@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::slice;
+use std::{cell::Cell, slice, time::Instant};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -78,6 +78,23 @@ pub struct PyVectorEnv {
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
     last_info: Vec<InfoDict>,
+    timings: BufferedCallTimings,
+}
+
+/// Cumulative wall time inside buffered calls: every step or reset, split into
+/// gameplay (all work in the call except encoding) and observation encoding.
+#[cfg(feature = "python")]
+#[derive(Default)]
+struct BufferedCallTimings {
+    gameplay_nanos: u64,
+    encoding_nanos: u64,
+}
+
+// A buffered call stays on its calling thread while the GIL is released, and each
+// stream's row is encoded inside it, so a thread-local counter needs no locks.
+#[cfg(feature = "python")]
+thread_local! {
+    static ENCODING_NANOS: Cell<u64> = const { Cell::new(0) };
 }
 
 #[cfg(feature = "python")]
@@ -123,6 +140,7 @@ impl PyVectorEnv {
             num_envs,
             buffers: None,
             last_info: Vec::new(),
+            timings: BufferedCallTimings::default(),
         })
     }
 
@@ -370,6 +388,14 @@ impl PyVectorEnv {
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
+    }
+
+    /// Cumulative `(gameplay_seconds, encoding_seconds)` of buffered calls.
+    fn buffered_call_timings(&self) -> (f64, f64) {
+        (
+            self.timings.gameplay_nanos as f64 / 1e9,
+            self.timings.encoding_nanos as f64 / 1e9,
+        )
     }
 }
 
@@ -728,10 +754,16 @@ impl PyVectorEnv {
         let config = self.config;
         let inner = &mut self.inner;
 
+        let started = Instant::now();
+        ENCODING_NANOS.set(0);
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
             py.allow_threads(|| run(inner, write_buffers, config))
                 .map_err(map_agent_err)
         });
+        let encoding = ENCODING_NANOS.get();
+        self.timings.encoding_nanos += encoding;
+        self.timings.gameplay_nanos +=
+            (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
         self.last_info = result?;
         Ok(())
@@ -1263,7 +1295,10 @@ impl SendWriteBuffers {
         truncated: bool,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
-        self.encode_observation(env_index, observation, config)?;
+        let started = Instant::now();
+        let encoded = self.encode_observation(env_index, observation, config);
+        ENCODING_NANOS.set(ENCODING_NANOS.get() + started.elapsed().as_nanos() as u64);
+        encoded?;
         self.write_step_state(env_index, reward, terminated, truncated)
             .map_err(ObservationWriteError::from)
     }

@@ -87,3 +87,27 @@ Main's `semantic-kernel-w17-v2` corpus was recorded under state hash v15; this
 branch's hash contract 16 moved every case's final hash and trace digest.
 Re-recorded with `semantic_conformance -- record`; command counts, outcomes,
 manifest and Phase rows are unchanged.
+
+# Task b015d5 — training seconds per update (2026-11-05)
+
+No design doc: the Task statement is the spec. Status and decisions:
+- Done in the working tree: receipt/panel attribution (native clock split, stream
+  bookkeeping, `TrainingRun.host`), trajectory-parallel returns, batched rollout
+  packing and assembly, `scripts/bench_training_update.py`.
+- Assumption: no GPU is rented for this Task (no spend authorized). GPU attribution
+  uses retained receipts; fixed-hardware controlled rows use one laptop, CPU device,
+  so model phases there are not GPU evidence. The first real run after merge gives
+  the on-GPU after number; it is not claimed here.
+- Assumption: results live in `experiments/training-update-time.md`; the rows are
+  few enough that no `experiments/data/` publication is needed.
+- `--max-facts` in the bench is an attribution axis; recipes and frozen observation
+  versions are unchanged. `elemental-uniform` validates to one producer, so worker
+  scaling cannot run on this recipe; lifting that is a separate decision.
+- Open: the on-GPU after number and a CUDA digest check need a real run. 256-stream
+  sequential rows showed minibatches higher after; 64-stream interleaved pairs did
+  not. Report states both.
+- `HostFacts.cpu_model` reads `/proc/cpuinfo`, so it is null off Linux; the GPU stays
+  in run identities, not `TrainingRun.host`.
+- For gate: rebuilt from HEAD, `test_resource_limit_receipt_replays_its_retained_encoding_boundary`
+  fails on `tests/fixtures/tla-pilot-permanent-capacity.jsonl`: its frame is schema 7,
+  native emits 8. This Task's only Rust change is timing; not repaired here.

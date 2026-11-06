@@ -73,6 +73,13 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     batch = first.collect(agent, 128)
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
+    for match, players in zip(
+        first.stream_matches, first._env.current_player_configs(), strict=True
+    ):
+        assert (match.hero_deck, match.villain_deck) == (
+            players[0].decklist,
+            players[1].decklist,
+        )
     exposure = first.stats.exposure
     assert (
         sum(c["learner_transitions"] for c in exposure.values()) == batch.actions.size

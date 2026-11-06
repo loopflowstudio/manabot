@@ -6,8 +6,10 @@ bit-identical with timing on or off.
 """
 
 from copy import deepcopy
+import os
 from pathlib import Path
 
+from etude.report import Series
 import numpy as np
 import pytest
 import torch
@@ -17,6 +19,8 @@ from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
+from manabot.training.panels import PERF
+from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
@@ -26,6 +30,7 @@ from manabot.training.regime import (
 )
 from manabot.verify.store import VerifyStore
 import managym
+from tests.training.test_recovery import tracked_updates
 from tests.training.test_two_seat_learning import _agent, _collector
 
 DAMPED_PHASES = {
@@ -154,3 +159,26 @@ def test_self_play_stage_records_both_timing_trees_by_default(tmp_path: Path) ->
         t.seconds for p, t in record.collection_timings.items() if "/" not in p
     )
     assert collected <= record.collection_seconds
+    step = record.collection_timings["Environment step and encoding"]
+    gameplay = record.collection_timings[
+        "Environment step and encoding/Native stepping"
+    ]
+    encoding = record.collection_timings[
+        "Environment step and encoding/Observation encoding"
+    ]
+    assert gameplay.seconds > 0 and encoding.seconds > 0
+    # The engine's clock covers exactly the steps of its phase: the reset that
+    # built the collector and any recovery replay sit outside that phase.
+    assert gameplay.calls == encoding.calls == step.calls
+    assert gameplay.seconds + encoding.seconds <= step.seconds
+    assert record.collection_timings["Stream bookkeeping"].calls >= step.calls
+    assert run.host is not None and run.host.logical_cpus == os.cpu_count()
+    assert TrainingRun.model_validate_json(run.model_dump_json()).host == run.host
+    row = tracked_updates(run, tmp_path)[0]
+    assert {
+        key
+        for panel in PERF
+        if isinstance(panel, Series)
+        for key in panel.keys
+        if key.startswith("time/")
+    } <= row.keys()

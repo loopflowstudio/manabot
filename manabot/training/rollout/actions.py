@@ -95,6 +95,18 @@ class PackedActions:
             log_probabilities[valid],
         )
 
+    def row(self, index: int) -> "PackedActions":
+        """One packed row as views of this block, for collection to hold per seat."""
+        start, stop = self.offsets[index : index + 2]
+        return PackedActions(
+            np.array([0, stop - start], dtype=np.int64),
+            self.slots[start:stop],
+            self.capacity,
+            {key: value[start:stop] for key, value in self.fields.items()},
+            self.probabilities[start:stop],
+            self.log_probabilities[start:stop],
+        )
+
     @classmethod
     def concatenate(cls, rows: Sequence["PackedActions"]) -> "PackedActions":
         first = rows[0]
@@ -176,13 +188,11 @@ class PackedActions:
     def selected_types(
         self, actions: NDArray[np.generic], type_width: int
     ) -> NDArray[np.generic]:
-        result = np.empty(actions.size, dtype=np.int64)
-        for row, action in enumerate(actions.reshape(-1)):
-            start, stop = self.offsets[row : row + 2]
-            local = np.flatnonzero(self.slots[start:stop] == action)
-            if len(local) != 1:
-                raise ValueError("selected action absent from packed support")
-            result[row] = self.fields["actions"][start + local[0], :type_width].argmax()
+        rows = np.repeat(np.arange(actions.size), np.diff(self.offsets))
+        chosen = self.slots == actions.reshape(-1)[rows]
+        if not np.array_equal(rows[chosen], np.arange(actions.size)):
+            raise ValueError("selected action absent from packed support")
+        result = self.fields["actions"][chosen, :type_width].argmax(-1)
         return result.reshape(actions.shape)
 
     @property

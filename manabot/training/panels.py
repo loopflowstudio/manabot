@@ -5,7 +5,9 @@ its Perf and ML details draw manabot's own keys (`update_metrics.metric_row`)
 rather than Etude's reinforcement-learning defaults. Keys are unprefixed:
 `entropy`, `collection_kl`, `numerical/...`, and the run's coordinates under
 `coordinates/`. Phase seconds per update are under `time/`
-(`update_metrics.phase_seconds`), drawn by `Flame`.
+(`update_metrics.phase_seconds`), drawn by `Flame` and, for the costs that decide
+a training machine, by the "Update time" series. Rows from runs before a phase
+was timed leave that series blank.
 """
 
 from etude.report import Attempts, Counters, Elapsed, Flame, MetricPanel, Pace, Series
@@ -15,6 +17,19 @@ PERF: tuple[MetricPanel, ...] = (
     Elapsed(),
     Attempts(),
     Flame(),
+    Series(
+        title="Update time",
+        keys=(
+            "time/collection/environment_step_and_encoding/native_stepping",
+            "time/collection/environment_step_and_encoding/observation_encoding",
+            "time/collection/observation_preparation",
+            "time/collection/policy_inference_and_action_selection",
+            "time/collection/stream_bookkeeping",
+            "time/collection/batch_assembly",
+            "time/learning",
+        ),
+        unit="seconds",
+    ),
     Series(title="Games played", keys=("coordinates/games",), unit="games"),
     Series(
         title="Idle stream steps",

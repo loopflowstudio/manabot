@@ -210,6 +210,14 @@ class ShardedVectorEnv:
         self._check()
         return [info for shard in self._shards for info in shard.native.get_last_info()]
 
+    def buffered_call_timings(self) -> tuple[float, float]:
+        """Mean shard gameplay and encoding seconds: shards run at once."""
+        shards = [shard.native.buffered_call_timings() for shard in self._shards]
+        return (
+            sum(gameplay for gameplay, _ in shards) / len(shards),
+            sum(encoding for _, encoding in shards) / len(shards),
+        )
+
     def capture_failure(self, error: BaseException) -> None:
         # Capture from the owning thread so live run coordinates remain available.
         for shard in self._shards:
