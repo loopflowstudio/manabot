@@ -81,7 +81,10 @@ def save_incident(
             }
         )
         batch_tensors.update(
-            {f"observation/{k}": torch.as_tensor(v) for k, v in batch.obs.items()}
+            {
+                f"observation/{k}": torch.as_tensor(v)
+                for k, v in batch.ordered_obs().items()
+            }
         )
         batch_tensors.update(
             {

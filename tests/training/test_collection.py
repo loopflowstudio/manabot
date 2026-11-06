@@ -8,7 +8,11 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    SeatRoutedCollector,
+    _ObservationRows,
+)
 from manabot.verify.games import INTERACTIVE_DECK
 
 
@@ -188,3 +192,17 @@ def test_collection_probabilities_and_bootstrap_survive_weight_change() -> None:
         first.observations().probabilities, first_probabilities
     )
     assert collector.stats.learner_transitions == 56
+
+
+def test_recorded_rows_survive_growth_and_later_appends() -> None:
+    buffers = {"x": np.arange(12, dtype=np.float32).reshape(4, 3)}
+    store = _ObservationRows(buffers, ["x"], 1)
+    assert store.append(np.array([2, 0])) == 0
+    first = store.arrays()["x"]
+    buffers["x"] += 100  # The native buffers are overwritten every step.
+    assert store.append(np.array([3, 1, 1])) == 2
+    np.testing.assert_array_equal(first, [[6, 7, 8], [0, 1, 2]])
+    np.testing.assert_array_equal(
+        store.arrays()["x"],
+        [[6, 7, 8], [0, 1, 2], [109, 110, 111], [103, 104, 105], [103, 104, 105]],
+    )

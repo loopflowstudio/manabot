@@ -270,7 +270,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
     collector._env = scripted
     batch = collector.collect(model, 1)
-    markers = batch.obs["agent_player"][:, 0, 0, 0]
+    markers = batch.ordered_obs()["agent_player"][:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
     assert ledger.state.completed == 2 and ledger.state.crashed == 1
@@ -524,7 +524,7 @@ def test_later_crash_preserves_previous_complete_games(
         collector._buffers, failure_generation=1, resource_limit=resource_limit
     )
     batch = collector.collect(model, 7)
-    markers = set(batch.obs["agent_player"][:, 0, 0, 0])
+    markers = set(batch.ordered_obs()["agent_player"][:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
         range(210, 215)
     )

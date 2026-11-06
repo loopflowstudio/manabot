@@ -133,7 +133,7 @@ def test_both_seats_keep_their_own_trajectory_and_terminal_credit(
     batch = collector.collect(agent, 1)
     assert batch.actions.shape == (8, 1)
     np.testing.assert_array_equal(
-        batch.obs["agent_player"][:, 0, 0, 0],
+        batch.ordered_obs()["agent_player"][:, 0, 0, 0],
         [0, 1, 3, 2, 4, 11, 10, 12],
     )
     np.testing.assert_array_equal(batch.rewards[:, 0], [0, 0, -1, 0, 1, -1, 0, 1])
@@ -191,8 +191,12 @@ def test_pair_routes_own_behavior() -> None:
     a, b = collector.collect_pair(first, 1)
     _behavior_matches(a, first)
     _behavior_matches(b, second)
-    np.testing.assert_array_equal(a.obs["agent_player"][:, 0, 0, 0], [0, 1, 3, 10, 12])
-    np.testing.assert_array_equal(b.obs["agent_player"][:, 0, 0, 0], [2, 4, 11])
+    np.testing.assert_array_equal(
+        a.ordered_obs()["agent_player"][:, 0, 0, 0], [0, 1, 3, 10, 12]
+    )
+    np.testing.assert_array_equal(
+        b.ordered_obs()["agent_player"][:, 0, 0, 0], [2, 4, 11]
+    )
 
 
 def test_two_seat_real_native_games_and_recovery() -> None:
