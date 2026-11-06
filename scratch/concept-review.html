@@ -14,12 +14,15 @@ code{padding:0 .2em}pre{padding:.8rem 1rem;overflow-x:auto;border-left:3px solid
 .proposed{color:var(--ok);font-style:italic}.existing{color:var(--mute);font-style:italic}
 table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--line);padding:.4rem .3rem;text-align:left;vertical-align:top}
 </style></head><body><main>
-<p class="meta">Task 30df0c · step: concept-review (headless) · 2026-11-06<br>
+<p class="meta">Task 30df0c · step: concept-review (headless, second pass) · 2026-11-06<br>
 Built from: Task brief; <code>scratch/questions.md</code>; <code>manabot/infra/config.py</code>, <code>manabot/model/checkpoint.py</code>,
 <code>manabot/training/state/admission.py</code>, <code>learning_state.py</code>, <code>training/execution.py</code>.</p>
 
 <h1>Fresh models read the catalog; old checkpoints must still match their own regimes</h1>
-<p><strong>Decision needed:</strong> none. The accepted requirement settles the fix. The design changed, so the graph goes back to implement.</p>
+<p><strong>Decision needed:</strong> none. Second pass, after the fix: nothing changes and no product choice is open. The step advances.</p>
+<h2>Second pass</h2>
+<p class="existing">Verified on this branch: <code>load_checkpoint</code> is the only path that builds a model from <code>agent_hypers</code> and goes through <code>ModelConfig.from_checkpoint</code>. Architecture identity leaves <code>hashed</code> out, so historical identities hash as before. No v8/v9 regime is committed outside tests. Still to run at gate: the model/observation validation and the arena admission suite.</p>
+<h2>First pass (resolved)</h2>
 
 <h2>Actions → concepts → APIs</h2>
 <table>

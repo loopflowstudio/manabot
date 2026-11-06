@@ -62,3 +62,13 @@ No open product choice.
 Sync 2026-11-06: main `dc8512bec` carries the merged b015d5 (training
 update time) and earlier MTG-243 notes in this file, retained at
 `dc8512bec:scratch/questions.md`; they confer nothing on this Task.
+
+## Concept review, second pass (2026-11-06) — nothing to change
+
+Against the implemented fix: `load_checkpoint` is the only reader that builds
+a model from `agent_hypers` (`model/catalog.py` reads the shape label only);
+architecture identity omits `hashed` and names `catalog` only for v8+ with a
+world, so historical identities are stable; `with_*` builders round-trip an
+explicit `hashed`. No v8/v9 regime or configuration is committed outside
+tests. No open product choice; next proof remains the docs/development.md
+model/observation validation and the arena admission suite at gate.
