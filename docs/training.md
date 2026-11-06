@@ -303,9 +303,10 @@ uv run etude report experiments/elemental.py --source .runs/example --open
 
 Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
-`time/learning/minibatches/forward_and_loss`), `selection_groups/<action
-type>/<terminal distance>/rows` and `self_play_outcomes/<deck>/<opponent
-deck>/<play|draw>/wins`. Offline readers use
+`time/learning/minibatches/forward_and_loss`), CUDA high-water marks
+(`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
+`selection_groups/<action type>/<terminal distance>/rows` and
+`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline readers use
 `manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
 

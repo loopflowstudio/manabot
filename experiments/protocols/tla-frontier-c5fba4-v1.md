@@ -50,12 +50,26 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   regime wall budget is 54 hours (194,400 s) and the update cap 3,000. Training
   stops at whichever comes first and exports the last complete raw learner.
   The sizes therefore receive equal wall-clock compute, not equal updates.
-  Training seed 21501 for both. No automatic retry.
+  Training seed 21501 for both. No automatic retry. Both sizes train at once,
+  so equal-update comparisons appear as they go; a cohort's default is one
+  machine at a time, so the launch names two:
+
+  ```bash
+  uv run etude launch experiments/tla_frontier.py --revision <frozen> --rent <gpu> \
+      --cohort tla-frontier-c5fba4 --parallel 2 --max-usd 76
+  ```
 - **Hardware.** Both sizes run on the same GPU model, chosen at launch and
   recorded before any score is read; different models void the equal-compute
   reading. USD38 over 56 hours admits at most USD0.67/hour, which covers
   the USD0.59/hour L4 and A40 of earlier receipts but not the USD0.96/hour
   RTX 5090, where the dollar ceiling would stop training first.
+- **Calibration.** Before the training runs, and after this protocol merges,
+  `experiments/tla_frontier_calibration.py` runs each size for five updates on
+  the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
+  reserve. It reads seconds per update and CUDA peak, under its own experiment
+  and regime ids, so it is never a frontier run and plays no comparison. If w256
+  cannot fit or would reach too few updates, the size changes in a new protocol
+  version, still before any scoring.
 
 ## Evaluation schedule
 
@@ -68,25 +82,56 @@ heuristic is the matched first-64 heuristic. Shared update milestones are 25,
 - At every milestone both sizes reached: w256 vs w64 at equal updates.
 - At each endpoint: that size vs the heuristic (unless the endpoint is a
   milestone) and vs its own update-0 initialization.
-- Once both runs finish: w256 endpoint vs w64 endpoint, the comparison at
-  equal wall-clock compute.
+- Once both runs end: w256 endpoint vs w64 endpoint, the comparison at equal
+  wall-clock compute when both finished.
+
+A size's endpoint is the last stored checkpoint of its ended run, including a
+failed run, so its reach is still played.
 
 Evaluation runs on rented CPU through Etude while training continues, so
-progress is visible at each milestone. Each pass is one 32-vCPU rental with 28
+progress is visible as it goes. Each pass is one 32-vCPU rental with 28
 workers, capped at USD2 and 1.75 hours plus setup; cumulative evaluation spend
 is capped at USD12. Each game has a 600-second wall limit, enforced by killing
 the game and counting it failed. MTG-213's 120 seconds would penalize the
 larger network for its own latency: one thread takes about 0.4 s per w256
 decision against 0.15 s at w64, across games averaging 180 decisions. Milestones
 past a size's endpoint stay in the schedule as unreached slots; failed or
-truncated games stay failed in their scheduled slots and are never replaced.
+truncated games stay failed in their scheduled slots and are never replaced, so
+no pass uses Etude's `--retry-failed`.
+
+### Evaluation driver
+
+One command drives every pass, from a checkout of the frozen revision on an
+always-on host beside the controller:
+
+```bash
+uv run etude eval experiments/tla_frontier.py --source <store> --rent <cpu32> --watch 14400
+```
+
+Every pass must run from that revision: a later commit changes `seats.source`,
+which analysis flags as a mixed cohort. The four-hour period batches both sizes'
+new milestones, so each milestone is played within one period of arriving.
+Expect about 15 rentals at USD0.45, setup included and unmeasured, for about
+USD7. Etude does not enforce the USD12 cap across passes: the operator reads
+spend after each pass and stops the loop when it reaches USD12.
+
+Etude's launch ledger, `~/.etude/experiments/launched.json`, is one file for
+every experiment on the computer, and any entry for a failed pass raises
+`launched_pass_failed` and ends the watch loop. Before starting the loop, check
+each entry's status there, including other experiments'. After a failed pass,
+look at why it failed, remove its entry from that file and restart the loop. A
+milestone delayed this way is still played; its failed games are not replayed.
+
+A run whose pod dies without recording an end stays `running`, so its endpoint
+stays unknown until the launcher records the end. The operator reads its stored
+checkpoints meanwhile.
 
 ## Reading
 
 `experiments/tla_frontier_analysis.py` produces these readings. Scores are the
 candidate's mean game score with 95% whole-pair bootstrap intervals (seed
 21592001), for comparisons whose 16 pairs all completed. Head-to-head rows put
-w256 first. A milestone past a finished run's endpoint is unreached and expects
+w256 first. A milestone past an ended run's endpoint is unreached and expects
 no games; any other absent comparison leaves that reading unknown.
 
 - **Learning**, per size: endpoint vs its initialization above 0.5 with the
@@ -95,6 +140,11 @@ no games; any other absent comparison leaves that reading unknown.
 - **Scale**: the equal-compute endpoint head-to-head is primary; equal-update
   head-to-heads describe sample efficiency.
 
+A failed size keeps its learning and strength readings at its last stored
+checkpoint, reported beside the run's state. Its endpoint head-to-head is still
+reported, but not as equal compute: the scale reading needs both runs finished
+and is otherwise absent, with an issue saying so.
+
 Report every attempt, failure, resource-limit discard, unreached milestone and
 cost. One seed per size supports a descriptive frontier reading, not a
 controlled claim that one size is better in general.
@@ -102,6 +152,6 @@ controlled claim that one size is better in general.
 ## Budget
 
 The Task's ceiling is USD100 including setup, failures, retries and evaluation:
-2 × USD38 training + USD12 evaluation = USD88, leaving USD12 for setup and
-failure costs. Any retry needs a recorded decision that keeps the total within
-USD100. Evaluation never runs on a laptop.
+2 × USD38 training + USD12 evaluation = USD88, leaving USD12 for calibration
+(USD2), setup and failure costs. Any retry needs a recorded decision that keeps
+the total within USD100. Evaluation never runs on a laptop.

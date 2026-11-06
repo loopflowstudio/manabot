@@ -7,7 +7,8 @@ width, depth and heads replaced (see the protocol
 shared update milestone, each size against the matched first-64 heuristic and
 the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
-other at equal wall budget.
+other, which is equal wall budget only when both runs finished. A failed run's
+endpoint is its last stored checkpoint, so its reach is still played and read.
 
 The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
 stays unchanged, so its evaluation callback, whose identities name that
@@ -54,7 +55,8 @@ from manabot.training.regime import TrainingRegime
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPERIMENT = "tla_frontier_c5fba4"
+# `etude eval` and `etude launch` both name the experiment for this file.
+EXPERIMENT = Path(__file__).stem
 PROTOCOL = ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.json"
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
@@ -186,8 +188,8 @@ class ScheduledComparison:
 
     `update` is the first player's, None for an endpoint its run has not
     reached. Head-to-head rows put the large size first, so their score is the
-    large size's. `unreached` marks a milestone past a finished run's endpoint,
-    which the wall budget ended on purpose and no missing evidence explains.
+    large size's. `unreached` marks a milestone past an ended run's endpoint,
+    which no later evidence can fill and no missing evidence explains.
     """
 
     tag: str
@@ -206,8 +208,9 @@ def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
 
 
 def endpoint(run: TrainingRun | None) -> int | None:
-    """The finished run's last update; None while it may still save more."""
-    return int(run.final.clocks["updates"]) if run and run.final else None
+    """An ended run's last stored update, failed or not; None while it may save more."""
+    last = run.checkpoints.last if run and run.ended else None
+    return int(last.clocks["updates"]) if last else None
 
 
 def comparison_schedule(
@@ -304,7 +307,7 @@ def comparison_schedule(
             model(label, 0),
             f"{label} final u{end} vs {label} u0",
         )
-    # Equal wall budget: the compute-matched comparison between the sizes.
+    # Equal wall budget when both finished; analysis reads no scale otherwise.
     expect(
         "endpoint-head-to-head",
         LARGE,
@@ -317,6 +320,8 @@ def comparison_schedule(
 
 def eval(state: ExperimentState) -> list[Job]:
     """Play the available comparisons; Etude owns already-delivered matches."""
+    if state.experiment != EXPERIMENT:
+        raise ValueError("frontier evaluation requires this experiment's runs")
     _, protocol = frozen()
     matchups = tuple(
         comparison.matchup

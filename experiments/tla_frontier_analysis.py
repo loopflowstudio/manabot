@@ -3,9 +3,12 @@
 `analyze` accounts for every comparison `comparison_schedule` expects before
 estimating anything, then applies the protocol's readings: learning per size,
 strength against the heuristic, and scale from the equal-compute endpoint
-head-to-head. A milestone past a finished run's endpoint is unreached rather
-than missing, because the wall budget stops training on purpose; every other
-absent comparison leaves the analysis incomplete and its reading unknown.
+head-to-head. A milestone past an ended run's endpoint is unreached rather than
+missing, because no run can still produce it; every other absent comparison
+leaves the analysis incomplete and its reading unknown. A failed run keeps its
+learning and strength readings at its last stored checkpoint, with `state`
+beside them, but its head-to-head score is not equal compute, so `scale` needs
+both runs finished.
 
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
@@ -89,7 +92,8 @@ class FrontierAnalysis(StrictModel):
     counts: Counts
     comparisons: list[Comparison]
     sizes: list[SizeReading]
-    # The large size's score at equal wall-clock compute, the primary scale reading.
+    # The large size's score at equal wall-clock compute, the primary scale
+    # reading. None unless both runs finished; `comparisons` keeps the score.
     scale: RateInterval | None
     complete: bool
     issues: list[str]
@@ -162,7 +166,7 @@ def _reading(
     comparisons: list[Comparison],
     db: duckdb.DuckDBPyConnection,
 ) -> SizeReading:
-    """An unfinished size's endpoint slots have update None and no score."""
+    """A size with no endpoint yet has endpoint slots of update None and no score."""
     end = endpoint(run)
     initial = next(c for c in comparisons if c.tag == f"initial-{label}")
     heuristic = next(
@@ -195,10 +199,13 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         _reading(label, size_run(state, label), comparisons, db) for label in SIZES
     ]
     issues = [
-        f"{reading.label} has no finished endpoint; no learning or scale claim."
+        f"{reading.label} has no endpoint; no learning or strength reading."
         for reading in sizes
         if reading.endpoint is None
     ]
+    equal_compute = all(reading.state == "finished" for reading in sizes)
+    if not equal_compute:
+        issues.append("A run did not finish; no equal-compute scale reading.")
     sources = {
         source for c in comparisons for pair in c.pairs for source in pair.sources
     }
@@ -206,14 +213,14 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         issues.append("Evaluation source is missing or differs across the cohort.")
     if any(c.score is None and not c.unreached for c in comparisons):
         issues.append("The frozen comparison schedule is incomplete.")
-    scale = next(c for c in comparisons if c.tag == "endpoint-head-to-head")
+    endpoints = next(c for c in comparisons if c.tag == "endpoint-head-to-head")
     return FrontierAnalysis(
         protocol_sha256=file_sha256(PROTOCOL),
         bootstrap_seed=protocol.bootstrap_seed,
         counts=total_counts([c.counts for c in comparisons]),
         comparisons=comparisons,
         sizes=sizes,
-        scale=scale.score,
+        scale=endpoints.score if equal_compute else None,
         complete=not issues,
         issues=issues,
     )

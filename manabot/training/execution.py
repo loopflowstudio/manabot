@@ -111,6 +111,20 @@ def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
     }
 
 
+def cuda_peak_metrics(device: str) -> dict[str, int]:
+    """This process's CUDA high-water marks so far; absent off CUDA.
+
+    Reserved bytes include the allocator's cache, so they are what a card must
+    hold; allocated bytes are what the tensors themselves needed.
+    """
+    if device != "cuda":
+        return {}
+    return {
+        "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
+        "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
+    }
+
+
 def process_tree_rss(process: psutil.Process) -> int:
     """Resident bytes of a process and its live descendants.
 
@@ -1416,7 +1430,9 @@ def _execute_regime(
                     spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        metric_row(diagnostic) | time_since(timed, spent),
+                        metric_row(diagnostic)
+                        | time_since(timed, spent)
+                        | cuda_peak_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]

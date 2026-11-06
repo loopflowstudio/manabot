@@ -24,3 +24,9 @@ until launch):
   latency on this Mac rather than a rented-CPU measurement.
 - **No execution in this step.** Launching paid training needs the protocol
   reviewed and frozen at a merged revision.
+- **Calibration length: five updates in a 3,600 s wall.** Direction said "a few
+  updates". A size slower than 2,400 s/update records no update; its failure or
+  empty reading is still the answer. Timing comes from a fresh policy, so late-run
+  games may cost more.
+- **The USD12 evaluation cap stays an operator check,** as directed; Etude has no
+  cross-pass ceiling here.
