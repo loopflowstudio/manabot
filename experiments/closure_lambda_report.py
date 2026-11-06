@@ -107,6 +107,8 @@ class TrainingRecord:
     seed: int
     stage: dict[str, object]
     updates: list[dict[str, float]]
+    # The run's game-error ledger state; empty when the regime records none.
+    game_errors: dict[str, object] = field(default_factory=dict)
 
     def row(self, update: int) -> dict[str, float]:
         """The metric row at an update, 1-indexed by the metric rows."""
@@ -182,6 +184,9 @@ def training_records(storage: Storage, experiment: str) -> list[TrainingRecord]:
                 seed=cast(int, document["seed"]),
                 stage=stages[0],
                 updates=_metric_rows(storage, run.name, keys),
+                game_errors=cast(
+                    dict[str, object], document.get("game_errors") or {}
+                ),
             )
         )
     return sorted(records, key=lambda r: (r.job, r.seed))
@@ -348,6 +353,12 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "targets_seconds": learning["Targets"]["seconds"],
         "diagnostics_seconds": learning["Selection and health diagnostics"]["seconds"],
         "idle_stream_steps": idle,
+        # Games that failed (capacity overflows under recovery) and the unfinished
+        # samples they discarded.
+        "crashed_games": float(cast(int, record.game_errors.get("crashed", 0))),
+        "discarded_samples": float(
+            cast(int, record.game_errors.get("discarded_samples", 0))
+        ),
         "idle_share": idle_share,
         # Wall time lost to idle slots if an idle slot cost as much as a stepped one:
         # an upper bound, since batched inference is sublinear in live streams.

@@ -51,21 +51,29 @@ budget and results pointer; this file holds working assumptions and open items.
 
 ## Log
 
-- 20:07–21:10 UTC: no L4 stock for an hour (launch refusals, no runs, no cost), then the
-  dollar-limit refusal above. 21:12 calibration launched: run 03e5613716a4, revision
-  b2cd4de45, machine 07c490-l4-586f45c56a62. Terminated at 30 min as "never booted",
-  then 21:47 ad86d25e2327 terminated at 15 min the same way. Both were wrong calls:
-  each had a job attempt, and Etude shows `setting_up`/"output not received" until
-  the end even on healthy runs (setup is budgeted 900 s). Charge both full
-  reservations ($1.02) to the cap. "Not booted" means no attempt id in `etude logs`.
-  Actual cause, found with `etude logs --run ID --follow`: all three (incl. 22:04
-  d167b004c555, which held its machine to ~$.50 until terminated at 23:20) died at once
-  with `experiment_differs_from_launch` from a `--calibration` flag that renamed the
-  experiment. Calibration attempts so far: 3 failed, ~$1.50 reserved/billed.
-- 23:27 calibration 491fa11b9fdf launched from its own file, revision 04c9cba75.
+- Calibration: four attempts, ~$1.30 billed, $2.04 charged. Three died on launch errors
+  of this study's making (an undersized dollar limit; a `--calibration` flag that
+  renamed the experiment → `experiment_differs_from_launch`; Etude names the experiment
+  after the launch file's stem). Two of those were also terminated early on the false
+  belief that `setting_up` meant not booted; healthy runs show `setting_up` and "output
+  not received" until done, and setup took 12.5 min. Inspect with
+  `etude logs --run ID --follow`. A failed job can keep its machine rented: terminate it.
+- 491fa11b9fdf (04c9cba75) trained 9 updates (~70 s each, one seat) and died on
+  continuation relations 65 > 64. Study 1 stopped under its kill criterion; protocol
+  amended (6d7c84db2). Lambda arms set `recover_capacity`, windows 1.5 h / $1.05.
+- Lambda baseline (.5/.8) c608a0fa7d29/04cef7d8ce8e/67f108f57c2e: all reached 75
+  updates, ~31–34 s median update, 19.7–19.9k games, 46–51k rows/update (~190/stream
+  vs floor 64). Idle share .637–.650; idle collection bound 771–799 s of 1279–1356 s
+  collection (+1087–1193 s learning). Controller died 00:43 (0.2.13 can't parse Vast
+  providers); restarted from the 0.2.14 overlay (`/tmp/e07c490 controller run`).
+- Ghost `07c490-l4-*` records from refused creates show estimated dollars but no RunPod
+  pod exists (`runpodctl pod list` empty); not charged.
 
 ## Open
 
-- Calibration quota (set `CLOSURE_QUOTA` in `experiments/elemental_variants.py`, amend
-  the protocol, commit, then launch study 1).
-- Provider bills: reconcile `runpodctl billing pods` against the launcher's `usd`.
+- Study 1 needs a decision beyond the protocol: exact-quota capacity recovery, wider
+  continuation relations for both arms, or deleting exact quota.
+- Lambda: 07c490-l4 allows 8 machines at once, so at most two arms (6 runs) run
+  together; launch the rest as machines free.
+- Idle streams: read `idle_stream_steps` from the lambda runs for the two-seat report.
+- Provider bills: reconcile `runpodctl billing pods --grouping podId` per pod.
