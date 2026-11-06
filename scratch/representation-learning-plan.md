@@ -24,9 +24,12 @@ cohort result**. Evidence is manifest-published under
 operational, not a settled invoice. No rentals or local drivers are live.
 `664f44738f35` stays an unscored attempt (`collect_failed`).
 
-**Remaining.** Demo/review judgment of the negative result. Any longer horizon,
-more seeds or another matchup needs its own prospective amendment and funds
-(about $6 remains); none is authorized. Etude defects for their owners
+**Remaining.** Demo/review judgment of the negative result and of the proposed
+contract, the Task acceptance gaps below, and PR421's title and body (still CPU-only at `c5ffe83fa`, after the
+last `pr-publish` pass stopped; the study merge stays unapproved). Any longer
+horizon, more seeds or another matchup needs its own prospective amendment and
+funds (about $6 remains, less than one repeat of this cohort); none is
+authorized. Etude defects for their owners
 (`ff3d48` / PR84): a Vast HTTP 400 create is retained as an unknown create and
 blocks the Run id (questions.md); the single-read liveness rule still applies
 outside PR84's launcher.
@@ -35,7 +38,96 @@ Proposed Experiments Wave memory update (not written; standalone realign):
 replace "The plan owns remaining acceptance" in the recovery paragraph with the
 completed result — no qualified plateau at 256 updates; GRU−pool −1.95
 [−5.88, +1.98]; one job per durable unit with incremental hash-verified ledger
-and parallel CPU evaluation completed the cohort for about $6.75.
+and parallel CPU evaluation completed the cohort for about $6.75. Add that the
+result covers v7 only, because v8 fixes its effect reducer to the GRU. Both
+"the plan owns remaining acceptance" lines dangle once scratch clears.
+
+## Task acceptance status (2026-11-05)
+
+The study answers one question inside MTG-249; it does not finish the Task.
+
+| Acceptance | State |
+|---|---|
+| Path inventory, diagram, before/after, field-level audit, combine/diverge cases | Kickoff design (`8e6cc62df:scratch/5da5f4-design-effective-state.md`, `:scratch/observation-architecture-snapshot.html`). The combine/diverge cases are durable in the guide's proposed section; the path inventory and field audit are not. |
+| Shared-effect contract, versioned migration, size and cost | Delivered: PR419 v7 and `docs/observation-and-model.md#input-v7-capacity`. |
+| Paired-position divergence | Source dependence has native fixtures (`manabot/verify/representation.py`). Other pairs are design-level anchors or synthetic probe cases. |
+| Effect predating the history window | Native: `test_effect_older_than_history_window_survives_only_in_current_state`, on real Commands (Yip Yip! versus Invasion Submersible; eight Raging Goblins fill 32 rows in one turn). The grants also differ in payload and target, so it does not show equal effective state; `cr_514_2` is that anchor. |
+| Memory lifecycle (reset, seat, fork, restoration, serving) | Proposed section of `docs/observation-and-model.md`. Not accepted, not built. |
+| Stateless baseline versus history/memory | Reasoned in the design only. Neither study arm carries memory, so no measurement exists. |
+| Reviewed design with recommendation | Durable as the guide's proposed section. v7 was approved and shipped; the memory recommendation has had no review. |
+
+Main squash-merges, so every branch hash cited here, including the design, stays
+reachable only through `refs/pull/421/head` after landing. `lf pr submit` drops
+these scratch files. The concept review below settles what follows from this.
+
+## Concept review — 2026-11-05, after the v8 sync (implemented, uncommitted at `c5ffe83fa`)
+
+All three items below are done. The guide's section is `Proposed: state, records,
+history and memory`. Kellan's upgrade could not serve as the indefinite grant:
+v7 rejects its granted-trigger payload, so the fixture uses Invasion Submersible.
+
+Compress: Ty Lee and Drill roots now share `_submit_offer`; `pytest` on transport,
+parity, state records, shared effects and layer input: 99 passed, 6 skipped. Rust
+anchors in the guide were confirmed present, not rerun; gate owns affected suites.
+
+The study is durable; the Task's deliverable is not. The accepted outcome is "a
+reviewed, explicit contract" covering effective state, shared records, history
+and memory, plus "a design review with clear recommendation and unresolved
+tradeoffs". Today that exists only in scratch at a branch hash. Whether the work
+finishes here or moves to a new Task, the contract must outlive scratch: a later
+Task needs it as input. So its durable home is implied, not a product choice, and
+the "decision for demo/review" recorded here earlier is withdrawn. Only the
+Task's own continuation remains open (see below).
+
+Implement, no paid compute and no change to tensors, models or defaults:
+
+1. **One proposed section in `docs/observation-and-model.md`**, replacing "Persistent
+   memory remains future work." It is the one guide for this part, so no new
+   document. Heading and first line mark it proposed: not accepted, not built.
+   State it as facts, with no attributions. Distill from the kickoff design; do
+   not copy it, because its status, canary and v5/v6 sections are obsolete:
+   - the recommendation: complete typed current state, no persistent policy state
+     as the first arm; a within-decision reducer is not memory;
+   - what belongs in effective state, shared records, history and memory, as a
+     short table, against v7/v8 as shipped;
+   - counterexamples with their anchors (all five named tests verified present
+     on this checkout, not rerun): expiry, source dependence, timestamp order,
+     fixed membership, copy versus effective state, ability loss;
+   - safe-combination rule: identical future behavior across expiry, sources,
+     affected sets, later entrants, intervening effects and multiplicity;
+   - the alternatives' assessments, including the relation-table split and
+     variable-length tokens: the design's "Alternatives kept distinct" table;
+   - memory lifecycle: ownership, reset, seat, hidden information, eviction, fork,
+     restoration, training/serving consistency;
+   - unresolved tradeoffs, and which claims are unmeasured (no stateless versus
+     memory measurement exists).
+2. **Native proof for an effect older than the history window.** The acceptance
+   says "show what happens"; only a synthetic probe does. Add one test on a real
+   position, built on `source_effect_root`-style fixtures in
+   `manabot/verify/representation.py`, extended only as needed: two end-of-turn
+   versus indefinite grants, enough public events to evict the grant from the
+   32-row history, then assert equal history suffixes and differing v7 effect
+   headers. If the native history window cannot be filled without constructed
+   events, record that and keep the claim marked as unproven rather than faking it.
+3. **Citation.** `experiments/README.md:201` cites `d57c5c9e7`, which main will not
+   contain after the squash. Say it is reachable through PR 421's head ref.
+
+Not implement: PR421 title and body stay with delivery. The Wave memory update
+stays proposed. Memory stays unbuilt: `Results stop at demo/review` still holds.
+
+Counterexample checked: "a design in a guide reads as approved". The proposed
+marking and the existing rule that the guide describes shipped behavior conflict
+only if the section is unmarked, so the marking is a requirement, not a style.
+Should the reviewer reject the recommendation, the section is deleted with no
+tensor, checkpoint or evidence consequence.
+
+Unresolved for Jack Heart at demo/review, neither blocking the work above:
+
+- The next-work choice (a/b/c) below.
+- Does MTG-249 complete once the contract is reviewed, leaving any memory arm to
+  a new Task, or does it stay open through a stateless-versus-memory measurement?
+  The Task says paid learning-quality work needs its own authorization, and about
+  $6 remains, so a review may be its natural end. No accepted decision says so.
 
 ## Concept review — 2026-11-05 (implemented in `22459b4b0`)
 
@@ -53,9 +145,11 @@ seeds, criteria and the $25 total. The Wave memory update above stays proposed.
 Open product choice, recorded for demo/review rather than this step: with no
 qualified plateau and about $6 left, a 256-update cohort cost about $6.75. Should
 Jack Heart (a) accept the inconclusive result and keep pooling as the simpler
-reducer for later work, (b) fund a prospective longer-horizon amendment, or
-(c) move to the unbuilt memory/relation-splitting questions? No accepted
-decision settles this, and none of the implementation above depends on it.
+reducer for v7 recipes, (b) fund a prospective longer-horizon amendment, or
+(c) move to the unbuilt memory/relation-splitting questions? Under (a), v8 runs
+keep the GRU for effect programs whatever is chosen; only continuation reduction
+stays selectable there. No accepted decision settles this, and none of the
+implementation above depends on it.
 
 Re-review after `e95eca187` (headless): the branch now matches this design. The
 GPU report is durable and indexed first, CPU is marked preliminary, and the
@@ -255,7 +349,15 @@ The runtime-changing syncs require actual source/native binding at admission.
 The pre-launch sync `2b2061c8d` / `51b4bd274` moved Linear bindings only.
 The subsequent sync `8318f1525` incorporated main `e113602a2` and MTG-213's
 v10 endpoint evidence. The recovery constraints own runtime equivalence since the
-executed source. Its CUDA receipts do not certify the later checkout. Main has not moved since.
+executed source. Its CUDA receipts do not certify the later checkout.
+Main `423dd2fcd` (policy input v8, one layer evaluator) arrived through merge
+`42970f90e`; HEAD contains current main. At v8 `SharedEffectEncoder` always uses
+`typed_gru` to keep ordered program tokens, while continuations still follow
+`state_encoder`. V7 keeps the selected reducer, so the GPU result says nothing
+about v8. New layer payloads reject on v1–v7, so any further v7 cohort must admit
+its population on the actual source. The branch's batched encoder matches main's
+per-record encoder in float64 on v7 and v8, both reducers: outputs and gradients
+within 7.1e-15 over 40 random batches each (one-off check, not a retained test).
 Experiments has no child memories. Standard growing-pool research stays separate.
 
 Memory, relation splitting, membership interning and semantic coalescing remain
@@ -278,5 +380,4 @@ Original design/diagram:
 traces and admission are retained and verified. Gate owns broader suites;
 demo/review owns scientific judgment. No rendering proof or plateau conclusion.
 
-Check: drive-state.json reconciles with the report ($6.747674, no live units, eval/train queues empty) at `2ca9a0d14`; broader validation to gate, scientific judgment to demo/review.
-Compress: study, experiment-discovery, Etude job and model suites pass after the admission cut; `/verify` and full suites remain gate's.
+Check: `uv run --extra dev pytest tests/model/test_shared_effects.py tests/model/test_state_records.py tests/model/test_layer_input.py tests/training/test_state_representation_study.py tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py -q` — 95 passed, 6 skipped; `/verify` and full suites to gate, scientific judgment to demo/review.

@@ -62,6 +62,8 @@ Per seed, pool / GRU (update-256 curve; held-out): 74211 51.6/40.6, 47.7/42.6;
   it, not strong play.
 - Pool versus GRU changes two reductions together (effect payloads and
   continuations).
+- V7 only. Policy input v8 always reduces effect programs with the GRU to keep
+  their token order, so this comparison does not apply to its effect path.
 - Paired learners of a seed ran on different hosts.
 - Pool/74212 was restarted from initialization; its weights differ from the
   lost run's by host QR rounding only (≤1.04e-6, receipt

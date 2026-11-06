@@ -137,3 +137,8 @@ exists, so sessions `1bd3d916419c`/`7da0af2dc646` never settle and their Run ids
 stay blocked. Inventory showed no instance, so nothing was paid. These units were
 recorded as never-started attempts (fresh unit identities follow). This belongs
 to Etude (`ff3d48` / PR84 owners).
+
+Assumption (realign, 2026-11-05): the `code` Graph does not call for Wave memory
+maintenance, so `.lf/wave/` stays read-only here and the update remains proposed
+in the plan. Replayed steers from earlier passes are history; none adds direction
+beyond the completed recovery cohort.

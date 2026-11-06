@@ -198,7 +198,8 @@ sustained-plateau criterion, and separate held-out scoring. Its first cohort
 was cancelled before scoring when measured concurrent GPU throughput invalidated
 the allocation budget. `state_representation_gpu.py` declares one recovery unit
 per frozen allocation file; the throughput admission and CUDA operator profiler
-that qualified it ended with the cohort and remain at source `d57c5c9e7`. Wider
+that qualified it ended with the cohort and remain at source `d57c5c9e7`,
+reachable through PR 421's head ref (`refs/pull/421/head`). Wider
 batches change optimization; the prospective recipe retains the original
 complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
 on 2026-11-05 after three of eight learners completed, with no curve or held-out
