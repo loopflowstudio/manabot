@@ -253,6 +253,15 @@ class ModelConfig(BaseConfig):
     attention_feedforward_dim: int | None = Field(
         default=None, ge=1, exclude_if=lambda value: value is None
     )
+    # How fact and shared-effect ids embed on explicit inputs v8 onward:
+    # `catalog` reads the card encoder's exact token rows and definition
+    # rows; `hashed` learns 4096 hashed rows per id column. Earlier inputs and
+    # models without a world have only the hashed layout. Saved checkpoints
+    # that omit the field are hashed (`from_checkpoint`); regimes omit the
+    # fresh default.
+    record_vocabulary: Literal["hashed", "catalog"] = Field(
+        default="catalog", exclude_if=lambda value: value == "catalog"
+    )
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -276,6 +285,24 @@ class ModelConfig(BaseConfig):
         if data.pop("compound_decisions") is not False:
             raise ValueError(COMPOUND_DECISIONS_REMOVED)
         return data
+
+    @classmethod
+    def from_checkpoint(cls, payload: dict[str, Any]) -> "ModelConfig":
+        """Missing record vocabulary means the frozen hashed ids."""
+        return cls(**{"record_vocabulary": "hashed", **payload})
+
+    def checkpoint_payload(self) -> dict[str, Any]:
+        """The serialized configuration with the record vocabulary explicit, so
+        `from_checkpoint` reads a fresh catalog model back as catalog."""
+        return {**self.model_dump(), "record_vocabulary": self.record_vocabulary}
+
+    def catalog_records(self, policy_input_version: int) -> bool:
+        """Whether fact and shared-effect ids read the card vocabulary."""
+        return (
+            self.record_vocabulary == "catalog"
+            and self.world is not None
+            and policy_input_version >= 8
+        )
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":

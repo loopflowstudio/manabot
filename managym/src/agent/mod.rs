@@ -8,6 +8,7 @@ pub mod observation_encoder;
 pub mod observation_json;
 pub mod opponent;
 pub mod policy_history;
+pub mod record_vocabulary;
 pub mod rollout_pool;
 pub mod shared_effects;
 pub mod structured_offer;

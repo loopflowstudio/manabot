@@ -182,6 +182,12 @@ checkpoints or experiment evidence.
   modal choices. Names are not game objects; do not use card slots or invent
   definitions for them. Native scalar/vector paths select v9 from this buffer's
   presence. V1–v8 and fresh v6 defaults remain unchanged.
+- Fact and shared-effect ids on v8/v9 read the card encoder's token rows
+  (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
+  regimes); native `agent/record_vocabulary.rs` lists every name the encoders
+  hash, so a new hashed name must appear there or the policy rejects it.
+  Checkpoints keep hashed ids: load through `ModelConfig.from_checkpoint` and
+  save `checkpoint_payload()`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

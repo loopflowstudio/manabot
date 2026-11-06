@@ -4369,6 +4369,29 @@ fn learning_token_value(name: &str) -> i32 {
     crate::cards::tokens::name_value(name)
 }
 
+/// `(namespace, name, value, token_kind, token_value)` of one record name.
+#[cfg(feature = "python")]
+type RecordNameRow = (&'static str, String, i32, Option<u16>, Option<i32>);
+
+/// Every name the fact and shared-effect encoders hash; the token is the
+/// learning token card text uses for the same concept, or `None`.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn learning_record_names() -> Vec<RecordNameRow> {
+    crate::agent::record_vocabulary::record_names()
+        .into_iter()
+        .map(|name| {
+            (
+                name.namespace.as_str(),
+                name.name,
+                name.value,
+                name.token.map(|(kind, _)| kind),
+                name.token.map(|(_, value)| value),
+            )
+        })
+        .collect()
+}
+
 /// The world pool by its public name (`"world"`, the only pool).
 #[cfg(feature = "python")]
 #[pyfunction]
@@ -4584,6 +4607,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
+    m.add_function(wrap_pyfunction!(learning_record_names, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;

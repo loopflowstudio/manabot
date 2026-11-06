@@ -139,7 +139,7 @@ def load_checkpoint(
     )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))
+    agent = ActorCritic(obs_space, ModelConfig.from_checkpoint(config["agent_hypers"]))
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):
@@ -188,7 +188,7 @@ def save_checkpoint(
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": obs_space.encoder.config.model_dump(),
             "train_hypers": {},
         },
