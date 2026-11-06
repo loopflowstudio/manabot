@@ -6,11 +6,13 @@ from dataclasses import replace
 from decimal import Decimal
 import json
 from pathlib import Path
+from typing import Literal
+from uuid import uuid4
 
 import duckdb
 from etude.eval.match import Tables, evaluate
 from etude.eval.query import statsdb
-from etude.eval.records import Match
+from etude.eval.records import Inference, Match, Matchup
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
@@ -20,13 +22,12 @@ from etude.experiment import (
     read_experiment,
 )
 from etude.jobs import evaluation_spec
+from etude.launch.errors import LauncherError
 from etude.launch.job_file import read_job_file
 from etude.launch.records import Run
 from etude.page import build, render
 from etude.run.errors import EtudeError
 from etude.run.records import ArtifactRef
-from etude.train.records import Step
-from etude.train.run import track
 import pytest
 
 from experiments import tla_frontier
@@ -37,15 +38,23 @@ from experiments.tla_frontier import (
     REGIME,
     ROOT,
     SMALL,
+    HostSpeed,
     SizeLabel,
     comparison_schedule,
     eval,
     export_updates,
     frozen,
+    read_hosts,
     runs,
     size_run,
 )
-from experiments.tla_frontier_analysis import FrontierAnalysis, PolicyActions, analyze
+from experiments.tla_frontier_analysis import (
+    Comparison,
+    FrontierAnalysis,
+    PolicyActions,
+    SetAside,
+    analyze,
+)
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
     MAX_HOURS,
@@ -53,20 +62,27 @@ from experiments.tla_frontier_calibration import (
     UPDATES,
     calibration_regime,
     read_calibration,
+    read_screen,
     runs as calibration_runs,
 )
 from manabot.env.observation import ObservationSpace
 from manabot.eval.results import EvaluationRow
 from manabot.experiment.job import TrainingJob
+from manabot.infra.config import RuntimeConfig
 from manabot.infra.identity import file_sha256
+from manabot.infra.runtime import RunContext, regime_tag
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.training.execution import cuda_peak_metrics
+from manabot.training.execution import cuda_peak_metrics, execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.verify.store import VerifyStore
+
+# What a launcher hands a worker: `uuid4().hex[:12]`, never the job's name.
+RUN_NAMES: dict[SizeLabel, str] = {SMALL: "0f3a9c1d2b4e", LARGE: "7be2d40a61c5"}
 
 
 def _checkpoint(label: SizeLabel, update: int) -> Checkpoint:
-    run = f"tla-frontier-c5fba4-{label}-seed21501"
+    run = RUN_NAMES[label]
     return Checkpoint(
         run=run,
         experiment=EXPERIMENT,
@@ -78,6 +94,7 @@ def _checkpoint(label: SizeLabel, update: int) -> Checkpoint:
         ),
         clocks={"updates": update},
         line=run,
+        tags=(regime_tag(f"tla-frontier-c5fba4-{label}"),),
     )
 
 
@@ -90,7 +107,7 @@ def _state(
         experiment=EXPERIMENT,
         runs=tuple(
             TrainingRun(
-                name=f"tla-frontier-c5fba4-{label}-seed21501",
+                name=RUN_NAMES[label],
                 experiment=EXPERIMENT,
                 state="finished" if finished else "running",
                 checkpoints=Checkpoints(
@@ -109,11 +126,10 @@ def _state(
 
 def _failed(state: ExperimentState, label: SizeLabel) -> ExperimentState:
     """The state with one size's run failed after its stored checkpoints."""
-    prefix = f"tla-frontier-c5fba4-{label}-"
     return replace(
         state,
         runs=tuple(
-            replace(run, state="failed") if run.name.startswith(prefix) else run
+            replace(run, state="failed") if run.name == RUN_NAMES[label] else run
             for run in state.runs
         ),
     )
@@ -124,27 +140,38 @@ def _tracked(
     source: Path,
     rows: dict[int, dict[str, float]],
     checkpoints: tuple[int, ...] = (),
-) -> None:
-    """Write a launched run as its worker would: its job's experiment and name."""
+    *,
+    end: Literal["finished", "failed"] | None = "finished",
+) -> str:
+    """Write a launched run through the worker's path and return its stored name.
+
+    A real `RunContext` under the launcher's environment owns the run's name and
+    checkpoint tags, so no fixture states what a worker writes.
+    """
     job = TrainingJob.model_validate_json(launched.job.config)
-    run = track(
-        experiment=job.experiment,
-        run=f"{job.regime.id}-seed{launched.seed}",
-        seed=launched.seed,
-        clocks=[Step("updates", "completed updates")],
-        directory=source,
-        config={"regime": job.regime.id},
-        strict=True,
-    )
-    try:
-        for update, metrics in rows.items():
-            run.log(metrics, updates=update)
-        for update in checkpoints:
-            path = source / f"{job.regime.id}-u{update}.pt"
-            path.write_text(f"synthetic export {job.regime.id} {update}")
-            run.checkpoint(path, updates=update)
-    finally:
-        run.finish()
+    name = uuid4().hex[:12]
+    with pytest.MonkeyPatch.context() as environment:
+        environment.setenv("ETUDE_RUN", name)
+        environment.setenv("ETUDE_TRACK_DIR", str(source))
+        environment.setenv("ETUDE_JOB_NAME", job.regime.id)
+        context = RunContext(
+            RuntimeConfig(name=name, runs_dir=source / "local", seed=launched.seed),
+            experiment=job.experiment,
+            regime=job.regime.id,
+        )
+        for update in sorted({*rows, *checkpoints}):
+            context.log_update(
+                rows.get(update, {}), updates=update, transitions=update * 100
+            )
+            if update in checkpoints:
+                path = source / f"{name}-u{update}.pt"
+                path.write_text(f"synthetic export {name} {update}")
+                context.checkpoint(path, transitions=update * 100)
+        context.close(end or "finished")
+    if end is None:
+        # A pod still training has written no end state yet.
+        next(source.rglob(f"{name}/state.json")).unlink()
+    return name
 
 
 def _compute_parameters(regime: TrainingRegime) -> int:
@@ -253,7 +280,7 @@ def test_exports_between_milestones_are_stored_but_not_played() -> None:
     state = _failed(
         _state({SMALL: 1300, LARGE: 525}, export_every=protocol.export_every), LARGE
     )
-    run = size_run(state, LARGE)
+    run = size_run(state, LARGE, protocol)
     assert run is not None
     assert {125, 525} <= {int(c.clocks["updates"]) for c in run.checkpoints}
     (job,) = eval(state)
@@ -295,10 +322,104 @@ def test_etude_eval_observes_the_runs_training_records(tmp_path: Path) -> None:
     for launched in launches:
         _tracked(launched, tmp_path, {25: {"loss": 0.1}}, (0, 25))
     state = observe(tmp_path, experiment.name)
-    assert size_run(state, SMALL) is not None and size_run(state, LARGE) is not None
+    protocol = frozen()[1]
+    assert size_run(state, SMALL, protocol) is not None
+    assert size_run(state, LARGE, protocol) is not None
     (job,) = experiment.eval(state)
     names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
-    assert "w256 u25 vs w64 u25" in names
+    assert {
+        "w64 u0 vs heuristic",
+        "w256 u0 vs heuristic",
+        "w64 u25 vs heuristic",
+        "w256 u25 vs heuristic",
+        "w256 u25 vs w64 u25",
+    } <= names
+
+
+def test_a_real_run_context_names_its_size_under_a_launcher_id(tmp_path: Path) -> None:
+    """Stored names are random ids, so the size reads back from checkpoint tags."""
+    small, large = runs("HEAD")
+    names = {
+        SMALL: _tracked(small, tmp_path, {}, (0, 25), end=None),
+        LARGE: _tracked(large, tmp_path, {}, (0, 25), end=None),
+    }
+    state = observe(tmp_path, EXPERIMENT)
+    protocol = frozen()[1]
+    assert {run.name for run in state.runs} == set(names.values())
+    for label, name in names.items():
+        found = size_run(state, label, protocol)
+        assert found is not None and found.name == name
+        assert not found.ended
+    assert len(evaluation_spec(eval(state)[0]).tournament.matchups) == 5
+
+
+def test_regime_tags_stay_out_of_match_keys() -> None:
+    conditions = tuple(pair.model_dump(mode="json") for pair in frozen()[1].pairs)
+    inference = Inference(source=[REGIME])
+
+    def keys(saved: Checkpoint) -> list[str]:
+        played = Matchup(
+            name="fixture",
+            players=(saved.model(inference), saved.model(inference)),
+            conditions=conditions,
+            games=4,
+        )
+        return [match.key for match in played.matches()]
+
+    tagged = _checkpoint(SMALL, 25)
+    assert tagged.tags
+    assert keys(tagged) == keys(tagged.model_copy(update={"tags": ()}))
+
+
+def test_one_size_relaunches_alone_with_its_own_ceiling() -> None:
+    file = ROOT / "experiments/tla_frontier.py"
+    (alone,) = read_job_file(file, ["--revision", "HEAD", "--size", LARGE])
+    assert alone.job.name == "tla-frontier-c5fba4-w256"
+    assert alone.job.max_usd == Decimal("38")
+    assert alone.job.max_attempts == 1
+    with pytest.raises(LauncherError, match="size must be"):
+        read_job_file(file, ["--revision", "HEAD", "--size", "w128"])
+
+
+def test_a_replaced_pod_is_set_aside_and_listed(
+    tmp_path: Path, frontier_db: duckdb.DuckDBPyConnection
+) -> None:
+    """Cancelled at the screen, a run leaves its size to the replacement."""
+    small, large = runs("HEAD")
+    retired = _tracked(large, tmp_path, {}, (0,), end="failed")
+    _tracked(small, tmp_path, {}, (0, 25), end=None)
+    replacement = _tracked(large, tmp_path, {}, (0, 25), end=None)
+    state = observe(tmp_path, EXPERIMENT)
+    protocol = frozen()[1]
+    found = size_run(state, LARGE, protocol)
+    assert found is not None and found.name == replacement
+    assert not any(
+        retired in str(comparison.matchup)
+        for comparison in comparison_schedule(state, protocol)
+    )
+    report = analyze(state, frontier_db, {})
+    assert report.set_aside == [
+        SetAside(run=retired, size=LARGE, state="failed", last_update=0)
+    ]
+
+
+def test_a_pod_cancelled_past_the_first_milestone_is_not_replaceable(
+    tmp_path: Path,
+) -> None:
+    """It keeps its size's run, which is why the screen reads each pod before 25."""
+    small, _ = runs("HEAD")
+    _tracked(small, tmp_path, {}, (0, 25), end="failed")
+    _tracked(small, tmp_path, {}, (0,), end=None)
+    with pytest.raises(ValueError, match="admits one w64 run"):
+        size_run(observe(tmp_path, EXPERIMENT), SMALL, frozen()[1])
+
+
+def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
+    _, large = runs("HEAD")
+    _tracked(large, tmp_path, {}, (0, 25), end=None)
+    _tracked(large, tmp_path, {}, (0, 25), end=None)
+    with pytest.raises(ValueError, match="admits one w256 run"):
+        size_run(observe(tmp_path, EXPERIMENT), LARGE, frozen()[1])
 
 
 def test_calibration_changes_only_length_and_identity() -> None:
@@ -322,6 +443,17 @@ def test_calibration_fits_its_ceiling_on_the_admitted_gpus() -> None:
     assert Decimal(str(MAX_HOURS + 0.25)) * Decimal("0.67") <= MAX_USD_PER_SIZE
 
 
+def _host_rows(us_per_row: dict[int, float]) -> dict[int, dict[str, float]]:
+    """A pod's step phase and rows, at 1,000 rows per update."""
+    return {
+        update: {
+            "time/collection/environment_step_and_encoding": us * 1000 / 1e6,
+            "rows": 1000,
+        }
+        for update, us in us_per_row.items()
+    }
+
+
 def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     tmp_path: Path,
 ) -> None:
@@ -335,17 +467,22 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
             "memory/peak_reserved_cuda_bytes": 6e9,
         },
     }
-    for update, (rss, count) in {
-        1: (9e9, 40_000),
-        2: (20e9, 90_000),
-        3: (12e9, 50_000),
+    for update, (rss, count, step) in {
+        1: (9e9, 40_000, 99.0),
+        2: (20e9, 90_000, 18.0),
+        3: (12e9, 50_000, 15.0),
     }.items():
-        rows[update] |= {"coordinates/rss_bytes": rss, "rows": count}
+        rows[update] |= {
+            "coordinates/rss_bytes": rss,
+            "rows": count,
+            "time/collection/environment_step_and_encoding": step,
+        }
     small, large = calibration_runs("HEAD")
     _tracked(small, tmp_path, rows, (0, 3))
     _tracked(large, tmp_path, {})
-    readings = {reading.run: reading for reading in read_calibration(tmp_path)}
-    reading = readings["tla-frontier-c5fba4-calibration-w64-seed21501"]
+    readings = {reading.job: reading for reading in read_calibration(tmp_path)}
+    reading = readings["tla-frontier-c5fba4-calibration-w64"]
+    assert len(reading.run) == 12  # the launcher's id; `job` says which size
     assert reading.updates == 3
     assert reading.seconds_per_update == 220  # the first update's warm-up is set aside
     assert reading.updates_in_wall_budget == 883
@@ -353,15 +490,114 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert reading.peak_reserved_cuda_bytes == 6_000_000_000
     assert reading.peak_rss_bytes == 20_000_000_000  # not the last update's value
     assert reading.median_rows_per_update == 50_000
-    silent = readings["tla-frontier-c5fba4-calibration-w256-seed21501"]
+    # Per row over updates 2 and 3, the first update's warm-up set aside.
+    assert reading.host.step_us_per_row == pytest.approx(250)
+    assert reading.host.step_spread == pytest.approx(1.5)
+    assert reading.host.cpu_model is None
+    silent = readings["tla-frontier-c5fba4-calibration-w256"]
     assert silent.updates == 0 and silent.seconds_per_update is None
     assert silent.peak_reserved_cuda_bytes is None
     assert silent.peak_rss_bytes is None and silent.median_rows_per_update is None
+    assert silent.host == HostSpeed(
+        step_us_per_row=None, step_spread=None, cpu_model=None
+    )
     # A frontier pass never sees calibration, even from a shared store.
     assert observe(tmp_path, EXPERIMENT).runs == ()
     assert observe(tmp_path, CALIBRATION).runs != ()
     misnamed = replace(observe(tmp_path, CALIBRATION), experiment=EXPERIMENT)
-    assert size_run(misnamed, SMALL) is None and size_run(misnamed, LARGE) is None
+    protocol = frozen()[1]
+    assert size_run(misnamed, SMALL, protocol) is None
+    assert size_run(misnamed, LARGE, protocol) is None
+
+
+def test_a_finished_receipt_names_the_cpu_when_its_revision_records_it(
+    tmp_path: Path,
+) -> None:
+    small, large = runs("HEAD")
+    named = _tracked(small, tmp_path, _host_rows({2: 100}), (0, 25))
+    older = _tracked(large, tmp_path, _host_rows({2: 100}), (0, 25))
+    for run, receipt in (
+        (named, {"host": {"cpu_model": "AMD EPYC 7763"}}),
+        (older, {"status": "paused"}),
+    ):
+        path = tmp_path / run / "attempt" / "training" / "run.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(receipt))
+    hosts = read_hosts(tmp_path)
+    assert hosts[named].cpu_model == "AMD EPYC 7763"
+    assert hosts[older].cpu_model is None
+
+
+def test_screen_reads_each_pod_against_the_fastest_in_the_store(tmp_path: Path) -> None:
+    window = range(2, 7)
+    small, large = runs("HEAD")
+    calibrated, _ = calibration_runs("HEAD")
+    fast = _host_rows(dict.fromkeys(range(2, 6), 200.0))
+    _tracked(calibrated, tmp_path, fast)
+    kept = _tracked(
+        small, tmp_path, _host_rows(dict.fromkeys(window, 250.0)), (0,), end=None
+    )
+    # Both frontier pods can read slow against calibration's.
+    slow = _tracked(
+        large, tmp_path, _host_rows(dict.fromkeys(window, 300.0)), (0,), end=None
+    )
+    early = _tracked(large, tmp_path, _host_rows({2: 400.0, 3: 400.0}), (0,), end=None)
+    readings = {reading.run: reading for reading in read_screen(tmp_path)}
+    assert readings[kept].ratio == pytest.approx(1.25) and readings[kept].slow is False
+    assert readings[slow].ratio == pytest.approx(1.5) and readings[slow].slow is True
+    # Before its window closes a live run is shown but not called.
+    assert readings[early].slow is None
+    assert sum(r.experiment == CALIBRATION for r in readings.values()) == 1
+
+
+def test_one_real_update_writes_every_key_calibration_reads(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A real `execute_regime` run, shrunk only so it finishes in a test."""
+    regime = calibration_regime(frozen()[0][SMALL], SMALL)
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    short = regime.model_copy(
+        update={
+            "agent": regime.agent.model_copy(
+                update={
+                    "hidden_dim": 16,
+                    "attention_layers": 1,
+                    "num_attention_heads": 2,
+                }
+            ),
+            "stages": [
+                stage.model_copy(
+                    update={
+                        "updates": 2,
+                        "streams": 2,
+                        "transitions": 8,
+                        "execution": stage.execution.model_copy(
+                            update={"device": "cpu"}
+                        ),
+                    }
+                )
+            ],
+        }
+    )
+    monkeypatch.setenv("ETUDE_RUN", uuid4().hex[:12])
+    monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "track"))
+    monkeypatch.setenv("ETUDE_JOB_NAME", short.id)
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        run = execute_regime(
+            short, 21501, tmp_path / "run", store, experiment=CALIBRATION
+        )
+    assert run.status == "completed"
+    (reading,) = read_calibration(tmp_path / "track")
+    assert reading.job == short.id and reading.state == "finished"
+    assert reading.updates == 2 and reading.seconds_per_update is not None
+    assert reading.peak_rss_bytes is not None
+    assert reading.median_rows_per_update is not None
+    assert reading.host.step_us_per_row is not None
+    # The real path tags its checkpoints, update 0 and the final export alike.
+    (stored,) = observe(tmp_path / "track", CALIBRATION).runs
+    tagged = stored.checkpoints.tagged(regime_tag(short.id))
+    assert len(tagged) == len(stored.checkpoints) and len(tagged) >= 2
 
 
 def test_cuda_peaks_are_absent_off_cuda_and_read_on_it(
@@ -402,24 +638,20 @@ def test_play_carries_a_real_games_cutoff_counts(
     space = ObservationSpace(narrow.observation)
     path = tmp_path / "u0.pt"
     save_checkpoint(ActorCritic(space, narrow.agent), space, path, player_configs=None)
-    run = f"tla-frontier-c5fba4-{SMALL}-seed21501"
-    saved = Checkpoint(
-        run=run,
-        experiment=EXPERIMENT,
-        ordinal=1,
-        artifact=ArtifactRef(
-            uri=path.as_uri(),
-            sha256=file_sha256(path),
-            size_bytes=path.stat().st_size,
-        ),
-        clocks={"updates": 0},
-        line=run,
+    saved = _checkpoint(SMALL, 0).model_copy(
+        update={
+            "artifact": ArtifactRef(
+                uri=path.as_uri(),
+                sha256=file_sha256(path),
+                size_bytes=path.stat().st_size,
+            )
+        }
     )
     state = ExperimentState(
         experiment=EXPERIMENT,
         runs=(
             TrainingRun(
-                name=run,
+                name=saved.run,
                 experiment=EXPERIMENT,
                 state="running",
                 checkpoints=Checkpoints([saved]),
@@ -576,9 +808,13 @@ def _outcomes(
     return keys
 
 
+def _endpoint_comparison(report: FrontierAnalysis) -> Comparison:
+    return next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+
+
 def _endpoint_score(report: FrontierAnalysis) -> float:
     """The endpoint head-to-head's score, reported even without a scale reading."""
-    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    played = _endpoint_comparison(report)
     assert played.result is not None and played.result.score is not None
     return played.result.score.mean
 
@@ -588,7 +824,7 @@ def test_analysis_reads_learning_and_scale_past_unreached_milestones(
 ) -> None:
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert report.complete and report.issues == []
     assert report.scale is not None and report.scale.score is not None
     assert report.scale.score.mean == 0.75
@@ -616,7 +852,7 @@ def test_failed_size_keeps_its_reach_but_no_equal_compute_scale(
         c.tag == "head-to-head" and c.update == 600 and c.unreached for c in schedule
     )
     _outcomes(frontier_db, state)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     small, large = report.sizes
     assert (large.state, large.endpoint) == ("failed", 450)
     assert large.learned is True and large.against_heuristic is not None
@@ -638,7 +874,7 @@ def test_analysis_keeps_a_negative_learning_reading(
 ) -> None:
     state = _state({SMALL: 100, LARGE: 50})
     _outcomes(frontier_db, state, wins=2)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert report.complete
     assert [reading.learned for reading in report.sizes] == [False, False]
 
@@ -651,7 +887,7 @@ def test_analysis_missing_reached_comparison_leaves_reading_unknown(
     frontier_db.execute(
         "DELETE FROM matches WHERE match = ?", [keys["w256 final u50 vs w256 u0"][0]]
     )
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert not report.complete
     assert "The frozen comparison schedule is incomplete." in report.issues
     assert report.sizes[1].learned is None
@@ -664,7 +900,7 @@ def test_analysis_of_running_sizes_claims_nothing(
 ) -> None:
     state = _state({SMALL: 100, LARGE: 50}, finished=False)
     _outcomes(frontier_db, state)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert not report.complete
     assert report.scale is None
     assert all(reading.endpoint is None for reading in report.sizes)
@@ -697,7 +933,7 @@ def test_failed_legs_bound_readings_instead_of_erasing_them(
     keys = _outcomes(frontier_db, state)
     _fail_leg(frontier_db, keys["w256 final vs w64 final"][0], 0)
     _fail_leg(frontier_db, keys["w64 final u1300 vs w64 u0"][0], 0)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     played = 64 * len(keys)
     assert not report.complete
     assert report.issues == [f"2 of {played} played games have no score."]
@@ -717,7 +953,7 @@ def test_a_failed_match_with_no_rows_counts_all_its_legs_unscored(
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state)
     _fail_match(frontier_db, keys["w64 final u1300 vs heuristic"][0])
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert "The frozen comparison schedule is incomplete." not in report.issues
     assert f"4 of {64 * len(keys)} played games have no score." in report.issues
     assert report.counts.failed_matches == 1
@@ -734,7 +970,7 @@ def test_a_bound_too_wide_to_decide_leaves_learning_unknown(
     keys = _outcomes(frontier_db, state)
     for key in keys["w64 final u1300 vs w64 u0"][:12]:
         _fail_match(frontier_db, key)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     small = report.sizes[0]
     assert small.learned is None
     assert small.against_initial is not None
@@ -747,7 +983,7 @@ def test_failed_legs_cannot_rescue_a_clear_negative_reading(
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state, wins=0)
     _fail_match(frontier_db, keys["w64 final u1300 vs w64 u0"][0])
-    assert analyze(state, frontier_db).sizes[0].learned is False
+    assert analyze(state, frontier_db, {}).sizes[0].learned is False
 
 
 def test_an_endpoint_at_the_update_cap_is_not_equal_compute(
@@ -755,7 +991,7 @@ def test_an_endpoint_at_the_update_cap_is_not_equal_compute(
 ) -> None:
     state = _state({SMALL: 3000, LARGE: 450})
     _outcomes(frontier_db, state)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert report.scale is None and not report.complete
     assert report.issues == [
         "A run hit the update cap; no equal-compute scale reading."
@@ -776,9 +1012,9 @@ def test_cutoff_counts_are_totalled_per_comparison_and_add_no_issue(
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state)
     _add_policy_actions(frontier_db)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert report.complete and report.issues == []
-    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    played = _endpoint_comparison(report)
     # 16 pairs of four games, each counted once though both seats repeat it.
     assert played.policy_actions == PolicyActions(
         games=64, decisions=6400, dropped_actions=192
@@ -802,8 +1038,8 @@ def test_a_killed_game_leaves_its_count_out_of_the_totals(
         "WHERE match = ? AND game = 0",
         [killed],
     )
-    report = analyze(state, frontier_db)
-    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    report = analyze(state, frontier_db, {})
+    played = _endpoint_comparison(report)
     assert played.counts.expected == 64
     assert played.policy_actions == PolicyActions(
         games=63, decisions=6300, dropped_actions=189
@@ -817,7 +1053,7 @@ def test_analysis_without_cutoff_columns_reports_no_counted_games(
 ) -> None:
     state = _state({SMALL: 100, LARGE: 50})
     _outcomes(frontier_db, state)
-    report = analyze(state, frontier_db)
+    report = analyze(state, frontier_db, {})
     assert report.complete
     assert report.policy_actions == PolicyActions()
 
@@ -856,12 +1092,17 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
     state = observe(tmp_path, EXPERIMENT)
     benchmark = evaluation_spec(eval(state)[0]).tournament
     matchups = {matchup.name: matchup.matches() for matchup in benchmark.matchups}
-    died = matchups["w256 final vs w64 final"][0]
+    died, uncounted = matchups["w256 final vs w64 final"][:2]
 
     def play(match: Match) -> Tables:
         if match.key == died.key:
             raise RuntimeError("the worker died")
-        return _played(match)
+        played = _played(match)
+        if match.key == uncounted.key:
+            # All four legs killed at their limit: this block stores no count at all.
+            for row in played["games"]:
+                row |= {"policy_decisions": None, "policy_dropped_actions": None}
+        return played
 
     def run(name: str, matches: list[Match]) -> None:
         evaluate(
@@ -887,14 +1128,13 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
     ):
         assert title in html
     with statsdb(EXPERIMENT, tmp_path) as db:
-        report = analyze(state, db)
+        report = analyze(state, db, read_hosts(tmp_path))
     played = sum(len(ms) for ms in matchups.values()) * 4
     assert report.issues == [f"4 of {played} played games have no score."]
     assert report.scale is not None and report.scale.score is None
     assert report.scale.worst.mean == 0.75 - 0.75 / 16
     assert report.scale.best.mean == 0.75 + 0.25 / 16
-    # Fifteen stored matches of the endpoint block, three counted games each.
-    endpoint = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
-    assert endpoint.policy_actions == PolicyActions(
-        games=45, decisions=4500, dropped_actions=90
+    # Fourteen counted matches of the endpoint block, three counted games each.
+    assert _endpoint_comparison(report).policy_actions == PolicyActions(
+        games=42, decisions=4200, dropped_actions=84
     )

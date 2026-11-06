@@ -1198,6 +1198,7 @@ def _execute_regime(
                             log_level="WARNING",
                         ),
                         experiment=experiment or stage.id,
+                        regime=regime.id,
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,

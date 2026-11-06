@@ -12,6 +12,11 @@ endpoint is its last stored checkpoint, so its reach is still played and read.
 Training exports more often than `eval` plays: the export cadence bounds what a
 lost rental can cost, and only milestones and endpoints are evaluated.
 
+A launched run is stored under its launcher id, so `size_run` knows a size by
+the regime tag on its checkpoints. A pod's single-thread speed sets the pace of
+this one-worker recipe, so `host_speed` reads it from each run's step phase;
+`experiments.tla_frontier_calibration` applies the protocol's screen to it.
+
 The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
 stays unchanged, so its evaluation callback, whose identities name that
 pilot's source and artifacts, is mirrored here rather than shared.
@@ -23,9 +28,11 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from decimal import Decimal
+import json
 import os
 from pathlib import Path
 import shutil
+from statistics import median
 from tempfile import TemporaryDirectory
 from typing import Literal
 
@@ -43,6 +50,9 @@ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
+from etude.run.listing import as_storage
+from etude.run.storage import Storage
+from etude.train.read import RunData, read_all
 import torch
 
 from experiments import tla_frontier
@@ -54,6 +64,7 @@ from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
+from manabot.infra.runtime import regime_tag
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
@@ -73,6 +84,10 @@ EVALUATION_WORKERS = 28
 EVALUATION_HOURS = 1.75
 EVALUATION_PASS_USD = Decimal("2")
 EVALUATION_ATTEMPTS = 3
+# Native stepping and encoding, which hold no network work, so pods training
+# different sizes compare directly. Update 1 carries warm-up.
+STEP_PHASE = "time/collection/environment_step_and_encoding"
+HOST_UPDATES = range(2, 7)
 HEURISTIC: HeuristicSpec = {
     "kind": "heuristic",
     "max_actions": 64,
@@ -158,27 +173,53 @@ def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...
     return tuple(sorted({*cadence, *protocol.milestones}))
 
 
-def runs(revision: str) -> list[Run]:
-    """One capped GPU allocation per size; no automatic retry or budget expansion."""
-    regimes, protocol = frozen()
-    return [
-        run
-        for regime in regimes.values()
-        for run in TrainingJob(
+def capped_runs(
+    regime: TrainingRegime,
+    *,
+    experiment: str,
+    revision: str,
+    seed: int,
+    max_hours: float,
+    max_usd: Decimal,
+    milestones: tuple[int, ...] = (),
+) -> list[Run]:
+    """One capped allocation; calibration measures the job the frontier launches."""
+    return (
+        TrainingJob(
             regime=regime,
-            experiment=EXPERIMENT,
-            milestones=export_updates(regime, protocol),
+            experiment=experiment,
+            milestones=milestones,
             finalization_seconds=600,
             stop_reserve_seconds=600,
             validate_numerics=True,
         )
-        .job(
-            repo=ROOT,
+        .job(repo=ROOT, revision=revision, max_hours=max_hours, max_usd=max_usd)
+        .runs(seed)
+    )
+
+
+def runs(revision: str, size: str = "both") -> list[Run]:
+    """One capped GPU allocation per size; no automatic retry or budget expansion.
+
+    `size` names one label to relaunch it alone, the protocol's replacement of
+    a pod its host screen read slow.
+    """
+    regimes, protocol = frozen()
+    if size not in ("both", *SIZES):
+        raise ValueError(f"size must be both, {SMALL} or {LARGE}, not {size}")
+    return [
+        run
+        for label, regime in regimes.items()
+        if size in ("both", label)
+        for run in capped_runs(
+            regime,
+            experiment=EXPERIMENT,
             revision=revision,
+            seed=protocol.training_seed,
             max_hours=protocol.training_hours,
             max_usd=protocol.training_usd,
+            milestones=export_updates(regime, protocol),
         )
-        .runs(protocol.training_seed)
     ]
 
 
@@ -201,6 +242,58 @@ def environment(protocol: Protocol) -> Environment:
     )
 
 
+# -- Host speed ---------------------------------------------------------------
+
+
+class HostSpeed(StrictModel):
+    """How fast a run's pod stepped; None means the run has no such reading.
+
+    A median over `HOST_UPDATES` as far as the run reached them, per row
+    because rows per update follow game length. `step_spread` is the window's
+    slowest update over its fastest: above the screen's line, one pod's own
+    variation could pass for a host difference. `cpu_model` is on a run's
+    receipt only once its attempt finishes, on revisions that record it.
+    """
+
+    step_us_per_row: float | None
+    step_spread: float | None
+    cpu_model: str | None
+
+
+def _receipt_cpu_model(storage: Storage, run: str) -> str | None:
+    receipts = [key for key in storage.keys(run) if key.endswith("training/run.json")]
+    if not receipts:
+        return None
+    host = json.loads(storage.get(max(receipts))).get("host")
+    return host.get("cpu_model") if host else None
+
+
+def host_speed(data: RunData, storage: Storage) -> HostSpeed:
+    steps = data.points(STEP_PHASE, "updates")
+    rows = data.points("rows", "updates")
+    counts = dict(zip(rows.x.tolist(), rows.y.tolist(), strict=True))
+    window = [
+        seconds * 1e6 / counts[update]
+        for update, seconds in zip(steps.x.tolist(), steps.y.tolist(), strict=True)
+        if update in HOST_UPDATES and counts.get(update)
+    ]
+    return HostSpeed(
+        step_us_per_row=median(window) if window else None,
+        step_spread=max(window) / min(window) if window else None,
+        cpu_model=_receipt_cpu_model(storage, data.name),
+    )
+
+
+def read_hosts(source: Storage | Path | str) -> dict[str, HostSpeed]:
+    """Every frontier run's host speed by stored run name."""
+    storage = as_storage(source)
+    return {
+        data.name: host_speed(data, storage)
+        for data in read_all(storage)
+        if data.experiment == EXPERIMENT
+    }
+
+
 # -- Evaluation schedule ------------------------------------------------------
 
 
@@ -220,10 +313,39 @@ class ScheduledComparison:
     unreached: bool = False
 
 
-def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
-    """The size's one run, which Etude names `<regime id>-seed<seed>`."""
-    prefix = f"{_regime_id(label)}-"
-    found = [run for run in state.runs if run.name.startswith(prefix)]
+def size_label(run: TrainingRun) -> SizeLabel | None:
+    """The size a run's checkpoints name; a run that stored none names no size."""
+    for label in SIZES:
+        if run.checkpoints.tagged(regime_tag(_regime_id(label))):
+            return label
+    return None
+
+
+def last_update(run: TrainingRun) -> int | None:
+    """The run's last stored update; None if it stored no checkpoint."""
+    last = run.checkpoints.last
+    return int(last.clocks["updates"]) if last else None
+
+
+def is_set_aside(run: TrainingRun, protocol: Protocol) -> bool:
+    """Whether a run ended below the first milestone, as a replaced pod does.
+
+    Such a run has nothing to evaluate. Analysis lists it, since every attempt
+    is reported, but it is no size's run.
+    """
+    reached = last_update(run)
+    return run.ended and (reached is None or reached < min(protocol.milestones))
+
+
+def size_run(
+    state: ExperimentState, label: SizeLabel, protocol: Protocol
+) -> TrainingRun | None:
+    """The size's one run: the checkpoints' regime tag names it, not its stored name."""
+    found = [
+        run
+        for run in state.runs
+        if size_label(run) == label and not is_set_aside(run, protocol)
+    ]
     if len(found) > 1:
         raise ValueError(f"frontier admits one {label} run, found {len(found)}")
     return found[0] if found else None
@@ -231,8 +353,7 @@ def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
 
 def endpoint(run: TrainingRun | None) -> int | None:
     """An ended run's last stored update, failed or not; None while it may save more."""
-    last = run.checkpoints.last if run and run.ended else None
-    return int(last.clocks["updates"]) if last else None
+    return last_update(run) if run and run.ended else None
 
 
 def comparison_schedule(
@@ -248,11 +369,11 @@ def comparison_schedule(
     inference = Inference(source=source)
     heuristic = Code(name="heuristic", source=source, config=HEURISTIC)
     conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
-    runs = {label: size_run(state, label) for label in SIZES}
-    endpoints = {label: endpoint(run) for label, run in runs.items()}
+    trained = {label: size_run(state, label, protocol) for label in SIZES}
+    endpoints = {label: endpoint(run) for label, run in trained.items()}
     saved: dict[SizeLabel, dict[int, Checkpoint]] = {
         label: {int(c.clocks["updates"]): c for c in run.checkpoints} if run else {}
-        for label, run in runs.items()
+        for label, run in trained.items()
     }
 
     def model(label: SizeLabel, update: int | None) -> Model | None:

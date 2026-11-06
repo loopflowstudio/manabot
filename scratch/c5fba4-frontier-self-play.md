@@ -1,15 +1,16 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
-Status: protocol v1 drafted 2026-11-05 by the first implement step,
-reconciled four times and concept-reviewed four times the same day (headless). Nothing
-has launched or spent money. Directions 1–14 are implemented; `frozen()` passes, so
-`runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190 in
-[direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
-runner `experiments/tla_frontier.py`; analysis
-`experiments/tla_frontier_analysis.py`; calibration
-`experiments/tla_frontier_calibration.py`; tests `tests/eval/test_tla_frontier.py`.
+Status: protocol v1 drafted 2026-11-05 by the first implement step, reconciled and
+concept-reviewed five times the same day (headless); directions 15–17 implemented
+2026-11-06. Nothing has launched or spent money. Directions 1–17 are implemented;
+`frozen()` passes, so `runtime_world` needed no re-freeze. Brief: Task c5fba4; direction
+comment 694f4190 in [direction.md](direction.md). Contract:
+`experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`; runner
+`experiments/tla_frontier.py`; analysis `experiments/tla_frontier_analysis.py`;
+calibration `experiments/tla_frontier_calibration.py`; tests
+`tests/eval/test_tla_frontier.py`.
 
-Check: `uv run --extra dev --extra evaluation pytest tests/eval/test_tla_frontier.py -q`, 35 passed (2026-11-05, after directions 13–14 and compress; run with the evaluation-match, pilot and local-evaluation tests, 114 passed).
+Check: `uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_tla_frontier.py tests/training/test_etude_job.py -q`, plus `tests/training/test_regimes.py`, `tests/training/test_etude_sdk.py` and `tests/test_package_boundaries.py`, all passed (2026-11-06); the frontier file also passes under the 0.2.14 control client, 44 passed. Gate owns wider suites. After the compress pass (2026-11-06), the frontier, job and pilot-analysis tests: 109 passed.
 
 ## Design (as implemented)
 
@@ -109,10 +110,10 @@ is hashed into retained environments).
 - Unproven until the first real rental: the evaluation driver delivering to the
   training store, setup cost per rental, and calibration's stock worker on CUDA.
 - Before reading a score, confirm from `etude status` that both runs had the
-  same GPU model, and record both pods' vCPUs.
-- A retry of a size is a new protocol version with its recorded decision and
-  new regime ids, since `size_run` matches the old run's prefix. The protocol's
-  "Lost rental" section states the default and both limits.
+  same GPU model. Host speed is read by `--screen` and in the analysis.
+- A retry of a size past the screen (direction 17) is a new protocol version with
+  its recorded decision and new regime ids, since `size_run` admits one run per
+  regime. The protocol's "Lost rental" section states the default and both limits.
 - The final report is written after the runs. `tla_frontier_analysis` gives its
   numbers: whole-pair intervals with failed-leg bounds, per-size learning, the
   scale score, hours per checkpoint and every failed, missing or unreached slot. `report()` stays
@@ -366,14 +367,11 @@ Measured on v10's retained receipts, extrapolated to about 1,300 updates:
     Jack Heart accepted on 2026-11-04 comes with aggregate replay-linked
     diagnostics, and the protocol gives every policy that cutoff. Training keeps
     its receipt (`failures/action-cutoff-*.json`; v10 counted 755,995 decisions and
-    no overflow). Evaluation does not: `native_game.py:366` puts
-    `policy_action_cutoff` on the game, and nothing reads it. A search of all 230
-    v10 evidence files finds no cutoff count, and `MatchRow` has no such field.
-    So the final read could not say whether a trained policy lost choices in a
-    scored game, and the brief names overflow past 64 slots as a limit left open.
-    Bigger boards from stronger play are where it would first appear. It must land
-    before launch, because played games would then need a replay of their command
-    traces to recover it.
+    no overflow). Evaluation's report stayed on the game (`native_game.py:366`), so
+    it reached the retained traces but no row: all 230 v10 evidence files hold no
+    count, and the final read could not say from the store whether a trained policy
+    lost choices in a scored game. The brief names overflow past 64 slots as a limit
+    left open, and bigger boards from stronger play are where it would first appear.
 
     Carry the decisions and dropped actions per game into `play`'s `games` rows,
     sum them per `Comparison`, and show the totals in the analysis. Frozen rows
@@ -395,10 +393,8 @@ Implementation notes (2026-11-05):
   heuristic played four valid games. Each game's report summed to its decision
   count (266, 73, 156 and 285) with 0 dropped at 64 slots. A test repeats this at 4 slots,
   where real games do overflow.
-- Correction to direction 13: the report is not lost today. `game` carries it into
-  the retained `.commands.jsonl.gz` traces, so current games need no replay, only a
-  read of those files. V10's own traces were not inspected for it. Rows still carry
-  the counts, so analysis reads them from the store.
+- V10's own traces were not inspected for the report; rows carry it from here on,
+  so analysis reads it from the store.
 - `MatchRow.policy_actions` uses `exclude_if`. `EvaluationRow` reads the key from its
   extras, because a declared field would dump as None and change the digest
   `_verify_block` recomputes.
@@ -410,6 +406,9 @@ Implementation notes (2026-11-05):
   head-to-head counts twice in both and `games` stays comparable with played games.
 - `coordinates/rss_bytes` is sampled once per update, so `peak_rss_bytes` can miss a
   peak inside an update. `sampled_peak_rss_bytes` stays in `run.json`.
+- Etude omits an all-null column from a block and reads blocks by name, so a match
+  of four killed games stores no count column. The real-store test now holds one
+  such match beside counted ones, and it counts zero games there.
 
 ### Left alone
 
@@ -434,9 +433,154 @@ already requires, and 14 widens an accepted reading.
   protocol version before launch.
 - Scored games show dropped actions at a meaningful rate: 64 slots limit strength,
   and the next protocol's capacity needs review. This does not void the reading.
-- Direction 13 cannot reach `play` without changing a frozen row digest: keep the
-  counts in the retained arena files and have analysis read those instead.
 
 Proposed wave memory (not written): `complete-games` closure makes update size,
 host memory and update cost follow game length; evaluation rows carry first-64
 cutoff counts from c5fba4 on, and earlier pilots' rows have none.
+
+## Fifth concept review (2026-11-05, headless)
+
+Walked what the first four left out: the store as a real launch writes it, and the
+pods a launch actually gets. Sizes, recipe, schedule, budget split and reading rules
+stay. One defect stops all evaluation. One new fact from b015d5 changes what the
+hardware check records.
+
+### Observed
+
+- **A launched run's stored name is a random id, so `size_run` finds nothing.**
+  `Scheduler._work` hands `run=run.id` (`uuid4().hex[:12]`), the worker exports it
+  as `ETUDE_RUN`, and `manabot/infra/runtime.py:78` tracks under it. V10's store
+  confirms this: its folder is `ae76c17951c3`, though its job was named for the
+  regime. `RunRecord.name`, `<job name>-seed<seed>`, exists only in the launcher.
+  `size_run` matches that name by prefix, and the test fixture `_tracked` writes it
+  by hand, so every store-backed test passes on a name no worker writes. A probe
+  wrote both runs under hex names with checkpoints at 0, 25 and 50: `size_run` gave
+  None for both sizes, the schedule held 0 playable matchups, and `eval` returned
+  `[]`. It raises nothing, so the watch loop would sit idle for all 54 hours and
+  direction 694f4190's evaluations would never play.
+- **`ExperimentState` cannot name a size.** `TrainingRun` holds name, experiment,
+  state and checkpoints in both 0.2.12 and 0.2.14. `observe` drops the declaration's
+  `job_name`. `Checkpoint.tags` does reach it, and `Checkpoints.tagged` reads them.
+- **Calibration has the same blind spot.** `Calibration.run` would be a hex id, so
+  its reader could not say which reading is w256, the one the gate needs.
+  `RunData.file.declaration.job_name` is available there, so this needs no Etude
+  change.
+- **Host class sets the pace, not vCPUs (b015d5, `experiments/training-update-time.md`
+  on its branch; its PR is not open).** One producer means one CPU thread, and this
+  regime has `workers: 1`. At a fixed GPU label, update time moved 1.6–1.8×. Retained
+  Elemental runs split 128–146 µs per decision (fast) from 205–239 (slow). Of the
+  retained L4 runs, 5 were fast and 2 slow; every A40 was slow, at the same price. The
+  protocol's check records vCPUs, which that work refuted as a cause, and offers A40
+  as equal to L4.
+- **TLA has no host anchor.** V10 spent 2,388 µs of collection per decision against
+  Elemental's roughly 580, unattributed. Its store is not on this machine, so its
+  step series and `rows` key were not read. Those bands are Elemental's.
+- **A run has one host.** Replacing a slow pod is `etude cancel` and a new launch from
+  update 0, under a new run id. `size_run` then raises on a second run, and
+  `submit` refuses a repeated cohort name.
+
+### Directions, implemented
+
+15. **Name each size on its stored checkpoints (blocks launch).** `RunContext.checkpoint`,
+    the one path for all three `experiment.checkpoint` callers, records a tag naming
+    the regime, such as `regime:tla-frontier-c5fba4-w64`. `size_run` selects by
+    `run.checkpoints.tagged(...)` instead of by name. A tag makes the stored record
+    self-describing, uses a mechanism both Etude versions already carry, and needs no
+    release. Check that tags stay out of match keys.
+
+    `_tracked` must write hex run names and take its tags from the real path, and one
+    test must drive a real `RunContext` under `ETUDE_RUN=<hex>` and read the size back
+    through `observe`, so no fixture states the seam again. Calibration shows the job
+    name beside the run id. Correct `size_run`'s docstring.
+
+    The gap itself belongs to Etude: `TrainingRun.job_name`, from the declaration, is
+    the better owner and [[etude-is-ours]] applies. It would need a release and a
+    control-client bump, so it is proposed separately, like ledger scoping. If it
+    lands first, `size_run` can read it and the tag can go.
+
+16. **Record host speed, not vCPUs.** The protocol's Hardware section replaces the
+    vCPU check. Each pod's speed is its median
+    `time/collection/environment_step_and_encoding` per row over updates 2–6. That
+    phase holds no network work, so it compares w64's pod with w256's directly. Add it
+    to `Calibration` and to `SizeReading`, and name `host.cpu_model` from
+    `training/run.json` as the second fact when the revision has it (b015d5). A
+    difference is reported and does not void the reading, as before. The protocol rents
+    L4, and A40 only if L4 stock is empty. Say that a gate reading depends on its host:
+    a slow pod reads up to 1.8× above a fast one, so the calibration reading shows
+    its step speed.
+
+    Calibration's rows are hand-written in tests, so prove on one short real
+    `execute_regime` update that every key it reads exists, `rows` included.
+
+17. **Declare a pre-scoring host screen.** Over 54 hours a slow pod costs a size up to
+    about 40% of its updates and buys it nothing, and on the retained L4 split a
+    launch of two pods meets at least one slow host about half the time. Replacing one
+    costs at most about USD1.50. Per-update cost is the brief's binding constraint, and
+    the brief says to coordinate with b015d5, whose recommendation this is.
+
+    - The evaluation driver starts after the screen, so no game exists when it acts.
+    - A pod reads slow at more than 1.3× the lowest step speed among this launch's
+      pods and calibration's. The bands imply about that ratio; it is a rough line,
+      like the gate. Both pods reading slow against calibration counts.
+    - The slower pod is cancelled, not deleted, and relaunched once per size. A size
+      that reads slow twice keeps its second run. Costs come from the reserve.
+    - `runs` takes a size parameter (a string, which `etude launch` can read), so one
+      size relaunches alone with its own USD38 ceiling and no cohort.
+    - `size_run` sets aside an ended run whose last update is below the first
+      milestone, and analysis lists those runs, since every attempt is reported.
+    - The protocol's "No automatic retry" stays. This is an operator step it declares
+      before scoring. Any later retry stays a new version.
+
+Implementation notes (2026-11-06):
+
+- **A cancelled run never read as ended, so the screen's replacement could not work.**
+  Etude's worker sees the stop file within 0.1 s and sends SIGTERM; training polls
+  that file once a second and handled no signal, and `atexit` does not run on signal
+  death. No `state.json` was written, so the run read `running` for good and the
+  replacement made `size_run` raise, ending the watch loop. A real worker process
+  reproduced it. `manabot.experiment.job`'s entry now turns SIGTERM into
+  `KeyboardInterrupt` (game-error isolation catches `Exception`), so the existing
+  `except BaseException` and close callback record `interrupted` / `failed`. This
+  reaches every `TrainingJob`, and a hard deadline's SIGTERM too. A machine lost
+  outright still records no end.
+- **The screen reads each pod, below update 25.** An ended run past the first milestone
+  stays its size's run, and w64 passes 25 before w256 passes 6 once w256 is slower than
+  about 625 s/update at w64's 150 s. The protocol's "both pods pass update 6" would have
+  cancelled a run that blocks evaluation. A test pins the refusal. Cost: a w64 pod slow
+  only against a later w256 reading is kept and reported.
+- Live metrics do reach the store (Etude seals and ships every few seconds), so the
+  screen reads running pods.
+
+### Left alone
+
+- **Launch timing against b015d5** stays a launch decision. It gets stronger: that
+  branch projects about 25% off an update and adds `TrainingRun.host`, so calibrating
+  on a revision without it would measure a slower trainer. It is bit-identical on CPU
+  only; CUDA is unchecked. It touches no protocol file, and the step series above
+  exists at this revision, so nothing here waits on it.
+- **Heuristic saturation.** If a size nears 1.0 against the heuristic, that curve and
+  the endpoint vs initialization stop resolving progress, and only head-to-heads
+  remain. V10 stood at 9/32, so no evidence says this happens. A next protocol can add
+  endpoint vs own earlier milestone; these checkpoints will exist.
+- **`workers: 1`** is the next lever on the same constraint, and b015d5 calls lifting
+  it a separate decision. It belongs in the final read's "what limits it next".
+
+No open product choice. 15 repairs what direction 694f4190 requires. 16 corrects a
+recorded fact. 17 stays inside the USD100, keeps every reading rule and precedes all
+scoring, and it is reversible until launch.
+
+### Counterexamples that would reopen this
+
+- Tags do not survive a real delivered checkpoint: then 15 needs the Etude change
+  first, and launch waits for it.
+- Calibration shows the step phase varying by more than 1.3× between updates on one
+  pod: the screen cannot read host class on TLA, so drop 17 and keep 16's reporting.
+- A fresh launch of one size is refused for a reason the quote does not show: the
+  screen needs a different shape, and 16 still stands.
+
+Proposed wave memory (not written): a launched run's stored name is its launcher id,
+not `<job>-seed<seed>`, and `ExperimentState` carries no job name, so experiments
+distinguish runs by checkpoint tags; fixtures must not write identities a worker does
+not write.
+Also: Etude ends an attempt with SIGTERM within 0.1 s of cancellation, so an end state
+depends on the worker's handler, not its stop-file poll.

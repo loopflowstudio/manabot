@@ -9,6 +9,8 @@ leaves the analysis incomplete and its reading unknown. A failed run keeps its
 learning and strength readings at its last stored checkpoint, with `state`
 beside them, but its head-to-head score is not equal compute, so `scale` needs
 both runs finished under the wall budget, neither stopped by the update cap.
+A run that ended below the first milestone is no size's run; `set_aside` lists
+it, because every attempt is reported.
 
 A failed game stays failed: nothing replaces it and it leaves the denominator
 unchanged. Its comparison has no `score`, but once every pair has a match
@@ -23,16 +25,19 @@ games. The totals span both players, so they support no per-policy rate.
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
 in its database, so `TrainingPoint` reads it here to show how far each size got
-per hour. The CLI writes JSON; it neither runs games nor replaces evidence.
+per hour. Each size also shows its pod's host speed, reported beside the
+reading and voiding nothing. The CLI writes JSON; it neither runs games nor
+replaces evidence.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Mapping
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import duckdb
 from etude.eval.query import statsdb
 from etude.experiment import ExperimentState, TrainingRun, observe
 import numpy as np
@@ -42,6 +47,7 @@ from experiments.tla_frontier import (
     EXPERIMENT,
     PROTOCOL,
     SIZES,
+    HostSpeed,
     Protocol,
     ScheduledComparison,
     SizeLabel,
@@ -49,6 +55,10 @@ from experiments.tla_frontier import (
     endpoint,
     environment,
     frozen,
+    is_set_aside,
+    last_update,
+    read_hosts,
+    size_label,
     size_run,
     update_cap,
 )
@@ -58,11 +68,15 @@ from experiments.tla_pilot_analysis import (
     PairResult,
     game_columns,
     pair_result,
+    stored_game_columns,
     total_counts,
 )
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
+
+if TYPE_CHECKING:
+    import duckdb
 
 
 class Bounded(StrictModel):
@@ -122,6 +136,18 @@ class SizeReading(StrictModel):
     against_initial: Bounded | None
     against_heuristic: Bounded | None
     learned: bool | None
+    # Comparing the two pods' speed reads the equal-compute claim; a difference
+    # is reported and voids nothing.
+    host: HostSpeed | None
+
+
+class SetAside(StrictModel):
+    """An attempt that ended below the first milestone; it enters no reading."""
+
+    run: str
+    size: SizeLabel | None
+    state: str
+    last_update: int | None
 
 
 class FrontierAnalysis(StrictModel):
@@ -132,6 +158,7 @@ class FrontierAnalysis(StrictModel):
     policy_actions: PolicyActions
     comparisons: list[Comparison]
     sizes: list[SizeReading]
+    set_aside: list[SetAside]
     # The large size's score at equal wall-clock compute, the primary scale
     # reading. None unless both runs finished below the update cap;
     # `comparisons` keeps the score.
@@ -166,17 +193,8 @@ def _bounded(pairs: list[PairResult], indices: npt.NDArray[np.int64]) -> Bounded
 def _policy_actions_by_match(
     db: duckdb.DuckDBPyConnection, environment_id: str
 ) -> dict[str, PolicyActions]:
-    """Each stored match's totals; Etude omits columns that are all null.
-
-    Each seat repeats its game's count, so seat 0 counts a game once.
-    """
-    available = {
-        row[0]
-        for row in db.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
-        ).fetchall()
-    }
-    if not {"policy_decisions", "policy_dropped_actions"} <= available:
+    """Totals by stored match; both seats repeat a game's count, so seat 0 reads it."""
+    if not {"policy_decisions", "policy_dropped_actions"} <= stored_game_columns(db):
         return {}
     rows = db.execute(
         "SELECT g.match, count(g.policy_decisions), "
@@ -280,6 +298,7 @@ def _reading(
     run: TrainingRun | None,
     comparisons: list[Comparison],
     db: duckdb.DuckDBPyConnection,
+    hosts: Mapping[str, HostSpeed],
 ) -> SizeReading:
     """A size with no endpoint yet has endpoint slots of update None and no score."""
     end = endpoint(run)
@@ -295,10 +314,15 @@ def _reading(
         against_initial=initial.result,
         against_heuristic=heuristic.result,
         learned=_learned(initial.result),
+        host=hosts.get(run.name) if run else None,
     )
 
 
-def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAnalysis:
+def analyze(
+    state: ExperimentState,
+    db: duckdb.DuckDBPyConnection,
+    hosts: Mapping[str, HostSpeed],
+) -> FrontierAnalysis:
     """Read the whole experiment; the two sizes are one cohort of comparisons."""
     regimes, protocol = frozen()
     cap = update_cap(regimes[SIZES[0]])
@@ -313,7 +337,8 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         for planned in comparison_schedule(state, protocol)
     ]
     sizes = [
-        _reading(label, size_run(state, label), comparisons, db) for label in SIZES
+        _reading(label, size_run(state, label, protocol), comparisons, db, hosts)
+        for label in SIZES
     ]
     issues = [
         f"{reading.label} has no endpoint; no learning or strength reading."
@@ -352,6 +377,16 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         policy_actions=_total_policy_actions([c.policy_actions for c in comparisons]),
         comparisons=comparisons,
         sizes=sizes,
+        set_aside=[
+            SetAside(
+                run=run.name,
+                size=size_label(run),
+                state=run.state,
+                last_update=last_update(run),
+            )
+            for run in state.runs
+            if is_set_aside(run, protocol)
+        ],
         scale=endpoints.result if finished and not capped else None,
         complete=not issues,
         issues=issues,
@@ -367,7 +402,7 @@ def main() -> None:
     args = parser.parse_args()
     state = observe(args.source, EXPERIMENT)
     with statsdb(EXPERIMENT, args.source) as db:
-        report = analyze(state, db)
+        report = analyze(state, db, read_hosts(args.source))
     atomic_json(args.out, report.model_dump(mode="json"))
 
 

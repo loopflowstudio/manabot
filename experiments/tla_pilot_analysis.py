@@ -120,18 +120,23 @@ def total_counts(counts: list[Counts]) -> Counts:
     )
 
 
+def stored_game_columns(db: duckdb.DuckDBPyConnection) -> set[str]:
+    """The `games` table's columns; Etude omits a column that is all null."""
+    return {
+        row[0]
+        for row in db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
+        ).fetchall()
+    }
+
+
 def game_columns(db: duckdb.DuckDBPyConnection) -> tuple[str, ...]:
     """One validated `games` projection for every pair; empty without results.
 
     Required columns stay in the query so malformed tables fail; only absent
     nullable fields get defaults.
     """
-    available = {
-        row[0]
-        for row in db.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
-        ).fetchall()
-    }
+    available = stored_game_columns(db)
     if not available:
         return ()
     return tuple(

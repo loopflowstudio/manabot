@@ -43,3 +43,15 @@ until launch):
 - **First-64 cutoffs are reported, not an issue** (fourth concept review). A nonzero
   evaluation count leaves `complete` unchanged, because overflow is accepted
   behavior. Reversible until launch.
+- **Checkpoint tag rather than an Etude release for naming a size** (fifth concept
+  review). `TrainingRun.job_name` is the better owner, but a release would hold
+  this PR. Reversible: `size_run` is the only reader.
+- **Pre-scoring host screen: 1.3×, updates 2–6, one replacement per size** (fifth
+  concept review). Rough lines from Elemental's bands; TLA has no anchor yet.
+  Reversible until launch. Without the screen, host class is reported only.
+- **SIGTERM ends every `TrainingJob` as `interrupted`** (2026-11-06, found implementing
+  direction 17). Wider than this experiment, but the handler sits at the worker's entry
+  and its only effect is recording an end. Reversible.
+- **A pod past update 25 is kept, not replaced** (2026-11-06). The simpler choice over
+  teaching `size_run` a replacement order, which `TrainingRun` has no start time to
+  support. Reversible until launch.
