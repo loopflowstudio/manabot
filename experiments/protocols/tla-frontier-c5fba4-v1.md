@@ -65,6 +65,10 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   The nested Doppler projects supply provider and artifact access. Etude 0.2.14
   is the control client only: the locked 0.2.12 cannot read the launcher's Vast
   provider rows, and workers keep 0.2.12.
+- **Exports.** Each size exports its raw learner every 25 updates and at every
+  milestone. Only milestones and endpoints are played; the other exports bound
+  what a lost rental can cost, to 25 updates: about 1 hour at 150 s/update and
+  10.4 hours at the 1,500 s/update launch gate.
 - **Hardware.** Both sizes run on the same GPU model, chosen at launch and
   recorded before any score is read; different models void the equal-compute
   reading. Etude's GPU templates set a minimum vCPU count, not an exact one, and
@@ -78,16 +82,20 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
   reserve. It reads seconds per update and CUDA peak, under its own experiment
   and regime ids, so it is never a frontier run and plays no comparison.
-  W256 launches at 1,500 s/update or less, about 130 updates in 54 hours, which
-  leaves head-to-heads at 25, 50 and 100. If it cannot fit or reads above that
-  line, the size changes in a new protocol version, still before any scoring.
+  W256 launches at 1,500 s/update or less, about 130 updates in 54 hours. That
+  reach is an upper estimate: calibration times a fresh policy, and MTG-183
+  slowed 1.55× between windows (confounded by a host change), which would leave
+  about 83 updates. A size at the gate therefore has head-to-heads at 25, 50 and
+  75, and at 100 only if it holds its calibrated speed. If it cannot fit or reads
+  above that line, the size changes in a new protocol version, still before any
+  scoring.
 
 ## Evaluation schedule
 
 Every comparison plays the same 16 fixed pairs (deck seed 21590001, deals
 21591000–21591015), four legs per pair swapping decks and seats: 64 games. The
 heuristic is the matched first-64 heuristic. Shared update milestones are 25,
-50, 100, 200, 300, 400, 600, 800, 1000, 1200, 1600, 2000 and 2400.
+50, 75, 100, 150, 200, 300, 400, 600, 800, 1000, 1200, 1600, 2000 and 2400.
 
 - At update 0 and every reached milestone: each size vs the heuristic.
 - At every milestone both sizes reached: w256 vs w64 at equal updates.
@@ -112,6 +120,7 @@ latency: one thread takes about 0.4 s per w256 decision against 0.15 s at w64,
 across games averaging 180 decisions. The arena journals in memory and copies
 its files out afterward, because its per-record sync takes about 0.1 s on a
 rented container disk and counts against that limit.
+
 Milestones past a size's endpoint stay in the schedule as unreached slots; failed
 or truncated games stay failed in their scheduled slots and are never replaced,
 so no pass uses Etude's `--retry-failed`.
@@ -131,8 +140,9 @@ doppler run -p etude -c prd -- doppler run -p manabot -c prd \
 Every pass must run from that revision: a later commit changes `seats.source`,
 which analysis flags as a mixed cohort. The four-hour period batches both sizes'
 new milestones, so each milestone is played within one period of arriving.
-Expect about 15 rentals at USD0.45, setup included and unmeasured, for about
-USD7, assuming no dud pods. Etude does not enforce the USD12 cap across passes:
+Expect about 36 comparisons over about 15 rentals, for about USD8.50 with setup
+included and unmeasured, assuming no dud pods. Etude does not enforce the USD12
+cap across passes:
 the operator reads spend after each pass and stops the loop when it reaches
 USD12. That stop and the USD12 reserve cover pods that never boot but still bill.
 
@@ -154,10 +164,6 @@ every experiment on the computer, and any entry for a failed pass raises
 each entry's status there, including other experiments'. After a failed pass,
 look at why it failed, remove its entry from that file and restart the loop. A
 milestone delayed this way is still played; its failed games are not replayed.
-
-A run whose pod dies without recording an end stays `running`, so its endpoint
-stays unknown until the launcher records the end. The operator reads its stored
-checkpoints meanwhile.
 
 ## Reading
 
@@ -192,6 +198,26 @@ with an issue saying so.
 Report every attempt, failure, resource-limit discard, unreached milestone and
 cost. One seed per size supports a descriptive frontier reading, not a
 controlled claim that one size is better in general.
+
+## Lost rental
+
+A size whose rental dies stops at its last export. By default that is its
+endpoint: it keeps its learning and strength readings and has no scale reading.
+A run whose pod dies without recording an end stays `running`, so its endpoint
+stays unknown until the launcher records the end. The operator reads its stored
+checkpoints meanwhile.
+
+Any further training is a recorded decision within the unspent part of that
+size's USD38. It continues from the last export under a new protocol version and
+does not restart: a restart cannot be afforded late and would compare a shorter
+run. The precedent is MTG-183's w3 to w4, through
+`LearnerContinuation.from_monitoring`: raw weights, the EMA reset to them and a
+fresh Adam, a declared discontinuity.
+
+This version does not build that path, and two limits stand in its way.
+`size_run` admits one run per size, so the new version must read a chain of runs.
+`stage_monitoring` in `experiments/elemental_long.py` needs the parent's
+`run.json`, which a truly dead pod may not have delivered; this is unproven.
 
 ## Budget
 

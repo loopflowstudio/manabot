@@ -3,6 +3,7 @@
   "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
   "deck_seed": 21590001,
   "evaluation_usd": "12",
+  "export_every": 25,
   "game_seconds": 600.0,
   "large": {
     "attention_layers": 4,
@@ -14,7 +15,9 @@
   "milestones": [
     25,
     50,
+    75,
     100,
+    150,
     200,
     300,
     400,

@@ -37,3 +37,6 @@ until launch):
   size inside 10–100× is worth a new protocol version before scoring.
 - **Failed legs bound a reading rather than void it** (second concept review).
   The analysis rule changes before any scoring; the strict `complete` flag stays.
+- **Export every 25 updates; milestones 75 and 150 added** (third concept review).
+  Both are reversible until launch. A cadence of 50 would halve exports and double
+  the loss bound; 25 is the choice because a gate-speed w256 loses 10.4 h per gap.

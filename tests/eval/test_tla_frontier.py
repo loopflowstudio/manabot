@@ -40,6 +40,7 @@ from experiments.tla_frontier import (
     SizeLabel,
     comparison_schedule,
     eval,
+    export_updates,
     frozen,
     runs,
     size_run,
@@ -77,7 +78,10 @@ def _checkpoint(label: SizeLabel, update: int) -> Checkpoint:
     )
 
 
-def _state(reached: dict[SizeLabel, int], *, finished: bool = True) -> ExperimentState:
+def _state(
+    reached: dict[SizeLabel, int], *, finished: bool = True, export_every: int = 0
+) -> ExperimentState:
+    """Stored checkpoints at milestones, with `export_every` adding the cadence."""
     milestones = (0, *frozen()[1].milestones)
     return ExperimentState(
         experiment=EXPERIMENT,
@@ -90,6 +94,7 @@ def _state(reached: dict[SizeLabel, int], *, finished: bool = True) -> Experimen
                     _checkpoint(label, update)
                     for update in sorted(
                         {u for u in milestones if u <= end}
+                        | (set(range(0, end, export_every)) if export_every else set())
                         | ({end} if finished else set())
                     )
                 ),
@@ -225,7 +230,7 @@ def test_milestones_play_both_sizes_against_heuristic_and_each_other() -> None:
         for c in schedule
     )
     tags = Counter(c.tag for c in playable)
-    assert tags["head-to-head"] == 6  # 25, 50, 100, 200, 300, 400
+    assert tags["head-to-head"] == 8  # 25, 50, 75, 100, 150, 200, 300, 400
     assert len(names) == len(playable)
 
 
@@ -238,6 +243,27 @@ def test_running_runs_evaluate_reached_milestones_only() -> None:
     (job,) = eval(state)
     assert job.max_usd == Decimal("2")
     assert job.max_attempts == 3
+
+
+def test_exports_between_milestones_are_stored_but_not_played() -> None:
+    protocol = frozen()[1]
+    state = _failed(
+        _state({SMALL: 1300, LARGE: 525}, export_every=protocol.export_every), LARGE
+    )
+    run = size_run(state, LARGE)
+    assert run is not None
+    assert {125, 525} <= {int(c.clocks["updates"]) for c in run.checkpoints}
+    (job,) = eval(state)
+    names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
+    # Update 525 is no milestone; it is played only as the failed run's endpoint.
+    assert {"w256 final u525 vs heuristic", "w256 final u525 vs w256 u0"} <= names
+    assert "w256 final vs w64 final" in names
+    assert "w256 u400 vs w64 u400" in names
+    assert "w256 u600 vs w64 u600" not in names
+    played = {
+        c.update for c in comparison_schedule(state, protocol) if c.matchup is not None
+    }
+    assert played == {0, *(u for u in protocol.milestones if u <= 1300), 525, 1300}
 
 
 def test_evaluation_job_prepares_a_stock_rented_machine() -> None:
@@ -360,6 +386,18 @@ def test_training_runs_admit_milestones_and_wall_budget() -> None:
     ]
     assert {run.job.until for run in launched} == {"updates=3000"}
     assert {run.job.max_attempts for run in launched} == {1}
+
+
+def test_training_exports_the_cadence_joined_with_the_milestones() -> None:
+    regimes, protocol = frozen()
+    expected = tuple(range(25, 3000, 25))
+    assert set(protocol.milestones) <= set(expected)
+    for launched in runs("HEAD"):
+        job = TrainingJob.model_validate_json(launched.job.config)
+        assert job.milestones == expected
+    # A milestone off the cadence is still exported, in order.
+    offset = protocol.model_copy(update={"milestones": (30,), "export_every": 1000})
+    assert export_updates(regimes[SMALL], offset) == (30, 1000, 2000)
 
 
 def test_discovery_keeps_evaluation_callback_importable() -> None:

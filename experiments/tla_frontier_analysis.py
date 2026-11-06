@@ -46,6 +46,7 @@ from experiments.tla_frontier import (
     environment,
     frozen,
     size_run,
+    update_cap,
 )
 from experiments.tla_pilot_analysis import (
     BOOTSTRAP_RESAMPLES,
@@ -58,7 +59,6 @@ from experiments.tla_pilot_analysis import (
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
-from manabot.training.regime import TrainSelfPlay
 
 
 class Bounded(StrictModel):
@@ -239,8 +239,7 @@ def _reading(
 def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAnalysis:
     """Read the whole experiment; the two sizes are one cohort of comparisons."""
     regimes, protocol = frozen()
-    stage = regimes[SIZES[0]].stages[0]
-    assert isinstance(stage, TrainSelfPlay)
+    cap = update_cap(regimes[SIZES[0]])
     environment_id = environment(protocol).identity
     columns = game_columns(db)
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
@@ -262,7 +261,7 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
     if not finished:
         issues.append("A run did not finish; no equal-compute scale reading.")
     # The cap is a second stop: a size reaching it spent less than the wall budget.
-    capped = any(reading.endpoint == stage.updates for reading in sizes)
+    capped = any(reading.endpoint == cap for reading in sizes)
     if capped:
         issues.append("A run hit the update cap; no equal-compute scale reading.")
     sources = {

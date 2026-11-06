@@ -1,8 +1,9 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
 Status: protocol v1 drafted 2026-11-05 by the first implement step,
-reconciled three times and concept-reviewed twice the same day (headless). Nothing
-has launched or spent money. Directions 1–9 from both reviews are implemented. Brief: Task c5fba4; direction comment 694f4190 in
+reconciled three times and concept-reviewed three times the same day (headless). Nothing
+has launched or spent money. Directions 1–12 are implemented; `frozen()` passes, so
+`runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190 in
 [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
 runner `experiments/tla_frontier.py`; analysis
 `experiments/tla_frontier_analysis.py`; calibration
@@ -17,6 +18,8 @@ runner `experiments/tla_frontier.py`; analysis
   Static declarations of those bytes live in tests, not `frozen()`.
 - Damped learning rule kept unchanged (absolute iteration schedule, so the
   update cap does not alter learning rates).
+- Exports (`export_every: 25`, joined with the milestones by `export_updates`)
+  are separate from evaluated milestones; `eval` plays only milestones and endpoints.
 - Wall-bounded runs → equal compute per size; shared update milestones give
   equal-update head-to-heads while both are running; endpoint head-to-head is
   the equal-compute comparison. Endpoint vs own initialization shows learning.
@@ -72,9 +75,9 @@ Observed:
   needs no `eval`; only `read_experiment` does, and nothing reads it that way.
 
 Estimates, not measurements: w64 about 1,300 updates at v10's 150 s/update (v9
-inputs may cost more); w256 per-update GPU cost and CUDA memory are unknown. About 30 comparisons
-(1,900 games, 17 CPU-hours) would cost about USD7 with per-rental setup (see
-direction 4), within the USD12 cap. At
+inputs may cost more); w256 per-update GPU cost and CUDA memory are unknown. About 36 comparisons
+would cost about USD8.50 with per-rental setup (see directions 4 and 11), within
+the USD12 cap. At
 USD0.59/hour the 54-hour wall spends about USD33 per size, so USD38 is a ceiling,
 not an expected cost.
 
@@ -106,7 +109,8 @@ is hashed into retained environments).
 - Before reading a score, confirm from `etude status` that both runs had the
   same GPU model, and record both pods' vCPUs.
 - A retry of a size is a new protocol version with its recorded decision and
-  new regime ids, since `size_run` matches the old run's prefix.
+  new regime ids, since `size_run` matches the old run's prefix. The protocol's
+  "Lost rental" section states the default and both limits.
 - The final report is written after the runs. `tla_frontier_analysis` gives its
   numbers: whole-pair intervals with failed-leg bounds, per-size learning, the
   scale score, hours per checkpoint and every failed, missing or unreached slot. `report()` stays
@@ -230,4 +234,98 @@ brief's "honest read" asks for.
 - A real retried pass replays a stored match (`repeated match` in analysis):
   direction 6's reading of Etude was wrong, and passes go back to one attempt.
 
-Check: `uv run --extra dev --extra evaluation pytest tests/eval/test_tla_frontier.py -q` — 28 passed on 0.2.12 and the 0.2.14 overlay after the compress pass; `frozen()` passes, so `runtime_world` needed no re-freeze. Broader suites stay with gate.
+## Third concept review (2026-11-05, headless)
+
+Walked what the first two left out: the 54 hours of training itself. What does a
+size keep if its rental dies, and what does someone see of a slow w256? Sizes,
+recipe, budget split and the reading rules stay. Evaluated milestones and export
+cadence change.
+
+### Checked and closed
+
+- **A wall stop reads as `finished`.** The protocol's normal ending is a trainer
+  status of `paused`, and analysis requires `finished`. `execute_regime` closes
+  the tracker `finished` for both (`execution.py:1219`), so `scale` survives the
+  normal path.
+- **The 12-hour rental ceiling is gone.** MTG-183 recorded 43,000 s per rental.
+  Etude 0.2.12 and 0.2.14 now bound a rental by its storage's grant: 36 h on AWS,
+  a week on R2. `l4`, `mtg252-a40` and `cpu32` all name `r2`, so 56 h plus setup
+  is admitted. A stale `max_rental_seconds` remains in some launcher rows, and no
+  code reads it. `l4` allows 2 machines at USD0.60/hour; `cpu32` allows 1.
+- **Long failures on record are not machine loss.** Four of the five rented
+  training attempts past 10 h ended `failed`. MTG-183 w3 hit its watchdog before
+  the wall stop existed (`5d676d6df`); w4 then ran 23.5 h and stopped cleanly. The
+  three `curriculum-175-*` runs ended `out_of_time` at 14.4 h. Their cause was not
+  traced, and they are not `TrainingJob` frontier runs. V10 also paused normally.
+
+### Directions, implemented
+
+10. **Export cadence is separate from evaluated milestones.** Today a size exports
+    only at the milestones, so milestones also set what a dead pod can lose.
+    Direction 2 keeps a failed run's reach at its last stored checkpoint, and
+    that checkpoint can be far back:
+
+    | Size, s/update | Reach | Milestones hit | Longest stretch without an export |
+    | --- | ---: | --- | --- |
+    | w64, 150 | 1,296 | 25 … 1200 | 8.3 h (USD4.90) |
+    | w256, 500 | 388 | 25 … 300 | 13.9 h (USD8.20) |
+    | w256, 1,000 | 194 | 25, 50, 100 | 26.2 h (USD15.50) |
+    | w256, 1,500 | 129 | 25, 50, 100 | 20.8 h (USD12.30) |
+
+    Pass `TrainingJob` every 25th update joined with the milestones, as a new
+    protocol field such as `export_every: 25`. `eval` still plays only milestones
+    and endpoints. `saved` and `endpoint` already take any update, and a dead
+    run's non-milestone endpoint is already scheduled as `final`. The loss bound
+    becomes 25 updates: 1 h at w64, 10.4 h at the gate. MTG-183's 50-update raw
+    exports are why w3 lost 14 updates rather than a window. Storage is small:
+    at most about 120 exports of about 60 MB at w256. Analysis's `training` points
+    get the same resolution for free.
+
+11. **Add milestones 75 and 150.** Direction 694f4190 asks for regular evaluation
+    during training, so that progress is visible. Doubling milestones thin out
+    in wall time if w256 is slow: at 1,000 s/update nothing is evaluated from hour
+    28 to hour 54. Calibration also reads a fresh policy, and MTG-183 fell from
+    103.55 to 66.76 updates/hour between windows (1.55×, confounded by the host
+    change). A w256 at the gate could then reach about 83 updates and miss 100, so
+    the protocol's "head-to-heads at 25, 50 and 100" is not assured. The two added
+    milestones cut the longest gap to 13.9 h at 1,000 s/update, 12.3 h at 1,500
+    and 16.1 h at 2,325. They add at most six comparisons, about USD1.40,
+    so about USD8.50 expected inside the USD12 cap. Update the gate sentence and
+    the estimate, and say that the gate's reach is an upper estimate. The gate
+    itself stays at 1,500.
+
+12. **Name the lost-pod path in the protocol.** The default is what direction 2
+    already gives: the size stops at its last export, keeps its learning and
+    strength readings, and has no scale reading. Add that any further training is
+    a recorded decision within that size's unspent USD38, continuing from the last
+    export under a new protocol version, not a fresh restart. A restart cannot be
+    afforded late and compares a shorter run. The precedent is MTG-183 w3→w4
+    (`LearnerContinuation.from_monitoring`: raw weights, EMA reset, fresh Adam, a
+    declared discontinuity). Say two limits plainly: `size_run` admits one run, so
+    that version must read a chain, and `stage_monitoring` needs the parent's
+    `run.json`, which a truly dead pod may not have delivered (unproven). Do not
+    build chains now. The launch decision can wait for a pod to die, and the Task
+    may never need them.
+
+### Risk, not a decision
+
+No rented attempt has run past 23.5 h, so 54 h on a pod is new. The launcher's
+history shows 1 machine loss in 170.5 GPU-hours and 3 in 8.6 CPU-hours (all three
+today, `fc6ffb-cpu32`). One event is a crude rate, but over 108 pod-hours it
+suggests a loss is about as likely as not. That is why 10 and 12 are worth doing.
+It also supports evaluation's three attempts.
+
+Proposed wave memory (not written): export cadence and evaluated milestones are
+separate choices, because exports set what a lost rental costs; Etude's rental
+ceiling now follows storage (R2 a week, AWS 36 h), superseding MTG-183's 43,000 s.
+
+No open product choice. 10 and 11 follow from directions 2 and 694f4190, and 12
+records the existing rule that a retry needs a decision, without taking it.
+
+### Counterexamples that would reopen this
+
+- Monitoring exports are slow enough at w256 to dent update throughput:
+  calibration runs no milestones, so the first real reading is `run`'s
+  `monitoring_export_seconds`. Widen the cadence in a new version if so.
+- A first pass shows evaluation costing well above USD0.45 a rental: drop 75 and
+  150 first when protecting the USD12 cap, by operator stop, not by editing scores.

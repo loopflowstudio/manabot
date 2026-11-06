@@ -9,6 +9,8 @@ the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
 other, which is equal wall budget only when both runs finished. A failed run's
 endpoint is its last stored checkpoint, so its reach is still played and read.
+Training exports more often than `eval` plays: the export cadence bounds what a
+lost rental can cost, and only milestones and endpoints are evaluated.
 
 The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
 stays unchanged, so its evaluation callback, whose identities name that
@@ -55,7 +57,7 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.regime import TrainingRegime
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,6 +104,9 @@ class Protocol(StrictModel):
     deck_seed: int
     pairs: tuple[Pair, ...]
     milestones: tuple[int, ...]
+    # Updates between exports; milestones set what is played, this what a lost
+    # rental can lose.
+    export_every: int
     game_seconds: float
     max_commands: int
     bootstrap_seed: int
@@ -141,6 +146,18 @@ def frozen() -> tuple[dict[SizeLabel, TrainingRegime], Protocol]:
     return {SMALL: small, LARGE: large}, protocol
 
 
+def update_cap(regime: TrainingRegime) -> int:
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    return stage.updates
+
+
+def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...]:
+    """Every update the run exports: the cadence joined with the milestones."""
+    cadence = range(protocol.export_every, update_cap(regime), protocol.export_every)
+    return tuple(sorted({*cadence, *protocol.milestones}))
+
+
 def runs(revision: str) -> list[Run]:
     """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
@@ -150,7 +167,7 @@ def runs(revision: str) -> list[Run]:
         for run in TrainingJob(
             regime=regime,
             experiment=EXPERIMENT,
-            milestones=protocol.milestones,
+            milestones=export_updates(regime, protocol),
             finalization_seconds=600,
             stop_reserve_seconds=600,
             validate_numerics=True,
