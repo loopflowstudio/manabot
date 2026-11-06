@@ -29,16 +29,16 @@
 <body>
 <main>
 <header>
-  <h1>The GPU result is the answer, but only scratch says so</h1>
+  <h1>The branch now says the GPU result is the answer</h1>
   <p>Task MTG-249 · 5da5f4 · concept-review step (headless) · 2026-11-05</p>
-  <p>Built from <code>scratch/representation-learning-plan.md</code>, <code>scratch/questions.md</code>, <code>experiments/README.md</code>, <code>experiments/protocols/state-representation-5da5f4-gpu.md</code>, PR #421 body, branch <code>c7aff6f5e</code></p>
+  <p>Built from <code>scratch/representation-learning-plan.md</code>, <code>scratch/questions.md</code>, <code>experiments/README.md</code>, <code>experiments/protocols/state-representation-5da5f4-gpu.md</code>, <code>experiments/state-representation-gpu.md</code>, PR #421 body, branch <code>e95eca187</code></p>
 </header>
 
-<p class="lead"><strong>Decision needed at demo/review:</strong> what the inconclusive GPU result means for the next step (question 1). The rest of this page follows from accepted direction and is recorded as the next implement direction.</p>
+<p class="lead"><strong>Decision needed at demo/review:</strong> what the inconclusive GPU result means for the next step (question 1). The re-review found nothing new to implement. The durable surfaces below are now <span class="existing">existing</span> on the branch (<code>22459b4b0</code>, <code>e95eca187</code>). The PR #421 title and body remain for delivery.</p>
 
 <h2>What a reader does, before and after</h2>
 <table>
-  <thead><tr><th>Action</th><th>Today on the branch <span class="existing">existing</span></th><th>After <span class="proposed">proposed</span></th></tr></thead>
+  <thead><tr><th>Action</th><th>Before <code>22459b4b0</code></th><th>Now <span class="existing">implemented</span>, except PR #421 <span class="proposed">delivery</span></th></tr></thead>
   <tbody>
     <tr><td>Open the experiments index</td><td>CPU study listed as “completed”. The GPU paragraph ends at the lost run: “no plateau or architecture result exists.”</td><td>GPU study listed first with its result. The CPU study is marked preliminary and insufficient for selection.</td></tr>
     <tr><td>Read the result</td><td>A scratch report (now removed), which <code>lf pr submit</code> removes from the diff</td><td><code>experiments/state-representation-gpu.md</code>, linked from the protocol's Recovery cohort result</td></tr>
@@ -48,7 +48,7 @@
 </table>
 
 <div class="callout">
-  <p><strong>The consequential mismatch.</strong> You made replicated GPU learning, not the CPU comparison, the evidence for choosing an architecture. The branch's durable surfaces still present the CPU study as the answer. The only text that states the GPU answer would disappear when the PR is submitted.</p>
+  <p><strong>The consequential mismatch (resolved on the branch; PR text pending).</strong> You made replicated GPU learning, not the CPU comparison, the evidence for choosing an architecture. The branch's durable surfaces still present the CPU study as the answer. The only text that states the GPU answer would disappear when the PR is submitted.</p>
 </div>
 
 <h2>The result being carried</h2>

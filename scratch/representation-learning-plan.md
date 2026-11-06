@@ -57,6 +57,13 @@ reducer for later work, (b) fund a prospective longer-horizon amendment, or
 (c) move to the unbuilt memory/relation-splitting questions? No accepted
 decision settles this, and none of the implementation above depends on it.
 
+Re-review after `e95eca187` (headless): the branch now matches this design. The
+GPU report is durable and indexed first, CPU is marked preliminary, and the
+reducer-not-memory wording appears in the report and index. Nothing new to
+implement. The only remaining gap is PR421's title and body, which still
+describe the CPU study and belong to delivery. The open choice above stays with
+demo/review: it concerns next work, not this change.
+
 ## History — how the cohort got here
 
 Recovery operations live in `.runs/representation/recovery/` (`drive.py`,
