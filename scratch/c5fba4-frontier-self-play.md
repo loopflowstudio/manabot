@@ -1,13 +1,15 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
 Status: protocol v1 drafted 2026-11-05 by the first implement step,
-reconciled three times and concept-reviewed three times the same day (headless). Nothing
-has launched or spent money. Directions 1–12 are implemented; `frozen()` passes, so
+reconciled four times and concept-reviewed four times the same day (headless). Nothing
+has launched or spent money. Directions 1–14 are implemented; `frozen()` passes, so
 `runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190 in
 [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
 runner `experiments/tla_frontier.py`; analysis
 `experiments/tla_frontier_analysis.py`; calibration
 `experiments/tla_frontier_calibration.py`; tests `tests/eval/test_tla_frontier.py`.
+
+Check: `uv run --extra dev --extra evaluation pytest tests/eval/test_tla_frontier.py -q`, 35 passed (2026-11-05, after directions 13–14 and compress; run with the evaluation-match, pilot and local-evaluation tests, 114 passed).
 
 ## Design (as implemented)
 
@@ -329,3 +331,112 @@ records the existing rule that a retry needs a decision, without taking it.
   `monitoring_export_seconds`. Widen the cadence in a new version if so.
 - A first pass shows evaluation costing well above USD0.45 a rental: drop 75 and
   150 first when protecting the USD12 cap, by operator stop, not by editing scores.
+
+## Fourth concept review (2026-11-05, headless)
+
+Walked what the first three left out: what a run 80 times longer than v10 does
+that 16 updates could not show, and what the final read needs for the brief's
+"what limits it next". Sizes, recipe, schedule, budget split and reading rules
+stay. One accepted diagnostic is missing from evaluation.
+
+### Checked and closed
+
+Measured on v10's retained receipts, extrapolated to about 1,300 updates:
+
+- **Host memory does not leak, and it follows rows.** RSS stays 16.6–18.3 GB
+  across all 16 updates. `complete-games` closure makes `transitions` a floor, so
+  an update is about one game per stream (263 games, 47k rows) and its size follows
+  game length. The fit over 14 updates is 11.1 GB + 131 KB per row (r 0.99); v7's
+  row is 145 KB. V9's row is 207 KB, which predicts about 22 GB at v10's peak rows.
+  The regime's 40 GiB stop (`execution.py:834`) then needs about 153k rows, 2.8×
+  that peak. This is a fit to 14 points at v7, so direction 14 reads the real value.
+- **CUDA memory does not follow rows.** Learning moves minibatches to the device
+  (`damped_policy.py:317`), so calibration's peak holds as rows change.
+- **Long-run files stay small.** The game ledger is 4.5 KB a game, about 1.5 GB
+  over 340,000 games. `by_cell` saturates at 35,912 cells of 153 bytes, about 5.5 MB
+  of `run.json`. Failed games alone keep actions. With at most about 7 GB of
+  exports, the rented disk needs roughly 9 GB. The template's disk size was not
+  read here; that is a launch check, and a full disk ends at the last export.
+- **Nothing kills a slow update.** The only watchdog is the whole-run budget. The
+  stop rule waits for an update boundary, and 56 h leaves 2 h past the wall.
+
+### Directions, implemented
+
+13. **Evaluation retains the first-64 cutoff counts.** The overflow exception
+    Jack Heart accepted on 2026-11-04 comes with aggregate replay-linked
+    diagnostics, and the protocol gives every policy that cutoff. Training keeps
+    its receipt (`failures/action-cutoff-*.json`; v10 counted 755,995 decisions and
+    no overflow). Evaluation does not: `native_game.py:366` puts
+    `policy_action_cutoff` on the game, and nothing reads it. A search of all 230
+    v10 evidence files finds no cutoff count, and `MatchRow` has no such field.
+    So the final read could not say whether a trained policy lost choices in a
+    scored game, and the brief names overflow past 64 slots as a limit left open.
+    Bigger boards from stronger play are where it would first appear. It must land
+    before launch, because played games would then need a replay of their command
+    traces to recover it.
+
+    Carry the decisions and dropped actions per game into `play`'s `games` rows,
+    sum them per `Comparison`, and show the totals in the analysis. Frozen rows
+    must keep their digests, so any `MatchRow` field is omitted when absent. An
+    overflow is accepted behavior, so a nonzero count is reported and adds no
+    issue: `complete` stays about missing and failed games. Totals span both
+    players, as in training's receipt; per-policy rates are not claimed. First
+    prove with a real game that the key is populated on the evaluation path.
+
+14. **Calibration reads host memory and rows.** It reports the peak of
+    `coordinates/rss_bytes` and median rows per update beside its CUDA peaks. V9
+    has never run on a GPU, and the 40 GiB stop is a real failure that the
+    reading's "cannot fit" should cover. These are retained rows, so this adds two
+    fields and no gate.
+
+Implementation notes (2026-11-05):
+
+- Real proof: one `tla_frontier.play` on a fresh w64 checkpoint against the
+  heuristic played four valid games. Each game's report summed to its decision
+  count (266, 73, 156 and 285) with 0 dropped at 64 slots. A test repeats this at 4 slots,
+  where real games do overflow.
+- Correction to direction 13: the report is not lost today. `game` carries it into
+  the retained `.commands.jsonl.gz` traces, so current games need no replay, only a
+  read of those files. V10's own traces were not inspected for it. Rows still carry
+  the counts, so analysis reads them from the store.
+- `MatchRow.policy_actions` uses `exclude_if`. `EvaluationRow` reads the key from its
+  extras, because a declared field would dump as None and change the digest
+  `_verify_block` recomputes.
+- A killed game returns no count, and limits fall on long games. `PolicyActions`
+  therefore adds `games`, the games counted, beside the two totals. Fewer than the
+  played count means the totals are a lower bound.
+- Analysis reads cutoffs once, grouped by match. The whole-analysis total sums
+  comparisons, as `counts` does, so a match shared by a milestone and the endpoint
+  head-to-head counts twice in both and `games` stays comparable with played games.
+- `coordinates/rss_bytes` is sampled once per update, so `peak_rss_bytes` can miss a
+  peak inside an update. `sampled_peak_rss_bytes` stays in `run.json`.
+
+### Left alone
+
+- **Rows per update are not fixed, so an "update" is about one game per stream.**
+  Equal-update comparisons stay fair because both sizes have that shape. Each
+  checkpoint's transitions are retained if the report needs them.
+- **The final report stays hand-assembled**, as v10's was. The numbers for "what
+  limits it next" are retained: `time/*` phases, `game_errors`, attempts and cost.
+  Building it now would guess at what the run shows. A dead pod loses its
+  `run.json` and cutoff receipt; the protocol already names that limit.
+- **Expected spend is about USD77 of USD100** (about 2 × USD33, USD8.50 of
+  evaluation, USD2 of calibration). That is headroom for direction 12's
+  continuation. Extending the wall would need a price known only at launch.
+
+No open product choice. Direction 13 implements a diagnostic the overflow exception
+already requires, and 14 widens an accepted reading.
+
+### Counterexamples that would reopen this
+
+- Calibration's peak RSS exceeds about 27 GB: a 1.55× rise in rows, MTG-183's
+  slowdown, would then pass the 40 GiB stop. Review the host and limit in a new
+  protocol version before launch.
+- Scored games show dropped actions at a meaningful rate: 64 slots limit strength,
+  and the next protocol's capacity needs review. This does not void the reading.
+- Direction 13 cannot reach `play` without changing a frozen row digest: keep the
+  counts in the retained arena files and have analysis read those instead.
+
+Proposed wave memory (not written): `complete-games` closure makes update size,
+host memory and update cost follow game length; evaluation rows carry first-64
+cutoff counts from c5fba4 on, and earlier pilots' rows have none.

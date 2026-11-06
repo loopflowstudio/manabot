@@ -45,7 +45,7 @@ from experiments.tla_frontier import (
     runs,
     size_run,
 )
-from experiments.tla_frontier_analysis import FrontierAnalysis, analyze
+from experiments.tla_frontier_analysis import FrontierAnalysis, PolicyActions, analyze
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
     MAX_HOURS,
@@ -56,8 +56,11 @@ from experiments.tla_frontier_calibration import (
     runs as calibration_runs,
 )
 from manabot.env.observation import ObservationSpace
+from manabot.eval.results import EvaluationRow
 from manabot.experiment.job import TrainingJob
+from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import save_checkpoint
 from manabot.training.execution import cuda_peak_metrics
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
@@ -332,6 +335,12 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
             "memory/peak_reserved_cuda_bytes": 6e9,
         },
     }
+    for update, (rss, count) in {
+        1: (9e9, 40_000),
+        2: (20e9, 90_000),
+        3: (12e9, 50_000),
+    }.items():
+        rows[update] |= {"coordinates/rss_bytes": rss, "rows": count}
     small, large = calibration_runs("HEAD")
     _tracked(small, tmp_path, rows, (0, 3))
     _tracked(large, tmp_path, {})
@@ -342,9 +351,12 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert reading.updates_in_wall_budget == 883
     assert reading.peak_allocated_cuda_bytes == 4_000_000_000
     assert reading.peak_reserved_cuda_bytes == 6_000_000_000
+    assert reading.peak_rss_bytes == 20_000_000_000  # not the last update's value
+    assert reading.median_rows_per_update == 50_000
     silent = readings["tla-frontier-c5fba4-calibration-w256-seed21501"]
     assert silent.updates == 0 and silent.seconds_per_update is None
     assert silent.peak_reserved_cuda_bytes is None
+    assert silent.peak_rss_bytes is None and silent.median_rows_per_update is None
     # A frontier pass never sees calibration, even from a shared store.
     assert observe(tmp_path, EXPERIMENT).runs == ()
     assert observe(tmp_path, CALIBRATION).runs != ()
@@ -376,6 +388,98 @@ def test_arena_journal_stays_off_disk_and_is_retained_after_failure(
             raise RuntimeError("the game died")
     assert not out_dir.exists()
     assert (retained / "game.jsonl").read_text() == "record"
+
+
+def test_play_carries_a_real_games_cutoff_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real games through the evaluation path; four slots force actual overflow."""
+    regimes, protocol = frozen()
+    regime = regimes[SMALL]
+    narrow = regime.model_copy(
+        update={"observation": regime.observation.model_copy(update={"max_actions": 4})}
+    )
+    space = ObservationSpace(narrow.observation)
+    path = tmp_path / "u0.pt"
+    save_checkpoint(ActorCritic(space, narrow.agent), space, path, player_configs=None)
+    run = f"tla-frontier-c5fba4-{SMALL}-seed21501"
+    saved = Checkpoint(
+        run=run,
+        experiment=EXPERIMENT,
+        ordinal=1,
+        artifact=ArtifactRef(
+            uri=path.as_uri(),
+            sha256=file_sha256(path),
+            size_bytes=path.stat().st_size,
+        ),
+        clocks={"updates": 0},
+        line=run,
+    )
+    state = ExperimentState(
+        experiment=EXPERIMENT,
+        runs=(
+            TrainingRun(
+                name=run,
+                experiment=EXPERIMENT,
+                state="running",
+                checkpoints=Checkpoints([saved]),
+            ),
+        ),
+    )
+    match = evaluation_spec(eval(state)[0]).tournament.matchups[0].matches()[0]
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "etude"))
+    monkeypatch.setattr(
+        tla_frontier, "frozen", lambda: ({SMALL: narrow, LARGE: narrow}, protocol)
+    )
+
+    games = tla_frontier.play(match)["games"]
+
+    retained = tmp_path / "etude" / "arena" / match.key / "rows.json"
+    decisions = {
+        row["leg"]: row["decisions"] for row in json.loads(retained.read_text())
+    }
+    assert len(decisions) == 4 and all(decisions.values())
+    for row in games:
+        assert row["policy_decisions"] == decisions[row["game"]]
+    assert sum(row["policy_dropped_actions"] for row in games) > 0
+
+
+def test_frozen_rows_keep_their_dump_without_cutoff_counts() -> None:
+    """`_verify_block` digests this dump, so a frozen row must gain no key."""
+    frozen_row = {
+        "arena_key": {
+            "world": "w17",
+            "content_suite": "fixture",
+            "viewer_boundary": "acting-viewer",
+            "arena_version": "fixture",
+            "rating_model_version": "unrated",
+            "rating_prior_sha256": "a" * 64,
+            "anchor_cohort_sha256": "b" * 64,
+            "evaluation_compute_envelope_id": "fixture",
+        },
+        "deal_seed": 1,
+        "leg": 0,
+        "player_a": "a",
+        "player_b": "b",
+        "player_a_registration_sha256": "c" * 64,
+        "player_b_registration_sha256": "d" * 64,
+        "score_a": 1.0,
+        "failure": None,
+        "terminated": True,
+        "truncated": False,
+        "replay_passed": True,
+        "trace_path": "traces/a__b.1.commands.jsonl.gz",
+        "game_seconds": 1.0,
+        "integrity": {},
+    }
+    row = EvaluationRow.model_validate(frozen_row)
+    assert row.policy_action_counts is None
+    assert "policy_actions" not in row.model_dump(mode="json")
+    counted = EvaluationRow.model_validate(
+        {**frozen_row, "policy_actions": {"decisions": 9, "dropped_actions": 2}}
+    )
+    assert counted.policy_action_counts is not None
+    assert counted.policy_action_counts.dropped_actions == 2
 
 
 def test_training_runs_admit_milestones_and_wall_budget() -> None:
@@ -660,6 +764,64 @@ def test_an_endpoint_at_the_update_cap_is_not_equal_compute(
     assert [reading.learned for reading in report.sizes] == [True, True]
 
 
+def _add_policy_actions(db: duckdb.DuckDBPyConnection) -> None:
+    """Every game, on both seats, 100 decisions and 3 dropped actions."""
+    db.execute("ALTER TABLE games ADD COLUMN policy_decisions BIGINT DEFAULT 100")
+    db.execute("ALTER TABLE games ADD COLUMN policy_dropped_actions BIGINT DEFAULT 3")
+
+
+def test_cutoff_counts_are_totalled_per_comparison_and_add_no_issue(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    _add_policy_actions(frontier_db)
+    report = analyze(state, frontier_db)
+    assert report.complete and report.issues == []
+    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    # 16 pairs of four games, each counted once though both seats repeat it.
+    assert played.policy_actions == PolicyActions(
+        games=64, decisions=6400, dropped_actions=192
+    )
+    assert report.policy_actions.games == 64 * len(keys)
+    assert report.policy_actions.dropped_actions == 192 * len(keys)
+    unreached = next(c for c in report.comparisons if c.unreached)
+    assert unreached.policy_actions == PolicyActions()
+
+
+def test_a_killed_game_leaves_its_count_out_of_the_totals(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    _add_policy_actions(frontier_db)
+    killed = keys["w256 final vs w64 final"][0]
+    _fail_leg(frontier_db, killed, 0)
+    frontier_db.execute(
+        "UPDATE games SET policy_decisions = NULL, policy_dropped_actions = NULL "
+        "WHERE match = ? AND game = 0",
+        [killed],
+    )
+    report = analyze(state, frontier_db)
+    played = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    assert played.counts.expected == 64
+    assert played.policy_actions == PolicyActions(
+        games=63, decisions=6300, dropped_actions=189
+    )
+    # Only the failed game is an issue; a nonzero cutoff never is.
+    assert report.issues == [f"1 of {64 * len(keys)} played games have no score."]
+
+
+def test_analysis_without_cutoff_columns_reports_no_counted_games(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 100, LARGE: 50})
+    _outcomes(frontier_db, state)
+    report = analyze(state, frontier_db)
+    assert report.complete
+    assert report.policy_actions == PolicyActions()
+
+
 def _played(match: Match) -> Tables:
     """Three of four legs won by the first player, in `play`'s result shape."""
     return {
@@ -675,6 +837,9 @@ def _played(match: Match) -> Tables:
                 "truncated": False,
                 "failure": None,
                 "seconds": 1.0,
+                # A game killed at its limit returns no count, as leg 3 here.
+                "policy_decisions": 100 if leg < 3 else None,
+                "policy_dropped_actions": 2 if leg < 3 else None,
             }
             for leg in range(4)
             for seat in (0, 1)
@@ -728,3 +893,8 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
     assert report.scale is not None and report.scale.score is None
     assert report.scale.worst.mean == 0.75 - 0.75 / 16
     assert report.scale.best.mean == 0.75 + 0.25 / 16
+    # Fifteen stored matches of the endpoint block, three counted games each.
+    endpoint = next(c for c in report.comparisons if c.tag == "endpoint-head-to-head")
+    assert endpoint.policy_actions == PolicyActions(
+        games=45, decisions=4500, dropped_actions=90
+    )

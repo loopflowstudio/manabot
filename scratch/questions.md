@@ -40,3 +40,6 @@ until launch):
 - **Export every 25 updates; milestones 75 and 150 added** (third concept review).
   Both are reversible until launch. A cadence of 50 would halve exports and double
   the loss bound; 25 is the choice because a gate-speed w256 loses 10.4 h per gap.
+- **First-64 cutoffs are reported, not an issue** (fourth concept review). A nonzero
+  evaluation count leaves `complete` unchanged, because overflow is accepted
+  behavior. Reversible until launch.

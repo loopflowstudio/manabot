@@ -1,4 +1,4 @@
-"""Task c5fba4 calibration: per-update cost and CUDA peak of both frontier sizes.
+"""Task c5fba4 calibration: per-update cost and memory of both frontier sizes.
 
 Each size runs its frozen regime for a few updates on the GPU chosen for the
 frontier runs, so a size that cannot fit, or would reach too few updates, changes
@@ -19,7 +19,10 @@ Runs after the protocol merges, before `experiments.tla_frontier.runs`:
 Update timing starts from a fresh policy, so its games need not last as long as
 a trained policy's. The reading is a median that sets aside the first update's
 warm-up, not a forecast of late-run cost. The protocol's launch gate compares
-the w256 reading against 1,500 s/update.
+the w256 reading against 1,500 s/update. Host memory follows rows per update,
+and an update is about one game per stream, so longer late-run games raise it:
+`peak_rss_bytes` and `median_rows_per_update` show how far the regime's 40 GiB
+stop is from a fresh policy's reading. Neither is a gate.
 """
 
 from __future__ import annotations
@@ -62,6 +65,9 @@ class Calibration(StrictModel):
     updates_in_wall_budget: int | None
     peak_allocated_cuda_bytes: int | None
     peak_reserved_cuda_bytes: int | None
+    # Sampled once per update, so a peak inside an update can exceed it.
+    peak_rss_bytes: int | None
+    median_rows_per_update: float | None
 
 
 def calibration_regime(regime: TrainingRegime, label: SizeLabel) -> TrainingRegime:
@@ -119,6 +125,7 @@ def _calibration(data: RunData, wall_seconds: float) -> Calibration:
     learning = data.points("time/learning", "updates")
     seconds = [float(a + b) for a, b in zip(collection.y, learning.y, strict=True)]
     cost = median(seconds[1:] or seconds) if seconds else None
+    rows = data.points("rows", "updates")
     return Calibration(
         run=data.name,
         state=data.state.state if data.state else "running",
@@ -127,6 +134,8 @@ def _calibration(data: RunData, wall_seconds: float) -> Calibration:
         updates_in_wall_budget=int(wall_seconds / cost) if cost else None,
         peak_allocated_cuda_bytes=_peak(data, "memory/peak_allocated_cuda_bytes"),
         peak_reserved_cuda_bytes=_peak(data, "memory/peak_reserved_cuda_bytes"),
+        peak_rss_bytes=_peak(data, "coordinates/rss_bytes"),
+        median_rows_per_update=float(median(rows.y)) if len(rows) else None,
     )
 
 

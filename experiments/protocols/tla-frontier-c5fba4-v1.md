@@ -80,8 +80,10 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 - **Calibration.** Before the training runs, and after this protocol merges,
   `experiments/tla_frontier_calibration.py` runs each size for five updates on
   the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
-  reserve. It reads seconds per update and CUDA peak, under its own experiment
-  and regime ids, so it is never a frontier run and plays no comparison.
+  reserve. It reads seconds per update, CUDA peak, peak host memory and median
+  rows per update, under its own experiment and regime ids, so it is never a
+  frontier run and plays no comparison. Host memory and rows add no gate; they
+  show how far the regime's 40 GiB stop is from a fresh policy's reading.
   W256 launches at 1,500 s/update or less, about 130 updates in 54 hours. That
   reach is an upper estimate: calibration times a fresh policy, and MTG-183
   slowed 1.55× between windows (confounded by a host change), which would leave
@@ -194,6 +196,12 @@ reported, but not as equal compute. The update cap is a second stop, so a size
 reaching it spent less than the wall budget. The scale reading therefore needs
 both runs finished with neither endpoint at the cap, and is otherwise absent,
 with an issue saying so.
+
+Each comparison and the whole analysis also total the first-64 cutoff: decisions
+and dropped actions, over the games that returned a count. A game killed at its
+limit returns none, so those totals can be low. An overflow is accepted behavior:
+a nonzero count is reported, adds no issue and leaves `complete` unchanged. The
+totals span both players, so they support no per-policy rate.
 
 Report every attempt, failure, resource-limit discard, unreached milestone and
 cost. One seed per size supports a descriptive frontier reading, not a

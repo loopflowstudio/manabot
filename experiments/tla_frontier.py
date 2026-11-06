@@ -517,6 +517,7 @@ def play(match: Match) -> Tables:
         row = by_leg.get(leg)
         valid = row is not None and row.valid
         score = row.score_a if valid else None
+        actions = row.policy_action_counts if row else None
         decks = matchup.decks(leg)
         for seat in (0, 1):
             game_seat = (leg + seat) % 2
@@ -536,6 +537,12 @@ def play(match: Match) -> Tables:
                     "truncated": row.truncated if row else False,
                     "failure": row.failure if row else result.error or "missing game",
                     "seconds": row.game_seconds if row else None,
+                    # The game's, repeated on each seat like `seconds`. A game
+                    # killed at its limit returns no count.
+                    "policy_decisions": actions.decisions if actions else None,
+                    "policy_dropped_actions": actions.dropped_actions
+                    if actions
+                    else None,
                 }
             )
     return {"games": rows}

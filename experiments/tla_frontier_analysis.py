@@ -16,6 +16,10 @@ receipt its `result` holds `worst` and `best`, which count each unscored leg as
 a loss and as a win, and readings use those bounds. Bounds rather than
 exclusion, because failures are not neutral: limits and kills fall on long games.
 
+First-64 cutoff totals sit beside the scores. An overflow is accepted behavior,
+so a nonzero count adds no issue and `complete` stays about missing and failed
+games. The totals span both players, so they support no per-policy rate.
+
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
 in its database, so `TrainingPoint` reads it here to show how far each size got
@@ -73,6 +77,18 @@ class Bounded(StrictModel):
     best: RateInterval
 
 
+class PolicyActions(StrictModel):
+    """First-64 cutoff totals over `games`, the games that returned a count.
+
+    A game killed at its limit returns none, and limits fall on long games, so
+    `games` below the played count means these totals are a lower bound.
+    """
+
+    games: int = 0
+    decisions: int = 0
+    dropped_actions: int = 0
+
+
 class Comparison(StrictModel):
     """One scheduled slot. An unreached slot expects no games, so it counts none.
 
@@ -86,6 +102,7 @@ class Comparison(StrictModel):
     counts: Counts = Counts()
     pairs: list[PairResult] = []
     result: Bounded | None = None
+    policy_actions: PolicyActions = PolicyActions()
 
 
 class TrainingPoint(StrictModel):
@@ -112,6 +129,7 @@ class FrontierAnalysis(StrictModel):
     bootstrap_seed: int
     bootstrap_resamples: int = BOOTSTRAP_RESAMPLES
     counts: Counts
+    policy_actions: PolicyActions
     comparisons: list[Comparison]
     sizes: list[SizeReading]
     # The large size's score at equal wall-clock compute, the primary scale
@@ -145,12 +163,53 @@ def _bounded(pairs: list[PairResult], indices: npt.NDArray[np.int64]) -> Bounded
     )
 
 
+def _policy_actions_by_match(
+    db: duckdb.DuckDBPyConnection, environment_id: str
+) -> dict[str, PolicyActions]:
+    """Each stored match's totals; Etude omits columns that are all null.
+
+    Each seat repeats its game's count, so seat 0 counts a game once.
+    """
+    available = {
+        row[0]
+        for row in db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
+        ).fetchall()
+    }
+    if not {"policy_decisions", "policy_dropped_actions"} <= available:
+        return {}
+    rows = db.execute(
+        "SELECT g.match, count(g.policy_decisions), "
+        "coalesce(sum(g.policy_decisions), 0), "
+        "coalesce(sum(g.policy_dropped_actions), 0) "
+        "FROM games g JOIN runs r USING (run) "
+        "WHERE g.seat = 0 AND r.environment = ? GROUP BY g.match",
+        [environment_id],
+    ).fetchall()
+    return {
+        match: PolicyActions(
+            games=games, decisions=int(decisions), dropped_actions=int(dropped)
+        )
+        for match, games, decisions, dropped in rows
+    }
+
+
+def _total_policy_actions(totals: list[PolicyActions]) -> PolicyActions:
+    return PolicyActions(
+        **{
+            field: sum(getattr(total, field) for total in totals)
+            for field in PolicyActions.model_fields
+        }
+    )
+
+
 def _comparison(
     planned: ScheduledComparison,
     db: duckdb.DuckDBPyConnection,
     protocol: Protocol,
     environment_id: str,
     columns: tuple[str, ...],
+    actions: dict[str, PolicyActions],
     indices: npt.NDArray[np.int64],
 ) -> Comparison:
     """Read a whole block of receipts; a partial block keeps its counts."""
@@ -182,6 +241,9 @@ def _comparison(
         counts=total_counts([pair.counts for pair in pairs]),
         pairs=pairs,
         result=_bounded(pairs, indices) if played else None,
+        policy_actions=_total_policy_actions(
+            [actions[key] for key in keys if key in actions]
+        ),
     )
 
 
@@ -242,11 +304,12 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
     cap = update_cap(regimes[SIZES[0]])
     environment_id = environment(protocol).identity
     columns = game_columns(db)
+    actions = _policy_actions_by_match(db, environment_id)
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
         0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
     )
     comparisons = [
-        _comparison(planned, db, protocol, environment_id, columns, indices)
+        _comparison(planned, db, protocol, environment_id, columns, actions, indices)
         for planned in comparison_schedule(state, protocol)
     ]
     sizes = [
@@ -286,6 +349,7 @@ def analyze(state: ExperimentState, db: duckdb.DuckDBPyConnection) -> FrontierAn
         protocol_sha256=file_sha256(PROTOCOL),
         bootstrap_seed=protocol.bootstrap_seed,
         counts=total_counts([c.counts for c in comparisons]),
+        policy_actions=_total_policy_actions([c.policy_actions for c in comparisons]),
         comparisons=comparisons,
         sizes=sizes,
         scale=endpoints.result if finished and not capped else None,
