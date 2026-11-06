@@ -1189,7 +1189,6 @@ class SeatRoutedCollector:
         packed = streams is not None
         streams = self._streams if streams is None else streams
         num_envs = len(streams)
-        shapes = self.observation_space.encoder.allocate(1)
         obs_rows = np.zeros((num_steps, num_envs), dtype=np.int64)
         actions = np.zeros((num_steps, num_envs), dtype=np.int64)
         logprobs = np.zeros((num_steps, num_envs), dtype=np.float32)
@@ -1197,8 +1196,8 @@ class SeatRoutedCollector:
         dones = np.zeros((num_steps, num_envs), dtype=bool)
         values = np.zeros((num_steps, num_envs), dtype=np.float32)
         next_obs = {
-            key: np.zeros((num_envs,) + value.shape[1:], dtype=value.dtype)
-            for key, value in shapes.items()
+            key: self._buffers[key][:num_envs].copy()
+            for key in self.observation_space.shapes
         }
         next_done = np.zeros((num_envs,), dtype=bool)
         # Flatten in time-major order, matching scalar credit/selected actions.
@@ -1232,8 +1231,6 @@ class SeatRoutedCollector:
             assert not streams[env_index]
             if not packed:
                 assert self._pending[env_index] is None
-            for key in self.observation_space.shapes:
-                next_obs[key][env_index] = self._buffers[key][env_index]
             next_done[env_index] = dones[num_steps - 1, env_index]
 
         return RolloutBatch(

@@ -126,3 +126,6 @@ not GPU evidence. The named CUDA check is the next producer of evidence.
   the recipe pins `workers: 1` and `elemental-uniform` requires one producer. That
   is a recipe decision, outside this Task.
 - Native stepping: engine budget harness, owned by the engine Tasks.
+
+Compress 2026-11-06: `_build_batch` copies `next_obs` straight from the buffers
+(no `allocate(1)` template). Focused training suites: 181 passed.
