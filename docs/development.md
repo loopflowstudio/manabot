@@ -241,9 +241,11 @@ their own and compares a change with the reference commit named in
 GitHub-hosted `ubuntu-24.04` runners land on different CPU generations, and
 the same engine measured 6.8k steps/s on an AMD EPYC 7763 and 10.3k on an
 Intel Xeon 6973P-C (2026-11-02), so wall time is never compared across runs.
-The job builds and runs the candidate, then builds the reference commit
-with the change's benchmarks and runs it on the one machine, and
-fails the PR when the candidate is more than 10% slower than the reference on
+The job builds both commits with the change's benchmarks before timing, then
+runs candidate/reference/reference/candidate on that machine. It compares the
+median duration of the two samples per engine (including each seed's worst
+reply; step throughput is the inverse median time per step) and fails the PR
+when the candidate is more than 10% slower than the reference on
 any timing or either run's digests differ from the committed ones (two runs
 of one engine on separate EPYC 7763 machines agreed within 2.5%). So a
 speedup that changes search results fails until the reference moves, and so
@@ -253,16 +255,21 @@ only.
 
 **Moving the reference.** Every run is a recording of its candidate: the
 `engine-budget` artifact holds the candidate's output and a `measurement.json`
-naming the candidate commit, date, run and runner CPU, written before the
-reference is built. A PR adopts its own run as the reference, saying why in
+naming the candidate commit, date, run and runner CPU. Raw samples and
+`sampling.json` retain both orders, CPU time, context switches, and host load /
+Linux CPU-pressure counters. These can show scheduling noise; without historical
+telemetry they cannot establish the cause of an earlier failure. There are no
+adaptive retries. A failed reference build still records the candidate before
+failing the check. A PR adopts its own run as the reference, saying why in
 the commit, for one of three reasons: a digest moved (a rules change reaching
 these decks, or a change to the benchmarks or the curated lists); a measured
 cost is accepted; or a speedup is kept, so later slowdowns are budgeted
 against the faster engine rather than allowed back up to the old reference.
 The PR body cites the delta from the run it adopts; the recording commit's
 own run then compares the same engine with that reference and passes. When
-both digests match and the engine did not change, investigate the failure and
-re-run the job before attributing it to runner noise; do not widen the tolerance.
+digests match but timing fails, inspect the retained samples and scheduling
+evidence before attributing the failure to runner noise. An unexplained failure
+remains a failure; do not retry until green or widen the tolerance.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget
@@ -275,7 +282,7 @@ commit, and a PR head stays fetchable after a squash merge. The benchmarks
 use only the stable `Env` surface (`new`, `reset`, `step`, `action_count`,
 `is_game_over`, `winner_index`, `flat_mc_scores`); a change to that surface
 that the reference commit no longer compiles with still records the
-candidate (the reference is built afterwards) and moves the reference in the
+candidate despite the failed reference build and moves the reference in the
 same PR like any other move. For a commit that has no PR, the `measure`
 dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without

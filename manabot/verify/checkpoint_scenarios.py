@@ -86,7 +86,6 @@ def score_checkpoint(
         scenario = SCENARIOS[scenario_name]
         env, observation, _ = build_scenario_env(scenario, space, seed)
         validate_agent_setup(player.agent, env.match.to_rust())
-        player.start_game(env, 0)
         game = {
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",
             "scenario_root": scenario_identity(scenario_name),

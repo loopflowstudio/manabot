@@ -104,10 +104,11 @@ def _collector(
 
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
+    rows = batch.observations()
     obs = observation_tensors(
         {
             key: value.reshape((-1,) + value.shape[2:])
-            for key, value in batch.obs.items()
+            for key, value in rows.observation.items()
         },
         "cpu",
     )
@@ -115,9 +116,11 @@ def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
         logits, values = agent(obs)
     np.testing.assert_allclose(batch.values.ravel(), values.numpy().ravel(), atol=1e-6)
     np.testing.assert_allclose(
-        batch.probabilities.reshape(logits.shape), logits.softmax(-1).numpy(), atol=1e-6
+        rows.probabilities.reshape(logits.shape),
+        logits.softmax(-1).numpy(),
+        atol=1e-6,
     )
-    selected = np.take_along_axis(batch.log_probabilities, batch.actions[..., None], -1)
+    selected = np.take_along_axis(rows.log_probabilities, batch.actions[..., None], -1)
     np.testing.assert_allclose(batch.logprobs, selected[..., 0])
 
 
@@ -130,7 +133,8 @@ def test_both_seats_keep_their_own_trajectory_and_terminal_credit(
     batch = collector.collect(agent, 1)
     assert batch.actions.shape == (8, 1)
     np.testing.assert_array_equal(
-        batch.obs["agent_player"][:, 0, 0, 0], [0, 1, 3, 2, 4, 11, 10, 12]
+        batch.obs["agent_player"][:, 0, 0, 0],
+        [0, 1, 3, 2, 4, 11, 10, 12],
     )
     np.testing.assert_array_equal(batch.rewards[:, 0], [0, 0, -1, 0, 1, -1, 0, 1])
     np.testing.assert_array_equal(batch.dones[:, 0], [0, 0, 1, 0, 1, 1, 0, 1])
@@ -206,8 +210,17 @@ def test_two_seat_real_native_games_and_recovery() -> None:
     actual = restored.collect(agent, 1)
     np.testing.assert_array_equal(actual.actions, expected.actions)
     np.testing.assert_array_equal(actual.rewards, expected.rewards)
-    for key in actual.obs:
-        np.testing.assert_array_equal(actual.obs[key], expected.obs[key])
+    actual_rows, expected_rows = actual.observations(), expected.observations()
+    for key in actual_rows.observation:
+        np.testing.assert_array_equal(
+            actual_rows.observation[key], expected_rows.observation[key]
+        )
+    np.testing.assert_array_equal(
+        actual_rows.probabilities, expected_rows.probabilities
+    )
+    np.testing.assert_array_equal(
+        actual_rows.log_probabilities, expected_rows.log_probabilities
+    )
 
 
 @pytest.mark.parametrize("mode", ["random", "frozen"])

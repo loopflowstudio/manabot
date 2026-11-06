@@ -173,6 +173,15 @@ checkpoints or experiment evidence.
   Shared admission rejects new unrepresentable layer payloads on v1–v7 before
   either encoder writes buffers. A stacked activation owns its chosen effects;
   catalog joins are observation provenance, never resolution lookup authority.
+- Naming is ordinary native decisions: `Decision::NameCard` holds a
+  `NameScope`; scopes over `NAME_BRANCHING` (64) names offer balanced groups of
+  sorted names, and only a name choice commits. Explicit input v9 retains v8
+  layouts and adds `name_candidates[A,4]` at ordinary action capacity: name row,
+  optional definition reference, then a group's first and last name rows, all
+  one-based. V1–v8 carry no name identity and see naming prompts as anonymous
+  modal choices. Names are not game objects; do not use card slots or invent
+  definitions for them. Native scalar/vector paths select v9 from this buffer's
+  presence. V1–v8 and fresh v6 defaults remain unchanged.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

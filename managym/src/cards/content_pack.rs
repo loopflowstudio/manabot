@@ -14,6 +14,7 @@ use std::{
 };
 
 use super::fixtures;
+use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
@@ -42,6 +43,7 @@ pub struct ContentPack {
     pub schema_version: u32,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
+    names: OnceLock<Arc<NameVocabulary>>,
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
 }
@@ -54,6 +56,24 @@ pub fn default_content_pack() -> &'static ContentPack {
 }
 
 impl ContentPack {
+    /// Sorted real names, including registered back faces.
+    /// Built once with the catalog; decisions and search forks share the allocation.
+    pub fn name_candidates(&self) -> Arc<NameVocabulary> {
+        Arc::clone(self.names.get_or_init(|| {
+            NameVocabulary::new(
+                self.definition_entries()
+                    .filter(|(id, card)| {
+                        !card.is_token && (!card.key.is_empty() || self.front_face(*id).is_some())
+                    })
+                    .map(|(definition, card)| NameCandidate {
+                        name: card.name.clone(),
+                        definition: Some(definition),
+                    })
+                    .collect(),
+            )
+        }))
+    }
+
     /// Representation-neutral fingerprint of the immutable card definitions.
     ///
     /// Sorting by card name keeps benchmark snapshots stable across storage
@@ -105,6 +125,7 @@ impl Default for ContentPack {
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
             cards_by_name: BTreeMap::new(),
+            names: OnceLock::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
             definitions: Vec::with_capacity(by_name.len()),
@@ -126,6 +147,7 @@ impl ContentPack {
     /// keyword and the catalog adds the trigger. Besides the catalog's own
     /// construction, only content-sensitivity tests extend a copy.
     pub fn register_card(&mut self, mut definition: CardDefinition) {
+        self.names.take();
         self.digest.take();
         self.public_definitions.take();
         if let Some(ward_cost) = definition.ward().cloned() {

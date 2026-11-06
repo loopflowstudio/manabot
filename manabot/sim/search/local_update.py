@@ -18,7 +18,7 @@ import time
 from typing import Literal
 
 import managym._managym as native
-from managym.decision import DecisionFrame, Observation, SemanticTransition
+from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
 from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
@@ -38,17 +38,10 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
+from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
-from manabot.sim.search.compound import (
-    CompoundCursor,
-    CompoundPrefixReceipt,
-    CompoundProjection,
-    CompoundRollout,
-    advance_compound,
-    project_compound,
-)
 from manabot.sim.search.sampling import (
     HandBatch,
     HandSample,
@@ -150,6 +143,20 @@ def regularized_update(
 
 
 @dataclass(frozen=True)
+class CompoundPrefixReceipt:
+    """Decoder prefix retained by receipts from removed compound policies.
+
+    Current searches never write one. The type remains so historical receipts
+    still validate and keep their replay identities.
+    """
+
+    root_observation_json: str
+    projection_json: str
+    tokens: tuple[int, ...]
+    commands: tuple[Command, ...]
+
+
+@dataclass(frozen=True)
 class RolloutReceipt:
     world_index: int | None
     world_seed: int
@@ -160,6 +167,8 @@ class RolloutReceipt:
     actor_observation_hashes: tuple[str, ...]
     branch_audit_json: str
     sampled_hand: HandSample | None = None
+    # Always zero for current searches; nonzero only in historical compound
+    # receipts.
     decoder_factors: int = 0
     canonical_commands: int = 0
 
@@ -408,8 +417,6 @@ def local_search_source_sha256() -> str:
     paths = (
         "manabot/sim/search/local_update.py",
         "manabot/sim/search/sampling.py",
-        "manabot/sim/search/compound.py",
-        "manabot/model/compound.py",
         "manabot/model/actor_critic.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
@@ -434,14 +441,9 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        if self.agent.config.compound_decisions and config.sampling == "belief":
-            raise ValueError(
-                "compound exact-history likelihood is unsupported; use a direct sampler"
-            )
         metadata = torch.load(checkpoint, map_location="cpu", weights_only=False)
         if (
-            not self.agent.config.compound_decisions
-            and self.agent.config.value_kind != "categorical_wdl"
+            self.agent.config.value_kind != "categorical_wdl"
             and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"
         ):
             raise ValueError(
@@ -488,8 +490,6 @@ class LocalUpdateTeacher:
         self.source_sha256 = local_search_source_sha256()
 
     def predict(self, engine: managym.Env) -> tuple[FloatArray, float]:
-        if self.agent.config.compound_decisions:
-            raise ValueError("compound inference requires a retained prefix projection")
         actor = int(engine.current_agent_index())
         raw = engine.observation_for_player(actor)
         encoded = self.space.encode(raw)
@@ -516,29 +516,17 @@ class LocalUpdateTeacher:
         receipt: LocalUpdateReceipt,
         *,
         query: WorldQuery | None = None,
-        compound_cursor: CompoundCursor | None = None,
     ) -> None:
         """Re-execute the sampled branches and compare every retained witness.
 
         The caller supplies the exact historical root and its tracked belief;
         receipts are not a substitute for the canonical source trajectory.
-        Elapsed time is the only excluded field.
+        Elapsed time is the only excluded field. Receipts of removed compound
+        policies are readable but not replayable here.
         """
-        if (
-            receipt.compound_prefix is not None
-            and receipt.compound_prefix.commands
-            and compound_cursor is None
-        ):
-            raise ValueError(
-                "compound replay requires the retained original-root cursor"
-            )
-        replay = self.search(
-            engine,
-            belief,
-            seed=receipt.seed,
-            query=query,
-            compound_cursor=compound_cursor,
-        )
+        if receipt.compound_prefix is not None:
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        replay = self.search(engine, belief, seed=receipt.seed, query=query)
         if replay.replay_identity() != receipt.replay_identity():
             raise ValueError("local update replay differs from retained evidence")
 
@@ -550,7 +538,6 @@ class LocalUpdateTeacher:
         seed: int,
         query: WorldQuery | None = None,
         deadline: float | None = None,
-        compound_cursor: CompoundCursor | None = None,
     ) -> LocalUpdateReceipt:
         started = time.perf_counter()
         limit = min(
@@ -635,15 +622,7 @@ class LocalUpdateTeacher:
             )
             sampling_probabilities = tuple(float(p) for p in belief.probabilities)
         frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
-        compound = (
-            project_compound(self.agent, engine, compound_cursor, check)
-            if self.agent.config.compound_decisions
-            else None
-        )
-        if compound is not None:
-            base = compound.probabilities
-        else:
-            base, _ = self.predict(engine)
+        base, _ = self.predict(engine)
         reference = np.full(len(base), 1.0 / len(base))
         if len(frame.offers) != len(base):
             raise ValueError("semantic offers and policy rows differ")
@@ -728,12 +707,6 @@ class LocalUpdateTeacher:
                 branch = session.fork_exact(world, "world")
                 hashes: list[str] = []
                 probabilities, value = base, 0.0
-                compound_rollout = (
-                    CompoundRollout(self.agent, compound, rollout_seed, check)
-                    if compound is not None
-                    else None
-                )
-                projection = compound
                 for ply in range(self.config.depth):
                     check()
                     if branch.is_game_over():
@@ -744,20 +717,11 @@ class LocalUpdateTeacher:
                             branch.semantic_observation_json(actor)
                         ).viewer_state_hash
                     )
-                    if compound_rollout is not None:
-                        assert projection is not None
-                        choice = (
-                            action if ply == 0 else compound_rollout.choose(projection)
-                        )
-                        compound_rollout.advance(projection, choice)
-                    else:
-                        choice = (
-                            action
-                            if ply == 0
-                            else int(
-                                policy_rng.choice(len(probabilities), p=probabilities)
-                            )
-                        )
+                    choice = (
+                        action
+                        if ply == 0
+                        else int(policy_rng.choice(len(probabilities), p=probabilities))
+                    )
                     _, _, _, truncated, _ = session.apply_policy_choice(
                         branch, site="child", policy_index=choice
                     )
@@ -766,14 +730,7 @@ class LocalUpdateTeacher:
                             "local rollout truncated before an authoritative outcome"
                         )
                     if not branch.is_game_over():
-                        if compound_rollout is not None:
-                            projection = compound_rollout.project(branch)
-                            probabilities, value = (
-                                projection.probabilities,
-                                projection.value,
-                            )
-                        else:
-                            probabilities, value = self.predict(branch)
+                        probabilities, value = self.predict(branch)
                 terminal = bool(branch.is_game_over())
                 if terminal:
                     winner = branch.winner_index()
@@ -787,9 +744,6 @@ class LocalUpdateTeacher:
                 receipts.append(
                     RolloutReceipt(
                         canonical_commands=len(hashes),
-                        decoder_factors=compound_rollout.factors
-                        if compound_rollout is not None
-                        else 0,
                         world_index=index,
                         sampled_hand=sampled_hand,
                         world_seed=world_seed,
@@ -821,7 +775,6 @@ class LocalUpdateTeacher:
             sampling_probabilities=sampling_probabilities,
             learned_belief=learned,
             direct_belief=direct if learned is None else None,
-            compound_prefix=compound.cursor.receipt() if compound is not None else None,
             query_json=json.dumps(selected_query.to_dict(), sort_keys=True),
             condition_mass=mass,
             viewer=viewer,
@@ -865,16 +818,11 @@ class LocalUpdatePlayer(ExactRangePlayer):
         self.deadline: float | None = None
         self._belief_seconds = 0.0
         self.history: ViewerHistory | None = None
-        self.compound_cursor: CompoundCursor | None = None
-        self.compound_projection: CompoundProjection | None = None
-        self._decision_limit: float = float("inf")
 
     def start_game(self, env: Env, seat: int) -> None:
         validate_agent_setup(self.teacher.agent, env.match.to_rust())
         started = time.perf_counter()
         self.last_receipt = None
-        self.compound_cursor = None
-        self.compound_projection = None
         self.history = None
         self.tracker = None
         if self.teacher.hand_sampler is not None:
@@ -902,14 +850,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
             )
 
     def prepare_step(self, env: Env, acting: int, action: int) -> None:
-        if acting == self.seat and self.compound_projection is not None:
-            self.compound_cursor = advance_compound(
-                self.teacher.agent,
-                self.compound_projection,
-                action,
-                self._check_deadline,
-            )
-            self.compound_projection = None
         if self.teacher.hand_sampler is None and self.sampling is RangeSampling.BELIEF:
             super().prepare_step(env, acting, action)
 
@@ -950,10 +890,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
                 )
         super().observe_step(env, acting, transition)
 
-    def _check_deadline(self) -> None:
-        if time.perf_counter() >= self._decision_limit:
-            raise TimeoutError("local search deadline exceeded; target unavailable")
-
     def act(self, env: Env, obs: dict[str, NDArray[np.float32]]) -> int:
         del obs
         if self.tracker is None and self.history is None:
@@ -980,16 +916,7 @@ class LocalUpdatePlayer(ExactRangePlayer):
             belief,
             seed=(self.seed * 1_000_003 + self.calls) % (2**63),
             deadline=limit,
-            compound_cursor=self.compound_cursor,
         )
-        if self.teacher.agent.config.compound_decisions:
-            self._decision_limit = limit
-            self.compound_projection = project_compound(
-                self.teacher.agent,
-                env._engine,
-                self.compound_cursor,
-                self._check_deadline,
-            )
         self.last_receipt = replace(
             self.last_receipt,
             belief_seconds=spent,
