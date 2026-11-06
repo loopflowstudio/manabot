@@ -135,3 +135,22 @@ the $25; protocol amendments record it. Exact quota's future stays Jack Heart's.
   passed at c59aeee0e. Treated as a local-extension mismatch; CI owns the check.
 
 Check (realign 2026-11-06): `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_batch_closure.py tests/training/test_elemental_closure_lambda.py -q` → 66 passed, 3 failed (local-extension replay cases above); `manabot.data publish experiments/data/closure-lambda-elemental-v1` → 0 manifest entries changed.
+
+## Concept review (graph step, 2026-11-06)
+
+Outcome: nothing to change at the concept level; no open product choice for this Task.
+
+- `Design` (a protocol's held-out pairings, shared by every arm) and `Pairing` (deck
+  pair + deal, legs exchanging decks and seats) carry the 2026-11-05 random-pairs steer
+  directly; the Allies/Lessons protocol becomes one `Design` rather than a parallel
+  path. `Conditions` names its design, so one `play_deal` serves both.
+- Exact quota under capacity recovery is one rule in two places (regime and collector):
+  game-error recovery is allowed with exact quota only when it recovers capacity, and a
+  failed paused game keeps the rows an update already learned from (`learned_samples`).
+  No new concept beyond that receipt field.
+- Non-blocking wording, for gate/polish if touched: the collector's error "exact quota
+  requires one seat, no per-game quota and capacity recovery" reads as if capacity
+  recovery were mandatory; the regime's message states the rule exactly. `play_deal`
+  now plays a pairing; the name is kept because Etude job commands reference it.
+- Exact quota's future (keep, fix complete games' serial packing, or two-seat exact
+  quota) is outside this Task: the brief asks for reports only; it stays Jack Heart's.
