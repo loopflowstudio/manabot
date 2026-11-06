@@ -7,9 +7,9 @@ batch's slowest game, and overlapping collection with learning. Multi-producer
 collection belongs to Task c5fba4 and is read from its result, not repeated here.
 
 Status: this is the design. Nothing has launched. It becomes frozen only after
-Jack Heart's design review in the Task conversation. Step 1 freezes first, and
-each later step freezes after the step-1 gates have been read, before any of its
-scored runs.
+Jack Heart's design review in the Task conversation. Step 1 freezes first. Each later step
+freezes after the previous step's readings have been discussed and that step
+chosen, before any of its scored runs.
 
 ## Authority and budget
 
@@ -109,16 +109,20 @@ environment and learner decisions. The driver samples, once a second:
   one machine per probe under the line's limit. No laptop run measures
   timing.
 
-**Gates (fixed before step 1 runs).** Read on the median of the L4 machines:
+**Choosing the next step.** There are no fixed pass/fail gates. The experiment
+goes one step at a time: after step 1, its readings are reported in the Task
+conversation, and Jack Heart chooses the next step with them. That choice is
+recorded here as an amendment before that step's runs. The readings that inform it:
 
-| Gate | Passes when | Then |
-|---|---|---|
-| G1, collection idle | collection >= 50% of the update and idle share >= .50 | step 3 (stop waiting) proceeds; below 35% collection it is dropped as a bound under ~15% |
-| G2, overlap | overlap bound >= 25%, with a spare core and GPU busy share < 70% | step 4 proceeds |
-| G3, packing | pack-2 gain >= 1.6 and peak host memory leaves 20% headroom at that K | step 2 proceeds at the largest K that passes, on the cheaper $/decision machine |
+| Reading | Points toward |
+|---|---|
+| Collection share and the measured idle share | Step 3 (stop waiting), sized by (collection - assembly) x idle share |
+| Overlap bound, spare cores and GPU busy share | Step 4 (overlap) |
+| Packing gain per machine, dollars per M learner decisions, memory headroom | Step 2 (seeds per machine) and its slot count |
 
-The cheapest step still applies: if no gate passes, the experiment ends with the
-step-1 report and the machine recommendation.
+Steps are taken in order of expected saving per dollar and per hour of work. A
+step with a small measured bound is not built. The experiment may end after
+step 1 with its report and the machine recommendation.
 
 ## Step 2: seeds per machine
 
@@ -138,7 +142,8 @@ Two checks support the construction:
   update) must fall within the spread of solo seeds at matched updates, with
   one-update watchdog margins intact.
 
-**Software needed only if G3 passes: Etude machine slots.** Today a machine runs
+**Etude machine slots.** Jack Heart approved building and shipping this on
+2026-11-06 as Etude Task 8ffc3e, independently of step 1's readings. Today a machine runs
 its session's attempts in turn ("There is no run-count packing setting",
 `etude-sdk/docs/launcher.md`). The change is an on-demand `slots: int` that
 places up to that many runs on one machine at once. Each run keeps its own
@@ -150,7 +155,7 @@ outputs, plus one two-run CPU canary. This is an Etude PR, not a manabot
 workaround. The same change lets steps 3 and 4 place control and arm seeds on
 one machine.
 
-## Step 3: stop waiting for the slowest game (if G1 passes)
+## Step 3: stop waiting for the slowest game
 
 At a closed batch, a finished two-seat stream waits until every stream finishes
 its game. There are two candidates:
@@ -181,7 +186,7 @@ its game. There are two candidates:
 decisions, interval including zero; .071 below at matched wall time and cost)
 sets no expectation for two seats.
 
-## Step 4: overlap collection and learning (if G2 passes)
+## Step 4: overlap collection and learning
 
 `elemental-throughput-overlap1-v1`: the collector gathers batch n+1 with the
 weights from update n-1 while the learner computes update n from batch n. The
@@ -248,7 +253,7 @@ $1.00. Each run reserves its window plus 15 minutes of setup at the ceiling.
 | Reserve for failed attempts and replaced hosts | | | $5.40 |
 | **Proposed total** | | | **$24.40 of $50** |
 
-If a gate fails, its lines are not spent. Step 2 has no strength line. Its Etude
+Lines for steps not chosen are not spent. Step 2 has no strength line. Its Etude
 change costs one CPU canary, paid from the reserve. If steps 3 and 4 both
 proceed, they share the control seeds.
 
@@ -271,6 +276,6 @@ proceed, they share the control seeds.
 `experiments/data/training-throughput-b015d5-v1/report.md` in the artifact
 store. It contains the step-1 table (per machine and K: s/update, phase tree,
 idle share, CPU cores, GPU busy share, peak memory, $/M learner decisions), the
-gate readings, the arms' strength curves on wall, dollar and decision clocks,
+step readings and choices, the arms' strength curves on wall, dollar and decision clocks,
 cost against this budget, and the machine and regime recommendation that
 updates `experiments/training-update-time.md`.
