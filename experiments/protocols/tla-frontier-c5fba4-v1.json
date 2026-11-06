@@ -3,7 +3,7 @@
   "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
   "deck_seed": 21590001,
   "evaluation_usd": "12",
-  "game_seconds": 120.0,
+  "game_seconds": 600.0,
   "large": {
     "attention_layers": 4,
     "hidden_dim": 256,
@@ -213,8 +213,6 @@
     "card_digest": "6a818cbcc0c48e0d9b6abb42fee4cbea288312a271e0e9514b5683f0ea3d1cd9",
     "world_version": "w17"
   },
-  "schema_version": 1,
-  "source_base": "8e5d152ab3a6cac72aff883917a37877ec7b574d",
   "training_hours": 56.0,
   "training_seed": 21501,
   "training_usd": "38"

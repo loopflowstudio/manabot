@@ -32,7 +32,7 @@ from etude.eval.records import (
     Matchup,
     Model,
 )
-from etude.experiment import Checkpoint, ExperimentState
+from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
@@ -43,7 +43,7 @@ from experiments.tla_pilot_v10 import HeuristicSpec, Pair, RuntimeWorld
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
-from manabot.experiment.job import TrainingJob
+from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -58,6 +58,12 @@ EXPERIMENT = "tla_frontier_c5fba4"
 PROTOCOL = ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.json"
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
+# One single-threaded game per worker on a 32-vCPU rental, leaving room for its
+# host. At cpu32's USD0.96/hour, these hours and Etude's 15-minute setup
+# allowance fit the pass ceiling.
+EVALUATION_WORKERS = 28
+EVALUATION_HOURS = 1.75
+EVALUATION_PASS_USD = Decimal("2")
 HEURISTIC: HeuristicSpec = {
     "kind": "heuristic",
     "max_actions": 64,
@@ -80,8 +86,6 @@ class ModelSize(StrictModel):
 
 
 class Protocol(StrictModel):
-    schema_version: Literal[1] = 1
-    source_base: str
     runtime_world: RuntimeWorld
     corpus_sha256: str
     observation_shapes: dict[str, tuple[int, ...]]
@@ -167,13 +171,8 @@ def _source() -> list[Path]:
 def environment(protocol: Protocol) -> Environment:
     return Environment(
         name="tla-frontier-c5fba4-v1",
-        files=canonical_sha256(
-            {
-                "world": managym.world_identity(),
-                "corpus": protocol.corpus_sha256,
-                "protocol": protocol.model_dump(mode="json"),
-            }
-        ),
+        # The protocol names the world and corpus, and `frozen` rejects drift.
+        files=canonical_sha256(protocol.model_dump(mode="json")),
         config={"purpose": "fixed-corpus-frontier-no-heldout-deck-claim"},
     )
 
@@ -187,32 +186,28 @@ class ScheduledComparison:
 
     `update` is the first player's, None for an endpoint its run has not
     reached. Head-to-head rows put the large size first, so their score is the
-    large size's.
+    large size's. `unreached` marks a milestone past a finished run's endpoint,
+    which the wall budget ended on purpose and no missing evidence explains.
     """
 
     tag: str
     update: int | None
     matchup: Matchup | None
+    unreached: bool = False
 
 
-def _checkpoints(
-    state: ExperimentState, label: SizeLabel
-) -> tuple[dict[int, Checkpoint], int | None]:
-    """The size's one run: saved checkpoints by update, and its endpoint if finished.
-
-    Etude names the run `<regime id>-seed<seed>`.
-    """
+def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
+    """The size's one run, which Etude names `<regime id>-seed<seed>`."""
     prefix = f"{_regime_id(label)}-"
     found = [run for run in state.runs if run.name.startswith(prefix)]
     if len(found) > 1:
         raise ValueError(f"frontier admits one {label} run, found {len(found)}")
-    if not found:
-        return {}, None
-    run = found[0]
-    return (
-        {int(c.clocks["updates"]): c for c in run.checkpoints},
-        int(run.final.clocks["updates"]) if run.final else None,
-    )
+    return found[0] if found else None
+
+
+def endpoint(run: TrainingRun | None) -> int | None:
+    """The finished run's last update; None while it may still save more."""
+    return int(run.final.clocks["updates"]) if run and run.final else None
 
 
 def comparison_schedule(
@@ -228,10 +223,12 @@ def comparison_schedule(
     inference = Inference(source=source)
     heuristic = Code(name="heuristic", source=source, config=HEURISTIC)
     conditions = tuple(pair.model_dump(mode="json") for pair in protocol.pairs)
-    saved: dict[SizeLabel, dict[int, Checkpoint]] = {}
-    endpoints: dict[SizeLabel, int | None] = {}
-    for label in SIZES:
-        saved[label], endpoints[label] = _checkpoints(state, label)
+    runs = {label: size_run(state, label) for label in SIZES}
+    endpoints = {label: endpoint(run) for label, run in runs.items()}
+    saved: dict[SizeLabel, dict[int, Checkpoint]] = {
+        label: {int(c.clocks["updates"]): c for c in run.checkpoints} if run else {}
+        for label, run in runs.items()
+    }
 
     def model(label: SizeLabel, update: int | None) -> Model | None:
         found = saved[label].get(update) if update is not None else None
@@ -245,6 +242,8 @@ def comparison_schedule(
         update: int | None,
         opponent: Model | Code | None,
         name: str,
+        *,
+        unreached: bool = False,
     ) -> None:
         candidate = model(label, update)
         schedule.append(
@@ -260,8 +259,13 @@ def comparison_schedule(
                 )
                 if candidate is not None and opponent is not None
                 else None,
+                unreached=unreached,
             )
         )
+
+    def past_endpoint(label: SizeLabel, update: int) -> bool:
+        end = endpoints[label]
+        return end is not None and update > end
 
     updates = (0, *protocol.milestones)
     for update in updates:
@@ -272,6 +276,7 @@ def comparison_schedule(
                 update,
                 heuristic,
                 f"{label} u{update} vs heuristic",
+                unreached=past_endpoint(label, update),
             )
         if update:
             expect(
@@ -280,6 +285,7 @@ def comparison_schedule(
                 update,
                 model(SMALL, update),
                 f"{LARGE} u{update} vs {SMALL} u{update}",
+                unreached=any(past_endpoint(label, update) for label in SIZES),
             )
     for label in SIZES:
         end = endpoints[label]
@@ -319,23 +325,30 @@ def eval(state: ExperimentState) -> list[Job]:
     )
     if not matchups:
         return []
-    return [
-        evaluation(
-            Benchmark(
-                name="tla-frontier-c5fba4-paired-v1",
-                environment=environment(protocol),
-                matchups=matchups,
-            ),
-            # Etude discovers this file with runpy; callbacks need an importable
-            # module identity even when eval itself came from <run_path>.
-            play=tla_frontier.play,
-            workers=4,
-            max_hours=6,
-            # One pass's ceiling; the operator keeps the cumulative evaluation
-            # spend under `protocol.evaluation_usd`.
-            max_usd=Decimal("2"),
-        )
-    ]
+    job = evaluation(
+        Benchmark(
+            name="tla-frontier-c5fba4-paired-v1",
+            environment=environment(protocol),
+            matchups=matchups,
+        ),
+        # Etude discovers this file with runpy; callbacks need an importable
+        # module identity even when eval itself came from <run_path>.
+        play=tla_frontier.play,
+        workers=EVALUATION_WORKERS,
+        max_hours=EVALUATION_HOURS,
+        # One pass's ceiling; the operator keeps the cumulative evaluation
+        # spend under `protocol.evaluation_usd`.
+        max_usd=EVALUATION_PASS_USD,
+        max_attempts=1,
+        setup=machine_setup(" --extra evaluation"),
+    )
+    # Etude's default command omits the extra holding its result writer (duckdb).
+    command = job.command.replace(
+        "uv run python",
+        f"{TOOLCHAIN_ENV}\nuv run --locked --extra evaluation python",
+        1,
+    )
+    return [job.model_copy(update={"command": command})]
 
 
 # -- Evaluation callback ------------------------------------------------------
@@ -478,7 +491,7 @@ def play(match: Match) -> Tables:
 
 
 def report() -> Report:
-    """Progress curves by update; the frozen protocol owns qualified claims."""
+    """Progress curves by update; `experiments.tla_frontier_analysis` owns claims."""
     return Report(
         score=Score(table="games", value="score", reference=0.5),
         clock="updates",

@@ -44,13 +44,18 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 
   Compute parameters exclude the five 4096-bucket hashed lookup tables, whose
   bucket count is unchanged; their width follows the model width. The ratio is
-  15.0×, inside the requested 10–100× and toward its low end so the larger size
-  still completes several hundred updates on its share of the budget.
+  15.0×, inside the requested 10–100× and toward its low end, because the
+  larger size's update cost on a GPU has not been measured.
 - **Budget per size.** One GPU allocation of at most USD38 and 56 hours; the
   regime wall budget is 54 hours (194,400 s) and the update cap 3,000. Training
   stops at whichever comes first and exports the last complete raw learner.
   The sizes therefore receive equal wall-clock compute, not equal updates.
   Training seed 21501 for both. No automatic retry.
+- **Hardware.** Both sizes run on the same GPU model, chosen at launch and
+  recorded before any score is read; different models void the equal-compute
+  reading. USD38 over 56 hours admits at most USD0.67/hour, which covers
+  the USD0.59/hour L4 and A40 of earlier receipts but not the USD0.96/hour
+  RTX 5090, where the dollar ceiling would stop training first.
 
 ## Evaluation schedule
 
@@ -67,15 +72,22 @@ heuristic is the matched first-64 heuristic. Shared update milestones are 25,
   equal wall-clock compute.
 
 Evaluation runs on rented CPU through Etude while training continues, so
-progress is visible at each milestone. Each pass is capped at USD2 and six
-hours; cumulative evaluation spend is capped at USD12. Milestones past a size's
-endpoint stay in the schedule as unreached slots; failed or truncated games
-stay failed in their scheduled slots and are never replaced.
+progress is visible at each milestone. Each pass is one 32-vCPU rental with 28
+workers, capped at USD2 and 1.75 hours plus setup; cumulative evaluation spend
+is capped at USD12. Each game has a 600-second wall limit, enforced by killing
+the game and counting it failed. MTG-213's 120 seconds would penalize the
+larger network for its own latency: one thread takes about 0.4 s per w256
+decision against 0.15 s at w64, across games averaging 180 decisions. Milestones
+past a size's endpoint stay in the schedule as unreached slots; failed or
+truncated games stay failed in their scheduled slots and are never replaced.
 
 ## Reading
 
-Scores are the candidate's mean game score with 95% whole-pair bootstrap
-intervals (seed 21592001). Head-to-head rows put w256 first.
+`experiments/tla_frontier_analysis.py` produces these readings. Scores are the
+candidate's mean game score with 95% whole-pair bootstrap intervals (seed
+21592001), for comparisons whose 16 pairs all completed. Head-to-head rows put
+w256 first. A milestone past a finished run's endpoint is unreached and expects
+no games; any other absent comparison leaves that reading unknown.
 
 - **Learning**, per size: endpoint vs its initialization above 0.5 with the
   interval excluding 0.5.

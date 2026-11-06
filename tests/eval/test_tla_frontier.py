@@ -1,9 +1,12 @@
 """The c5fba4 frontier protocol pins two sizes and a milestone evaluation schedule."""
 
 from collections import Counter
+from collections.abc import Iterator
 from decimal import Decimal
+import json
 from pathlib import Path
 
+import duckdb
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
@@ -29,6 +32,7 @@ from experiments.tla_frontier import (
     frozen,
     runs,
 )
+from experiments.tla_frontier_analysis import analyze
 from manabot.env.observation import ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -162,6 +166,13 @@ def test_running_runs_evaluate_reached_milestones_only() -> None:
     assert not any("final" in name for name in names)
     (job,) = eval(state)
     assert job.max_usd == Decimal("2")
+    assert job.max_attempts == 1
+
+
+def test_evaluation_job_prepares_a_stock_rented_machine() -> None:
+    (job,) = eval(_state({SMALL: 25, LARGE: 25}, finished=False))
+    assert job.setup is not None and "--extra evaluation" in job.setup
+    assert "uv run --locked --extra evaluation python" in job.command
 
 
 def test_no_checkpoints_schedules_nothing() -> None:
@@ -183,3 +194,127 @@ def test_discovery_keeps_evaluation_callback_importable() -> None:
     callback = evaluation_spec(job).play
     assert callback.module == "experiments.tla_frontier"
     assert callable(callback.load(job.repo))
+
+
+# Controlled outcomes exercise the analysis without running games or training.
+# This schema is Etude's public statsdb projection.
+@pytest.fixture
+def frontier_db() -> Iterator[duckdb.DuckDBPyConnection]:
+    with duckdb.connect() as db:
+        db.execute("CREATE TABLE runs (run VARCHAR, environment VARCHAR)")
+        db.execute(
+            "CREATE TABLE matches (run VARCHAR, match VARCHAR, state VARCHAR, error VARCHAR)"
+        )
+        db.execute(
+            "CREATE TABLE seats (run VARCHAR, match VARCHAR, seat BIGINT, source VARCHAR)"
+        )
+        db.execute(
+            "CREATE TABLE games (run VARCHAR, match VARCHAR, seat BIGINT, game BIGINT, attempted BOOLEAN, valid BOOLEAN, score DOUBLE, terminated BOOLEAN, truncated BOOLEAN, failure VARCHAR)"
+        )
+        db.execute(
+            "CREATE TABLE training_checkpoints (run VARCHAR, ordinal BIGINT, wall_ms BIGINT, clocks JSON)"
+        )
+        yield db
+
+
+def _outcomes(
+    db: duckdb.DuckDBPyConnection, state: ExperimentState, wins: int = 3
+) -> dict[str, list[str]]:
+    """Every scheduled pair scores `wins` of four legs for its first player."""
+    benchmark = evaluation_spec(eval(state)[0]).tournament
+    db.execute(
+        "INSERT INTO runs VALUES ('fixture-eval', ?)", [benchmark.environment.identity]
+    )
+    keys: dict[str, list[str]] = {}
+    for matchup in benchmark.matchups:
+        keys[matchup.name] = [match.key for match in matchup.matches()]
+        for key in keys[matchup.name]:
+            db.execute(
+                "INSERT INTO matches VALUES ('fixture-eval', ?, 'done', NULL)", [key]
+            )
+            for seat in (0, 1):
+                db.execute(
+                    "INSERT INTO seats VALUES ('fixture-eval', ?, ?, ?)",
+                    [key, seat, "a" * 64],
+                )
+                db.executemany(
+                    "INSERT INTO games VALUES ('fixture-eval', ?, ?, ?, true, true, ?, true, false, NULL)",
+                    [
+                        [key, seat, leg, float((leg < wins) != bool(seat))]
+                        for leg in range(4)
+                    ],
+                )
+    for run in state.runs:
+        db.executemany(
+            "INSERT INTO training_checkpoints VALUES (?, ?, ?, ?)",
+            [
+                [
+                    run.name,
+                    saved.ordinal,
+                    1_000 + int(saved.clocks["updates"]) * 3_600_000,
+                    json.dumps(saved.clocks),
+                ]
+                for saved in run.checkpoints
+            ],
+        )
+    return keys
+
+
+def test_analysis_reads_learning_and_scale_past_unreached_milestones(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    keys = _outcomes(frontier_db, state)
+    report = analyze(state, frontier_db)
+    assert report.complete and report.issues == []
+    assert report.scale is not None and report.scale.mean == 0.75
+    for reading in report.sizes:
+        assert reading.learned is True
+        assert reading.against_heuristic is not None
+    small, large = report.sizes
+    assert (small.endpoint, large.endpoint) == (1300, 450)
+    assert large.training[-1].update == 450 and large.training[-1].hours == 450
+    unreached = {c.name or (c.tag, c.update) for c in report.comparisons if c.unreached}
+    assert ("head-to-head", 600) in unreached
+    assert ("heuristic-w64", 2400) in unreached
+    assert report.counts.expected == report.counts.valid == 64 * len(keys)
+
+
+def test_analysis_keeps_a_negative_learning_reading(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 100, LARGE: 50})
+    _outcomes(frontier_db, state, wins=2)
+    report = analyze(state, frontier_db)
+    assert report.complete
+    assert [reading.learned for reading in report.sizes] == [False, False]
+
+
+def test_analysis_missing_reached_comparison_leaves_reading_unknown(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 100, LARGE: 50})
+    keys = _outcomes(frontier_db, state)
+    frontier_db.execute(
+        "DELETE FROM matches WHERE match = ?", [keys["w256 final u50 vs w256 u0"][0]]
+    )
+    report = analyze(state, frontier_db)
+    assert not report.complete
+    assert "The frozen comparison schedule is incomplete." in report.issues
+    assert report.sizes[1].learned is None
+    assert report.sizes[0].learned is True
+    assert report.counts.missing == 4
+
+
+def test_analysis_of_running_sizes_claims_nothing(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 100, LARGE: 50}, finished=False)
+    _outcomes(frontier_db, state)
+    report = analyze(state, frontier_db)
+    assert not report.complete
+    assert report.scale is None
+    assert all(reading.endpoint is None for reading in report.sizes)
+    assert all(reading.learned is None for reading in report.sizes)
+    # While a run may still go on, later milestones are pending, never unreached.
+    assert not any(c.unreached for c in report.comparisons)

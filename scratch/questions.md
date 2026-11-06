@@ -18,5 +18,9 @@ until launch):
 - **Equal wall-clock budget, not equal updates.** Equal-update comparisons are
   the shared milestones; equal compute is the endpoint head-to-head.
 - **16 pairs (64 games) per comparison**, twice v10's, for ±~0.09 intervals.
+- **cpu32 for evaluation passes**, as in MTG-186 and the learning-signal study;
+  1.75 h keeps a pass inside USD2 at USD0.96/hour.
+- **600 s per game**, five times MTG-213's limit, sized from one-observation
+  latency on this Mac rather than a rented-CPU measurement.
 - **No execution in this step.** Launching paid training needs the protocol
   reviewed and frozen at a merged revision.
