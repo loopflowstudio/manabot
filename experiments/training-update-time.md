@@ -91,6 +91,40 @@ before. The pairs did not reproduce that, and all six favored the new source eve
 on unchanged model code, so neither direction is claimed for minibatches. A
 256-stream interleaved run was not made.
 
+**One recorded copy per observation (2026-11-06).** Base `76e71abc3`, new is this
+change; same laptop, extension built from `76e71abc3`, CPU device, `threads=1`, load
+13-31. Six interleaved 64-stream pairs in ABBA order (14,028 decisions and 64 games
+per update; three pairs before sizing the first update's store from its row floor,
+three after, with the same readings) and one 256-stream pair (52,291 decisions):
+
+| µs per decision | 64 streams, base | 64 streams, new | 256 base | 256 new |
+|---|---|---|---|---|
+| Batch assembly | 18.5-20.0 | 2.8-3.2 | 23.1 | 3.3 |
+| Rollout recording | 12.4-16.3 | 15.6-17.2 | 10.9 | 15.8 |
+| Assembly + recording | 31.0-35.6 | 18.6-20.2 | 34.0 | 19.1 |
+
+Every pair agrees: assembly + recording falls by 12-16 µs per decision, about 0.6%
+of a CPU-device update. That is too small to resolve in whole-update time here
+(31.0-36.6 s at 64 streams), so no seconds-per-update gain is claimed. Recording
+rose because first-touch page faults moved from assembly's zeroed arrays into the
+store. Peak footprint (`/usr/bin/time -l`) did not fall at 64 streams (2.85-2.92 GB
+base, 2.96-3.09 GB new); one 256-stream pair read 9.77 against 9.17 GB footprint
+(10.27 against 9.25 GB RSS). The second copy was short-lived, so the peak is set
+elsewhere. Raw, EMA and optimizer state and all 72 game attempts are bit-identical
+to base (24 streams, 3 updates, CPU), with source identities excluded.
+
+Remaining measured costs, and why they stop here: on this CPU device, policy
+inference (~960 µs) and minibatches (~730-1140 µs) are model compute and not GPU
+evidence. Native stepping (~52 µs) belongs to the engine budget harness. Three
+`PolicyInference.check` walks per step (~5 µs) and the per-step failure frame
+(~10 µs, retained replay evidence) are each below this machine's noise; changing
+the frame needs review. The remaining GPU levers are 629 aten ops and 17 host
+syncs per collection forward, and ~31 syncs per learner minibatch. They need a
+named CUDA check on a real L4 run: `torch.cuda.set_sync_debug_mode("warn")` counts
+and a `torch.profiler` kernel count over updates 2-3, read beside
+`time/collection/policy_inference_and_action_selection` and
+`time/learning/minibatches`.
+
 Targets on Apple MPS for a ~48,000-row packed column: GAE 14.4 s to 6 ms, terminal
 distances 41.6 s to 9 ms. That is the launch-latency mechanism, on a device other
 than the one training rents.
@@ -109,6 +143,8 @@ than the one training rents.
 - **Collection.** Pack actions once per step, refresh only restarted streams,
   assemble batches per key, vectorize `selected_types`.
 - **Learner.** One finite check over all parameters; one transfer per dtype.
+- **Rollout storage.** Recording copies each sampled observation row once into a
+  per-update store; batches index it instead of re-stacking every row.
 
 Same seed, old and new source, 3 updates at 24 streams: raw weights, EMA weights,
 optimizer state and all counters are bit-identical (`7f1baaeda750ff2f`,

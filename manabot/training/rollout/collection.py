@@ -74,11 +74,65 @@ OPPONENT_MODES = ("random", "frozen", "self", "learning")
 # -----------------------------------------------------------------------------
 
 
+class _ObservationRows:
+    """One update's recorded non-action observation rows, each copied once.
+
+    Recording copies a step's sampled rows from the native buffers straight into
+    `[capacity, *shape]` arrays; a pending decision keeps only its row number, and
+    the batch indexes these arrays instead of re-stacking every row. Each update
+    allocates a fresh store because a returned batch may outlive collection
+    (incidents, recovery) while the next update records; appends never write
+    rows a batch already views. Capacity starts a quarter above the larger of
+    the previous update's rows and the closure's row floor; growth doubles and
+    copies used rows once.
+    """
+
+    def __init__(
+        self, buffers: dict[str, np.ndarray], keys: list[str], capacity: int
+    ) -> None:
+        self._buffers = buffers
+        self._keys = keys
+        self.rows = 0
+        self.capacity = max(capacity, 1)
+        self._arrays = self._allocate(self.capacity)
+
+    def _allocate(self, capacity: int) -> dict[str, np.ndarray]:
+        # Untouched np.empty pages are not resident, so spare capacity is cheap.
+        return {
+            key: np.empty(
+                (capacity, *self._buffers[key].shape[1:]),
+                dtype=self._buffers[key].dtype,
+            )
+            for key in self._keys
+        }
+
+    def append(self, rows: np.ndarray) -> int:
+        """Copy buffer `rows` to the end of the store; return the first store row."""
+        start, stop = self.rows, self.rows + len(rows)
+        if stop > self.capacity:
+            self.capacity = max(2 * self.capacity, stop)
+            grown = self._allocate(self.capacity)
+            for key, array in self._arrays.items():
+                grown[key][:start] = array[:start]
+            self._arrays = grown
+        for key, array in self._arrays.items():
+            # `clip` writes `out` directly; `raise` would buffer. Rows are in range.
+            np.take(
+                self._buffers[key], rows, axis=0, out=array[start:stop], mode="clip"
+            )
+        self.rows = stop
+        return start
+
+    def arrays(self) -> dict[str, np.ndarray]:
+        """Used rows as views; rows of discarded failed games stay unreferenced."""
+        return {key: array[: self.rows] for key, array in self._arrays.items()}
+
+
 @dataclass
 class _Pending:
     """A decision awaiting its reward at the same seat's next turn or game end."""
 
-    obs: dict[str, np.ndarray]
+    obs_row: int  # Row in this update's _ObservationRows.
     action: int
     logprob: float
     value: float
@@ -99,11 +153,14 @@ class _Transition:
 class RolloutBatch:
     """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
 
-    `obs` retains non-action fields; `action_data` owns legal action rows and
-    behavior distributions in time-major order. `observations` reunites them.
+    `obs` holds non-action fields as recorded rows [N, ...], unordered;
+    `obs_rows` [time * trajectory] names the recorded row of each time-major
+    rollout row. `action_data` owns legal action rows and behavior distributions
+    in time-major order. `observations` reunites them.
     """
 
     obs: dict[str, np.ndarray]
+    obs_rows: np.ndarray
     actions: np.ndarray
     logprobs: np.ndarray
     rewards: np.ndarray
@@ -126,11 +183,9 @@ class RolloutBatch:
         if indexes is None:
             indexes = np.arange(self.actions.size)
         rows = self.action_data.unpack(indexes)
+        recorded = self.obs_rows[indexes]
         rows.observation.update(
-            {
-                key: value.reshape(-1, *value.shape[2:])[indexes]
-                for key, value in self.obs.items()
-            }
+            {key: value[recorded] for key, value in self.obs.items()}
         )
         if trajectory_shape is not None:
             rows.observation = {
@@ -142,6 +197,13 @@ class RolloutBatch:
                 *trajectory_shape, -1
             )
         return rows
+
+    def ordered_obs(self) -> dict[str, np.ndarray]:
+        """Non-action fields gathered into [time, trajectory, ...] order."""
+        return {
+            key: value[self.obs_rows].reshape(*self.actions.shape, *value.shape[1:])
+            for key, value in self.obs.items()
+        }
 
 
 ExposureKind = Literal[
@@ -400,6 +462,12 @@ class SeatRoutedCollector:
             self._streams: list[list[_Transition]] = [[] for _ in range(slots)]
             self._pending: list[_Pending | None] = [None] * slots
             self._game_start_rows = [0] * slots
+            self._observation_keys = [
+                key for key in self.observation_space.shapes if key not in ACTION_FIELDS
+            ]
+            self._observations = _ObservationRows(
+                self._buffers, self._observation_keys, 0
+            )
 
             if opponent_mode == "random":
                 self._opponent: Any = RandomBatchController(seed=seed + 1)
@@ -687,6 +755,20 @@ class SeatRoutedCollector:
         games = np.zeros(num_envs, dtype=np.int64)
         if num_steps < 1:
             raise ValueError("num_steps must be positive")
+        # Update boundaries hold no pending row, so nothing live refers to the
+        # previous store; returned batches keep their own reference to it.
+        if all(pending is None for pending in self._pending):
+            # The batch holds at least num_steps rows per slot (exact quota) or
+            # per stream (complete games); whole-game counts give no floor.
+            floor = (
+                0
+                if self.games_per_stream is not None
+                else num_steps * (num_envs if complete_games else len(self._streams))
+            )
+            rows = max(self._observations.rows, floor)
+            self._observations = _ObservationRows(
+                self._buffers, self._observation_keys, rows + rows // 4
+            )
         while True:
             try:
                 if check is not None:
@@ -1054,12 +1136,7 @@ class SeatRoutedCollector:
             logprobs = logprob_t.cpu().numpy()
             values = value_t.view(-1).cpu().numpy()
         with self.profiler.track("Rollout recording"):
-            # One copied slice per key; per-row dicts view into it.
-            obs_rows = {
-                key: self._buffers[key][rows]
-                for key in self.observation_space.shapes
-                if key not in ACTION_FIELDS
-            }
+            first = self._observations.append(rows)
             packed = PackedActions.pack(
                 {
                     key: self._buffers[key][rows]
@@ -1076,7 +1153,7 @@ class SeatRoutedCollector:
                     else int(row)
                 )
                 self._pending[slot] = _Pending(
-                    obs={key: value[j] for key, value in obs_rows.items()},
+                    obs_row=first + j,
                     action=int(acts[j]),
                     logprob=float(logprobs[j]),
                     value=float(values[j]),
@@ -1113,11 +1190,7 @@ class SeatRoutedCollector:
         streams = self._streams if streams is None else streams
         num_envs = len(streams)
         shapes = self.observation_space.encoder.allocate(1)
-        obs = {
-            key: np.zeros((num_steps, num_envs) + value.shape[1:], dtype=value.dtype)
-            for key, value in shapes.items()
-            if key not in ACTION_FIELDS
-        }
+        obs_rows = np.zeros((num_steps, num_envs), dtype=np.int64)
         actions = np.zeros((num_steps, num_envs), dtype=np.int64)
         logprobs = np.zeros((num_steps, num_envs), dtype=np.float32)
         rewards = np.zeros((num_steps, num_envs), dtype=np.float32)
@@ -1149,9 +1222,7 @@ class SeatRoutedCollector:
                 outcome_probabilities[:, env_index] = [
                     row.outcome_probabilities for row in pending
                 ]
-            # One copy per key, not per key and row: ~25 keys of ~50,000 rows.
-            for key, column in obs.items():
-                np.stack([row.obs[key] for row in pending], out=column[:, env_index])
+            obs_rows[:, env_index] = [row.obs_row for row in pending]
             actions[:, env_index] = [row.action for row in pending]
             logprobs[:, env_index] = [row.logprob for row in pending]
             values[:, env_index] = [row.value for row in pending]
@@ -1166,7 +1237,8 @@ class SeatRoutedCollector:
             next_done[env_index] = dones[num_steps - 1, env_index]
 
         return RolloutBatch(
-            obs=obs,
+            obs=self._observations.arrays(),
+            obs_rows=obs_rows.reshape(-1),
             actions=actions,
             logprobs=logprobs,
             rewards=rewards,

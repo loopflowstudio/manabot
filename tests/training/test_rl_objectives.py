@@ -56,6 +56,7 @@ def fixture() -> tuple[Learner, RolloutBatch]:
     actions = np.array([[0], [1], [2], [0]])
     batch = RolloutBatch(
         obs={},  # This fixture has only action fields; the critic is a scalar.
+        obs_rows=np.arange(4),
         actions=actions,
         logprobs=np.log(probabilities[np.arange(4), actions[:, 0]])[:, None],
         rewards=np.array([[0], [1], [0], [-1]], dtype=np.float32),

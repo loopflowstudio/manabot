@@ -90,58 +90,24 @@ CPU-device sample (186 of ~15,000 samples, `sample-64.txt`). It belongs to the
 engine budget harness (`bench_search`/`bench_steps`) and the engine Tasks. Here it
 stays an unchanged control.
 
-## Active phase: one recorded copy per observation (implement this)
+## Done 2026-11-06: one recorded copy per observation
 
-Goal: delete assembly's second full copy and the per-row view dicts while the
-learner gets bitwise-identical rows in the same order.
+`_ObservationRows` (collection.py) holds one update's non-action rows; `_Pending.obs_row`
+is a store row; `RolloutBatch.obs` is the recorded rows `[N, ...]` with `obs_rows`
+`[T*E]`, and `ordered_obs()` is the one `[T, E, ...]` accessor (incidents, tests).
+First-update capacity comes from the closure's row floor, then 1.25x the previous rows.
+Results are in `experiments/training-update-time.md`: assembly + recording falls
+12-16 µs/decision in all 7 pairs (~0.6%), no whole-update or memory claim (peak is
+set elsewhere). Digests: weights/EMA/optimizer match the table above; game attempts
+`cb230744dcd7c850` for both base and new with `digest2.py` (also excludes
+`source_commit`, `training_source_sha256`, which `digest.py` hashed, so its
+attempts digest moved with any source change). Raw rows: `ab-*.txt` in the logs dir.
+Checks: focused training suites pass (`test_game_errors` resource-limit replay fails
+3/3 as inherited, see questions.md); `test_recovery -k real_interruption` passes.
 
-Implementation (in `manabot/training/rollout/collection.py`):
-
-- A private per-update observation store (`_ObservationRows` or similar) holds one
-  array per non-action key, `[capacity, *shape]`. Recording writes each step's rows
-  with `np.take(self._buffers[key], rows, axis=0, out=store[key][n:n + k])`
-  (or an equivalent single copy). It returns the base row; growth doubles
-  capacity, copying used rows once. Allocate fresh per update; do not reuse across
-  updates, because a returned batch may be retained (incidents, recovery) while
-  the next collection runs. Reuse is a later measured choice only.
-- `_Pending.obs: dict[str, np.ndarray]` becomes the store row index (int).
-- `_build_batch` builds an int64 `rows` index (packed position → store row) in the
-  existing time-major/packed order instead of `np.stack`, and gives `RolloutBatch`
-  the store arrays trimmed to used rows (views) plus that index.
-  `RolloutBatch.observations(indexes)` gathers `obs[key][rows[indexes]]`: one
-  gather per key per minibatch, as today. Keep `next_obs`, `action_data`, scalars
-  and `outcome_probabilities` unchanged.
-- Keep one owner for the ordered `[T, E, ...]` view. `incidents.py` (failure
-  dump) and tests read `batch.obs`; give them one materializing accessor (e.g. the
-  existing `observations()` with no indexes, or a named method). Do not keep two
-  representations.
-- Snapshots are taken only at empty update boundaries; the store is empty there.
-  Recovery journals, exposure counters and stats are unchanged.
-
-Deletion targets: the per-stream, per-key `np.stack(..., out=column[:, env_index])`
-loop and the `obs` zero allocation in `_build_batch`; per-row `obs` dicts in
-`_Pending`; `obs_rows` dict-of-copies in `_sample_learning_rows` (replaced by the
-store write).
-
-Focused checks:
-- `uv run --extra dev pytest tests/training/test_collection.py tests/training/test_batch_closure.py tests/training/test_rl_objectives.py tests/training/test_training_decks.py tests/training/test_packed_action_rollouts.py tests/training/test_naming_transitions.py tests/training/test_phase_timing.py tests/training/test_regimes.py -q`
-- `uv run --extra dev pytest tests/training/test_recovery.py -q -k real_interruption`
-- Digests: `run_keep.py` + `digest.py` at 24 streams × 3 updates must reproduce the
-  four baseline digests above exactly.
-- Python-only change: no extension rebuild, Rust tests or Engine Budget movement
-  expected. Run `uv run python scripts/check_loopflow_workflows.py` only if
-  workflow files change.
-
-Measurement (same machine, interleaved base/new, read minima and per-pair ratios):
-- Base worktree at `76e71abc3` (`git worktree add`); alternate base/new runs of
-  `bench_training_update.py --streams 64 --updates 2` (ABBA, ≥3 pairs) and at least
-  one 256-stream pair. Compare `Batch assembly` and `Rollout recording` µs/decision.
-  Expect assembly to fall from 19-27 to a few µs/decision. Claim only what all pairs agree on.
-- Peak memory: `/usr/bin/time -l` on the same 64-stream command, base vs new.
-  Expect about −1.2 GB footprint at 64 streams (one copy of 14k × 82 KB), and
-  about −4.3 GB at 256 streams if measured.
-- Record results in `experiments/training-update-time.md` (fixed-hardware section)
-  with the identity above. Make no GPU or whole-update claim this noise cannot support.
+Stopping: every remaining host lever is below the noise here (check ≈5, failure
+frame ≈10 µs/decision, the frame needs review); inference and minibatches on CPU are
+not GPU evidence. The named CUDA check is the next producer of evidence.
 
 ## Next phases (not active; each needs its own evidence or review)
 

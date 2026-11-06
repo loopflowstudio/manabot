@@ -208,8 +208,9 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
         )
         restored.restore(first.snapshot(), lambda: None)
         left, right = first.collect(agent, 1), restored.collect(agent, 1)
-        for key in left.obs:
-            np.testing.assert_array_equal(left.obs[key], right.obs[key])
+        expected, actual = left.ordered_obs(), right.ordered_obs()
+        for key in expected:
+            np.testing.assert_array_equal(expected[key], actual[key])
         np.testing.assert_array_equal(left.actions, right.actions)
         assert first._self_play_decks == restored._self_play_decks
         assert first._env.current_game_seeds() == restored._env.current_game_seeds()

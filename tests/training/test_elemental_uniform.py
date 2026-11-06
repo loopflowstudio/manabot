@@ -147,8 +147,9 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     restored.restore(first.snapshot(), lambda: None)
     assert first._self_play_decks == restored._self_play_decks
     left, right = first.collect(agent, 64), restored.collect(agent, 64)
-    for key in left.obs:
-        np.testing.assert_array_equal(left.obs[key], right.obs[key])
+    expected, actual = left.ordered_obs(), right.ordered_obs()
+    for key in expected:
+        np.testing.assert_array_equal(expected[key], actual[key])
     np.testing.assert_array_equal(left.actions, right.actions)
     np.testing.assert_array_equal(left.rewards, right.rewards)
     assert first.stats.exposure == restored.stats.exposure
