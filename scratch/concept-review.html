@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept review — MTG-249 after the recovery cohort</title>
+<style>
+  :root { --fg:#222; --bg:#fbfaf7; --muted:#666; --rule:#ddd; --prop:#7a4b00; --propbg:#fff3df; --ok:#24572f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e6e3dc; --bg:#1b1a18; --muted:#a29d93; --rule:#3a3833; --prop:#ffcf85; --propbg:#3a2c14; --ok:#9fd3a8; }
+  }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; line-height:1.25; margin:0 0 .6rem; }
+  h2 { font-size:1.15rem; margin:2.4rem 0 .6rem; border-top:1px solid var(--rule); padding-top:1.2rem; }
+  code { font:.85em ui-monospace, Menlo, monospace; }
+  .lead { font-size:1.08rem; }
+  .proposed { background:var(--propbg); color:var(--prop); padding:0 .3em; border-radius:3px; font-size:.85em; font-family:ui-sans-serif, system-ui, sans-serif; }
+  .existing { color:var(--ok); font-size:.85em; font-family:ui-sans-serif, system-ui, sans-serif; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td { text-align:left; vertical-align:top; padding:.45rem .5rem; border-bottom:1px solid var(--rule); }
+  th { font-weight:600; }
+  .callout { border-left:3px solid var(--prop); padding:.2rem 0 .2rem 1rem; margin:1.2rem 0; }
+  ol li { margin-bottom:.7rem; }
+  @media (max-width:520px) { table, thead, tbody, tr, th, td { display:block; } thead { display:none; } td { border:0; padding:.2rem 0; } tr { border-bottom:1px solid var(--rule); padding:.5rem 0; display:block; } }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>The design and the branch agree; two questions wait for demo</h1>
+  <p>Task MTG-249 &middot; 5da5f4 &middot; concept-review step (headless) &middot; 2026-11-05</p>
+  <p>Built from scratch/representation-learning-plan.md, scratch/questions.md, docs/observation-and-model.md, experiments/state-representation-gpu.md, managym/cards/tests/cards/observability.rs, working tree over 3b00256eb</p>
+</header>
+
+<p class="lead">Decisions needed at demo: what follows the inconclusive GPU result (question 1), and where this Task ends (question 2). Neither changes this PR. Nothing goes back to implement.</p>
+
+<h2>What a reader does now</h2>
+<table>
+  <thead><tr><th>Action</th><th>Where it lands</th></tr></thead>
+  <tbody>
+    <tr><td>Ask what the GPU study found</td><td><span class="existing">existing</span> Durable report, indexed first: no qualified plateau, GRU minus pool &minus;1.95 points [&minus;5.88, +1.98]</td></tr>
+    <tr><td>Ask what belongs in state, records, history or memory</td><td><span class="proposed">proposed</span> A marked section of <code>docs/observation-and-model.md</code>: not accepted, not built</td></tr>
+    <tr><td>Ask what happens to an effect older than the history window</td><td><span class="existing">existing</span> <code>test_effect_older_than_history_window_survives_only_in_current_state</code>, on real Commands</td></tr>
+    <tr><td>Ask whether a new field reaches the policy</td><td><span class="existing">existing</span> <code>observability.rs</code> does not compile until the field is named</td></tr>
+    <tr><td>Find the paths from native state to the network</td><td><span class="existing">existing</span> The guide's <em>What the network sees</em>, <em>What the network does</em> and <em>Where the code lives</em></td></tr>
+  </tbody>
+</table>
+
+<div class="callout"><strong>Changed in this review.</strong> The earlier question about keeping the path inventory and field audit durable is withdrawn. Maintained owners already exist, and they are stronger than a dated snapshot. The kickoff's snapshot stays at <code>8e6cc62df</code> as history.</div>
+
+<h2>The recommendation you will review</h2>
+<p>Keep complete typed current state, with no persistent policy state as the first arm. History stays an optional window. A recurrent arm is a later learning experiment, not a repair for missing rules state. No measurement supports this yet: neither study arm carries memory.</p>
+
+<h2>Unchanged</h2>
+<p>No tensor, model or default change, and no paid compute. Fresh input stays v6. Frozen evidence, seeds, criteria and the $25 total stay as they are; about $18.89 is accounted operationally, not as a settled invoice. PR #421's body still reports only the CPU study and stays with delivery. Merging the study is still not approved.</p>
+
+<h2>Questions</h2>
+<ol>
+  <li>With no qualified plateau and about $6 left (a full cohort cost about $6.75), what next?
+    <ul style="list-style:none;padding-left:.5rem">
+      <li>(a) Accept the inconclusive result and keep pooling for v7 recipes. V8 keeps the GRU for effect programs either way.</li>
+      <li>(b) Fund a prospective longer-horizon amendment.</li>
+      <li>(c) Move to the unbuilt memory and relation-splitting questions.</li>
+    </ul></li>
+  <li>When does MTG-249 complete?
+    <ul style="list-style:none;padding-left:.5rem">
+      <li>(a) Once the contract is reviewed, with any memory arm in a new Task.</li>
+      <li>(b) Only after a stateless-versus-memory measurement, which needs its own authorization.</li>
+    </ul></li>
+</ol>
+</main>
+</body>
+</html>

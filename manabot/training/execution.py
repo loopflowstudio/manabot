@@ -1320,7 +1320,7 @@ def _execute_regime(
                             behavior_agent,
                             stage.transitions,
                             deadline_monotonic=deadline,
-                            check=check if regime.recoverable else None,
+                            check=check,
                         )
                     finally:
                         synchronize()

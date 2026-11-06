@@ -1,5 +1,6 @@
 """Typed state treatments preserve native decisions and train/export normally."""
 
+from copy import deepcopy
 from pathlib import Path
 from typing import Literal
 
@@ -7,12 +8,13 @@ import numpy as np
 import pytest
 import torch
 
-from experiments.state_representation import recipe
+from experiments.state_representation_v7 import recipe
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.records import RecordReducer
 from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
 from manabot.training.execution import execute_regime
 from manabot.verify.representation import shared_effect_root
@@ -241,6 +243,29 @@ def test_stack_order_is_semantic_but_row_storage_order_is_not(arm: Arm) -> None:
     assert not torch.allclose(changed, summary, atol=1e-7, rtol=1e-7)
 
 
+@pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_unused_continuation_parameters_keep_absent_gradients(
+    arm: Arm, device: str
+) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    encoder = TypedContinuationEncoder(8, arm).to(device)
+    rows = torch.zeros(2, 64, 49, device=device)
+    rows[:, 0, :7] = torch.tensor([1, 1, 0, 7, 1, 1, 1])
+    rows[:, 0, 31] = 1
+    summary, _ = encoder(
+        rows,
+        torch.randn(2, 2, 8, device=device),
+        torch.randn(2, 64, 2, 8, device=device),
+    )
+    summary.square().sum().backward()
+    assert all(p.grad is None for p in encoder.edge.parameters())
+    assert all(p.grad is None for p in encoder.structures[0].parameters())
+    assert all(p.grad is None for p in encoder.structures[1].parameters())
+    assert encoder.structures[2].weight.grad is not None
+
+
 def test_native_shared_effects_keep_timestamps_and_reject_v5_overflow() -> None:
     env = shared_effect_root(6)
     space = ObservationSpace(ObservationConfig(policy_input_version=5))
@@ -258,3 +283,75 @@ def test_native_shared_effects_keep_timestamps_and_reject_v5_overflow() -> None:
     for encode in (space.encode, lambda obs: overflowing.encode_observation(obs, 5)):
         with pytest.raises((ValueError, RuntimeError), match="facts"):
             encode(obs)
+
+
+@pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+def test_flat_records_preserve_sequence_order_and_gradients(arm: Arm) -> None:
+    torch.set_num_threads(1)
+    torch.manual_seed(91)
+    reducer = RecordReducer(8, arm)
+    reference = deepcopy(reducer)
+    lengths = [3, 1, 5, 3, 2]
+    tokens = torch.randn(sum(lengths), 8, requires_grad=True)
+    separate = tokens.detach().clone().requires_grad_()
+    actual = reducer(tokens, lengths)
+    expected_rows: list[torch.Tensor] = []
+    for sequence in separate.split(lengths):
+        if reference.gru is None:
+            pooled = sequence.sum(0)
+        else:
+            _, hidden = reference.gru(sequence.unsqueeze(0))
+            pooled = hidden[-1, 0]
+        expected_rows.append(reference.output(torch.tanh(pooled)))
+    expected = torch.stack(expected_rows)
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    expected.square().sum().backward()
+    torch.testing.assert_close(tokens.grad, separate.grad)
+    for parameter, other in zip(
+        reducer.parameters(), reference.parameters(), strict=True
+    ):
+        torch.testing.assert_close(parameter.grad, other.grad)
+
+
+@pytest.mark.parametrize("arm", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_continuation_batches_preserve_independent_frames_and_gradients(
+    arm: Arm,
+    device: str,
+) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    torch.set_num_threads(1)
+    torch.manual_seed(93)
+    encoder = TypedContinuationEncoder(8, arm).to(device)
+    reference = deepcopy(encoder)
+    objects = torch.randn(3, 3, 8, device=device, requires_grad=True)
+    definitions = torch.randn(3, 64, 2, 8, device=device, requires_grad=True)
+    relations = torch.zeros(3, 64, 49, device=device)
+    for batch in (0, 2):
+        for row, (handle, parent, kind) in enumerate(((4, 0, 1), (9, 4, 7))):
+            relations[batch, row, :7] = torch.tensor([1, handle, parent, kind, 1, 1, 1])
+            relations[batch, row, 31] = 1
+        relations[batch, 2] = relations[batch, 1]
+        relations[batch, 2, 0] = 2
+        relations[batch, 2, 24] = 3
+    relations[2, 1, 6] = relations[2, 2, 24] = 0
+    relations[1, :, :31] = float("nan")
+    relations.requires_grad_()
+    copies = [
+        x.detach().clone().requires_grad_() for x in (relations, objects, definitions)
+    ]
+    actual = encoder(relations, objects, definitions)
+    each = [reference(*(x[i : i + 1] for x in copies)) for i in range(3)]
+    expected = tuple(torch.cat([item[column] for item in each]) for column in (0, 1))
+    for a, b in zip(actual, expected, strict=True):
+        torch.testing.assert_close(a, b)
+    sum(x.square().sum() for x in actual).backward()
+    sum(x.square().sum() for x in expected).backward()
+    for a, b in zip((relations, objects, definitions), copies, strict=True):
+        torch.testing.assert_close(a.grad, b.grad)
+    for parameter, other in zip(
+        encoder.parameters(), reference.parameters(), strict=True
+    ):
+        torch.testing.assert_close(parameter.grad, other.grad)

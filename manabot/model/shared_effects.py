@@ -21,7 +21,7 @@ from manabot.env.shared_effects import (
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
-    join_rows,
+    join_record_rows,
     masked_record_rows,
     program_number,
     record_indexes,
@@ -44,30 +44,6 @@ class SharedEffectEncoder(nn.Module):
         self.header = nn.Linear(8 + 2 * width, width)
         self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
 
-    def _route(
-        self,
-        records: list[torch.Tensor],
-        routes: list[torch.Tensor],
-        objects: torch.Tensor,
-    ) -> torch.Tensor:
-        """Reduce independent programs and sum each membership into [N,D] objects."""
-        encoded = self.reducer(records)
-        if self.version >= 8:
-            repeated = torch.repeat_interleave(
-                encoded,
-                torch.tensor([len(route) for route in routes], device=objects.device),
-                dim=0,
-            )
-        else:
-            repeated = torch.cat(
-                [encoded[i].expand(len(route), -1) for i, route in enumerate(routes)]
-            )
-        # Duplicate memberships accumulate; every target's gradient reaches the
-        # same payload. Retained v7 keeps its original expansion and reduction.
-        return objects + torch.zeros_like(objects).index_add(
-            0, torch.cat(routes), repeated
-        )
-
     def forward(
         self,
         headers: torch.Tensor,
@@ -75,109 +51,126 @@ class SharedEffectEncoder(nn.Module):
         members: torch.Tensor,
         objects: torch.Tensor,
     ) -> torch.Tensor:
-        headers = masked_record_rows(headers, EFFECT_ROWS, EFFECT_DIM, 17)
-        batch = len(objects)
+        # One metadata transfer admits the entire batch. Numerical features and
+        # object joins below still read the original tensors, retaining gradients.
+        host = masked_record_rows(headers.detach().cpu(), EFFECT_ROWS, EFFECT_DIM, 17)
+        batch, object_count, width = objects.shape
         if (
-            headers.shape[0] != batch
+            host.shape[0] != batch
             or details.shape != (batch, self.detail_rows, DETAIL_DIM)
             or members.shape != (batch, MEMBER_ROWS, MEMBER_DIM)
         ):
             raise ValueError("invalid shared effect buffer shape")
-        results = list(objects.unbind(0))
-        all_records: list[torch.Tensor] = []
-        all_routes: list[torch.Tensor] = []
-        for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
-            live = headers[b, headers[b, :, 17].bool()]
-            halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
-            source = record_indexes(live[:, 11], 2**24, "effect source definition")
-            links = record_indexes(
-                live[:, [10, 12]], objects.shape[1], "effect source/controller"
+        live_positions = host[..., 17].nonzero()
+        if len(live_positions) == 0:
+            return objects
+        live = host[live_positions[:, 0], live_positions[:, 1]]
+        halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
+        source = record_indexes(live[:, 11], 2**24, "effect source definition")
+        links = record_indexes(
+            live[:, [10, 12]], object_count, "effect source/controller"
+        )
+        if (links[:, 0] == 0).any():
+            raise ValueError("effect controller is absent")
+        offsets = record_indexes(
+            live[:, 13:17],
+            max(MEMBER_ROWS, self.detail_rows),
+            "effect CSR offset/count",
+        ).tolist()
+        detail_indexes: list[int] = []
+        member_indexes: list[int] = []
+        member_records: list[int] = []
+        token_indexes: list[int] = []
+        lengths: list[int] = []
+        # Projections produce all three-token headers, then all details. Gather
+        # them into header/detail sequences without per-record device operations.
+        header_token_count = 3 * len(live)
+        previous_batch = -1
+        d_end = m_end = 0
+        for i, ((b, _), (d, count, m, targets)) in enumerate(
+            zip(live_positions.tolist(), offsets, strict=True)
+        ):
+            if b != previous_batch:
+                d_end = m_end = 0
+                previous_batch = b
+            if (
+                d != d_end
+                or m != m_end
+                or d + count > self.detail_rows
+                or targets == 0
+                or m + targets > MEMBER_ROWS
+            ):
+                raise ValueError("invalid effect CSR partition")
+            d_end, m_end = d + count, m + targets
+            detail_start = header_token_count + len(detail_indexes)
+            token_indexes.extend(range(3 * i, 3 * i + 3))
+            token_indexes.extend(range(detail_start, detail_start + count))
+            lengths.append(3 + count)
+            detail_indexes.extend(
+                range(b * self.detail_rows + d, b * self.detail_rows + d_end)
             )
-            if (links[:, 0] == 0).any():
-                raise ValueError("effect controller is absent")
-            numeric = live[:, 2:10].clone()
-            numeric[:, -1] /= EFFECT_ROWS
-            header = self.header(
-                torch.cat(
-                    (
-                        numeric,
-                        join_rows(objects[b], links[:, 0]),
-                        join_rows(objects[b], links[:, 1]),
-                    ),
-                    -1,
+            member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
+            member_records.extend([i] * targets)
+        # Validate all live details/members together, ignoring poisoned padding.
+        detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
+        kinds = record_indexes(
+            detail_host[:, 0], 19 if self.version >= 8 else 3, "effect detail kind"
+        )
+        ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
+        if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
+            raise ValueError("live effect detail has no kind")
+        member_host = members.detach().cpu().reshape(-1, MEMBER_DIM)[member_indexes]
+        targets = record_indexes(member_host[:, 0], object_count, "effect member")
+        orders = record_indexes(
+            member_host[:, 1], MEMBER_ROWS, "effect membership order"
+        )
+        if (targets == 0).any():
+            raise ValueError("effect membership is absent")
+        if (orders == 0).any():
+            raise ValueError("effect membership order is absent")
+        batches = live_positions[:, 0]
+        member_batches = batches[member_records]
+        global_orders = member_batches * (MEMBER_ROWS + 1) + orders
+        if len(global_orders.unique()) != len(global_orders):
+            raise ValueError("duplicate effect membership order")
+        device = objects.device
+        header_indexes = (batches * EFFECT_ROWS + live_positions[:, 1]).to(device)
+        numeric = headers.reshape(-1, EFFECT_DIM)[header_indexes, 2:10].clone()
+        numeric[:, -1] /= EFFECT_ROWS
+        controller, source_object = join_record_rows(
+            objects, batches[:, None], links
+        ).unbind(1)
+        header = self.header(torch.cat((numeric, controller, source_object), -1))
+        mod = self.modification(
+            (((halves[:, 0] << 16) | halves[:, 1]) % 4096).to(device)
+        )
+        sources = self.source((source % 4096).to(device))
+        unsigned = (ids[:, 0] << 16) | ids[:, 1]
+        detail_tokens = self.detail((unsigned % 4096).to(device)) + self.detail_kind(
+            kinds.to(device)
+        )
+        if self.version >= 8:
+            # Integer/boolean tokens retain signed numeric meaning;
+            # the GRU retains the ordered shared program structure.
+            signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
+            is_number = ((kinds == 14) | (kinds == 15)).unsqueeze(-1).to(device)
+            detail_tokens = detail_tokens + self.detail_number(
+                program_number(signed.to(device=device, dtype=objects.dtype)).unsqueeze(
+                    -1
                 )
+            ).masked_fill(~is_number, 0)
+        tokens = torch.cat(
+            (
+                torch.stack((mod, sources, torch.tanh(header)), 1).flatten(0, 1),
+                detail_tokens,
             )
-            mod = self.modification(((halves[:, 0] << 16) | halves[:, 1]) % 4096)
-            sources = self.source(source % 4096)
-            offsets = record_indexes(
-                live[:, 13:17],
-                max(MEMBER_ROWS, self.detail_rows),
-                "effect CSR offset/count",
-            ).tolist()
-            records: list[torch.Tensor] = []
-            routes: list[torch.Tensor] = []
-            d_end = m_end = 0
-            member_orders: list[torch.Tensor] = []
-            for i, (d, count, m, targets) in enumerate(offsets):
-                if (
-                    d != d_end
-                    or m != m_end
-                    or d + count > self.detail_rows
-                    or targets == 0
-                    or m + targets > MEMBER_ROWS
-                ):
-                    raise ValueError("invalid effect CSR partition")
-                d_end, m_end = d + count, m + targets
-                tokens = details[b, d:d_end]
-                kinds = record_indexes(
-                    tokens[:, 0], 19 if self.version >= 8 else 3, "effect detail kind"
-                )
-                ids = record_indexes(tokens[:, 1:], 65535, "effect detail half")
-                if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
-                    raise ValueError("live effect detail has no kind")
-                unsigned = (ids[:, 0] << 16) | ids[:, 1]
-                encoded_details = self.detail(unsigned % 4096) + self.detail_kind(kinds)
-                if self.version >= 8:
-                    # Integer/boolean tokens retain signed numeric meaning;
-                    # the GRU retains the ordered shared program structure.
-                    signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
-                    numeric = ((kinds == 14) | (kinds == 15)).unsqueeze(-1)
-                    encoded_details = encoded_details + self.detail_number(
-                        program_number(signed.to(objects.dtype)).unsqueeze(-1)
-                    ).masked_fill(~numeric, 0)
-                records.append(
-                    torch.cat(
-                        (
-                            torch.stack((mod[i], sources[i], torch.tanh(header[i]))),
-                            encoded_details,
-                        )
-                    )
-                )
-                memberships = members[b, m:m_end]
-                targets_index = record_indexes(
-                    memberships[:, 0], objects.shape[1], "effect member"
-                )
-                if (targets_index == 0).any():
-                    raise ValueError("effect membership is absent")
-                orders = record_indexes(
-                    memberships[:, 1], MEMBER_ROWS, "effect membership order"
-                )
-                if (orders == 0).any():
-                    raise ValueError("effect membership order is absent")
-                member_orders.append(orders)
-                routes.append(targets_index - 1)
-            orders = torch.cat(member_orders)
-            if len(orders.unique()) != len(orders):
-                raise ValueError("duplicate effect membership order")
-            if self.version >= 8:
-                # Programs remain independent packed sequences. One reduction
-                # across the batch avoids a separate GRU dispatch per sample.
-                all_records.extend(records)
-                all_routes.extend(route + b * objects.shape[1] for route in routes)
-                continue
-            results[b] = self._route(records, routes, objects[b])
-        if self.version >= 8 and all_records:
-            return self._route(
-                all_records, all_routes, objects.flatten(0, 1)
-            ).reshape_as(objects)
-        return torch.stack(results)
+        )
+        encoded = self.reducer(
+            tokens[torch.tensor(token_indexes, device=device)], lengths
+        )
+        # Duplicate memberships remain separate scatter additions and gradients.
+        routes = (member_batches * object_count + targets - 1).to(device)
+        repeated = encoded[torch.tensor(member_records, device=device)]
+        table = objects.reshape(-1, width)
+        delta = torch.zeros_like(table).index_add(0, routes, repeated)
+        return objects + delta.reshape_as(objects)
