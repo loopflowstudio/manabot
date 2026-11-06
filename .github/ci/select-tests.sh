@@ -37,6 +37,7 @@ else
       tests/semantic/fixtures/elemental/*) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;
       managym/tests/*|managym/cards/tests/*) select_jobs rust semantic_conformance ;;
+      managym/.config/nextest.toml) select_jobs rust ;;
       academy/ui/src/lib/packs/*|academy/ui/src/lib/fixtures/*)
         select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
       academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*|academy/ui/src/lib/card-art/*)
