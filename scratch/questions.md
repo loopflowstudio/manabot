@@ -72,3 +72,11 @@ world, so historical identities are stable; `with_*` builders round-trip an
 explicit `hashed`. No v8/v9 regime or configuration is committed outside
 tests. No open product choice; next proof remains the docs/development.md
 model/observation validation and the arena admission suite at gate.
+
+## Publish validation (2026-11-06)
+
+After `lf sync` (main unchanged) and a fresh release extension build:
+- `pytest tests/model/ tests/semantic/test_elemental_world.py tests/eval/test_evaluation_models.py tests/eval/test_mirror_admission.py tests/training/test_monitor_evaluation.py tests/env/test_observation.py tests/training/test_action_cutoff.py tests/verify/test_native_buffer_capacities.py tests/training/test_active_training.py tests/test_package_boundaries.py` — 455 passed, 1 skipped.
+- `pytest tests/verify/ tests/training/test_regimes.py tests/training/test_recovery.py` (includes observation parity) — 212 passed.
+- `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings` clean.
+- `cargo nextest run --profile ci` (debug) — 1001 passed, 2 skipped.
