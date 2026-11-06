@@ -144,7 +144,8 @@ than the one training rents.
   assemble batches per key, vectorize `selected_types`.
 - **Learner.** One finite check over all parameters; one transfer per dtype.
 - **Rollout storage.** Recording copies each sampled observation row once into a
-  per-update store; batches index it instead of re-stacking every row.
+  per-update store; batches index it instead of re-stacking every row. The batch
+  holds those rows as `RecordedObservations`, addressed only by rollout index.
 
 Same seed, old and new source, 3 updates at 24 streams: raw weights, EMA weights,
 optimizer state and all counters are bit-identical (`7f1baaeda750ff2f`,

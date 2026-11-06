@@ -163,3 +163,30 @@ Next implement direction (follows from one owner per fact and named types):
   gate, not only the focused suites.
 - No behavior change: digests stay `76e926e3ea4fcde1` / `2a31f25602a86b9c` /
   `05eb51c04b5e2d14` / `cb230744dcd7c850`, and timing rows are not re-taken.
+
+## Performance review 2026-11-06 (after `2a4736bc7`)
+
+Repaired the working contract before accepting results. `RolloutBatch.obs` +
+`obs_rows` became one typed owner, `RecordedObservations` (`rows` [N, ...],
+`index` [T*E], `gather`, `ordered`), and the field `obs` is gone, so a stale
+reader fails with AttributeError instead of reading the wrong axes. The two
+`tests/model` readers use `ordered_obs()` and keep their assertions; fixtures
+in `test_rl_objectives.py`/`test_regimes.py` construct the new owner.
+Digests at the repaired source (`keep-review`, `digest2.py`): raw/EMA/optimizer/
+attempts `76e926e3ea4fcde1` / `2a31f25602a86b9c` / `05eb51c04b5e2d14` /
+`cb230744dcd7c850`, 72 games, 14,311 decisions, identical to base. The timing rows
+stand: the repair renames ownership and does not change the copy path.
+
+Judgment:
+- Supported gain: assembly + recording 12-16 µs/decision lower in all 7 same-machine
+  pairs (~0.6% of a CPU-device update); learner targets and selection diagnostics
+  ~10x lower (earlier phase). No whole-update or memory claim; laptop noise
+  (load 13-31, 90.8-106.3 s/update on identical code) cannot support one.
+- Negative results: peak footprint did not fall; recording rose 3-5 µs as page
+  faults moved into the store; minibatch direction at 256 streams is unresolved.
+- Remaining: CPU inference/minibatches are model compute, not GPU evidence; native
+  stepping belongs to the engine budget; check walks (~5) and failure frames (~10
+  µs/decision) are below noise, and the frame needs review as replay evidence.
+- Stopping: no remaining host lever is measurable on this machine. Named check, not
+  run: CUDA sync/kernel counts on a real L4 run (see above). Engine Budget is a CI
+  check on the PR; its reference is not re-recorded here.

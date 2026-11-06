@@ -149,18 +149,42 @@ class _Transition:
     done: bool
 
 
+@dataclass(frozen=True)
+class RecordedObservations:
+    """Non-action observation fields of one batch, each sampled row stored once.
+
+    `rows` holds recorded rows [N, ...] in recording order, which is neither time-
+    nor trajectory-major and may include rows of discarded failed games. `index`
+    [time * trajectory] names the recorded row of each time-major rollout row, so
+    readers address observations only through rollout indexes.
+    """
+
+    rows: dict[str, np.ndarray]
+    index: np.ndarray
+
+    def gather(self, indexes: np.ndarray) -> dict[str, np.ndarray]:
+        """Rows for flat time-major rollout `indexes`, as [batch, ...]."""
+        recorded = self.index[indexes]
+        return {key: value[recorded] for key, value in self.rows.items()}
+
+    def ordered(self, shape: tuple[int, ...]) -> dict[str, np.ndarray]:
+        """Every rollout row gathered into `shape` (time, trajectory) order."""
+        return {
+            key: value.reshape(*shape, *value.shape[1:])
+            for key, value in self.gather(np.arange(len(self.index))).items()
+        }
+
+
 @dataclass
 class RolloutBatch:
     """On-policy rows [time, trajectory]; complete games may be packed [rows, 1].
 
-    `obs` holds non-action fields as recorded rows [N, ...], unordered;
-    `obs_rows` [time * trajectory] names the recorded row of each time-major
-    rollout row. `action_data` owns legal action rows and behavior distributions
-    in time-major order. `observations` reunites them.
+    `recorded` owns non-action fields, addressed by time-major rollout index.
+    `action_data` owns legal action rows and behavior distributions in time-major
+    order. `observations` reunites them.
     """
 
-    obs: dict[str, np.ndarray]
-    obs_rows: np.ndarray
+    recorded: RecordedObservations
     actions: np.ndarray
     logprobs: np.ndarray
     rewards: np.ndarray
@@ -183,10 +207,7 @@ class RolloutBatch:
         if indexes is None:
             indexes = np.arange(self.actions.size)
         rows = self.action_data.unpack(indexes)
-        recorded = self.obs_rows[indexes]
-        rows.observation.update(
-            {key: value[recorded] for key, value in self.obs.items()}
-        )
+        rows.observation.update(self.recorded.gather(indexes))
         if trajectory_shape is not None:
             rows.observation = {
                 key: value.reshape(*trajectory_shape, *value.shape[1:])
@@ -200,10 +221,7 @@ class RolloutBatch:
 
     def ordered_obs(self) -> dict[str, np.ndarray]:
         """Non-action fields gathered into [time, trajectory, ...] order."""
-        return {
-            key: value[self.obs_rows].reshape(*self.actions.shape, *value.shape[1:])
-            for key, value in self.obs.items()
-        }
+        return self.recorded.ordered(self.actions.shape)
 
 
 ExposureKind = Literal[
@@ -1234,8 +1252,9 @@ class SeatRoutedCollector:
             next_done[env_index] = dones[num_steps - 1, env_index]
 
         return RolloutBatch(
-            obs=self._observations.arrays(),
-            obs_rows=obs_rows.reshape(-1),
+            recorded=RecordedObservations(
+                self._observations.arrays(), obs_rows.reshape(-1)
+            ),
             actions=actions,
             logprobs=logprobs,
             rewards=rewards,

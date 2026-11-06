@@ -16,7 +16,7 @@ from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import selected_rows
 from manabot.training.regime import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
-from manabot.training.rollout.collection import RolloutBatch
+from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 
 
 class TinyPolicy(torch.nn.Module):
@@ -55,8 +55,8 @@ def fixture() -> tuple[Learner, RolloutBatch]:
         probabilities = logits.softmax(-1).numpy()
     actions = np.array([[0], [1], [2], [0]])
     batch = RolloutBatch(
-        obs={},  # This fixture has only action fields; the critic is a scalar.
-        obs_rows=np.arange(4),
+        # This fixture has only action fields; the critic is a scalar.
+        recorded=RecordedObservations({}, np.arange(4)),
         actions=actions,
         logprobs=np.log(probabilities[np.arange(4), actions[:, 0]])[:, None],
         rewards=np.array([[0], [1], [0], [-1]], dtype=np.float32),
@@ -275,4 +275,5 @@ def test_learning_materializes_only_selected_minibatches(
     monkeypatch.setattr(RolloutBatch, "observations", selected_rows_only)
     run(trainer, batch, control(minibatches=2))
     assert seen == [2, 2]
-    assert "actions" not in batch.obs and "actions_valid" not in batch.obs
+    assert "actions" not in batch.recorded.rows
+    assert "actions_valid" not in batch.recorded.rows
