@@ -60,6 +60,13 @@ opposite:
   The Task title's "agent memory" remains an unbuilt proposal. Durable text must
   not describe the result as a memory finding.
 
+Done 2026-11-05 (implement): `experiments/state-representation-gpu.md` exists,
+linked from the README index (first, with result), the README's GPU study
+paragraph and the protocol's Recovery cohort result; the CPU report and index
+entry are marked preliminary with numbers unchanged. PR421 reframing remains for
+the delivery step. Check: `test_experiment_data_untracked.py`,
+`test_experiment_data.py`, `test_ci_selection.py` pass.
+
 Unchanged: no default/model promotion (fresh input stays v6), frozen evidence,
 seeds, criteria and the $25 total. The Wave memory update above stays proposed.
 

@@ -97,9 +97,18 @@ history.
 
 ## Index
 
-[V7 state reduction](state-representation-v7.md): **completed 2026-11-04** —
-four seeds, 32,768 training games and 1,024 replayed evaluation games. GRU minus
-pooling: −0.98 points [−10.13, +8.18], at 1.06× training time; no promotion.
+[V7 state reduction, GPU horizon](state-representation-gpu.md): **completed
+2026-11-05** — four paired seeds, 256 updates (524,288 training games), 11,264
+replayed evaluation games. No qualified plateau (one of six final-window
+intervals within ±5). Held-out GRU minus pooling: −1.95 points [−5.88, +1.98],
+neither advantage nor equivalence; no promotion. GRU and pooling are two
+within-decision reducers, not agent memory.
+
+[V7 state reduction, CPU](state-representation-v7.md): **preliminary,
+2026-11-04** — four seeds at 128 updates, 32,768 training games and 1,024
+replayed evaluation games. GRU minus pooling: −0.98 points [−10.13, +8.18], at
+1.06× training time. Too short a horizon to choose an architecture; the GPU
+study above is the answer.
 
 [Growing card pools, MTG-245](protocols/growing-pool-245-v1.md): **prospective,
 unexecuted** — authored reference league, frozen mixtures and separate retention,
@@ -193,5 +202,6 @@ science requires an explicit frozen allocation backed by measured affordability.
 Wider batches change optimization; the prospective recipe retains the original
 complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
 on 2026-11-05 after three of eight learners completed, with no curve or held-out
-endpoint, so no plateau or architecture result exists. Recovery is an amendment
-to the protocol, not a change to that record. The completed CPU study remains frozen.
+endpoint; that record is unchanged. The recovery amendment completed the cohort
+the same day: [the GPU report](state-representation-gpu.md) holds its result.
+The preliminary CPU study remains frozen.

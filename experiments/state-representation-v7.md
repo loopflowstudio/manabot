@@ -2,6 +2,10 @@
 
 2026-11-04 · Task 5da5f4 · completed prospective comparison
 
+*Preliminary (noted 2026-11-05).* This 128-update CPU horizon is not enough to
+choose an architecture. The [GPU horizon study](state-representation-gpu.md)
+answers the question; the numbers below are unchanged.
+
 **GRU did not demonstrate an advantage.** Across four paired training seeds, its
 score against the heuristic was **0.98 percentage points lower** than pooling;
 the 95% cross-seed interval is **−10.13 to +8.18 points**. Training took **1.06×**

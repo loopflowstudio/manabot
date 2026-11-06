@@ -563,6 +563,8 @@ study are not merged by this amendment. Spending stays inside the original $25.
 
 ## Recovery cohort result — 2026-11-05
 
+Report: [state-representation-gpu.md](../state-representation-gpu.md).
+
 All eight learners completed 256 updates; all 72 curve and eight held-out
 endpoints were scored and hash-verified (11,264 games, all replayed, zero
 failures). The frozen analysis ran once, over the complete ledger.
