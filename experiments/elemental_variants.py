@@ -50,10 +50,10 @@ def closure_comparison(
 ) -> TrainingRegime:
     """One-seat Elemental differing only in when each batch closes.
 
-    Exact quota needs one learning seat and settles no whole games, so both arms
-    learn from one seat (seat-balanced across streams) without game-error recovery,
-    and everything else of the recipe stays. Game length moves with the policy, so
-    recorded counters verify the row match in each run.
+    Exact quota needs one learning seat, so both arms learn from one seat
+    (seat-balanced across streams), and everything else of the recipe stays,
+    capacity recovery included. Game length moves with the policy, so recorded
+    counters verify the row match in each run.
     """
     transitions = CLOSURE_COMPLETE_FLOOR if closure == "complete-games" else quota
     if transitions is None:
@@ -62,7 +62,6 @@ def closure_comparison(
     stage = _stage(regime)
     stage.learning_seats = "one"
     stage.batch_closure = closure
-    stage.game_errors = None
     stage.transitions = transitions
     return TrainingRegime.model_validate(regime.model_dump())
 

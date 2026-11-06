@@ -207,6 +207,48 @@ pace on this world), reserved at $1.05.
 
 Study 1's predictions and analysis above stay as written and are not scored.
 
+## Amendment 2026-11-06: study 1 reopens through capacity recovery
+
+Made after study 2 was scored and before any closure run. Its arms, seeds, pairings and
+predictions were fixed above; no closure outcome has been seen. The route is an
+assumption taken at the Task's decision pass, because it is reversible branch code that
+keeps the v1 input and spends only inside this study's $25. Exact quota's future stays
+Jack Heart's decision.
+
+**Route.** Exact quota accepts `game_errors` when `recover_capacity` is set. A game that
+overflows discards its rows not yet learned from and its pending decision; its stream
+takes a fresh game and keeps collecting to the quota. Rows earlier updates already
+learned from stay, because they cannot be unlearned, and are counted as
+`learned_samples`. Those rows bootstrapped from a value estimate like any paused rows.
+A complete-games game discards all its rows, so this asymmetry is inherent to the
+closures. Capacity failures were 3 of 293,393 games in study 2; the report gives each
+arm's counts.
+
+**Arms.** Both arms now keep the recipe's game-error policy with `recover_capacity`,
+replacing the earlier departure that dropped it. They still differ only in
+`batch_closure` and `transitions`. This brings both closer to the recipe.
+
+**Target: 75 updates**, down from 150, about 1.8M learner decisions at one seat. That is
+earlier training than study 2's 3.1–3.8M, so a null here says nothing about later
+learning. Windows stay 1.5 hours, a 70-minute training wall. The only one-seat pace
+measured is ~70 s per opening update, which would reach about 60 updates if it never
+fell; matched comparison extends only to what every run reached. Scored updates are 20,
+40, 75 and each run's endpoint.
+
+**Calibration** reruns on seed 70100 with the same arm, 30 updates. Its window goes from
+.6 to .75 hours ($.60 reserved) so the 25-minute wall covers more than the opening
+updates. The kill criterion stands: if it fails, or no quota matches within 10%, study 1
+stops and the report says why.
+
+| Line | Dollars |
+|---|---:|
+| Spent: calibration $1.19 and training $8.94 billed, evaluation ~$4.8 estimated | 14.93 |
+| Calibration rerun | .60 |
+| Study 1 training, 6 runs × $1.05 | 6.30 |
+| Evaluation, one pass (900 pairings; study 2's ran about one a second) | 1.20 |
+| Left | 1.97 |
+| **Total** | **25.00** |
+
 ## Results
 
 `experiments/data/closure-lambda-elemental-v1/report.md` (artifact store; manifest in

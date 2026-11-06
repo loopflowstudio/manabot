@@ -27,7 +27,7 @@ from manabot.training.regime import BatchClosure
 
 EXPERIMENT = "elemental_closure"
 SEEDS = "70101,70102,70103"
-UPDATES = 150
+UPDATES = 75
 # Rental hours and dollars per run at the L4 rate the protocol budgets.
 HOURS = 1.5
 USD_PER_RUN = 1.05

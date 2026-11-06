@@ -142,6 +142,16 @@ def test_exact_quota_rejects_settings_that_need_whole_games(
         _stage(batch_closure="exact-quota", **fields)
 
 
+def test_exact_quota_accepts_capacity_recovery() -> None:
+    stage = _stage(
+        learning_seats="one",
+        batch_closure="exact-quota",
+        game_errors=GameErrorPolicy(recover_capacity=True),
+    )
+    regime = _regime(stage)
+    assert _closure(TrainingRegime.model_validate(regime.model_dump())) == "exact-quota"
+
+
 def test_a_game_error_policy_does_not_choose_the_closure() -> None:
     without = _stage(learning_seats="one")
     with_policy = _stage(learning_seats="one", game_errors=GameErrorPolicy())

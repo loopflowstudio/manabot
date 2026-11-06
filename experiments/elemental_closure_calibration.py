@@ -18,8 +18,8 @@ EXPERIMENT = "elemental_closure_calibration"
 SEED = 70100
 UPDATES = 30
 # The window and its reservation (window plus setup at $.60) from the protocol.
-HOURS = 0.6
-USD_PER_RUN = 0.51
+HOURS = 0.75
+USD_PER_RUN = 0.6
 
 
 def runs(revision: str) -> list[Run]:

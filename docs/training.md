@@ -140,8 +140,10 @@ finished streams idle until the slowest game ends, recorded as
 `idle_stream_steps`. `"exact-quota"` pauses each stream at exactly `transitions`
 learner rows and bootstraps the mid-game tail from `V(next_obs)`. Exact quota
 needs one learning seat, because at a pause only the acting seat has a next
-observation, and rejects `games_per_stream` and `game_errors`, which settle whole
-games.
+observation, and rejects `games_per_stream`. It accepts `game_errors` only with
+`recover_capacity`: a failed game discards the rows no update has learned from, its
+stream refills to the quota, and the rows earlier updates learned from stay, counted
+as `learned_samples`.
 
 A saved stage never declared its closure, so `TrainingRegime` resolves omission
 the way those runs behaved: one seat with neither `games_per_stream` nor

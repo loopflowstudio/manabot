@@ -53,7 +53,8 @@ def test_closure_arms_learn_from_one_seat_and_differ_only_in_closure() -> None:
     for arm in (exact, complete):
         stage = _stage(arm)
         assert stage.learning_seats == "one"
-        assert stage.game_errors is None
+        assert stage.game_errors is not None
+        assert stage.game_errors.recover_capacity
         assert stage.matchup_curriculum == "elemental-uniform"
     assert _stage(exact).transitions == 90
     assert _stage(complete).transitions == CLOSURE_COMPLETE_FLOOR
