@@ -249,6 +249,18 @@ stops and the report says why.
 | Left | 1.97 |
 | **Total** | **25.00** |
 
+## Amendment 2026-11-06: calibration sets the quota at 121
+
+Made before any closure arm launched. Calibration fbcb3fd57b2c (revision e6acf3ba4,
+seed 70100, complete games with capacity recovery) reached all 30 updates. Rows per
+stream per update were 116–123 over updates 1–10 and averaged 121.3 over updates 11–30,
+every one of those within 10% of 121 (lowest 109.8 at update 29, 9.3% under). The exact
+arm's quota is therefore **121**. One game of 9,625 overflowed and was recovered,
+discarding 58 samples. Updates took 33–40 s, so 75 updates need about 45 minutes of the
+70-minute wall on a fast host; at 121 rows the target is about 2.3M learner decisions,
+not the 1.8M estimated above. The calibration's machine stayed rented to its 15:27
+deadline after the controller died, so the cap is charged its $.60 reservation.
+
 ## Results
 
 `experiments/data/closure-lambda-elemental-v1/report.md` (artifact store; manifest in

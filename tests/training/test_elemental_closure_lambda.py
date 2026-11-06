@@ -69,6 +69,7 @@ def test_closure_arms_learn_from_one_seat_and_differ_only_in_closure() -> None:
 def test_exact_arm_needs_its_calibrated_quota() -> None:
     with pytest.raises(ValueError, match="calibration"):
         closure_comparison("exact-quota", 150, quota=None)
+    assert _stage(closure_comparison("exact-quota", 75)).transitions == 121
 
 
 def test_lambda_arms_keep_two_seats_and_differ_only_in_their_traces() -> None:

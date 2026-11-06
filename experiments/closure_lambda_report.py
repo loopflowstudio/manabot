@@ -349,6 +349,10 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "discarded_samples": float(
             cast(int, record.game_errors.get("discarded_samples", 0))
         ),
+        # An exact-quota game's rows that earlier updates learned from before it failed.
+        "learned_samples": float(
+            cast(int, record.game_errors.get("learned_samples", 0))
+        ),
         "idle_share": idle_share,
         # Wall time lost to idle slots if an idle slot cost as much as a stepped one:
         # an upper bound, since batched inference is sublinear in live streams.

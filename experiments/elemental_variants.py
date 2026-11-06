@@ -18,7 +18,7 @@ import managym
 # recipe's floor; the exact arm's quota is what that floor realized per stream in
 # calibration once game length settled (protocol, calibration section).
 CLOSURE_COMPLETE_FLOOR = 64
-CLOSURE_QUOTA: int | None = None
+CLOSURE_QUOTA: int | None = 121
 
 
 def _stage(regime: TrainingRegime) -> TrainSelfPlay:
