@@ -18,6 +18,23 @@ from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.matchup import selected_match
 
 
+def _match(
+    key: str, design: learning_signal.Design, pairing: learning_signal.Pairing
+) -> SimpleNamespace:
+    """An Etude match of one pairing: the candidate against the heuristic."""
+    return SimpleNamespace(
+        key=key,
+        games=design.legs,
+        conditions=learning_signal.Conditions(
+            design=design.name, **pairing.model_dump()
+        ).model_dump(),
+        players=(
+            SimpleNamespace(name="candidate"),
+            Code(name="heuristic", source=[Path(learning_signal.__file__)]),
+        ),
+    )
+
+
 def test_a_held_out_deal_scores_all_eight_deck_seat_legs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -31,17 +48,7 @@ def test_a_held_out_deal_scores_all_eight_deck_seat_legs(
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "out"))
     monkeypatch.setattr(learning_signal, "local_checkpoint_file", lambda _: path)
     design = learning_signal.ALLIES_LESSONS
-    match = SimpleNamespace(
-        key="deal",
-        games=8,
-        conditions=learning_signal.Conditions(
-            design=design.name, **design.pairings[0].model_dump()
-        ).model_dump(),
-        players=(
-            SimpleNamespace(name="candidate"),
-            Code(name="heuristic", source=[Path(learning_signal.__file__)]),
-        ),
-    )
+    match = _match("deal", design, design.pairings[0])
     tables = learning_signal.play_deal(match)  # type: ignore[arg-type]
     plays = tables["plays"]
     assert len(plays) == 16
@@ -71,17 +78,7 @@ def test_an_elemental_pairing_scores_both_decks_from_both_seats(
     )
     monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path / "out"))
     monkeypatch.setattr(learning_signal, "local_checkpoint_file", lambda _: path)
-    match = SimpleNamespace(
-        key="pairing",
-        games=4,
-        conditions=learning_signal.Conditions(
-            design=design.name, **pairing.model_dump()
-        ).model_dump(),
-        players=(
-            SimpleNamespace(name="candidate"),
-            Code(name="heuristic", source=[Path(learning_signal.__file__)]),
-        ),
-    )
+    match = _match("pairing", design, pairing)
     plays = learning_signal.play_deal(match)["plays"]  # type: ignore[arg-type]
     assert len(plays) == 8
     candidate = [row for row in plays if row["seat"] == 0]
@@ -97,14 +94,7 @@ def test_an_elemental_pairing_scores_both_decks_from_both_seats(
 def test_a_pairing_outside_the_design_is_refused() -> None:
     design = learning_signal.ELEMENTAL_PAIRS
     foreign = design.pairings[0].model_copy(update={"deal": 1})
-    match = SimpleNamespace(
-        key="pairing",
-        games=4,
-        conditions=learning_signal.Conditions(
-            design=design.name, **foreign.model_dump()
-        ).model_dump(),
-        players=(SimpleNamespace(name="candidate"), None),
-    )
+    match = _match("pairing", design, foreign)
     with pytest.raises(ValueError, match="frozen schedule"):
         learning_signal.play_deal(match)  # type: ignore[arg-type]
 

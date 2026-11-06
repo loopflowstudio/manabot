@@ -54,7 +54,6 @@ class Study:
 class StudySet:
     """A protocol's two studies, the legs each scored pairing plays, and its folder."""
 
-    name: str
     out: Path
     legs: int
     studies: tuple[Study, ...]
@@ -62,7 +61,6 @@ class StudySet:
 
 SETS = {
     "allies-lessons": StudySet(
-        "allies-lessons",
         DATA / "closure-lambda-v1",
         8,
         (
@@ -79,7 +77,6 @@ SETS = {
         ),
     ),
     "elemental": StudySet(
-        "elemental",
         DATA / "closure-lambda-elemental-v1",
         4,
         (
@@ -108,7 +105,7 @@ class TrainingRecord:
     stage: dict[str, object]
     updates: list[dict[str, float]]
     # The run's game-error ledger state; empty when the regime records none.
-    game_errors: dict[str, object] = field(default_factory=dict)
+    game_errors: dict[str, object]
 
     def row(self, update: int) -> dict[str, float]:
         """The metric row at an update, 1-indexed by the metric rows."""
@@ -184,9 +181,7 @@ def training_records(storage: Storage, experiment: str) -> list[TrainingRecord]:
                 seed=cast(int, document["seed"]),
                 stage=stages[0],
                 updates=_metric_rows(storage, run.name, keys),
-                game_errors=cast(
-                    dict[str, object], document.get("game_errors") or {}
-                ),
+                game_errors=cast(dict[str, object], document.get("game_errors") or {}),
             )
         )
     return sorted(records, key=lambda r: (r.job, r.seed))
@@ -289,19 +284,14 @@ def seed_interval(differences: Sequence[float]) -> tuple[float, float, float]:
 
 
 def deal_interval(
-    arm: Sequence[Scored],
-    baseline: Sequence[Scored],
-    arm_update: Sequence[int],
-    base_update: Sequence[int],
+    arm: Sequence[Scored], baseline: Sequence[Scored], update: int
 ) -> tuple[float, float]:
     """Interval for the arm difference from resampling the shared deals, seeds fixed."""
-    deals = sorted(arm[0].deal_scores[arm_update[0]])
-    a = np.array(
-        [[s.deal_scores[u][d] for d in deals] for s, u in zip(arm, arm_update)]
-    ).mean(axis=0)
-    b = np.array(
-        [[s.deal_scores[u][d] for d in deals] for s, u in zip(baseline, base_update)]
-    ).mean(axis=0)
+    deals = sorted(arm[0].deal_scores[update])
+    a = np.array([[s.deal_scores[update][d] for d in deals] for s in arm]).mean(axis=0)
+    b = np.array([[s.deal_scores[update][d] for d in deals] for s in baseline]).mean(
+        axis=0
+    )
     generator = np.random.default_rng(6510)
     picks = generator.integers(0, len(deals), (BOOTSTRAP_RESAMPLES, len(deals)))
     samples = (a - b)[picks].mean(axis=1)
@@ -475,10 +465,7 @@ def analyze(
         }
         if job != study.baseline:
             entry["deal_interval_at_last_common"] = deal_interval(
-                [scored[r.run] for r in present],
-                base_scored,
-                [last] * len(present),
-                [last] * len(base_scored),
+                [scored[r.run] for r in present], base_scored, last
             )
         cast(dict[str, object], result["jobs"])[job] = entry
     result["last_common_update"] = last

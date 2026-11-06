@@ -43,7 +43,7 @@ import torch
 
 from experiments.elemental_grid import DECKS, PACK as ELEMENTAL_PACK
 from manabot.eval.benchmark import evaluation_tables
-from manabot.eval.evaluation import EvaluationRequest, EvaluationResult, evaluate
+from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -124,15 +124,13 @@ class Conditions(BaseModel):
 
 # Allies/Lessons (fc6ffb): the one selected pair over 25 deals, mirrors included.
 PACK = "ur-lessons-vs-gw-allies"
-MATCHUP = AuthoredMatchup(pack_key=PACK, role_a="ur_lessons", role_b="gw_allies")
 # Reserved for that protocol: disjoint from monitoring and training seeds.
 DEALS = tuple(range(6_510_000_000, 6_510_000_025))
 ALLIES_LESSONS = Design(
     name="closure-lambda-v1",
     pack=PACK,
     pairings=tuple(
-        Pairing(role_a=MATCHUP.role_a, role_b=MATCHUP.role_b, deal=deal)
-        for deal in DEALS
+        Pairing(role_a="ur_lessons", role_b="gw_allies", deal=deal) for deal in DEALS
     ),
     matchup_mode="all",
     game_seconds=120.0,
@@ -170,14 +168,7 @@ ELEMENTAL_PAIRS = Design(
     matchup_mode="cross",
     game_seconds=600.0,
 )
-ELEMENTAL_PAIRINGS_SHA256 = (
-    "9bff729243f7962406520412e37d023fb6a6619e2eb996de43ef85ec5859503f"
-)
 DESIGNS = {design.name: design for design in (ALLIES_LESSONS, ELEMENTAL_PAIRS)}
-
-
-def pairings_sha256(design: Design) -> str:
-    return canonical_sha256([pairing.model_dump() for pairing in design.pairings])
 
 
 # --------------------------------------------------------------------------- launch
@@ -369,15 +360,21 @@ def play_deal(match: Match) -> Tables:
     with TemporaryDirectory(dir=_journal_root()) as journal:
         out_dir = Path(journal) / "deal"
         try:
-            result = _play(
-                design,
-                matchup,
-                conditions.deal,
-                candidate,
-                opponent,
-                path,
-                key,
-                out_dir,
+            result = evaluate(
+                EvaluationRequest(
+                    key=key,
+                    candidate=candidate,
+                    opponent=opponent,
+                    checkpoint_paths={"candidate": str(path)},
+                    deal_seeds=(conditions.deal,),
+                    matchup_mode=design.matchup_mode,
+                    authored_matchup=matchup,
+                    game_seconds=design.game_seconds,
+                    max_commands=MAX_COMMANDS,
+                    bootstrap_seed=BOOTSTRAP_SEED,
+                    purpose=design.name,
+                ),
+                out_dir=out_dir,
             )
         finally:
             if out_dir.is_dir():
@@ -389,34 +386,6 @@ def play_deal(match: Match) -> Tables:
 
 def _journal_root() -> str | None:
     return "/dev/shm" if Path("/dev/shm").is_dir() else None
-
-
-def _play(
-    design: Design,
-    matchup: AuthoredMatchup,
-    deal: int,
-    candidate: PlayerRegistration,
-    opponent: PlayerRegistration,
-    path: Path,
-    key: EvaluationKey,
-    out_dir: Path,
-) -> EvaluationResult:
-    return evaluate(
-        EvaluationRequest(
-            key=key,
-            candidate=candidate,
-            opponent=opponent,
-            checkpoint_paths={"candidate": str(path)},
-            deal_seeds=(deal,),
-            matchup_mode=design.matchup_mode,
-            authored_matchup=matchup,
-            game_seconds=design.game_seconds,
-            max_commands=MAX_COMMANDS,
-            bootstrap_seed=BOOTSTRAP_SEED,
-            purpose=design.name,
-        ),
-        out_dir=out_dir,
-    )
 
 
 def learning_report(baseline: str) -> Report:

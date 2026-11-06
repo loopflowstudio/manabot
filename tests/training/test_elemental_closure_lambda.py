@@ -9,15 +9,14 @@ from experiments.elemental_variants import (
     closure_comparison,
     lambda_sweep,
 )
-from experiments.learning_signal import (
-    DEALS,
-    ELEMENTAL_PAIRINGS_SHA256,
-    ELEMENTAL_PAIRS,
-    pairings_sha256,
-)
+from experiments.learning_signal import DEALS, ELEMENTAL_PAIRS
+from manabot.infra.identity import canonical_sha256
 from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
+
+# The protocol's pairings, fixed before scoring.
+PAIRINGS_SHA256 = "9bff729243f7962406520412e37d023fb6a6619e2eb996de43ef85ec5859503f"
 
 
 def _changed(first: dict[str, object], second: dict[str, object]) -> set[str]:
@@ -88,7 +87,7 @@ def test_lambda_arms_keep_two_seats_and_differ_only_in_their_traces() -> None:
 def test_elemental_pairings_are_fixed_distinct_pairs_on_reserved_deals() -> None:
     pairings = ELEMENTAL_PAIRS.pairings
     assert len(pairings) == 50
-    assert pairings_sha256(ELEMENTAL_PAIRS) == ELEMENTAL_PAIRINGS_SHA256
+    assert canonical_sha256([p.model_dump() for p in pairings]) == PAIRINGS_SHA256
     assert ELEMENTAL_PAIRS.legs == 4
     deals = [pairing.deal for pairing in pairings]
     assert len(set(deals)) == len(deals)

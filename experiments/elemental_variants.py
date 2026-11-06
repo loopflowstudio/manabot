@@ -55,18 +55,15 @@ def closure_comparison(
     and everything else of the recipe stays. Game length moves with the policy, so
     recorded counters verify the row match in each run.
     """
-    if closure == "exact-quota" and quota is None:
+    transitions = CLOSURE_COMPLETE_FLOOR if closure == "complete-games" else quota
+    if transitions is None:
         raise ValueError("the exact arm's quota is set by calibration")
     regime = elemental_recipe(f"elemental-closure-{closure}-v1", updates)
     stage = _stage(regime)
     stage.learning_seats = "one"
     stage.batch_closure = closure
     stage.game_errors = None
-    stage.transitions = (
-        quota
-        if closure == "exact-quota" and quota is not None
-        else CLOSURE_COMPLETE_FLOOR
-    )
+    stage.transitions = transitions
     return TrainingRegime.model_validate(regime.model_dump())
 
 
