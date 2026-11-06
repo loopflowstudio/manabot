@@ -10,7 +10,9 @@ learning and strength readings at its last stored checkpoint, with `state`
 beside them, but its head-to-head score is not equal compute, so `scale` needs
 both runs finished under the wall budget, neither stopped by the update cap.
 A run that ended below the first milestone is no size's run; `set_aside` lists
-it, because every attempt is reported.
+it, because every attempt is reported. `analyze` reads the state it is given, and
+`main` first joins the launcher's ends (`with_launcher_ends`), so the CLI needs
+launcher access and refuses to read a run it cannot place.
 
 A failed game stays failed: nothing replaces it and it leaves the denominator
 unchanged. Its comparison has no `score`, but once every pair has a match
@@ -64,6 +66,7 @@ from experiments.tla_frontier import (
     size_label,
     size_run,
     update_cap,
+    with_launcher_ends,
 )
 from experiments.tla_pilot_analysis import (
     BOOTSTRAP_RESAMPLES,
@@ -406,7 +409,7 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    state = observe(args.source, EXPERIMENT)
+    state = with_launcher_ends(observe(args.source, EXPERIMENT))
     with statsdb(EXPERIMENT, args.source) as db:
         report = analyze(state, db, read_hosts(args.source))
     atomic_json(args.out, report.model_dump(mode="json"))

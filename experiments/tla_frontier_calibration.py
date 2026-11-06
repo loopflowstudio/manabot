@@ -20,18 +20,17 @@ gate reading depends on its host, so it shows its pod's step speed beside it, an
 pods and a launch's.
 
 A failed game is never replayed, so the first rented evaluation pass must not be
-a scored one. Once both calibration runs have ended, `eval` plays the frontier's
-own pass job over calibration's checkpoints, and `read_rehearsal` (`--rehearsal`)
-reads it against the second launch gate. The launcher holds a pass's cost, so that
-read takes the control client. These checkpoints are nearly fresh policies, so
-the reading says what the pass does on a rental, not how long a trained policy's
-games run.
+a scored one. Once both calibration runs have ended, or the launcher has closed
+them, `eval` plays the frontier's own pass job over calibration's checkpoints, and
+`read_rehearsal` (`--rehearsal`) reads it against the second launch gate. The
+launcher holds a pass's cost, so that read takes the control client. These
+checkpoints are nearly fresh policies, so the reading says what the pass does on a
+rental, not how long a trained policy's games run.
 """
 
 from __future__ import annotations
 
 import argparse
-from collections.abc import Callable
 from decimal import Decimal
 import json
 from pathlib import Path
@@ -62,6 +61,8 @@ from experiments.tla_frontier import (
     host_speed,
     last_update,
     paired_matchup,
+    pass_name,
+    with_launcher_ends,
 )
 from experiments.tla_pilot_analysis import stored_game_columns
 from manabot.infra.identity import StrictModel, canonical_sha256
@@ -247,15 +248,16 @@ def eval(state: ExperimentState) -> list[Job]:
     """The rehearsal, once no calibration run can still save a later checkpoint."""
     if state.experiment != EXPERIMENT:
         raise ValueError("rehearsal requires calibration's runs")
-    if not state.runs or not all(run.ended for run in state.runs):
+    closed = with_launcher_ends(state)
+    if not closed.runs or not all(run.ended for run in closed.runs):
         return []
     _, protocol = frozen()
     return [
         evaluation_pass(
             Benchmark(
-                name="tla-frontier-c5fba4-rehearsal-v1",
+                name=pass_name("tla-frontier-c5fba4-rehearsal-v1"),
                 environment=_rehearsal_environment(protocol),
-                matchups=rehearsal_matchups(state, protocol),
+                matchups=rehearsal_matchups(closed, protocol),
             )
         )
     ]
@@ -361,18 +363,11 @@ def read_screen(source: Storage | Path | str) -> list[ScreenReading]:
     return [reading(data, host) for data, host in found]
 
 
-def _launcher_usd(run: str) -> Decimal:
-    return client.status(run).usd
-
-
-def read_rehearsal(
-    source: Storage | Path | str, usd: Callable[[str], Decimal] = _launcher_usd
-) -> Rehearsal:
+def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
     """The rehearsal's games and cost, and whether they pass the second launch gate.
 
     It passes only with every scheduled game played, valid and under the line.
-    Each game repeats on both seats, so seat 0 reads it. `usd` is the launcher's
-    cost of one stored pass.
+    Each game repeats on both seats, so seat 0 reads it.
     """
     with statsdb(EXPERIMENT, source) as db:
         receipts = db.execute("SELECT run, state FROM matches").fetchall()
@@ -400,7 +395,7 @@ def read_rehearsal(
         invalid_games=invalid,
         median_game_seconds=median(seconds) if seconds else None,
         slowest_game_seconds=slowest,
-        pass_usd=sum((usd(run) for run in runs), Decimal(0)),
+        pass_usd=sum((client.status(run).usd for run in runs), Decimal(0)),
         passed=(
             len(games) == scheduled
             and not failed

@@ -13,19 +13,22 @@ import duckdb
 from etude.eval.match import Tables, evaluate
 from etude.eval.query import statsdb
 from etude.eval.records import Inference, Match, Matchup, Model
+from etude.eval.tournament import hold
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
     ExperimentState,
+    Pass,
     TrainingRun,
     advance,
     observe,
     read_experiment,
 )
 from etude.jobs import evaluation_spec
+from etude.launch import client
 from etude.launch.errors import LauncherError
 from etude.launch.job_file import read_job_file
-from etude.launch.records import Run
+from etude.launch.records import Outcome, Run, Status
 from etude.page import build, render
 from etude.run.errors import EtudeError
 from etude.run.listing import as_storage
@@ -37,17 +40,21 @@ from experiments.tla_frontier import (
     EXPERIMENT,
     HEURISTIC,
     LARGE,
+    PASS_ATTEMPT,
     REGIME,
     ROOT,
     SMALL,
     HostSpeed,
     SizeLabel,
     comparison_schedule,
+    endpoint,
     eval,
     export_updates,
     frozen,
+    pass_name,
     runs,
     size_run,
+    with_launcher_ends,
 )
 from experiments.tla_frontier_analysis import (
     Comparison,
@@ -55,6 +62,7 @@ from experiments.tla_frontier_analysis import (
     PolicyActions,
     SetAside,
     analyze,
+    main as analysis_main,
     read_hosts,
 )
 from experiments.tla_frontier_calibration import (
@@ -84,6 +92,32 @@ from manabot.verify.store import VerifyStore
 CALIBRATION_FILE = ROOT / "experiments/tla_frontier_calibration.py"
 # What a launcher hands a worker: `uuid4().hex[:12]`, never the job's name.
 RUN_NAMES: dict[SizeLabel, str] = {SMALL: "0f3a9c1d2b4e", LARGE: "7be2d40a61c5"}
+# Taken before `launcher` replaces it, for the test of a real launcher's refusal.
+REAL_STATUS = client.status
+
+
+def _status(run: str, outcome: Outcome | None, usd: Decimal = Decimal(0)) -> Status:
+    """What the launcher says of a run: `outcome` closes it, None leaves it live."""
+    return Status(
+        run=run,
+        phase="done" if outcome else "running",
+        reason=None,
+        outcome=outcome,
+        cause=None,
+        until=None,
+        clocks={},
+        usd=usd,
+        attempts=1,
+        rental_ended=None,
+    )
+
+
+@pytest.fixture(autouse=True)
+def launcher(monkeypatch: pytest.MonkeyPatch) -> dict[str, Outcome]:
+    """The runs the launcher has closed, by outcome; every other run is live."""
+    closed: dict[str, Outcome] = {}
+    monkeypatch.setattr(client, "status", lambda run: _status(run, closed.get(run)))
+    return closed
 
 
 def _checkpoint(label: SizeLabel, update: int) -> Checkpoint:
@@ -412,10 +446,23 @@ def test_protocol_commands_name_their_rentals() -> None:
         for command in block.split('"${control[@]}"')
         if "--rent" in command
     ]
-    assert len(commands) == 5
+    assert len(commands) == 6
     for command in commands:
         rented = command[command.index("--rent") + 1]
         assert rented == ("l4" if "launch" in command else "cpu32")
+
+
+def test_protocol_waits_for_the_rehearsal_and_names_the_relaunch() -> None:
+    """`etude eval` returns at launch, so the reader waits for the pass to end."""
+    (rehearsal,) = [block for block in _protocol_blocks() if "--rehearsal" in block]
+    assert (
+        rehearsal.index("etude eval")
+        < rehearsal.index("etude wait <run>")
+        < rehearsal.index("--rehearsal")
+    )
+    (relaunch,) = [block for block in _protocol_blocks() if PASS_ATTEMPT in block]
+    assert "etude ondemand max cpu32 2" in relaunch
+    assert f'{PASS_ATTEMPT}=2 "${{control[@]}}" etude eval' in relaunch
 
 
 def test_a_replaced_pod_is_set_aside_and_listed(
@@ -457,6 +504,280 @@ def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
     _tracked(large, tmp_path, {}, (0, 25), end=None)
     with pytest.raises(ValueError, match="admits one w256 run"):
         size_run(observe(tmp_path, EXPERIMENT), LARGE, frozen()[1])
+
+
+def test_a_lost_pod_past_the_first_milestone_ends_at_its_last_export(
+    tmp_path: Path, launcher: dict[str, Outcome]
+) -> None:
+    """The store alone would read it running for good; the launcher closes it."""
+    small, large = runs("HEAD")
+    lost = _tracked(small, tmp_path, {}, (0, 25, 50), end=None)
+    _tracked(large, tmp_path, {}, (0, 25, 50, 75))
+    launcher[lost] = "lost"
+    stored = observe(tmp_path, EXPERIMENT)
+    protocol = frozen()[1]
+    assert endpoint(size_run(stored, SMALL, protocol)) is None
+    closed = with_launcher_ends(stored)
+    found = size_run(closed, SMALL, protocol)
+    assert found is not None and found.state == "failed"
+    assert endpoint(found) == 50
+    schedule = comparison_schedule(closed, protocol)
+    assert all(
+        c.unreached
+        for c in schedule
+        if c.tag == f"heuristic-{SMALL}" and c.update == 75
+    )
+    # `eval` reads the launcher itself, so the endpoint comparisons play.
+    (job,) = eval(stored)
+    names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
+    assert {"w64 final u50 vs w64 u0", "w256 final vs w64 final"} <= names
+
+
+def test_a_lost_pod_below_the_first_milestone_leaves_its_size_to_a_replacement(
+    tmp_path: Path, launcher: dict[str, Outcome], frontier_db: duckdb.DuckDBPyConnection
+) -> None:
+    _, large = runs("HEAD")
+    lost = _tracked(large, tmp_path, {}, (0,), end=None)
+    replacement = _tracked(large, tmp_path, {}, (0, 25), end=None)
+    launcher[lost] = "out_of_time"
+    stored = observe(tmp_path, EXPERIMENT)
+    protocol = frozen()[1]
+    with pytest.raises(ValueError, match="admits one w256 run"):
+        size_run(stored, LARGE, protocol)
+    closed = with_launcher_ends(stored)
+    found = size_run(closed, LARGE, protocol)
+    assert found is not None and found.name == replacement and not found.ended
+    assert analyze(closed, frontier_db, {}).set_aside == [
+        SetAside(run=lost, size=LARGE, state="failed", last_update=0)
+    ]
+
+
+def test_a_live_pod_and_delivery_lag_stay_running(
+    tmp_path: Path, launcher: dict[str, Outcome]
+) -> None:
+    """A run the launcher calls succeeded still has its end state on the way."""
+    small, large = runs("HEAD")
+    _tracked(small, tmp_path, {}, (0, 25), end=None)
+    delivering = _tracked(large, tmp_path, {}, (0, 25), end=None)
+    launcher[delivering] = "succeeded"
+    stored = observe(tmp_path, EXPERIMENT)
+    assert with_launcher_ends(stored) == stored
+
+
+def test_a_stored_end_outranks_the_launcher(tmp_path: Path) -> None:
+    """A run with an end state is never asked about, so history needs no launcher."""
+    small, _ = runs("HEAD")
+    _tracked(small, tmp_path, {}, (0, 25))
+
+    def refuse(run: str) -> Status:
+        raise AssertionError(run)
+
+    stored = observe(tmp_path, EXPERIMENT)
+    assert with_launcher_ends(stored, refuse) == stored
+
+
+def test_a_running_run_the_launcher_does_not_know_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Read away from the launcher, a dead pod must not pass for a live one."""
+    small, _ = runs("HEAD")
+    run = _tracked(small, tmp_path / "store", {}, (0,), end=None)
+    monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "launcher"))
+    with pytest.raises(LauncherError, match=f"no run '{run}'"):
+        with_launcher_ends(observe(tmp_path / "store", EXPERIMENT), REAL_STATUS)
+
+
+def test_analysis_command_reads_a_lost_size_at_its_last_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, launcher: dict[str, Outcome]
+) -> None:
+    """The CLI joins the launcher's end, so a lost size keeps its readings."""
+    small, large = runs("HEAD")
+    store = tmp_path / "store"
+    lost = _tracked(small, store, {}, (0, 25), end=None)
+    _tracked(large, store, {}, (0, 25, 50))
+    launcher[lost] = "lost"
+    (job,) = eval(observe(store, EXPERIMENT))
+    benchmark = evaluation_spec(job).tournament
+    evaluate(
+        experiment=EXPERIMENT,
+        environment=benchmark.environment,
+        matches=[m for each in benchmark.matchups for m in each.matches()],
+        play=_played,
+        run="fixture-eval",
+        directory=store,
+    )
+    out = tmp_path / "analysis.json"
+    monkeypatch.setattr(
+        "sys.argv", ["analysis", "--source", str(store), "--out", str(out)]
+    )
+    analysis_main()
+    report = FrontierAnalysis.model_validate_json(out.read_text())
+    reading = next(size for size in report.sizes if size.label == SMALL)
+    assert (reading.state, reading.endpoint) == ("failed", 25)
+    assert reading.against_initial is not None
+    assert reading.against_heuristic is not None
+    assert report.scale is None
+    assert "A run did not finish; no equal-compute scale reading." in report.issues
+    assert not any("no endpoint" in issue for issue in report.issues)
+    assert any(c.unreached and c.update == 50 for c in report.comparisons)
+
+
+def _first_pass(
+    source: Path, home: Path, launched: list[Run], monkeypatch: pytest.MonkeyPatch
+) -> tuple[Run, list[Match]]:
+    """Both sizes ended at update 25, and the pass `etude eval` launches for them."""
+
+    def launch(run: Run, pool: str | None, *, rent: str | None) -> str:
+        launched.append(run)
+        return run.id
+
+    monkeypatch.setattr("etude.experiment.client.launch", launch)
+    small, large = runs("HEAD")
+    _tracked(small, source, {}, (0, 25))
+    _tracked(large, source, {}, (0, 25))
+    _advance(source, home)
+    (run,) = launched
+    matches = evaluation_spec(run.job).matches
+    assert matches is not None
+    return run, list(matches)
+
+
+def _advance(source: Path, home: Path) -> Pass:
+    (done,) = advance(
+        read_experiment(ROOT / "experiments/tla_frontier.py"),
+        source=as_storage(source),
+        rent="cpu32",
+        directory=home,
+    )
+    return done
+
+
+def _clear_ledger(home: Path) -> None:
+    """The operator's removal of a failed pass's entry."""
+    (home / "experiments/launched.json").write_text("[]")
+
+
+def _deliver(
+    run: Run,
+    matches: list[Match],
+    source: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    play: Callable[[Match], Tables],
+) -> None:
+    """Play a launched pass as its worker does, under its launcher id."""
+    spec = evaluation_spec(run.job)
+    monkeypatch.setenv("ETUDE_RUN", run.id)
+    hold(
+        spec.tournament,
+        experiment=EXPERIMENT,
+        play=play,
+        checkpoints=tuple(each.ref for each in spec.checkpoints),
+        matches=matches,
+        directory=source,
+    )
+
+
+def test_pass_names_change_only_under_an_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(PASS_ATTEMPT, raising=False)
+    assert pass_name("paired") == "paired"
+    monkeypatch.setenv(PASS_ATTEMPT, "2")
+    assert pass_name("paired") == "paired-attempt-2"
+
+
+def test_a_pass_that_delivered_nothing_relaunches_under_a_new_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, launcher: dict[str, Outcome]
+) -> None:
+    """Its pending matches are unchanged, so only the attempt moves its id."""
+    home = tmp_path / "home"
+    launched: list[Run] = []
+    first, matches = _first_pass(tmp_path / "store", home, launched, monkeypatch)
+    launcher[first.id] = "lost"
+    with pytest.raises(EtudeError, match="launched_pass_failed"):
+        _advance(tmp_path / "store", home)
+    _clear_ledger(home)
+    # The same id again, which the launcher refuses as already admitted.
+    assert _advance(tmp_path / "store", home).launched == first.id
+    _clear_ledger(home)
+    monkeypatch.setenv(PASS_ATTEMPT, "2")
+    done = _advance(tmp_path / "store", home)
+    assert done.launched is not None and done.launched != first.id
+    assert "-attempt-2-" in done.launched
+    again = evaluation_spec(launched[-1].job).matches
+    assert again is not None
+    assert [m.key for m in again] == [m.key for m in matches]
+
+
+def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, launcher: dict[str, Outcome]
+) -> None:
+    """Stored matches stay, a failed one stays failed, and analysis reads one cohort."""
+    source = tmp_path / "store"
+    home = tmp_path / "home"
+    launched: list[Run] = []
+    first, matches = _first_pass(source, home, launched, monkeypatch)
+    delivered, died, rest = matches[:24], matches[24], matches[25:]
+
+    def play(match: Match) -> Tables:
+        if match.key == died.key:
+            raise RuntimeError("the worker died")
+        return _played(match)
+
+    _deliver(first, delivered, source, monkeypatch, play)
+    with pytest.raises(EtudeError, match="match_failed"):
+        _deliver(first, [died], source, monkeypatch, play)
+    launcher[first.id] = "failed"
+    _clear_ledger(home)
+    monkeypatch.setenv(PASS_ATTEMPT, "2")
+    done = _advance(source, home)
+    assert (done.new, done.failed) == (len(rest), 1)
+    second = launched[-1]
+    assert second.id != first.id
+    replayed = evaluation_spec(second.job).matches
+    assert replayed is not None
+    assert {m.key for m in replayed} == {m.key for m in rest}
+    _deliver(second, rest, source, monkeypatch, play)
+
+    state = observe(source, EXPERIMENT)
+    with statsdb(EXPERIMENT, source) as db:
+        report = analyze(state, db, {})
+    schedule = comparison_schedule(state, frozen()[1])
+    held = {m.key for m in delivered}, {m.key for m in rest}
+    spanning = [
+        comparison
+        for comparison, planned in zip(report.comparisons, schedule, strict=True)
+        if planned.matchup is not None
+        and all({m.key for m in planned.matchup.matches()} & keys for keys in held)
+    ]
+    assert spanning
+    for comparison in spanning:
+        assert comparison.result is not None
+        assert comparison.counts.attempted_matches == 16
+    played = sum(c.counts.expected for c in report.comparisons)
+    slots = [
+        (planned.tag, match.key)
+        for planned in schedule
+        if planned.matchup is not None
+        for match in planned.matchup.matches()
+    ]
+    # A match in two slots counts in both, as its failed legs do.
+    unscored = 4 * sum(key == died.key for _, key in slots)
+    assert report.issues == [f"{unscored} of {played} played games have no score."]
+
+    # `report()`'s tag curves read either tournament whole, whichever pass played.
+    page = build(source, ROOT / "experiments/tla_frontier.py")
+    curves: dict[str | None, Counter[str]] = {}
+    for cell in page.cells:
+        chosen = page.selections[cell.selection]
+        if chosen.tag and cell.opponent is not None and not cell.split:
+            curves.setdefault(chosen.tournament, Counter())[chosen.tag] += cell.matches
+    assert len(curves) == 2
+    plain, attempt = curves.values()
+    assert plain == attempt
+    # Every delivered match of a tag, seen from both seats; the failed one is absent.
+    delivered_by_tag = Counter(tag for tag, key in slots if key != died.key)
+    assert plain == Counter({tag: 2 * n for tag, n in delivered_by_tag.items()})
 
 
 def test_calibration_changes_only_length_and_identity() -> None:
@@ -634,6 +955,35 @@ def test_rehearsal_waits_for_both_runs_to_end(tmp_path: Path) -> None:
     assert calibration_eval(observe(tmp_path, CALIBRATION)) == []
 
 
+def test_a_lost_calibration_pod_is_rehearsed_at_its_last_export(
+    tmp_path: Path, launcher: dict[str, Outcome]
+) -> None:
+    small, large = calibration_runs("HEAD")
+    _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
+    lost = _tracked(large, tmp_path, {3: {"loss": 0.1}}, (0, 3), end=None)
+    launcher[lost] = "lost"
+    (job,) = calibration_eval(observe(tmp_path, CALIBRATION))
+    seated = {
+        player.checkpoint.key.run
+        for matchup in evaluation_spec(job).tournament.matchups
+        for player in matchup.players
+        if isinstance(player, Model)
+    }
+    assert lost in seated
+
+
+def test_rehearsal_names_its_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _calibrated(tmp_path)
+    state = observe(tmp_path, CALIBRATION)
+    (plain,) = calibration_eval(state)
+    monkeypatch.setenv(PASS_ATTEMPT, "2")
+    (attempt,) = calibration_eval(state)
+    name = evaluation_spec(plain).tournament.name
+    assert evaluation_spec(attempt).tournament.name == f"{name}-attempt-2"
+
+
 def test_rehearsal_refuses_a_size_with_no_distinct_pair(tmp_path: Path) -> None:
     small, large = calibration_runs("HEAD")
     _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
@@ -677,10 +1027,6 @@ _KILLED = {
 }
 
 
-def _free(run: str) -> Decimal:
-    return Decimal(0)
-
-
 def _timed(seconds: float) -> Callable[[Match], Tables]:
     def played(match: Match) -> Tables:
         return {
@@ -693,12 +1039,18 @@ def _timed(seconds: float) -> Callable[[Match], Tables]:
     return played
 
 
+def _priced(monkeypatch: pytest.MonkeyPatch, usd: str) -> None:
+    """The launcher charges each pass `usd`."""
+    monkeypatch.setattr(client, "status", lambda run: _status(run, None, Decimal(usd)))
+
+
 def test_rehearsal_reader_passes_a_clean_pass_and_keeps_training_readings_apart(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _calibrated(tmp_path)
     _rehearsed(tmp_path, _timed(100.0))
-    reading = read_rehearsal(tmp_path, lambda run: Decimal("0.48"))
+    _priced(monkeypatch, "0.48")
+    reading = read_rehearsal(tmp_path)
     assert reading.runs == ("rehearsal-pass",)
     assert (reading.matches, reading.failed_matches) == (32, 0)
     assert (reading.games, reading.invalid_games) == (128, 0)
@@ -714,7 +1066,7 @@ def test_rehearsal_reader_passes_a_clean_pass_and_keeps_training_readings_apart(
 def test_rehearsal_fails_at_the_game_line(tmp_path: Path) -> None:
     _calibrated(tmp_path)
     _rehearsed(tmp_path, _timed(297.0))
-    reading = read_rehearsal(tmp_path, _free)
+    reading = read_rehearsal(tmp_path)
     assert reading.slowest_game_seconds == 300 and not reading.passed
 
 
@@ -732,7 +1084,7 @@ def test_rehearsal_fails_on_one_killed_game(tmp_path: Path) -> None:
         return tables
 
     _rehearsed(tmp_path, played)
-    reading = read_rehearsal(tmp_path, _free)
+    reading = read_rehearsal(tmp_path)
     assert (reading.games, reading.invalid_games) == (128, 1)
     assert reading.slowest_game_seconds == 103 and not reading.passed
 
@@ -745,13 +1097,15 @@ def test_rehearsal_fails_when_every_game_was_killed(tmp_path: Path) -> None:
         return {"games": [row | _KILLED for row in _played(match)["games"]]}
 
     _rehearsed(tmp_path, played)
-    reading = read_rehearsal(tmp_path, _free)
+    reading = read_rehearsal(tmp_path)
     assert (reading.games, reading.invalid_games) == (128, 128)
     assert reading.slowest_game_seconds is None and not reading.passed
 
 
-def test_rehearsal_fails_with_a_raising_match_or_nothing_played(tmp_path: Path) -> None:
-    empty = read_rehearsal(tmp_path, _free)
+def test_rehearsal_fails_with_a_raising_match_or_nothing_played(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    empty = read_rehearsal(tmp_path)
     assert empty.games == 0 and empty.runs == () and not empty.passed
     _calibrated(tmp_path)
     keys: list[str] = []
@@ -764,7 +1118,8 @@ def test_rehearsal_fails_with_a_raising_match_or_nothing_played(tmp_path: Path) 
 
     with pytest.raises(EtudeError, match="match_failed"):
         _rehearsed(tmp_path, played)
-    reading = read_rehearsal(tmp_path, lambda run: Decimal("0.2"))
+    _priced(monkeypatch, "0.2")
+    reading = read_rehearsal(tmp_path)
     assert reading.failed_matches == 1 and reading.games < 128
     assert reading.pass_usd == Decimal("0.2") and not reading.passed
 

@@ -9,6 +9,8 @@ the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
 other, which is equal wall budget only when both runs finished. A failed run's
 endpoint is its last stored checkpoint, so its reach is still played and read.
+Only a worker writes a run's end, so `with_launcher_ends` joins the launcher's
+record of a lost pod to what the store kept before anything reads the schedule.
 Training exports more often than `eval` plays: the export cadence bounds what a
 lost rental can cost, and only milestones and endpoints are evaluated.
 
@@ -17,6 +19,10 @@ the regime tag on its checkpoints. A pod's single-thread speed sets the pace of
 this one-worker recipe, so `host_speed` reads it from each run's step phase;
 `experiments.tla_frontier_calibration` applies the protocol's screen to it.
 
+A pass's launcher id is a digest of its pending matches, and the launcher refuses
+a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
+keys exclude that name, so a relaunch plays only what no pass attempted.
+
 The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
 stays unchanged, so its evaluation callback, whose identities name that
 pilot's source and artifacts, is mirrored here rather than shared.
@@ -24,9 +30,9 @@ pilot's source and artifacts, is mirrored here rather than shared.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 import json
 import os
@@ -48,7 +54,8 @@ from etude.eval.records import (
 )
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
-from etude.launch.records import Job, Run
+from etude.launch import client
+from etude.launch.records import Job, Run, Status
 from etude.report import Curve, Matches, Report, Score
 from etude.run.storage import Storage
 from etude.train.read import RunData
@@ -83,6 +90,8 @@ EVALUATION_WORKERS = 28
 EVALUATION_HOURS = 1.75
 EVALUATION_PASS_USD = Decimal("2")
 EVALUATION_ATTEMPTS = 3
+# Set to the next attempt's number to relaunch a pass; see `pass_name`.
+PASS_ATTEMPT = "C5FBA4_PASS_ATTEMPT"
 # Native stepping and encoding, which hold no network work, so pods training
 # different sizes compare directly. Update 1 carries warm-up.
 STEP_PHASE = "time/collection/environment_step_and_encoding"
@@ -320,6 +329,39 @@ def paired_matchup(
     )
 
 
+def _launcher_status(run: str) -> Status:
+    """`client.status`, read per call so a replaced client reaches a discovered `eval`."""
+    return client.status(run)
+
+
+def with_launcher_ends(
+    state: ExperimentState, status: Callable[[str], Status] = _launcher_status
+) -> ExperimentState:
+    """`state` with each run the launcher closed unsuccessfully ended as failed.
+
+    Only a worker writes a run's end, so a pod lost outright or deleted by its
+    guardian reads `running` in the store for good, and its size could never
+    reach an endpoint. The launcher owns whether an attempt is over and the store
+    what it kept, so such a run ends at its last export. A `succeeded` run with
+    no end state is delivery lag and stays running. A running run the launcher
+    does not know raises, so a read away from the launcher fails loudly rather
+    than taking a dead pod for a live one.
+    """
+
+    def lost(run: TrainingRun) -> bool:
+        if run.ended:
+            return False
+        found = status(run.name)
+        return found.done and found.outcome != "succeeded"
+
+    return replace(
+        state,
+        runs=tuple(
+            replace(run, state="failed") if lost(run) else run for run in state.runs
+        ),
+    )
+
+
 def size_label(run: TrainingRun) -> SizeLabel | None:
     """The size a run's checkpoints name; a run that stored none names no size."""
     for label in SIZES:
@@ -465,9 +507,10 @@ def eval(state: ExperimentState) -> list[Job]:
     if state.experiment != EXPERIMENT:
         raise ValueError("frontier evaluation requires this experiment's runs")
     _, protocol = frozen()
+    closed = with_launcher_ends(state)
     matchups = tuple(
         comparison.matchup
-        for comparison in comparison_schedule(state, protocol)
+        for comparison in comparison_schedule(closed, protocol)
         if comparison.matchup is not None
     )
     if not matchups:
@@ -475,12 +518,24 @@ def eval(state: ExperimentState) -> list[Job]:
     return [
         evaluation_pass(
             Benchmark(
-                name="tla-frontier-c5fba4-paired-v1",
+                name=pass_name("tla-frontier-c5fba4-paired-v1"),
                 environment=environment(protocol),
                 matchups=matchups,
             )
         )
     ]
+
+
+def pass_name(name: str) -> str:
+    """A benchmark's name under this attempt; with no attempt set, `name` itself.
+
+    `etude eval` names a pass for its tournament and pending matches, so without
+    a new name a pass that delivered nothing could never launch again. The name
+    sits outside match keys and environments, so an attempt skips stored matches,
+    leaves failed ones failed and changes nothing scored.
+    """
+    attempt = os.environ.get(PASS_ATTEMPT)
+    return f"{name}-attempt-{attempt}" if attempt else name
 
 
 def evaluation_pass(benchmark: Benchmark) -> Job:
@@ -495,9 +550,9 @@ def evaluation_pass(benchmark: Benchmark) -> Job:
         # One pass's ceiling across its attempts; the operator keeps the
         # cumulative evaluation spend under `protocol.evaluation_usd`.
         max_usd=EVALUATION_PASS_USD,
-        # Etude retries only lost or refused machines, resuming the same run and
-        # skipping stored matches, so no game result can be replaced, and a lost
-        # rental does not end the watch loop.
+        # Etude retries a machine lost or refused after admission, resuming the
+        # same run and skipping stored matches, so no game result can be replaced.
+        # A refused first create raises instead, which ends the watch loop.
         max_attempts=EVALUATION_ATTEMPTS,
         setup=machine_setup(" --extra evaluation"),
     )

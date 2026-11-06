@@ -129,9 +129,14 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   ```bash
   "${control[@]}" etude eval experiments/tla_frontier_calibration.py \
       --source <store> --rent cpu32
+  "${control[@]}" etude wait <run>
   "${control[@]}" python -m experiments.tla_frontier_calibration \
       --source <store> --rehearsal
   ```
+
+  `etude eval` returns at launch and prints the pass's run id, so `etude wait` holds
+  the read until the pass is over; read earlier, it sees no games. The wait is
+  unproven against a real rental, like the rest of this block.
 
   The reading shows games, invalid games, median and slowest game seconds and the
   pass's cost. The second launch gate is a rough line like the first: all 128 games
@@ -140,8 +145,13 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   any scoring. The policies are nearly fresh, so the reading shows what a pass does
   on a rental, not how long a trained policy's games run. If w256 stored nothing past
   update 0 the rehearsal refuses to play, because the first gate has already failed.
-  A failed rehearsal pass leaves a launch ledger entry, and clearing it, as under
-  [Evaluation driver](#evaluation-driver), rehearses that recovery too.
+  A calibration pod the launcher closed counts as ended at its last export, so the
+  rehearsal plays what it stored.
+
+  A rehearsal pass that fails or delivers nothing recovers as under
+  [Failed pass](#failed-pass), which rehearses that recovery too, with
+  `C5FBA4_PASS_ATTEMPT` set on the `etude eval` line above. A match it stored as
+  failed stays failed, so that reading fails this gate.
 - **Host screen.** Over 54 hours a slow pod costs a size up to about 40% of its
   updates, so before any scoring the operator reads each pod's host speed and
   replaces a slow one. This is a declared operator step, not an automatic retry:
@@ -165,11 +175,13 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
     is rough, taken from Elemental's bands; TLA has no anchor of its own.
   - Cancel a slow pod with `etude cancel <run>` and do not delete it. The worker
     takes Etude's SIGTERM and records the run as failed at its last export. Confirm
-    that from `state` in the screen's output before relaunching, because `size_run`
-    admits one live run per size. A pod lost outright records no end, so its size
-    is not relaunched; any retry is then a new protocol version. Otherwise relaunch
-    that size once, alone and with no cohort. Its job carries the USD38 ceiling, and
-    `--max-usd` is a cohort limit that Etude refuses without a cohort:
+    that the run is over before relaunching, because `size_run` admits one live run
+    per size. `state` in the screen's output is the store's, so a pod lost outright
+    still reads `running` there; confirm that one from `etude status`. Evaluation and
+    analysis read the launcher's end themselves, so a lost pod below the first
+    milestone relaunches like a cancelled one. Relaunch that size once, alone and
+    with no cohort. Its job carries the USD38 ceiling, and `--max-usd` is a cohort
+    limit that Etude refuses without a cohort:
 
     ```bash
     "${control[@]}" etude launch experiments/tla_frontier.py --revision <frozen> \
@@ -179,8 +191,9 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   - A size that reads slow twice keeps its second run. A replacement starts from
     update 0, and the cancelled pod's cost, at most about USD1.50, comes from the
     reserve.
-  - A run that ends below the first milestone is set aside. It is no size's run,
-    plays nothing, and analysis lists it, since every attempt is reported.
+  - A run that ends below the first milestone, by its own record or the launcher's,
+    is set aside. It is no size's run, plays nothing, and analysis lists it, since
+    every attempt is reported.
   - A pod that never started stores no run and trained nothing, so it is not the
     screen's one replacement. Relaunch that size with the command above, and report
     the launcher's record of the pod with the attempts. A refused cohort launch
@@ -222,19 +235,28 @@ heuristic is the matched first-64 heuristic. Shared update milestones are 25,
   wall-clock compute when both finished.
 
 A size's endpoint is the last stored checkpoint of its ended run, including a
-failed run, so its reach is still played.
+failed run, so its reach is still played. A run has ended when the worker recorded
+its end or the launcher closed it with any outcome but `succeeded`. Only a worker
+writes a stored end, so both `eval`s and the analysis command ask the launcher about
+each run still reading `running`. A `succeeded` run with no stored end is still
+delivering and stays running. A running run the launcher does not know raises, so
+these reads need the launcher, and a read away from it fails rather than taking a
+dead pod for a live one.
 
 Evaluation runs on rented CPU through Etude while training continues, so
 progress is visible as it goes. Each pass is one 32-vCPU rental with 28
 workers, capped at USD2 and 1.75 hours plus setup across up to three attempts;
-cumulative evaluation spend is capped at USD12. Etude retries only a refused or
-lost machine, resuming the same run and skipping stored matches, so no game
-result can be replaced; training keeps no automatic retry.
+cumulative evaluation spend is capped at USD12. Etude retries a machine lost or
+refused after admission, resuming the same run and skipping stored matches, so no
+game result can be replaced; training keeps no automatic retry. A create refused
+before admission is not retried: see [Evaluation driver](#evaluation-driver).
 
 Each game has a 600-second wall limit, enforced by killing the game and counting
-it failed. MTG-213's 120 seconds would penalize the larger network for its own
-latency: one thread takes about 0.4 s per w256 decision against 0.15 s at w64,
-across games averaging 180 decisions. The arena journals in memory and copies
+it failed. MTG-213's 120 seconds could penalize the larger network for its own
+latency on a loaded rental. The limit was sized from single-observation readings
+of about 0.4 s at w256 and 0.15 s at w64. A real fresh-w256 match on a development
+Mac then ran about 0.05 s per decision, so the limit may be generous; the
+rehearsal reads it on a rental. The arena journals in memory and copies
 its files out afterward, because its per-record sync takes about 0.1 s on a
 rented container disk and counts against that limit.
 
@@ -264,14 +286,22 @@ cap across passes:
 the operator reads spend after each pass and stops the loop when it reaches
 USD12. That stop and the USD12 reserve cover pods that never boot but still bill.
 
-To see progress at any time, draw the report from the same checkout:
+Any launcher error ends the loop, silently for a create refused before admission,
+which leaves no ledger entry to find. Restarting it is safe, because stored matches
+are skipped, and a stopped driver costs only timeliness: every checkpoint stays
+playable. So check the process is alive whenever spend is read. Stop it once both
+runs have ended and a pass reports nothing new.
+
+To see progress at any time, draw the report from the same checkout, with launcher
+access, since it asks `eval` what is wanted:
 
 ```bash
 "${control[@]}" etude report experiments/tla_frontier.py --source <store>
 ```
 
 The report is descriptive curves by update; `experiments/tla_frontier_analysis.py`
-owns every reading below.
+owns every reading below. A relaunched pass adds a second tournament to its selector.
+Each shows the same curves, whichever pass played a match.
 
 Reading progress changes nothing. Past the host screen, no run is cancelled,
 relaunched or extended because of a score. A stop for cost, a dead run or any
@@ -281,9 +311,30 @@ reading.
 Etude's launch ledger, `~/.etude/experiments/launched.json`, is one file for
 every experiment on the computer, and any entry for a failed pass raises
 `launched_pass_failed` and ends the watch loop. Before starting the loop, check
-each entry's status there, including other experiments'. After a failed pass,
-look at why it failed, remove its entry from that file and restart the loop. A
-milestone delayed this way is still played; its failed games are not replayed.
+each entry's status there, including other experiments'.
+
+### Failed pass
+
+A pass's launcher id is a digest of its pending matches, and the launcher refuses
+an id it knows, including one from a refused create. So a pass that delivered
+nothing cannot launch again as it stands, and the endpoint pass has no new
+milestone coming to change its matches. The recovery is:
+
+1. Look at why it failed, from `etude status <run>` and its logs.
+2. Remove its entry from the ledger, if it has one.
+3. If a refused create is holding `cpu32`'s one-machine limit, raise the limit.
+4. Set the next attempt and restart the loop. The first relaunch is attempt 2.
+
+```bash
+"${control[@]}" etude ondemand max cpu32 2
+C5FBA4_PASS_ATTEMPT=2 "${control[@]}" etude eval experiments/tla_frontier.py \
+    --source <store> --rent cpu32 --watch 14400
+```
+
+The variable suffixes the tournament's name (`-attempt-2`), which changes the pass's
+id and nothing scored: names sit outside match keys and environments. The attempt
+plays exactly the matches no pass attempted, leaves failed games failed, and analysis
+reads one comparison across both passes. A milestone delayed this way is still played.
 
 ## Reading
 
@@ -308,6 +359,13 @@ Any unscored game leaves the analysis incomplete, with an issue naming the count
 - **Scale**: the equal-compute endpoint head-to-head is primary, with the same
   bounds; equal-update head-to-heads describe sample efficiency.
 
+The analysis runs where the launcher is, because a lost pod's end lives there:
+
+```bash
+"${control[@]}" python -m experiments.tla_frontier_analysis \
+    --source <store> --out <analysis.json>
+```
+
 A failed size keeps its learning and strength readings at its last stored
 checkpoint, reported beside the run's state. Its endpoint head-to-head is still
 reported, but not as equal compute. The update cap is a second stop, so a size
@@ -329,9 +387,10 @@ controlled claim that one size is better in general.
 
 A size whose rental dies stops at its last export. By default that is its
 endpoint: it keeps its learning and strength readings and has no scale reading.
-A run whose pod dies without recording an end stays `running`, so its endpoint
-stays unknown until the launcher records the end. The operator reads its stored
-checkpoints meanwhile.
+A pod that dies without recording an end reads `running` in the store for good, and
+the launcher's closed status ends it there, as under
+[Evaluation schedule](#evaluation-schedule). Until the controller declares the pod
+lost, the size's endpoint stays unknown.
 
 Any further training is a recorded decision within the unspent part of that
 size's USD38. It continues from the last export under a new protocol version and

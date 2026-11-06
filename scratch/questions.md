@@ -63,3 +63,8 @@ until launch):
   truncated or missing game also fails it. Reversible until launch.
 - **The 600 s limit's 0.4 s rationale may be high** (2026-11-06). A real fresh w256 match here took
   about 0.05 s a decision. The limit stays; the rehearsal's rented reading decides.
+- **Launcher status closes a lost run, in manabot** (seventh concept review). Etude's `observe`
+  is the better owner, but a release would move the control pin and hold this PR. Reversible:
+  one helper. Its unknown-run error means analysis and `etude report` need launcher access.
+- **`C5FBA4_PASS_ATTEMPT` names a relaunched pass** (seventh concept review). The same trade,
+  against a fresh id from `advance`. Reversible until launch; absent, names are unchanged.
