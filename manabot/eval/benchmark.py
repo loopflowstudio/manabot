@@ -43,7 +43,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.execution import EvalExecution
-from manabot.sim.matchup import selected_decks
+from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.registration import PlayerRegistration
 
 BENCHMARK = "two-seat-ladder-heuristic-deck-seats"
@@ -160,16 +160,24 @@ def play(match: Match, *, inference: InferenceEndpoint | None = None) -> Tables:
     return evaluation_tables(result.rows)
 
 
-def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
+def evaluation_tables(
+    rows: Sequence[EvaluationRow],
+    *,
+    matchup: AuthoredMatchup | None = None,
+    legs: int = 8,
+) -> Tables:
     """Project one replay-checked deal using each player's actual authored deck.
 
-    Cross-deck opponents exchange seats inside a pair of legs: the candidate
-    plays Lessons in legs 0 and 3, Allies in 1 and 2. Leg pairs alone name the
-    authored setup, not which deck the candidate controls.
+    Cross-deck opponents exchange seats inside a pair of legs: with the selected
+    Allies/Lessons pair the candidate plays Lessons in legs 0 and 3, Allies in 1
+    and 2. Leg pairs alone name the authored setup, not which deck the candidate
+    controls. Another authored `matchup` names its own pair, labelled
+    "<deck> v <deck>", over the first `legs` of its matrix: the four cross legs,
+    or all eight with the mirrors.
     """
     if (
-        {row.leg for row in rows} != set(range(8))
-        or len(rows) != 8
+        {row.leg for row in rows} != set(range(legs))
+        or len(rows) != legs
         or not all(row.valid for row in rows)
     ):
         raise ValueError("arena deal incomplete or failed integrity; evidence retained")
@@ -181,7 +189,7 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
     }
     plays: list[Row] = []
     for row in rows:
-        decks = selected_decks(row.leg)
+        decks = selected_decks(row.leg) if matchup is None else matchup.decks(row.leg)
         extra = row.model_extra or {}
         if (
             extra.get("seat_decks") != list(decks)
@@ -204,7 +212,9 @@ def evaluation_tables(rows: Sequence[EvaluationRow]) -> Tables:
                     "score": score if seat == 0 else 1.0 - score,
                     "deck": deck,
                     "opponent_deck": opponent_deck,
-                    "matchup": labels[(deck, opponent_deck)],
+                    "matchup": labels[(deck, opponent_deck)]
+                    if matchup is None
+                    else f"{deck} v {opponent_deck}",
                     "game_seat": game_seat,
                     "on_play": game_seat == 0,
                     "valid": True,

@@ -8,7 +8,8 @@ decisions per native stream, then finishes its current game. Complete trajectori
 are packed in one column, separated by terminal flags: GAE cannot cross players or
 games, and no behavior sample or pending action survives an update. Batch row
 counts may exceed the quota. Exact-quota closure, one seat only, pauses each stream
-at the learner-decision quota and carries the game across the update.
+at the learner-decision quota and carries the game across the update. A game that
+then fails loses only the rows not yet learned from; its stream refills to the quota.
 
 Self-play uses one live model for both seats. ``collect_pair`` instead returns
 one batch per learning model, with seats balanced across streams; each model's
@@ -260,6 +261,9 @@ class CollectorStats:
     games_by_stream: dict[int, int] = field(default_factory=dict)
     # Ordered deck identities plus learning seats; counts are realized, not quotas.
     exposure: dict[str, ExposureCounts] = field(default_factory=dict)
+    # Per slot, rows of the game in progress that earlier updates already learned
+    # from. Only exact-quota games span updates.
+    learned_game_rows: dict[int, int] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -383,9 +387,11 @@ class SeatRoutedCollector:
         if batch_closure == "exact-quota" and (
             learning_seats == "both"
             or games_per_stream is not None
-            or game_errors is not None
+            or (game_errors is not None and not game_errors.recover_capacity)
         ):
-            raise ValueError("exact quota requires one seat and no per-game accounting")
+            raise ValueError(
+                "exact quota requires one seat, no per-game quota and capacity recovery"
+            )
 
         self.observation_space = observation_space
         self.match = match
@@ -587,6 +593,8 @@ class SeatRoutedCollector:
             self.stats.exposure = {}
         if not hasattr(self.stats, "self_play"):
             self.stats.self_play = SelfPlayCounter()
+        if not hasattr(self.stats, "learned_game_rows"):
+            self.stats.learned_game_rows = {}
 
     def _refresh_roots(self, rows: np.ndarray) -> None:
         """Read native sampling after resets, before counting the next game's rows.
@@ -897,6 +905,15 @@ class SeatRoutedCollector:
                     actions, active, acting, seeds, games, completed, num_steps
                 )
 
+        if self.game_errors and not complete_games:
+            # A paused game's rows so far are learned from by this batch; a later
+            # failure of that game must not discard them.
+            for slot, stream in enumerate(self._streams):
+                rows = len(stream) - self._game_start_rows[slot]
+                if rows:
+                    self.stats.learned_game_rows[slot] = (
+                        self.stats.learned_game_rows.get(slot, 0) + rows
+                    )
         with self.profiler.track("Batch assembly"):
             if complete_games:
                 if self.opponent_mode == "learning":
@@ -1076,17 +1093,21 @@ class SeatRoutedCollector:
         """Settle this game's rows and persist its receipt before clearing replay inputs.
 
         Failed games lose only their suffix and pending decisions; complete
-        earlier games stay valid. The ledger owns allowance across snapshots.
+        earlier games stay valid, and so do a paused game's rows that an earlier
+        update learned from. The ledger owns allowance across snapshots.
         """
         assert self._record_attempt is not None
         completed = outcome == "completed"
         valid = 0
         discarded = 0
+        learned = 0
         for slot in self._game_slots(row):
             count = len(self._streams[slot]) - self._game_start_rows[slot]
+            earlier = self.stats.learned_game_rows.pop(slot, 0)
             if completed:
-                valid += count
+                valid += count + earlier
             else:
+                learned += earlier
                 discarded += count + int(self._pending[slot] is not None)
                 self.stats.learner_transitions -= count
                 self._expose(row, "learner_transitions", -count)
@@ -1110,6 +1131,7 @@ class SeatRoutedCollector:
                 if outcome == "resource_limit"
                 else None,
                 discarded_samples=discarded,
+                learned_samples=learned,
                 valid_samples=valid,
                 seconds=time.perf_counter() - self._game_started[row],
             )
