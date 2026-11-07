@@ -704,12 +704,12 @@ pub(crate) fn project_frame(
     if let Some(batch) = &effect.batch {
         out.batch(batch);
     }
-    // Ordinary catalog execution keeps its frozen projection. These retained
-    // domains have no predecessor representation and must be admitted explicitly.
+    // Ordinary catalog execution keeps its frozen projection: v1-v7 never
+    // encoded earlier instructions' results (selected, moved, created), so a
+    // later choice in the same program stays admissible. These retained domains
+    // have no predecessor representation and must be admitted explicitly.
     frame.effect_execution_requires_v8 = effect.batch.is_some()
         || effect.iteration.is_some()
-        || !effect.selected.is_empty()
-        || !effect.created.is_empty()
         || completion_requires_v8(game, &effect.completion);
     out.finish(frame);
 }

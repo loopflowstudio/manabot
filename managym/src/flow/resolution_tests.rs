@@ -3795,19 +3795,22 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 ),
                 Err(ObservationEncodeError::Capacity { field: "facts", .. })
             ));
-            {
-                for version in 1..8 {
-                    assert!(matches!(
-                        encode(
-                            &obs,
-                            &ObservationEncoderConfig {
-                                policy_input_version: version,
-                                ..config
-                            }
-                        ),
-                        Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
-                    ));
-                }
+            // Earlier instructions' results were never part of v1-v7, so a
+            // later choice after them stays admissible there; the novel
+            // domains (iteration, batches, completions) require v8.
+            for version in 1..8 {
+                let frozen = encode(
+                    &obs,
+                    &ObservationEncoderConfig {
+                        policy_input_version: version,
+                        ..config
+                    },
+                );
+                let rejected = matches!(
+                    frozen,
+                    Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
+                );
+                assert_eq!(rejected, case != "selected", "v{version}: {case}");
             }
             let capture = game.capture_decision(player, 0).unwrap();
             evidence.push(serde_json::json!({"case":case,"choice":choice,"capture":capture,

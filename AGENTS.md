@@ -177,7 +177,9 @@ checkpoints or experiment evidence.
   reset), with one-based visible reference slots in relation kind 10. The native
   frame/batch owners project rules payloads; raw storage identities never enter
   these tokens. Frozen selection obligations retain codes 5/6/7 on v1–v7, while
-  v8 uses 28. Novel effect execution rejects earlier inputs before buffer writes;
+  v8 uses 28. Earlier instructions' results (selected, moved, created) stay out
+  of v1–v7, which remain admissible; open event batches, iterations and new
+  completions are novel and reject earlier inputs before buffer writes;
   fact/relation overflow is a typed Capacity error, never truncation.
 - Naming is ordinary native decisions: `Decision::NameCard` holds a
   `NameScope`; scopes over `NAME_BRANCHING` (64) names offer balanced groups of

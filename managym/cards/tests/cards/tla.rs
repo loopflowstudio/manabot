@@ -2906,6 +2906,38 @@ fn farm_animals_destroy_an_artifact_without_targeting_a_creature() {
     assert_eq!(s.game().state.players[0].life, 23);
 }
 
+/// Every policy input version admits the paused effect execution. The
+/// five-color fixture deck exceeds small legacy card capacities, so only
+/// effect-execution admission is under test.
+fn assert_every_input_admits_effect_execution(s: &Scenario) {
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    for version in 1..=9 {
+        let config = ObservationEncoderConfig {
+            policy_input_version: version,
+            ..Default::default()
+        };
+        assert!(
+            !matches!(
+                encode(&obs, &config),
+                Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
+            ),
+            "v{version}"
+        );
+    }
+}
+
+#[test]
+fn created_tokens_do_not_block_a_later_scry_on_frozen_inputs() {
+    let mut s = five_color_setup(&["Gather the White Lotus"]);
+    play_and_settle(&mut s, "Plains");
+    cast(&mut s, "Gather the White Lotus");
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
+    // V1-v7 never encoded an earlier instruction's created objects, so the
+    // scry that follows them stays admissible on every input.
+    assert_every_input_admits_effect_execution(&s);
+}
+
 #[test]
 fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     let mut s = five_color_setup(&["Cycle of Renewal"]);
@@ -2917,22 +2949,7 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     select_card(&mut s, one);
     // Between picks the search keeps its frozen library obligation, so every
     // policy input, including the fresh v6 default, encodes the pause.
-    let obs = Observation::for_player(s.game(), PlayerId(0));
-    for version in 1..=9 {
-        let config = ObservationEncoderConfig {
-            policy_input_version: version,
-            ..Default::default()
-        };
-        // The five-color fixture deck exceeds small legacy card capacities;
-        // only admission of the retained selection is under test.
-        assert!(
-            !matches!(
-                encode(&obs, &config),
-                Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
-            ),
-            "v{version}"
-        );
-    }
+    assert_every_input_admits_effect_execution(&s);
     let two = library_card(&s, 0, "Swamp");
     select_card(&mut s, two);
     settle(&mut s);
