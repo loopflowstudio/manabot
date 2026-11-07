@@ -112,8 +112,8 @@ authorized by that approval.
 - Outcome: all three machines completed P1-P3. `04c78c2631c6` succeeded. The other
   two report `failed` only because the P4 child was SIGKILLed at about 61 GB peak,
   with the cause not established. P4 was not retried, under the two-failure stop
-  rule. Estimated cost $1.09 of the $2.80 lines; RunPod's bill had not yet posted
-  in full. All three machines are released. Readings and evidence:
+  rule. Cost about $1.06 of the $2.80 lines ($.96 posted by RunPod, the rest
+  estimated from rental time). All three machines are released. Readings and evidence:
   `experiments/data/training-throughput-b015d5-v1/report.md`. Steps 2-4 are not
   chosen.
 

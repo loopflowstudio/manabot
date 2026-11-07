@@ -72,7 +72,9 @@ available L4 machines. Quoting needs the 0.2.14 overlay and nested Doppler
 
 Report: `experiments/data/training-throughput-b015d5-v1/report.md` (published).
 Open for later, none blocking step 1:
-- The cause of the P4 SIGKILL and of the K=4 recording stall on L4-a is unknown.
+- The cause of the K=4 recording stall on L4-a is unknown. The P4 SIGKILL is also
+  unproven, but both peaks are within 13 MB of 61.05 GB, which points to a pod limit.
 - `run_phase` reads host memory, not the pod's allowance, so the memory gate cannot
   trip on rented pods. Fix before relying on it for K above 4.
-- Reconcile the $1.09 estimate once RunPod posts the 06:00 hour.
+- The bill had posted $.96 by 07:16 UTC; about $.10 of the $1.06 total is still
+  estimated. Etude's run list shows about $.44, which is below the bill.
