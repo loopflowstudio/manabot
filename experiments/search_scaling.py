@@ -33,6 +33,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 import gzip
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -409,7 +410,12 @@ def play(
     done = _done(out)
     games = out / f"games-{host}-{worker}.jsonl"
     decisions = out / f"decisions-{host}-{worker}.jsonl.gz"
-    units = [u for u in _units(plan_path) if sims[0] <= u.condition.sims <= sims[1]]
+    # Within a budget, deals lead and conditions interleave, so a stopped host
+    # still holds every condition of its budget on the same deals.
+    units = sorted(
+        (u for u in _units(plan_path) if sims[0] <= u.condition.sims <= sims[1]),
+        key=lambda u: (u.condition.sims, u.game.index, u.game.deal, u.condition.key),
+    )
     for index, unit in enumerate(units):
         if index % workers != worker or unit.key in done:
             continue
@@ -424,6 +430,127 @@ def play(
             os.fsync(file.fileno())
 
 
+# ---------------------------------------------------------------------------
+# Rented hosts (Etude)
+
+REVISION_FILE = "REVISION"
+RUST_TOOLCHAIN = "1.98.1"
+CHECKPOINT_KEY = "jobs/f3748bcabac8/checkpoints/learner_transitions-331180341.pt"
+CHECKPOINT_BYTES = 1_071_166
+# A share's workers stop this long before Etude's deadline so it can deliver.
+STOP_MARGIN_SECONDS = 600
+
+
+@dataclass(frozen=True)
+class Share:
+    """One rented host's part of the plan: a budget range and a worker slice."""
+
+    name: str
+    min_sims: int
+    max_sims: int
+    first_worker: int
+    workers: int
+    total_workers: int
+
+
+SHARES = (
+    Share("s256", 256, 256, 0, 32, 32),
+    Share("s1024a", 1024, 1024, 0, 32, 64),
+    Share("s1024b", 1024, 1024, 32, 32, 64),
+)
+
+
+def job() -> None:
+    """On a rented host: play one share with every worker, stop before the deadline.
+
+    Completed games are durable rows in ETUDE_OUTPUT_DIR; a game in progress
+    at the stop is lost and replayed by any later run of the same share.
+    """
+    import signal
+    import subprocess
+    import sys
+
+    from datetime import datetime
+
+    share = Share(**json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text()))
+    out = Path(os.environ["ETUDE_OUTPUT_DIR"])
+    checkpoint = Path(os.environ["ETUDE_INPUTS_DIR"]) / "policy.pt"
+    stop = Path(os.environ["ETUDE_STOP_FILE"])
+    given = os.environ.get("ETUDE_DEADLINE")
+    deadline = datetime.fromisoformat(given).timestamp() if given else math.inf
+    children = [
+        subprocess.Popen(
+            [
+                sys.executable, "-m", "experiments.search_scaling", "play",
+                "--plan", "experiments/search-scaling/plan-v1.jsonl",
+                "--checkpoint", str(checkpoint), "--out", str(out),
+                "--worker", str(share.first_worker + i),
+                "--workers", str(share.total_workers),
+                "--min-sims", str(share.min_sims), "--max-sims", str(share.max_sims),
+            ],
+            env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+        )
+        for i in range(share.workers)
+    ]
+    started = time.time()
+    while any(child.poll() is None for child in children):
+        if stop.exists() or time.time() > deadline - STOP_MARGIN_SECONDS:
+            for child in children:
+                if child.poll() is None:
+                    child.send_signal(signal.SIGTERM)
+            break
+        time.sleep(10)
+    for child in children:
+        child.wait()
+    rows = sum(1 for path in out.glob("games-*.jsonl") for _ in path.open())
+    (out / "etude-result.json").write_text(
+        json.dumps({"clocks": {"steps": rows, "wall_time_ms": int(1000 * (time.time() - started))}})
+    )
+
+
+def runs(revision: str = "HEAD", hours: float = 4.5) -> list[Any]:
+    """Etude jobs for every share; construction launches nothing."""
+    from decimal import Decimal
+
+    from etude.launch.records import Input, Job
+
+    setup = (
+        "set -eu\n"
+        'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
+        "https://sh.rustup.rs | sh -s -- -y --profile minimal "
+        f"--default-toolchain {RUST_TOOLCHAIN}\n"
+        f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}\n'
+        f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
+        "uv sync --locked --python 3.12\n"
+    )
+    return [
+        Job(
+            name=f"search-scaling-{share.name}",
+            setup=setup,
+            command=(
+                f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}\n'
+                "uv run --locked python -m experiments.search_scaling job"
+            ),
+            config=json.dumps(asdict(share)),
+            repo=str(Path(__file__).resolve().parents[1]),
+            revision=revision,
+            max_hours=hours,
+            # $0.96/hour ceiling $1.00, plus Etude's 15-minute setup allowance.
+            max_usd=Decimal(str(round(hours + 0.5, 2))),
+            max_attempts=1,
+            inputs=(
+                Input(
+                    name="policy.pt",
+                    key=CHECKPOINT_KEY,
+                    sha256=CHECKPOINT_SHA256,
+                    size_bytes=CHECKPOINT_BYTES,
+                ),
+            ),
+        )
+        for share in SHARES
+    ]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
@@ -432,6 +559,7 @@ def main() -> None:
     make.add_argument("--max-sims", type=int, default=max(BUDGETS))
     make.add_argument("--out", type=Path, required=True)
     run = commands.add_parser("play")
+    commands.add_parser("job")
     run.add_argument("--plan", type=Path, required=True)
     run.add_argument("--checkpoint", type=Path, required=True)
     run.add_argument("--out", type=Path, required=True)
@@ -449,6 +577,8 @@ def main() -> None:
         units = plan(args.games_per_cell, chosen)
         args.out.write_text("".join(unit.to_json() + "\n" for unit in units))
         print(f"{len(units)} units, {len(chosen)} conditions, {len(DECKS) ** 2} cells")
+    elif args.command == "job":
+        job()
     else:
         play(
             args.plan,
