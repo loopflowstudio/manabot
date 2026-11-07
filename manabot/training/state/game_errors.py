@@ -85,6 +85,9 @@ class GameAttempt(BaseModel):
         default=None, exclude_if=lambda value: value is None
     )
     discarded_samples: int = 0
+    # A failed game's rows that an earlier update already learned from; only
+    # exact-quota games span updates. A completed game's are in valid_samples.
+    learned_samples: int = Field(default=0, exclude_if=lambda value: not value)
     valid_samples: int = 0
     seconds: float = 0
 
@@ -108,6 +111,7 @@ class GameErrorState(BaseModel):
     abandoned: int = 0
     abandoned_samples: int = 0
     discarded_samples: int = 0
+    learned_samples: int = Field(default=0, exclude_if=lambda value: not value)
     replacement_samples: int = 0
     window: list[bool] = []
     by_cell: dict[str, dict[str, int]] = {}
@@ -133,6 +137,7 @@ class GameErrorState(BaseModel):
         self.completed += int(not failed)
         self.crashed += int(failed)
         self.discarded_samples += attempt.discarded_samples
+        self.learned_samples += attempt.learned_samples
         self.replacement_samples += min(self.replacement_debt, attempt.valid_samples)
         self.window = [*self.window, failed][-policy.window :]
         if len(self.window) >= policy.warmup and self.error_rate > policy.threshold:
