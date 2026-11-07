@@ -44,7 +44,9 @@ from experiments.elemental_grid import DECKS, PACK, Game, schedule
 
 CHECKPOINT_SHA256 = "4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4"
 # The deals' frozen grid; a plan uses the first `games_per_cell` deals of each cell.
-GRID_SCHEDULE_SHA256 = "ecc487e4708a8565b9c787068ff676f62b0c35420b179204fbbf72056f436264"
+GRID_SCHEDULE_SHA256 = (
+    "ecc487e4708a8565b9c787068ff676f62b0c35420b179204fbbf72056f436264"
+)
 MAX_STEPS = 10_000
 WORLDS = 4
 C_PUCT = 1.5
@@ -114,7 +116,9 @@ class Unit:
 DEALS_PER_CELL = {1024: 5}
 
 
-def plan(games_per_cell: int, conditions: Iterable[Condition] = CONDITIONS) -> list[Unit]:
+def plan(
+    games_per_cell: int, conditions: Iterable[Condition] = CONDITIONS
+) -> list[Unit]:
     """Units cheapest condition first, deals round-robin across cells within it.
 
     Workers take units in this order, so a partial run holds complete low budgets
@@ -126,7 +130,8 @@ def plan(games_per_cell: int, conditions: Iterable[Condition] = CONDITIONS) -> l
         Unit(condition, game)
         for condition in ordered
         for game in by_round
-        if game.index < min(games_per_cell, DEALS_PER_CELL.get(condition.sims, games_per_cell))
+        if game.index
+        < min(games_per_cell, DEALS_PER_CELL.get(condition.sims, games_per_cell))
     ]
 
 
@@ -235,9 +240,16 @@ class _Timed:
                     visits=[int(v) for v in result.visit_counts],
                     q=[round(float(v), 5) for v in result.q_values],
                     root_value=round(float(result.root_value), 5),
-                    world_visits=[[int(v) for v in row] for row in result.world_visit_counts],
-                    world_q=[[round(float(v), 4) for v in row] for row in result.world_q_values],
-                    world_root_values=[round(float(v), 5) for v in result.world_root_values],
+                    world_visits=[
+                        [int(v) for v in row] for row in result.world_visit_counts
+                    ],
+                    world_q=[
+                        [round(float(v), 4) for v in row]
+                        for row in result.world_q_values
+                    ],
+                    world_root_values=[
+                        round(float(v), 5) for v in result.world_root_values
+                    ],
                     tree_nodes=int(result.tree_nodes),
                     max_depth=int(result.max_depth),
                     cap_hits=int(result.cap_hits),
@@ -286,7 +298,9 @@ def _opponent(condition: Condition, checkpoint: Path, seed: int) -> Any:
 # One game
 
 
-def play_unit(unit: Unit, checkpoint: Path, host: str) -> tuple[GameRow, list[DecisionLog]]:
+def play_unit(
+    unit: Unit, checkpoint: Path, host: str
+) -> tuple[GameRow, list[DecisionLog]]:
     import torch
 
     from manabot.env import Env, Match, Reward
@@ -299,10 +313,14 @@ def play_unit(unit: Unit, checkpoint: Path, host: str) -> tuple[GameRow, list[De
     hero_player, space = _hero(condition, checkpoint, seed=game.deal)
     log: list[DecisionLog] | None = [] if condition.hero == "puct" else None
     hero = _Timed(hero_player, unit.key, log)
-    opponent = _Timed(_opponent(condition, checkpoint, seed=game.deal + 1), unit.key, None)
+    opponent = _Timed(
+        _opponent(condition, checkpoint, seed=game.deal + 1), unit.key, None
+    )
     decks = [game.heuristic_deck, game.heuristic_deck]
     decks[game.model_seat] = game.model_deck
-    setup = MatchConfig.authored(PACK, decks[0], decks[1], hero="seat-0", villain="seat-1")
+    setup = MatchConfig.authored(
+        PACK, decks[0], decks[1], hero="seat-0", villain="seat-1"
+    )
     env = Env(
         Match(setup.model_copy(update={"content_pack": PACK})),
         space,
@@ -481,12 +499,24 @@ def job() -> None:
     children = [
         subprocess.Popen(
             [
-                sys.executable, "-m", "experiments.search_scaling", "play",
-                "--plan", "experiments/search-scaling/plan-v1.jsonl",
-                "--checkpoint", str(checkpoint), "--out", str(out),
-                "--worker", str(share.first_worker + i),
-                "--workers", str(share.total_workers),
-                "--min-sims", str(share.min_sims), "--max-sims", str(share.max_sims),
+                sys.executable,
+                "-m",
+                "experiments.search_scaling",
+                "play",
+                "--plan",
+                "experiments/search-scaling/plan-v1.jsonl",
+                "--checkpoint",
+                str(checkpoint),
+                "--out",
+                str(out),
+                "--worker",
+                str(share.first_worker + i),
+                "--workers",
+                str(share.total_workers),
+                "--min-sims",
+                str(share.min_sims),
+                "--max-sims",
+                str(share.max_sims),
             ],
             env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
         )
@@ -504,7 +534,14 @@ def job() -> None:
         child.wait()
     rows = sum(1 for path in out.glob("games-*.jsonl") for _ in path.open())
     (out / "etude-result.json").write_text(
-        json.dumps({"clocks": {"steps": rows, "wall_time_ms": int(1000 * (time.time() - started))}})
+        json.dumps(
+            {
+                "clocks": {
+                    "steps": rows,
+                    "wall_time_ms": int(1000 * (time.time() - started)),
+                }
+            }
+        )
     )
 
 
@@ -512,7 +549,7 @@ def runs(revision: str = "HEAD", hours: float = 4.5) -> list[Any]:
     """Etude jobs for every share; construction launches nothing."""
     from decimal import Decimal
 
-    from etude.launch.records import Input, Job
+    from etude.launch.records import Input, Job, Run
 
     setup = (
         "set -eu\n"
@@ -524,28 +561,30 @@ def runs(revision: str = "HEAD", hours: float = 4.5) -> list[Any]:
         "uv sync --locked --python 3.12\n"
     )
     return [
-        Job(
-            name=f"search-scaling-{share.name}",
-            setup=setup,
-            command=(
-                f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}\n'
-                "uv run --locked python -m experiments.search_scaling job"
-            ),
-            config=json.dumps(asdict(share)),
-            repo=str(Path(__file__).resolve().parents[1]),
-            revision=revision,
-            max_hours=hours,
-            # $0.96/hour ceiling $1.00, plus Etude's 15-minute setup allowance.
-            max_usd=Decimal(str(round(hours + 0.5, 2))),
-            max_attempts=1,
-            inputs=(
-                Input(
-                    name="policy.pt",
-                    key=CHECKPOINT_KEY,
-                    sha256=CHECKPOINT_SHA256,
-                    size_bytes=CHECKPOINT_BYTES,
+        Run(
+            job=Job(
+                name=f"search-scaling-{share.name}",
+                setup=setup,
+                command=(
+                    f'export PATH="$HOME/.cargo/bin:$PATH" RUSTUP_TOOLCHAIN={RUST_TOOLCHAIN}\n'
+                    "uv run --locked python -m experiments.search_scaling job"
                 ),
-            ),
+                config=json.dumps(asdict(share)),
+                repo=str(Path(__file__).resolve().parents[1]),
+                revision=revision,
+                max_hours=hours,
+                # $0.96/hour ceiling $1.00, plus Etude's 15-minute setup allowance.
+                max_usd=Decimal(str(round(hours + 0.5, 2))),
+                max_attempts=1,
+                inputs=(
+                    Input(
+                        name="policy.pt",
+                        key=CHECKPOINT_KEY,
+                        sha256=CHECKPOINT_SHA256,
+                        size_bytes=CHECKPOINT_BYTES,
+                    ),
+                ),
+            )
         )
         for share in SHARES
     ]
