@@ -46,6 +46,7 @@ from etude.experiment import ExperimentState, TrainingRun
 from etude.launch import client
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
+from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -287,7 +288,7 @@ def _calibration(data: RunData, pod: PodReading, wall_seconds: float) -> Calibra
     )
 
 
-def read_calibration(source: Path | str) -> list[Calibration]:
+def read_calibration(source: Storage | Path | str) -> list[Calibration]:
     """Every calibration run under `source`, retries included.
 
     The rehearsal's passes are runs here too, so they are set aside.
@@ -302,7 +303,7 @@ def read_calibration(source: Path | str) -> list[Calibration]:
     ]
 
 
-def read_rehearsal(source: Path | str) -> Rehearsal:
+def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
     """The rehearsal's games and cost, and whether they pass the second launch gate.
 
     It passes only with every scheduled game played, valid and under the line.
@@ -352,10 +353,11 @@ def main() -> None:
         "--rehearsal", action="store_true", help="read the evaluation rehearsal"
     )
     args = parser.parse_args()
+    source = storage_from_uri(args.source)
     if args.rehearsal:
-        print(read_rehearsal(args.source).model_dump_json(indent=2))
+        print(read_rehearsal(source).model_dump_json(indent=2))
         return
-    readings = read_calibration(args.source)
+    readings = read_calibration(source)
     print(json.dumps([reading.model_dump() for reading in readings], indent=2))
 
 
