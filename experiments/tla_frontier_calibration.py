@@ -74,20 +74,32 @@ from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = Path(__file__).stem
 UPDATES = 5
-# 2,400 s stay usable under the 600 s stop reserve: one update well past the
-# protocol's 1,500 s launch gate, and all five at MTG-213's 150 s.
-WALL_SECONDS = 3600.0
-# Etude's 15-minute setup allowance and these hours fit each pod's ceiling at
-# the USD0.67/hour the training budget admits.
-MAX_HOURS = 1.2
 # The w64 pod at one producer, beside the frontier's four.
 ONE_PRODUCER = "w64-p1"
 type Pod = Literal["w64", "w160l8", "w64-p1"]
-# USD2 in total, inside the protocol's reserve.
+# A pod's updates stop once another one plus the 600 s stop reserve no longer fits
+# its wall, and its hours must also cover the 600 s finalization. W160l8 keeps
+# 3,000 s, one update well past the protocol's 1,500 s launch gate; each w64 pod
+# keeps 1,100 s, five updates at 220 s.
+WALL_SECONDS: dict[Pod, float] = {
+    SMALL: 1700.0,
+    ONE_PRODUCER: 1700.0,
+    LARGE: 3600.0,
+}
+MAX_HOURS: dict[Pod, float] = {
+    SMALL: 0.65,
+    ONE_PRODUCER: 0.65,
+    LARGE: 1.2,
+}
+# Etude refuses a rental whose hours plus its 15-minute setup allowance cost more
+# than the job's dollars, so each ceiling covers that at the on-demand's
+# USD0.60/hour limit. USD2 in total, inside the protocol's reserve.
+ONDEMAND_USD_PER_HOUR = Decimal("0.60")
+SETUP_HOURS = Decimal("0.25")
 MAX_USD: dict[Pod, Decimal] = {
-    SMALL: Decimal("0.45"),
-    ONE_PRODUCER: Decimal("0.45"),
-    LARGE: Decimal("1.1"),
+    SMALL: Decimal("0.55"),
+    ONE_PRODUCER: Decimal("0.55"),
+    LARGE: Decimal("0.9"),
 }
 # The second launch gate, a rough line at half the protocol's 600 s game limit.
 REHEARSAL_GAME_SECONDS = 300.0
@@ -147,7 +159,7 @@ def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
         regime,
         id=_regime_id(pod),
         updates=UPDATES,
-        wall_seconds=WALL_SECONDS,
+        wall_seconds=WALL_SECONDS[pod],
         workers=1 if pod == ONE_PRODUCER else None,
     )
 
@@ -168,7 +180,7 @@ def runs(revision: str) -> list[Run]:
             experiment=EXPERIMENT,
             revision=revision,
             seed=protocol.training_seed,
-            max_hours=MAX_HOURS,
+            max_hours=MAX_HOURS[pod],
             max_usd=MAX_USD[pod],
         )
     ]

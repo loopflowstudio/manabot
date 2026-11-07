@@ -157,9 +157,9 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 Before the training runs, at a merged revision carrying the software below,
 `experiments/tla_frontier_calibration.py` runs each size for five updates
 on the chosen GPU, under its own experiment and regime ids, so it is never a
-frontier run. One pod per size at four producers, at most USD0.45 for w64 and
-USD1.10 for w160l8, and a third pod running w64 at one producer, at most
-USD0.45: USD2 together, from the reserve. The one-producer pod differs from the
+frontier run. One pod per size at four producers, at most USD0.55 for w64 and
+USD0.90 for w160l8, and a third pod running w64 at one producer, at most
+USD0.55: USD2 together, from the reserve. The one-producer pod differs from the
 w64 pod only in `execution.workers`; it sets nothing and gates nothing.
 
 ```bash
