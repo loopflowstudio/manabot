@@ -215,7 +215,12 @@ shared path, a wall-clock dependency, or Etude's new concurrent worker. No stren
 runs are needed, because the learning rule is unchanged. Strength per dollar is the
 control's strength per update times updates per dollar. This step plays no
 evaluation deals and scores no checkpoint. The speed legs make no learning claim:
-that a run learns the same at any producer count is c5fba4's result.
+whether a run learns the same at any producer count is c5fba4's question, cited and
+not retested. Its landed evidence is a CPU check at four streams: under a fixed
+policy, observations, actions, game seeds and draws agree at 1, 2 and 4 producers
+(`test_uniform_draws_agree_across_producer_counts`, this control's roster). Its
+protocol is accepted, not frozen, and plans no trained comparison across producer
+counts: its one-producer pod reads speed only.
 
 ### What runs
 
@@ -251,7 +256,8 @@ sequences them, because a free slot would otherwise take the next run early.
   producers) arrive with it. For this one-producer control, the latter's
   `collection.py` change only lifts a restriction. Every leg shares the commit, so
   neither touches this comparison, but step 1's absolute speeds are from `70d79ccb8`
-  and are not re-measured against it.
+  and are not re-measured against it. Main through `711b9d839` changes only the TLA
+  frontier experiment files after those two.
 
 ### Digest check (D1, D2)
 
@@ -317,18 +323,27 @@ These come at no extra cost and are the first measurements of the real launch pa
 
 Speed only. For each of the five (K, P) shapes, on the one rented machine:
 
-- **Sustained s/update.** Median of updates 2-8 per run, averaged over the shape's
-  runs. M1 and M2 use the same updates, so all five shapes read equal spans, and their
-  full 20 updates are reported beside that. M2 uses its four solo runs.
-- **M learner decisions per hour** across the machine, summed over concurrent runs,
-  and **per dollar** at the rental's billed rate, excluding setup as step 1 did.
+- **Concurrent span.** A packed leg's runs set up separately, so they do not start
+  together as step 1's children did, and the first to finish frees the machine for the
+  rest. A shape is read only over updates 2 onward that lie wholly inside the span when
+  all K runs train. Update rows hold no wall clock, so a run's training start is its
+  first `gpu-samples.csv` timestamp, and an update ends at that plus its
+  `training_seconds`. The sampler starts a few seconds before training, which is small
+  against an update. The report gives each run's count of updates read. Under 3 for any
+  run means the shape is **not read**: its table row says so, it gets no recommendation,
+  and a longer leg needs an amendment. Solo shapes read updates 2-8.
+- **Sustained s/update.** Median over the concurrent span per run, averaged over the
+  shape's runs. M1's and M2's full 20 updates are reported beside that. M2 uses its four
+  solo runs.
+- **M learner decisions per hour** across the machine, summed over concurrent runs
+  from those medians, and **per dollar** at the rental's billed rate, excluding setup as step 1 did.
 - **GPU busy share.** Every CUDA run samples `nvidia-smi` once a second into
   `gpu-samples.csv` in its output. The sampler reads the whole GPU, and its timestamps
   bound the run. For a shape, take the mean utilization from the last run's first row to
   the first run's last row, dropping the first eighth for start-up, as step 1 did.
 - **CPU saturation.** Producers are threads of the run's process, so the update rows'
-  `process_cpu_seconds` over `training_seconds` is each run's busy cores, as in step 1.
-  Sum over the shape's runs, then divide by the machine's vCPUs. Spinning CUDA waits
+  `process_cpu_seconds` over `training_seconds`, differenced across the concurrent
+  span, is each run's busy cores, as in step 1. Sum over the shape's runs, then divide by the machine's vCPUs. Spinning CUDA waits
   count as busy, so read this beside s/update, not alone.
 - **vCPU count.** The provider's figure for the rented pod (`runpodctl`), recorded in
   the report. The pod cannot show it: step 1 read 128 CPUs and no quota on every pod,
@@ -345,6 +360,14 @@ is inferred from busy cores per shape against its vCPUs, labeled as an inference
 the machine that would confirm it. Expect (4, 4) to oversubscribe an L4: 16 producer
 threads and 4 learners on 6 vCPUs. Running it there is deliberate, and a slow reading is
 the finding, not a failure.
+
+The two halves of a shape have different owners. K is a launch choice: slots belong to
+the on-demand, and no regime byte changes. P is `execution.workers`, a regime field, so
+each producer count is a declared variant, and a live continuation must preserve it. The
+standard shape picks its machine at rental, A4000 first, after the regime is declared.
+So the report also says whether one P serves both classes, and what the worse class pays
+for it. If none does, the regime has to be chosen after the machine, and that goes to
+Jack Heart with the recommendation. This step adopts no producer count.
 
 ### Machine and launch
 
@@ -381,9 +404,12 @@ the finding, not a failure.
   finish within 900 s or the run fails at admission, having trained nothing. Step 1's
   setups took about 5 minutes alone; four at once have never run, and each builds the
   native extension. D2 is the first reading, so read its `phase setup` times from the
-  logs before M1. If two at once took over 7 minutes, launch M1 as two pairs about 8
-  minutes apart, still all four on the machine for the speed reading. A run that fails
-  this way is retried staggered, and counts as that leg's first failure.
+  logs before M1. If two at once took over 7 minutes, launch M1 and S44 as two pairs
+  about 8 minutes apart with `--seeds`. That keeps setup inside its deadline at the
+  price of the speed reading: pairs overlap only briefly, so K=4 reads few updates at M1
+  and probably none at S44, whose first pair can finish 8 updates before the second
+  trains (see "Concurrent span"). A run that fails this way is retried staggered, and
+  counts as that leg's first failure.
 - **Client.** `--slots` is on Etude main (`a7718f5`, PR #85) and unreleased; PyPI's
   latest is 0.2.14. The launcher packages its own client for the pod, so no release is
   needed to run it. But main's launcher schema is version 12, and opening the shared
@@ -470,8 +496,9 @@ The digest and metric legs cover one producer per seed. The speed legs add what 
 leaves out, at speed only. They read the control's world, and not c5fba4's recipe with
 its wider input and roster. They show which shape is cheapest on the rented machine
 over 8 updates. They do not show that a packed multi-producer run learns as a solo one
-does: the producer half is c5fba4's, the packing half rests on this step's one-producer
-legs, and nothing here runs the two together for learning.
+does: the producer half rests on c5fba4's fixed-policy collection check, which has no
+trained counterpart, the packing half rests on this step's one-producer legs, and
+nothing here runs the two together for learning.
 
 ## Step 3: stop waiting for the slowest game (deferred)
 

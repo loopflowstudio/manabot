@@ -141,16 +141,13 @@ Code matches the protocol's five items; no code changed. Protocol corrected:
   `run_worker` refuses to train with less than watchdog plus finalization left, so setup
   over 900 s fails admission. Four concurrent native builds are unmeasured. The 7-minute
   D2 trigger and staggering M1 in two pairs are my reversible choice, for execution review.
-- Limit added: step 2 covers one producer per seed. `sampled_self_play` now defaults to
-  four producers, which is 16 on a 6-vCPU L4 at K=4.
 - Exact isolated client invocation moved from these notes into the protocol, since
   scratch is removed before landing. Source lines and step 3's stale c5fba4 dependency updated.
 - Digest watchdog checked: 46 s of 600 s, laptop, 24 streams, 3 updates, real worker. It
   shows margin only; it is no timing evidence.
 
-Before freeze: this branch is one commit behind main (`e5114c7db`, c5fba4 calibration
-ceilings; unrelated to step 2 and it touches `scratch/questions.md`). Re-quote both
-on-demands at the launch commit. Etude main has moved to `199335c`; the pin stays `a7718f5`.
+Before freeze: re-quote both on-demands at the launch commit. Etude main is at `199335c`;
+the pin stays `a7718f5`.
 
 ## concept-review b015d5 (2026-11-07): step 2 against the accepted design
 
@@ -161,8 +158,8 @@ terminate. No design change and no code direction; implement need not iterate.
   (`scheduler.py`), so cohorts land on the held machine and `--max 1` is not hit. Not yet
   exercised on a held rental: the acceptance quote placed runs on a new one.
 - Failure and recovery hold: the booted pod's guardian ends it at its deadline without a
-  controller, bounding a lost session at the 4-hour window (about $2.36 on L4, under the
-  $3.50 stop). Failing one run leaves its neighbors running. An unbooted pod still needs
+  controller, bounding a lost session at the 5-hour window ($3.00 at the L4 ceiling, under
+  the $4.50 stop). Failing one run leaves its neighbors running. An unbooted pod still needs
   the isolated controller's tick.
 - Shape stays out of the regime. Slots belong to the on-demand, so packing changes no
   recipe and no frozen identity. That is the right owner.
@@ -193,7 +190,6 @@ Reversible choices, for review:
 - Only one machine class is rented, so the recommendation for the other is an inference
   from busy cores, labeled as one. Measuring both classes would need a second rental that
   comment ceff7d63 does not ask for.
-- This branch is one commit behind origin/main (`711b9d839`, frontier stores); not synced here.
 
 ## compress b015d5 (2026-11-07): seeds x producers legs
 
@@ -201,3 +197,38 @@ Reversible choices, for review:
 shape; `elemental_variants.self_play_stage` is now public and replaces the local assert.
 Launch docstring corrected to `--hours 5`. `pytest tests/training/test_training_throughput.py
 tests/infra/test_host_facts.py tests/training/test_elemental_closure_lambda.py`: passed.
+
+## realign b015d5 (2026-11-07): seeds x producers legs against code and upstream
+
+Branch is level with origin/main at `fb626f214`; main since step 2's design touched only
+TLA frontier files. Etude pin holds. No code changed. The launch file, budget (19 runs, $3.00
+machine plus $1.50), watchdogs, on-demand rows in the isolated home and speed-leg regimes all
+match the protocol; nothing is rented in that home.
+- Corrected: the protocol called producer learning equivalence "c5fba4's result". What exists
+  is a CPU, four-stream, fixed-policy collection check, and c5fba4 is not frozen and plans no
+  trained comparison. Jack Heart's "cited, not retested" stands; the citation now says what it
+  rests on, so the execution review sees how thin it is.
+- Checked, no change: the sampler's EXIT trap fails when `nvidia-smi` died first, but the job
+  command has no `set -e`, so the job's status holds.
+
+## concept-review b015d5 (2026-11-07): seeds x producers legs against the accepted design
+
+Walked one reading: launch S44, read (4, 4), choose a shape. The legs, stop rules, budget and
+regimes match comment ceff7d63. Two protocol changes; no code follows from either.
+- **Concurrent span.** Step 1's children started together after one setup; Etude attempts each
+  set up alone, so a packed leg's runs start apart and a fixed "updates 2-8" mixes K=4 with
+  lighter load. Over 8 updates that is much of the leg. Shapes now read only updates inside
+  the span when all K train, under 3 per run means not read. Existing rows supply this:
+  `gpu-samples.csv`'s first timestamp plus `training_seconds`.
+- That exposed the stagger fallback's claim. Two pairs 8 minutes apart overlap about 5
+  minutes at M1, and probably not at all at S44. Stagger now covers S44 too (`--seeds`
+  already allows it), and the protocol states what it costs. No new approval is implied:
+  a longer S44 would be an amendment, since comment ceff7d63 set 8 updates.
+- **Owners of a shape.** K is launch-time, P is regime bytes that a live continuation must
+  preserve (`regime.py`), and machine selection happens after the regime is declared. So a
+  per-class recommendation can conflict with "A4000 when available, L4 otherwise". The
+  report now says whether one P serves both. This limits what the recommendation can
+  mean; it does not need deciding before freeze, because this step adopts no P.
+Checked, no change: speed-leg regimes, `threads: 1` retained. `producers.py` states no policy or
+CUDA state enters a producer thread, so the device does not reach the sharded env. That is
+read from code; no CUDA multi-producer run has happened here, so S14 is the first.
