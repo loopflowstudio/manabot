@@ -25,7 +25,7 @@ the checkouts being compared and read minimum, not mean, durations.
 
 import argparse
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 import importlib
 import json
 from pathlib import Path
@@ -73,6 +73,7 @@ def _cuda_counts(out: Path) -> Iterator[None]:
             return
         shown(message, *args, **kwargs)  # type: ignore[arg-type]
 
+    # catch_warnings restores the filters and `showwarning` on exit.
     with warnings.catch_warnings():
         warnings.simplefilter("always")
         warnings.showwarning = count  # type: ignore[assignment]
@@ -84,7 +85,6 @@ def _cuda_counts(out: Path) -> Iterator[None]:
                 yield
         finally:
             torch.cuda.set_sync_debug_mode("default")
-            warnings.showwarning = shown
     launches = sum(e.count for e in trace.key_averages() if e.key in _LAUNCHES)
     out.write_text(json.dumps({"kernel_launches": launches, "synchronizations": syncs}))
 
@@ -150,11 +150,11 @@ def main() -> None:
 def _execute(regime: TrainingRegime, seed: int, counts: Path | None) -> TrainingRun:
     with tempfile.TemporaryDirectory(prefix="bench-update-") as folder:
         out = Path(folder)
-        with VerifyStore(out / "runs.sqlite") as store:
-            if counts is None:
-                return execute_regime(regime, seed, out / "run", store)
-            with _cuda_counts(counts):
-                return execute_regime(regime, seed, out / "run", store)
+        counting: AbstractContextManager[None] = (
+            nullcontext() if counts is None else _cuda_counts(counts)
+        )
+        with VerifyStore(out / "runs.sqlite") as store, counting:
+            return execute_regime(regime, seed, out / "run", store)
 
 
 if __name__ == "__main__":

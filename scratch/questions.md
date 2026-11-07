@@ -127,7 +127,7 @@ assumptions, for Jack Heart's review:
 Built: `scripts/bench_training_update.py` `--json` (whole receipt), `--recipe` as a file
 or `module:function(regime_id, updates)` declaration, `--cuda-counts`;
 `experiments/training_throughput.py` (phase driver, 1 Hz samplers, `/dev/shm` journal,
-`--collect` cleanup, `runs()`); `tests/training/test_training_throughput.py`.
+module-run cleanup, `runs()`); `tests/training/test_training_throughput.py`.
 Reversible choices:
 - PR #436 is still open, so `elemental_variants` is not on main. The probe names the
   control as the declaration string `experiments.elemental_variants:elemental_recipe`;

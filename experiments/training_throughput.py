@@ -24,7 +24,6 @@ end; the job's cleanup copies whatever an interrupted phase left.
 
 from __future__ import annotations
 
-import argparse
 from collections.abc import Sequence
 from decimal import Decimal
 import os
@@ -385,7 +384,7 @@ def runs(
         setup=machine_setup(""),
         command=f"{TOOLCHAIN_ENV}\nuv run --locked python -m etude.call "
         "--function experiments.training_throughput:run",
-        cleanup="uv run --locked python -m experiments.training_throughput --collect",
+        cleanup="uv run --locked python -m experiments.training_throughput",
         config=probe.model_dump_json(),
         repo=str(ROOT),
         revision=revision,
@@ -396,12 +395,6 @@ def runs(
     return job.runs(*range(1, machines + 1))
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--collect", action="store_true", required=True)
-    parser.parse_args()
-    collect(Path(os.environ["ETUDE_OUTPUT_DIR"]))
-
-
 if __name__ == "__main__":
-    main()
+    # The job's cleanup: keep whatever an interrupted phase journaled.
+    collect(Path(os.environ["ETUDE_OUTPUT_DIR"]))
