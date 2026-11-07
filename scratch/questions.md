@@ -88,129 +88,20 @@ branch's hash contract 16 moved every case's final hash and trace digest.
 Re-recorded with `semantic_conformance -- record`; command counts, outcomes,
 manifest and Phase rows are unchanged.
 
-# Task b015d5 — training seconds per update (2026-11-05)
+# Task b015d5 — training seconds per update (PR #435, merged `45cc961a2`)
 
-No design doc: the Task statement is the spec. Status and decisions:
-- Done and committed: receipt/panel attribution (native clock split, stream
-  bookkeeping, `TrainingRun.host`), trajectory-parallel returns, batched rollout
-  packing and assembly, `scripts/bench_training_update.py`.
-- Assumption: no GPU is rented for this Task (no spend authorized). GPU attribution
-  uses retained receipts; fixed-hardware controlled rows use one laptop, CPU device,
-  so model phases there are not GPU evidence. The first real run after merge gives
-  the on-GPU after number; it is not claimed here.
-- Assumption: results live in `experiments/training-update-time.md`; the rows are
-  few enough that no `experiments/data/` publication is needed.
-- `--max-facts` in the bench is an attribution axis; recipes and frozen observation
-  versions are unchanged. `elemental-uniform` validates to one producer, so worker
-  scaling cannot run on this recipe; lifting that is a separate decision.
-- Open: the on-GPU after number and a CUDA digest check need a real run. 256-stream
-  sequential rows showed minibatches higher after; 64-stream interleaved pairs did
-  not. Report states both.
-- `HostFacts.cpu_model` reads `/proc/cpuinfo`, so it is null off Linux; the GPU stays
-  in run identities, not `TrainingRun.host`.
-- For gate: `test_resource_limit_receipt_replays_its_retained_encoding_boundary` fails
-  3/3 at `3b5dd2935` after a rebuild, and identically on base `8e5d152ab`:
-  `tests/fixtures/tla-pilot-permanent-capacity.jsonl` retains a schema 7 frame and
-  native emits `SEMANTIC_DECISION_VERSION` 8, so the replay returns `binding_mismatch`.
-  Inherited; this Task's only Rust change is timing. `tests/training/test_game_errors.py`
-  is in no CI selection, which is why main stays green. Not repaired here; it needs
-  its own bug Task, because the fixture is retained evidence.
-- The fixed-hardware rows measured `5d676d6df` and `8e5d152ab`. The sync to `f6f171d34`
-  added engine commit `c59aeee0e` afterward. The 2026-11-06 rows at `76e71abc3`
-  include it (native stepping 52.6-64.3 µs/decision), but no before/after pair
-  isolates it; the engine budget harness owns that comparison.
-- Proposed infrastructure Wave memory (not written; this step leaves `.lf/wave/`
-  read-only): rented-host CPU class moves update time 1.6-1.8x at a fixed GPU label,
-  so compare `host.cpu_model` and native stepping before attributing a slowdown
-  to a change; a packed ~50,000-row column makes per-time-step device recursions
-  launch-bound, so keep such recursions on the host.
-
-## Concept review b015d5 (2026-11-05)
-
-Walked: rent a pod, read the panel, keep or replace it; a slow host; a recovery
-attempt (the "another machine" case was wrong; see the re-review below). The model stands: one phase tree in the receipt, drawn
-per update; `TrainingRun.host` per attempt; the bench prints the same tree. The clock
-covers every `VectorEnv` buffered path (no rayon; `encode_active`/`step_active` are
-the separate slot env). No open product choice: producers, GPU spend and recipes stay
-outside this Task.
-
-All five review items are committed at `1201df60e`: host screen, parent series,
-one-producer scope, stepping rename, recovery reading. A later review that read the
-earlier tree called them undone; each was rechecked at that commit. Results:
-- Screen values came from `r2://manabot/jobs` receipts and per-update metric blocks,
-  re-read 2026-11-05: 10 runs, median updates 2-11 at 6.9-7.7 s fast, 10.6-12.4 s slow.
-  Bands 8 s / 9 s are this Task's choice from that gap; they fit 256-stream two-seat
-  Elemental only. Six A40 runs' early medians were not read; their stage means were.
-- Recovery check: stage timers do not carry. `execution.py` zeroes seconds and
-  `collection_timings` on resume while `updates` and decisions continue. Stage means
-  are still the wrong reading, for that reason; `test_recovery.py` pins it.
-- `time_since` lost its "timer went down" branch: every reset precedes the loop's
-  first reading and the learner is never rebuilt inside it.
-- Checks on the rebuilt extension: `tests/training/test_phase_timing.py`,
-  `tests/infra/test_host_facts.py` (11 passed),
-  `test_real_interruption_restores_complete_learning_state` (4 passed). Broader
-  suites stay with gate.
-
-## Concept re-review b015d5 (2026-11-05, at `1201df60e`)
-
-Normal path and failure re-walked against the code. The phase tree, native clock,
-panel, bench and machine recommendation stand; no open product choice. One
-correction to the model, and one fact it makes redundant.
-
-Correction: **a run never changes machines.** `settle_orphan` raises "recovery lease
-belongs to a different host"; launched jobs are `max_attempts=1`; `RunContext`
-refuses a launcher retry that finds checkpoints. Replacing a slow pod therefore
-means a new launch and a new run, so a run has one host. Resuming does not refuse
-on a changed config: Etude keeps the stored declaration, so nothing there gates.
-
-Applied 2026-11-05 (no receipt shape change, no rerun of measurements): the report
-says recovery stays on its host and "replace the pod" is a new launch from update 0;
-the `host.py` docstring says the facts take no part in recovery admission; `"host"`
-left `resolved_config`, so `TrainingRun.host` is the one owner and reaches
-`ETUDE_OUTPUT_DIR` as the job's receipt. No test read the Etude copy.
-
-What would invalidate 3: an Etude page or report needing the CPU without the receipt.
-None exists today. If one appears, the gap belongs on Etude's `Attempt`, which already
-holds per-attempt `host` and `pod`; that is an Etude change, not part of this Task.
-Check: `tests/training/test_phase_timing.py`, `tests/infra/test_host_facts.py` and
-`test_real_interruption_restores_complete_learning_state` pass (15 selected, 4 of them
-the recovery test's parameters). Post-merge verification has not run: nothing is merged.
-
-## Concept review b015d5 (2026-11-05, at `426317204`)
-
-Re-walked "screen a pod, replace it, keep the evidence". The phase tree, native clock,
-panel, bench and machine recommendation stand, and `TrainingRun.host` stays the one
-owner. No open product choice. One correction, to the report's wording only.
-
-Gap: the report says "replace the pod" and "Record `host.cpu_model` either way", but
-not how to replace it. Removing `"host"` from `resolved_config` left no live copy of
-the CPU model, and Etude's courier publishes attempt outputs only once `finished.json`
-exists (`_carry_attempt`). Deleting a slow pod therefore loses its receipt. Those are
-the runs a good-CPU list most needs, and the list would be built from survivors.
-
-Applied at `524691050`, one edit to "Screen hosts" in
-`experiments/training-update-time.md`: replace a slow pod with `etude cancel <run>`,
-then relaunch; do not delete the pod first. The CPU model is readable from
-`training/run.json` once the attempt finishes, not during the screen. The update-time
-series is what the screen reads live.
-
-Why cancel is enough: `persist()` exports `run.json`, host included, at setup, before
-update 1. Cancel raises in training ("Cancellation retains failed scientific receipts")
-and the worker's `_finish` then records the outputs for the courier. This comes from
-reading the code; no cancel was run. No code change: a pod lost outright loses all its
-outputs, which is Etude's delivery contract, not this Task's.
-
-## engine-measure b015d5 (2026-11-06)
-
-Jack Heart's steer moved this Task onto the engine-performance graph (training update,
-not only the engine). The measured plan and active phase are in
-[b015d5-update-measure.md](b015d5-update-measure.md). Assumptions (reversible):
-- Active phase is host-side and exact: one recorded copy per observation row
-  (assembly no longer re-stacks ~4.3 GB/update). GPU launch/sync levers are listed with
-  a named CUDA check and are not implemented without GPU evidence.
-- Native stepping is an unchanged control here; the engine budget harness owns it.
-- Failure-capture frames and `PolicyInference.check` keep their contracts; only the
-  exact single-walk check is a candidate without review.
+History of the measurement and concept reviews: `git show 645b9be21:scratch/questions.md`.
+Live items:
+- Inherited, unrepaired: `test_resource_limit_receipt_replays_its_retained_encoding_boundary`
+  fails because `tests/fixtures/tla-pilot-permanent-capacity.jsonl` retains a schema 7
+  frame while native emits `SEMANTIC_DECISION_VERSION` 8 (`binding_mismatch`). The test
+  is in no CI selection. It needs its own bug Task; the fixture is retained evidence.
+- `HostFacts.cpu_model` reads `/proc/cpuinfo` (null off Linux); the GPU stays in run
+  identities, not `TrainingRun.host`.
+- Proposed infrastructure Wave memory (not written; `.lf/wave/` is read-only here):
+  rented-host CPU class moves update time 1.6-1.8x at a fixed GPU label, so compare
+  `host.cpu_model` and native stepping before attributing a slowdown; a packed
+  ~50,000-row column makes per-time-step device recursions launch-bound.
 
 ## experiment-design b015d5 (2026-11-06): training throughput
 
@@ -230,3 +121,26 @@ assumptions, for Jack Heart's review:
 - An A4000 probe is included as the larger-CPU, cheaper-GPU shape. Etude's `a4000`
   template lists several rented machines that may be ghost records; check
   `etude machines` before launch.
+
+## implement b015d5 (2026-11-06): step-1 probe software
+
+Built: `scripts/bench_training_update.py` `--json` (whole receipt), `--recipe` as a file
+or `module:function(regime_id, updates)` declaration, `--cuda-counts`;
+`experiments/training_throughput.py` (phase driver, 1 Hz samplers, `/dev/shm` journal,
+`--collect` cleanup, `runs()`); `tests/training/test_training_throughput.py`.
+Reversible choices:
+- PR #436 is still open, so `elemental_variants` is not on main. The probe names the
+  control as the declaration string `experiments.elemental_variants:elemental_recipe`;
+  it resolves only at a commit containing #436. The CPU test uses the frozen 183 file
+  instead so it does not depend on #436. Launch pins a commit that has both.
+  Checked: the declaration loads from #436's file (w17, 256 streams, both seats,
+  `recover_capacity` true).
+- Children drop every `ETUDE_*` variable and track locally; only the driver is the
+  launched run. Each child's `TrainingRun` receipt is the evidence.
+- A phase is skipped when the previous completed phase's largest child peak x its child
+  count exceeds `memory_fraction` (.85) of machine memory. Peak is Linux VmHWM, else the
+  largest sampled RSS.
+- Any failed phase fails the run after all phases have run; evidence is kept.
+- Quote 2026-11-06 at `8d178f40e`: `--rent l4 --machines 2` plans $2.06 (reservation
+  $2.10); `--rent a4000` refused, no stock at quote time. Re-quote before launch.
+

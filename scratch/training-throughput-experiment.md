@@ -73,8 +73,10 @@ awaiting Jack Heart's review in the Task conversation. Nothing has launched. Sum
 
 Dependencies before freeze: PR #436 (07c490) must land, because it carries
 `elemental_variants.elemental_recipe` and `ELEMENTAL_PAIRS`. The probe software
-(bench `--json`/`--recipe`, `experiments/training_throughput.py`) is not yet
-written. Steps 3 and 4 build after c5fba4's `collection.py` change.
+(bench `--json`/`--recipe`/`--cuda-counts`, `experiments/training_throughput.py`) is
+built and passes its CPU acceptance (implement, 2026-11-06; see questions.md). Not
+launched: launch waits for #436 on main (or a pinned commit with it) and Jack Heart's
+execution review. Steps 3 and 4 build after c5fba4's `collection.py` change.
 
 ## Design direction (Jack Heart, 2026-11-06)
 
