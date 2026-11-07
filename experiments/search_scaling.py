@@ -385,8 +385,18 @@ def _units(path: Path) -> Iterator[Unit]:
             yield Unit.from_json(line)
 
 
-def play(plan_path: Path, checkpoint: Path, out: Path, worker: int, workers: int) -> None:
-    """Play this worker's share of the plan, resuming after any completed game."""
+def play(
+    plan_path: Path,
+    checkpoint: Path,
+    out: Path,
+    worker: int,
+    workers: int,
+    sims: tuple[int, int] = (0, max(BUDGETS)),
+) -> None:
+    """Play this worker's share of the plan's units within `sims`, resuming.
+
+    Hosts split the plan by budget; workers on a host split it by unit index.
+    """
     import torch
 
     from manabot.infra.identity import file_sha256
@@ -399,7 +409,8 @@ def play(plan_path: Path, checkpoint: Path, out: Path, worker: int, workers: int
     done = _done(out)
     games = out / f"games-{host}-{worker}.jsonl"
     decisions = out / f"decisions-{host}-{worker}.jsonl.gz"
-    for index, unit in enumerate(_units(plan_path)):
+    units = [u for u in _units(plan_path) if sims[0] <= u.condition.sims <= sims[1]]
+    for index, unit in enumerate(units):
         if index % workers != worker or unit.key in done:
             continue
         row, log = play_unit(unit, checkpoint, host)
@@ -426,6 +437,8 @@ def main() -> None:
     run.add_argument("--out", type=Path, required=True)
     run.add_argument("--worker", type=int, required=True)
     run.add_argument("--workers", type=int, required=True)
+    run.add_argument("--min-sims", type=int, default=0)
+    run.add_argument("--max-sims", type=int, default=max(BUDGETS))
     args = parser.parse_args()
     if args.command == "plan":
         from experiments.elemental_grid import schedule_sha256
@@ -437,7 +450,14 @@ def main() -> None:
         args.out.write_text("".join(unit.to_json() + "\n" for unit in units))
         print(f"{len(units)} units, {len(chosen)} conditions, {len(DECKS) ** 2} cells")
     else:
-        play(args.plan, args.checkpoint, args.out, args.worker, args.workers)
+        play(
+            args.plan,
+            args.checkpoint,
+            args.out,
+            args.worker,
+            args.workers,
+            (args.min_sims, args.max_sims),
+        )
 
 
 if __name__ == "__main__":
