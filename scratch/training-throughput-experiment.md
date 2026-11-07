@@ -62,11 +62,11 @@ Nothing has launched.
 - Step 1: `probe` job, 2 L4 + 1 A4000 runs; phases solo, pack-2, pack-4, CUDA
   counts. Reports the phase tree, idle share, CPU/GPU use, peak memory and
   $/M learner decisions; Jack Heart chooses the next step from those readings.
-- Blocked on: PR #436 (07c490: `elemental_variants.elemental_recipe`,
-  `ELEMENTAL_PAIRS`) is open and BLOCKED, Integration failing (checked
-  2026-11-06). Step 1 freezes when it lands or the probe pins its exact commit.
-  Re-quote L4 and A4000 stock before launch.
+- PR #436 landed as `ebed0963e` (2026-11-07 UTC) and is merged into this branch;
+  the probe's control declaration resolves (w17) and a 2-update, 8-stream CPU bench
+  of it completes with its metrics run kept. Step 1 freezes at a pushed launch commit
+  containing it, after execution review; re-quote L4 and A4000 stock before launch.
 - Later: step 2 packing needs Etude machine slots (Etude Task 8ffc3e, approved);
   steps 3-4 build after c5fba4's `collection.py` change. Proposed reservation
   $24.40 of $50.
-- Check 2026-11-06: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.
+- Check 2026-11-06 (after merging main): `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.

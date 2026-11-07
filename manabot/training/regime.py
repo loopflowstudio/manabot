@@ -421,9 +421,10 @@ class TrainSelfPlay(Stage):
     # `transitions` as a per-stream floor and finishes the game in progress, so
     # every return ends at a real result. "exact-quota" pauses each stream at
     # `transitions` learner rows, usually mid-game, and bootstraps from
-    # V(next_obs). A new stage defaults here; a saved one that omits the field is
-    # resolved by TrainingRegime, so it serializes only when `_implied_closure`
-    # would say otherwise.
+    # V(next_obs). Under capacity recovery a failed game loses only the rows no
+    # update has learned from and its stream refills. A new stage defaults here; a
+    # saved one that omits the field is resolved by TrainingRegime, so it serializes
+    # only when `_implied_closure` would say otherwise.
     batch_closure: BatchClosure = "complete-games"
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
@@ -462,9 +463,12 @@ class TrainSelfPlay(Stage):
                     "the acting seat has a next observation, so the other seat's "
                     "pending row has no successor"
                 )
-            if self.games_per_stream is not None or self.game_errors is not None:
+            if self.games_per_stream is not None:
+                raise ValueError("games_per_stream requires complete games")
+            if self.game_errors is not None and not self.game_errors.recover_capacity:
                 raise ValueError(
-                    "games_per_stream and game error recovery require complete games"
+                    "game error recovery without capacity recovery requires "
+                    "complete games"
                 )
         if self.learning_seats == "both" and self.behavior not in (
             "current-self",

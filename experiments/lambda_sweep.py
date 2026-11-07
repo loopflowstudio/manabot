@@ -15,7 +15,12 @@ from etude.launch.records import Job, Run
 from etude.report import Report
 
 from experiments.batched_baseline import lambda_sweep
-from experiments.learning_signal import evaluation_jobs, learning_report, training_runs
+from experiments.learning_signal import (
+    ALLIES_LESSONS,
+    evaluation_jobs,
+    learning_report,
+    training_runs,
+)
 
 EXPERIMENT = "lambda_sweep"
 SEEDS = (65201, 65202, 65203)
@@ -51,7 +56,9 @@ def runs(
 
 
 def eval(state: ExperimentState) -> list[Job]:
-    return evaluation_jobs(state, "lambda-sweep-v1", hours=0.75, usd=0.96)
+    return evaluation_jobs(
+        state, "lambda-sweep-v1", ALLIES_LESSONS, hours=0.75, usd=0.96
+    )
 
 
 def report() -> Report:

@@ -1,5 +1,6 @@
 Inherited MTG-243 naming notes (another branch's handoff) were removed; they are at
-`c6746f3ff:scratch/questions.md` and confer nothing on b015d5.
+`c6746f3ff:scratch/questions.md` and confer nothing on b015d5. Main's 07c490 notes (arrived with PR #436) are at
+`ebed0963e:scratch/questions.md` and likewise confer nothing here.
 
 # Task b015d5 — training seconds per update (PR #435, merged `45cc961a2`)
 

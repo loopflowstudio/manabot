@@ -9,8 +9,8 @@ collection belongs to Task c5fba4 and is read from its result, not repeated here
 Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
 comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Nothing
 has launched. Acceptance confers no spending authority beyond the execution
-review below. Step 1 freezes once PR #436 (the control recipe) has landed, or
-the probe pins an exact commit containing it. Each later step freezes after the
+review below. PR #436 (the control recipe) landed as `ebed0963e`; step 1 freezes
+at a launch commit containing it. Each later step freezes after the
 previous step's readings have been discussed and that step chosen, before any
 of its scored runs.
 
@@ -27,7 +27,7 @@ of its scored runs.
 
 ## Fixed identities
 
-- **Source.** Main after PR #435 (`45cc961a2`) and PR #436 (07c490, the
+- **Source.** Main after PR #435 (`45cc961a2`) and PR #436 (`ebed0963e`, 07c490's
   `elemental_variants.elemental_recipe` declaration and
   `learning_signal.ELEMENTAL_PAIRS`). If c5fba4's change to
   `manabot/training/rollout/collection.py` lands first, it is included. Each

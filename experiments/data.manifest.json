@@ -2590,6 +2590,30 @@
    "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
    "bytes": 9321
   },
+  "experiments/data/closure-lambda-elemental-v1/elemental_closure-rows-assembly.png": {
+   "sha256": "d8fcae7aa6f56a171ba25ec044aba1b92edf1eb6c98ed626062a3c5349b9c319",
+   "bytes": 163875
+  },
+  "experiments/data/closure-lambda-elemental-v1/elemental_closure-strength.png": {
+   "sha256": "bf860e1b65246141d3e93a875b5852d6ed5876401b9361a502a38bbd0674e5c8",
+   "bytes": 92495
+  },
+  "experiments/data/closure-lambda-elemental-v1/elemental_lambda-rows-assembly.png": {
+   "sha256": "21d77f093f33834bc2115ac02bf4d20df01abb117ced41935fd090c63e8ec82f",
+   "bytes": 336569
+  },
+  "experiments/data/closure-lambda-elemental-v1/elemental_lambda-strength.png": {
+   "sha256": "f082b984e160e265f3a39ed6970df5a503ccd17c0795bdbd2ffb0bb9eb9bca4d",
+   "bytes": 109997
+  },
+  "experiments/data/closure-lambda-elemental-v1/report.md": {
+   "sha256": "48fc0cc2fb6ae5bca47dc0acd3c5cb53dbc3e003c14bb349e2ead65d991542ac",
+   "bytes": 15301
+  },
+  "experiments/data/closure-lambda-elemental-v1/results.json": {
+   "sha256": "7307d01752730eb06547c56fb69416f07eb0898f06294e4bed7b976d906aabdc",
+   "bytes": 159515
+  },
   "experiments/data/closure-lambda-v1/batch_closure-rows-assembly.png": {
    "sha256": "41c189852b483208765ecaa97e7e0505bce8c3bd4fb63021b35cc899d2e4b349",
    "bytes": 191878
