@@ -1,13 +1,13 @@
 """Magnetic-mirror local update on one oracle world, over MTG-183's endpoint.
 
-Each searched decision tries every legal action once in a single world holding
-the opponent's true hand (libraries reshuffled), plays `depth` decisions by
+Each searched decision tries every legal action once in each world holding
+the opponent's true hand (libraries reshuffled, once per world), plays `depth` decisions by
 policy sampling, scores the position with the network, and samples the move from
 
     p ∝ exp((Q + alpha log uniform + beta log policy) / (alpha + beta))
 
-(`manabot.sim.search.local_update.regularized_update`). With one world each Q is
-one rollout. The move is sampled, so the matching no-search baseline is the
+(`manabot.sim.search.local_update.regularized_update`). Each Q averages one
+rollout per world. The move is sampled, so the matching no-search baseline is the
 sampled policy. These games reuse search_scaling's first five deals per grid
 cell, so scores pair with every condition of that sweep.
 
@@ -48,7 +48,18 @@ from manabot.sim.search.sampling import (
 DEALS_PER_CELL = 5
 # Depth runs at a step size that moves the policy; beta runs at one depth. At the
 # default beta 1 the target stays within about 0.005 total variation of the policy.
-SETTINGS = ((2, 0.1), (10, 0.1), (20, 0.1), (40, 0.1), (20, 1.0), (20, 0.03))
+# Four worlds keep the true hand and draw fresh shuffles and rollouts, so each Q
+# averages four rollouts. Settings are (depth, beta, worlds).
+SETTINGS = (
+    (2, 0.1, 1),
+    (10, 0.1, 1),
+    (20, 0.1, 1),
+    (40, 0.1, 1),
+    (20, 1.0, 1),
+    (20, 0.03, 1),
+    (20, 0.1, 4),
+    (20, 0.03, 4),
+)
 # Deep rollouts must finish; local update raises rather than truncating a search.
 DECISION_SECONDS = 600.0
 
@@ -58,15 +69,17 @@ class Arm:
     opponent: Opponent
     depth: int
     beta: float
+    worlds: int = 1
 
     @property
     def key(self) -> str:
-        return f"{self.opponent}/mirror-d{self.depth}-b{self.beta:g}"
+        suffix = f"-w{self.worlds}" if self.worlds > 1 else ""
+        return f"{self.opponent}/mirror-d{self.depth}-b{self.beta:g}{suffix}"
 
 
 ARMS = tuple(
-    Arm(opponent, depth, beta)
-    for depth, beta in SETTINGS
+    Arm(opponent, depth, beta, worlds)
+    for depth, beta, worlds in SETTINGS
     for opponent in ("policy", "heuristic")
 )
 
@@ -147,7 +160,7 @@ def _teacher(arm: Arm, checkpoint: Path) -> Any:
         checkpoint,
         CHECKPOINT_SHA256,
         LocalSearchConfig(
-            worlds=1,
+            worlds=arm.worlds,
             depth=arm.depth,
             beta=arm.beta,
             decision_seconds=DECISION_SECONDS,
@@ -295,16 +308,17 @@ def play(
         key=lambda g: (g.index, g.deal),
     )
     units = [(game, arm) for game in games for arm in arms]
-    teachers: dict[tuple[int, float], Any] = {}
+    teachers: dict[tuple[int, float, int], Any] = {}
     played = 0
     for index, (game, arm) in enumerate(units):
         if index % workers != worker or f"{arm.key}/{game.deal}" in done:
             continue
         if limit is not None and played >= limit:
             return
-        teacher = teachers.get((arm.depth, arm.beta))
+        setting = (arm.depth, arm.beta, arm.worlds)
+        teacher = teachers.get(setting)
         if teacher is None:
-            teacher = teachers[arm.depth, arm.beta] = _teacher(arm, checkpoint)
+            teacher = teachers[setting] = _teacher(arm, checkpoint)
         row, log = play_game(arm, game, teacher, checkpoint, host)
         with gzip.open(out / f"decisions-{host}-{worker}.jsonl.gz", "at") as file:
             for entry in log:
