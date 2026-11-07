@@ -1,8 +1,9 @@
 """Task c5fba4: frontier self-play on the 17Lands TLA trophy corpus at two model sizes.
 
 One seed per size trains under the same damped self-play rule, population,
-input v9 and wall budget; the large size is the frozen w64 regime with only its
-width, depth and heads replaced (see the protocol
+input v9, four producers and wall budget; the large size is the frozen w64
+regime with only its width, depth, heads and damping horizon replaced (see the
+protocol
 `experiments/protocols/tla-frontier-c5fba4-v1.md`). `eval` plays, at every
 shared update milestone, each size against the matched first-64 heuristic and
 the larger size against the smaller at equal updates; at the endpoints it adds
@@ -15,9 +16,9 @@ Training exports more often than `eval` plays: the export cadence bounds what a
 lost rental can cost, and only milestones and endpoints are evaluated.
 
 A launched run is stored under its launcher id, so `size_run` knows a size by
-the regime tag on its checkpoints. A pod's single-thread speed sets the pace of
-this one-worker recipe, so `host_speed` reads it from each run's step phase;
-`experiments.tla_frontier_calibration` applies the protocol's screen to it.
+the regime tag on its checkpoints. `host_speed` reads each run's step phase and
+`run_receipt` its host and game-error counts; both are reported and void
+nothing. A lost run stops at its last export.
 
 A pass's launcher id is a digest of its pending matches, and the launcher refuses
 a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
@@ -74,7 +75,13 @@ from manabot.infra.runtime import regime_tag
 from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    DampedPolicyLearning,
+    IterationSchedule,
+    TrainingRegime,
+    TrainSelfPlay,
+)
+from manabot.training.state.game_errors import GameErrorState
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -102,19 +109,23 @@ HEURISTIC: HeuristicSpec = {
     "action_overflow": "first-legal",
 }
 
-type SizeLabel = Literal["w64", "w256"]
+type SizeLabel = Literal["w64", "w160l8"]
 SMALL: SizeLabel = "w64"
-LARGE: SizeLabel = "w256"
+LARGE: SizeLabel = "w160l8"
 SIZES: tuple[SizeLabel, SizeLabel] = (SMALL, LARGE)
 
 
 # -- Frozen contract ----------------------------------------------------------
 
 
-class ModelSize(StrictModel):
+class LargeSize(StrictModel):
+    """The large arm's compute network and damping horizon; all else is w64's."""
+
     hidden_dim: int
     attention_layers: int
     num_attention_heads: int
+    # `IterationSchedule.steps`: the updates calibration expects it to reach.
+    expected_updates: int
 
 
 class Protocol(StrictModel):
@@ -122,7 +133,7 @@ class Protocol(StrictModel):
     corpus_sha256: str
     observation_shapes: dict[str, tuple[int, ...]]
     regime_sha256: str
-    large: ModelSize
+    large: LargeSize
     training_seed: int
     deck_seed: int
     pairs: tuple[Pair, ...]
@@ -160,19 +171,44 @@ def frozen() -> tuple[dict[SizeLabel, TrainingRegime], Protocol]:
     small = TrainingRegime.model_validate_json(REGIME.read_bytes())
     if ObservationSpace(small.observation).shapes != protocol.observation_shapes:
         raise ValueError("frontier tensor capacities differ from frozen protocol")
-    large = small.model_copy(
-        update={
-            "id": _regime_id(LARGE),
-            "agent": small.agent.model_copy(update=protocol.large.model_dump()),
-        }
+    stage = _stage(small)
+    size = protocol.large.model_dump(exclude={"expected_updates"})
+    schedule = _schedule(small).model_copy(
+        update={"steps": protocol.large.expected_updates}
+    )
+    learning = stage.learning.model_copy(update={"iteration_schedule": schedule})
+    large = TrainingRegime.model_validate(
+        small.model_copy(
+            update={
+                "id": _regime_id(LARGE),
+                "agent": small.agent.model_copy(update=size),
+                "stages": [stage.model_copy(update={"learning": learning})],
+            }
+        ).model_dump()
     )
     return {SMALL: small, LARGE: large}, protocol
 
 
-def update_cap(regime: TrainingRegime) -> int:
+def _stage(regime: TrainingRegime) -> TrainSelfPlay:
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
-    return stage.updates
+    return stage
+
+
+def _schedule(regime: TrainingRegime) -> IterationSchedule:
+    learning = _stage(regime).learning
+    assert isinstance(learning, DampedPolicyLearning)
+    assert learning.iteration_schedule is not None
+    return learning.iteration_schedule
+
+
+def horizon(regime: TrainingRegime) -> int:
+    """The size's damping horizon, `IterationSchedule.steps`."""
+    return _schedule(regime).steps
+
+
+def update_cap(regime: TrainingRegime) -> int:
+    return _stage(regime).updates
 
 
 def export_updates(regime: TrainingRegime, protocol: Protocol) -> tuple[int, ...]:
@@ -206,19 +242,12 @@ def capped_runs(
     )
 
 
-def runs(revision: str, size: str = "both") -> list[Run]:
-    """One capped GPU allocation per size; no automatic retry or budget expansion.
-
-    `size` names one label to relaunch it alone, the protocol's replacement of
-    a pod its host screen read slow.
-    """
+def runs(revision: str) -> list[Run]:
+    """One capped GPU allocation per size; no automatic retry or budget expansion."""
     regimes, protocol = frozen()
-    if size not in ("both", *SIZES):
-        raise ValueError(f"size must be both, {SMALL} or {LARGE}, not {size}")
     return [
         run
-        for label, regime in regimes.items()
-        if size in ("both", label)
+        for regime in regimes.values()
         for run in capped_runs(
             regime,
             experiment=EXPERIMENT,
@@ -263,9 +292,9 @@ class HostSpeed(StrictModel):
 
     A median over `HOST_UPDATES` as far as the run reached them, per row
     because rows per update follow game length. `step_spread` is the window's
-    slowest update over its fastest: above the screen's line, one pod's own
-    variation could pass for a host difference. `cpu_model` is on a run's
-    receipt only once its attempt finishes, on revisions that record it.
+    slowest update over its fastest, so one pod's own variation is not read as
+    a host difference. `cpu_model` is on a run's receipt only once its attempt
+    finishes, on revisions that record it.
     """
 
     step_us_per_row: float | None
@@ -273,12 +302,52 @@ class HostSpeed(StrictModel):
     cpu_model: str | None
 
 
-def _receipt_cpu_model(storage: Storage, run: str) -> str | None:
+class GameErrorCounts(StrictModel):
+    """A run's settled game attempts by outcome, from `TrainingRun.game_errors`.
+
+    `engine_error` and `resource_limit` are the aborted games `recover_capacity`
+    keeps apart; their samples are discarded and training continued.
+    """
+
+    attempted: int
+    completed: int
+    engine_error: int
+    resource_limit: int
+    discarded_samples: int
+    stop_reason: str | None
+
+
+def _receipt(storage: Storage, run: str) -> dict[str, object] | None:
+    """The run's `TrainingRun` export, written once its attempt finishes."""
     receipts = [key for key in storage.keys(run) if key.endswith("training/run.json")]
-    if not receipts:
+    return json.loads(storage.get(max(receipts))) if receipts else None
+
+
+def _receipt_cpu_model(storage: Storage, run: str) -> str | None:
+    receipt = _receipt(storage, run)
+    host = receipt.get("host") if receipt else None
+    return host.get("cpu_model") if isinstance(host, dict) else None
+
+
+def game_error_counts(storage: Storage, run: str) -> GameErrorCounts | None:
+    """Per-label totals over every deck/seat cell; None before the receipt exists."""
+    receipt = _receipt(storage, run)
+    found = receipt.get("game_errors") if receipt else None
+    if found is None:
         return None
-    host = json.loads(storage.get(max(receipts))).get("host")
-    return host.get("cpu_model") if host else None
+    state = GameErrorState.model_validate(found)
+    totals: dict[str, int] = {}
+    for cell in state.by_cell.values():
+        for outcome, count in cell.items():
+            totals[outcome] = totals.get(outcome, 0) + count
+    return GameErrorCounts(
+        attempted=state.attempted,
+        completed=state.completed,
+        engine_error=totals.get("engine_error", 0),
+        resource_limit=totals.get("resource_limit", 0),
+        discarded_samples=state.discarded_samples,
+        stop_reason=state.stop_reason,
+    )
 
 
 def host_speed(data: RunData, storage: Storage) -> HostSpeed:
@@ -294,6 +363,20 @@ def host_speed(data: RunData, storage: Storage) -> HostSpeed:
         step_us_per_row=median(window) if window else None,
         step_spread=max(window) / min(window) if window else None,
         cpu_model=_receipt_cpu_model(storage, data.name),
+    )
+
+
+class PodReading(StrictModel):
+    """What a run's pod did beside its scores: reported, voiding nothing."""
+
+    host: HostSpeed
+    game_errors: GameErrorCounts | None
+
+
+def pod_reading(data: RunData, storage: Storage) -> PodReading:
+    return PodReading(
+        host=host_speed(data, storage),
+        game_errors=game_error_counts(storage, data.name),
     )
 
 
@@ -377,7 +460,7 @@ def last_update(run: TrainingRun) -> int | None:
 
 
 def is_set_aside(run: TrainingRun, protocol: Protocol) -> bool:
-    """Whether a run ended below the first milestone, as a replaced pod does.
+    """Whether a run ended below the first milestone.
 
     Such a run has nothing to evaluate. Analysis lists it, since every attempt
     is reported, but it is no size's run.
@@ -743,11 +826,11 @@ def report() -> Report:
                 matches=Matches(tag=f"heuristic-{SMALL}"),
             ),
             Curve(
-                title="Width 256 vs fixed heuristic",
+                title="Width 160, 8 layers vs fixed heuristic",
                 matches=Matches(tag=f"heuristic-{LARGE}"),
             ),
             Curve(
-                title="Width 256 vs width 64 at equal updates",
+                title="Width 160, 8 layers vs width 64 at equal updates",
                 matches=Matches(tag="head-to-head"),
             ),
         ),

@@ -55,6 +55,9 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   1e-4 clamp about 23% of the way in and ends near 2.0e-5, and τ ends near 0.0032,
   for either size.
 
+  Until calibration, the JSON holds provisional horizons: 1,296 for w64 (v10's
+  150 s/update) and 129 for w160l8 (the size gate's 1,500 s/update).
+  Calibration's five updates are too few for the horizon to matter.
   Expected updates come from calibration. For each size, S = min(10,000,
   ⌊194,400 / s⌋), where s is calibration's median seconds per update over updates
   2–5 at the frozen producer count on the chosen GPU. The fit is not sensitive to
@@ -69,8 +72,8 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   update. Roster sampling draws each game's decks from its stream's native seed,
   and producer streams keep global seeds, so the draws do not depend on the
   producer count. That is an acceptance check of the software, not an
-  assumption. Calibration reads the step phase at four producers; it has no
-  one-producer arm.
+  assumption. Calibration reads the step phase at four producers, and a third
+  pod runs w64 at one producer, so the readings show what four producers buy.
 - **Input.** Policy input v9 (v8 layer-state layout plus naming candidates),
   512 local facts, 128 cards and 96 permanents per seat, 64 policy action
   slots with the accepted matched first-64 overflow for every policy. The
@@ -153,8 +156,10 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 Before the training runs, at a merged revision carrying the software below,
 `experiments/tla_frontier_calibration.py` runs each size for five updates
 on the chosen GPU, under its own experiment and regime ids, so it is never a
-frontier run. One pod per size, at four producers: at most USD0.50 for w64 and
-USD1.50 for w160l8, USD2 together, from the reserve.
+frontier run. One pod per size at four producers, at most USD0.45 for w64 and
+USD1.10 for w160l8, and a third pod running w64 at one producer, at most
+USD0.45: USD2 together, from the reserve. The one-producer pod differs from the
+w64 pod only in `execution.workers`; it sets nothing and gates nothing.
 
 ```bash
 "${control[@]}" etude launch experiments/tla_frontier_calibration.py \
@@ -236,6 +241,7 @@ reading fails this gate.
 3. Calibration, then the evaluation rehearsal.
 4. Both gates, and each size's horizon written into the JSON
    protocol and regime. Freeze at the merged revision that carries them.
+5. The fact-embedding check below, before either long run.
 5. Execution review.
 6. The training launch, then the evaluation driver.
 
@@ -464,6 +470,15 @@ acceptance check:
    pytest tests/eval/test_tla_frontier.py -q`, an equal-hours schedule test
    over fixture checkpoints with hours, and an analysis test whose fixture runs
    carry both labels in `game_errors.by_cell`.
+
+5. **Catalog against hashed fact ids** (accepted with the design; software from
+   Task 30df0c, PR #437). Before either 54-hour run, a short matched w64 check
+   compares `ModelConfig.record_vocabulary` catalog against hashed: same recipe,
+   seed, decks and updates, differing only in that field, on rented hardware
+   inside the reserve. Its criterion is fixed before it runs, from learning
+   curves and a small vs-initialization and head-to-head read; catalog must
+   learn at least as well as hashed. A failure returns the embedding choice to
+   review before any long run.
 
 Calibration runs from the merged revision of 1–4. The freeze is a second, small
 change carrying both horizons and the regime hash.

@@ -1,8 +1,11 @@
 """Task c5fba4 calibration: per-update cost, memory and a rehearsed evaluation pass.
 
-Each size runs its frozen regime for a few updates on the GPU chosen for the
-frontier runs, so a size that cannot fit, or would reach too few updates, changes
-in a new protocol version before any scoring. Calibration is not a first attempt
+Each size runs its frozen regime, at its four producers, for a few updates on
+the GPU chosen for the frontier runs, so a size that cannot fit, or would reach
+too few updates, changes in a new protocol version before any scoring. Each
+reading's `expected_updates` is the damping horizon the protocol takes from it
+(`fitted_horizon`). A third pod runs w64 at one producer, so the readings show
+what the four producers buy. Calibration is not a first attempt
 at the frozen runs: its regime ids and this file's experiment keep it out of
 `experiments.tla_frontier.size_run`, and its games touch no frontier slot. The
 protocol's Launch sequence owns the commands and both launch gates.
@@ -15,9 +18,9 @@ and an update is about one game per stream, so longer late-run games raise it:
 stop is from a fresh policy's reading. Neither is a gate.
 
 A stored run is named by its launcher id, so each reading shows its job name. A
-gate reading depends on its host, so it shows its pod's step speed beside it, and
-`read_screen` (`--screen`) applies the protocol's host screen to calibration's
-pods and a launch's.
+gate reading depends on its host, so it shows its pod's step speed beside it,
+and its settled games by label (`engine_error`, `resource_limit`) once its
+receipt exists. Neither adds a gate.
 
 A failed game is never replayed, so the first rented evaluation pass must not be
 a scored one. Once both calibration runs have ended, or the launcher has closed
@@ -35,6 +38,7 @@ from decimal import Decimal
 import json
 from pathlib import Path
 from statistics import median
+from typing import Literal
 
 from etude.eval.query import statsdb
 from etude.eval.records import Benchmark, Environment, Matchup
@@ -46,11 +50,10 @@ from etude.run.storage import Storage
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
-    EXPERIMENT as FRONTIER,
     GAMES_PER_PAIR,
-    HOST_UPDATES,
     LARGE,
     SMALL,
+    GameErrorCounts,
     HostSpeed,
     Protocol,
     SizeLabel,
@@ -58,6 +61,7 @@ from experiments.tla_frontier import (
     checkpoint_inference,
     evaluation_pass,
     frozen,
+    game_error_counts,
     host_speed,
     last_update,
     paired_matchup,
@@ -67,6 +71,7 @@ from experiments.tla_frontier import (
 from experiments.tla_pilot_analysis import stored_game_columns
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.runtime import regime_tag
+from manabot.recipes.builders import fitted_horizon
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 
 EXPERIMENT = Path(__file__).stem
@@ -74,14 +79,18 @@ UPDATES = 5
 # 2,400 s stay usable under the 600 s stop reserve: one update well past the
 # protocol's 1,500 s launch gate, and all five at MTG-213's 150 s.
 WALL_SECONDS = 3600.0
-# USD2 in total, inside the protocol's reserve. Etude's 15-minute setup allowance
-# and these hours fit one size's ceiling at the USD0.67/hour the training budget
-# admits.
+# Etude's 15-minute setup allowance and these hours fit each pod's ceiling at
+# the USD0.67/hour the training budget admits.
 MAX_HOURS = 1.2
-MAX_USD_PER_SIZE = Decimal("1")
-# A pod reads slow above this multiple of the lowest step speed in the store. A
-# rough line from Elemental's fast and slow bands; TLA has no anchor of its own.
-SLOW_HOST_RATIO = 1.3
+# The w64 pod at one producer, beside the frontier's four.
+ONE_PRODUCER = "w64-p1"
+type Pod = Literal["w64", "w160l8", "w64-p1"]
+# USD2 in total, inside the protocol's reserve.
+MAX_USD: dict[Pod, Decimal] = {
+    SMALL: Decimal("0.45"),
+    ONE_PRODUCER: Decimal("0.45"),
+    LARGE: Decimal("1.1"),
+}
 # The second launch gate, a rough line at half the protocol's 600 s game limit.
 REHEARSAL_GAME_SECONDS = 300.0
 REHEARSAL_COMPARISONS = 2
@@ -96,8 +105,9 @@ class Calibration(StrictModel):
     state: str
     updates: int
     seconds_per_update: float | None
-    # What the frontier wall budget would reach at that cost.
-    updates_in_wall_budget: int | None
+    # The damping horizon S at that cost: the frontier wall's updates, capped
+    # at the reference.
+    expected_updates: int | None
     peak_allocated_cuda_bytes: int | None
     peak_reserved_cuda_bytes: int | None
     # Sampled once per update, so a peak inside an update can exceed it.
@@ -105,22 +115,7 @@ class Calibration(StrictModel):
     median_rows_per_update: float | None
     # Calibration's five updates reach only part of the host window.
     host: HostSpeed
-
-
-class ScreenReading(StrictModel):
-    """One pod against the fastest in the store; `slow` None means not read yet.
-
-    A run is read once it has passed the host window or ended.
-    """
-
-    run: str
-    job: str | None
-    experiment: str
-    state: str
-    updates: int
-    host: HostSpeed
-    ratio: float | None
-    slow: bool | None
+    game_errors: GameErrorCounts | None
 
 
 class Rehearsal(StrictModel):
@@ -142,45 +137,57 @@ class Rehearsal(StrictModel):
     passed: bool
 
 
-def _regime_id(label: SizeLabel) -> str:
-    return f"tla-frontier-c5fba4-calibration-{label}"
+def _regime_id(pod: Pod) -> str:
+    return f"tla-frontier-c5fba4-calibration-{pod}"
 
 
-def calibration_regime(regime: TrainingRegime, label: SizeLabel) -> TrainingRegime:
-    """The frozen regime, changed only in its identity, update target and wall."""
+def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
+    """The frozen regime, changed only in its identity, update target and wall.
+
+    The one-producer pod also sets `execution.workers` to 1.
+    """
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
-    return regime.model_copy(
-        update={
-            "id": _regime_id(label),
-            "wall_seconds": WALL_SECONDS,
-            "stages": [
-                stage.model_copy(
-                    update={
-                        "updates": UPDATES,
-                        "execution": stage.execution.model_copy(
-                            update={"wall_seconds": WALL_SECONDS}
-                        ),
-                    }
-                )
-            ],
-        }
+    workers = 1 if pod == ONE_PRODUCER else stage.execution.workers
+    execution = stage.execution.model_copy(
+        update={"wall_seconds": WALL_SECONDS, "workers": workers}
+    )
+    return TrainingRegime.model_validate(
+        regime.model_copy(
+            update={
+                "id": _regime_id(pod),
+                "wall_seconds": WALL_SECONDS,
+                "stages": [
+                    stage.model_copy(
+                        update={
+                            "updates": UPDATES,
+                            "execution": execution,
+                        }
+                    )
+                ],
+            }
+        ).model_dump()
     )
 
 
 def runs(revision: str) -> list[Run]:
-    """One capped allocation per size; a size that fails is itself the reading."""
+    """One capped allocation per pod; a pod that fails is itself the reading."""
     regimes, protocol = frozen()
+    pods: list[tuple[Pod, TrainingRegime]] = [
+        (SMALL, regimes[SMALL]),
+        (LARGE, regimes[LARGE]),
+        (ONE_PRODUCER, regimes[SMALL]),
+    ]
     return [
         run
-        for label, regime in regimes.items()
+        for pod, regime in pods
         for run in capped_runs(
-            calibration_regime(regime, label),
+            calibration_regime(regime, pod),
             experiment=EXPERIMENT,
             revision=revision,
             seed=protocol.training_seed,
             max_hours=MAX_HOURS,
-            max_usd=MAX_USD_PER_SIZE,
+            max_usd=MAX_USD[pod],
         )
     ]
 
@@ -204,9 +211,9 @@ def _furthest_run(state: ExperimentState, label: SizeLabel) -> TrainingRun:
 def rehearsal_matchups(
     state: ExperimentState, protocol: Protocol
 ) -> tuple[Matchup, Matchup]:
-    """W256 against its own start, then against w64; both last checkpoints.
+    """W160l8 against its own start, then against w64; both last checkpoints.
 
-    W256 in both seats is the slowest game the frontier schedules. A w256 that
+    W160l8 in both seats is the slowest game the frontier schedules. A w160l8 that
     stored only update 0 has no distinct pair, and no training reading for the
     first gate either, so that is refused rather than rehearsed.
     """
@@ -296,12 +303,13 @@ def _calibration(data: RunData, storage: Storage, wall_seconds: float) -> Calibr
         state=_state(data),
         updates=_updates(data),
         seconds_per_update=cost,
-        updates_in_wall_budget=int(wall_seconds / cost) if cost else None,
+        expected_updates=fitted_horizon(wall_seconds, cost) if cost else None,
         peak_allocated_cuda_bytes=_peak(data, "memory/peak_allocated_cuda_bytes"),
         peak_reserved_cuda_bytes=_peak(data, "memory/peak_reserved_cuda_bytes"),
         peak_rss_bytes=_peak(data, "coordinates/rss_bytes"),
         median_rows_per_update=float(median(rows.y)) if len(rows) else None,
         host=host_speed(data, storage),
+        game_errors=game_error_counts(storage, data.name),
     )
 
 
@@ -323,44 +331,6 @@ def read_calibration(source: Storage | Path | str) -> list[Calibration]:
         _calibration(data, storage, wall_seconds)
         for data in _training_data(storage, EXPERIMENT)
     ]
-
-
-def read_screen(source: Storage | Path | str) -> list[ScreenReading]:
-    """Calibration's and the frontier's pods, retired ones included, per the host screen.
-
-    Replacing a slow pod leaves the lowest speed in place, so a replacement is
-    read against the same line as the pod it replaced.
-    """
-    storage = as_storage(source)
-    found = [
-        (data, host_speed(data, storage))
-        for data in _training_data(storage, EXPERIMENT, FRONTIER)
-    ]
-    speeds = [
-        host.step_us_per_row for _, host in found if host.step_us_per_row is not None
-    ]
-    lowest = min(speeds, default=None)
-
-    def reading(data: RunData, host: HostSpeed) -> ScreenReading:
-        updates = _updates(data)
-        read = data.state is not None or updates >= HOST_UPDATES[-1]
-        ratio = (
-            host.step_us_per_row / lowest
-            if lowest is not None and host.step_us_per_row is not None
-            else None
-        )
-        return ScreenReading(
-            run=data.name,
-            job=_job(data),
-            experiment=data.experiment,
-            state=_state(data),
-            updates=updates,
-            host=host,
-            ratio=ratio,
-            slow=ratio > SLOW_HOST_RATIO if read and ratio is not None else None,
-        )
-
-    return [reading(data, host) for data, host in found]
 
 
 def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
@@ -409,18 +379,14 @@ def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, help="Etude training store")
-    reading = parser.add_mutually_exclusive_group()
-    reading.add_argument(
-        "--screen", action="store_true", help="read the pre-scoring host screen"
-    )
-    reading.add_argument(
+    parser.add_argument(
         "--rehearsal", action="store_true", help="read the evaluation rehearsal"
     )
     args = parser.parse_args()
     if args.rehearsal:
         print(read_rehearsal(args.source).model_dump_json(indent=2))
         return
-    readings = (read_screen if args.screen else read_calibration)(args.source)
+    readings = read_calibration(args.source)
     print(json.dumps([reading.model_dump() for reading in readings], indent=2))
 
 

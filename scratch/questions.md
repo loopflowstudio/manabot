@@ -111,3 +111,20 @@ until launch):
   last export and is reported like any ended run.
 - **No calibration gate on overflow counts.** Calibration reports them per label;
   fresh-policy counts say little about trained games.
+
+## Implement pass (2026-11-06, headless)
+
+- **Calibration ceilings USD0.45 / 1.10 / 0.45** (w64, w160l8, w64 one producer),
+  keeping USD2 total with the accepted third pod. Each small pod buys setup plus
+  five 300 s updates at USD0.67/hour; the large pod's 1.2 h binds first.
+  Reversible before calibration.
+- **Provisional horizons 1,296 (w64) and 129 (w160l8)** in the regime and protocol
+  JSON until calibration writes the measured ones. Five calibration updates do
+  not feel the difference.
+- **The large arm's horizon lives in the protocol's `large.expected_updates`**,
+  beside its width, depth and heads; w64's lives in its regime file. One owner each.
+- **The Etude `Checkpoint.wall_ms` PR is not opened from this step**: it is a
+  separate repository's PR and release. Equal-hours scheduling, its analysis rows
+  and an hours curve wait for it; nothing was built around its absence.
+- **`sampled_self_play` sets the game-error threshold to .25**, v10's, not the
+  field default .1. Reversible; a recipe choice, not a field default.

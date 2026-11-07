@@ -2,12 +2,13 @@
   "bootstrap_seed": 21592001,
   "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
   "deck_seed": 21590001,
-  "evaluation_usd": "12",
+  "evaluation_usd": "14",
   "export_every": 25,
   "game_seconds": 600.0,
   "large": {
-    "attention_layers": 4,
-    "hidden_dim": 256,
+    "attention_layers": 8,
+    "expected_updates": 129,
+    "hidden_dim": 160,
     "num_attention_heads": 8
   },
   "max_commands": 10000,
@@ -23,11 +24,12 @@
     400,
     600,
     800,
-    1000,
     1200,
     1600,
-    2000,
-    2400
+    2400,
+    3200,
+    4800,
+    6400
   ],
   "observation_shapes": {
     "action_focus": [
@@ -49,11 +51,11 @@
       128
     ],
     "agent_permanents": [
-      64,
+      96,
       38
     ],
     "agent_permanents_valid": [
-      64
+      96
     ],
     "agent_player": [
       1,
@@ -107,11 +109,11 @@
       128
     ],
     "opponent_permanents": [
-      64,
+      96,
       38
     ],
     "opponent_permanents_valid": [
-      64
+      96
     ],
     "opponent_player": [
       1,
@@ -211,7 +213,7 @@
       "second": 53
     }
   ],
-  "regime_sha256": "2f7ffa8213cd80a7ad9c8491d8dc39ca13599b6a79d283ad71b79ca393391266",
+  "regime_sha256": "aea2613052bf8b77851b1fc0db4064b2c6cd113248f713d02ae04acba8a848f7",
   "runtime_world": {
     "card_digest": "6a818cbcc0c48e0d9b6abb42fee4cbea288312a271e0e9514b5683f0ea3d1cd9",
     "world_version": "w17"

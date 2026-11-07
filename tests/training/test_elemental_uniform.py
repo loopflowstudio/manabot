@@ -157,6 +157,46 @@ def test_uniform_collector_recovers_changed_terminal_roots(
     assert first._env.current_game_seeds() == restored._env.current_game_seeds()
 
 
+@pytest.mark.parametrize("workers", [2, 4])
+def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
+    torch.set_num_threads(1)
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
+    )
+    collectors = [
+        SeatRoutedCollector(
+            ObservationSpace(),
+            _match(),
+            Reward(RewardConfig()),
+            num_envs=4,
+            seed=17402,
+            opponent_mode="self",
+            learning_seats="both",
+            matchup_curriculum="elemental-uniform",
+            workers=count,
+        )
+        for count in (1, workers)
+    ]
+    one, many = collectors
+    try:
+        for _ in range(2):
+            left, right = one.collect(agent, 64), many.collect(agent, 64)
+            expected, actual = left.ordered_obs(), right.ordered_obs()
+            for key in expected:
+                np.testing.assert_array_equal(expected[key], actual[key])
+            np.testing.assert_array_equal(left.actions, right.actions)
+            assert one._env.current_matchup_indices() == (
+                many._env.current_matchup_indices()
+            )
+            assert one._env.current_game_seeds() == many._env.current_game_seeds()
+            assert one.stats.exposure == many.stats.exposure
+        assert one.stats.games > 0
+    finally:
+        one.close()
+        many.close()
+
+
 def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
     collector = _collector("current", 256)
     np.testing.assert_array_equal(collector.learner_seat, np.arange(256) % 2)
@@ -177,19 +217,14 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
     bad.hero_sideboard = {}
     with pytest.raises(ValueError, match="exact Elemental"):
         elemental_roster(Match(bad))
-    for workers, mode, root in [
-        (2, "self", None),
-        (1, "random", None),
-        (1, "self", "lethal-target-v1"),
-    ]:
-        with pytest.raises(ValueError, match="one producer"):
+    for mode, root in [("random", None), ("self", "lethal-target-v1")]:
+        with pytest.raises(ValueError, match="current-self and ordinary roots"):
             SeatRoutedCollector(
                 ObservationSpace(),
                 _match(),
                 Reward(RewardConfig()),
                 num_envs=4,
                 matchup_curriculum="elemental-uniform",
-                workers=workers,
                 opponent_mode=mode,
                 root=root,
             )
@@ -230,11 +265,12 @@ def test_uniform_real_cpu_update_and_checkpoint_reload(tmp_path: Path) -> None:
     baseline = deepcopy(value)
     baseline["stages"][0].update(streams=256, transitions=64)
     assert validate_regime(baseline).stages[0].streams == 256
-    for invalid in (2, 4):
-        bad = deepcopy(value)
-        bad["stages"][0]["execution"]["workers"] = invalid
-        with pytest.raises(ValueError, match="one producer"):
-            TrainingRegime.model_validate(bad)
+    for workers in (2, 4):
+        parallel = deepcopy(value)
+        parallel["stages"][0]["execution"]["workers"] = workers
+        assert TrainingRegime.model_validate(parallel).stages[0].execution.workers == (
+            workers
+        )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(recipe, 17402, tmp_path / "run", store)
     assert run.status == "completed"

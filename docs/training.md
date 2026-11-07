@@ -88,9 +88,14 @@ count, wall and memory limits (`Execution`). `execution.workers` accepts 1
 (default), 2 or 4 CPU observation producers for self-play only: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
-unchanged across partitions. `execution.threads` controls Torch threads
-independently. More workers are not a recommended default; the matched GPU
-comparison is in
+unchanged across partitions. Sampled rosters (a deck source or
+`elemental-uniform`) draw each game's decks from that game's native seed, so
+draws, exposure and batches agree for 1, 2 and 4 producers.
+`execution.threads` controls Torch threads independently. The field default
+stays 1, so saved regimes keep their meaning; new sampled-roster recipes built by
+`manabot.recipes.builders.sampled_self_play` default to four producers, a
+damping horizon fitted to the run's expected updates and `recover_capacity`.
+The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
 
@@ -315,9 +320,8 @@ The Perf panel's "Update time" series shows where an update goes:
 the engine's own clock into `native_stepping` and `observation_encoding`, beside
 preparation, inference, `stream_bookkeeping`, assembly and learning.
 `TrainingRun.host` names the machine the attempt got. With one producer
-(`execution.workers` 1, which `elemental-uniform` requires) training occupies one
-CPU thread, so host single-thread speed sets its pace, not vCPU count or GPU size;
-see
+(`execution.workers` 1) training occupies one CPU thread, so host single-thread
+speed sets its pace, not vCPU count or GPU size; see
 [training update time](../experiments/training-update-time.md) before choosing a
 machine. `scripts/bench_training_update.py` prints the same split for one machine.
 

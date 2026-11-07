@@ -27,8 +27,10 @@ games. The totals span both players, so they support no per-policy rate.
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
 in its database, so `TrainingPoint` reads it here to show how far each size got
-per hour. Each size also shows its pod's host speed, reported beside the
-reading and voiding nothing. The CLI writes JSON; it neither runs games nor
+per hour. Each size also shows its damping horizon and producers beside the
+updates it reached, and its pod's host speed and settled games by label
+(`engine_error`, `resource_limit`), reported beside the reading and voiding
+nothing. The CLI writes JSON; it neither runs games nor
 replaces evidence.
 """
 
@@ -52,7 +54,7 @@ from experiments.tla_frontier import (
     EXPERIMENT,
     PROTOCOL,
     SIZES,
-    HostSpeed,
+    PodReading,
     Protocol,
     ScheduledComparison,
     SizeLabel,
@@ -60,9 +62,10 @@ from experiments.tla_frontier import (
     endpoint,
     environment,
     frozen,
-    host_speed,
+    horizon,
     is_set_aside,
     last_update,
+    pod_reading,
     size_label,
     size_run,
     update_cap,
@@ -80,6 +83,7 @@ from experiments.tla_pilot_analysis import (
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import StrictModel, file_sha256
+from manabot.training.regime import TrainingRegime
 
 if TYPE_CHECKING:
     import duckdb
@@ -142,9 +146,12 @@ class SizeReading(StrictModel):
     against_initial: Bounded | None
     against_heuristic: Bounded | None
     learned: bool | None
+    # The damping horizon S and producer count the size's regime declared.
+    horizon: int
+    workers: int
     # Comparing the two pods' speed reads the equal-compute claim; a difference
-    # is reported and voids nothing.
-    host: HostSpeed | None
+    # is reported and voids nothing. None before the run's records are read.
+    pod: PodReading | None
 
 
 class SetAside(StrictModel):
@@ -295,7 +302,8 @@ def _reading(
     run: TrainingRun | None,
     comparisons: list[Comparison],
     db: duckdb.DuckDBPyConnection,
-    hosts: Mapping[str, HostSpeed],
+    pods: Mapping[str, PodReading],
+    regime: TrainingRegime,
 ) -> SizeReading:
     """A size with no endpoint yet has endpoint slots of update None and no score."""
     end = endpoint(run)
@@ -311,14 +319,16 @@ def _reading(
         against_initial=initial.result,
         against_heuristic=heuristic.result,
         learned=_learned(initial.result),
-        host=hosts.get(run.name) if run else None,
+        horizon=horizon(regime),
+        workers=regime.stages[0].execution.workers,
+        pod=pods.get(run.name) if run else None,
     )
 
 
 def analyze(
     state: ExperimentState,
     db: duckdb.DuckDBPyConnection,
-    hosts: Mapping[str, HostSpeed],
+    pods: Mapping[str, PodReading],
 ) -> FrontierAnalysis:
     """Read the whole experiment; the two sizes are one cohort of comparisons."""
     regimes, protocol = frozen()
@@ -334,7 +344,14 @@ def analyze(
         for planned in comparison_schedule(state, protocol)
     ]
     sizes = [
-        _reading(label, size_run(state, label, protocol), comparisons, db, hosts)
+        _reading(
+            label,
+            size_run(state, label, protocol),
+            comparisons,
+            db,
+            pods,
+            regimes[label],
+        )
         for label in SIZES
     ]
     issues = [
@@ -392,11 +409,11 @@ def analyze(
     )
 
 
-def read_hosts(source: Storage | Path | str) -> dict[str, HostSpeed]:
-    """Every frontier run's host speed by stored run name."""
+def read_pods(source: Storage | Path | str) -> dict[str, PodReading]:
+    """Every frontier run's host speed and game-error counts by stored run name."""
     storage = as_storage(source)
     return {
-        data.name: host_speed(data, storage)
+        data.name: pod_reading(data, storage)
         for data in read_all(storage)
         if data.experiment == EXPERIMENT
     }
@@ -411,7 +428,7 @@ def main() -> None:
     args = parser.parse_args()
     state = with_launcher_ends(observe(args.source, EXPERIMENT))
     with statsdb(EXPERIMENT, args.source) as db:
-        report = analyze(state, db, read_hosts(args.source))
+        report = analyze(state, db, read_pods(args.source))
     atomic_json(args.out, report.model_dump(mode="json"))
 
 

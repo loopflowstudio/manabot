@@ -44,6 +44,7 @@ from experiments.tla_frontier import (
     REGIME,
     ROOT,
     SMALL,
+    GameErrorCounts,
     HostSpeed,
     SizeLabel,
     comparison_schedule,
@@ -51,6 +52,7 @@ from experiments.tla_frontier import (
     eval,
     export_updates,
     frozen,
+    horizon,
     pass_name,
     runs,
     size_run,
@@ -63,18 +65,18 @@ from experiments.tla_frontier_analysis import (
     SetAside,
     analyze,
     main as analysis_main,
-    read_hosts,
+    read_pods,
 )
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
     MAX_HOURS,
-    MAX_USD_PER_SIZE,
+    MAX_USD,
+    ONE_PRODUCER,
     UPDATES,
     calibration_regime,
     eval as calibration_eval,
     read_calibration,
     read_rehearsal,
-    read_screen,
     runs as calibration_runs,
 )
 from manabot.env.observation import ObservationSpace
@@ -87,6 +89,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.training.execution import cuda_peak_metrics, execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.state.game_errors import GameErrorState
 from manabot.verify.store import VerifyStore
 
 CALIBRATION_FILE = ROOT / "experiments/tla_frontier_calibration.py"
@@ -224,9 +227,12 @@ def _compute_parameters(regime: TrainingRegime) -> int:
 
 
 def _recipe(regime: TrainingRegime) -> dict[str, object]:
-    """The regime without its identity and compute-network size."""
+    """The regime without its identity, compute-network size and horizon."""
     size = {"hidden_dim", "attention_layers", "num_attention_heads"}
-    return regime.model_dump(mode="json", exclude={"id": True, "agent": size})
+    horizon = {0: {"learning": {"iteration_schedule": {"steps"}}}}
+    return regime.model_dump(
+        mode="json", exclude={"id": True, "agent": size, "stages": horizon}
+    )
 
 
 def _without_length(regime: TrainingRegime) -> dict[str, object]:
@@ -237,12 +243,17 @@ def _without_length(regime: TrainingRegime) -> dict[str, object]:
     )
 
 
-def test_sizes_differ_only_in_compute_network() -> None:
-    regimes, _ = frozen()
+def test_sizes_differ_only_in_compute_network_and_horizon() -> None:
+    regimes, protocol = frozen()
     small, large = regimes[SMALL], regimes[LARGE]
     assert _recipe(small) == _recipe(large)
     assert (small.agent.hidden_dim, small.agent.attention_layers) == (64, 2)
-    assert (large.agent.hidden_dim, large.agent.attention_layers) == (256, 4)
+    assert (large.agent.hidden_dim, large.agent.attention_layers) == (160, 8)
+    assert large.agent.num_attention_heads == 8
+    assert horizon(small) == 1296 and horizon(large) == protocol.large.expected_updates
+    for regime in (small, large):
+        assert regime.stages[0].execution.workers == 4
+        assert regime.observation.max_permanents_per_player == 96
     ratio = _compute_parameters(large) / _compute_parameters(small)
     assert 10 <= ratio <= 100
 
@@ -286,13 +297,13 @@ def test_milestones_play_both_sizes_against_heuristic_and_each_other() -> None:
     schedule = comparison_schedule(_state({SMALL: 1300, LARGE: 450}), frozen()[1])
     playable = [c for c in schedule if c.matchup is not None]
     names = {c.matchup.name for c in playable if c.matchup is not None}
-    assert "w64 u0 vs heuristic" in names and "w256 u0 vs heuristic" in names
-    assert "w256 u400 vs w64 u400" in names
-    assert "w256 u600 vs w64 u600" not in names
+    assert "w64 u0 vs heuristic" in names and "w160l8 u0 vs heuristic" in names
+    assert "w160l8 u400 vs w64 u400" in names
+    assert "w160l8 u600 vs w64 u600" not in names
     assert "w64 u1200 vs heuristic" in names
-    assert {"w64 final u1300 vs heuristic", "w256 final u450 vs heuristic"} <= names
-    assert {"w64 final u1300 vs w64 u0", "w256 final u450 vs w256 u0"} <= names
-    assert "w256 final vs w64 final" in names
+    assert {"w64 final u1300 vs heuristic", "w160l8 final u450 vs heuristic"} <= names
+    assert {"w64 final u1300 vs w64 u0", "w160l8 final u450 vs w160l8 u0"} <= names
+    assert "w160l8 final vs w64 final" in names
     # Unreached milestones stay expected for analysis.
     assert any(
         c.update == 2400 and c.tag == "head-to-head" and c.matchup is None
@@ -307,7 +318,7 @@ def test_running_runs_evaluate_reached_milestones_only() -> None:
     state = _state({SMALL: 100, LARGE: 50}, finished=False)
     schedule = comparison_schedule(state, frozen()[1])
     names = {c.matchup.name for c in schedule if c.matchup is not None}
-    assert "w256 u50 vs w64 u50" in names
+    assert "w160l8 u50 vs w64 u50" in names
     assert not any("final" in name for name in names)
     (job,) = eval(state)
     assert job.max_usd == Decimal("2")
@@ -325,10 +336,10 @@ def test_exports_between_milestones_are_stored_but_not_played() -> None:
     (job,) = eval(state)
     names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
     # Update 525 is no milestone; it is played only as the failed run's endpoint.
-    assert {"w256 final u525 vs heuristic", "w256 final u525 vs w256 u0"} <= names
-    assert "w256 final vs w64 final" in names
-    assert "w256 u400 vs w64 u400" in names
-    assert "w256 u600 vs w64 u600" not in names
+    assert {"w160l8 final u525 vs heuristic", "w160l8 final u525 vs w160l8 u0"} <= names
+    assert "w160l8 final vs w64 final" in names
+    assert "w160l8 u400 vs w64 u400" in names
+    assert "w160l8 u600 vs w64 u600" not in names
     played = {
         c.update for c in comparison_schedule(state, protocol) if c.matchup is not None
     }
@@ -368,10 +379,10 @@ def test_etude_eval_observes_the_runs_training_records(tmp_path: Path) -> None:
     names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
     assert {
         "w64 u0 vs heuristic",
-        "w256 u0 vs heuristic",
+        "w160l8 u0 vs heuristic",
         "w64 u25 vs heuristic",
-        "w256 u25 vs heuristic",
-        "w256 u25 vs w64 u25",
+        "w160l8 u25 vs heuristic",
+        "w160l8 u25 vs w64 u25",
     } <= names
 
 
@@ -413,16 +424,6 @@ def test_regime_tags_stay_out_of_match_keys() -> None:
 def _protocol_blocks() -> list[str]:
     protocol = (ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.md").read_text()
     return protocol.split("```")[1::2]
-
-
-def test_one_size_relaunches_alone_with_its_own_ceiling() -> None:
-    file = ROOT / "experiments/tla_frontier.py"
-    (alone,) = read_job_file(file, ["--revision", "HEAD", "--size", LARGE])
-    assert alone.job.name == "tla-frontier-c5fba4-w256"
-    assert alone.job.max_usd == Decimal("38")
-    assert alone.job.max_attempts == 1
-    with pytest.raises(LauncherError, match="size must be"):
-        read_job_file(file, ["--revision", "HEAD", "--size", "w128"])
 
 
 def test_protocol_launches_set_cohort_limits_only_on_a_cohort() -> None:
@@ -468,7 +469,7 @@ def test_protocol_waits_for_the_rehearsal_and_names_the_relaunch() -> None:
 def test_a_replaced_pod_is_set_aside_and_listed(
     tmp_path: Path, frontier_db: duckdb.DuckDBPyConnection
 ) -> None:
-    """Cancelled at the screen, a run leaves its size to the replacement."""
+    """A run that ended below the first milestone is listed, and no size's run."""
     small, large = runs("HEAD")
     retired = _tracked(large, tmp_path, {}, (0,), end="failed")
     _tracked(small, tmp_path, {}, (0, 25), end=None)
@@ -487,10 +488,10 @@ def test_a_replaced_pod_is_set_aside_and_listed(
     ]
 
 
-def test_a_pod_cancelled_past_the_first_milestone_is_not_replaceable(
+def test_a_pod_ended_past_the_first_milestone_keeps_its_size(
     tmp_path: Path,
 ) -> None:
-    """It keeps its size's run, which is why the screen reads each pod before 25."""
+    """Past update 25 a run is its size's, so a second run of the size is an error."""
     small, _ = runs("HEAD")
     _tracked(small, tmp_path, {}, (0, 25), end="failed")
     _tracked(small, tmp_path, {}, (0,), end=None)
@@ -502,7 +503,7 @@ def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
     _, large = runs("HEAD")
     _tracked(large, tmp_path, {}, (0, 25), end=None)
     _tracked(large, tmp_path, {}, (0, 25), end=None)
-    with pytest.raises(ValueError, match="admits one w256 run"):
+    with pytest.raises(ValueError, match="admits one w160l8 run"):
         size_run(observe(tmp_path, EXPERIMENT), LARGE, frozen()[1])
 
 
@@ -530,10 +531,10 @@ def test_a_lost_pod_past_the_first_milestone_ends_at_its_last_export(
     # `eval` reads the launcher itself, so the endpoint comparisons play.
     (job,) = eval(stored)
     names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
-    assert {"w64 final u50 vs w64 u0", "w256 final vs w64 final"} <= names
+    assert {"w64 final u50 vs w64 u0", "w160l8 final vs w64 final"} <= names
 
 
-def test_a_lost_pod_below_the_first_milestone_leaves_its_size_to_a_replacement(
+def test_a_lost_pod_below_the_first_milestone_is_set_aside(
     tmp_path: Path, launcher: dict[str, Outcome], frontier_db: duckdb.DuckDBPyConnection
 ) -> None:
     _, large = runs("HEAD")
@@ -542,7 +543,7 @@ def test_a_lost_pod_below_the_first_milestone_leaves_its_size_to_a_replacement(
     launcher[lost] = "out_of_time"
     stored = observe(tmp_path, EXPERIMENT)
     protocol = frozen()[1]
-    with pytest.raises(ValueError, match="admits one w256 run"):
+    with pytest.raises(ValueError, match="admits one w160l8 run"):
         size_run(stored, LARGE, protocol)
     closed = with_launcher_ends(stored)
     found = size_run(closed, LARGE, protocol)
@@ -786,16 +787,44 @@ def test_calibration_changes_only_length_and_identity() -> None:
         changed = calibration_regime(regime, label)
         assert changed.stages[0].updates == UPDATES
         assert _without_length(changed) == _without_length(regime)
+    one = calibration_regime(regimes[SMALL], ONE_PRODUCER)
+    assert one.stages[0].execution.workers == 1
+    assert one.id == "tla-frontier-c5fba4-calibration-w64-p1"
+    four = calibration_regime(regimes[SMALL], SMALL)
+    assert _without_length(one) == _without_length(
+        four.model_copy(
+            update={
+                "stages": [
+                    four.stages[0].model_copy(
+                        update={
+                            "execution": four.stages[0].execution.model_copy(
+                                update={"workers": 1}
+                            )
+                        }
+                    )
+                ]
+            }
+        )
+    )
 
 
 def test_calibration_fits_its_ceiling_on_the_admitted_gpus() -> None:
     launched = read_job_file(CALIBRATION_FILE, ["--revision", "HEAD"])
-    assert len(launched) == 2
+    assert [run.job.name for run in launched] == [
+        "tla-frontier-c5fba4-calibration-w64",
+        "tla-frontier-c5fba4-calibration-w160l8",
+        "tla-frontier-c5fba4-calibration-w64-p1",
+    ]
     jobs = [TrainingJob.model_validate_json(run.job.config) for run in launched]
     assert {job.experiment for job in jobs} == {CALIBRATION}
+    assert [job.regime.stages[0].execution.workers for job in jobs] == [4, 4, 1]
     assert {run.job.until for run in launched} == {f"updates={UPDATES}"}
     assert sum(run.job.max_usd or 0 for run in launched) == Decimal("2")
-    assert Decimal(str(MAX_HOURS + 0.25)) * Decimal("0.67") <= MAX_USD_PER_SIZE
+    hourly, setup = Decimal("0.67"), Decimal("0.25")
+    # The large pod's hours bind; each small pod buys setup and five 300 s updates.
+    assert (Decimal(str(MAX_HOURS)) + setup) * hourly <= MAX_USD[LARGE]
+    for pod in (SMALL, ONE_PRODUCER):
+        assert MAX_USD[pod] / hourly >= setup + Decimal(UPDATES * 300) / 3600
 
 
 def _host_rows(us_per_row: dict[int, float]) -> dict[int, dict[str, float]]:
@@ -832,7 +861,7 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
             "rows": count,
             "time/collection/environment_step_and_encoding": step,
         }
-    small, large = calibration_runs("HEAD")
+    small, large, _ = calibration_runs("HEAD")
     _tracked(small, tmp_path, rows, (0, 3))
     _tracked(large, tmp_path, {})
     readings = {reading.job: reading for reading in read_calibration(tmp_path)}
@@ -840,7 +869,8 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert len(reading.run) == 12  # the launcher's id; `job` says which size
     assert reading.updates == 3
     assert reading.seconds_per_update == 220  # the first update's warm-up is set aside
-    assert reading.updates_in_wall_budget == 883
+    assert reading.expected_updates == 883  # ⌊194,400 / 220⌋, the horizon S
+    assert reading.game_errors is None  # no receipt until the attempt finishes
     assert reading.peak_allocated_cuda_bytes == 4_000_000_000
     assert reading.peak_reserved_cuda_bytes == 6_000_000_000
     assert reading.peak_rss_bytes == 20_000_000_000  # not the last update's value
@@ -849,7 +879,7 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert reading.host.step_us_per_row == pytest.approx(250)
     assert reading.host.step_spread == pytest.approx(1.5)
     assert reading.host.cpu_model is None
-    silent = readings["tla-frontier-c5fba4-calibration-w256"]
+    silent = readings["tla-frontier-c5fba4-calibration-w160l8"]
     assert silent.updates == 0 and silent.seconds_per_update is None
     assert silent.peak_reserved_cuda_bytes is None
     assert silent.peak_rss_bytes is None and silent.median_rows_per_update is None
@@ -866,8 +896,8 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
 
 
 def _calibrated(source: Path, last: int = 5) -> tuple[str, str]:
-    """Both calibration runs, ended, stored through the worker's path."""
-    small, large = calibration_runs("HEAD")
+    """Both four-producer calibration runs, ended, stored through the worker's path."""
+    small, large, _ = calibration_runs("HEAD")
     return (
         _tracked(small, source, {last: {"loss": 0.1}}, (0, last)),
         _tracked(large, source, {last: {"loss": 0.1}}, (0, last)),
@@ -920,7 +950,7 @@ def test_rehearsal_is_a_frontier_pass_of_calibration_checkpoints(
 ) -> None:
     small, large = _calibrated(tmp_path)
     matchups = _rehearsal_matchups(tmp_path)
-    assert set(matchups) == {"w256 last vs w256 u0", "w256 last vs w64 last"}
+    assert set(matchups) == {"w160l8 last vs w160l8 u0", "w160l8 last vs w64 last"}
     protocol = frozen()[1]
     pairs = [pair.model_dump(mode="json") for pair in protocol.pairs]
     for matchup in matchups.values():
@@ -928,10 +958,12 @@ def test_rehearsal_is_a_frontier_pass_of_calibration_checkpoints(
         assert len(matches) == len(protocol.pairs)
         # `play` refuses anything but the frozen pairs at four legs.
         assert all(m.conditions in pairs and m.games == 4 for m in matches)
-    last, first = (p.checkpoint.key for p in matchups["w256 last vs w256 u0"].players)
+    last, first = (
+        p.checkpoint.key for p in matchups["w160l8 last vs w160l8 u0"].players
+    )
     assert (last.run, first.run) == (large, large)
     assert last.name != first.name
-    across = matchups["w256 last vs w64 last"].players
+    across = matchups["w160l8 last vs w64 last"].players
     assert [player.checkpoint.key.run for player in across] == [large, small]
 
     (job,) = calibration_eval(observe(tmp_path, CALIBRATION))
@@ -949,7 +981,7 @@ def test_rehearsal_is_a_frontier_pass_of_calibration_checkpoints(
 
 def test_rehearsal_waits_for_both_runs_to_end(tmp_path: Path) -> None:
     assert calibration_eval(ExperimentState(experiment=CALIBRATION)) == []
-    small, large = calibration_runs("HEAD")
+    small, large, _ = calibration_runs("HEAD")
     _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
     _tracked(large, tmp_path, {3: {"loss": 0.1}}, (0, 3), end=None)
     assert calibration_eval(observe(tmp_path, CALIBRATION)) == []
@@ -958,7 +990,7 @@ def test_rehearsal_waits_for_both_runs_to_end(tmp_path: Path) -> None:
 def test_a_lost_calibration_pod_is_rehearsed_at_its_last_export(
     tmp_path: Path, launcher: dict[str, Outcome]
 ) -> None:
-    small, large = calibration_runs("HEAD")
+    small, large, _ = calibration_runs("HEAD")
     _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
     lost = _tracked(large, tmp_path, {3: {"loss": 0.1}}, (0, 3), end=None)
     launcher[lost] = "lost"
@@ -985,10 +1017,10 @@ def test_rehearsal_names_its_attempt(
 
 
 def test_rehearsal_refuses_a_size_with_no_distinct_pair(tmp_path: Path) -> None:
-    small, large = calibration_runs("HEAD")
+    small, large, _ = calibration_runs("HEAD")
     _tracked(small, tmp_path, {5: {"loss": 0.1}}, (0, 5))
     _tracked(large, tmp_path, {}, (0,), end="failed")
-    with pytest.raises(ValueError, match="w256 stored no update past 0"):
+    with pytest.raises(ValueError, match="w160l8 stored no update past 0"):
         calibration_eval(observe(tmp_path, CALIBRATION))
 
 
@@ -1060,7 +1092,6 @@ def test_rehearsal_reader_passes_a_clean_pass_and_keeps_training_readings_apart(
     assert reading.passed
     # A pass is a stored run of this experiment, and no training reading.
     assert len(read_calibration(tmp_path)) == 2
-    assert len(read_screen(tmp_path)) == 2
 
 
 def test_rehearsal_fails_at_the_game_line(tmp_path: Path) -> None:
@@ -1124,44 +1155,46 @@ def test_rehearsal_fails_with_a_raising_match_or_nothing_played(
     assert reading.pass_usd == Decimal("0.2") and not reading.passed
 
 
-def test_a_finished_receipt_names_the_cpu_when_its_revision_records_it(
+def test_a_finished_receipt_names_the_cpu_and_game_errors_by_label(
     tmp_path: Path,
 ) -> None:
     small, large = runs("HEAD")
     named = _tracked(small, tmp_path, _host_rows({2: 100}), (0, 25))
     older = _tracked(large, tmp_path, _host_rows({2: 100}), (0, 25))
+    errors = GameErrorState(
+        attempted=9,
+        completed=6,
+        crashed=3,
+        discarded_samples=40,
+        by_cell={
+            "a:b:0": {"completed": 4, "engine_error": 1},
+            "b:a:1": {"completed": 2, "resource_limit": 2},
+        },
+    )
     for run, receipt in (
-        (named, {"host": {"cpu_model": "AMD EPYC 7763"}}),
+        (
+            named,
+            {
+                "host": {"cpu_model": "AMD EPYC 7763"},
+                "game_errors": errors.model_dump(mode="json"),
+            },
+        ),
         (older, {"status": "paused"}),
     ):
         path = tmp_path / run / "attempt" / "training" / "run.json"
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps(receipt))
-    hosts = read_hosts(tmp_path)
-    assert hosts[named].cpu_model == "AMD EPYC 7763"
-    assert hosts[older].cpu_model is None
-
-
-def test_screen_reads_each_pod_against_the_fastest_in_the_store(tmp_path: Path) -> None:
-    window = range(2, 7)
-    small, large = runs("HEAD")
-    calibrated, _ = calibration_runs("HEAD")
-    fast = _host_rows(dict.fromkeys(range(2, 6), 200.0))
-    _tracked(calibrated, tmp_path, fast)
-    kept = _tracked(
-        small, tmp_path, _host_rows(dict.fromkeys(window, 250.0)), (0,), end=None
+    pods = read_pods(tmp_path)
+    assert pods[named].host.cpu_model == "AMD EPYC 7763"
+    assert pods[named].game_errors == GameErrorCounts(
+        attempted=9,
+        completed=6,
+        engine_error=1,
+        resource_limit=2,
+        discarded_samples=40,
+        stop_reason=None,
     )
-    # Both frontier pods can read slow against calibration's.
-    slow = _tracked(
-        large, tmp_path, _host_rows(dict.fromkeys(window, 300.0)), (0,), end=None
-    )
-    early = _tracked(large, tmp_path, _host_rows({2: 400.0, 3: 400.0}), (0,), end=None)
-    readings = {reading.run: reading for reading in read_screen(tmp_path)}
-    assert readings[kept].ratio == pytest.approx(1.25) and readings[kept].slow is False
-    assert readings[slow].ratio == pytest.approx(1.5) and readings[slow].slow is True
-    # Before its window closes a live run is shown but not called.
-    assert readings[early].slow is None
-    assert sum(r.experiment == CALIBRATION for r in readings.values()) == 1
+    assert pods[older].host.cpu_model is None and pods[older].game_errors is None
 
 
 def test_one_real_update_writes_every_key_calibration_reads(
@@ -1184,7 +1217,7 @@ def test_one_real_update_writes_every_key_calibration_reads(
                 stage.model_copy(
                     update={
                         "updates": 2,
-                        "streams": 2,
+                        "streams": 4,
                         "transitions": 8,
                         "execution": stage.execution.model_copy(
                             update={"device": "cpu"}
@@ -1332,22 +1365,24 @@ def test_training_runs_admit_milestones_and_wall_budget() -> None:
     launched = runs("HEAD")
     assert [run.job.name for run in launched] == [
         "tla-frontier-c5fba4-w64",
-        "tla-frontier-c5fba4-w256",
+        "tla-frontier-c5fba4-w160l8",
     ]
-    assert {run.job.until for run in launched} == {"updates=3000"}
+    assert {run.job.until for run in launched} == {"updates=10000"}
+    configs = [TrainingJob.model_validate_json(run.job.config) for run in launched]
+    assert [horizon(job.regime) for job in configs] == [1296, 129]
     assert {run.job.max_attempts for run in launched} == {1}
 
 
 def test_training_exports_the_cadence_joined_with_the_milestones() -> None:
     regimes, protocol = frozen()
-    expected = tuple(range(25, 3000, 25))
+    expected = tuple(range(25, 10_000, 25))
     assert set(protocol.milestones) <= set(expected)
     for launched in runs("HEAD"):
         job = TrainingJob.model_validate_json(launched.job.config)
         assert job.milestones == expected
     # A milestone off the cadence is still exported, in order.
-    offset = protocol.model_copy(update={"milestones": (30,), "export_every": 1000})
-    assert export_updates(regimes[SMALL], offset) == (30, 1000, 2000)
+    offset = protocol.model_copy(update={"milestones": (30,), "export_every": 4000})
+    assert export_updates(regimes[SMALL], offset) == (30, 4000, 8000)
 
 
 def test_discovery_keeps_evaluation_callback_importable() -> None:
@@ -1461,7 +1496,7 @@ def test_failed_size_keeps_its_reach_but_no_equal_compute_scale(
     state = _failed(_state({SMALL: 1300, LARGE: 450}), LARGE)
     schedule = comparison_schedule(state, frozen()[1])
     names = {c.matchup.name for c in schedule if c.matchup is not None}
-    assert {"w256 final u450 vs w256 u0", "w256 final vs w64 final"} <= names
+    assert {"w160l8 final u450 vs w160l8 u0", "w160l8 final vs w64 final"} <= names
     assert any(
         c.tag == "head-to-head" and c.update == 600 and c.unreached for c in schedule
     )
@@ -1499,7 +1534,8 @@ def test_analysis_missing_reached_comparison_leaves_reading_unknown(
     state = _state({SMALL: 100, LARGE: 50})
     keys = _outcomes(frontier_db, state)
     frontier_db.execute(
-        "DELETE FROM matches WHERE match = ?", [keys["w256 final u50 vs w256 u0"][0]]
+        "DELETE FROM matches WHERE match = ?",
+        [keys["w160l8 final u50 vs w160l8 u0"][0]],
     )
     report = analyze(state, frontier_db, {})
     assert not report.complete
@@ -1545,7 +1581,7 @@ def test_failed_legs_bound_readings_instead_of_erasing_them(
 ) -> None:
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state)
-    _fail_leg(frontier_db, keys["w256 final vs w64 final"][0], 0)
+    _fail_leg(frontier_db, keys["w160l8 final vs w64 final"][0], 0)
     _fail_leg(frontier_db, keys["w64 final u1300 vs w64 u0"][0], 0)
     report = analyze(state, frontier_db, {})
     played = 64 * len(keys)
@@ -1603,7 +1639,7 @@ def test_failed_legs_cannot_rescue_a_clear_negative_reading(
 def test_an_endpoint_at_the_update_cap_is_not_equal_compute(
     frontier_db: duckdb.DuckDBPyConnection,
 ) -> None:
-    state = _state({SMALL: 3000, LARGE: 450})
+    state = _state({SMALL: 10_000, LARGE: 450})
     _outcomes(frontier_db, state)
     report = analyze(state, frontier_db, {})
     assert report.scale is None and not report.complete
@@ -1645,7 +1681,7 @@ def test_a_killed_game_leaves_its_count_out_of_the_totals(
     state = _state({SMALL: 1300, LARGE: 450})
     keys = _outcomes(frontier_db, state)
     _add_policy_actions(frontier_db)
-    killed = keys["w256 final vs w64 final"][0]
+    killed = keys["w160l8 final vs w64 final"][0]
     _fail_leg(frontier_db, killed, 0)
     frontier_db.execute(
         "UPDATE games SET policy_decisions = NULL, policy_dropped_actions = NULL "
@@ -1706,7 +1742,7 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
     state = observe(tmp_path, EXPERIMENT)
     benchmark = evaluation_spec(eval(state)[0]).tournament
     matchups = {matchup.name: matchup.matches() for matchup in benchmark.matchups}
-    died, uncounted = matchups["w256 final vs w64 final"][:2]
+    died, uncounted = matchups["w160l8 final vs w64 final"][:2]
 
     def play(match: Match) -> Tables:
         if match.key == died.key:
@@ -1737,12 +1773,12 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
     html = render(page)
     for title in (
         "Width 64 vs fixed heuristic",
-        "Width 256 vs fixed heuristic",
-        "Width 256 vs width 64 at equal updates",
+        "Width 160, 8 layers vs fixed heuristic",
+        "Width 160, 8 layers vs width 64 at equal updates",
     ):
         assert title in html
     with statsdb(EXPERIMENT, tmp_path) as db:
-        report = analyze(state, db, read_hosts(tmp_path))
+        report = analyze(state, db, read_pods(tmp_path))
     played = sum(len(ms) for ms in matchups.values()) * 4
     assert report.issues == [f"4 of {played} played games have no score."]
     assert report.scale is not None and report.scale.score is None

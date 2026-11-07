@@ -97,3 +97,12 @@ four producers help.
   A failure returns the embedding choice to review before any long run. It runs
   inside this Task's reserve on rented hardware, coordinated with 30df0c, which
   owns the software and runs no paid compute.
+- **PR #437 readiness for the gate (30df0c, head bab2e80d6).** Fresh regimes can
+  select `record_vocabulary: hashed` (pinned by
+  `test_fresh_regimes_can_select_hashed_ids`). Rerun the coverage sweep on the
+  frozen revision before calibration:
+  `uv run python -m manabot.verify.record_coverage --games 200 --seed 0`
+  (seed 0: 36,202 decisions, 333/333 cards, every id mapped). Its seed 1 ran
+  about 25× slower per decision on very large boards: a game-time and
+  per-update cost risk calibration and the rehearsal should read, not a
+  vocabulary issue.

@@ -4,9 +4,8 @@
 
 The design review (scratch/direction.md, steers d52dc416 and a3318c8a) returned
 protocol v1. The revised design is in `experiments/protocols/tla-frontier-c5fba4-v1.md`,
-marked "revised design, not frozen". Its JSON, regime and runner still hold the
-reviewed draft, so the text below this section ("as implemented") describes the
-draft code, not the design.
+marked "revised design, not frozen". The implement pass of 2026-11-06 moved the
+JSON, regime and runner onto it except where "Software" below says otherwise.
 
 - Arms: w64 (64/2/4, 385,538 compute params) and w160l8 (160/8/8, 5,538,242;
   14.4×), counted on f6f171d34 with six 4096-row tables excluded. Provisional:
@@ -31,64 +30,46 @@ draft code, not the design.
   calibration (two pods, ≤ USD2) + rehearsal → horizons written, freeze →
   execution review → launch.
 
-Software needed (built on main after #435 and 30df0c; none started):
-1. `ShardedVectorEnv` roster forwarding; drop one-producer validators
-   (`collection.py:276`, `regime.py:235,476-484,712`). Accept: 1/2/4-producer
-   draws, exposure, batch agree; regime files round-trip.
-2. Recipe builders: required expected updates → `IterationSchedule(steps=…)`,
-   four producers for deck-source/Elemental, `recover_capacity=True` for new
-   self-play recipes; docs. Accept: existing modules'
-   regime dumps unchanged.
-3. Etude `Checkpoint.wall_ms` in `ExperimentState` + release; move the control pin.
-4. Runner/JSON/tests: w160l8, horizons, cap, milestones, equal-hours schedule and
-   analysis, USD14, 96 permanents, recounted parameters, per-label game-error
-   counts; delete `read_screen`/`--screen`/`--size` and their tests.
+Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
+#437 (30df0c) was still open at this pass.
+
+1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
+   `current_player_configs`/`current_matchup_indices`; deck-source,
+   `elemental-uniform` and collector one-producer validators removed. Draws come
+   from each game's native seed, so no Rust change.
+2. Done: `manabot.recipes.builders.sampled_self_play` (four producers, fitted
+   `IterationSchedule`, `recover_capacity`, threshold .25, cap 10,000) and
+   `fitted_horizon`; field defaults unchanged; docs/training.md, docs/learning.md.
+3. Not started: Etude `Checkpoint.wall_ms` PR and release in
+   `loopflowstudio/etude` (Etude main d3f9028 lacks it). Cross-repo, so not
+   opened from this headless step.
+4. Done except equal-hours: w160l8 label and `LargeSize` (with
+   `expected_updates`), regime rebuilt from the builder (96 permanents, workers 4,
+   cap 10,000, provisional horizons 1,296 / 129), new milestones, USD14,
+   `game_error_counts`/`PodReading` in calibration and analysis (horizon and
+   workers per size), calibration's `expected_updates`, a third calibration pod
+   `w64-p1`; `read_screen`, `--screen`, `--size` and their tests deleted.
+   Remaining, blocked on 3: equal-hours pairs in `comparison_schedule`, their
+   analysis rows and an hours curve in `report()`; then a fixture-hours test.
+   Remaining, blocked on #437: recount parameters on main and write them in the
+   protocol table.
+5. Catalog-vs-hashed `record_vocabulary` check: protocol step written; its runner
+   and pre-registered criterion wait for #437.
+
+Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
+tests/eval/test_tla_frontier.py -q` 66 passed; `tests/training/test_builders.py
+test_training_decks.py test_elemental_uniform.py` passed (2026-11-06, after a
+release extension rebuild). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
 
 ## Draft as reviewed
 
-Status: protocol v1 drafted 2026-11-05 (headless), concept-reviewed nine times through
-2026-11-06. Nothing has launched or spent money. Directions 1–25 are implemented. `frozen()`
-passes, so `runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190
-in [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
-runner `experiments/tla_frontier.py`; analysis `experiments/tla_frontier_analysis.py`; calibration
-`experiments/tla_frontier_calibration.py`; tests `tests/eval/test_tla_frontier.py`. Full text of the
-earlier reviews: `1ef23d800:scratch/c5fba4-frontier-self-play.md`.
-
-Check: `uv run --extra dev --extra evaluation --extra artifacts pytest tests/eval/test_tla_frontier.py -q`: 68 passed on locked 0.2.12, `frozen()` passes and ruff clean (2026-11-06, rerun after direction 25); 68 passed under the 0.2.14 control client at `eeae53b0c`. Gate owns wider suites.
-
-## Design (as implemented)
-
-- Two regimes, identical to MTG-213 v10 except: input v9 / 512 facts, wall
-  54 h, update cap 3,000. One regime file (w64) is hash-pinned; w256 is derived
-  in `frozen()` from the protocol's `large` size (width 256, 4 layers, 8 heads;
-  15.0× compute parameters of w64 = 648k → 9.71M, hashed tables excluded).
-  Static declarations of those bytes live in tests, not `frozen()`.
-- Damped learning rule kept unchanged (absolute iteration schedule, so the
-  update cap does not alter learning rates). Closure-lambda v1 (PR #431) gives no
-  reason to move it: closure showed no difference and no arm beat .5 / .8, which
-  this regime uses with `complete-games` (read from the resolved stage). That study
-  is Allies/Lessons and early training, so it is no TLA evidence; its Elemental
-  repeat, 07c490, has not reported.
-- Exports (`export_every: 25`, joined with the milestones by `export_updates`)
-  are separate from evaluated milestones; `eval` plays only milestones and endpoints.
-- Wall-bounded runs → equal compute per size; shared update milestones give
-  equal-update head-to-heads while both are running; endpoint head-to-head is
-  the equal-compute comparison. Endpoint vs own initialization shows learning.
-- 16 fixed pairs × 4 legs per comparison; training USD38 / 56 h per size;
-  cumulative evaluation USD12; USD12 reserve under the USD100 cap.
-- Both sizes share one GPU model, chosen at launch and recorded before scoring.
-  USD38 / 56 h admits at most USD0.67/hour: L4, or A40 if L4 stock is empty, not
-  RTX 5090.
-- Evaluation passes are cpu32 rentals (28 workers, USD2, 1.75 h plus setup, three
-  attempts for lost machines), prepared with the Rust toolchain and `evaluation` extra. Game limit
-  600 s; the arena journals in `/dev/shm` and copies out, as `learning_signal` does.
-- Control commands use the 0.2.14 client with nested Doppler and the `artifacts`
-  and `evaluation` extras, through the protocol's one `control` array (an array so
-  `caffeinate` can run it). `--screen` and `ondemand startup` use it too, and the
-  protocol owns calibration's commands. Workers stay on locked 0.2.12.
+Protocol v1 drafted 2026-11-05 (headless) and concept-reviewed nine times; its
+design (w256, one producer, absolute schedule, host screen) and checks are at
+`8e4ed4a9c:scratch/c5fba4-frontier-self-play.md`, earlier reviews at
+`1ef23d800:scratch/c5fba4-frontier-self-play.md`. Nothing has launched or spent money.
 
 ## Reconciliation findings (2026-11-05)
 
@@ -139,9 +120,11 @@ not an expected cost.
 
 ## Delete — do not maintain
 
-Nothing: new capability. `experiments/tla_pilot_v10.py` is executed evidence
-and stays unchanged (its callback is mirrored, not shared, because its source
-is hashed into retained environments).
+Deleted 2026-11-06: `read_screen`, `ScreenReading`, `SLOW_HOST_RATIO`, `--screen`,
+`runs(size=…)`/`--size` and their tests; the one-producer validators for sampled
+rosters. Kept: `host_speed` (reported, not a gate) and `is_set_aside` (lists an
+attempt that ended below update 25). `experiments/tla_pilot_v10.py` is executed
+evidence and stays unchanged.
 
 ## Remaining work
 
@@ -150,24 +133,20 @@ is hashed into retained environments).
   rules PRs such as #433 can do that; main matched the checkout base on 2026-11-06.
 - Freeze at a merged revision, then follow the protocol's "Launch sequence":
   on-demand checks, calibration and rehearsal (paid, USD2 ceiling each), both gates,
-  training (paid; needs an execution decision), host screen, evaluation driver.
+  horizons, the catalog-vs-hashed check, training (paid; needs an execution
+  decision), evaluation driver.
   `etude launch` refuses several runs without
   `--cohort`, and a cohort's default `--parallel 1` would train w256 only after
   w64's 54 hours, so both commands name a cohort and two machines.
-- Sequence the freeze against PR #435 (b015d5), a launch decision; see the fifth
-  review's "Left alone".
 - Unproven until the first real rental: delivery to the training store, setup cost
   per rental, `/dev/shm` with 28 workers, and calibration's stock worker on CUDA. The
   rehearsal reads all but the last ahead of scoring.
 - Before reading a score, confirm from `etude status` that both runs had the
-  same GPU model. Host speed is read by `--screen` and in the analysis.
-- A retry of a size past the screen (direction 17) is a new protocol version with
-  its recorded decision and new regime ids, since `size_run` admits one run per
-  regime. The protocol's "Lost rental" section states the default and both limits.
-- This Task runs builtin `pursue`, which ends at publication. Freeze, execution review,
-  execution, analysis and evidence review are the `experiment` graph's tail
-  (`docs/workflows.md`). A merged PR therefore completes neither the Task nor the spend
-  decision; that tail is still to be taken up.
+  same GPU model. Host speed is reported in calibration and the analysis.
+- Any retry of a size is a new protocol version with new regime ids, since
+  `size_run` admits one run per regime.
+- A merged PR completes neither the Task nor the spend decision; freeze, execution
+  review, execution, analysis and evidence review follow on the `experiment` graph.
 - The final report is written after the runs. `tla_frontier_analysis` gives its
   numbers: whole-pair intervals with failed-leg bounds, per-size learning, the
   scale score, hours per checkpoint and every failed, missing or unreached slot. `report()` stays

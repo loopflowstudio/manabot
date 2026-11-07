@@ -5864,7 +5864,7 @@
     "max_events": 32,
     "max_facts": 512,
     "max_focus_objects": 2,
-    "max_permanents_per_player": 64,
+    "max_permanents_per_player": 96,
     "policy_input_version": 9
   },
   "recovery_max_microsteps": null,
@@ -5880,7 +5880,7 @@
         "precision": "float32",
         "threads": 1,
         "wall_seconds": 194400.0,
-        "workers": 1
+        "workers": 4
       },
       "game_errors": {
         "max_game_actions": 40000,
@@ -5899,6 +5899,10 @@
         "filter_kind": "quantile",
         "filter_scope": "actor_critic",
         "gradient": "damped_policy",
+        "iteration_schedule": {
+          "reference_steps": 10000,
+          "steps": 1296
+        },
         "learning_rate_max": 0.0001,
         "learning_rate_min": 5e-06,
         "learning_rate_power": 1.1,
@@ -5919,7 +5923,7 @@
       "trainable": "policy_value",
       "trainer": "net_opponent",
       "transitions": 64,
-      "updates": 3000
+      "updates": 10000
     }
   ],
   "wall_seconds": 194400.0,
