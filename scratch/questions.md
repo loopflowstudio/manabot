@@ -45,8 +45,10 @@ module-run cleanup, `runs()`); `tests/training/test_training_throughput.py`.
 Reversible choices:
 - PR #436 is still open, so `elemental_variants` is not on main. The probe names the
   control as the declaration string `experiments.elemental_variants:elemental_recipe`;
-  it resolves only at a commit containing #436. The CPU test uses the frozen 183 file
-  instead so it does not depend on #436. Launch pins a commit that has both.
+  it resolves at any commit containing #436 (main since `ebed0963e`). The CPU test
+  keeps the frozen 183 file: it checks driver mechanics (receipts, samples, memory
+  skip, cleanup), which the recipe does not change; the control's own 2-update CPU
+  bench is recorded in the design status. Launch pins a commit that has both.
   Checked: the declaration loads from #436's file (w17, 256 streams, both seats,
   `recover_capacity` true).
 - Children drop every `ETUDE_*` variable and track locally; only the driver is the

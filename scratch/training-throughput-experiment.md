@@ -70,3 +70,10 @@ Nothing has launched.
   steps 3-4 build after c5fba4's `collection.py` change. Proposed reservation
   $24.40 of $50.
 - Check 2026-11-06 (after merging main): `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.
+- Concept review 2026-11-06 (after #436): no design change and no open product choice.
+  #436 let one-seat exact quota run under capacity recovery (`learned_game_rows`
+  per slot keeps rows an update already learned from when a paused game later fails).
+  Step 3's two-seat exact quota extends that accounting to both seats' slots of a
+  game rather than adding a second mechanism; this matches the protocol's "discards a
+  failed game's unlearned rows". Next: execution review with Jack Heart, then the
+  step-1 launch.
