@@ -37,6 +37,17 @@ def seed_random(seed: int, *, torch_deterministic: bool = True) -> None:
     torch.backends.cudnn.deterministic = torch_deterministic
 
 
+def regime_tag(regime: str) -> str:
+    """The checkpoint tag naming a regime.
+
+    A launched run is stored under its launcher id, and an experiment's
+    `observe` state keeps no job name, so this tag is what tells a stored
+    checkpoint's regime apart. Etude keeps tags out of checkpoint keys, so it
+    changes no match identity.
+    """
+    return f"regime:{regime}"
+
+
 class RunContext:
     """Seed the learner and record locally or into an Etude-launched run.
 
@@ -46,7 +57,8 @@ class RunContext:
     stands in that run, a restored snapshot or a stage boundary, which need not
     be the run's latest Etude checkpoint; earlier rows after it are superseded. Under the SDK launcher the run
     identity and tracking directory come from ETUDE_RUN/ETUDE_TRACK_DIR. A
-    new run tracks under `experiment`, an experiment file's stem.
+    new run tracks under `experiment`, an experiment file's stem. Given a
+    `regime`, every checkpoint carries its `regime_tag`.
     SDK admission failures are not silently converted to untracked training.
     """
 
@@ -55,6 +67,7 @@ class RunContext:
         config: RuntimeConfig,
         *,
         experiment: str,
+        regime: str | None = None,
         run: str | None = None,
         resume: Path | None = None,
         resumed_at: Mapping[str, float] | None = None,
@@ -101,6 +114,7 @@ class RunContext:
         if resume is None and self.run.latest_checkpoint() is not None:
             self.run.finish("failed")
             raise ValueError("policy artifacts cannot resume collector/optimizer state")
+        self._checkpoint_tags = (regime_tag(regime),) if regime else ()
         self._closed = False
         self._updates = 0
         self._transitions = 0
@@ -131,7 +145,10 @@ class RunContext:
         if self._closed:
             raise RuntimeError("cannot checkpoint a closed run context")
         return self.run.checkpoint(
-            path, updates=self._updates, learner_transitions=transitions
+            path,
+            tags=self._checkpoint_tags,
+            updates=self._updates,
+            learner_transitions=transitions,
         )
 
     def close(self, state: Literal["finished", "failed"] = "finished") -> None:

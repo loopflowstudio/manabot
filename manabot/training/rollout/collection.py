@@ -358,11 +358,9 @@ class SeatRoutedCollector:
             self._uniform_roster = elemental_roster(match)
         else:
             self._uniform_roster = []
-        if self._uniform_roster and (
-            workers != 1 or root is not None or opponent_mode != "self"
-        ):
+        if self._uniform_roster and (root is not None or opponent_mode != "self"):
             raise ValueError(
-                "per-game roster sampling requires current-self, one producer and ordinary roots"
+                "per-game roster sampling requires current-self and ordinary roots"
             )
         if workers not in (1, 2, 4) or workers > num_envs:
             raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")

@@ -415,6 +415,12 @@ def play_cell(
             }
             if authored:
                 row["seat_decks"] = list(seat_decks)
+            if (cutoff := game.get("policy_action_cutoff")) is not None:
+                counts = cutoff["counts_by_kind"].values()
+                row["policy_actions"] = {
+                    "decisions": sum(c["decisions"] for c in counts),
+                    "dropped_actions": sum(c["dropped_actions"] for c in counts),
+                }
             for player_id in pair:
                 values = [
                     d["latency_seconds"]
