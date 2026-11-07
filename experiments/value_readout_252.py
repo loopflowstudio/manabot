@@ -113,7 +113,17 @@ FINALS: dict[tuple[ValueAggregation, int], str] = {
 }
 # The continuation that took each update-150 learner to update 300, with
 # capacity recovery in every arm.
-THIRDS: dict[tuple[ValueAggregation, int], str] = {}
+THIRDS: dict[tuple[ValueAggregation, int], str] = {
+    ("masked_mean", 25201): "9dc7467fe36f",
+    ("value_token", 25201): "38ffa8f894e4",
+    ("attention_readout", 25201): "18d587226949",
+    ("masked_mean", 25202): "8691031b8f42",
+    ("value_token", 25202): "6e5142aa73fb",
+    ("attention_readout", 25202): "4aa2ace09d06",
+    ("masked_mean", 25203): "f58d5f801868",
+    ("value_token", 25203): "6398381e57a5",
+    ("attention_readout", 25203): "63ad2b5da85c",
+}
 # Each segment's parents: segment 2 continues the first segments, segment 3
 # the update-150 runs.
 SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {
