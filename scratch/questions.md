@@ -1,6 +1,8 @@
 Inherited MTG-243 naming notes (another branch's handoff) were removed; they are at
 `c6746f3ff:scratch/questions.md` and confer nothing on b015d5. Main's 07c490 notes (arrived with PR #436) are at
-`ebed0963e:scratch/questions.md` and likewise confer nothing here.
+`ebed0963e:scratch/questions.md` and likewise confer nothing here. Main's c5fba4 notes
+(arrived with the sync onto `646cb9821`) are at `646cb9821:scratch/questions.md` and likewise confer
+nothing here.
 
 # Task b015d5 — training seconds per update (PR #435, merged `45cc961a2`)
 
@@ -118,8 +120,7 @@ Open or assumed:
   Never run that client without `ETUDE_HOME`: it would upgrade the shared database.
 - 80 GB disks are my choice (the shared on-demands use 40-50), for four venvs and builds.
 - `RUNPOD_MEM_GB` is read as decimal GB, the smaller reading if it means GiB.
-- Main moved to `405223165` (c5fba4's sampled-roster producers) after this branch's last
-  sync. Not merged here; only `scratch/questions.md` conflicts. Delivery syncs it, and
+- Main's `405223165` (c5fba4's sampled-roster producers) is synced here through `646cb9821`;
   the protocol says the launch commit includes it.
 - `flock` is not on macOS, so `machine_setup` is Linux-only; every rented machine is.
   The script's order and failure handling are tested with stand-in tools; real lock
