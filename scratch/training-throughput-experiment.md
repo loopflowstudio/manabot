@@ -53,9 +53,12 @@ by Jack Heart at experiment-design review (comment 14e6cc54) with fixed gates
 replaced by step-at-a-time choice; no spending authority beyond execution review.
 Nothing has launched.
 
-- Exists: step-1 probe software (bench `--json`/`--recipe`/`--cuda-counts`,
+- Exists: step-1 probe software (bench `--json`/`--recipe`/`--out`/`--cuda-counts`,
   `experiments/training_throughput.py` phase driver and samplers) with its CPU
-  acceptance test.
+  acceptance test. Each child keeps `seed-N/run`, whose Etude metrics run holds the
+  per-update rows (about 40 MB on CPU at 8 streams, mostly 6 MB checkpoints, so
+  checkpoints stay in the copy). P4 reads launches and syncs per update; per-forward
+  and per-minibatch figures are upper bounds only (concept review, done at `300fa36fc`).
 - Step 1: `probe` job, 2 L4 + 1 A4000 runs; phases solo, pack-2, pack-4, CUDA
   counts. Reports the phase tree, idle share, CPU/GPU use, peak memory and
   $/M learner decisions; Jack Heart chooses the next step from those readings.
@@ -67,23 +70,3 @@ Nothing has launched.
   steps 3-4 build after c5fba4's `collection.py` change. Proposed reservation
   $24.40 of $50.
 - Check 2026-11-06: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.
-
-## Concept review (2026-11-06, graph step, no person): done in implement
-
-The three directions from reviewing `8d178f40e`..`73e82311f` are implemented:
-
-1. Per-update rows are retained. Bench takes `--out DIR` (still temporary without it),
-   and the probe passes `seed-N/run`, so each child's Etude metrics run (per-update
-   `time/*`, idle and learner rows) is published next to `receipt.json`. The CPU
-   acceptance test reads every child's `metrics_run` under its folder with
-   `read_updates` and requires one `time/*` row per update. A child's folder is about
-   40 MB on CPU at 8 streams and 2 updates (mostly 6 MB checkpoints), so the checkpoints
-   stay in the copy.
-2. The protocol and the bench docstring state P4 as launches and syncs per update (run
-   total / updates). Per-forward and per-minibatch figures are upper bounds only.
-3. The launch lines use `--rent l4` / `--rent a4000`.
-
-Check: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` passed (3).
-
-Unchanged: Step 1 still waits on PR #436, which was OPEN as of this review. Phases, seeds,
-the memory skip rule, the failure semantics and the budget match the protocol.
