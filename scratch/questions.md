@@ -78,3 +78,25 @@ Open for later, none blocking step 1:
   trip on rented pods. Fix before relying on it for K above 4.
 - The bill had posted $.96 by 07:16 UTC; about $.10 of the $1.06 total is still
   estimated. Etude's run list shows about $.44, which is below the bill.
+
+## experiment-design b015d5 (2026-11-07): step 2 amendment
+
+Design: protocol section "Step 2: seeds per machine (amended 2026-11-07)". Nothing
+frozen or launched. Route: needs software (protocol's five items), then freeze, then
+execution review with Jack Heart. Reversible assumptions, for review:
+- "Two-run digest test" runs on CPU. Same-seed CUDA runs are not expected to match, so
+  the CUDA legs are compared by metrics, with one repeated solo seed (M3) as the noise
+  scale. M3 is my addition, at about $.10-.20.
+- All legs share one hand-rented machine, so CPU digests and the K=1/K=4 readings share
+  hardware. That needs `etude wait` between legs and an explicit `etude terminate`.
+- Metric legs run 20 updates and four seeds. Enough to show a gross leak, not a small
+  effect. Any leak would appear early, and 20 matches a scored coordinate of 07c490.
+- Step 2 uses Etude main under an isolated `ETUDE_HOME`, because schema 12 would lock
+  0.2.14 clients out of the shared launcher database. Moving the shared launcher to a
+  release is a separate decision, and "standard shape" needs it before other Tasks can
+  pack. Etude's 0.2.15 release is not requested here.
+- Setup stays per attempt with a `flock` on the rustup lines; `Preparation` does not
+  fit the editable, in-tree native build yet.
+- The A4000 selection wait is 30 minutes, then L4.
+Open: whether cgroup or `RUNPOD_MEM_GB` shows a pod's allowance is unknown until the
+first step 2 receipt. Step 1's `cpu_quota` was None on every pod.
