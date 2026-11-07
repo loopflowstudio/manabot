@@ -444,7 +444,7 @@ No learning code changes. No frozen world, observation version or recipe changes
 3. **Concurrent setup** (`manabot/experiment/job.py`). Etude runs `setup` once per
    attempt, so four attempts would run the `test -x rustup || curl ...` install and
    `rustup toolchain install` at once on one `$HOME/.cargo`. `machine_setup` takes a
-   `flock` around those lines. `uv sync` stays per attempt, because each attempt has its own
+   `flock` around those lines where the machine has one, which every rental does. `uv sync` stays per attempt, because each attempt has its own
    source directory and uv and cargo lock their own caches. Four concurrent native
    builds cost minutes per rental, which the shape readings report. Etude's
    `Preparation` builds once per machine, but it does not fit yet: the editable install

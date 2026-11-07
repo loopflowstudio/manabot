@@ -122,9 +122,9 @@ Open or assumed:
 - `RUNPOD_MEM_GB` is read as decimal GB, the smaller reading if it means GiB.
 - Main's `405223165` (c5fba4's sampled-roster producers) is synced here through `646cb9821`;
   the protocol says the launch commit includes it.
-- `flock` is not on macOS, so `machine_setup` is Linux-only; every rented machine is.
-  The script's order and failure handling are tested with stand-in tools; real lock
-  contention first happens on the rental.
+- `flock` is not on macOS, so `machine_setup` takes the lock only where it exists (gate);
+  every rented machine has it. The script's order and failure handling are tested with
+  stand-in tools; real lock contention first happens on the rental.
 
 ## compress b015d5 (2026-11-07): step 2 software
 

@@ -145,12 +145,13 @@ def machine_setup(extras: str) -> str:
     setup once per attempt, and attempts sharing a machine share `$HOME/.cargo`, so
     a `flock` serializes the toolchain install. `uv sync` stays outside it: each
     attempt has its own source directory, and uv and cargo lock their own caches.
-    Rented Linux machines supply `flock`; this script does not run on macOS.
+    Linux machines supply `flock`; macOS has none, so a local attempt installs
+    unserialized.
     """
     return (
         "set -eu\n"
         "{\n"
-        "flock 9\n"
+        "if command -v flock >/dev/null; then flock 9; fi\n"
         'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
         "https://sh.rustup.rs | sh -s -- -y --profile minimal "
         f"--default-toolchain {RUST_TOOLCHAIN}\n"

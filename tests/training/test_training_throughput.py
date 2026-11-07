@@ -143,17 +143,18 @@ def _tool(folder: Path, name: str, body: str) -> None:
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
 
 
-def _setup(tmp_path: Path, rustup: str) -> tuple[int, list[str]]:
-    """Run the real setup script against recording stand-ins for its tools."""
+def _setup(tmp_path: Path, rustup: str, flock: bool = True) -> tuple[int, list[str]]:
+    """Run the real setup script with only recording stand-ins on its PATH."""
     tools = tmp_path / "tools"
     tools.mkdir()
     (tmp_path / ".cargo/bin").mkdir(parents=True)
-    _tool(tools, "flock", "exit 0")
+    if flock:
+        _tool(tools, "flock", "exit 0")
     _tool(tmp_path / ".cargo/bin", "rustup", rustup)
     _tool(tools, "uv", 'test -n "$RUSTUP_TOOLCHAIN"')
     done = subprocess.run(
         ["/bin/sh", "-c", machine_setup(" --extra dev")],
-        env={"HOME": str(tmp_path), "PATH": f"{tools}:/usr/bin:/bin"},
+        env={"HOME": str(tmp_path), "PATH": str(tools)},
     )
     return done.returncode, (tmp_path / "calls").read_text().splitlines()
 
@@ -167,6 +168,13 @@ def test_setup_takes_the_lock_before_the_toolchain_and_syncs_outside_it(
     assert [call.split()[0] for call in calls] == ["flock", "rustup", "uv"]
     assert calls[-1].endswith("--extra dev")
     assert (tmp_path / ".manabot-rust-setup.lock").exists()
+
+
+def test_setup_runs_where_flock_is_absent(tmp_path: Path) -> None:
+    code, calls = _setup(tmp_path, "exit 0", flock=False)
+
+    assert code == 0
+    assert [call.split()[0] for call in calls] == ["rustup", "uv"]
 
 
 def test_failed_toolchain_install_stops_setup(tmp_path: Path) -> None:
