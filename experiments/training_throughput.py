@@ -6,8 +6,10 @@ children at once as ordinary `scripts/bench_training_update.py` subprocesses on 
 control recipe, and samples the machine once a second while they run: each
 child's resident and peak memory and CPU seconds, the machine's available memory,
 and, where `nvidia-smi` exists, GPU utilization and per-process device memory.
-Every child writes its whole `TrainingRun` receipt, so the phase tree, idle stream
-steps, CPU seconds and host come from the training code itself. Nothing here
+Every child writes its whole `TrainingRun` receipt and keeps its run folder
+(`run/`), whose Etude metrics run holds each update's `time/*`, idle and learner
+rows, so the phase tree, idle stream steps, CPU seconds and host come from the
+training code itself. Nothing here
 trains for strength or changes a learning rule.
 
 A child after the first phase is skipped when the previous phase's largest child
@@ -16,9 +18,9 @@ Results are journaled under `/dev/shm` when it exists (outside the attempt's
 output, which the courier publishes) and copied to `ETUDE_OUTPUT_DIR` at each phase
 end; the job's cleanup copies whatever an interrupted phase left.
 
-    uv run etude launch experiments/training_throughput.py --rent b015d5-l4 \\
+    uv run etude launch experiments/training_throughput.py --rent l4 \\
         --revision COMMIT --machines 2
-    uv run etude launch experiments/training_throughput.py --rent b015d5-a4000 \\
+    uv run etude launch experiments/training_throughput.py --rent a4000 \\
         --revision COMMIT --usd-per-run 0.70
 """
 
@@ -279,6 +281,8 @@ def run_phase(
             str(seed),
             "--json",
             str(child / "receipt.json"),
+            "--out",
+            str(child / "run"),
         ]
         if phase.cuda_counts:
             command += ["--cuda-counts", str(child / "cuda-counts.json")]

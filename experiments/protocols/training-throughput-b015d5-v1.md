@@ -68,7 +68,7 @@ machine. A driver runs these phases in sequence on the same host, each as
 | P1 solo | 1 | 12 | 26001 | phase tree, idle share, CPU cores, GPU busy share, peak host and device memory |
 | P2 pack-2 | 2 at once | 12 | 26002-26003 | the same, per child and per machine |
 | P3 pack-4 | 4 at once | 8 | 26004-26007 | the same; skipped if P2 peak host memory x 4 exceeds 85% of the machine |
-| P4 CUDA counts | 1 | 3 | 26008 | `torch.profiler` kernel launches and `torch.cuda.set_sync_debug_mode("warn")` sync counts per collection forward and per learner minibatch |
+| P4 CUDA counts | 1 | 3 | 26008 | `torch.profiler` kernel launches and `torch.cuda.set_sync_debug_mode("warn")` sync counts per update (run total / updates); per collection forward or learner minibatch only as upper bounds, since one total covers every phase |
 
 P4 runs last and alone, so its instrumentation does not perturb P1-P3. Readings
 use updates 2 onward; update 1 includes warm-up. Timing comparisons use median

@@ -7,6 +7,7 @@ import pytest
 
 from experiments import training_throughput as probe
 from manabot.training.records import TrainingRun
+from manabot.training.update_metrics import read_updates
 
 RECIPE = (
     Path(__file__).parents[2] / "experiments" / "regimes" / "elemental-long-183-v1.json"
@@ -42,12 +43,21 @@ def test_cpu_probe_writes_receipts_and_samples_for_every_child(
         assert samples
         assert result.peak_child_bytes and result.peak_child_bytes > 0
         for child in result.children:
+            seed_folder = folder / f"seed-{child.seed}"
             run = TrainingRun.model_validate_json(
-                (folder / f"seed-{child.seed}" / "receipt.json").read_bytes()
+                (seed_folder / "receipt.json").read_bytes()
             )
             assert run.status == "completed"
             assert run.stages[0].updates == 2
             assert run.stages[0].collection_timings
+            # The per-update metrics run survives in the child's published folder.
+            assert run.metrics_run is not None
+            name = Path(run.metrics_run).name
+            updates = read_updates(seed_folder / "run", [run])[name]
+            assert sorted(updates) == [1, 2]
+            assert all(
+                any(k.startswith("time/") for k in row) for row in updates.values()
+            )
         pids = {c.pid for sample in samples for c in sample.children}
         assert len(pids) == result.phase.children
 

@@ -67,3 +67,23 @@ Nothing has launched.
   steps 3-4 build after c5fba4's `collection.py` change. Proposed reservation
   $24.40 of $50.
 - Check 2026-11-06: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.
+
+## Concept review (2026-11-06, graph step, no person): done in implement
+
+The three directions from reviewing `8d178f40e`..`73e82311f` are implemented:
+
+1. Per-update rows are retained. Bench takes `--out DIR` (still temporary without it),
+   and the probe passes `seed-N/run`, so each child's Etude metrics run (per-update
+   `time/*`, idle and learner rows) is published next to `receipt.json`. The CPU
+   acceptance test reads every child's `metrics_run` under its folder with
+   `read_updates` and requires one `time/*` row per update. A child's folder is about
+   40 MB on CPU at 8 streams and 2 updates (mostly 6 MB checkpoints), so the checkpoints
+   stay in the copy.
+2. The protocol and the bench docstring state P4 as launches and syncs per update (run
+   total / updates). Per-forward and per-minibatch figures are upper bounds only.
+3. The launch lines use `--rent l4` / `--rent a4000`.
+
+Check: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` passed (3).
+
+Unchanged: Step 1 still waits on PR #436, which was OPEN as of this review. Phases, seeds,
+the memory skip rule, the failure semantics and the budget match the protocol.

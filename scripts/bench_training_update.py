@@ -10,11 +10,15 @@ regime file gives a comparable row on the same machine; that re-pin has no
 capacity recovery, so one overflowing game ends the run. `--max-facts` narrows
 the fact axis for attribution only; it never names a recipe to train.
 
-`--json OUT` writes the whole `TrainingRun` receipt. `--cuda-counts OUT` counts
-CUDA kernel launches (`torch.profiler`) and synchronizing calls
-(`torch.cuda.set_sync_debug_mode("warn")`) over the run; divide by the receipt's
-phase `calls` for per-forward or per-minibatch rates. The instrumentation slows
-the run, so its timings are not comparable with uninstrumented rows.
+`--json OUT` writes the whole `TrainingRun` receipt. `--out DIR` keeps the run's
+folder (its verify store, checkpoints and the Etude metrics run that holds each
+update's rows, which the receipt's `metrics_run` names); without it the folder is
+temporary and deleted. `--cuda-counts OUT` counts CUDA kernel launches
+(`torch.profiler`) and synchronizing calls (`torch.cuda.set_sync_debug_mode("warn")`)
+as one total over the run. Divided by the receipt's updates it is a per-update
+rate; divided by one phase's `calls` it is only an upper bound for that phase,
+because every phase's launches are in the sum. The instrumentation slows the run,
+so its timings are not comparable with uninstrumented rows.
 
 Host-side phases are comparable across machines; model phases on CPU are not,
 because rented GPUs spend them on launch latency. On a shared machine, alternate
@@ -98,6 +102,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=25201)
     parser.add_argument("--max-facts", type=int)
     parser.add_argument("--json", type=Path, help="write the TrainingRun receipt")
+    parser.add_argument("--out", type=Path, help="keep the run folder here")
     parser.add_argument("--cuda-counts", type=Path, help="write CUDA launch counts")
     args = parser.parse_args()
 
@@ -116,7 +121,7 @@ def main() -> None:
             update={"max_facts": args.max_facts}
         )
 
-    run = _execute(regime, args.seed, args.cuda_counts)
+    run = _execute(regime, args.seed, args.out, args.cuda_counts)
     if args.json is not None:
         args.json.write_text(run.model_dump_json())
     if run.status != "completed":
@@ -147,9 +152,18 @@ def main() -> None:
             print(f"{label:10} {path:64} {micros:9.1f} us/decision")
 
 
-def _execute(regime: TrainingRegime, seed: int, counts: Path | None) -> TrainingRun:
-    with tempfile.TemporaryDirectory(prefix="bench-update-") as folder:
-        out = Path(folder)
+def _execute(
+    regime: TrainingRegime, seed: int, keep: Path | None, counts: Path | None
+) -> TrainingRun:
+    """Run the regime in `keep`, or in a temporary folder deleted afterwards."""
+    folder: AbstractContextManager[str | Path] = (
+        tempfile.TemporaryDirectory(prefix="bench-update-")
+        if keep is None
+        else nullcontext(keep)
+    )
+    with folder as name:
+        out = Path(name)
+        out.mkdir(parents=True, exist_ok=True)
         counting: AbstractContextManager[None] = (
             nullcontext() if counts is None else _cuda_counts(counts)
         )
