@@ -34,8 +34,8 @@ otherwise.
   written, freeze → catalog-vs-hashed check → execution review → launch.
 
 Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
-#437 (30df0c, head bab2e80d6) is still open. origin/main moved to ebed0963e
-(ten-deck Elemental studies) after this branch's last sync; not yet merged in.
+#437 (30df0c, head bab2e80d6) is still open. origin/main (ebed0963e, ten-deck
+Elemental studies) is merged in; nothing on main beyond it.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
    `current_player_configs`/`current_matchup_indices`; deck-source,
@@ -67,7 +67,7 @@ Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced 
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-81 passed, 1 skipped (needs #437) (implement, 2026-11-06). Gate owns wider suites.
+81 passed, 1 skipped (needs #437) (realign, after 1aa39cac4, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
