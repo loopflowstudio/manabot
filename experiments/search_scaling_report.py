@@ -217,6 +217,7 @@ p.note { color: var(--text-secondary); margin: 6px 0 14px; max-width: 760px; }
 .tile .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
 .tile .s { color: var(--text-muted); font-size: 12.5px; }
 .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; }
+.row.pairs { grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 14px 8px; }
 .card h3 { font-size: 14.5px; margin: 0 0 2px; }
 .card .sub { color: var(--text-secondary); font-size: 12.5px; margin: 0 0 6px; }
@@ -308,7 +309,7 @@ def _series(points: list[tuple[float, Estimate, str]], x: Axis, y: Axis, color: 
     return out
 
 
-def _reference(value: Estimate, label: str, y: Axis, dash: bool) -> list[str]:
+def _reference(value: Estimate, label: str, y: Axis, dash: bool, below: bool) -> list[str]:
     left, right, top, bottom = PAD["l"], W - PAD["r"], PAD["t"], H - PAD["b"]
     py = y(value.mean, bottom, top)
     style = 'stroke-dasharray="5 4"' if dash else 'stroke-dasharray="1.5 3.5"'
@@ -317,7 +318,7 @@ def _reference(value: Estimate, label: str, y: Axis, dash: bool) -> list[str]:
             f'<line x1="{left}" x2="{right}" y1="{py:.1f}" y2="{py:.1f}" stroke="var(--reference)" '
             f'stroke-width="1.5" {style}/>'
             f'<line x1="{left}" x2="{right}" y1="{py:.1f}" y2="{py:.1f}" stroke="transparent" stroke-width="10"/></g>',
-            f'<text x="{right - 2}" y="{py - 5:.1f}" text-anchor="end">{escape(label)} {_fmt(value.mean)}</text>']
+            f'<text x="{right - 2}" y="{py + 13 if below else py - 5:.1f}" text-anchor="end">{escape(label)} {_fmt(value.mean)}</text>']
 
 
 def _ticks(low: float, high: float, step: float) -> list[float]:
@@ -371,9 +372,12 @@ def score_chart(found: dict[str, Condition], opponent: str, by_time: bool,
         ticks = [(float(s), str(s)) for s in BUDGETS]
         title = "simulations per decision (log scale)"
     body = _frame(ticks, _ticks(y.low, y.high, 0.05), x, y, title, lambda v: f"{v:.2f}")
+    # The lower of two close lines labels beneath itself so the labels never collide.
+    lowest = min((r.mean for r in refs.values() if r is not None), default=0.0)
     for name, dash in (("policy", True), ("greedy", False)):
         if refs[name] is not None:
-            body += _reference(refs[name], "sampled policy" if name == "policy" else "greedy policy", y, dash)
+            body += _reference(refs[name], "sampled policy" if name == "policy" else "greedy policy", y, dash,
+                               refs[name].mean == lowest)
     for index, source in enumerate(SOURCES):
         body += _series(series[source], x, y, f"--series-{index + 1}")
     return _svg(body, f"score {OPPONENT_TITLE[opponent]} by {'time' if by_time else 'simulations'}")
@@ -479,7 +483,7 @@ def build(directories: Sequence[Path], out: Path) -> dict:
     # Headline tiles.
     tiles = []
     for opponent in OPPONENTS:
-        base = estimate([r["score"] for r in found[f"{opponent}/policy"].valid])
+        base = estimate([r["score"] for r in found[f"{opponent}/greedy"].valid])
         best = None
         for sims in reversed(BUDGETS):
             e = estimate([r["score"] for r in found[f"{opponent}/puct-{sims}-uniform"].valid])
@@ -487,12 +491,12 @@ def build(directories: Sequence[Path], out: Path) -> dict:
                 best = (sims, e)
                 break
         if base:
-            tiles.append(f'<div class="tile"><div class="k">Policy {OPPONENT_TITLE[opponent]}</div>'
+            tiles.append(f'<div class="tile"><div class="k">Greedy policy {OPPONENT_TITLE[opponent]}</div>'
                          f'<div class="v">{_pct(base.mean)}</div>'
                          f'<div class="s">[{_pct(base.low)}, {_pct(base.high)}] · {base.n} games</div></div>')
         if best:
             sims, e = best
-            g = paired(found[f"{opponent}/puct-{sims}-uniform"], found[f"{opponent}/policy"])
+            g = paired(found[f"{opponent}/puct-{sims}-uniform"], found[f"{opponent}/greedy"])
             tiles.append(f'<div class="tile"><div class="k">Search, {sims} sims, uniform hands</div>'
                          f'<div class="v">{_pct(e.mean)}</div>'
                          f'<div class="s">{OPPONENT_TITLE[opponent]} · '
@@ -525,12 +529,12 @@ def build(directories: Sequence[Path], out: Path) -> dict:
 
     gain_cards = []
     for opponent in OPPONENTS:
-        rows = [(f"{s} sims, {src}", gain(f"{opponent}/puct-{s}-{src}", f"{opponent}/policy"))
+        rows = [(f"{s} sims, {src}", gain(f"{opponent}/puct-{s}-{src}", f"{opponent}/greedy"))
                 for s in BUDGETS for src in SOURCES]
-        gain_cards.append(f'<div class="card"><h3>Search over the sampled policy, {OPPONENT_TITLE[opponent]}</h3>'
+        gain_cards.append(f'<div class="card"><h3>Search over the greedy policy, {OPPONENT_TITLE[opponent]}</h3>'
                           f'<div class="sub">Paired by deal, percentage points</div>{gain_chart(rows, "gain")}</div>')
     sections.append("<h2>What search adds</h2>"
-                    '<p class="note">Paired differences cancel deal luck: each bar compares two conditions on the deals both finished.</p>'
+                    '<p class="note">Search plays its most-visited action, so the fair baseline is the policy\'s own top action, not its sampled play. Paired differences cancel deal luck: each bar compares two conditions on the deals both finished.</p>'
                     '<div class="row">' + "".join(gain_cards) + "</div>")
 
     oracle_cards = []
@@ -553,7 +557,7 @@ def build(directories: Sequence[Path], out: Path) -> dict:
                 break
         if chosen is None:
             continue
-        a, b = found[f"{opponent}/puct-{chosen}-uniform"], found[f"{opponent}/policy"]
+        a, b = found[f"{opponent}/puct-{chosen}-uniform"], found[f"{opponent}/greedy"]
         rows = []
         for deck in DECKS:
             sa = {r["deal"]: r["score"] for r in a.valid if r["model_deck"] == deck}
@@ -561,11 +565,11 @@ def build(directories: Sequence[Path], out: Path) -> dict:
             rows.append((deck.removeprefix("elemental_").upper(),
                          estimate([sa[d] - sb[d] for d in sorted(sa.keys() & sb.keys())])))
         deck_cards.append(f'<div class="card"><h3>By hero deck, {chosen} sims, {OPPONENT_TITLE[opponent]}</h3>'
-                          f'<div class="sub">Uniform-hand search minus sampled policy, points</div>{gain_chart(rows, "deck")}</div>')
+                          f'<div class="sub">Uniform-hand search minus greedy policy, points</div>{gain_chart(rows, "deck")}</div>')
     if deck_cards:
         sections.append("<h2>Where search helps</h2>"
                         '<p class="note">Paired gain for each deck MTG-183 pilots, across all ten opposing decks. '
-                        "About 100 deals per bar at full plan, so intervals are wide.</p>"
+                        f"About {10 * DEALS_PER_CELL.get(chosen, 10)} deals per bar, so intervals are wide and single decks are hints, not findings.</p>"
                         '<div class="row">' + "".join(deck_cards) + "</div>")
 
     # Diagnostics.
@@ -591,13 +595,19 @@ def build(directories: Sequence[Path], out: Path) -> dict:
         depth_max = max([v for pts in depth.values() for _, v, _ in pts] + [1])
         sec_max = max([v for pts in seconds.values() for _, v, _ in pts] + [0.1])
         depth_top = math.ceil(depth_max / 10) * 10
-        sec_top = 10 ** math.ceil(math.log10(sec_max)) if sec_max > 0 else 1
         sec_top = next(t for t in (0.1, 0.25, 0.5, 1, 2, 4, 8, 16) if t >= sec_max)
+
+        def share_top(pts: dict[str, list[tuple[int, float, str]]]) -> float:
+            """The smallest round share axis holding every point, so small rates stay readable."""
+            most = max([v for row in pts.values() for _, v, _ in row] + [0.0])
+            return next(t for t in (0.05, 0.1, 0.25, 0.5, 1.0) if t >= most)
+
+        override_top, disagreement_top = share_top(override), share_top(disagreement)
         cards = [
             ("Search overrides the policy", "Decisions where the chosen action is not the policy's most likely one",
-             line_chart(override, 0.5, lambda v: f"{v * 100:.0f}%", "override", 0.1)),
+             line_chart(override, override_top, lambda v: f"{v * 100:.0f}%", "override", override_top / 5)),
             ("Worlds disagree", "Decisions where sampled worlds' most-visited actions differ",
-             line_chart(disagreement, 1.0, lambda v: f"{v * 100:.0f}%", "disagreement", 0.2)),
+             line_chart(disagreement, disagreement_top, lambda v: f"{v * 100:.0f}%", "disagreement", disagreement_top / 5)),
             ("Tree depth", "Deepest simulation, in decisions below the root",
              line_chart(depth, depth_top, lambda v: f"{v:.0f}", "depth", depth_top / 5)),
             ("Time per decision", "Mean wall seconds per searched decision, one CPU thread",
@@ -606,16 +616,16 @@ def build(directories: Sequence[Path], out: Path) -> dict:
         sections.append("<h2>How search behaves</h2>"
                         '<p class="note">Over searched decisions with more than one legal action, both opponents pooled. '
                         "These are the levers for making search cheaper or sharper.</p>"
-                        + _legend(False) + '<div class="row">'
+                        + _legend(False) + '<div class="row pairs">'
                         + "".join(f'<div class="card"><h3>{t}</h3><div class="sub">{s}</div>{c}</div>' for t, s, c in cards)
                         + "</div>")
 
     # Table.
-    head = "<tr><th>Condition</th><th>Games</th><th>Invalid</th><th>Score</th><th>95% interval</th><th>vs policy (paired)</th><th>s / decision</th><th>Override</th></tr>"
+    head = "<tr><th>Condition</th><th>Games</th><th>Invalid</th><th>Score</th><th>95% interval</th><th>vs greedy (paired)</th><th>s / decision</th><th>Override</th></tr>"
     body = []
     for key, c in sorted(found.items(), key=lambda kv: (kv[1].opponent, kv[1].sims, kv[1].hero, kv[1].source or "")):
         est = estimate([r["score"] for r in c.valid])
-        g = paired(c, found[f"{c.opponent}/policy"]) if c.hero != "policy" else None
+        g = paired(c, found[f"{c.opponent}/greedy"]) if c.hero == "puct" else None
         d = diag.get(key)
         body.append(
             f"<tr><td>{escape(key)}</td><td>{len(c.rows)} / {c.planned}</td><td>{len(c.rows) - len(c.valid)}</td>"
@@ -632,7 +642,12 @@ def build(directories: Sequence[Path], out: Path) -> dict:
         f"Search is determinized PUCT: the budget split over four worlds, one tree each, the network as prior and "
         "leaf value, c<sub>puct</sub> 1.5, most-visited action played. Uniform worlds draw the opponent's unknown hand "
         "uniformly from the cards the hero has not seen; oracle worlds use the true hand. Both reshuffle libraries. "
-        "The opponent never searches. One deal is one game; draws score half.</p>")
+        "The opponent never searches. One deal is one game; draws score half.</p>"
+        '<p class="note">Budgets through 64 ran on an Apple-silicon Mac mini; 256 and 1024 ran on rented 32-vCPU hosts, '
+        "one thread per game, so times across that boundary are comparable only roughly. Rented hosts stopped at their "
+        "time limit, so 256 and 1024 lack some late deals; paired gains use only deals both sides finished, and each "
+        "condition's score uses the deals it played. Intervals are per comparison, with no correction for the number of "
+        "comparisons shown.</p>")
 
     html = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
