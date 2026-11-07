@@ -72,7 +72,23 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed (realign, with #437 merged and the extension rebuilt, 2026-11-07). Gate owns wider suites.
+83 passed (Question ratio fix, with #437 merged, 2026-11-06). Gate owns wider suites.
+
+### Concept review 12 (2026-11-06, headless): next implement direction
+
+- Done: the protocol's Question now says about 17× in compute parameters (17.4×;
+  13.6× in total), matching the counts section; no other copy of the old ratio remains.
+- Not a change, kept for the freeze: Etude's store already holds `wall_ms` in
+  `training_checkpoints`, so the hours are on record from the first export. Item 3
+  only exposes them, so it gates when equal-hours slots can be played, not training.
+  It does not gate calibration either, which runs from 1, 2 and 4.
+- Unresolved (Jack Heart's call, not yet blocking): if Etude Task 3d4f40 has not
+  released by the time calibration's horizons are written, does the freeze wait for
+  it (the protocol as written, item 3 before freeze), or does it freeze and play
+  equal-hours slots retroactively once a new version moves the client pin?
+  Evidence: `training_checkpoints.wall_ms` is already in the store
+  (`etude/eval/query.py`), and `checkpoint_hours` returns None until the Etude
+  change lands.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.

@@ -22,9 +22,9 @@ bytes.
 ## Question
 
 How far can self-play on the frozen 17Lands TLA trophy population push play
-strength at the current recipe size, and does a network about 14× larger in
-compute parameters get further on the same budget? This is a frontier push with
-one seed per size, not an ablation grid.
+strength at the current recipe size, and does a network about 17× larger in
+compute parameters (17.4×; 13.6× in total parameters) get further on the same
+budget? This is a frontier push with one seed per size, not an ablation grid.
 
 The run also moves the default training recipe toward what is best for USD10–100
 runs. The defaults it establishes are four observation producers for
