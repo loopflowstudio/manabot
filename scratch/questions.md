@@ -67,3 +67,12 @@ Bound to main `70d79ccb8`. Receipt is in the protocol. The A4000 quote
 succeeded ($.44); the L4 quote is still open because RunPod reported no
 available L4 machines. Quoting needs the 0.2.14 overlay and nested Doppler
 (see the launch-client memory). Re-quote L4 at execution review.
+
+## pool-validation b015d5 (2026-11-07): step 1 executed
+
+Report: `experiments/data/training-throughput-b015d5-v1/report.md` (published).
+Open for later, none blocking step 1:
+- The cause of the P4 SIGKILL and of the K=4 recording stall on L4-a is unknown.
+- `run_phase` reads host memory, not the pod's allowance, so the memory gate cannot
+  trip on rented pods. Fix before relying on it for K above 4.
+- Reconcile the $1.09 estimate once RunPod posts the 06:00 hour.

@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 1 frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 1 executed)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -7,8 +7,8 @@ batch's slowest game, and overlapping collection with learning. Multi-producer
 collection belongs to Task c5fba4 and is read from its result, not repeated here.
 
 Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
-comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Nothing
-has launched. Acceptance confers no spending authority beyond the execution
+comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Step 1
+has run (see its execution record); nothing later has. Acceptance confers no spending authority beyond the execution
 review below. PR #436 (the control recipe) landed as `ebed0963e`; step 1 freezes
 at a launch commit containing it. Each later step freezes after the
 previous step's readings have been discussed and that step chosen, before any
@@ -95,6 +95,27 @@ receipt is recorded after that commit and changes no executable byte.
 - Authority: execution stays under comment 9f9d0956's $50 inclusive cap and the
   $2.80 step-1 lines above. Freezing confers no new spending authority. Launch
   still waits for execution review.
+
+**Step 1 execution (2026-11-07 UTC).** Jack Heart approved launching step 1 as
+frozen at execution review (comment 37512749): two L4 probes on a new on-demand
+`b015d5-l4` (at most 2 machines, under $.60/hour) and one A4000 probe on `a4000`
+with `--usd-per-run 0.70`, within the $2.80 step-1 lines. Steps 2-4 are not
+authorized by that approval.
+- Re-quote at launch: L4 quoted $.59/hour, planned $2.06 within $2.10. The two
+  L4 runs launched at 05:27 as cohort `training-throughput-probe-l4`
+  (`--max-usd 2.10`): runs `2b5e4b4a1fb4` (seed 1, machine
+  `b015d5-l4-06d85fdd0fde`) and `04c78c2631c6` (seed 2, machine
+  `b015d5-l4-f6648404bf33`), revision `70d79ccb8`.
+- The A4000 re-quote again found no available machine, so its run was queued:
+  `11937fd035f5`, cohort `training-throughput-probe-a4000`, `--max-usd 0.70`. It
+  rented `a4000-e28308d569b9` at 05:43.
+- Outcome: all three machines completed P1-P3. `04c78c2631c6` succeeded. The other
+  two report `failed` only because the P4 child was SIGKILLed at about 61 GB peak,
+  with the cause not established. P4 was not retried, under the two-failure stop
+  rule. Estimated cost $1.09 of the $2.80 lines; RunPod's bill had not yet posted
+  in full. All three machines are released. Readings and evidence:
+  `experiments/data/training-throughput-b015d5-v1/report.md`. Steps 2-4 are not
+  chosen.
 
 **Job.** `experiments/training_throughput.py` `probe`: one Etude run per
 machine. A driver runs these phases in sequence on the same host, each as
