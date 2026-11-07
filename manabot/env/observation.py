@@ -581,16 +581,20 @@ class ObservationEncoder:
                 )
 
         for index, frame in enumerate(obs.continuation):
-            for ordinal, (kind, value) in enumerate(frame.program):
-                push(
-                    obs.agent.id
-                    if frame.controller == obs.agent.player_index
-                    else obs.opponent.id,
-                    FACT_CONTINUATION_PROGRAM,
-                    index + 1,
-                    (float(kind), float(ordinal)),
-                    detail=value,
-                )
+            programs = [frame.program]
+            if self.config.policy_input_version >= 8:
+                programs.append(frame.execution)
+            for program in programs:
+                for ordinal, (kind, value) in enumerate(program):
+                    push(
+                        obs.agent.id
+                        if frame.controller == obs.agent.player_index
+                        else obs.opponent.id,
+                        FACT_CONTINUATION_PROGRAM,
+                        index + 1,
+                        (float(kind), float(ordinal)),
+                        detail=value,
+                    )
             if frame.attackers is not None:
                 push(
                     obs.agent.id
@@ -717,7 +721,18 @@ class ObservationEncoder:
                 row[12:19] = frame.cost
             row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
             row[30] = frame.resolutions_this_turn
-            row[28] = frame.decision
+            if (
+                self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+            ):
+                row[7] = 0.0
+                row[21] = 0.0
+            row[28] = (
+                frame.legacy_decision
+                if self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+                else frame.decision
+            )
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
@@ -744,6 +759,12 @@ class ObservationEncoder:
                     context_row[0], context_row[22], context_row[29] = kind, 1, 1
                     _reference(context_row, reference)
                     rows.append(context_row)
+            if self.config.policy_input_version >= 8:
+                for ordinal, reference in enumerate(frame.execution_references, 1):
+                    retained = row.copy()
+                    retained[0], retained[22], retained[29] = 10, 1, ordinal
+                    _reference(retained, reference)
+                    rows.append(retained)
             if self.shows_everything and frame.inherited_from is not None:
                 inherited = row.copy()
                 inherited[0], inherited[22], inherited[29] = 7, 1, 1

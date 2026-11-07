@@ -692,11 +692,10 @@ impl Game {
                 };
                 last_controller == Some(controller)
             }
-            Condition::DiscardedThisWay(predicate) => frame.is_some_and(|frame| {
-                frame
-                    .this_way
-                    .iter()
-                    .any(|card| self.card_matches_predicate(*card, predicate))
+            Condition::CardsThisWayMatch(predicate) => frame.is_some_and(|frame| {
+                frame.this_way.iter().any(|object| {
+                    self.card_matches_predicate(CardId::from(object.entity), predicate)
+                })
             }),
             Condition::TriggeringSpellMatches(predicate) => matches!(
                 frame.and_then(|frame| frame.context_target),

@@ -740,6 +740,13 @@
         "mana_cost": {
           "$ref": "#/$defs/RequiredNullable3"
         },
+        "pending": {
+          "description": "Native pending execution, omitted on older recorded projections.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "recent_facts": {
           "type": "array",
           "items": {

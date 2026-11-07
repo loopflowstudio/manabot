@@ -826,6 +826,11 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
+    execution: list[tuple[int, int]]
+    execution_references: list[VisibleReference]
+    execution_description: str | None
+    execution_summary: list[str]
+    execution_requires_v8: bool
     program: list[tuple[int, int]]
     program_description: str | None
     remembered: list[VisibleReference]
@@ -834,6 +839,7 @@ class ContinuationFrame:
     source_transforms: int
     kind: int
     decision: int
+    legacy_decision: int | None
     parent: int | None
     controller: int
     source: VisibleReference

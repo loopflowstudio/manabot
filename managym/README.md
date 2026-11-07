@@ -88,6 +88,10 @@ frame retains its active clause and each chosen slot's resolution-start eligibil
 across suspended decisions (CR 608.2b). Effects use those retained results; live
 presence checks separately prevent following departed objects (CR 400.7).
 Illegal slots remain positional, and zero optional targets still resolve.
+`ObjectSelector::Targets` applies one verb to all eligible slots of that clause
+in one event batch. `ForEachTarget` instead runs a separate child program per
+slot, retaining its position across choices. Leaves from the Vine's simultaneous
+counter placement uses the former.
 Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
@@ -285,5 +289,71 @@ controller or card's owner elsewhere (including outside the game). Zone
 filters use `card_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
-`OrderLibraryBottom`, placing cards nearest the top first through ordinary
-SelectCard Commands. Only the chooser sees the remaining inspected cards.
+`OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard
+Commands. Bottom ordering exposes the remaining inspected cards; Surveil uses
+the same owner to order kept cards on top, retaining the chosen prefix privately
+until ordering finishes. Top ordering has obligation code 27 (mode is the
+committed prefix length); code 23 retains its bottom-order meaning.
+
+`EffectFrame::completion` owns the return destination: the interrupted scope,
+a retained caller decision, a completed-operation event, root spell cleanup,
+or root priority. Completion events fire before the caller's suffix; Scry and
+Surveil wait for every partition and ordering choice. `continue_resolution` runs
+any pending batch before exposing the next decision. An `EventBatch` on the active
+frame retains every proposal, applied replacement identity, pre-departure facts
+and result until replacement choices and consequent linked returns finish. The
+affected player chooses each replacement; applicability is recomputed after every
+transformation. No member
+commits until the complete batch is ready. Native obligation code 29 names this
+choice, with source-specific labels and focus.
+
+Mana activation sacrifice effects retain their output and parent payment there
+after upfront mana, tap and life costs commit. Returning from a linked-entry
+replacement restores the saved decision without paying costs again or opening
+priority. Combat, SBA departures, spell finalization, activated costs, token
+entry and Surveil movement use this owner. SBA progress distinguishes stable,
+changed and pending; a pending turn action cannot enter priority stabilization.
+Immediate fixture/arithmetic helpers require completion without a question and
+fail explicitly if used for a choice-bearing event. Sacrifice facts match their
+pre-move subjects after replacement choices and before any batch member leaves;
+trigger placement still waits for resolution. Explicit input v8 projects the
+retained program, results, completion and proposals through fact-kind 14 as bare
+name/value facts, with viewer-safe reference slots in relation kind 10; a frame
+that retains nothing emits no occurrence. Academy's pending-resolution summary
+and LLM text are rendered by the same walk only through `describe_execution`
+(decision context and capture), never by a policy observation. Earlier inputs reject
+novel retained state before buffer writes; migrated searches retain their frozen
+obligation codes and implied completion events.
+
+`SelectCards` snapshots eligible exact objects from its selector, retains min/max
+cardinality across choices, and runs the chosen effects in a child scope with
+`ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
+result independently of a later `Move`; the caller keeps those results while
+selection effects run. Mill, optional discard/draw and basic/tutor searches use
+ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+`ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
+materializers refresh unknown selected subsets throughout saved callers and child
+scopes, preserving cardinality and exact viewer-known choices. Restricted partial
+selections exclude incompatible count worlds. Foretold assignments use the same
+subset constraints: exact weights count only compatible ordered fills, and the
+materializer samples that conditional measure. Commitments are captured before
+zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
+Frozen count-only belief samplers reject these additional constraints before
+inference. `ObjectBinding` carries exact incarnation, captured zone/predicate and
+per-seat exact knowledge through waiting, queued, placing, stack and resolving
+trigger lifetimes. Both samplers use one assignment across those captures and
+active selections; known exact captures remain fixed, and departed incarnations
+never follow a later object. Capturing `Moved` uses its new zone. This binding
+provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
+never draw order. Prospective battlefield entrants are public during replacement
+choices and remain pinned in both samplers.
+
+`Effect::Move.library_end` states top/bottom placement without a shuffle; its
+placement commits before linked returns can pause. `put_in_library` authors that
+operation, and `ShuffleLibrary` can follow after all child work. Ordinary `move_to`
+retains shuffle-into-library behavior. Shared selection has obligation code 28;
+retired codes 5, 6 and 7 keep their historical meanings.
+
+`SuspendedResolution::continuation` walks retained frames and decisions root first;
+observation projection and hidden-world sampling share that chain for caller
+ancestry and inspection permissions.
