@@ -119,11 +119,11 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   last complete raw learner when it stops. The sizes therefore receive equal
   wall-clock compute, not equal updates. Training seed 21501 for both. No
   automatic retry. Every command in this protocol runs through one control
-  prefix. The nested Doppler projects supply provider and artifact access. The
-  control client is Etude 0.2.14 or the later release that adds checkpoint wall
-  time ([Before freeze](#before-freeze)). The locked 0.2.12 cannot read the
-  launcher's Vast provider rows, and workers keep 0.2.12. The prefix is an
-  array, not a function, so `caffeinate` can run it:
+  prefix. The nested Doppler projects supply provider and artifact access. Until
+  the freeze the control client is Etude 0.2.14, because the locked 0.2.12 cannot
+  read the launcher's Vast provider rows; the freeze moves it and the job project
+  to Etude main ([Before freeze](#before-freeze) item 3). The prefix is an array,
+  not a function, so `caffeinate` can run it:
 
   ```bash
   control=(doppler run -p etude -c prd -- doppler run -p manabot -c prd
@@ -245,11 +245,10 @@ reading fails this gate.
    per-update cost risk that calibration's seconds per update and the
    rehearsal's slowest game read; it is not a vocabulary failure.
 4. Calibration, then the evaluation rehearsal.
-5. Both gates, and each size's horizon written into the JSON
-   protocol and regime. Freeze at the merged revision that carries them and
-   item 3.
-6. The fact-embedding check (item 5 under [Before freeze](#before-freeze)),
-   before either long run.
+5. The fact-embedding check (item 5 under [Before freeze](#before-freeze)), from
+   the same merged revision, once calibration has read w64's cost.
+6. Both gates, and each size's horizon written into the JSON protocol and regime.
+   Freeze at the merged revision that carries them and item 3.
 7. Execution review.
 8. The training launch, then the evaluation driver.
 
@@ -494,14 +493,15 @@ check:
    configurations keep their meaning. Check: every existing experiment module's
    regime ids and dumps are unchanged, and a fresh recipe's dump carries the
    four producers, the fitted horizon and `recover_capacity`.
-3. **Checkpoint wall time in `ExperimentState`** (Etude PR and release:
+3. **Checkpoint wall time in `ExperimentState`** (Etude PR #86, no patch release:
    `Checkpoint.wall_ms`, from `training_checkpoints`). `eval` and the analysis
    take equal-hours pairs from `tla_frontier.checkpoint_hours`, which reads no
    hours until this lands, so those slots stay unplayable and the analysis
-   reports them missing. No manabot clock stands in. The control client pin
-   moves to that release, and workers stay 0.2.12. Check: the Etude test reads
-   `wall_ms` on a stored checkpoint, match keys are unchanged, and
-   `checkpoint_hours` rebases it per run.
+   reports them missing. No manabot clock stands in. The freeze change moves the
+   job project and the control client to `etude-sdk` from main together, because
+   `Record` forbids extra fields: a pass sent with `wall_ms` fails on a job
+   pinned to 0.2.12. Check: the Etude test reads `wall_ms` on a stored checkpoint,
+   match keys are unchanged, and `checkpoint_hours` rebases it per run.
 4. **Frontier runner** (`experiments/tla_frontier*.py`, protocol JSON, regime,
    tests). Producers and horizons per size from the protocol, update cap 10,000,
    the milestones above, the equal-hours schedule and its analysis, evaluation
@@ -515,13 +515,17 @@ check:
 
 5. **Catalog against hashed fact ids** (accepted with the design). The field is
    Task 30df0c's: PR #437 lets fresh regimes select `record_vocabulary: hashed`,
-   and this item's tests rerun on the frozen revision. Before either 54-hour run,
-   `experiments/tla_frontier_vocabulary.py` trains two arms of the frozen w64
+   and this item's tests rerun on the frozen revision. Before the freeze,
+   `experiments/tla_frontier_vocabulary.py` trains two arms of the w64
    regime that differ only in `ModelConfig.record_vocabulary`, catalog and
    hashed: same recipe, seed 21501, decks, four producers, 100 updates, exports
    at 25, 50, 75 and 100, a 9,000-second wall and at most USD2 and 3 hours each
    on the frontier's GPU. If calibration reads w64 above 84 s/update, the length
-   changes by recorded decision before the check runs. Once both arms end at
+   changes by recorded decision before the check runs. Both arms carry the
+   regime's provisional horizon of 1,296. At that horizon, and at any fitted one
+   inside that line (S at least 2,314), the rate stays at its 1e-4 clamp for all
+   100 updates, and the horizon only moves τ, equally in both arms. Once both arms
+   end at
    update 100, one pass on the 16 frozen pairs plays each arm's update 100 against
    its own update 0, and catalog's update 100 against hashed's, catalog first,
    under an environment of its own. The criterion, fixed here, fails catalog when
@@ -538,11 +542,11 @@ check:
    Otherwise catalog passes. A reading missing an input (an arm short of update
    100, an unplayed comparison or an absent loss) is unread, which is no pass.
    A failure, or an unread check, returns the embedding choice to review before
-   any long run. Commands, after freeze:
+   the freeze. Commands, from the merged revision:
 
    ```bash
    "${control[@]}" etude launch experiments/tla_frontier_vocabulary.py \
-       --revision <frozen> --rent l4 --cohort tla-frontier-c5fba4-vocabulary \
+       --revision <merged> --rent l4 --cohort tla-frontier-c5fba4-vocabulary \
        --parallel 2 --max-usd 4
    "${control[@]}" etude eval experiments/tla_frontier_vocabulary.py \
        --source <store> --rent cpu32
@@ -557,10 +561,11 @@ check:
    fresh model's fact contribution is zero, weighted fact output registers per
    kind, and the reader covers the frontier and vocabulary checkpoints it names.
 
-Calibration runs from the merged revision of items 1, 2 and 4–6; it does not
-need item 3. The freeze is a second, small change carrying both horizons and the
-regime hash, and it waits for item 3, because equal-hours slots read
-`checkpoint_hours`, which is runner code fixed at the freeze.
+Calibration, the rehearsal and the fact-embedding check run from the merged
+revision of items 1, 2 and 4–6; they do not need item 3. The freeze is a second,
+small change carrying both horizons, the regime hash and the Etude move, and it
+waits for item 3, because equal-hours slots read `checkpoint_hours`, which is
+runner code fixed at the freeze.
 
 ## Budget
 

@@ -1,9 +1,9 @@
 """Task c5fba4 fact-embedding check: catalog against hashed record ids at w64.
 
-Before either 54-hour frontier run, two short runs of the frozen w64 regime
-differ only in `ModelConfig.record_vocabulary`: `catalog` embeds fact and
-shared-effect ids through the card encoder's exact token vocabulary (Task
-30df0c, the fresh default), `hashed` learns 4096 hashed rows per id column.
+Before the freeze, two short runs of the protocol's w64 regime differ only in
+`ModelConfig.record_vocabulary`: `catalog` embeds fact and shared-effect ids
+through the card encoder's exact token vocabulary (Task 30df0c, the fresh
+default), `hashed` learns 4096 hashed rows per id column.
 Same recipe, seed, decks, producers and updates. The protocol's Before freeze
 item 5 owns the decision; this file fixes its criterion before the check runs.
 
@@ -95,7 +95,7 @@ def _regime_id(vocabulary: Vocabulary) -> str:
 
 
 def vocabulary_regime(regime: TrainingRegime, vocabulary: Vocabulary) -> TrainingRegime:
-    """The frozen w64 regime with its identity, length and record vocabulary changed."""
+    """The w64 regime with its identity, length and record vocabulary changed."""
     return shortened(
         regime,
         id=_regime_id(vocabulary),

@@ -1,6 +1,6 @@
 """Task c5fba4 calibration: per-update cost, memory and a rehearsed evaluation pass.
 
-Each size runs its frozen regime, at its four producers, for a few updates on
+Each size runs its protocol regime, at its four producers, for a few updates on
 the GPU chosen for the frontier runs, so a size that cannot fit, or would reach
 too few updates, changes in a new protocol version before any scoring. Each
 reading's `expected_updates` is the damping horizon the protocol takes from it
@@ -139,7 +139,7 @@ def _regime_id(pod: Pod) -> str:
 
 
 def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
-    """The frozen regime, changed only in its identity, update target and wall.
+    """The protocol regime, changed only in its identity, update target and wall.
 
     The one-producer pod also sets `execution.workers` to 1.
     """

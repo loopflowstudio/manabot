@@ -30,9 +30,9 @@ otherwise.
   rehearsal ≤ 2).
 - Order: #435 and #437 (merged) → parameter recount (done) → software
   (protocol "Before freeze" 1, 2, 4–6) merges as PR #439 → record coverage sweep
-  (seed 0) → calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal →
-  horizons written → item 3 (Etude `wall_ms`) lands → freeze → catalog-vs-hashed
-  check → execution review → launch.
+  (seed 0) → calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal (≤ USD2) →
+  catalog-vs-hashed check (≤ USD6) → horizons written → item 3 (Etude `wall_ms`) lands →
+  freeze → execution review → launch.
 
 Software (numbered as protocol "Before freeze" 1–6). #435 (2026-11-06), b015d5's throughput
 protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged in.
@@ -44,10 +44,10 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
 2. Done: `manabot.recipes.builders.sampled_self_play` (four producers, fitted
    `IterationSchedule`, `recover_capacity`, threshold .25, cap 10,000) and
    `fitted_horizon`; field defaults unchanged; docs/training.md, docs/learning.md.
-3. Waiting: Etude `Checkpoint.wall_ms` PR and release in `loopflowstudio/etude`,
-   filed as Etude Task 3d4f40 (steer a6c38666). Read from the Etude checkout on
-   2026-11-07: unstarted, unowned, no PR; starting it is Jack Heart's call. When it lands, `tla_frontier.checkpoint_hours` (now returns None) rebases
-   `wall_ms` per run; the control pin moves to that release.
+3. Waiting: Etude PR #86 (Task 3d4f40, open 2026-11-07, approved; no patch release).
+   When it merges, `tla_frontier.checkpoint_hours` (now returns None) rebases `wall_ms`
+   per run, and the freeze change moves the job project and control client to
+   `etude-sdk` from main together.
 4. Done except the recount: w160l8 label and `LargeSize`, regime from the builder
    (96 permanents, workers 4, cap 10,000, provisional horizons 1,296 / 129), new
    milestones, USD14, per-label game errors, calibration's `expected_updates` and
@@ -226,13 +226,13 @@ unchanged.
 
 ## Remaining work
 
-- PR #439 merges (items 1, 2, 4–6); its CI is green at 0f9736f21. Etude Task 3d4f40 (item 3) must start
-  and release before the freeze; it does not hold calibration.
-- Then the protocol's "Launch sequence": on-demand checks, coverage sweep, calibration and
-  rehearsal (paid, USD2 ceiling each), both gates, horizons, freeze, the catalog-vs-hashed
-  check, execution review, training (paid; needs an execution decision), evaluation driver.
-  No Graph step launches the paid steps before execution review, and their launcher is
-  unsettled (concept review 15).
+- PR #439 merges (items 1, 2, 4–6). Etude PR #86 (item 3) must merge before the freeze;
+  it does not hold calibration, the rehearsal or the fact-embedding check.
+- Then the protocol's "Launch sequence": on-demand checks, coverage sweep, calibration,
+  rehearsal, the catalog-vs-hashed check, both gates, horizons, freeze, execution review,
+  training (paid; needs an execution decision), evaluation driver. The operator conversation
+  launches the three pre-freeze paid steps from the merged revision inside the USD10 reserve
+  (direction, 2026-11-07), which answers concept review 15. No Graph step does.
   `frozen()` rejects a drifted world, so a card-catalog change before launch moves the pin in
   a new protocol version. Open rules PRs such as #433 can do that.
   `etude launch` refuses several runs without

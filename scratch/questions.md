@@ -61,6 +61,14 @@ Its notes are at `54b109aff:scratch/questions.md`. One live item:
 schema 7 fixture frame against native version 8 (`binding_mismatch`); it is in no CI
 selection and needs its own bug Task.
 
+## Gate (2026-11-07, headless)
+
+- **The fact-embedding check runs from the merged #439 revision with the regime's
+  provisional horizon**, not a second horizons merge. Concept review 15 said it needs the
+  horizons; it does not. Inside the check's 84 s/update line S ≥ 2,314, so the rate stays
+  clamped for all 100 updates and τ moves equally in both arms. Reversible: land the horizons
+  first if the check should carry the exact freeze regime.
+
 ## Fact-contribution reading (implement, 2026-11-07, headless)
 
 Reversible choices for Jack Heart's review:

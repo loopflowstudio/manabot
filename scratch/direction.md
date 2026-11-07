@@ -121,3 +121,22 @@ four producers help.
   beside learning; it gates nothing. Declare it in the protocol before freeze and
   implement it in this PR (#439). A reading near zero after training is a
   finding that neither design is being used.
+
+## Demo accepted and pre-freeze authority (Jack Heart, 2026-11-07)
+
+"yes" to the four open questions, on the operator's stated terms:
+
+- **PR #439 accepted at demo**, head `22d9f829b`, CI green; continuing runs gate
+  and land.
+- **Pre-freeze paid steps authorized**: this conversation may launch calibration
+  (at most USD2), the evaluation rehearsal (at most USD2) and the fact-embedding
+  check (at most USD6) from the merged revision, inside the USD10 reserve,
+  reporting after each. The long runs still wait for execution review.
+- **Fact-embedding check runs before the freeze.**
+- **3d4f40**: already moving in its own Session; Jack approved Etude PR #86 and
+  directed no patch release, with manabot using etude-sdk from main. The operator's
+  "freeze without waiting" does not hold: `checkpoint_hours` is runner code fixed
+  at the freeze, so the freeze keeps waiting for #86. The freeze change also moves
+  the job project and control client to that Etude together: `Record` forbids
+  extra fields, so a pass sent with `wall_ms` fails on a job pinned to 0.2.12.
+  Protocol item 3's "release" and "workers stay 0.2.12" are stale.
