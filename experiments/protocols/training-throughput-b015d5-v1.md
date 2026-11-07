@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 2 amendment, not frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 2 frozen, not launched)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -15,8 +15,9 @@ run (see its execution record). Jack Heart accepted its evidence and chose step 
 (2026-11-07, comment 9d671e78) and accepted its design, including running from Etude
 main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Jack Heart then
 asked this step to own how packing combines with multiple producers (2026-11-07,
-comment ceff7d63), which added legs S14, S22 and S44. Step 2's software is built; it
-has not frozen or launched, and execution review returns to Jack Heart.
+comment ceff7d63), which added legs S14, S22 and S44. Step 2's software landed as
+`668212567` (PR #442) and step 2 is frozen at that commit (see its freeze receipt). It
+has not launched, and execution review returns to Jack Heart.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -221,6 +222,54 @@ policy, observations, actions, game seeds and draws agree at 1, 2 and 4 producer
 (`test_uniform_draws_agree_across_producer_counts`, this control's roster). Its
 protocol is accepted, not frozen, and plans no trained comparison across producer
 counts: its one-producer pod reads speed only.
+
+**Step 2 freeze receipt (2026-11-07).** Jack Heart accepted software review and directed
+this freeze at PR #442's commit (comment 258f3c96). The launch revision is
+`668212567d8dbe17882f7c857274f6a7d3c494db`, on main, for every leg. It contains #435,
+#436, `43150799f` and `405223165`. This receipt is recorded after that commit and changes
+no executable byte.
+- Source bundle: every leg's job carries one bundle of 1,479 files, sorted-key SHA-256
+  `6334a27b…1ff3`: all 1,480 tracked files except `CLAUDE.md`, which is a symlink. Key files:
+  `experiments/training_throughput_packing.py` `9d1cd47b…2f4d`,
+  `experiments/training_throughput.py` `f36641e3…cd19`,
+  `experiments/elemental_variants.py` `0e51b536…0df4`,
+  `experiments/learning_signal.py` `836230fd…9cb0`, `manabot/experiment/job.py`
+  `62aa4fd3…5aca`, `manabot/infra/host.py` `7cd0dbbd…208b`, frozen regime
+  `elemental-long-183-v1.json` `be9de376…64ad` (as step 1), `uv.lock` `b562227a…7c58`
+  (as step 1).
+- Regimes, on w17, by sorted-key SHA-256 of the job's regime:
+  - digest `elemental-throughput-digest-v1` `0366ff8d…1c3e`: 24 streams, 3 updates, CPU,
+    600 s watchdog, equal in D1 and D2;
+  - metric `elemental-throughput-pack-check-v1` `57823471…728a`: 256 streams, 20 updates,
+    CUDA, one producer, 2,400 s watchdog, equal in M1, M2 and M3;
+  - `elemental-throughput-producers-2-v1` `53867f36…59c1`: S22;
+  - `elemental-throughput-producers-4-v1` `8c414618…5f26`: equal in S14 and S44. Both
+    speed regimes run 256 streams, 8 updates, CUDA, 1,500 s watchdog.
+- Discovery: Etude `read_job_file`, client `a7718f5`, read all eight legs at this revision
+  without executing games or training: 19 runs (1, 2, 4, 4, 1, 1, 2, 4), each leg with its
+  own job name and the seeds in the table. Limits match "Run limits".
+- Acceptance: `tests/training/test_training_throughput.py`, `tests/infra/test_host_facts.py`
+  and `tests/training/test_elemental_closure_lambda.py` pass on this tree (38 tests).
+- Isolation: step 2 plays no evaluation deals and scores no checkpoint, so no held-out set
+  or anchor is touched. Seeds 26201-26202 and 26211-26214 are disjoint from 26001-26008,
+  26101-26104 and the `ELEMENTAL_PAIRS` deals. M3 is the noise reference.
+- Client: `ETUDE_HOME=$HOME/.etude-b015d5-step2 doppler run -p etude -c prd -- doppler run
+  -p manabot -c prd --preserve-env=RUNPOD_API_KEY -- uv run --with "etude-sdk[s3,eval] @
+  git+file:///Users/jack/src/etude@a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11" etude ...`.
+  The shared `~/.etude/launcher.db` stays at schema 11. Its isolated home holds both
+  on-demands at 4 slots and at most 1 machine, and no rented machine.
+- Quote, 2026-11-07 about 19:28 UTC, at this revision, nothing rented:
+  - `b015d5-l4x4`: L4, 6 vCPUs, 48 GB, $.59/hour, rentable. D1 alone plans $.44 within
+    $.45. The four M1 runs share one L4 at 4 slots, planned $.74 within $3.00. The four
+    S44 runs share one at 4 slots, planned $.59 within $2.40.
+  - `b015d5-a4000x4`: **open.** RunPod reports no A4000 ($.25/hour offer, ceiling $.40), so
+    Etude refuses the quote at every leg. The selection rule's 30-minute wait covers this.
+  - These quotes plan a new rental per leg. Etude's `rent` has no quote, so the 5-hour hand
+    rental is priced from the rate: at most $2.95 on an L4 and $1.25 at the A4000 offer.
+    Placement on a held rental has not been exercised.
+- Authority: step 2 stays under comment 9f9d0956's $50 inclusive cap and comment ceff7d63's
+  $4.50, about $5.56 reserved with step 1. Freezing confers no spending authority. Nothing
+  launches or rents before execution review with Jack Heart.
 
 ### What runs
 

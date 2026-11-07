@@ -232,3 +232,13 @@ regimes match comment ceff7d63. Two protocol changes; no code follows from eithe
 Checked, no change: speed-leg regimes, `threads: 1` retained. `producers.py` states no policy or
 CUDA state enters a producer thread, so the device does not reach the sharded env. That is
 read from code; no CUDA multi-producer run has happened here, so S14 is the first.
+
+## experiment-freeze b015d5 (2026-11-07): step 2
+
+Bound to main `668212567` (this branch's tree equals it). Receipt is in the protocol. L4
+quoted and rentable at about 19:28 UTC; A4000 quote stays open, no stock. For execution review:
+- Etude's `rent` has no quote, so the hand rental's cost is from the rate, and the per-leg
+  quotes plan new rentals. Placement on a held rental is still unexercised.
+- Proposed, not in the protocol: `etude rent ... --hours 5 --max-usd 3.00`, so the provider
+  window itself holds the machine line. Etude's `--max-usd` ends the window early.
+- The isolated controller still needs starting before the rental, under `caffeinate -is`.
