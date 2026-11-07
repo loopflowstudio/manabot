@@ -184,7 +184,7 @@ def collector_for(
 
 
 def markers(batch: RolloutBatch) -> list[int]:
-    return batch.obs["agent_player"][..., 0, 0].astype(int).ravel().tolist()
+    return batch.ordered_obs()["agent_player"][..., 0, 0].astype(int).ravel().tolist()
 
 
 def learning(**changes: object) -> DampedPolicyLearning:

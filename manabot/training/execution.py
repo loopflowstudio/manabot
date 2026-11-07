@@ -29,6 +29,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
+from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -695,6 +696,7 @@ def _execute_regime(
         space = ObservationSpace(regime.observation)
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
+        run.host = host_facts()
         if snapshot is not None:
             admit_recovery_identities(
                 snapshot.identities, identities, source_repair_reason

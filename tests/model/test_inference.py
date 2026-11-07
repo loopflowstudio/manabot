@@ -28,7 +28,7 @@ def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
         },
     }
     for field in fields(batch):
-        if field.name in {"obs", "action_data"}:
+        if field.name in {"recorded", "action_data"}:
             continue  # Compared above through the complete materialized evidence.
         value = getattr(batch, field.name)
         if isinstance(value, np.ndarray):

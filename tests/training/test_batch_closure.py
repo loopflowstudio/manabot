@@ -213,7 +213,7 @@ def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     agent = _agent()
     collector = _one_seat("complete-games")
     batch = collector.collect(agent, 2)
-    assert batch.obs["agent_player"].shape[1] == 1
+    assert batch.ordered_obs()["agent_player"].shape[1] == 1
     assert bool(batch.next_done.all())
     # Every packed trajectory closes on a terminal row, so nothing bootstraps.
     assert bool(batch.dones[-1].all())
