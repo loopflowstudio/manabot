@@ -480,13 +480,9 @@ class TrainSelfPlay(Stage):
         if self.execution.workers != 1 and self.root is not None:
             raise ValueError("diagnostic roots require one producer")
         if self.matchup_curriculum == "elemental-uniform":
-            if (
-                self.behavior != "current-self"
-                or self.execution.workers != 1
-                or self.root is not None
-            ):
+            if self.behavior != "current-self" or self.root is not None:
                 raise ValueError(
-                    "elemental-uniform requires current-self, one producer and ordinary roots"
+                    "elemental-uniform requires current-self and ordinary roots"
                 )
         elif self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
@@ -713,13 +709,12 @@ class TrainingRegime(Strict):
         if self.deck_source is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"
-            or stage.execution.workers != 1
             or stage.root is not None
             or stage.matchup_curriculum != "fixed"
             for stage in self.stages
         ):
             raise ValueError(
-                "a deck source requires current-self, one producer, ordinary roots and no curriculum"
+                "a deck source requires current-self, ordinary roots and no curriculum"
             )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None

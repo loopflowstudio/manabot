@@ -4,14 +4,16 @@ ShardedVectorEnv gives each worker disjoint native streams and NumPy row views.
 Native buffered calls release the GIL; a barrier completes every shard before
 returning to the collector. The parent retains global batching, policy sampling,
 rollout ordering and recovery. Global reset strides make stream identity
-independent of worker count. No policy or CUDA state enters a producer thread.
+independent of worker count. Sampled rosters (deck sources, elemental-uniform)
+draw each game's pair natively from that game's seed, so draws match for any
+worker count. No policy or CUDA state enters a producer thread.
 """
 
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -110,6 +112,44 @@ class ShardedVectorEnv:
                 for shard in self._shards
             ]
         )
+
+    # The two roster setters run serially, before reset: native admission is
+    # input-determined, so a rejection comes from the first shard and leaves
+    # every shard unchanged.
+
+    def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
+        self._check()
+        for shard in self._shards:
+            shard.native.set_uniform_roster(roster)
+
+    def set_training_decks(
+        self,
+        decks: list[managym.PlayerConfig],
+        digest: str,
+        sampling: Literal[
+            "uniform-distinct-v1", "uniform-independent-v1"
+        ] = "uniform-distinct-v1",
+    ) -> None:
+        """Replace later roots' decks on every shard."""
+        self._check()
+        for shard in self._shards:
+            shard.native.set_training_decks(decks, digest, sampling)
+
+    def current_player_configs(self) -> list[list[managym.PlayerConfig]]:
+        self._check()
+        return [
+            players
+            for shard in self._shards
+            for players in shard.native.current_player_configs()
+        ]
+
+    def current_matchup_indices(self) -> list[tuple[int, int]]:
+        self._check()
+        return [
+            pair
+            for shard in self._shards
+            for pair in shard.native.current_matchup_indices()
+        ]
 
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
         self._run(

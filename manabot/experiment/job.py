@@ -24,6 +24,8 @@ A segment ends before its wall budget rather than at it: the stage stops at an
 update boundary once another update plus `stop_reserve_seconds` no longer fits,
 exports raw/EMA/Adam and ends `paused`. That paused segment is a successful
 attempt reporting the update it reached, and its successor continues normally.
+A launcher's SIGTERM ends the attempt `interrupted`, recording the run as failed
+at its last export.
 
 A job's runs track under its `experiment`, the experiment file's stem
 (`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
@@ -36,7 +38,9 @@ import json
 import math
 import os
 from pathlib import Path
+import signal
 import time
+from types import FrameType
 
 from etude.launch.records import Input, Job
 from etude.run.storage import SAFE_NAME
@@ -396,5 +400,14 @@ def run_worker() -> TrainingRun:
     return run
 
 
+def _interrupt(signum: int, frame: FrameType | None) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 if __name__ == "__main__":
+    # Etude ends an attempt with SIGTERM, within 0.1 s of a cancellation and well
+    # before training polls its stop file. Unhandled, it kills the process with
+    # no end state, so the run reads as running for good. KeyboardInterrupt
+    # because game-error isolation catches Exception.
+    signal.signal(signal.SIGTERM, _interrupt)
     run_worker()
