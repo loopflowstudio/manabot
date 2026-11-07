@@ -4,7 +4,9 @@ The previous contents described MTG-243 (naming), inherited from the parent
 commit; they remain at `8e5d152ab:scratch/questions.md`.
 
 Material assumptions made headless by the first implement step (reversible
-until launch):
+until launch). Superseded by the design review: w256/15× (now w160l8, 14.4×
+provisional), the host screen, and "equal compute is the endpoint only" (now
+equal-hours pairs throughout).
 
 - **Larger size = width 256, 4 layers, 8 heads (15× compute parameters).** The
   brief's 290k base count does not match the current v9 count (648k excluding
@@ -74,10 +76,9 @@ until launch):
 
 ## Design revision (2026-11-06, headless, after design review)
 
-- **Four producers, no one-producer calibration arm.** "Two arms only" read as
-  covering calibration too, so producer value is not measured on a rental; the
-  software's acceptance check proves equal draws, and calibration reads the step
-  phase. Reversible before freeze: add a w64 one-producer pod (about USD0.30).
+- **Four producers for both arms.** Calibration's one-producer w64 pod (accepted
+  by Jack Heart with the design) measures what four producers buy; it sets and
+  gates nothing.
 - **Horizon S = min(10,000, ⌊194,400 / s⌋)**, s = calibration's median s/update
   over updates 2–5, no slowdown allowance. The end of the curve is flat, so a run
   reaching 55% of S ends at a rate near 3.8e-5 instead of 2.0e-5.
@@ -123,8 +124,24 @@ until launch):
   not feel the difference.
 - **The large arm's horizon lives in the protocol's `large.expected_updates`**,
   beside its width, depth and heads; w64's lives in its regime file. One owner each.
-- **The Etude `Checkpoint.wall_ms` PR is not opened from this step**: it is a
-  separate repository's PR and release. Equal-hours scheduling, its analysis rows
-  and an hours curve wait for it; nothing was built around its absence.
+- **The Etude `Checkpoint.wall_ms` PR is not opened from this step**: the operator
+  conversation files it (steer a6c38666). Equal-hours slots are built over a typed
+  hours input; only that source waits.
 - **`sampled_self_play` sets the game-error threshold to .25**, v10's, not the
   field default .1. Reversible; a recipe choice, not a field default.
+
+## Realign (2026-11-06, headless)
+
+- **Calibration launches with `--parallel 3`**, one machine per pod, so the
+  one-producer pod does not wait behind the other two. Same USD2 ceiling.
+
+## Implement pass: equal hours and the fact-embedding check (2026-11-06, headless)
+
+- **One hours source for `eval` and analysis** (`checkpoint_hours`), so both read
+  one schedule; analysis does not take hours from Etude's database meanwhile.
+  Until Etude's `Checkpoint.wall_ms`, equal-hours slots are missing in analysis.
+- **An equal-hours endpoint pair after w64 ended earlier is unreached**, as the
+  protocol says, even by minutes at the wall; the endpoint head-to-head covers it.
+- **Fact-embedding check: 100 updates, 9,000 s wall, USD2/3 h per arm**, and its
+  three-rule criterion (protocol item 5). Value loss is the learning curve
+  because it costs no games. Reversible until the check runs.

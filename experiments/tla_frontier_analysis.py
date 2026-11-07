@@ -27,7 +27,9 @@ games. The totals span both players, so they support no per-policy rate.
 Each pair's four correlated legs move together, and one set of bootstrap
 indices serves every comparison. Etude keeps each checkpoint's wall time only
 in its database, so `TrainingPoint` reads it here to show how far each size got
-per hour. Each size also shows its damping horizon and producers beside the
+per hour. Equal-hours slots take their hours from `checkpoint_hours`, the
+source `eval` schedules them from, so both read one schedule; each slot reports
+both sizes' hours. Each size also shows its damping horizon and producers beside the
 updates it reached, and its pod's host speed and settled games by label
 (`engine_error`, `resource_limit`), reported beside the reading and voiding
 nothing. The CLI writes JSON; it neither runs games nor
@@ -58,6 +60,7 @@ from experiments.tla_frontier import (
     Protocol,
     ScheduledComparison,
     SizeLabel,
+    checkpoint_hours,
     comparison_schedule,
     endpoint,
     environment,
@@ -123,6 +126,9 @@ class Comparison(StrictModel):
     update: int | None
     name: str | None
     unreached: bool
+    # Equal-hours slots: w160l8's hours and its w64 partner's, which is at most
+    # one export interval earlier.
+    hours: tuple[float, float] | None = None
     counts: Counts = Counts()
     pairs: list[PairResult] = []
     result: Bounded | None = None
@@ -203,7 +209,7 @@ def _bounded(pairs: list[PairResult], indices: npt.NDArray[np.int64]) -> Bounded
     )
 
 
-def _policy_actions_by_match(
+def policy_actions_by_match(
     db: duckdb.DuckDBPyConnection, environment_id: str
 ) -> dict[str, PolicyActions]:
     """Totals by stored match; both seats repeat a game's count, so seat 0 reads it."""
@@ -225,7 +231,7 @@ def _policy_actions_by_match(
     }
 
 
-def _comparison(
+def read_comparison(
     planned: ScheduledComparison,
     db: duckdb.DuckDBPyConnection,
     protocol: Protocol,
@@ -260,6 +266,7 @@ def _comparison(
         update=planned.update,
         name=name,
         unreached=False,
+        hours=planned.hours,
         counts=field_totals(Counts, [pair.counts for pair in pairs]),
         pairs=pairs,
         result=_bounded(pairs, indices) if played else None,
@@ -269,7 +276,14 @@ def _comparison(
     )
 
 
-def _learned(initial: Bounded | None) -> bool | None:
+def bootstrap_indices(protocol: Protocol) -> npt.NDArray[np.int64]:
+    """Whole-pair resamples shared by every comparison read under `protocol`."""
+    return np.random.default_rng(protocol.bootstrap_seed).integers(
+        0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
+    )
+
+
+def learned(initial: Bounded | None) -> bool | None:
     """Whether the endpoint beat its initialization under every failed-leg outcome."""
     if initial is None:
         return None
@@ -301,7 +315,7 @@ def _reading(
     label: SizeLabel,
     run: TrainingRun | None,
     comparisons: list[Comparison],
-    db: duckdb.DuckDBPyConnection,
+    training: list[TrainingPoint],
     pods: Mapping[str, PodReading],
     regime: TrainingRegime,
 ) -> SizeReading:
@@ -315,10 +329,10 @@ def _reading(
         label=label,
         state=run.state if run else None,
         endpoint=end,
-        training=_training_points(db, run),
+        training=training,
         against_initial=initial.result,
         against_heuristic=heuristic.result,
-        learned=_learned(initial.result),
+        learned=learned(initial.result),
         horizon=horizon(regime),
         workers=regime.stages[0].execution.workers,
         pod=pods.get(run.name) if run else None,
@@ -335,20 +349,22 @@ def analyze(
     cap = update_cap(regimes[SIZES[0]])
     environment_id = environment(protocol).identity
     columns = game_columns(db)
-    actions = _policy_actions_by_match(db, environment_id)
-    indices = np.random.default_rng(protocol.bootstrap_seed).integers(
-        0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
-    )
+    actions = policy_actions_by_match(db, environment_id)
+    indices = bootstrap_indices(protocol)
+    trained = {label: size_run(state, label, protocol) for label in SIZES}
+    training = {label: _training_points(db, run) for label, run in trained.items()}
     comparisons = [
-        _comparison(planned, db, protocol, environment_id, columns, actions, indices)
-        for planned in comparison_schedule(state, protocol)
+        read_comparison(
+            planned, db, protocol, environment_id, columns, actions, indices
+        )
+        for planned in comparison_schedule(state, protocol, checkpoint_hours(state))
     ]
     sizes = [
         _reading(
             label,
-            size_run(state, label, protocol),
+            trained[label],
             comparisons,
-            db,
+            training[label],
             pods,
             regimes[label],
         )

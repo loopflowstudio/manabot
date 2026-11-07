@@ -1,11 +1,13 @@
 # TLA frontier self-play at two model sizes (c5fba4 v1)
 
-**Status: revised design, not frozen.** The 2026-11-06 design review returned the
-reviewed draft for revision. This text is the revised design. The JSON protocol,
-regime and runner on this branch still hold the reviewed draft, and they change in
-the software listed under [Before freeze](#before-freeze), which builds on main
-after PR #435 and Task 30df0c's input consolidation merge. Two values enter the
-JSON only from calibration: each size's damping horizon.
+**Status: accepted design, not frozen.** The 2026-11-06 design review returned the
+reviewed draft for revision, and the revised design was accepted the same day with
+the one-producer calibration pod and the fact-embedding check (item 5 under
+[Before freeze](#before-freeze)). The JSON protocol, regime and runner on this
+branch follow it except where that section lists remaining software. Freezing
+waits for Task 30df0c's input consolidation (PR #437) to merge and for the
+parameter recount on main. Two values enter the JSON only from calibration: each
+size's damping horizon.
 Nothing has launched, and no score exists.
 
 Once frozen, this protocol is fixed before any scoring. The runner is
@@ -164,7 +166,7 @@ w64 pod only in `execution.workers`; it sets nothing and gates nothing.
 ```bash
 "${control[@]}" etude launch experiments/tla_frontier_calibration.py \
     --revision <merged> --rent l4 --cohort tla-frontier-c5fba4-calibration \
-    --parallel 2 --max-usd 2
+    --parallel 3 --max-usd 2
 "${control[@]}" python -m experiments.tla_frontier_calibration --source <store>
 ```
 
@@ -238,12 +240,19 @@ reading fails this gate.
    "${control[@]}" etude ondemand startup mtg252-a40 --seconds 900
    ```
 
-3. Calibration, then the evaluation rehearsal.
-4. Both gates, and each size's horizon written into the JSON
+3. The record coverage sweep on the revision calibration runs from:
+   `uv run python -m manabot.verify.record_coverage --games 200 --seed 0`.
+   Every card and id must map (on PR #437's head: 36,202 decisions, 333/333
+   cards). Its seed 1 ran about 25× slower per decision on very large boards,
+   a game-time and per-update cost risk that calibration's seconds per update
+   and the rehearsal's slowest game read; it is not a vocabulary failure.
+4. Calibration, then the evaluation rehearsal.
+5. Both gates, and each size's horizon written into the JSON
    protocol and regime. Freeze at the merged revision that carries them.
-5. The fact-embedding check below, before either long run.
-5. Execution review.
-6. The training launch, then the evaluation driver.
+6. The fact-embedding check (item 5 under [Before freeze](#before-freeze)),
+   before either long run.
+7. Execution review.
+8. The training launch, then the evaluation driver.
 
 ## Evaluation schedule
 
@@ -255,7 +264,9 @@ heuristic is the matched first-64 heuristic. Shared update milestones are 25,
 
 - At update 0 and every reached milestone: each size vs the heuristic.
 - **Equal hours.** At every w160l8 milestone and at its endpoint: w160l8 vs w64's
-  last checkpoint at or before the same hours. Hours are a checkpoint's wall time
+  last checkpoint at or before the same hours. A pair that is also an
+  equal-update or endpoint pair is played once, under that comparison's name, and
+  both slots read its games. Hours are a checkpoint's wall time
   since its run's first checkpoint, update 0, so pre-training setup counts for
   neither size. The pair is fixed once w64 has stored a checkpoint later than
   that hour, or has ended. If w64 ended earlier than that hour, the slot is
@@ -337,7 +348,8 @@ launcher access, since it asks `eval` what is wanted:
 "${control[@]}" etude report experiments/tla_frontier.py --source <store>
 ```
 
-The report is descriptive curves by update and by hours;
+The report is descriptive curves by update, the equal-hours curve drawn at
+w160l8's updates because Etude's report axes are checkpoint clocks;
 `experiments/tla_frontier_analysis.py` owns every reading below. A relaunched
 pass adds a second tournament to its selector. Each shows the same curves,
 whichever pass played a match.
@@ -455,10 +467,13 @@ acceptance check:
    regime ids and dumps are unchanged, and a fresh recipe's dump carries the
    four producers, the fitted horizon and `recover_capacity`.
 3. **Checkpoint wall time in `ExperimentState`** (Etude PR and release:
-   `Checkpoint.wall_ms`, from `training_checkpoints`). `eval` needs it to choose
-   equal-hours pairs during training. The control client pin moves to that
-   release, and workers stay 0.2.12. Check: the Etude test reads `wall_ms` on a
-   stored checkpoint, and match keys are unchanged.
+   `Checkpoint.wall_ms`, from `training_checkpoints`). `eval` and the analysis
+   take equal-hours pairs from `tla_frontier.checkpoint_hours`, which reads no
+   hours until this lands, so those slots stay unplayable and the analysis
+   reports them missing. No manabot clock stands in. The control client pin
+   moves to that release, and workers stay 0.2.12. Check: the Etude test reads
+   `wall_ms` on a stored checkpoint, match keys are unchanged, and
+   `checkpoint_hours` rebases it per run.
 4. **Frontier runner** (`experiments/tla_frontier*.py`, protocol JSON, regime,
    tests). Producers and horizons per size from the protocol, update cap 10,000,
    the milestones above, the equal-hours schedule and its analysis, evaluation
@@ -467,18 +482,47 @@ acceptance check:
    counts in calibration and the analysis. Delete:
    the host screen (`read_screen`, `--screen`), the one-size relaunch (`--size`),
    and their tests. Check: `uv run --extra dev --extra evaluation --extra artifacts
-   pytest tests/eval/test_tla_frontier.py -q`, an equal-hours schedule test
-   over fixture checkpoints with hours, and an analysis test whose fixture runs
-   carry both labels in `game_errors.by_cell`.
+   pytest tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py
+   -q`, the equal-hours schedule tests over fixture checkpoint hours (including
+   one pair played once under both slots), and an analysis test whose fixture
+   runs carry both labels in `game_errors.by_cell`.
 
-5. **Catalog against hashed fact ids** (accepted with the design; software from
-   Task 30df0c, PR #437). Before either 54-hour run, a short matched w64 check
-   compares `ModelConfig.record_vocabulary` catalog against hashed: same recipe,
-   seed, decks and updates, differing only in that field, on rented hardware
-   inside the reserve. Its criterion is fixed before it runs, from learning
-   curves and a small vs-initialization and head-to-head read; catalog must
-   learn at least as well as hashed. A failure returns the embedding choice to
-   review before any long run.
+5. **Catalog against hashed fact ids** (accepted with the design; the field is
+   Task 30df0c's, PR #437, whose head `bab2e80d6` lets fresh regimes select
+   `record_vocabulary: hashed`). Before either 54-hour run,
+   `experiments/tla_frontier_vocabulary.py` trains two arms of the frozen w64
+   regime that differ only in `ModelConfig.record_vocabulary`, catalog and
+   hashed: same recipe, seed 21501, decks, four producers, 100 updates, exports
+   at 25, 50, 75 and 100, a 9,000-second wall and at most USD2 and 3 hours each
+   on the frontier's GPU. If calibration reads w64 above 84 s/update, the length
+   changes by recorded decision before the check runs. Once both arms end at
+   update 100, one pass on the 16 frozen pairs plays each arm's update 100 against
+   its own update 0, and catalog's update 100 against hashed's, catalog first,
+   under an environment of its own. The criterion, fixed here, fails catalog when
+   any of these holds:
+
+   1. **Head-to-head:** the catalog-vs-hashed `best` upper bound is below 0.5,
+      so catalog loses under every failed-leg outcome.
+   2. **Learning:** hashed's learning against its initialization is established
+      (`worst` lower bound above 0.5) and catalog's is rejected (`best` lower
+      bound at or below 0.5).
+   3. **Learning curve:** catalog's median `value_loss` over updates 51–100 is
+      more than 1.10 times hashed's.
+
+   Otherwise catalog passes. A reading missing an input (an arm short of update
+   100, an unplayed comparison or an absent loss) is unread, which is no pass.
+   A failure, or an unread check, returns the embedding choice to review before
+   any long run. Commands, after freeze:
+
+   ```bash
+   "${control[@]}" etude launch experiments/tla_frontier_vocabulary.py \
+       --revision <frozen> --rent l4 --cohort tla-frontier-c5fba4-vocabulary \
+       --parallel 2 --max-usd 4
+   "${control[@]}" etude eval experiments/tla_frontier_vocabulary.py \
+       --source <store> --rent cpu32
+   "${control[@]}" etude wait <run>
+   "${control[@]}" python -m experiments.tla_frontier_vocabulary --source <store>
+   ```
 
 Calibration runs from the merged revision of 1–4. The freeze is a second, small
 change carrying both horizons and the regime hash.
@@ -487,7 +531,9 @@ change carrying both horizons and the regime hash.
 
 The Task's ceiling is USD100 including setup, failures, retries and evaluation:
 2 × USD38 training + USD14 evaluation = USD90, leaving USD10 for calibration
-(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected), setup
-and failure costs. Evaluation is about 18% of training's ceiling. Any retry needs
+(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected), the
+fact-embedding check (USD4 for its two arms and a USD2 pass ceiling, about USD3.50
+expected), setup and failure costs. The ceilings fill the reserve; expected spend
+is about USD5.50 of it. Evaluation is about 18% of training's ceiling. Any retry needs
 a recorded decision that keeps the total within USD100. Evaluation never runs on
 a laptop.

@@ -8,7 +8,10 @@ protocol
 shared update milestone, each size against the matched first-64 heuristic and
 the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
-other, which is equal wall budget only when both runs finished. A failed run's
+other, which is equal wall budget only when both runs finished. At every
+w160l8 milestone and its endpoint it also pairs w160l8 with w64's last
+checkpoint at or before the same training hours (`checkpoint_hours`, waiting on
+Etude's `Checkpoint.wall_ms`). A failed run's
 endpoint is its last stored checkpoint, so its reach is still played and read.
 Only a worker writes a run's end, so `with_launcher_ends` joins the launcher's
 record of a lost pod to what the store kept before anything reads the schedule.
@@ -31,7 +34,7 @@ pilot's source and artifacts, is mirrored here rather than shared.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from decimal import Decimal
@@ -383,6 +386,12 @@ def pod_reading(data: RunData, storage: Storage) -> PodReading:
 # -- Evaluation schedule ------------------------------------------------------
 
 
+# Hours since each run's first checkpoint (update 0), by stored run name, then
+# by the checkpoint's update. Etude stores each checkpoint's `wall_ms`; this is
+# that clock rebased per run, so pre-training setup counts for no size.
+type CheckpointHours = Mapping[str, Mapping[int, float]]
+
+
 @dataclass(frozen=True)
 class ScheduledComparison:
     """One expected comparison; a missing checkpoint leaves an unplayable slot.
@@ -390,13 +399,15 @@ class ScheduledComparison:
     `update` is the first player's, None for an endpoint its run has not
     reached. Head-to-head rows put the large size first, so their score is the
     large size's. `unreached` marks a milestone past an ended run's endpoint,
-    which no later evidence can fill and no missing evidence explains.
+    which no later evidence can fill and no missing evidence explains. An
+    equal-hours slot's `hours` are the large size's and its w64 partner's.
     """
 
     tag: str
     update: int | None
     matchup: Matchup | None
     unreached: bool = False
+    hours: tuple[float, float] | None = None
 
 
 def paired_matchup(
@@ -488,14 +499,46 @@ def endpoint(run: TrainingRun | None) -> int | None:
     return last_update(run) if run and run.ended else None
 
 
+def checkpoint_hours(state: ExperimentState) -> CheckpointHours | None:
+    """Each stored checkpoint's training hours, as `eval` sees them.
+
+    None until Etude's `Checkpoint` carries the `wall_ms` its store already
+    keeps (the protocol's Before freeze item 3); then this rebases it per run. No
+    manabot clock stands in, so until then equal-hours slots stay unplayable and
+    analysis, which schedules from this same source, reports them missing.
+    """
+    del state
+    return None
+
+
+def _partner(
+    hours: float, small: Mapping[int, float], small_ended: bool
+) -> tuple[int, float] | Literal["unreached"] | None:
+    """W64's last checkpoint at or before `hours`; None while it may still change.
+
+    The pair is fixed once w64 has stored a later checkpoint or has ended. A w64
+    that ended before `hours` never reaches the slot.
+    """
+    if not small_ended and all(saved <= hours for saved in small.values()):
+        return None
+    before = [(saved, update) for update, saved in small.items() if saved <= hours]
+    if not before or (small_ended and max(small.values()) < hours):
+        return "unreached"
+    saved, update = max(before)
+    return update, saved
+
+
 def comparison_schedule(
-    state: ExperimentState, protocol: Protocol
+    state: ExperimentState,
+    protocol: Protocol,
+    hours: CheckpointHours | None = None,
 ) -> list[ScheduledComparison]:
     """Every expected comparison, playable or not, in one order for play and analysis.
 
     Milestones past a wall-bounded endpoint remain expected but unplayable, so
     analysis can report how far each size reached. A milestone that is also an
-    endpoint is scheduled once, as a milestone.
+    endpoint is scheduled once, as a milestone. Equal-hours slots need `hours`
+    for both sizes' checkpoints; without them they stay unplayable.
     """
     inference = checkpoint_inference()
     heuristic = Code(name="heuristic", source=_source(), config=HEURISTIC)
@@ -574,6 +617,40 @@ def comparison_schedule(
             model(label, 0),
             f"{label} final u{end} vs {label} u0",
         )
+
+    def run_hours(label: SizeLabel) -> Mapping[int, float]:
+        run = trained[label]
+        return hours.get(run.name, {}) if hours is not None and run else {}
+
+    def equal_hours(update: int | None) -> ScheduledComparison:
+        """W160l8 at `update` against w64's last checkpoint at or before its hours."""
+        unreached = update is not None and past_endpoint(LARGE, update)
+        at = run_hours(LARGE).get(update) if update is not None else None
+        small = trained[SMALL]
+        found = (
+            _partner(at, run_hours(SMALL), small is not None and small.ended)
+            if at is not None and run_hours(SMALL)
+            else None
+        )
+        if found == "unreached":
+            return ScheduledComparison("equal-hours", update, None, unreached=True)
+        candidate = model(LARGE, update)
+        partner = model(SMALL, found[0]) if found is not None else None
+        if at is None or found is None or candidate is None or partner is None:
+            return ScheduledComparison("equal-hours", update, None, unreached=unreached)
+        point = f"u{update}" if update in protocol.milestones else f"final u{update}"
+        return ScheduledComparison(
+            tag="equal-hours",
+            update=update,
+            matchup=paired_matchup(
+                f"{LARGE} {point} vs {SMALL} u{found[0]} at equal hours",
+                (candidate, partner),
+                "equal-hours",
+                protocol,
+            ),
+            hours=(at, found[1]),
+        )
+
     # Equal wall budget when both finished; analysis reads no scale otherwise.
     expect(
         "endpoint-head-to-head",
@@ -582,6 +659,11 @@ def comparison_schedule(
         model(SMALL, endpoints[SMALL]),
         f"{LARGE} final vs {SMALL} final",
     )
+    # Last, so a pair that is also an equal-update or endpoint pair keeps that
+    # comparison's name and tag when `eval` plays it once.
+    schedule.extend(equal_hours(update) for update in protocol.milestones)
+    if endpoints[LARGE] not in protocol.milestones:
+        schedule.append(equal_hours(endpoints[LARGE]))
     return schedule
 
 
@@ -591,9 +673,11 @@ def eval(state: ExperimentState) -> list[Job]:
         raise ValueError("frontier evaluation requires this experiment's runs")
     _, protocol = frozen()
     closed = with_launcher_ends(state)
-    matchups = tuple(
+    matchups = _distinct(
         comparison.matchup
-        for comparison in comparison_schedule(closed, protocol)
+        for comparison in comparison_schedule(
+            closed, protocol, checkpoint_hours(closed)
+        )
         if comparison.matchup is not None
     )
     if not matchups:
@@ -607,6 +691,23 @@ def eval(state: ExperimentState) -> list[Job]:
             )
         )
     ]
+
+
+def _distinct(matchups: Iterable[Matchup]) -> tuple[Matchup, ...]:
+    """Each set of matches once, under its first comparison's name.
+
+    An equal-hours pair can be an equal-update or endpoint pair as well, most
+    often at the endpoints when both runs stop at the wall. Analysis reads games
+    by match key, so both slots read the one set of games.
+    """
+    seen: set[frozenset[str]] = set()
+    kept: list[Matchup] = []
+    for matchup in matchups:
+        keys = frozenset(match.key for match in matchup.matches())
+        if keys not in seen:
+            seen.add(keys)
+            kept.append(matchup)
+    return tuple(kept)
 
 
 def pass_name(name: str) -> str:
@@ -816,7 +917,12 @@ def play(match: Match) -> Tables:
 
 
 def report() -> Report:
-    """Progress curves by update; `experiments.tla_frontier_analysis` owns claims."""
+    """Progress curves by update; `experiments.tla_frontier_analysis` owns claims.
+
+    Etude's report axes are checkpoint clocks, and hours are not one yet, so the
+    equal-hours curve is drawn at w160l8's update; a pair that is also an
+    equal-update or endpoint pair is played once, under that tag.
+    """
     return Report(
         score=Score(table="games", value="score", reference=0.5),
         clock="updates",
@@ -832,6 +938,11 @@ def report() -> Report:
             Curve(
                 title="Width 160, 8 layers vs width 64 at equal updates",
                 matches=Matches(tag="head-to-head"),
+            ),
+            # Drawn at w160l8's updates; each pair's two hours are in analysis.
+            Curve(
+                title="Width 160, 8 layers vs width 64 at equal training hours",
+                matches=Matches(tag="equal-hours"),
             ),
         ),
     )

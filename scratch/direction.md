@@ -106,3 +106,8 @@ four producers help.
   about 25× slower per decision on very large boards: a game-time and
   per-update cost risk calibration and the rehearsal should read, not a
   vocabulary issue.
+- **No manabot workaround for checkpoint wall time.** Equal-hours pairing needs
+  Etude's `Checkpoint.wall_ms`. Gaps in Etude are fixed with Etude PRs (we
+  write Etude), not manabot workarounds such as reconstructing hours on the
+  manabot side. Leave equal-hours pairing marked as waiting on that Etude
+  change; the operator conversation handles filing it.

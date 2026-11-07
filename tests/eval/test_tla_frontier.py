@@ -35,7 +35,7 @@ from etude.run.listing import as_storage
 from etude.run.records import ArtifactRef
 import pytest
 
-from experiments import tla_frontier
+from experiments import tla_frontier, tla_frontier_analysis
 from experiments.tla_frontier import (
     EXPERIMENT,
     HEURISTIC,
@@ -44,8 +44,10 @@ from experiments.tla_frontier import (
     REGIME,
     ROOT,
     SMALL,
+    CheckpointHours,
     GameErrorCounts,
     HostSpeed,
+    ScheduledComparison,
     SizeLabel,
     comparison_schedule,
     endpoint,
@@ -55,6 +57,7 @@ from experiments.tla_frontier import (
     horizon,
     pass_name,
     runs,
+    size_label,
     size_run,
     with_launcher_ends,
 )
@@ -113,6 +116,35 @@ def _status(run: str, outcome: Outcome | None, usd: Decimal = Decimal(0)) -> Sta
         attempts=1,
         rental_ended=None,
     )
+
+
+# Training milliseconds per update in fixtures: w160l8 three times slower, so
+# equal hours and equal updates pick different w64 checkpoints.
+MS_PER_UPDATE: dict[SizeLabel, int] = {SMALL: 144_000, LARGE: 432_000}
+
+
+def _fixture_hours(state: ExperimentState) -> CheckpointHours:
+    """Each tagged checkpoint's hours at its size's fixture rate.
+
+    Stands in for Etude's `Checkpoint.wall_ms`, which `checkpoint_hours` waits on.
+    """
+    return {
+        run.name: {
+            int(saved.clocks["updates"]): saved.clocks["updates"]
+            * MS_PER_UPDATE[label]
+            / 3_600_000
+            for saved in run.checkpoints
+        }
+        for run in state.runs
+        if (label := size_label(run)) is not None
+    }
+
+
+@pytest.fixture(autouse=True)
+def hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Both readers of `checkpoint_hours` see the fixture's hours."""
+    monkeypatch.setattr(tla_frontier, "checkpoint_hours", _fixture_hours)
+    monkeypatch.setattr(tla_frontier_analysis, "checkpoint_hours", _fixture_hours)
 
 
 @pytest.fixture(autouse=True)
@@ -325,6 +357,76 @@ def test_running_runs_evaluate_reached_milestones_only() -> None:
     assert job.max_attempts == 3
 
 
+def _equal_hours(
+    schedule: list[ScheduledComparison],
+) -> dict[int | None, ScheduledComparison]:
+    return {c.update: c for c in schedule if c.tag == "equal-hours"}
+
+
+def test_equal_hours_pair_w64s_last_checkpoint_at_or_before_each_hour() -> None:
+    state = _state({SMALL: 1300, LARGE: 450})
+    slots = _equal_hours(comparison_schedule(state, frozen()[1], _fixture_hours(state)))
+    # W160l8 trains at 0.12 h/update and w64 at 0.04: u25 is 3 h, w64's u75.
+    names = {u: c.matchup.name for u, c in slots.items() if c.matchup is not None}
+    assert names[25] == "w160l8 u25 vs w64 u75 at equal hours"
+    assert slots[25].hours == (25 * 0.12, 75 * 0.04)
+    # 9 h falls between w64's stored u200 (8 h) and u300 (12 h).
+    assert names[75] == "w160l8 u75 vs w64 u200 at equal hours"
+    assert names[400] == "w160l8 u400 vs w64 u1200 at equal hours"
+    assert all(c.hours is None or c.hours[1] <= c.hours[0] for c in slots.values())
+    # W64 ended at 52 h, before w160l8's 54 h endpoint; past w160l8's endpoint
+    # milestones are unreached as for every other comparison.
+    assert slots[450].unreached and slots[450].matchup is None
+    assert slots[600].unreached and slots[6400].unreached
+    assert set(names) == {25, 50, 75, 100, 150, 200, 300, 400}
+
+
+def test_equal_hours_wait_until_w64_passes_the_hour() -> None:
+    state = _state({SMALL: 100, LARGE: 50}, finished=False)
+    slots = _equal_hours(comparison_schedule(state, frozen()[1], _fixture_hours(state)))
+    # W64's u100 is 4 h: past u25's 3 h, so that pair is fixed.
+    assert slots[25].matchup is not None
+    assert slots[25].matchup.name == "w160l8 u25 vs w64 u75 at equal hours"
+    # U50 is 6 h; w64 may still store a later partner, so it is not yet playable.
+    assert slots[50].matchup is None and not slots[50].unreached
+    assert slots[None].matchup is None and not slots[None].unreached
+
+
+def test_equal_hours_without_a_source_of_hours_stay_unplayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tla_frontier, "checkpoint_hours", lambda state: None)
+    state = _state({SMALL: 1300, LARGE: 450})
+    slots = _equal_hours(comparison_schedule(state, frozen()[1]))
+    assert all(c.matchup is None for c in slots.values())
+    assert not slots[25].unreached and slots[600].unreached
+    (job,) = eval(state)
+    played = evaluation_spec(job).tournament.matchups
+    assert not any("equal-hours" in matchup.tags for matchup in played)
+
+
+def test_an_equal_hours_endpoint_pair_is_played_once_and_read_by_both_slots(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    # Both stop at 54 h, so w64's endpoint is w160l8's endpoint partner.
+    state = _state({SMALL: 1350, LARGE: 450})
+    played = {m.name for m in evaluation_spec(eval(state)[0]).tournament.matchups}
+    assert "w160l8 final vs w64 final" in played
+    assert not any("final u450 vs" in name and "equal hours" in name for name in played)
+    _outcomes(frontier_db, state)
+    report = analyze(state, frontier_db, {})
+    assert report.complete
+    endpoint_pair = next(
+        c for c in report.comparisons if c.tag == "equal-hours" and c.update == 450
+    )
+    assert endpoint_pair.hours == (54, 54)
+    assert endpoint_pair.result == _endpoint_comparison(report).result
+    early = next(
+        c for c in report.comparisons if c.tag == "equal-hours" and c.update == 25
+    )
+    assert early.hours == (25 * 0.12, 3) and early.result is not None
+
+
 def test_exports_between_milestones_are_stored_but_not_played() -> None:
     protocol = frozen()[1]
     state = _failed(
@@ -429,7 +531,8 @@ def _protocol_blocks() -> list[str]:
 def test_protocol_launches_set_cohort_limits_only_on_a_cohort() -> None:
     """`etude launch` refuses `--max-usd` or `--parallel` without `--cohort`."""
     launches = [block for block in _protocol_blocks() if "etude launch" in block]
-    assert len(launches) == 2
+    # Training, calibration and the fact-embedding check.
+    assert len(launches) == 3
     for block in launches:
         assert "--cohort" in block or not {"--max-usd", "--parallel"} & set(
             block.split()
@@ -447,19 +550,27 @@ def test_protocol_commands_name_their_rentals() -> None:
         for command in block.split('"${control[@]}"')
         if "--rent" in command
     ]
-    assert len(commands) == 5
+    assert len(commands) == 7
     for command in commands:
         rented = command[command.index("--rent") + 1]
         assert rented == ("l4" if "launch" in command else "cpu32")
 
 
-def test_protocol_waits_for_the_rehearsal_and_names_the_relaunch() -> None:
-    """`etude eval` returns at launch, so the reader waits for the pass to end."""
+def test_protocol_waits_for_each_pass_and_names_the_relaunch() -> None:
+    """`etude eval` returns at launch, so each reader waits for its pass to end."""
     (rehearsal,) = [block for block in _protocol_blocks() if "--rehearsal" in block]
     assert (
         rehearsal.index("etude eval")
         < rehearsal.index("etude wait <run>")
         < rehearsal.index("--rehearsal")
+    )
+    (check,) = [
+        block for block in _protocol_blocks() if "tla_frontier_vocabulary" in block
+    ]
+    assert (
+        check.index("etude eval")
+        < check.index("etude wait <run>")
+        < check.index("python -m experiments.tla_frontier_vocabulary")
     )
     (relaunch,) = [block for block in _protocol_blocks() if PASS_ATTEMPT in block]
     assert "etude ondemand max cpu32 2" in relaunch
@@ -743,7 +854,7 @@ def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
     state = observe(source, EXPERIMENT)
     with statsdb(EXPERIMENT, source) as db:
         report = analyze(state, db, {})
-    schedule = comparison_schedule(state, frozen()[1])
+    schedule = comparison_schedule(state, frozen()[1], _fixture_hours(state))
     held = {m.key for m in delivered}, {m.key for m in rest}
     spanning = [
         comparison
@@ -777,7 +888,11 @@ def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
     plain, attempt = curves.values()
     assert plain == attempt
     # Every delivered match of a tag, seen from both seats; the failed one is absent.
-    delivered_by_tag = Counter(tag for tag, key in slots if key != died.key)
+    # A match in two slots is played once, under the first slot's tag.
+    tag_of: dict[str, str] = {}
+    for tag, key in slots:
+        tag_of.setdefault(key, tag)
+    delivered_by_tag = Counter(tag for key, tag in tag_of.items() if key != died.key)
     assert plain == Counter({tag: 2 * n for tag, n in delivered_by_tag.items()})
 
 
@@ -1448,7 +1563,9 @@ def _outcomes(
                 [
                     run.name,
                     saved.ordinal,
-                    1_000 + int(saved.clocks["updates"]) * 3_600_000,
+                    1_000
+                    + int(saved.clocks["updates"])
+                    * MS_PER_UPDATE[size_label(run) or SMALL],
                     json.dumps(saved.clocks),
                 ]
                 for saved in run.checkpoints
@@ -1483,7 +1600,7 @@ def test_analysis_reads_learning_and_scale_past_unreached_milestones(
         assert reading.against_heuristic is not None
     small, large = report.sizes
     assert (small.endpoint, large.endpoint) == (1300, 450)
-    assert large.training[-1].update == 450 and large.training[-1].hours == 450
+    assert large.training[-1].update == 450 and large.training[-1].hours == 54
     unreached = {c.name or (c.tag, c.update) for c in report.comparisons if c.unreached}
     assert ("head-to-head", 600) in unreached
     assert ("heuristic-w64", 2400) in unreached

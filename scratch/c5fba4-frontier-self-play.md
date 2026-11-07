@@ -1,11 +1,13 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
-## Revised design (2026-11-06, after design review) — current
+## Accepted design (2026-11-06) — current
 
-The design review (scratch/direction.md, steers d52dc416 and a3318c8a) returned
-protocol v1. The revised design is in `experiments/protocols/tla-frontier-c5fba4-v1.md`,
-marked "revised design, not frozen". The implement pass of 2026-11-06 moved the
-JSON, regime and runner onto it except where "Software" below says otherwise.
+The design review (scratch/direction.md, steers d52dc416, a3318c8a, 82d2041b)
+returned protocol v1; Jack Heart accepted the revised design the same day (steer
+ff3c999d) with the one-producer calibration pod and a catalog-vs-hashed gate. It
+is `experiments/protocols/tla-frontier-c5fba4-v1.md`, marked "accepted design, not
+frozen". The JSON, regime and runner follow it except where "Software" says
+otherwise.
 
 - Arms: w64 (64/2/4, 385,538 compute params) and w160l8 (160/8/8, 5,538,242;
   14.4×), counted on f6f171d34 with six 4096-row tables excluded. Provisional:
@@ -26,12 +28,14 @@ JSON, regime and runner onto it except where "Software" below says otherwise.
   pair are cut. A lost run stops at its last export and is reported.
 - Budget: 2 × USD38 training + USD14 evaluation; USD10 reserve (calibration ≤ 2,
   rehearsal ≤ 2).
-- Order: #435 and 30df0c merge → parameter recount → software (protocol "Before freeze" items 1–4) merges →
-  calibration (two pods, ≤ USD2) + rehearsal → horizons written, freeze →
-  execution review → launch.
+- Order: #435 (merged) and #437 (30df0c) merge → parameter recount → software
+  (protocol "Before freeze" 1–5) merges → record coverage sweep (seed 0) →
+  calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal → horizons
+  written, freeze → catalog-vs-hashed check → execution review → launch.
 
 Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
-#437 (30df0c) was still open at this pass.
+#437 (30df0c, head bab2e80d6) is still open. origin/main moved to ebed0963e
+(ten-deck Elemental studies) after this branch's last sync; not yet merged in.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
    `current_player_configs`/`current_matchup_indices`; deck-source,
@@ -40,26 +44,30 @@ Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced 
 2. Done: `manabot.recipes.builders.sampled_self_play` (four producers, fitted
    `IterationSchedule`, `recover_capacity`, threshold .25, cap 10,000) and
    `fitted_horizon`; field defaults unchanged; docs/training.md, docs/learning.md.
-3. Not started: Etude `Checkpoint.wall_ms` PR and release in
-   `loopflowstudio/etude` (Etude main d3f9028 lacks it). Cross-repo, so not
-   opened from this headless step.
-4. Done except equal-hours: w160l8 label and `LargeSize` (with
-   `expected_updates`), regime rebuilt from the builder (96 permanents, workers 4,
-   cap 10,000, provisional horizons 1,296 / 129), new milestones, USD14,
-   `game_error_counts`/`PodReading` in calibration and analysis (horizon and
-   workers per size), calibration's `expected_updates`, a third calibration pod
-   `w64-p1`; `read_screen`, `--screen`, `--size` and their tests deleted.
-   Remaining, blocked on 3: equal-hours pairs in `comparison_schedule`, their
-   analysis rows and an hours curve in `report()`; then a fixture-hours test.
-   Remaining, blocked on #437: recount parameters on main and write them in the
-   protocol table.
-5. Catalog-vs-hashed `record_vocabulary` check: protocol step written; its runner
-   and pre-registered criterion wait for #437.
+3. Waiting: Etude `Checkpoint.wall_ms` PR and release in `loopflowstudio/etude`.
+   Filing belongs to the operator conversation (steer a6c38666), not this step.
+   When it lands, `tla_frontier.checkpoint_hours` (now returns None) rebases
+   `wall_ms` per run; the control pin moves to that release.
+4. Done except the recount: w160l8 label and `LargeSize`, regime from the builder
+   (96 permanents, workers 4, cap 10,000, provisional horizons 1,296 / 129), new
+   milestones, USD14, per-label game errors, calibration's `expected_updates` and
+   `w64-p1` pod; host screen and `--size` deleted. Equal-hours slots are built:
+   `comparison_schedule(state, protocol, hours)` over a typed `CheckpointHours`,
+   `_partner` (w64's last at or before; pending until w64 passes the hour;
+   unreached if w64 ended earlier), scheduled last so `eval`'s `_distinct` plays a
+   pair shared with an equal-update/endpoint slot once under that name; analysis
+   `Comparison.hours`; a report curve at w160l8's updates. Fixture-hours tests
+   cover them. Remaining, blocked on #437: recount parameters on main.
+5. Built: `experiments/tla_frontier_vocabulary.py` and its tests; the criterion
+   is in the protocol (head-to-head `best.upper` < .5; hashed learned and catalog
+   rejected; late value loss > 1.10× hashed). Merge dependency: `vocabulary_regime`
+   needs #437's `ModelConfig.record_vocabulary` and raises without it; the arm
+   regime test is skipped until #437 is merged in, so rerun
+   `tests/eval/test_tla_frontier_vocabulary.py` after syncing #437.
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
-tests/eval/test_tla_frontier.py -q` 66 passed; `tests/training/test_builders.py
-test_training_decks.py test_elemental_uniform.py` passed (2026-11-06, after a
-release extension rebuild). Gate owns wider suites.
+tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
+81 passed, 1 skipped (needs #437) (implement, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
