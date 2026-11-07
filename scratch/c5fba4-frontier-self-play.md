@@ -110,6 +110,18 @@ the vocabulary experiment). Gate owns wider suites.
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
 
+### Concept review 14 (2026-11-07, headless): nothing to change
+
+- Item 6 (steer 6472bb87) matches the demo review: declared under protocol
+  "Reading › Fact contribution" and "Before freeze" 6, built in
+  `experiments/tla_frontier_facts.py`, descriptive and gating nothing. It stays a
+  module beside `tla_frontier_analysis` rather than inside it, because it loads
+  checkpoints and the analysis reads only matches; the analysis docstring names
+  it. That is a placement under the direction, not a product choice.
+- Main has not moved past the base; PR #439 is mergeable with Integration
+  pending. Item 3 still waits on Etude Task 3d4f40, which holds the freeze, not
+  calibration. No open product choice.
+
 ### Realign (2026-11-07, headless)
 
 Main has not moved past this branch's base; PR #439 is open at `54b109aff`
