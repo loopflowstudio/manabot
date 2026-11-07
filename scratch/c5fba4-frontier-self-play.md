@@ -34,7 +34,7 @@ otherwise.
   horizons written → item 3 (Etude `wall_ms`) lands → freeze → catalog-vs-hashed
   check → execution review → launch.
 
-Software (protocol "Before freeze" 1–5). #435 (2026-11-06), b015d5's throughput
+Software (numbered as protocol "Before freeze" 1–6). #435 (2026-11-06), b015d5's throughput
 protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged in.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
@@ -44,9 +44,9 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
 2. Done: `manabot.recipes.builders.sampled_self_play` (four producers, fitted
    `IterationSchedule`, `recover_capacity`, threshold .25, cap 10,000) and
    `fitted_horizon`; field defaults unchanged; docs/training.md, docs/learning.md.
-3. Waiting: Etude `Checkpoint.wall_ms` PR and release in `loopflowstudio/etude`.
-   Filing belongs to the operator conversation (steer a6c38666), not this step.
-   When it lands, `tla_frontier.checkpoint_hours` (now returns None) rebases
+3. Waiting: Etude `Checkpoint.wall_ms` PR and release in `loopflowstudio/etude`,
+   filed as Etude Task 3d4f40 (steer a6c38666). Read from the Etude checkout on
+   2026-11-07: unstarted, unowned, no PR; starting it is Jack Heart's call. When it lands, `tla_frontier.checkpoint_hours` (now returns None) rebases
    `wall_ms` per run; the control pin moves to that release.
 4. Done except the recount: w160l8 label and `LargeSize`, regime from the builder
    (96 permanents, workers 4, cap 10,000, provisional horizons 1,296 / 129), new
@@ -65,13 +65,7 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
    (milestones are interior); now `MILESTONES = (25, 50, 75)` and the stop export
    gives 100. The pre-#437 guard and its skip test are deleted.
 
-6. Built (direction 26): the set-aside rule is gone. `size_run(state, label)` admits the one
-   tagged run of a size; a run lost below update 25 is its size's run, endpoint at its last
-   export, its milestone and endpoint slots unreached (no matchup), its endpoint readings None,
-   scale absent. `FrontierAnalysis.runs` (`Attempt`) lists every stored run, size None without
-   a checkpoint.
-
-7. Built (demo review, steer 6472bb87): the fact-contribution reading,
+6. Built (demo review, steer 6472bb87): the fact-contribution reading,
    protocol "Reading › Fact contribution" and "Before freeze" 6.
    `experiments/tla_frontier_facts.py`: `sample_positions` (one seeded
    random-action game per frozen pair, every 4th decision, ≤32 per pair; 495
@@ -81,11 +75,17 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
    experiment. Fresh w64: facts exactly 0; shared effects median about .21 (no
    zero-init), so update 0 is the shared-effect baseline.
 
+Beyond the protocol's list (direction 26): the set-aside rule is gone. `size_run(state,
+label)` admits the one tagged run of a size; a run lost below update 25 is its size's run,
+endpoint at its last export, its milestone and endpoint slots unreached (no matchup), its
+endpoint readings None, scale absent. `FrontierAnalysis.runs` (`Attempt`) lists every stored
+run, size None without a checkpoint.
+
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
-tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py
-tests/eval/test_tla_frontier_facts.py -q` 88 passed (2026-11-07; one protocol-block
-filter in test_tla_frontier.py narrowed because the new command block also names
-the vocabulary experiment). Gate owns wider suites.
+tests/eval/test_experiment_files.py tests/eval/test_tla_frontier.py
+tests/eval/test_tla_frontier_vocabulary.py tests/eval/test_tla_frontier_facts.py -q` 92
+passed on 546b496d5 plus the working-tree fix (2026-11-07). CI on PR #439 owns the
+Integration suites; a head with the fix has not yet run there.
 
 ### Concept review 13 (2026-11-06, headless): nothing to change
 
@@ -107,8 +107,7 @@ the vocabulary experiment). Gate owns wider suites.
   files, and "Before freeze" says calibration runs from items 1, 2, 4–6 while the
   freeze waits for item 3.
 
-Not changed: execution authority. Nothing is launched; spend waits for
-`experiment-execution-review`.
+Nothing is launched. Concept review 15 states the authority for each paid step.
 
 ### Concept review 14 (2026-11-07, headless): nothing to change
 
@@ -122,11 +121,47 @@ Not changed: execution authority. Nothing is launched; spend waits for
   pending. Item 3 still waits on Etude Task 3d4f40, which holds the freeze, not
   calibration. No open product choice.
 
-### Realign (2026-11-07, headless)
+### Concept review 15 (2026-11-07, headless): nothing to implement; one authority gap for the freeze
 
-Main has not moved past this branch's base; PR #439 is open at `54b109aff`
-(mergeable, CI pending at realign). `lf task status 3d4f40` does not resolve from
-this repository, so the Etude Task's state is unverified here; item 3 stays waiting.
+- The realigned Launch sequence, "Before freeze" and this plan agree, and the Launch
+  sequence's order is the one Jack Heart accepted. No design or code change follows.
+  Main has not moved; PR #439 is mergeable, its three Integration jobs pending.
+- **Paid steps before execution review have no Graph owner.** The Launch sequence
+  spends before step 7: calibration and the rehearsal (step 4) and the fact-embedding
+  check (step 6). `experiment-freeze` inspects "without executing games or training",
+  `experiment-software-review` launches nothing, and only `pool-validation` runs paid
+  work, after execution review. The Graph therefore cannot produce the horizons
+  `experiment-freeze` must bind. Left alone, the freeze stops there.
+- **What authority exists.** The Graph direction says "Any paid launch waits for
+  `experiment-execution-review`". The later order and accepted design place calibration
+  before the freeze, with its USD2 ceiling and one-producer pod. That settles the order
+  for calibration; the rehearsal is in the protocol Jack Heart accepted. Neither
+  statement says who launches them, and no step may assume it. The fact-embedding check
+  is required only "before either 54-hour run", so its place before execution review is
+  the protocol's, not a direction. This corrects review 13's "spend waits for execution
+  review", which contradicted the order.
+- **Question for Jack Heart at the freeze boundary:** does the design acceptance
+  authorize a person or operator conversation to launch calibration, the rehearsal and
+  the fact-embedding check within their ceilings before execution review, or does each
+  need its own go-ahead? This is execution authority, not a product choice, and the
+  Graph's skills keep it at that boundary. It touches no software in PR #439, so
+  delivery continues. Until answered, no step launches any of the three.
+- Operator note: the fact-embedding check waits on the freeze only because its commands
+  name the frozen revision, so it also waits on Etude Task 3d4f40. It needs the horizons
+  but not equal-hours code. Running it first would also spare a new protocol version if
+  catalog fails. That reorders an accepted protocol, so it is Jack Heart's to decide.
+
+### Realign after demo (2026-11-07, headless)
+
+Main has not moved past this branch's base (43150799f). PR #439 is open at 546b496d5:
+mergeable, Python Unit Tests, packages and the Linux install passed. CI run 42345721634 then
+failed Integration (ubuntu-latest, evaluation), 1 failed, 481 passed, 1 skipped, and Tests
+Result with it: `test_etude_finds_each_current_experiment_and_nothing_else` did not list
+`tla_frontier`, `tla_frontier_calibration` or `tla_frontier_vocabulary`. The expected set now
+names them; `tla_frontier_facts` and `tla_frontier_analysis` are helpers Etude rightly does
+not discover. The protocol's Launch sequence now
+matches "Before freeze": step 1 needs items 1, 2 and 4–6, and the freeze in step 5 also needs
+item 3. Plan items now use the protocol's numbers.
 
 ## History (full text at `739f95b8d:scratch/c5fba4-frontier-self-play.md`)
 
@@ -178,13 +213,15 @@ unchanged.
 
 ## Remaining work
 
-- Review of the protocol before freezing. `frozen()` rejects a drifted world, so a
-  card-catalog change before launch moves the pin in a new protocol version. Open
-  rules PRs such as #433 can do that; main matched the checkout base on 2026-11-06.
-- Freeze at a merged revision, then follow the protocol's "Launch sequence":
-  on-demand checks, calibration and rehearsal (paid, USD2 ceiling each), both gates,
-  horizons, the catalog-vs-hashed check, training (paid; needs an execution
-  decision), evaluation driver.
+- PR #439 finishes CI and merges (items 1, 2, 4–6). Etude Task 3d4f40 (item 3) must start
+  and release before the freeze; it does not hold calibration.
+- Then the protocol's "Launch sequence": on-demand checks, coverage sweep, calibration and
+  rehearsal (paid, USD2 ceiling each), both gates, horizons, freeze, the catalog-vs-hashed
+  check, execution review, training (paid; needs an execution decision), evaluation driver.
+  No Graph step launches the paid steps before execution review, and their launcher is
+  unsettled (concept review 15).
+  `frozen()` rejects a drifted world, so a card-catalog change before launch moves the pin in
+  a new protocol version. Open rules PRs such as #433 can do that.
   `etude launch` refuses several runs without
   `--cohort`, and a cohort's default `--parallel 1` would train the large arm only after
   w64's 54 hours, so both commands name a cohort and two machines.

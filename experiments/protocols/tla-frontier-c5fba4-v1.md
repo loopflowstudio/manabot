@@ -227,8 +227,8 @@ reading fails this gate.
 
 ## Launch sequence
 
-1. The software under [Before freeze](#before-freeze) merges on main. PRs #435
-   and #437 have merged, and the parameter counts above are taken with both.
+1. Items 1, 2 and 4–6 under [Before freeze](#before-freeze) merge on main. PRs
+   #435 and #437 have merged, and the parameter counts above are taken with both.
 2. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
    supply with none holds its whole window. `l4` has 900 seconds; set the others
    where absent. `cpu32` allows one machine, which fits one pass at a time.
@@ -246,7 +246,8 @@ reading fails this gate.
    rehearsal's slowest game read; it is not a vocabulary failure.
 4. Calibration, then the evaluation rehearsal.
 5. Both gates, and each size's horizon written into the JSON
-   protocol and regime. Freeze at the merged revision that carries them.
+   protocol and regime. Freeze at the merged revision that carries them and
+   item 3.
 6. The fact-embedding check (item 5 under [Before freeze](#before-freeze)),
    before either long run.
 7. Execution review.
