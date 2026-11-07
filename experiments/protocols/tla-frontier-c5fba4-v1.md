@@ -4,9 +4,9 @@
 reviewed draft for revision, and the revised design was accepted the same day with
 the one-producer calibration pod and the fact-embedding check (item 5 under
 [Before freeze](#before-freeze)). The JSON protocol, regime and runner on this
-branch follow it except where that section lists remaining software. Freezing
-waits for Task 30df0c's input consolidation (PR #437) to merge and for the
-parameter recount on main. Two values enter the JSON only from calibration: each
+branch follow it except where that section lists remaining software. Task
+30df0c's input consolidation (PR #437) merged on 2026-11-07, and the parameters
+below are recounted on it. Two values enter the JSON only from calibration: each
 size's damping horizon.
 Nothing has launched, and no score exists.
 
@@ -86,7 +86,7 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 - **Input architecture.** Both sizes use the consolidated input of Task 30df0c:
   fact and effect ids embed through the card encoder's exact token vocabulary,
   and sources join the card table, replacing the six hashed 4096-row tables.
-  It merges before this protocol freezes, and the freeze pins it.
+  It merged as PR #437 on 2026-11-07, and the freeze pins it.
 - **Failed games.** `game_errors.recover_capacity` stays on, as in v10 and as
   decided for MTG-252. An engine error or a capacity overflow (for example
   `continuation relations 65 > 64`, or a permanent past 96) aborts that one
@@ -99,20 +99,17 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 
   | Label | Width | Attention layers | Heads | Compute parameters | Total parameters |
   | --- | ---: | ---: | ---: | ---: | ---: |
-  | w64 | 64 | 2 | 4 | 385,538 | 1,958,402 |
-  | w160l8 | 160 | 8 | 8 | 5,538,242 | 9,470,402 |
+  | w64 | 64 | 2 | 4 | 307,010 | 412,482 |
+  | w160l8 | 160 | 8 | 8 | 5,341,922 | 5,605,602 |
 
-  These counts are provisional. They were taken on the checkout base `f6f171d34`
-  (main on 2026-11-06), before input consolidation, and exclude the six
-  4096-bucket hashed lookup tables (three for facts, three for shared effects).
-  Consolidation removes those tables, so the counts are retaken on main after
-  Task 30df0c merges, before calibration, excluding embedding lookup tables
-  likewise, and written here and in the JSON. On the provisional count the ratio
-  is 14.4×, inside the requested 10–100×, and the large arm grows in depth as
-  well as width. A recount outside 10–100× returns the size choice to review
-  before calibration. The earlier draft's w256 (4 layers, 8 heads) has 8,663,554
-  compute parameters on the same base, 22.5×; its 15.0× was counted when the
-  model had five tables. W256 is the fallback: if w160l8 misses calibration's
+  Compute parameters exclude the embedding lookup tables (the card token table
+  and the fact-kind, effect-detail-kind and name tables). They were counted with
+  PR #437 merged, at `563ae37dd`; the freeze revision's tests check the ratio.
+  The ratio is 17.4× (13.6× in total parameters), inside the requested 10–100×,
+  and the large arm grows in depth as well as width. The counts taken before
+  consolidation (385,538 and 5,538,242, 14.4×) excluded six 4096-bucket hashed
+  tables that PR #437 removed. The earlier draft's w256 (4 layers, 8 heads) had
+  8,663,554 compute parameters on that pre-consolidation base, 22.5×. W256 is the fallback: if w160l8 misses calibration's
   speed gate, a new protocol version replaces it with w256 before any scoring.
 - **Budget per size.** One GPU allocation of at most USD38 and 56 hours; the
   regime wall budget is 54 hours (194,400 s). The update cap is 10,000, the
@@ -228,9 +225,8 @@ reading fails this gate.
 
 ## Launch sequence
 
-1. The software under [Before freeze](#before-freeze) merges on main after
-   PR #435. Task 30df0c's PR #437 merges before freeze. The parameter counts
-   are retaken on main after #437 and before calibration.
+1. The software under [Before freeze](#before-freeze) merges on main. PRs #435
+   and #437 have merged, and the parameter counts above are taken with both.
 2. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
    supply with none holds its whole window. `l4` has 900 seconds; set the others
    where absent. `cpu32` allows one machine, which fits one pass at a time.
@@ -447,10 +443,8 @@ claim that one size is better in general.
 
 ## Before freeze
 
-Software, merged on main after PR #435, each with its acceptance check. Items 1,
-2 and 4 do not read PR #437, and item 5 works on either side of it. PR #437
-merges before freeze; item 4's recounted parameters are taken after it as a
-freeze step, not as a condition of merging:
+Software, merged on main after PRs #435 and #437, each with its acceptance
+check:
 
 1. **Roster sampling with 2–4 producers** (`manabot/training/rollout/producers.py`,
    `collection.py`, `regime.py`). `ShardedVectorEnv` forwards training decks and

@@ -34,6 +34,7 @@ from etude.run.errors import EtudeError
 from etude.run.listing import as_storage
 from etude.run.records import ArtifactRef
 import pytest
+from torch import nn
 
 from experiments import tla_frontier, tla_frontier_analysis
 from experiments.tla_frontier import (
@@ -249,13 +250,12 @@ def _tracked(
 
 
 def _compute_parameters(regime: TrainingRegime) -> int:
-    """Parameters outside the 4096-bucket hashed lookup tables."""
+    """Parameters outside the embedding lookup tables, as the protocol counts them."""
     agent = ActorCritic(ObservationSpace(regime.observation), regime.agent)
-    return sum(
-        p.numel()
-        for p in agent.parameters()
-        if not (p.dim() == 2 and p.shape[0] == 4096)
+    lookups = sum(
+        m.weight.numel() for m in agent.modules() if isinstance(m, nn.Embedding)
     )
+    return sum(p.numel() for p in agent.parameters()) - lookups
 
 
 def _recipe(regime: TrainingRegime) -> dict[str, object]:
@@ -287,6 +287,8 @@ def test_sizes_differ_only_in_compute_network_and_horizon() -> None:
         assert regime.stages[0].execution.workers == 4
         assert regime.observation.max_permanents_per_player == 96
     ratio = _compute_parameters(large) / _compute_parameters(small)
+    assert _compute_parameters(small) == 307_010
+    assert _compute_parameters(large) == 5_341_922
     assert 10 <= ratio <= 100
 
 

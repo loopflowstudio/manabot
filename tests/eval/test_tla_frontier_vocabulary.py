@@ -37,10 +37,8 @@ from experiments.tla_frontier_vocabulary import (
     vocabulary_regime,
 )
 from manabot.eval.results import RateInterval
-from manabot.infra.config import ModelConfig, RuntimeConfig
+from manabot.infra.config import RuntimeConfig
 from manabot.infra.runtime import RunContext, regime_tag
-
-HAS_RECORD_VOCABULARY = "record_vocabulary" in ModelConfig.model_fields
 
 
 @pytest.fixture(autouse=True)
@@ -187,18 +185,11 @@ def test_the_check_rejects_a_foreign_experiment() -> None:
         eval(ExperimentState(experiment="other", runs=()))
 
 
-@pytest.mark.skipif(HAS_RECORD_VOCABULARY, reason="PR #437 has merged")
-def test_arms_refuse_before_record_vocabulary_exists() -> None:
-    with pytest.raises(ValueError, match="30df0c"):
-        runs("HEAD")
-
-
-@pytest.mark.skipif(not HAS_RECORD_VOCABULARY, reason="needs PR #437")
 def test_arms_differ_only_in_record_vocabulary() -> None:
     small = frozen()[0][SMALL]
     catalog, hashed = (vocabulary_regime(small, v) for v in ("catalog", "hashed"))
-    assert getattr(catalog.agent, "record_vocabulary") == "catalog"
-    assert getattr(hashed.agent, "record_vocabulary") == "hashed"
+    assert catalog.agent.record_vocabulary == "catalog"
+    assert hashed.agent.record_vocabulary == "hashed"
     exclude = {"id": True, "agent": {"record_vocabulary"}}
     assert catalog.model_dump(exclude=exclude) == hashed.model_dump(exclude=exclude)
     stage = catalog.stages[0]

@@ -9,10 +9,10 @@ is `experiments/protocols/tla-frontier-c5fba4-v1.md`, marked "accepted design, n
 frozen". The JSON, regime and runner follow it except where "Software" says
 otherwise.
 
-- Arms: w64 (64/2/4, 385,538 compute params) and w160l8 (160/8/8, 5,538,242;
-  14.4×), counted on f6f171d34 with six 4096-row tables excluded. Provisional:
-  Task 30df0c's input consolidation (steer 82d2041b) removes those tables and
-  merges before freeze; both arms use it and counts are retaken on main after it.
+- Arms: w64 (64/2/4) and w160l8 (160/8/8). Recounted with #437 merged at
+  563ae37dd, embedding lookup tables excluded: 307,010 and 5,341,922 compute
+  params, 17.4× (totals 412,482 / 5,605,602, 13.6×). The pre-consolidation
+  counts (385,538 / 5,538,242, 14.4×) are superseded; the test pins the new ones.
 - 96 permanents per seat (from 64), both arms; calibration reads the cost.
 - `recover_capacity` stays on: engine errors and overflows abort one game,
   labelled `engine_error` / `resource_limit`; analysis and calibration report
@@ -28,15 +28,13 @@ otherwise.
   pair are cut. A lost run stops at its last export and is reported.
 - Budget: 2 × USD38 training + USD14 evaluation; USD10 reserve (calibration ≤ 2,
   rehearsal ≤ 2).
-- Order (revised, eleventh review): #435 (merged) → software (protocol "Before
-  freeze" 1, 2, 4, 5) merges without waiting for #437 → #437 (30df0c) merges →
-  parameter recount → record coverage sweep (seed 0) →
+- Order: #435 and #437 (merged) → parameter recount (done) → software
+  (protocol "Before freeze" 1, 2, 4, 5) merges → record coverage sweep (seed 0) →
   calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal → horizons
   written, freeze → catalog-vs-hashed check → execution review → launch.
 
-Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
-#437 (30df0c) is still open (head 40ecda6be). origin/main 70d79ccb8 (b015d5's
-throughput protocol) is merged in.
+Software (protocol "Before freeze" 1–5). #435 (2026-11-06), b015d5's throughput
+protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged in.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
    `current_player_configs`/`current_matchup_indices`; deck-source,
@@ -58,11 +56,13 @@ throughput protocol) is merged in.
    unreached if w64 ended earlier), scheduled last so `eval`'s `_distinct` plays a
    pair shared with an equal-update/endpoint slot once under that name; analysis
    `Comparison.hours`; a report curve at w160l8's updates. Fixture-hours tests
-   cover them. Remaining freeze step (not a merge blocker): recount after #437.
+   cover them. Recount done (see Arms).
 5. Built: `experiments/tla_frontier_vocabulary.py` and its tests; the criterion
    is in the protocol (head-to-head `best.upper` < .5; hashed learned and catalog
-   rejected; late value loss > 1.10× hashed). `vocabulary_regime` raises without
-   #437's `ModelConfig.record_vocabulary`; its arm test skips until #437 is in.
+   rejected; late value loss > 1.10× hashed). With #437 in, the arm test ran and
+   showed `EXPORTS` passing update 100 as a milestone, which `TrainingJob` rejects
+   (milestones are interior); now `MILESTONES = (25, 50, 75)` and the stop export
+   gives 100. The pre-#437 guard and its skip test are deleted.
 
 6. Built (direction 26): the set-aside rule is gone. `size_run(state, label)` admits the one
    tagged run of a size; a run lost below update 25 is its size's run, endpoint at its last
@@ -72,7 +72,7 @@ throughput protocol) is merged in.
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed, 1 skipped (needs #437) (compress, after merging 70d79ccb8, 2026-11-06). Gate owns wider suites.
+83 passed (realign, with #437 merged and the extension rebuilt, 2026-11-07). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
@@ -94,10 +94,9 @@ pre-review design (w256, one producer, host screen) is at `8e4ed4a9c`, reviews 1
   without `--retry-failed`; a failed launched pass blocks later passes from that computer
   (`launched_pass_failed`), untested on a real rental. `etude report` calls `eval`, so it needs
   launcher access.
-- **Order** (direction 27). Software merges after #435 without #437: items 1, 2, 4 do not read it
-  and item 5 runs on both sides (`HAS_RECORD_VOCABULARY`); b015d5's throughput protocol builds on
-  item 1's `collection.py`. Reopens if #437 changes `ModelConfig`, the regime builders or
-  `collection.py` against items 1–2; the later PR rebases.
+- **Order** (direction 27). #437 merged before this software did, and the merge was clean
+  against items 1–2. A stale local extension (`learning_record_names` missing) fails four
+  tests after merging #437: rebuild it.
 - **Clients.** Locked 0.2.12 `etude ondemands` fails on a `vast` row; the 0.2.14 overlay with
   nested Doppler works and its evaluation keys match 0.2.12's. The GPU model lives in the
   launcher's session record (`etude status`), so same-GPU is an operator check.

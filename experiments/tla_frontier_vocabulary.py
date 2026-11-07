@@ -7,7 +7,8 @@ shared-effect ids through the card encoder's exact token vocabulary (Task
 Same recipe, seed, decks, producers and updates. The protocol's Before freeze
 item 5 owns the decision; this file fixes its criterion before the check runs.
 
-`runs` launches both arms for `UPDATES` updates, exporting at `EXPORTS`.
+`runs` launches both arms for `UPDATES` updates, exporting at the interior
+`MILESTONES` and at the final update, where training stops and exports.
 Once both arms have ended, `eval` plays three comparisons on the frontier's
 16 frozen pairs through the frontier's own pass job: each arm's update
 `UPDATES` against its own update 0, and catalog against hashed at update
@@ -30,9 +31,6 @@ which is no pass: a recorded decision reruns or reviews it before a long run.
 Each failure names its rule, and a failure returns the embedding choice to
 review. These games sit under this experiment and an environment of their own,
 so they touch no frontier slot, match key or score.
-
-PR #437 (Task 30df0c) adds `record_vocabulary`; until it merges, `runs`
-refuses rather than launching two identical arms.
 """
 
 from __future__ import annotations
@@ -71,7 +69,6 @@ from experiments.tla_frontier_analysis import (
     read_comparison,
 )
 from experiments.tla_pilot_analysis import game_columns
-from manabot.infra.config import ModelConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.infra.runtime import regime_tag
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -80,7 +77,8 @@ EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
 VOCABULARIES: tuple[Vocabulary, Vocabulary] = ("catalog", "hashed")
 UPDATES = 100
-EXPORTS = (25, 50, 75, 100)
+# Interior exports; the job exports update UPDATES itself when training stops.
+MILESTONES = (25, 50, 75)
 # 100 updates fit 8,400 usable seconds under the 600 s stop reserve at up to
 # 84 s/update. Calibration reads w64's cost first; a slower reading changes the
 # length here, by recorded decision, before the check runs.
@@ -100,12 +98,7 @@ def _regime_id(vocabulary: Vocabulary) -> str:
 
 
 def vocabulary_regime(regime: TrainingRegime, vocabulary: Vocabulary) -> TrainingRegime:
-    """The frozen w64 regime with its identity, length and record vocabulary changed.
-
-    Raises before PR #437, whose `ModelConfig.record_vocabulary` the arms need.
-    """
-    if "record_vocabulary" not in ModelConfig.model_fields:
-        raise ValueError("record_vocabulary needs Task 30df0c (PR #437) merged")
+    """The frozen w64 regime with its identity, length and record vocabulary changed."""
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     execution = stage.execution.model_copy(update={"wall_seconds": WALL_SECONDS})
@@ -140,7 +133,7 @@ def runs(revision: str) -> list[Run]:
             seed=protocol.training_seed,
             max_hours=MAX_HOURS,
             max_usd=MAX_USD,
-            milestones=EXPORTS,
+            milestones=MILESTONES,
         )
     ]
 
