@@ -202,6 +202,22 @@ def test_architecture_identity_names_catalog_only_where_it_applies() -> None:
     assert "record_vocabulary" not in ModelConfig().model_dump()
 
 
+def test_fresh_regimes_can_select_hashed_ids() -> None:
+    """A fresh regime naming `hashed` keeps it through serialization and builds
+    the hashed tables, so one recipe can train both layouts side by side."""
+    regime = ModelConfig(
+        hidden_dim=16, world=managym.WORLD_SETUP, record_vocabulary="hashed"
+    )
+    payload = regime.model_dump()
+    assert payload["record_vocabulary"] == "hashed"
+    assert ModelConfig.model_validate(payload) == regime
+    assert ModelConfig.from_checkpoint(regime.checkpoint_payload(), 9) == regime
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    model = ActorCritic(space, regime)
+    assert hasattr(model.shared_effects, "modification")
+    assert hasattr(model.facts, "ident")
+
+
 def test_checkpoints_without_the_field_read_hashed_only_where_it_applies() -> None:
     world = {"world": managym.WORLD_SETUP}
     assert ModelConfig.from_checkpoint(world, 8).record_vocabulary == "hashed"
