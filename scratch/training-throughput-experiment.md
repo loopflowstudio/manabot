@@ -77,3 +77,7 @@ Nothing has launched.
   game rather than adding a second mechanism; this matches the protocol's "discards a
   failed game's unlearned rows". Next: execution review with Jack Heart, then the
   step-1 launch.
+- Gate 2026-11-06 at `dc4ffdc5f`: `uv run --extra dev pytest tests/training/test_training_throughput.py -q`
+  3 passed; `ruff check` / `ruff format --check` on the three changed Python files clean;
+  `scripts/check_loopflow_workflows.py` valid. PR #438 Integration (core/evaluation/long)
+  pending at gate time; CI owns it. No code changes.
