@@ -6,8 +6,9 @@ the one-producer calibration pod and the fact-embedding check (item 5 under
 [Before freeze](#before-freeze)). The JSON protocol, regime and runner on this
 branch follow it except where that section lists remaining software. Task
 30df0c's input consolidation (PR #437) merged on 2026-11-07, and the parameters
-below are recounted on it. Two values enter the JSON only from calibration: each
-size's damping horizon.
+below are recounted on it. Two values come only from calibration: each size's
+damping horizon, w64's as `iteration_schedule.steps` in its regime JSON and
+w160l8's as `large.expected_updates` in the protocol JSON.
 Nothing has launched, and no score exists.
 
 Once frozen, this protocol is fixed before any scoring. The runner is
@@ -556,8 +557,10 @@ check:
    fresh model's fact contribution is zero, weighted fact output registers per
    kind, and the reader covers the frontier and vocabulary checkpoints it names.
 
-Calibration runs from the merged revision of 1–4. The freeze is a second, small
-change carrying both horizons and the regime hash.
+Calibration runs from the merged revision of items 1, 2 and 4–6; it does not
+need item 3. The freeze is a second, small change carrying both horizons and the
+regime hash, and it waits for item 3, because equal-hours slots read
+`checkpoint_hours`, which is runner code fixed at the freeze.
 
 ## Budget
 

@@ -29,9 +29,10 @@ otherwise.
 - Budget: 2 × USD38 training + USD14 evaluation; USD10 reserve (calibration ≤ 2,
   rehearsal ≤ 2).
 - Order: #435 and #437 (merged) → parameter recount (done) → software
-  (protocol "Before freeze" 1, 2, 4, 5) merges → record coverage sweep (seed 0) →
-  calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal → horizons
-  written, freeze → catalog-vs-hashed check → execution review → launch.
+  (protocol "Before freeze" 1, 2, 4–6) merges as PR #439 → record coverage sweep
+  (seed 0) → calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal →
+  horizons written → item 3 (Etude `wall_ms`) lands → freeze → catalog-vs-hashed
+  check → execution review → launch.
 
 Software (protocol "Before freeze" 1–5). #435 (2026-11-06), b015d5's throughput
 protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged in.
@@ -102,13 +103,18 @@ the vocabulary experiment). Gate owns wider suites.
 - Operator risk, not a design question: 3d4f40 has not started, and starting it is
   Jack Heart's call. If it is still unstarted when calibration's horizons are written,
   the freeze waits there.
-- Wording for the gate: the protocol's status says the two horizons "enter the JSON".
-  w160l8's goes in the protocol JSON (`large.expected_updates`, provisional 129) and
-  w64's in its regime JSON (`iteration_schedule.steps`, provisional 1,296). Name both
-  files.
+- Wording (fixed at realign, 2026-11-07): the protocol's status names both horizon
+  files, and "Before freeze" says calibration runs from items 1, 2, 4–6 while the
+  freeze waits for item 3.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
+
+### Realign (2026-11-07, headless)
+
+Main has not moved past this branch's base; PR #439 is open at `54b109aff`
+(mergeable, CI pending at realign). `lf task status 3d4f40` does not resolve from
+this repository, so the Etude Task's state is unverified here; item 3 stays waiting.
 
 ## History (full text at `739f95b8d:scratch/c5fba4-frontier-self-play.md`)
 
