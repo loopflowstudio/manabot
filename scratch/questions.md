@@ -1,7 +1,8 @@
 # c5fba4 open questions and assumptions — 2026-11-05
 
 The previous contents described MTG-243 (naming), inherited from the parent
-commit; they remain at `8e5d152ab:scratch/questions.md`.
+commit; they remain at `8e5d152ab:scratch/questions.md`; main's Task 07c490 notes
+(closure and lambda on Elemental) remain at `e8da7909d:scratch/questions.md`.
 
 Material assumptions made headless by the first implement step (reversible
 until launch). Superseded by the design review: w256/15× (now w160l8, 14.4×
