@@ -50,7 +50,7 @@ from typing import TYPE_CHECKING
 from etude.eval.query import statsdb
 from etude.experiment import ExperimentState, TrainingRun, observe
 from etude.run.listing import as_storage
-from etude.run.storage import Storage
+from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import read_all
 import numpy as np
 import numpy.typing as npt
@@ -441,9 +441,10 @@ def main() -> None:
     )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    state = with_launcher_ends(observe(args.source, EXPERIMENT))
-    with statsdb(EXPERIMENT, args.source) as db:
-        report = analyze(state, db, read_pods(args.source))
+    source = storage_from_uri(args.source)
+    state = with_launcher_ends(observe(source, EXPERIMENT))
+    with statsdb(EXPERIMENT, source) as db:
+        report = analyze(state, db, read_pods(source))
     atomic_json(args.out, report.model_dump(mode="json"))
 
 

@@ -46,6 +46,7 @@ from etude.eval.records import Environment
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
+from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -266,7 +267,7 @@ def _late(curve: list[tuple[int, float]]) -> float | None:
     return median(late) if len(late) == len(LATE_UPDATES) else None
 
 
-def read_check(state: ExperimentState, source: Path | str) -> VocabularyCheck:
+def read_check(state: ExperimentState, source: Storage | Path | str) -> VocabularyCheck:
     """Both arms, the three comparisons and the verdict, from `state` and its store."""
     _, protocol = frozen()
     storage = as_storage(source)
@@ -320,8 +321,9 @@ def main() -> None:
         "--source", required=True, help="Etude training and evaluation store"
     )
     args = parser.parse_args()
-    state = with_launcher_ends(observe(args.source, EXPERIMENT))
-    print(read_check(state, args.source).model_dump_json(indent=2))
+    source = storage_from_uri(args.source)
+    state = with_launcher_ends(observe(source, EXPERIMENT))
+    print(read_check(state, source).model_dump_json(indent=2))
 
 
 if __name__ == "__main__":
