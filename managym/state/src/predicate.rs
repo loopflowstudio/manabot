@@ -5,7 +5,10 @@
 use super::card::{Card, CardType, Keyword};
 
 /// A structural predicate over cards. Every populated field must match.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+/// Deserialization reads a definition's serialized predicate back, so
+/// observation vocabularies can enumerate what the encoders describe.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct CardPredicate {
     /// Shares the asking source permanent's layered name. Requires a source
     /// (currently ControlsAtLeast); card-only matching cannot answer it.

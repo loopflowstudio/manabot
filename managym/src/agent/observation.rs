@@ -525,6 +525,40 @@ impl CopyData {
     }
 }
 
+/// Every name `ContinuousEffectData::modification` takes, as the fact and
+/// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
+/// each written name against this list.
+pub const MODIFICATION_NAMES: [&str; 28] = [
+    "SetCreatureTypes",
+    "AddTypes",
+    "SetTypes",
+    "SetColors",
+    "AddColors",
+    "GrantActivated",
+    "GrantTriggered",
+    "GrantStatic",
+    "SwitchPt",
+    "LoseNonManaAbilities",
+    "AddSubtypes",
+    "BecomeCreature",
+    "Nonlegendary",
+    "AddKeywords",
+    "LoseAllAbilities",
+    "Firebending",
+    "SetBasePt",
+    "ModifyPt",
+    "CantBeBlocked",
+    "CantBlock",
+    "DoesntUntap",
+    "LoseKeywords",
+    "ExileIfWouldDie",
+    "KeepUnspentMana",
+    "NoMaximumHandSize",
+    "ControlChanged",
+    "ModeChosen",
+    "HasAbilitiesOfSource",
+];
+
 impl ContinuousEffectData {
     pub(super) fn new(effect: &ContinuousEffect) -> Self {
         Self::of_modification(
@@ -553,7 +587,7 @@ impl ContinuousEffectData {
             timestamp,
             ..Default::default()
         };
-        data.modification = match modification {
+        let name = match modification {
             Modification::SetCreatureTypes(subtypes) => {
                 data.subtypes = subtypes.clone();
                 "SetCreatureTypes"
@@ -631,8 +665,12 @@ impl ContinuousEffectData {
                 "ModeChosen"
             }
             Modification::HasAbilitiesOfSource => "HasAbilitiesOfSource",
-        }
-        .to_string();
+        };
+        debug_assert!(
+            MODIFICATION_NAMES.contains(&name),
+            "{name} is missing from MODIFICATION_NAMES"
+        );
+        data.modification = name.to_string();
         data
     }
 
