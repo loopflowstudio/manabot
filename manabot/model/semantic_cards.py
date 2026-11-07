@@ -133,7 +133,27 @@ class SemanticCardEncoder(nn.Module):
         )
 
     def definitions(self) -> torch.Tensor:
-        """Encode the immutable catalog once for visible and historical references."""
+        """Encode the immutable catalog once for visible and historical references.
+
+        Inference (eval mode, no gradients) reuses the last encoding while the
+        embedding and GRU weights are unchanged: the catalog is constant, so a
+        batch-of-one search pays the GRU once per model, not once per forward.
+        Parameter version counters invalidate the cache on any in-place update.
+        """
+        if self.training or torch.is_grad_enabled():
+            return self._encode_definitions()
+        key = (
+            self.tokens.device,
+            *(parameter._version for parameter in self.token_embedding.parameters()),
+            *(parameter._version for parameter in self.encoder.parameters()),
+        )
+        cached = getattr(self, "_inference_definitions", None)
+        if cached is None or cached[0] != key:
+            cached = (key, self._encode_definitions())
+            self._inference_definitions = cached
+        return cached[1]
+
+    def _encode_definitions(self) -> torch.Tensor:
         tokens = self.token_embedding(self.tokens)
         packed = nn.utils.rnn.pack_padded_sequence(
             tokens, self.lengths.cpu(), batch_first=True, enforce_sorted=False
