@@ -46,40 +46,24 @@ faster and learn less from each. Compare arms on the same host; hosts differ
 ten-deck Elemental. Do not rewrite frozen worlds, observation versions or recipes:
 a new regime is a new declared variant. Task 07c490 owns the one-seat closure study.
 
-## Design (experiment-design pass, 2026-11-06)
+## Design status (2026-11-06)
 
-Owning artifact: `experiments/protocols/training-throughput-b015d5-v1.md`, a draft
-awaiting Jack Heart's review in the Task conversation. Nothing has launched. Summary:
+Owning artifact: `experiments/protocols/training-throughput-b015d5-v1.md`, accepted
+by Jack Heart at experiment-design review (comment 14e6cc54) with fixed gates
+replaced by step-at-a-time choice; no spending authority beyond execution review.
+Nothing has launched.
 
-- Step 1 is a measurement-only `probe` job, one Etude run per machine: 2 L4s
-  (6 vCPU / 48 GB) and 1 A4000 (16 vCPU / 48 GB). Phases run in sequence on the
-  same host: solo, pack-2, pack-4, then a CUDA kernel/sync count. It reads the
-  phase tree, idle share, CPU cores, GPU busy share, peak memory and $/M learner
-  decisions. Gates G1 (collection >= 50% and idle >= .50), G2 (overlap bound
-  >= 25%) and G3 (pack-2 gain >= 1.6 with memory headroom) decide steps 2-4.
-- Packing needs no strength runs: separate processes under a synchronous update
-  learn the same by construction. A CPU digest and the packed seeds' metric
-  spread check it. Production packing needs an Etude machine-slots PR; Etude
-  runs one attempt per machine at a time (`etude-sdk/docs/launcher.md`, "no
-  run-count packing setting").
-- Step 3 is two-seat exact quota with per-seat carry-over (quota ~190 by
-  calibration). Refill-with-discard is built only if an offline bias check of
-  game lengths stays within 5%.
-- Step 4 is one-update-stale overlap, as a learner thread.
-- Strength arms: 4 seeds (26101-26104), 75 updates, exports every 5 updates,
-  07c490's 50 `ELEMENTAL_PAIRS` vs heuristic. Primary clocks are wall time and
-  dollars; secondary is learner decisions; paired by seed.
-- Proposed reservation $24.40 of the $50 cap; the rest is unallocated.
-
-Dependencies before freeze: PR #436 (07c490) must land, because it carries
-`elemental_variants.elemental_recipe` and `ELEMENTAL_PAIRS`. The probe software
-(bench `--json`/`--recipe`/`--cuda-counts`, `experiments/training_throughput.py`) is
-built and passes its CPU acceptance (implement, 2026-11-06; see questions.md). Not
-launched: launch waits for #436 on main (or a pinned commit with it) and Jack Heart's
-execution review. Steps 3 and 4 build after c5fba4's `collection.py` change.
-
-## Design direction (Jack Heart, 2026-11-06)
-
-- No strict gates: take one step at a time and choose the next from the readings, putting energy where it pays.
-- Etude machine slots approved to build and ship: Etude Task 8ffc3e.
-- PR #436 (07c490) supplies the control recipe; its CI repair is in progress.
+- Exists: step-1 probe software (bench `--json`/`--recipe`/`--cuda-counts`,
+  `experiments/training_throughput.py` phase driver and samplers) with its CPU
+  acceptance test.
+- Step 1: `probe` job, 2 L4 + 1 A4000 runs; phases solo, pack-2, pack-4, CUDA
+  counts. Reports the phase tree, idle share, CPU/GPU use, peak memory and
+  $/M learner decisions; Jack Heart chooses the next step from those readings.
+- Blocked on: PR #436 (07c490: `elemental_variants.elemental_recipe`,
+  `ELEMENTAL_PAIRS`) is open and BLOCKED, Integration failing (checked
+  2026-11-06). Step 1 freezes when it lands or the probe pins its exact commit.
+  Re-quote L4 and A4000 stock before launch.
+- Later: step 2 packing needs Etude machine slots (Etude Task 8ffc3e, approved);
+  steps 3-4 build after c5fba4's `collection.py` change. Proposed reservation
+  $24.40 of $50.
+- Check 2026-11-06: `uv run --extra dev pytest tests/training/test_training_throughput.py -q` — 3 passed.

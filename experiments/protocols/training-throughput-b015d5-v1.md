@@ -6,10 +6,13 @@ candidates are packing several seeds on one machine, not waiting for each
 batch's slowest game, and overlapping collection with learning. Multi-producer
 collection belongs to Task c5fba4 and is read from its result, not repeated here.
 
-Status: this is the design. Nothing has launched. It becomes frozen only after
-Jack Heart's design review in the Task conversation. Step 1 freezes first. Each later step
-freezes after the previous step's readings have been discussed and that step
-chosen, before any of its scored runs.
+Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
+comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Nothing
+has launched. Acceptance confers no spending authority beyond the execution
+review below. Step 1 freezes once PR #436 (the control recipe) has landed, or
+the probe pins an exact commit containing it. Each later step freezes after the
+previous step's readings have been discussed and that step chosen, before any
+of its scored runs.
 
 ## Authority and budget
 
