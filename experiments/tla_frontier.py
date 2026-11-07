@@ -624,20 +624,23 @@ def comparison_schedule(
 
     def equal_hours(update: int | None) -> ScheduledComparison:
         """W160l8 at `update` against w64's last checkpoint at or before its hours."""
-        unreached = update is not None and past_endpoint(LARGE, update)
-        at = run_hours(LARGE).get(update) if update is not None else None
-        small = trained[SMALL]
-        found = (
-            _partner(at, run_hours(SMALL), small is not None and small.ended)
-            if at is not None and run_hours(SMALL)
-            else None
+        unplayable = ScheduledComparison(
+            "equal-hours",
+            update,
+            None,
+            unreached=update is not None and past_endpoint(LARGE, update),
         )
+        small_run, small_hours = trained[SMALL], run_hours(SMALL)
+        at = run_hours(LARGE).get(update) if update is not None else None
+        if at is None or small_run is None or not small_hours:
+            return unplayable
+        found = _partner(at, small_hours, small_run.ended)
         if found == "unreached":
-            return ScheduledComparison("equal-hours", update, None, unreached=True)
+            return replace(unplayable, unreached=True)
         candidate = model(LARGE, update)
         partner = model(SMALL, found[0]) if found is not None else None
-        if at is None or found is None or candidate is None or partner is None:
-            return ScheduledComparison("equal-hours", update, None, unreached=unreached)
+        if found is None or candidate is None or partner is None:
+            return unplayable
         point = f"u{update}" if update in protocol.milestones else f"final u{update}"
         return ScheduledComparison(
             tag="equal-hours",

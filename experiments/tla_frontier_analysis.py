@@ -352,7 +352,6 @@ def analyze(
     actions = policy_actions_by_match(db, environment_id)
     indices = bootstrap_indices(protocol)
     trained = {label: size_run(state, label, protocol) for label in SIZES}
-    training = {label: _training_points(db, run) for label, run in trained.items()}
     comparisons = [
         read_comparison(
             planned, db, protocol, environment_id, columns, actions, indices
@@ -364,7 +363,7 @@ def analyze(
             label,
             trained[label],
             comparisons,
-            training[label],
+            _training_points(db, trained[label]),
             pods,
             regimes[label],
         )

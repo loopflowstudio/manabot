@@ -176,16 +176,14 @@ def check_schedule(
     def slot(
         tag: str, name: str, first: Checkpoint | None, second: Checkpoint | None
     ) -> ScheduledComparison:
-        playable = ready and first is not None and second is not None
-        return ScheduledComparison(
-            tag=tag,
-            update=UPDATES,
-            matchup=paired_matchup(
+        matchup = (
+            paired_matchup(
                 name, (first.model(inference), second.model(inference)), tag, protocol
             )
-            if playable and first is not None and second is not None
-            else None,
+            if ready and first is not None and second is not None
+            else None
         )
+        return ScheduledComparison(tag=tag, update=UPDATES, matchup=matchup)
 
     end = {vocabulary: _at(arms[vocabulary], UPDATES) for vocabulary in VOCABULARIES}
     return [
