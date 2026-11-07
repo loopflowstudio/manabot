@@ -110,8 +110,9 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   and the large arm grows in depth as well as width. The counts taken before
   consolidation (385,538 and 5,538,242, 14.4×) excluded six 4096-bucket hashed
   tables that PR #437 removed. The earlier draft's w256 (4 layers, 8 heads) had
-  8,663,554 compute parameters on that pre-consolidation base, 22.5×. W256 is the fallback: if w160l8 misses calibration's
-  speed gate, a new protocol version replaces it with w256 before any scoring.
+  8,663,554 compute parameters on that pre-consolidation base, 22.5×. W256 is
+  the fallback: if w160l8 misses calibration's speed gate, a new protocol
+  version replaces it with w256 before any scoring.
 - **Budget per size.** One GPU allocation of at most USD38 and 56 hours; the
   regime wall budget is 54 hours (194,400 s). The update cap is 10,000, the
   horizon's ceiling, so the wall is the stop that binds. Training exports the
@@ -505,9 +506,7 @@ check:
    the milestones above, the equal-hours schedule and its analysis, evaluation
    USD14, the w160l8 size and label, 96 permanents per seat, the recounted
    parameters, calibration's expected-updates reading, and per-label game-error
-   counts in calibration and the analysis. Delete:
-   the host screen (`read_screen`, `--screen`), the one-size relaunch (`--size`),
-   and their tests. Check: `uv run --extra dev --extra evaluation --extra artifacts
+   counts in calibration and the analysis. Check: `uv run --extra dev --extra evaluation --extra artifacts
    pytest tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py
    -q`, the equal-hours schedule tests over fixture checkpoint hours (including
    one pair played once under both slots), and an analysis test whose fixture

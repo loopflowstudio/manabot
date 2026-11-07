@@ -30,8 +30,6 @@ GIB = 1024**3
 
 # The damped rule's curves are written for this many updates (`IterationSchedule`).
 REFERENCE_UPDATES = 10_000
-# Roster-sampled self-play collects with this many native producers by default.
-SAMPLED_ROSTER_WORKERS: Literal[1, 2, 4] = 4
 
 ValueOutput = Literal["scalar", "categorical_wdl"]
 ValueAggregation = Literal["historical_mean", "masked_mean", "value_token"]
@@ -201,12 +199,7 @@ def sampled_self_play(
     deck_source: UniformDecks | None = None,
     match: MatchConfig | None = None,
     elemental_uniform: bool = False,
-    updates: int = REFERENCE_UPDATES,
-    streams: int = 256,
-    transitions: int = 64,
-    workers: Literal[1, 2, 4] = SAMPLED_ROSTER_WORKERS,
-    device: Literal["cpu", "cuda"] = "cuda",
-    memory_bytes: int = 40 * GIB,
+    workers: Literal[1, 2, 4] = 4,
 ) -> TrainingRegime:
     """One wall-bounded, two-seat damped self-play stage over a sampled roster.
 
@@ -214,22 +207,21 @@ def sampled_self_play(
     Elemental roster with `elemental_uniform`). Its damping horizon spans the
     updates the wall reaches at the measured `seconds_per_update`
     (`fitted_horizon`), so a run far shorter than the reference still walks the
-    whole rate and τ curve. Producers
-    default to four, since one native producer is the critical path of an update.
-    An engine error or capacity overflow aborts one labelled game
-    (`recover_capacity`); the rolling game-error stop still ends the run. These
-    are recipe choices: the Pydantic field defaults, which saved regimes rely
-    on, are unchanged. The update cap defaults to the reference so the wall
-    binds.
+    whole rate and τ curve. Producers default to four, since one native producer
+    is the critical path of an update. An engine error or capacity overflow
+    aborts one labelled game (`recover_capacity`); the rolling game-error stop
+    still ends the run. These are recipe choices: the Pydantic field defaults,
+    which saved regimes rely on, are unchanged. The update cap is the reference,
+    so the wall binds.
     """
     stage = TrainSelfPlay(
         id="self-play",
         operation="train_self_play",
         behavior="current-self",
         learning_seats="both",
-        updates=updates,
-        streams=streams,
-        transitions=transitions,
+        updates=REFERENCE_UPDATES,
+        streams=256,
+        transitions=64,
         matchup_curriculum="elemental-uniform" if elemental_uniform else "fixed",
         learning=move_learning(
             IterationSchedule(
@@ -239,11 +231,11 @@ def sampled_self_play(
         ),
         game_errors=GameErrorPolicy(threshold=0.25, recover_capacity=True),
         execution=Execution(
-            device=device,
+            device="cuda",
             threads=1,
             workers=workers,
             wall_seconds=wall_seconds,
-            memory_bytes=memory_bytes,
+            memory_bytes=40 * GIB,
         ),
     )
     regime = TrainingRegime(

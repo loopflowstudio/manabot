@@ -54,6 +54,8 @@ from experiments.tla_frontier import (
     SIZES,
     SMALL,
     Protocol,
+    checkpoint_update,
+    deck_matchup,
     endpoint,
     frozen,
     size_run,
@@ -80,12 +82,11 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     ObservationSpace,
 )
-from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import StrictModel
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import fetch_etude_checkpoint, load_checkpoint
 from manabot.model.facts import FactEncoder
-from manabot.sim.matchup import DeckMatchup
+from manabot.training.regime import TrainingRegime
 import managym
 
 type Observation = dict[str, npt.NDArray[np.generic]]
@@ -117,25 +118,17 @@ KIND_NAMES: dict[int, str] = {
 # -- Positions ----------------------------------------------------------------
 
 
-def sample_positions(protocol: Protocol, observation: ObservationConfig) -> Observation:
+def sample_positions(regime: TrainingRegime, protocol: Protocol) -> Observation:
     """The fixed positions, stacked: [P, ...] per observation key.
 
     Every checkpoint reads these same arrays, so readings differ only by model.
     """
-    regimes, _ = frozen()
-    source = regimes[SMALL].deck_source
-    assert source is not None and source.entry_ids is not None
-    space = ObservationSpace(observation)
+    space = ObservationSpace(regime.observation)
     rng = random.Random(POSITION_SEED)
     kept: list[Observation] = []
     for pair in protocol.pairs:
-        matchup = DeckMatchup(
-            population_sha256=protocol.corpus_sha256,
-            entries=(source.entry_ids[pair.first], source.entry_ids[pair.second]),
-            lists=(source.decks[pair.first], source.decks[pair.second]),
-        )
         env = managym.Env(seed=pair.deal, skip_trivial=True)
-        env.reset(Match(matchup.match(0)).to_rust())
+        env.reset(Match(deck_matchup(regime, protocol, pair).match(0)).to_rust())
         taken = 0
         for decision in range(MAX_DECISIONS):
             player = env.current_agent_index()
@@ -322,10 +315,6 @@ class FactContributionReading(StrictModel):
     checkpoints: list[CheckpointContribution]
 
 
-def _update(checkpoint: Checkpoint) -> int:
-    return int(checkpoint.clocks["updates"])
-
-
 def read_checkpoints(
     state: ExperimentState, experiment: ReadExperiment, protocol: Protocol
 ) -> list[tuple[str, TrainingRun, Checkpoint]]:
@@ -340,21 +329,18 @@ def read_checkpoints(
             run = size_run(state, label)
             if run is None:
                 continue
-            wanted = {0, *protocol.milestones}
-            last = endpoint(run)
-            if last is not None:
-                wanted.add(last)
+            wanted = {0, *protocol.milestones, endpoint(run)}
             found += [
                 (label, run, checkpoint)
                 for checkpoint in run.checkpoints
-                if _update(checkpoint) in wanted
+                if checkpoint_update(checkpoint) in wanted
             ]
     else:
         for arm in vocabulary_check.VOCABULARIES:
             run = vocabulary_check.arm_run(state, arm)
             if run is not None:
                 found += [(arm, run, checkpoint) for checkpoint in run.checkpoints]
-    return sorted(found, key=lambda item: (item[0], _update(item[2])))
+    return sorted(found, key=lambda item: (item[0], checkpoint_update(item[2])))
 
 
 def read(
@@ -362,20 +348,20 @@ def read(
 ) -> FactContributionReading:
     """Every covered checkpoint's reading on the fixed positions."""
     regimes, protocol = frozen()
-    observation = regimes[SMALL].observation
-    positions = sample_positions(protocol, observation)
+    regime = regimes[SMALL]
+    positions = sample_positions(regime, protocol)
     readings: list[CheckpointContribution] = []
     for label, run, checkpoint in read_checkpoints(state, experiment, protocol):
         reference = checkpoint.artifact
         path = fetch_etude_checkpoint(reference, cache / f"{reference.sha256}.pt")
         model, space = load_checkpoint(str(path))
-        if space.encoder.config != observation:
+        if space.encoder.config != regime.observation:
             raise ValueError("checkpoint observation differs from frontier protocol")
         readings.append(
             CheckpointContribution(
                 label=label,
                 run=run.name,
-                update=_update(checkpoint),
+                update=checkpoint_update(checkpoint),
                 reading=read_model(model, positions),
             )
         )

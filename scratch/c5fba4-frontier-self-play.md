@@ -167,8 +167,14 @@ played (the endpoint head-to-head name carries no updates, so Etude raises `matc
 Deleted 2026-11-06: `read_screen`, `ScreenReading`, `SLOW_HOST_RATIO`, `--screen`,
 `runs(size=…)`/`--size` and their tests; the one-producer validators for sampled
 rosters; `is_set_aside`, `SetAside`, `FrontierAnalysis.set_aside` and their two tests
-(direction 26); `ModelContribution.positions` (the reading's top-level count holds it). Kept: `host_speed` (reported, not a gate). `experiments/tla_pilot_v10.py` is executed
-evidence and stays unchanged.
+(direction 26); `ModelContribution.positions` (the reading's top-level count holds it).
+Deleted 2026-11-07 (compress): the `with_launcher_ends` status parameter, the separate
+environment and `Benchmark` builders, `read_comparison`'s seven-argument surface and
+`sampled_self_play`'s caller-less `updates`/`streams`/`transitions`/`device`/`memory_bytes`.
+Shared now: `shortened`, `one_run`/`tagged_runs`, `evaluation_jobs`, `read_comparisons`,
+`deck_matchup`, `pod_reading` (one receipt read; `Calibration.pod`). Kept: host speed
+(reported, not a gate). `experiments/tla_pilot_v10.py` is executed evidence and stays
+unchanged.
 
 ## Remaining work
 

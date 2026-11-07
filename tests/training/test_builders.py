@@ -174,8 +174,6 @@ def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
     assert stage.learning.rates(1_296) == stage.learning.model_copy(
         update={"iteration_schedule": None}
     ).rates(REFERENCE_UPDATES)
-    assert stage.execution.workers == 4
-    assert stage.game_errors is not None and stage.game_errors.recover_capacity
     assert stage.updates == REFERENCE_UPDATES
     dumped = regime.model_dump(mode="json")["stages"][0]
     assert dumped["execution"]["workers"] == 4

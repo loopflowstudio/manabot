@@ -584,7 +584,7 @@ def test_a_second_tagged_run_after_an_early_loss_raises(tmp_path: Path) -> None:
     _, large = runs("HEAD")
     _tracked(large, tmp_path, {}, (0,), end="failed")
     _tracked(large, tmp_path, {}, (0, 25), end=None)
-    with pytest.raises(ValueError, match="admits one w160l8 run"):
+    with pytest.raises(ValueError, match="w160l8 admits one run"):
         size_run(observe(tmp_path, EXPERIMENT), LARGE)
 
 
@@ -595,7 +595,7 @@ def test_a_pod_ended_past_the_first_milestone_keeps_its_size(
     small, _ = runs("HEAD")
     _tracked(small, tmp_path, {}, (0, 25), end="failed")
     _tracked(small, tmp_path, {}, (0,), end=None)
-    with pytest.raises(ValueError, match="admits one w64 run"):
+    with pytest.raises(ValueError, match="w64 admits one run"):
         size_run(observe(tmp_path, EXPERIMENT), SMALL)
 
 
@@ -603,7 +603,7 @@ def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
     _, large = runs("HEAD")
     _tracked(large, tmp_path, {}, (0, 25), end=None)
     _tracked(large, tmp_path, {}, (0, 25), end=None)
-    with pytest.raises(ValueError, match="admits one w160l8 run"):
+    with pytest.raises(ValueError, match="w160l8 admits one run"):
         size_run(observe(tmp_path, EXPERIMENT), LARGE)
 
 
@@ -702,7 +702,9 @@ def test_a_live_pod_and_delivery_lag_stay_running(
     assert with_launcher_ends(stored) == stored
 
 
-def test_a_stored_end_outranks_the_launcher(tmp_path: Path) -> None:
+def test_a_stored_end_outranks_the_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A run with an end state is never asked about, so history needs no launcher."""
     small, _ = runs("HEAD")
     _tracked(small, tmp_path, {}, (0, 25))
@@ -710,8 +712,9 @@ def test_a_stored_end_outranks_the_launcher(tmp_path: Path) -> None:
     def refuse(run: str) -> Status:
         raise AssertionError(run)
 
+    monkeypatch.setattr(client, "status", refuse)
     stored = observe(tmp_path, EXPERIMENT)
-    assert with_launcher_ends(stored, refuse) == stored
+    assert with_launcher_ends(stored) == stored
 
 
 def test_a_running_run_the_launcher_does_not_know_raises(
@@ -721,8 +724,9 @@ def test_a_running_run_the_launcher_does_not_know_raises(
     small, _ = runs("HEAD")
     run = _tracked(small, tmp_path / "store", {}, (0,), end=None)
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "launcher"))
+    monkeypatch.setattr(client, "status", REAL_STATUS)
     with pytest.raises(LauncherError, match=f"no run '{run}'"):
-        with_launcher_ends(observe(tmp_path / "store", EXPERIMENT), REAL_STATUS)
+        with_launcher_ends(observe(tmp_path / "store", EXPERIMENT))
 
 
 def test_analysis_command_reads_a_lost_size_at_its_last_export(
@@ -1011,20 +1015,20 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert reading.updates == 3
     assert reading.seconds_per_update == 220  # the first update's warm-up is set aside
     assert reading.expected_updates == 883  # ⌊194,400 / 220⌋, the horizon S
-    assert reading.game_errors is None  # no receipt until the attempt finishes
+    assert reading.pod.game_errors is None  # no receipt until the attempt finishes
     assert reading.peak_allocated_cuda_bytes == 4_000_000_000
     assert reading.peak_reserved_cuda_bytes == 6_000_000_000
     assert reading.peak_rss_bytes == 20_000_000_000  # not the last update's value
     assert reading.median_rows_per_update == 50_000
     # Per row over updates 2 and 3, the first update's warm-up set aside.
-    assert reading.host.step_us_per_row == pytest.approx(250)
-    assert reading.host.step_spread == pytest.approx(1.5)
-    assert reading.host.cpu_model is None
+    assert reading.pod.host.step_us_per_row == pytest.approx(250)
+    assert reading.pod.host.step_spread == pytest.approx(1.5)
+    assert reading.pod.host.cpu_model is None
     silent = readings["tla-frontier-c5fba4-calibration-w160l8"]
     assert silent.updates == 0 and silent.seconds_per_update is None
     assert silent.peak_reserved_cuda_bytes is None
     assert silent.peak_rss_bytes is None and silent.median_rows_per_update is None
-    assert silent.host == HostSpeed(
+    assert silent.pod.host == HostSpeed(
         step_us_per_row=None, step_spread=None, cpu_model=None
     )
     # A frontier pass never sees calibration, even from a shared store.
@@ -1380,7 +1384,7 @@ def test_one_real_update_writes_every_key_calibration_reads(
     assert reading.updates == 2 and reading.seconds_per_update is not None
     assert reading.peak_rss_bytes is not None
     assert reading.median_rows_per_update is not None
-    assert reading.host.step_us_per_row is not None
+    assert reading.pod.host.step_us_per_row is not None
     # The real path tags its checkpoints, update 0 and the final export alike.
     (stored,) = observe(tmp_path / "track", CALIBRATION).runs
     tagged = stored.checkpoints.tagged(regime_tag(short.id))

@@ -41,38 +41,36 @@ from statistics import median
 from typing import Literal
 
 from etude.eval.query import statsdb
-from etude.eval.records import Benchmark, Environment, Matchup
+from etude.eval.records import Matchup
 from etude.experiment import ExperimentState, TrainingRun
 from etude.launch import client
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
-from etude.run.storage import Storage
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
     GAMES_PER_PAIR,
     LARGE,
     SMALL,
-    GameErrorCounts,
-    HostSpeed,
+    PodReading,
     Protocol,
     SizeLabel,
     capped_runs,
     checkpoint_inference,
-    evaluation_pass,
+    environment,
+    evaluation_jobs,
     frozen,
-    game_error_counts,
-    host_speed,
     last_update,
     paired_matchup,
-    pass_name,
+    pod_reading,
+    shortened,
+    tagged_runs,
     with_launcher_ends,
 )
 from experiments.tla_pilot_analysis import stored_game_columns
-from manabot.infra.identity import StrictModel, canonical_sha256
-from manabot.infra.runtime import regime_tag
+from manabot.infra.identity import StrictModel
 from manabot.recipes.builders import fitted_horizon
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = Path(__file__).stem
 UPDATES = 5
@@ -114,8 +112,7 @@ class Calibration(StrictModel):
     peak_rss_bytes: int | None
     median_rows_per_update: float | None
     # Calibration's five updates reach only part of the host window.
-    host: HostSpeed
-    game_errors: GameErrorCounts | None
+    pod: PodReading
 
 
 class Rehearsal(StrictModel):
@@ -146,27 +143,12 @@ def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
 
     The one-producer pod also sets `execution.workers` to 1.
     """
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    workers = 1 if pod == ONE_PRODUCER else stage.execution.workers
-    execution = stage.execution.model_copy(
-        update={"wall_seconds": WALL_SECONDS, "workers": workers}
-    )
-    return TrainingRegime.model_validate(
-        regime.model_copy(
-            update={
-                "id": _regime_id(pod),
-                "wall_seconds": WALL_SECONDS,
-                "stages": [
-                    stage.model_copy(
-                        update={
-                            "updates": UPDATES,
-                            "execution": execution,
-                        }
-                    )
-                ],
-            }
-        ).model_dump()
+    return shortened(
+        regime,
+        id=_regime_id(pod),
+        updates=UPDATES,
+        wall_seconds=WALL_SECONDS,
+        workers=1 if pod == ONE_PRODUCER else None,
     )
 
 
@@ -201,8 +183,7 @@ def _furthest_run(state: ExperimentState, label: SizeLabel) -> TrainingRun:
     A failed calibration can be launched again, and any of its runs may have
     stored checkpoints; the rehearsal wants the heaviest evidence of the size.
     """
-    tag = regime_tag(_regime_id(label))
-    found = [run for run in state.runs if run.checkpoints.tagged(tag)]
+    found = tagged_runs(state, _regime_id(label))
     if not found:
         raise ValueError(f"no {label} calibration checkpoint: {label} fails its gate")
     return max(found, key=lambda run: last_update(run) or 0)
@@ -243,14 +224,6 @@ def rehearsal_matchups(
     )
 
 
-def _rehearsal_environment(protocol: Protocol) -> Environment:
-    return Environment(
-        name="tla-frontier-c5fba4-calibration-v1",
-        files=canonical_sha256(protocol.model_dump(mode="json")),
-        config={"purpose": "evaluation-rehearsal-not-scored"},
-    )
-
-
 def eval(state: ExperimentState) -> list[Job]:
     """The rehearsal, once no calibration run can still save a later checkpoint."""
     if state.experiment != EXPERIMENT:
@@ -259,15 +232,15 @@ def eval(state: ExperimentState) -> list[Job]:
     if not closed.runs or not all(run.ended for run in closed.runs):
         return []
     _, protocol = frozen()
-    return [
-        evaluation_pass(
-            Benchmark(
-                name=pass_name("tla-frontier-c5fba4-rehearsal-v1"),
-                environment=_rehearsal_environment(protocol),
-                matchups=rehearsal_matchups(closed, protocol),
-            )
-        )
-    ]
+    return evaluation_jobs(
+        "tla-frontier-c5fba4-rehearsal-v1",
+        environment(
+            protocol,
+            "tla-frontier-c5fba4-calibration-v1",
+            "evaluation-rehearsal-not-scored",
+        ),
+        rehearsal_matchups(closed, protocol),
+    )
 
 
 # -- Readings -----------------------------------------------------------------
@@ -278,20 +251,7 @@ def _peak(data: RunData, metric: str) -> int | None:
     return int(rows.y.max()) if len(rows) else None
 
 
-def _updates(data: RunData) -> int:
-    rows = data.points("rows", "updates")
-    return int(rows.x[-1]) if len(rows) else 0
-
-
-def _job(data: RunData) -> str | None:
-    return data.file.declaration.job_name if data.file else None
-
-
-def _state(data: RunData) -> str:
-    return data.state.state if data.state else "running"
-
-
-def _calibration(data: RunData, storage: Storage, wall_seconds: float) -> Calibration:
+def _calibration(data: RunData, pod: PodReading, wall_seconds: float) -> Calibration:
     collection = data.points("time/collection", "updates")
     learning = data.points("time/learning", "updates")
     seconds = [float(a + b) for a, b in zip(collection.y, learning.y, strict=True)]
@@ -299,41 +259,35 @@ def _calibration(data: RunData, storage: Storage, wall_seconds: float) -> Calibr
     rows = data.points("rows", "updates")
     return Calibration(
         run=data.name,
-        job=_job(data),
-        state=_state(data),
-        updates=_updates(data),
+        job=data.file.declaration.job_name if data.file else None,
+        state=data.state.state if data.state else "running",
+        updates=int(rows.x[-1]) if len(rows) else 0,
         seconds_per_update=cost,
         expected_updates=fitted_horizon(wall_seconds, cost) if cost else None,
         peak_allocated_cuda_bytes=_peak(data, "memory/peak_allocated_cuda_bytes"),
         peak_reserved_cuda_bytes=_peak(data, "memory/peak_reserved_cuda_bytes"),
         peak_rss_bytes=_peak(data, "coordinates/rss_bytes"),
         median_rows_per_update=float(median(rows.y)) if len(rows) else None,
-        host=host_speed(data, storage),
-        game_errors=game_error_counts(storage, data.name),
+        pod=pod,
     )
 
 
-def _training_data(storage: Storage, *experiments: str) -> list[RunData]:
-    """The experiments' training runs; the rehearsal's passes are runs here too."""
+def read_calibration(source: Path | str) -> list[Calibration]:
+    """Every calibration run under `source`, retries included.
+
+    The rehearsal's passes are runs here too, so they are set aside.
+    """
+    storage = as_storage(source)
+    wall_seconds = frozen()[0][SMALL].wall_seconds
     return [
-        data
+        _calibration(data, pod_reading(data, storage), wall_seconds)
         for data in read_all(storage)
-        if data.experiment in experiments
+        if data.experiment == EXPERIMENT
         and (data.file is None or data.file.declaration.kind != "evaluation")
     ]
 
 
-def read_calibration(source: Storage | Path | str) -> list[Calibration]:
-    """Every calibration run under `source`, retries included."""
-    storage = as_storage(source)
-    wall_seconds = frozen()[0][SMALL].wall_seconds
-    return [
-        _calibration(data, storage, wall_seconds)
-        for data in _training_data(storage, EXPERIMENT)
-    ]
-
-
-def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
+def read_rehearsal(source: Path | str) -> Rehearsal:
     """The rehearsal's games and cost, and whether they pass the second launch gate.
 
     It passes only with every scheduled game played, valid and under the line.

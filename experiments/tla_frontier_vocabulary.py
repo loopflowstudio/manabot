@@ -42,7 +42,7 @@ from statistics import median
 from typing import Literal
 
 from etude.eval.query import statsdb
-from etude.eval.records import Benchmark, Environment, Matchup
+from etude.eval.records import Environment
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
@@ -54,24 +54,22 @@ from experiments.tla_frontier import (
     ScheduledComparison,
     capped_runs,
     checkpoint_inference,
-    evaluation_pass,
+    environment,
+    evaluation_jobs,
     frozen,
     last_update,
+    one_run,
     paired_matchup,
-    pass_name,
+    shortened,
     with_launcher_ends,
 )
 from experiments.tla_frontier_analysis import (
     Bounded,
-    bootstrap_indices,
     learned,
-    policy_actions_by_match,
-    read_comparison,
+    read_comparisons,
 )
-from experiments.tla_pilot_analysis import game_columns
-from manabot.infra.identity import StrictModel, canonical_sha256
-from manabot.infra.runtime import regime_tag
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.infra.identity import StrictModel
+from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
@@ -90,7 +88,6 @@ MAX_USD = Decimal("2")
 # Rule 3: the second half of the run, past the first export's warm-up.
 LATE_UPDATES = range(51, UPDATES + 1)
 VALUE_LOSS_RATIO = 1.10
-VALUE_LOSS = "value_loss"
 
 
 def _regime_id(vocabulary: Vocabulary) -> str:
@@ -99,24 +96,12 @@ def _regime_id(vocabulary: Vocabulary) -> str:
 
 def vocabulary_regime(regime: TrainingRegime, vocabulary: Vocabulary) -> TrainingRegime:
     """The frozen w64 regime with its identity, length and record vocabulary changed."""
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
-    execution = stage.execution.model_copy(update={"wall_seconds": WALL_SECONDS})
-    return TrainingRegime.model_validate(
-        regime.model_copy(
-            update={
-                "id": _regime_id(vocabulary),
-                "wall_seconds": WALL_SECONDS,
-                "agent": regime.agent.model_copy(
-                    update={"record_vocabulary": vocabulary}
-                ),
-                "stages": [
-                    stage.model_copy(
-                        update={"updates": UPDATES, "execution": execution}
-                    )
-                ],
-            }
-        ).model_dump()
+    return shortened(
+        regime,
+        id=_regime_id(vocabulary),
+        updates=UPDATES,
+        wall_seconds=WALL_SECONDS,
+        agent=regime.agent.model_copy(update={"record_vocabulary": vocabulary}),
     )
 
 
@@ -142,12 +127,7 @@ def runs(revision: str) -> list[Run]:
 
 
 def arm_run(state: ExperimentState, vocabulary: Vocabulary) -> TrainingRun | None:
-    """The arm's run, known by its regime tag since stored names are launcher ids."""
-    tag = regime_tag(_regime_id(vocabulary))
-    found = [run for run in state.runs if run.checkpoints.tagged(tag)]
-    if len(found) > 1:
-        raise ValueError(f"the check admits one {vocabulary} run, found {len(found)}")
-    return found[0] if found else None
+    return one_run(state, _regime_id(vocabulary))
 
 
 def _at(run: TrainingRun | None, update: int) -> Checkpoint | None:
@@ -199,10 +179,10 @@ def check_schedule(
 
 
 def _environment(protocol: Protocol) -> Environment:
-    return Environment(
-        name="tla-frontier-c5fba4-vocabulary-v1",
-        files=canonical_sha256(protocol.model_dump(mode="json")),
-        config={"purpose": "record-vocabulary-check-not-frontier-scored"},
+    return environment(
+        protocol,
+        "tla-frontier-c5fba4-vocabulary-v1",
+        "record-vocabulary-check-not-frontier-scored",
     )
 
 
@@ -211,22 +191,15 @@ def eval(state: ExperimentState) -> list[Job]:
     if state.experiment != EXPERIMENT:
         raise ValueError("the vocabulary check requires its own runs")
     _, protocol = frozen()
-    matchups: tuple[Matchup, ...] = tuple(
-        planned.matchup
-        for planned in check_schedule(with_launcher_ends(state), protocol)
-        if planned.matchup is not None
+    return evaluation_jobs(
+        "tla-frontier-c5fba4-vocabulary-v1",
+        _environment(protocol),
+        [
+            planned.matchup
+            for planned in check_schedule(with_launcher_ends(state), protocol)
+            if planned.matchup is not None
+        ],
     )
-    if not matchups:
-        return []
-    return [
-        evaluation_pass(
-            Benchmark(
-                name=pass_name("tla-frontier-c5fba4-vocabulary-v1"),
-                environment=_environment(protocol),
-                matchups=matchups,
-            )
-        )
-    ]
 
 
 # -- Reading ------------------------------------------------------------------
@@ -281,7 +254,7 @@ def verdict(
 
 
 def _curve(data: RunData) -> list[tuple[int, float]]:
-    rows = data.points(VALUE_LOSS, "updates")
+    rows = data.points("value_loss", "updates")
     return [
         (int(update), float(loss))
         for update, loss in zip(rows.x.tolist(), rows.y.tolist(), strict=True)
@@ -302,16 +275,15 @@ def read_check(state: ExperimentState, source: Path | str) -> VocabularyCheck:
         for data in read_all(storage)
         if data.experiment == EXPERIMENT
     }
-    environment_id = _environment(protocol).identity
-    indices = bootstrap_indices(protocol)
     with statsdb(EXPERIMENT, source) as db:
-        columns = game_columns(db)
-        actions = policy_actions_by_match(db, environment_id)
         comparisons = {
-            planned.tag: read_comparison(
-                planned, db, protocol, environment_id, columns, actions, indices
+            comparison.tag: comparison
+            for comparison in read_comparisons(
+                check_schedule(state, protocol),
+                db,
+                protocol,
+                _environment(protocol).identity,
             )
-            for planned in check_schedule(state, protocol)
         }
     arms: dict[Vocabulary, ArmReading] = {}
     for vocabulary in VOCABULARIES:

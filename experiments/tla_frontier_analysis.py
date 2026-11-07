@@ -42,7 +42,7 @@ rather than reading matches, is `experiments.tla_frontier_facts`.
 from __future__ import annotations
 
 import argparse
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -211,7 +211,7 @@ def _bounded(pairs: list[PairResult], indices: npt.NDArray[np.int64]) -> Bounded
     )
 
 
-def policy_actions_by_match(
+def _policy_actions_by_match(
     db: duckdb.DuckDBPyConnection, environment_id: str
 ) -> dict[str, PolicyActions]:
     """Totals by stored match; both seats repeat a game's count, so seat 0 reads it."""
@@ -233,56 +233,55 @@ def policy_actions_by_match(
     }
 
 
-def read_comparison(
-    planned: ScheduledComparison,
+def read_comparisons(
+    schedule: Iterable[ScheduledComparison],
     db: duckdb.DuckDBPyConnection,
     protocol: Protocol,
     environment_id: str,
-    columns: tuple[str, ...],
-    actions: dict[str, PolicyActions],
-    indices: npt.NDArray[np.int64],
-) -> Comparison:
-    """Read a whole block of receipts; a partial block keeps its counts."""
-    name = planned.matchup.name if planned.matchup else None
-    if planned.unreached:
+) -> list[Comparison]:
+    """Read each slot's whole block of receipts; a partial block keeps its counts.
+
+    One set of whole-pair resamples serves every slot.
+    """
+    columns = game_columns(db)
+    actions = _policy_actions_by_match(db, environment_id)
+    indices = np.random.default_rng(protocol.bootstrap_seed).integers(
+        0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
+    )
+
+    def read(planned: ScheduledComparison) -> Comparison:
+        name = planned.matchup.name if planned.matchup else None
+        if planned.unreached:
+            return Comparison(
+                tag=planned.tag, update=planned.update, name=name, unreached=True
+            )
+        # The scheduler constructs matches in frozen pair order. Keep absent
+        # checkpoints in that same order instead of selecting surviving pairs.
+        keys = (
+            [match.key for match in planned.matchup.matches()]
+            if planned.matchup
+            else [None] * len(protocol.pairs)
+        )
+        pairs = [
+            pair_result(db, pair, key, environment_id, columns)
+            for pair, key in zip(protocol.pairs, keys, strict=True)
+        ]
+        played = all(pair.counts.attempted_matches for pair in pairs)
         return Comparison(
             tag=planned.tag,
             update=planned.update,
             name=name,
-            unreached=True,
+            unreached=False,
+            hours=planned.hours,
+            counts=field_totals(Counts, [pair.counts for pair in pairs]),
+            pairs=pairs,
+            result=_bounded(pairs, indices) if played else None,
+            policy_actions=field_totals(
+                PolicyActions, [actions[key] for key in keys if key in actions]
+            ),
         )
-    # The scheduler constructs matches in frozen pair order. Keep absent
-    # checkpoints in that same order instead of selecting surviving pairs.
-    keys = (
-        [match.key for match in planned.matchup.matches()]
-        if planned.matchup
-        else [None] * len(protocol.pairs)
-    )
-    pairs = [
-        pair_result(db, pair, key, environment_id, columns)
-        for pair, key in zip(protocol.pairs, keys, strict=True)
-    ]
-    played = all(pair.counts.attempted_matches for pair in pairs)
-    return Comparison(
-        tag=planned.tag,
-        update=planned.update,
-        name=name,
-        unreached=False,
-        hours=planned.hours,
-        counts=field_totals(Counts, [pair.counts for pair in pairs]),
-        pairs=pairs,
-        result=_bounded(pairs, indices) if played else None,
-        policy_actions=field_totals(
-            PolicyActions, [actions[key] for key in keys if key in actions]
-        ),
-    )
 
-
-def bootstrap_indices(protocol: Protocol) -> npt.NDArray[np.int64]:
-    """Whole-pair resamples shared by every comparison read under `protocol`."""
-    return np.random.default_rng(protocol.bootstrap_seed).integers(
-        0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
-    )
+    return [read(planned) for planned in schedule]
 
 
 def learned(initial: Bounded | None) -> bool | None:
@@ -353,17 +352,13 @@ def analyze(
     """Read the whole experiment; the two sizes are one cohort of comparisons."""
     regimes, protocol = frozen()
     cap = update_cap(regimes[SIZES[0]])
-    environment_id = environment(protocol).identity
-    columns = game_columns(db)
-    actions = policy_actions_by_match(db, environment_id)
-    indices = bootstrap_indices(protocol)
     trained = {label: size_run(state, label) for label in SIZES}
-    comparisons = [
-        read_comparison(
-            planned, db, protocol, environment_id, columns, actions, indices
-        )
-        for planned in comparison_schedule(state, protocol, checkpoint_hours(state))
-    ]
+    comparisons = read_comparisons(
+        comparison_schedule(state, protocol, checkpoint_hours(state)),
+        db,
+        protocol,
+        environment(protocol).identity,
+    )
     sizes = [
         _reading(
             label,

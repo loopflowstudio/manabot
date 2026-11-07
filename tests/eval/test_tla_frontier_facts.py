@@ -27,7 +27,7 @@ from manabot.model.checkpoint import save_checkpoint
 @pytest.fixture(scope="module")
 def positions() -> Observation:
     regimes, protocol = frozen()
-    return sample_positions(protocol, regimes[SMALL].observation)
+    return sample_positions(regimes[SMALL], protocol)
 
 
 def _fresh() -> ActorCritic:
@@ -40,7 +40,7 @@ def test_positions_are_fixed_and_carry_facts_and_effects(
     positions: Observation,
 ) -> None:
     regimes, protocol = frozen()
-    again = sample_positions(protocol, regimes[SMALL].observation)
+    again = sample_positions(regimes[SMALL], protocol)
     assert all(np.array_equal(positions[key], again[key]) for key in positions)
     assert positions["facts"][..., -1].sum() > 0
     assert (positions["effect_members"][..., 0] > 0).sum() > 0
