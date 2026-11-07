@@ -2,7 +2,8 @@
 
 The previous contents described MTG-243 (naming), inherited from the parent
 commit; they remain at `8e5d152ab:scratch/questions.md`; main's Task 07c490 notes
-(closure and lambda on Elemental) remain at `e8da7909d:scratch/questions.md`.
+(closure and lambda on Elemental) remain at `e8da7909d:scratch/questions.md`;
+neither confers anything on c5fba4 or b015d5.
 
 Material assumptions made headless by the first implement step (reversible
 until launch). Superseded by the design review: w256/15× (now w160l8, 14.4×
@@ -151,10 +152,6 @@ equal-hours pairs throughout).
   scheduled slot is played or unreached (no "schedule is incomplete" issue). `complete` stays
   False because any lost run carries "A run did not finish", as the existing failed-run test pins;
   changing that is a separate decision. (implement, 2026-11-06)
-
-Inherited MTG-243 naming notes (another branch's handoff) were removed; they are at
-`c6746f3ff:scratch/questions.md` and confer nothing on b015d5. Main's 07c490 notes (arrived with PR #436) are at
-`ebed0963e:scratch/questions.md` and likewise confer nothing here.
 
 # Task b015d5 — training seconds per update (PR #435, merged `45cc961a2`)
 

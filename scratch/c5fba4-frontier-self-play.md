@@ -35,9 +35,8 @@ otherwise.
   written, freeze → catalog-vs-hashed check → execution review → launch.
 
 Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
-#437 (30df0c) is still open, head now 40ecda6be (was bab2e80d6). origin/main has
-one commit beyond the last sync, 70d79ccb8 (b015d5's throughput probe protocol); it
-conflicts only in `scratch/questions.md`.
+#437 (30df0c) is still open (head 40ecda6be). origin/main 70d79ccb8 (b015d5's
+throughput protocol) is merged in.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
    `current_player_configs`/`current_matchup_indices`; deck-source,
@@ -59,13 +58,11 @@ conflicts only in `scratch/questions.md`.
    unreached if w64 ended earlier), scheduled last so `eval`'s `_distinct` plays a
    pair shared with an equal-update/endpoint slot once under that name; analysis
    `Comparison.hours`; a report curve at w160l8's updates. Fixture-hours tests
-   cover them. Remaining, blocked on #437: recount parameters on main.
+   cover them. Remaining freeze step (not a merge blocker): recount after #437.
 5. Built: `experiments/tla_frontier_vocabulary.py` and its tests; the criterion
    is in the protocol (head-to-head `best.upper` < .5; hashed learned and catalog
-   rejected; late value loss > 1.10× hashed). Merge dependency: `vocabulary_regime`
-   needs #437's `ModelConfig.record_vocabulary` and raises without it; the arm
-   regime test is skipped until #437 is merged in, so rerun
-   `tests/eval/test_tla_frontier_vocabulary.py` after syncing #437.
+   rejected; late value loss > 1.10× hashed). `vocabulary_regime` raises without
+   #437's `ModelConfig.record_vocabulary`; its arm test skips until #437 is in.
 
 6. Built (direction 26): the set-aside rule is gone. `size_run(state, label)` admits the one
    tagged run of a size; a run lost below update 25 is its size's run, endpoint at its last
@@ -75,47 +72,23 @@ conflicts only in `scratch/questions.md`.
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed, 1 skipped (needs #437) (realign after direction 26, 2026-11-06). Gate owns wider suites.
+83 passed, 1 skipped (needs #437) (implement, direction 27, after merging 70d79ccb8, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
 
-## Eleventh concept review (2026-11-06, headless): software lands ahead of #437
+## Concept reviews ten and eleven (2026-11-06, headless; full text at `6304f0e28`)
 
-Main moved to 70d79ccb8, which adds b015d5's draft throughput protocol. That protocol leaves
-multi-producer collection to this Task ("read from its result, not repeated here") and builds
-its two-seat exact-quota step "after c5fba4's `collection.py` change lands". This branch's
-order holds every software merge behind #437 (protocol "Before freeze" opening line and Launch
-sequence step 1). The accepted direction does not ask for that: software builds on main after
-#435, and 30df0c lands "before this protocol freezes". The stricter order now delays a second
-Task with no gain, because nothing in items 1, 2 or 4 reads #437, and item 5 already runs on
-both sides of it (`HAS_RECORD_VOCABULARY` picks the refusing test before #437 and the arm test
-after it).
-
-### Direction, for implement
-
-27. Software merges once #435 is in, not after #437. Edit the protocol's "Before freeze" opening
-    line and Launch sequence step 1 so they agree: software merges after #435; #437 merges before
-    freeze; the parameter recount follows #437 and comes before calibration. The status paragraph
-    already puts freeze after #437 and the recount, and stays. Item 4's "recounted parameters" is
-    a freeze step, not a merge blocker. Item 5's citation of #437 head `bab2e80d6` gives way to
-    "rerun on the frozen revision", because the head has moved (40ecda6be). Sync origin/main; the
-    only conflict is `scratch/questions.md`, which main rewrote for b015d5. Keep this Task's
-    entries and main's.
-
-What would reopen this: #437 changes `ModelConfig`, the regime builders or `collection.py` in a
-way that conflicts with items 1 and 2. In that case the later of the two PRs rebases; the order
-of freeze steps does not change. No product choice is open.
-
-## Tenth concept review (2026-11-06): lost runs are not replaced
-
-The accepted design cut replacement ("a lost run stops at its last export and is reported";
-protocol §Lost run), but `is_set_aside` still admitted a second run when the first ended below
-update 25, so a w160l8 pod lost early left its size with no run and the analysis could never be
-complete. Direction 26 (item 6 above) removed it. An update-0 endpoint is unreached rather than
-played, because a policy played against itself would read as learning rejected. What would reopen
-this: any launcher path that stores a second run under one regime tag (Etude `max_attempts` is
-unused). The admission rule would then need an owner, preferably Etude's run identity.
+- Tenth (direction 26, item 6): a lost run is its size's only run; no replacement. An update-0
+  endpoint is unreached, not played. Reopens if a launcher stores a second run under one tag.
+- Eleventh (direction 27, implemented): software merges after #435 without waiting for #437,
+  because items 1, 2 and 4 do not read #437 and item 5 runs on both sides of it
+  (`HAS_RECORD_VOCABULARY`); b015d5's throughput protocol (main 70d79ccb8) builds on item 1's
+  `collection.py`. #437 merges before freeze; the parameter recount follows it and precedes
+  calibration. The protocol's "Before freeze" opening and Launch step 1 now say so, and item 5
+  and the coverage sweep cite "rerun on the frozen revision" instead of a #437 head. Reopens if
+  #437 changes `ModelConfig`, the regime builders or `collection.py` against items 1–2; the
+  later PR rebases.
 
 ## Draft as reviewed
 
@@ -128,19 +101,9 @@ design (w256, one producer, absolute schedule, host screen) and checks are at
 
 Observed:
 
-- `game_seconds` is a hard kill that counts as a failed game. One real
-  observation took 130–170 ms (w64) and 380–420 ms (w256) per single-thread
-  forward on this Mac; v10 games averaged 180 decisions. Raised to 600 s. A real
-  match later ran about 0.05 s a decision (direction 18's notes), and the protocol
-  now says the limit may be generous.
-- `eval()` had no machine setup, so a stock rented machine could not build the
-  engine or write results. Now follows `experiments/learning_signal.py`.
-- Update 0 and `clocks["updates"]` are real: execution exports the initial raw
-  checkpoint and v10 read the same clock.
-- Checkpoint clocks carry updates and transitions, no wall time, so `eval` cannot
-  pick equal-compute pairs before the endpoints. Etude does retain each
-  checkpoint's `wall_ms`, in `training_checkpoints`; only `ExperimentState`
-  drops it. The analysis reads it as hours per checkpoint.
+- Resolved and in the protocol (full text at `6304f0e28`): `game_seconds` 600 s, `eval()`
+  machine setup as in `learning_signal.py`, real update-0 exports, and checkpoint `wall_ms`
+  retained in `training_checkpoints` but dropped by `ExperimentState` (item 3).
 - Installed Etude source, read 2026-11-05: `etude eval` counts a failed match and
   leaves it alone unless given `--retry-failed`, so a default pass never trips
   analysis's repeated-match error. Its launch ledger (one file per computer)

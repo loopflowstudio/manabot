@@ -228,9 +228,9 @@ reading fails this gate.
 
 ## Launch sequence
 
-1. PR #435 and Task 30df0c's PR merge on main. The parameter counts are
-   retaken. The software under [Before freeze](#before-freeze) merges after
-   them.
+1. The software under [Before freeze](#before-freeze) merges on main after
+   PR #435. Task 30df0c's PR #437 merges before freeze. The parameter counts
+   are retaken on main after #437 and before calibration.
 2. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
    supply with none holds its whole window. `l4` has 900 seconds; set the others
    where absent. `cpu32` allows one machine, which fits one pass at a time.
@@ -242,8 +242,7 @@ reading fails this gate.
 
 3. The record coverage sweep on the revision calibration runs from:
    `uv run python -m manabot.verify.record_coverage --games 200 --seed 0`.
-   Every card and id must map (on PR #437's head: 36,202 decisions, 333/333
-   cards). Its seed 1 ran about 25× slower per decision on very large boards,
+   Every card and id must map; it is rerun on the frozen revision. Its seed 1 ran about 25× slower per decision on very large boards,
    a game-time and per-update cost risk that calibration's seconds per update
    and the rehearsal's slowest game read; it is not a vocabulary failure.
 4. Calibration, then the evaluation rehearsal.
@@ -447,8 +446,10 @@ claim that one size is better in general.
 
 ## Before freeze
 
-Software, built on main after PR #435 and Task 30df0c merge, each with its
-acceptance check:
+Software, merged on main after PR #435, each with its acceptance check. Items 1,
+2 and 4 do not read PR #437, and item 5 works on either side of it. PR #437
+merges before freeze; item 4's recounted parameters are taken after it as a
+freeze step, not as a condition of merging:
 
 1. **Roster sampling with 2–4 producers** (`manabot/training/rollout/producers.py`,
    `collection.py`, `regime.py`). `ShardedVectorEnv` forwards training decks and
@@ -488,8 +489,8 @@ acceptance check:
    runs carry both labels in `game_errors.by_cell`.
 
 5. **Catalog against hashed fact ids** (accepted with the design; the field is
-   Task 30df0c's, PR #437, whose head `bab2e80d6` lets fresh regimes select
-   `record_vocabulary: hashed`). Before either 54-hour run,
+   Task 30df0c's, PR #437, which lets fresh regimes select
+   `record_vocabulary: hashed`; rerun on the frozen revision). Before either 54-hour run,
    `experiments/tla_frontier_vocabulary.py` trains two arms of the frozen w64
    regime that differ only in `ModelConfig.record_vocabulary`, catalog and
    hashed: same recipe, seed 21501, decks, four producers, 100 updates, exports
