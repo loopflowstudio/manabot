@@ -75,8 +75,11 @@ from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
     MAX_HOURS,
     MAX_USD,
+    ONDEMAND_USD_PER_HOUR,
     ONE_PRODUCER,
+    SETUP_HOURS,
     UPDATES,
+    WALL_SECONDS,
     calibration_regime,
     eval as calibration_eval,
     read_calibration,
@@ -926,6 +929,15 @@ def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
     assert plain == Counter({tag: 2 * n for tag, n in delivered_by_tag.items()})
 
 
+def test_calibration_ceilings_cover_each_rental_within_two_dollars() -> None:
+    """Etude refuses a job whose hours and setup cost more than its dollars."""
+    for pod, ceiling in MAX_USD.items():
+        hours = Decimal(str(MAX_HOURS[pod])) + SETUP_HOURS
+        assert hours * ONDEMAND_USD_PER_HOUR <= ceiling
+        assert WALL_SECONDS[pod] + 600 <= MAX_HOURS[pod] * 3600
+        assert WALL_SECONDS[pod] - 600 >= UPDATES * 220
+
+
 def test_calibration_changes_only_length_and_identity() -> None:
     regimes, _ = frozen()
     for label, regime in regimes.items():
@@ -965,11 +977,6 @@ def test_calibration_fits_its_ceiling_on_the_admitted_gpus() -> None:
     assert [job.regime.stages[0].execution.workers for job in jobs] == [4, 4, 1]
     assert {run.job.until for run in launched} == {f"updates={UPDATES}"}
     assert sum(run.job.max_usd or 0 for run in launched) == Decimal("2")
-    hourly, setup = Decimal("0.67"), Decimal("0.25")
-    # The large pod's hours bind; each small pod buys setup and five 300 s updates.
-    assert (Decimal(str(MAX_HOURS)) + setup) * hourly <= MAX_USD[LARGE]
-    for pod in (SMALL, ONE_PRODUCER):
-        assert MAX_USD[pod] / hourly >= setup + Decimal(UPDATES * 300) / 3600
 
 
 def _host_rows(us_per_row: dict[int, float]) -> dict[int, dict[str, float]]:

@@ -31,7 +31,7 @@ Still live from the first implement step and concept reviews 2–8:
 
 - **Four producers for both arms**; the accepted one-producer w64 calibration pod
   measures what they buy and gates nothing. Calibration launches with `--parallel 3`;
-  ceilings USD0.45 / 1.10 / 0.45 (w64, w160l8, w64 one producer), USD2 total.
+  ceilings USD0.55 / 0.90 / 0.55 (w64, w160l8, w64 one producer), USD2 total; launched at `--parallel 2`, since `l4` allows two machines.
 - **Horizon S = min(10,000, ⌊194,400 / s⌋)**, s = calibration's median s/update over
   updates 2–5, no slowdown allowance. Provisional 1,296 (w64, in its regime) and 129
   (w160l8, in the protocol's `large.expected_updates`) until calibration.
