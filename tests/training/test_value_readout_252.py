@@ -1,11 +1,22 @@
 """MTG-252 readout arms vary only the critic readout of the re-pinned 183 recipe."""
 
+from etude.experiment import (
+    Checkpoint,
+    Checkpoints,
+    ExperimentState,
+    TrainingRun,
+    read_experiment,
+)
+from etude.jobs import evaluation_spec
+from etude.run.records import ArtifactRef
 import pytest
 import torch
 
-from experiments import value_readout_252
+from experiments import learning_signal, value_readout_252
+from experiments.learning_signal import ELEMENTAL_PAIRS
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.experiment.job import LearnerContinuation, StagedExport
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_agent
@@ -103,3 +114,129 @@ def test_pairings_depend_on_the_run_seed_not_the_arm() -> None:
         decisions.append(collector.stats.micro_steps)
     # The policies played different games over the same pairings.
     assert decisions[0] != decisions[1]
+
+
+def test_a_segment_continues_its_parent_with_only_the_watchdog_changed() -> None:
+    export = StagedExport(key="k", sha256="0" * 64, bytes=1)
+    continuation = LearnerContinuation(
+        from_update=111,
+        source_stage="self-play",
+        source_run=export,
+        raw=export,
+        ema=export,
+        optimizer=export,
+    )
+    run = value_readout_252.grid([25201], updates=150)[0]
+
+    job = value_readout_252.segment(run, continuation, hours=1.5)
+
+    assert job.continuation == continuation
+    assert job.regime.wall_seconds == 1.5 * 3600 - 900 - 300
+    left = run.regime.model_dump(mode="json")
+    right = job.regime.model_dump(mode="json")
+    for dump in (left, right):
+        dump.pop("wall_seconds")
+        dump["stages"][0]["execution"].pop("wall_seconds")
+    assert left == right
+
+
+def test_every_arm_and_seed_has_one_parent() -> None:
+    runs = value_readout_252.grid([25201, 25202, 25203])
+    parents = value_readout_252.PARENTS
+    assert set(parents) == {(run.aggregation, run.seed) for run in runs}
+    assert len(set(parents.values())) == len(parents)
+
+
+def test_capacity_recovery_changes_only_that_segment() -> None:
+    export = StagedExport(key="k", sha256="0" * 64, bytes=1)
+    continuation = LearnerContinuation(
+        from_update=111,
+        source_stage="self-play",
+        source_run=export,
+        raw=export,
+        ema=export,
+        optimizer=export,
+    )
+    run = value_readout_252.grid([25202], updates=150)[1]
+
+    job = value_readout_252.segment(run, continuation, 1.5, recover_capacity=True)
+
+    assert job.regime.stages[0].game_errors.recover_capacity
+    assert not run.regime.stages[0].game_errors.recover_capacity
+
+
+def _stored(run: str, *updates: int) -> TrainingRun:
+    return TrainingRun(
+        name=run,
+        experiment=value_readout_252.EXPERIMENT,
+        state="finished",
+        checkpoints=Checkpoints(
+            Checkpoint(
+                run=run,
+                experiment=value_readout_252.EXPERIMENT,
+                ordinal=ordinal,
+                artifact=ArtifactRef(
+                    uri=f"r2://bucket/{run}/updates-{update}.pt",
+                    sha256="a" * 64,
+                    size_bytes=1,
+                ),
+                clocks={"updates": float(update)},
+                line=run,
+            )
+            for ordinal, update in enumerate(updates, start=1)
+        ),
+    )
+
+
+def test_evaluation_scores_first_segments_and_finals_on_one_schedule() -> None:
+    state = ExperimentState(
+        experiment=value_readout_252.EXPERIMENT,
+        runs=(
+            *(
+                _stored(parent, 20, 40, 75, 111)
+                for parent in value_readout_252.PARENTS.values()
+            ),
+            *(_stored(final, 150) for final in value_readout_252.FINALS.values()),
+        ),
+    )
+    matchups = value_readout_252.evaluation_matchups(state)
+    heuristic = [m for m in matchups if "heuristic" in m.tags]
+    head_to_head = [m for m in matchups if "head-to-head" in m.tags]
+    # 9 runs x (20, 40, 75 from the first segment, 150 from its continuation);
+    # the first segment's own end (111) is not scored.
+    assert len(heuristic) == 36
+    assert not any("u111" in m.name for m in heuristic)
+    assert len(head_to_head) == 9
+    schedule = matchups[0].conditions
+    assert all(m.conditions == schedule for m in matchups)
+    assert len(schedule) == len(ELEMENTAL_PAIRS.pairings)
+    assert {m.games for m in matchups} == {ELEMENTAL_PAIRS.legs}
+
+
+def test_an_unstored_final_is_left_for_a_later_pass() -> None:
+    state = ExperimentState(
+        experiment=value_readout_252.EXPERIMENT,
+        runs=tuple(
+            _stored(parent, 20, 40, 75) for parent in value_readout_252.PARENTS.values()
+        ),
+    )
+    matchups = value_readout_252.evaluation_matchups(state)
+    assert len(matchups) == 27
+    assert not any("head-to-head" in m.tags for m in matchups)
+
+
+def test_the_discovered_evaluation_callback_stays_importable() -> None:
+    experiment = read_experiment(
+        value_readout_252.ROOT / "experiments/value_readout_252.py"
+    )
+    state = ExperimentState(
+        experiment=value_readout_252.EXPERIMENT,
+        runs=tuple(
+            _stored(parent, 20) for parent in value_readout_252.PARENTS.values()
+        ),
+    )
+    (job,) = experiment.eval(state)  # type: ignore[arg-type]
+    callback = evaluation_spec(job).play
+    assert callback.module == "experiments.learning_signal"
+    assert callback.load(job.repo) is learning_signal.play_deal
+    assert "--extra evaluation" in job.command

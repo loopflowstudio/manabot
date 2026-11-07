@@ -1,10 +1,31 @@
 # Critic readout comparison — MTG-252
 
-**Status: training authorized, scoring protocol not frozen.** Jack Heart
+**Status: trained; evaluation launched, no score read.** Jack Heart
 (2026-11-05) authorized 3 arms × 3 seeds (25201–25203) × 150 updates inside a
-USD20 cap covering training, evaluation and retries. Training launches as Etude
-cohort `mtg252` (9 runs, at most USD1.35 each, USD12.15 reserved). Thresholds and
-evaluation schedule size are still open and are fixed before any score is read.
+USD20 cap covering training, evaluation and retries. No promotion or rejection
+threshold is set; the result is reported as measured.
+
+## Execution record
+
+- **Hardware.** RunPod had no L4 stock, so every run trained on an A40
+  (`mtg252-a40`, USD.59/h), one three-arm cohort per seed
+  (`mtg252-s<seed>-mtg252-a40-1`), revision `fe25e6e18`. The windows were sized
+  from L4 pace; at about 53 s per update the first segments paused at their
+  watchdog after 92–112 updates.
+- **Continuations.** Each first segment continued to update 150 from its raw,
+  EMA and Adam exports (`LearnerContinuation`, `value_readout_252.segment`), not
+  `etude continue`, which carries a policy alone and failed six launches at
+  about USD.12. Continuation runs are `value_readout_252.FINALS`.
+- **Pairing fairness.** A continuation restarts its game streams and RNGs at its
+  own boundary, so arms under one seed meet the same pairing sequence only
+  through the first segment.
+- **Capacity recovery.** The value_token seed 25202 continuation stopped at
+  update 124 when a legal position needed 65 continuation relations (64 slots).
+  Its repeat, `89dd4b6d2b8e`, sets `game_errors.recover_capacity`, which
+  discards and replaces only a game that overflows. No other run sets it.
+- **Spend.** First segments USD8.76; failed continues about USD.12;
+  continuations and the repeat about USD6 (per-run readings are incomplete).
+  Evaluation is limited to USD3.
 
 ## Question
 
@@ -122,17 +143,17 @@ selection groups are unchanged.
 3. **Training.** The re-pinned 183 stage at a fixed update count with
    milestone exports. Cost per update must be measured on the w17 base before
    a budget is set; 183's w13 timings and v10's TLA timings do not transfer.
-4. **Evaluation against the heuristic.** Each arm's milestone and final
-   checkpoints play the heuristic over one common schedule of random
-   Elemental deck pairings: ordered pairs drawn with a fixed seed from the
-   10 × 10 grid (mirrors included), each deal played with the model on the
-   play and on the draw, as in `mtg186_eval`'s "rest" schedule. One fixed
-   schedule seed draws the pairings and deals once; every arm and seed plays
-   that identical schedule, pinned by SHA-256 in the protocol. Failed and missing slots stay
-   in place.
-5. **Head-to-head.** Final policies play each other directly, each arm
-   against each other arm within a seed, on that same fixed schedule with
-   both seat legs. Arm A is model A in every game of a pairing.
+4. **Evaluation against the heuristic.** Updates 20, 40 and 75 of each first
+   segment and 150 of its continuation play the heuristic over 07c490's fixed
+   design, `learning_signal.ELEMENTAL_PAIRS`: fifty Elemental deck pairs drawn
+   with a fixed seed from the 45 distinct pairs, each with its own reserved
+   deal, scored over the four cross legs, so the model plays both decks on the
+   play and on the draw. Mirrors are excluded, as there. Every arm and seed plays
+   that identical schedule. Failed pairings stay in place.
+5. **Head-to-head.** Each seed's three final policies play each other pairwise
+   on the same fifty pairings and four legs; the earlier arm in `ARMS` is the
+   first player. One rented 32-vCPU pass plays about 2,250 pairings (9,000
+   games).
 6. **Analysis.** Paired differences against `masked_mean` by seed and deal
    block, with intervals over seeds and deals; head-to-head scores per arm
    pair with intervals over seeds and deals; per-collected-transition,
