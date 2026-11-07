@@ -444,7 +444,8 @@ choice by paying a real cost and checking the remaining mana.
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
-namespace. Exercise discovery with `read_experiment` in runner tests. Local
+namespace. Exercise discovery with `read_experiment` in runner tests, or
+`etude.launch.job_file.read_job_file` for a launch file with no `eval`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
 

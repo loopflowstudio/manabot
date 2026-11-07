@@ -46,6 +46,7 @@ from etude.experiment import ExperimentState, TrainingRun
 from etude.launch import client
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
+from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -74,20 +75,35 @@ from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = Path(__file__).stem
 UPDATES = 5
-# 2,400 s stay usable under the 600 s stop reserve: one update well past the
-# protocol's 1,500 s launch gate, and all five at MTG-213's 150 s.
-WALL_SECONDS = 3600.0
-# Etude's 15-minute setup allowance and these hours fit each pod's ceiling at
-# the USD0.67/hour the training budget admits.
-MAX_HOURS = 1.2
 # The w64 pod at one producer, beside the frontier's four.
 ONE_PRODUCER = "w64-p1"
 type Pod = Literal["w64", "w160l8", "w64-p1"]
-# USD2 in total, inside the protocol's reserve.
+# A pod's updates stop once another one plus the 600 s stop reserve no longer fits
+# its wall. Its hours run from the machine's start, so they cover the wall, the
+# 600 s finalization and the job's setup, which took about 170 s on an L4; a job
+# with too little left refuses to start. W160l8 keeps 2,700 s, one update well
+# past the protocol's 1,500 s launch gate; each w64 pod keeps 800 s, five updates
+# at 160 s.
+WALL_SECONDS: dict[Pod, float] = {
+    SMALL: 1400.0,
+    ONE_PRODUCER: 1400.0,
+    LARGE: 3300.0,
+}
+MAX_HOURS: dict[Pod, float] = {
+    SMALL: 0.65,
+    ONE_PRODUCER: 0.65,
+    LARGE: 1.2,
+}
+# Etude refuses a rental whose hours plus its 15-minute setup allowance cost more
+# than the job's dollars, so each ceiling covers that at the on-demand's
+# USD0.60/hour limit. USD2 in total, inside the protocol's reserve.
+ONDEMAND_USD_PER_HOUR = Decimal("0.60")
+SETUP_HOURS = Decimal("0.25")
+JOB_SETUP_SECONDS = 300.0
 MAX_USD: dict[Pod, Decimal] = {
-    SMALL: Decimal("0.45"),
-    ONE_PRODUCER: Decimal("0.45"),
-    LARGE: Decimal("1.1"),
+    SMALL: Decimal("0.55"),
+    ONE_PRODUCER: Decimal("0.55"),
+    LARGE: Decimal("0.9"),
 }
 # The second launch gate, a rough line at half the protocol's 600 s game limit.
 REHEARSAL_GAME_SECONDS = 300.0
@@ -128,6 +144,10 @@ class Rehearsal(StrictModel):
     games: int
     # Killed, truncated or never finished: nothing a scored pass could replay.
     invalid_games: int
+    # Of those, games aborted past an observation capacity. They are labelled and
+    # bound a reading, and no game limit or size change would remove them, so
+    # they are reported and fail no gate.
+    capacity_aborts: int
     median_game_seconds: float | None
     slowest_game_seconds: float | None
     pass_usd: Decimal
@@ -147,7 +167,7 @@ def calibration_regime(regime: TrainingRegime, pod: Pod) -> TrainingRegime:
         regime,
         id=_regime_id(pod),
         updates=UPDATES,
-        wall_seconds=WALL_SECONDS,
+        wall_seconds=WALL_SECONDS[pod],
         workers=1 if pod == ONE_PRODUCER else None,
     )
 
@@ -168,7 +188,7 @@ def runs(revision: str) -> list[Run]:
             experiment=EXPERIMENT,
             revision=revision,
             seed=protocol.training_seed,
-            max_hours=MAX_HOURS,
+            max_hours=MAX_HOURS[pod],
             max_usd=MAX_USD[pod],
         )
     ]
@@ -272,7 +292,7 @@ def _calibration(data: RunData, pod: PodReading, wall_seconds: float) -> Calibra
     )
 
 
-def read_calibration(source: Path | str) -> list[Calibration]:
+def read_calibration(source: Storage | Path | str) -> list[Calibration]:
     """Every calibration run under `source`, retries included.
 
     The rehearsal's passes are runs here too, so they are set aside.
@@ -287,7 +307,7 @@ def read_calibration(source: Path | str) -> list[Calibration]:
     ]
 
 
-def read_rehearsal(source: Path | str) -> Rehearsal:
+def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
     """The rehearsal's games and cost, and whether they pass the second launch gate.
 
     It passes only with every scheduled game played, valid and under the line.
@@ -298,17 +318,23 @@ def read_rehearsal(source: Path | str) -> Rehearsal:
         columns = stored_game_columns(db)
         # Etude omits an all-null column, as when every game was killed.
         seconds_column = "seconds" if "seconds" in columns else "NULL"
+        failure_column = "failure" if "failure" in columns else "NULL"
         games = (
             db.execute(
-                f"SELECT valid, {seconds_column} FROM games WHERE seat = 0"
+                f"SELECT valid, {seconds_column}, {failure_column} "
+                "FROM games WHERE seat = 0"
             ).fetchall()
             if columns
             else []
         )
     runs = tuple(sorted({run for run, _ in receipts}))
     failed = sum(state != "done" for _, state in receipts)
-    invalid = sum(not valid for valid, _ in games)
-    seconds = [float(each) for _, each in games if each is not None]
+    invalid = sum(not valid for valid, _, _ in games)
+    aborted = sum(
+        not valid and "capacity exceeded" in (failure or "")
+        for valid, _, failure in games
+    )
+    seconds = [float(each) for _, each, _ in games if each is not None]
     slowest = max(seconds, default=None)
     scheduled = REHEARSAL_COMPARISONS * len(frozen()[1].pairs) * GAMES_PER_PAIR
     return Rehearsal(
@@ -317,13 +343,14 @@ def read_rehearsal(source: Path | str) -> Rehearsal:
         failed_matches=failed,
         games=len(games),
         invalid_games=invalid,
+        capacity_aborts=aborted,
         median_game_seconds=median(seconds) if seconds else None,
         slowest_game_seconds=slowest,
         pass_usd=sum((client.status(run).usd for run in runs), Decimal(0)),
         passed=(
             len(games) == scheduled
             and not failed
-            and not invalid
+            and invalid == aborted
             and slowest is not None
             and slowest < REHEARSAL_GAME_SECONDS
         ),
@@ -337,10 +364,11 @@ def main() -> None:
         "--rehearsal", action="store_true", help="read the evaluation rehearsal"
     )
     args = parser.parse_args()
+    source = storage_from_uri(args.source)
     if args.rehearsal:
-        print(read_rehearsal(args.source).model_dump_json(indent=2))
+        print(read_rehearsal(source).model_dump_json(indent=2))
         return
-    readings = read_calibration(args.source)
+    readings = read_calibration(source)
     print(json.dumps([reading.model_dump() for reading in readings], indent=2))
 
 

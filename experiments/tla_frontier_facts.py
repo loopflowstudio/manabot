@@ -44,6 +44,7 @@ from tempfile import TemporaryDirectory
 from typing import Literal
 
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
+from etude.run.storage import storage_from_uri
 import numpy as np
 import numpy.typing as npt
 import torch
@@ -383,8 +384,9 @@ def main() -> None:
     parser.add_argument("--source", required=True, help="Etude store")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    source = storage_from_uri(args.source)
     torch.set_num_threads(1)
-    state = with_launcher_ends(observe(args.source, args.experiment))
+    state = with_launcher_ends(observe(source, args.experiment))
     with TemporaryDirectory() as cache:
         reading = read(state, args.experiment, Path(cache))
     args.out.write_text(reading.model_dump_json(indent=2))

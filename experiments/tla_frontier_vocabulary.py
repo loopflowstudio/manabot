@@ -46,6 +46,7 @@ from etude.eval.records import Environment
 from etude.experiment import Checkpoint, ExperimentState, TrainingRun, observe
 from etude.launch.records import Job, Run
 from etude.run.listing import as_storage
+from etude.run.storage import Storage, storage_from_uri
 from etude.train.read import RunData, read_all
 
 from experiments.tla_frontier import (
@@ -74,19 +75,18 @@ from manabot.training.regime import TrainingRegime
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
 VOCABULARIES: tuple[Vocabulary, Vocabulary] = ("catalog", "hashed")
-UPDATES = 100
+UPDATES = 75
 # Interior exports; the job exports update UPDATES itself when training stops.
-MILESTONES = (25, 50, 75)
-# 100 updates fit 8,400 usable seconds under the 600 s stop reserve at up to
-# 84 s/update. Calibration reads w64's cost first; a slower reading changes the
-# length here, by recorded decision, before the check runs.
-WALL_SECONDS = 9000.0
-# Etude's 15-minute setup allowance and the wall fit each arm's ceiling at the
-# USD0.67/hour the training budget admits; USD4 together, from the reserve.
-MAX_HOURS = 3.0
-MAX_USD = Decimal("2")
+MILESTONES = (25, 50)
+# Calibration read w64 at 167 s/update. 75 updates fit 15,000 usable seconds under
+# the 600 s stop reserve at up to 200 s/update, a fifth above that reading.
+WALL_SECONDS = 15600.0
+# The wall, finalization, job setup and Etude's 15-minute allowance fit each arm's
+# ceiling at the on-demand's USD0.60/hour limit; USD6 together, from the reserve.
+MAX_HOURS = 4.6
+MAX_USD = Decimal("3")
 # Rule 3: the second half of the run, past the first export's warm-up.
-LATE_UPDATES = range(51, UPDATES + 1)
+LATE_UPDATES = range(38, UPDATES + 1)
 VALUE_LOSS_RATIO = 1.10
 
 
@@ -266,7 +266,7 @@ def _late(curve: list[tuple[int, float]]) -> float | None:
     return median(late) if len(late) == len(LATE_UPDATES) else None
 
 
-def read_check(state: ExperimentState, source: Path | str) -> VocabularyCheck:
+def read_check(state: ExperimentState, source: Storage | Path | str) -> VocabularyCheck:
     """Both arms, the three comparisons and the verdict, from `state` and its store."""
     _, protocol = frozen()
     storage = as_storage(source)
@@ -320,8 +320,9 @@ def main() -> None:
         "--source", required=True, help="Etude training and evaluation store"
     )
     args = parser.parse_args()
-    state = with_launcher_ends(observe(args.source, EXPERIMENT))
-    print(read_check(state, args.source).model_dump_json(indent=2))
+    source = storage_from_uri(args.source)
+    state = with_launcher_ends(observe(source, EXPERIMENT))
+    print(read_check(state, source).model_dump_json(indent=2))
 
 
 if __name__ == "__main__":

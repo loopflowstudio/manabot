@@ -15,7 +15,9 @@ Additional updates in this version:
   is_valid flag.
 """
 
-from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
+from collections import Counter
+from collections.abc import Sequence
+from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
 
@@ -195,6 +197,17 @@ def _timestamp_ranks(
         for timestamp in perm.keyword_counter_timestamps.values()
     )
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
+
+
+def _card_rows(cards: Sequence[Any], sideboard: int) -> str:
+    """Where a seat's card rows sit, for a capacity failure's retained text."""
+    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in cards)
+    tokens = Counter(card.name for card in cards if card.is_token)
+    parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
+    parts.append(f"sideboard {sideboard}")
+    parts.append(f"tokens {sum(tokens.values())}")
+    parts.extend(f"{name} {count}" for name, count in tokens.most_common(3))
+    return ", ".join(parts)
 
 
 class ObservationEncoder:
@@ -422,7 +435,9 @@ class ObservationEncoder:
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:
             raise ValueError(
-                "observation capacity exceeded: agent_cards plus sideboard"
+                "observation capacity exceeded: agent_cards plus sideboard "
+                f"{start + len(outside)} > {self.cards_per_player} "
+                f"({_card_rows(obs.agent_cards, len(outside))})"
             )
         for offset, card in enumerate(outside):
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
