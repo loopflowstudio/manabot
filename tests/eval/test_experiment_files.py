@@ -39,10 +39,15 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     assert found == {
         "batch_closure",
         "elemental",
+        "elemental_closure",
+        "elemental_lambda",
         "growing_pool",
         "lambda_sweep",
         "mtg183-elemental-eval",
         "seat_comparison",
+        "tla_frontier",
+        "tla_frontier_calibration",
+        "tla_frontier_vocabulary",
         "tla_pilot_v10",
         "two_seat",
     }

@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
+from manabot.infra.host import HostFacts
 from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
@@ -32,7 +33,9 @@ class PhaseTiming(Strict):
 
     Phase boundaries sit at points that already wait for the device, so a
     phase includes the device work it queued. Nested phases sum to at most
-    their parent; the remainder is untimed work inside the parent.
+    their parent; the remainder is untimed work inside the parent. Native
+    stepping and observation encoding come from the engine's own clock, as the
+    mean across parallel producer shards.
     """
 
     seconds: float = Field(ge=0, allow_inf_nan=False)
@@ -146,6 +149,8 @@ class RunRecord[RegimeT](Strict):
     seed: int
     seed_streams: dict[str, int]
     identities: dict
+    # This attempt's machine; absent in runs recorded before it was read.
+    host: HostFacts | None = Field(default=None, exclude_if=lambda value: value is None)
     status: Literal[
         "pending", "running", "completed", "failed", "interrupted", "paused"
     ] = "pending"

@@ -208,8 +208,9 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
         )
         restored.restore(first.snapshot(), lambda: None)
         left, right = first.collect(agent, 1), restored.collect(agent, 1)
-        for key in left.obs:
-            np.testing.assert_array_equal(left.obs[key], right.obs[key])
+        expected, actual = left.ordered_obs(), right.ordered_obs()
+        for key in expected:
+            np.testing.assert_array_equal(expected[key], actual[key])
         np.testing.assert_array_equal(left.actions, right.actions)
         assert first._self_play_decks == restored._self_play_decks
         assert first._env.current_game_seeds() == restored._env.current_game_seeds()
@@ -223,6 +224,59 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
     finally:
         first.close()
         restored.close()
+
+
+@pytest.mark.parametrize("workers", [2, 4])
+def test_sampled_decks_agree_across_producer_counts(
+    decks: UniformDecks, workers: int
+) -> None:
+    agent = _agent()
+    collectors = [
+        SeatRoutedCollector(
+            ObservationSpace(),
+            Match(decks.match_config()),
+            Reward(RewardConfig()),
+            num_envs=4,
+            seed=17402,
+            opponent_mode="self",
+            games_per_stream=2,
+            deck_source=decks,
+            workers=count,
+        )
+        for count in (1, workers)
+    ]
+    one, many = collectors
+    try:
+        left, right = one.collect(agent, 1), many.collect(agent, 1)
+        expected, actual = left.ordered_obs(), right.ordered_obs()
+        for key in expected:
+            np.testing.assert_array_equal(expected[key], actual[key])
+        np.testing.assert_array_equal(left.actions, right.actions)
+        assert one.stats.games == many.stats.games == 8
+        assert one._env.current_game_seeds() == many._env.current_game_seeds()
+        assert [
+            [player.decklist for player in pair]
+            for pair in one._env.current_player_configs()
+        ] == [
+            [player.decklist for player in pair]
+            for pair in many._env.current_player_configs()
+        ]
+        assert one._self_play_decks == many._self_play_decks
+        assert one.stats.exposure == many.stats.exposure
+        # A rejected replacement leaves every shard's decks in place.
+        before = many._env.current_player_configs()
+        with pytest.raises(managym.AgentError, match="Ally"):
+            many._env.set_training_decks(
+                [decks.players()[0], Deck({"Swamp": 10, "Ally": 1}).player()], "bad"
+            )
+        many._env.reset_seeds_into_buffers(many._env.current_game_seeds())
+        assert [
+            [player.decklist for player in pair]
+            for pair in many._env.current_player_configs()
+        ] == [[player.decklist for player in pair] for pair in before]
+    finally:
+        one.close()
+        many.close()
 
 
 def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(

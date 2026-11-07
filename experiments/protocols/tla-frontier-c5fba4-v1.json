@@ -1,0 +1,224 @@
+{
+  "bootstrap_seed": 21592001,
+  "corpus_sha256": "2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
+  "deck_seed": 21590001,
+  "evaluation_usd": "14",
+  "export_every": 25,
+  "game_seconds": 600.0,
+  "large": {
+    "attention_layers": 8,
+    "expected_updates": 129,
+    "hidden_dim": 160,
+    "num_attention_heads": 8
+  },
+  "max_commands": 10000,
+  "max_paid_usd": "100",
+  "milestones": [
+    25,
+    50,
+    75,
+    100,
+    150,
+    200,
+    300,
+    400,
+    600,
+    800,
+    1200,
+    1600,
+    2400,
+    3200,
+    4800,
+    6400
+  ],
+  "observation_shapes": {
+    "action_focus": [
+      64,
+      2
+    ],
+    "actions": [
+      64,
+      22
+    ],
+    "actions_valid": [
+      64
+    ],
+    "agent_cards": [
+      128,
+      56
+    ],
+    "agent_cards_valid": [
+      128
+    ],
+    "agent_permanents": [
+      96,
+      38
+    ],
+    "agent_permanents_valid": [
+      96
+    ],
+    "agent_player": [
+      1,
+      73
+    ],
+    "agent_player_valid": [
+      1
+    ],
+    "decklists": [
+      2,
+      128,
+      5
+    ],
+    "effect_details": [
+      4096,
+      3
+    ],
+    "effect_members": [
+      2048,
+      2
+    ],
+    "effects": [
+      128,
+      18
+    ],
+    "events": [
+      32,
+      7
+    ],
+    "events_valid": [
+      32
+    ],
+    "facts": [
+      512,
+      12
+    ],
+    "known_hand": [
+      2,
+      128,
+      2
+    ],
+    "name_candidates": [
+      64,
+      4
+    ],
+    "opponent_cards": [
+      128,
+      56
+    ],
+    "opponent_cards_valid": [
+      128
+    ],
+    "opponent_permanents": [
+      96,
+      38
+    ],
+    "opponent_permanents_valid": [
+      96
+    ],
+    "opponent_player": [
+      1,
+      73
+    ],
+    "opponent_player_valid": [
+      1
+    ],
+    "relations": [
+      64,
+      49
+    ],
+    "semantic_cards": [
+      2,
+      128
+    ]
+  },
+  "pairs": [
+    {
+      "deal": 21591000,
+      "first": 107,
+      "second": 89
+    },
+    {
+      "deal": 21591001,
+      "first": 5,
+      "second": 90
+    },
+    {
+      "deal": 21591002,
+      "first": 133,
+      "second": 122
+    },
+    {
+      "deal": 21591003,
+      "first": 2,
+      "second": 112
+    },
+    {
+      "deal": 21591004,
+      "first": 33,
+      "second": 41
+    },
+    {
+      "deal": 21591005,
+      "first": 76,
+      "second": 108
+    },
+    {
+      "deal": 21591006,
+      "first": 18,
+      "second": 10
+    },
+    {
+      "deal": 21591007,
+      "first": 112,
+      "second": 20
+    },
+    {
+      "deal": 21591008,
+      "first": 95,
+      "second": 68
+    },
+    {
+      "deal": 21591009,
+      "first": 97,
+      "second": 40
+    },
+    {
+      "deal": 21591010,
+      "first": 74,
+      "second": 57
+    },
+    {
+      "deal": 21591011,
+      "first": 123,
+      "second": 21
+    },
+    {
+      "deal": 21591012,
+      "first": 28,
+      "second": 28
+    },
+    {
+      "deal": 21591013,
+      "first": 17,
+      "second": 2
+    },
+    {
+      "deal": 21591014,
+      "first": 127,
+      "second": 10
+    },
+    {
+      "deal": 21591015,
+      "first": 132,
+      "second": 53
+    }
+  ],
+  "regime_sha256": "aea2613052bf8b77851b1fc0db4064b2c6cd113248f713d02ae04acba8a848f7",
+  "runtime_world": {
+    "card_digest": "6a818cbcc0c48e0d9b6abb42fee4cbea288312a271e0e9514b5683f0ea3d1cd9",
+    "world_version": "w17"
+  },
+  "training_hours": 56.0,
+  "training_seed": 21501,
+  "training_usd": "38"
+}

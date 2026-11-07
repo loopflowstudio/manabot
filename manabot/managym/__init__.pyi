@@ -56,6 +56,11 @@ def card_definitions_json() -> str:
 def learning_token_value(name: str) -> int:
     """The learning catalog's stable token value for a Rust or printed name."""
 
+def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]:
+    """Every name fact/shared-effect encoders hash, as `(namespace, name,
+    value, token_kind, token_value)`; the token is card text's for the same
+    concept. Namespaces: `token`, `name`, `restriction`."""
+
 class PreparedPossibleWorldMaterializer:
     @property
     def viewer(self) -> int: ...
@@ -258,6 +263,8 @@ class VectorEnv:
         self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None: ...
     def replace_failed_into_buffers(self, failed: list[bool]) -> None: ...
+    def buffered_call_timings(self) -> tuple[float, float]:
+        """Cumulative (stepping_seconds, encoding_seconds) of buffered calls."""
     def semantic_decision_frames_json(
         self, active: list[bool] | None = None
     ) -> list[str | None]: ...

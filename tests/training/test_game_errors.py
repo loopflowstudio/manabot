@@ -28,7 +28,7 @@ from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.returns import transition_gae
-from manabot.training.regime import Learning
+from manabot.training.regime import BatchClosure, Learning
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -202,6 +202,7 @@ def _tolerant_collector(
     ledger: GameErrorLedger,
     *,
     seats: Literal["one", "both"] = "both",
+    closure: BatchClosure = "complete-games",
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         model.observation_space,
@@ -210,6 +211,7 @@ def _tolerant_collector(
         num_envs=2,
         opponent_mode="self",
         learning_seats=seats,
+        batch_closure=closure,
         game_errors=ledger.policy,
         record_attempt=lambda row: ledger.record(row, {}),
     )
@@ -268,7 +270,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
     collector._env = scripted
     batch = collector.collect(model, 1)
-    markers = batch.obs["agent_player"][:, 0, 0, 0]
+    markers = batch.ordered_obs()["agent_player"][:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
     assert ledger.state.completed == 2 and ledger.state.crashed == 1
@@ -304,6 +306,49 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     )
     assert result["rows"] == batch.actions.size
     assert learner.optimizer.state
+
+
+def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
+    tmp_path: Path,
+) -> None:
+    model = agent()
+    policy = GameErrorPolicy(threshold=0.25, recover_capacity=True)
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    collector = _tolerant_collector(model, ledger, seats="one", closure="exact-quota")
+    scripted = ScriptedFailures(collector._buffers, resource_limit=True)
+    collector._env = scripted
+
+    # Stream 1 learns from seat 1: its game pauses at its second decision.
+    first = collector.collect(model, 1)
+    assert first.obs["agent_player"][0, 1, 0, 0] == 11
+    assert not first.next_done[1] and ledger.state.crashed == 0
+
+    # That decision overflows. The learned row stays learned, the pending one goes
+    # and the replacement game fills the quota.
+    second = collector.collect(model, 1)
+    assert second.actions.shape == (1, 2)
+    assert second.obs["agent_player"][0, 1, 0, 0] == 111
+    assert not second.dones[0, 1]
+    failure = GameAttempt.model_validate(
+        json.loads(ledger.path.read_text().splitlines()[-1])["attempt"]
+    )
+    assert failure.outcome == "resource_limit"
+    assert (failure.learned_samples, failure.discarded_samples) == (1, 1)
+    assert (ledger.state.learned_samples, ledger.state.discarded_samples) == (1, 1)
+    assert collector.stats.learner_transitions == 4
+    assert not any(collector._pending) and not any(collector._streams)
+    assert len(collector._game_actions[1]) == 3
+
+    # The replacement game finishes across the boundary with all of its rows valid.
+    collector.collect(model, 1)
+    attempts = [
+        GameAttempt.model_validate(json.loads(line)["attempt"])
+        for line in ledger.path.read_text().splitlines()
+    ]
+    (replacement,) = [
+        row for row in attempts if row.stream == 1 and row.outcome == "completed"
+    ]
+    assert replacement.valid_samples == 2
 
 
 def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> None:
@@ -479,7 +524,7 @@ def test_later_crash_preserves_previous_complete_games(
         collector._buffers, failure_generation=1, resource_limit=resource_limit
     )
     batch = collector.collect(model, 7)
-    markers = set(batch.obs["agent_player"][:, 0, 0, 0])
+    markers = set(batch.ordered_obs()["agent_player"][:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
         range(210, 215)
     )

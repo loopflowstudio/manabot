@@ -5,8 +5,12 @@ from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
+import time
 
+from etude.experiment import observe
 from etude.train.read import read_all
 import pytest
 
@@ -156,6 +160,44 @@ def test_worker_rejects_before_learning(
     with pytest.raises(ValueError, match=message):
         run_worker()
     assert not (tmp_path / "output").exists()
+
+
+def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Etude stops an attempt with SIGTERM, well before training polls its stop file."""
+    spec = specification()
+    stage = spec.regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = 100_000
+    worker_environment(
+        tmp_path, monkeypatch, spec.model_copy(update={"milestones": ()})
+    )
+    worker = subprocess.Popen(
+        [sys.executable, "-m", "manabot.experiment.job"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    tracking = tmp_path / "tracking"
+    try:
+        deadline = time.monotonic() + 120
+        while not any(tracking.rglob("*.pt")) and worker.poll() is None:
+            assert time.monotonic() < deadline, "the worker exported nothing"
+            time.sleep(0.2)
+        assert worker.poll() is None, worker.stderr and worker.stderr.read()
+        worker.send_signal(signal.SIGTERM)
+        assert worker.wait(timeout=60) != 0
+    finally:
+        worker.kill()
+        worker.communicate()
+    (run,) = observe(tracking, "fixture").runs
+    assert run.state == "failed"
+    assert run.checkpoints.last is not None
+    receipt = TrainingRun.model_validate_json(
+        (tmp_path / "output/training/run.json").read_text()
+    )
+    assert receipt.status == "interrupted"
 
 
 def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
@@ -357,7 +399,9 @@ def test_segment_out_of_wall_budget_succeeds_paused_with_learner_state(
     regime = ema_regime(5)
     watchdog = min(regime.wall_seconds, regime.stages[0].execution.wall_seconds)
     # A reserve just inside the watchdog: the stage stops after one update.
-    spec = TrainingJob(regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3)
+    spec = TrainingJob(
+        regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3
+    )
     worker_environment(tmp_path, monkeypatch, spec)
     run = run_worker()
     assert run.status == "paused" and run.updates_through() == 1

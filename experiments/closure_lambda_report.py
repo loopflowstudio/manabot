@@ -1,8 +1,10 @@
-"""Regenerate the closure-lambda-v1 report from stored Etude runs and evaluations.
+"""Regenerate a closure-lambda report from stored Etude runs and evaluations.
 
-Protocol: experiments/protocols/closure-lambda-v1.md. Reads each study's training
-records (`run.json`, per-update metric blocks) and evaluation tables from the bucket,
-then writes tables, figures and `results.json` under `experiments/data/closure-lambda-v1/`.
+Two study sets share this builder: `allies-lessons` (Task fc6ffb, protocol
+experiments/protocols/closure-lambda-v1.md) and `elemental` (Task 07c490, protocol
+closure-lambda-elemental-v1.md). Each reads its two studies' training records
+(`run.json`, per-update metric blocks) and evaluation tables from the bucket, then
+writes tables, figures and `results.json` under its `experiments/data/<set>/` folder.
 The prose in `report.md` is written from those tables, so a rebuild never rewrites it.
 
 Jobs are labelled by job name and seed count and averaged across seeds. Scores are
@@ -10,7 +12,7 @@ interpolated onto a common clock per run, then averaged, so runs whose checkpoin
 at different learner decisions, seconds or dollars compare at equal positions.
 
     uv run --extra dev --extra artifacts --extra reports python -m \
-        experiments.closure_lambda_report --costs costs.json
+        experiments.closure_lambda_report --set elemental --costs costs.json
 """
 
 import argparse
@@ -28,10 +30,10 @@ from etude.train.block import decode, rows
 import matplotlib.pyplot as plt
 import numpy as np
 
-OUT = Path(__file__).resolve().parent / "data" / "closure-lambda-v1"
+DATA = Path(__file__).resolve().parent / "data"
 SOURCE = "r2://manabot/jobs"
 DISTANCES = ("terminal", "1-4", "5+", "censored")
-# The rate every rental in the protocol paid; receipts in costs.json hold the bills.
+# The rate every rental in both protocols paid; receipts in costs.json hold the bills.
 L4_USD_PER_HOUR = 0.59
 BOOTSTRAP_RESAMPLES = 2000
 INTERVAL = 0.95
@@ -48,18 +50,49 @@ class Study:
     title: str
 
 
-STUDIES = (
-    Study(
-        "batch_closure",
-        "batch-closure-exact-quota-v1",
-        "Study 1: batch closure, Allies/Lessons only",
+@dataclass(frozen=True)
+class StudySet:
+    """A protocol's two studies, the legs each scored pairing plays, and its folder."""
+
+    out: Path
+    legs: int
+    studies: tuple[Study, ...]
+
+
+SETS = {
+    "allies-lessons": StudySet(
+        DATA / "closure-lambda-v1",
+        8,
+        (
+            Study(
+                "batch_closure",
+                "batch-closure-exact-quota-v1",
+                "Study 1: batch closure, Allies/Lessons only",
+            ),
+            Study(
+                "lambda_sweep",
+                "lambda-sweep-p0.5-v0.8-v1",
+                "Study 2: lambda, Allies/Lessons only",
+            ),
+        ),
     ),
-    Study(
-        "lambda_sweep",
-        "lambda-sweep-p0.5-v0.8-v1",
-        "Study 2: lambda, Allies/Lessons only",
+    "elemental": StudySet(
+        DATA / "closure-lambda-elemental-v1",
+        4,
+        (
+            Study(
+                "elemental_closure",
+                "elemental-closure-exact-quota-v1",
+                "Study 1: batch closure, ten-deck Elemental, one learning seat",
+            ),
+            Study(
+                "elemental_lambda",
+                "elemental-lambda-p0.5-v0.8-v1",
+                "Study 2: lambda, ten-deck Elemental",
+            ),
+        ),
     ),
-)
+}
 
 
 @dataclass
@@ -71,6 +104,8 @@ class TrainingRecord:
     seed: int
     stage: dict[str, object]
     updates: list[dict[str, float]]
+    # The run's game-error ledger state; empty when the regime records none.
+    game_errors: dict[str, object]
 
     def row(self, update: int) -> dict[str, float]:
         """The metric row at an update, 1-indexed by the metric rows."""
@@ -146,13 +181,14 @@ def training_records(storage: Storage, experiment: str) -> list[TrainingRecord]:
                 seed=cast(int, document["seed"]),
                 stage=stages[0],
                 updates=_metric_rows(storage, run.name, keys),
+                game_errors=cast(dict[str, object], document.get("game_errors") or {}),
             )
         )
     return sorted(records, key=lambda r: (r.job, r.seed))
 
 
-def scored_runs(storage: Storage, experiment: str) -> dict[str, Scored]:
-    """Candidate scores from the evaluation database, averaged over each deal's 8 legs."""
+def scored_runs(storage: Storage, experiment: str, legs: int) -> dict[str, Scored]:
+    """Candidate scores from the evaluation database, averaged over each deal's legs."""
     database = statsdb(experiment, storage)
     found = database.execute(
         """
@@ -173,8 +209,10 @@ def scored_runs(storage: Storage, experiment: str) -> dict[str, Scored]:
     ).fetchall()
     scored: dict[str, Scored] = {}
     for run, update, deal, score, plays in found:
-        if plays != 8:
-            raise ValueError(f"{run} u{update} deal {deal} has {plays} legs, not 8")
+        if plays != legs:
+            raise ValueError(
+                f"{run} u{update} deal {deal} has {plays} legs, not {legs}"
+            )
         entry = scored.setdefault(run, Scored(run=run))
         if update not in entry.deal_scores:
             entry.updates.append(update)
@@ -246,19 +284,14 @@ def seed_interval(differences: Sequence[float]) -> tuple[float, float, float]:
 
 
 def deal_interval(
-    arm: Sequence[Scored],
-    baseline: Sequence[Scored],
-    arm_update: Sequence[int],
-    base_update: Sequence[int],
+    arm: Sequence[Scored], baseline: Sequence[Scored], update: int
 ) -> tuple[float, float]:
     """Interval for the arm difference from resampling the shared deals, seeds fixed."""
-    deals = sorted(arm[0].deal_scores[arm_update[0]])
-    a = np.array(
-        [[s.deal_scores[u][d] for d in deals] for s, u in zip(arm, arm_update)]
-    ).mean(axis=0)
-    b = np.array(
-        [[s.deal_scores[u][d] for d in deals] for s, u in zip(baseline, base_update)]
-    ).mean(axis=0)
+    deals = sorted(arm[0].deal_scores[update])
+    a = np.array([[s.deal_scores[update][d] for d in deals] for s in arm]).mean(axis=0)
+    b = np.array([[s.deal_scores[update][d] for d in deals] for s in baseline]).mean(
+        axis=0
+    )
     generator = np.random.default_rng(6510)
     picks = generator.integers(0, len(deals), (BOOTSTRAP_RESAMPLES, len(deals)))
     samples = (a - b)[picks].mean(axis=1)
@@ -295,6 +328,8 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
     rows_total = float(cast(int, stage["learner_transitions"]))
     collection_seconds = float(cast(float, stage["collection_seconds"]))
     learning_seconds = float(cast(float, stage["learning_seconds"]))
+    assembly_seconds = collection["Batch assembly"]["seconds"]
+    idle_share = idle / (idle + decisions)
     return {
         "updates": updates,
         "rows": rows_total,
@@ -304,11 +339,25 @@ def _timing(record: TrainingRecord) -> dict[str, float]:
         "environment_decisions": decisions,
         "collection_seconds": collection_seconds,
         "learning_seconds": learning_seconds,
-        "assembly_seconds": collection["Batch assembly"]["seconds"],
+        "assembly_seconds": assembly_seconds,
         "targets_seconds": learning["Targets"]["seconds"],
         "diagnostics_seconds": learning["Selection and health diagnostics"]["seconds"],
         "idle_stream_steps": idle,
-        "idle_share": idle / (idle + decisions),
+        # Games that failed (capacity overflows under recovery) and the unfinished
+        # samples they discarded.
+        "crashed_games": float(cast(int, record.game_errors.get("crashed", 0))),
+        "discarded_samples": float(
+            cast(int, record.game_errors.get("discarded_samples", 0))
+        ),
+        # An exact-quota game's rows that earlier updates learned from before it failed.
+        "learned_samples": float(
+            cast(int, record.game_errors.get("learned_samples", 0))
+        ),
+        "idle_share": idle_share,
+        # Wall time lost to idle slots if an idle slot cost as much as a stepped one:
+        # an upper bound, since batched inference is sublinear in live streams.
+        "idle_collection_seconds_bound": (collection_seconds - assembly_seconds)
+        * idle_share,
         "assembly_stalled_updates": float(
             sum(
                 row.get("time/collection/batch_assembly", 0.0) > ASSEMBLY_STALL_SECONDS
@@ -420,10 +469,7 @@ def analyze(
         }
         if job != study.baseline:
             entry["deal_interval_at_last_common"] = deal_interval(
-                [scored[r.run] for r in present],
-                base_scored,
-                [last] * len(present),
-                [last] * len(base_scored),
+                [scored[r.run] for r in present], base_scored, last
             )
         cast(dict[str, object], result["jobs"])[job] = entry
     result["last_common_update"] = last
@@ -502,25 +548,32 @@ def _assembly_series(records: list[TrainingRecord]) -> list[dict[str, object]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--set", choices=sorted(SETS), default="allies-lessons")
     parser.add_argument("--source", default=SOURCE)
-    parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--out", type=Path, help="default: the set's data folder")
     parser.add_argument(
         "--costs", type=Path, help="billed receipts to carry into results"
     )
     arguments = parser.parse_args()
-    arguments.out.mkdir(parents=True, exist_ok=True)
+    chosen = SETS[arguments.set]
+    out = arguments.out or chosen.out
+    out.mkdir(parents=True, exist_ok=True)
     storage = storage_from_uri(arguments.source)
     results: dict[str, object] = {}
-    for study in STUDIES:
+    for study in chosen.studies:
         records = training_records(storage, study.experiment)
-        scored = scored_runs(storage, study.experiment)
+        if not records:
+            # A study stopped before training (its protocol says why) has no arms.
+            results[study.experiment] = {"title": study.title, "runs": []}
+            continue
+        scored = scored_runs(storage, study.experiment, chosen.legs)
         result = analyze(study, records, scored)
         result["assembly"] = _assembly_series(records)
         results[study.experiment] = result
-        _figure(study, records, result, arguments.out)
+        _figure(study, records, result, out)
     if arguments.costs is not None:
         results["costs"] = json.loads(arguments.costs.read_text())
-    (arguments.out / "results.json").write_text(json.dumps(results, indent=1))
+    (out / "results.json").write_text(json.dumps(results, indent=1))
 
 
 if __name__ == "__main__":

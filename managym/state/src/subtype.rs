@@ -174,6 +174,11 @@ const SUBTYPES: &[(&str, SubtypeCategory)] = &[
     ("Wurm", Creature),
 ];
 
+/// Every subtype in the table, in name order.
+pub fn subtypes() -> impl Iterator<Item = &'static str> {
+    SUBTYPES.iter().map(|(name, _)| *name)
+}
+
 /// The list `subtype` is on, or `None` for a name outside the table.
 pub fn subtype_category(subtype: &str) -> Option<SubtypeCategory> {
     SUBTYPES

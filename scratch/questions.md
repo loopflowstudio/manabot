@@ -32,3 +32,10 @@ experiment is selected. The incoming report and artifact manifest are preserved.
 Sync with main `c59aeee0e` (2026-11-06): MTG-244 and MTG-243 landed. #427 was a
 squash, so its source head `369833ee6` was merged first and used as the base for
 main. V9 is the latest input, so retained execution reaches v8 and later.
+
+Sync with main `646cb9821` (2026-11-07): retain this Task's decisions here. Incoming
+c5fba4 frontier, b015d5 throughput and fact-contribution notes remain at
+`646cb98218715be19095914796dc8f7855f8030f:scratch/questions.md`; they do not expand
+this Task's authorization. That file's open bug-Task item stands: a schema 7 fixture
+fails `test_resource_limit_receipt_replays_its_retained_encoding_boundary` with
+`binding_mismatch` against native version 8.

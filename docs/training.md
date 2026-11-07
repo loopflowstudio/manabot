@@ -88,9 +88,14 @@ count, wall and memory limits (`Execution`). `execution.workers` accepts 1
 (default), 2 or 4 CPU observation producers for self-play only: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
-unchanged across partitions. `execution.threads` controls Torch threads
-independently. More workers are not a recommended default; the matched GPU
-comparison is in
+unchanged across partitions. Sampled rosters (a deck source or
+`elemental-uniform`) draw each game's decks from that game's native seed, so
+draws, exposure and batches agree for 1, 2 and 4 producers.
+`execution.threads` controls Torch threads independently. The field default
+stays 1, so saved regimes keep their meaning; new sampled-roster recipes built by
+`manabot.recipes.builders.sampled_self_play` default to four producers, a
+damping horizon fitted to the run's expected updates and `recover_capacity`.
+The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
 
@@ -140,8 +145,10 @@ finished streams idle until the slowest game ends, recorded as
 `idle_stream_steps`. `"exact-quota"` pauses each stream at exactly `transitions`
 learner rows and bootstraps the mid-game tail from `V(next_obs)`. Exact quota
 needs one learning seat, because at a pause only the acting seat has a next
-observation, and rejects `games_per_stream` and `game_errors`, which settle whole
-games.
+observation, and rejects `games_per_stream`. It accepts `game_errors` only with
+`recover_capacity`: a failed game discards the rows no update has learned from, its
+stream refills to the quota, and the rows earlier updates learned from stay, counted
+as `learned_samples`.
 
 A saved stage never declared its closure, so `TrainingRegime` resolves omission
 the way those runs behaved: one seat with neither `games_per_stream` nor
@@ -303,11 +310,22 @@ uv run etude report experiments/elemental.py --source .runs/example --open
 
 Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
-`time/learning/minibatches/forward_and_loss`), `selection_groups/<action
-type>/<terminal distance>/rows` and `self_play_outcomes/<deck>/<opponent
-deck>/<play|draw>/wins`. Offline readers use
+`time/learning/minibatches/forward_and_loss`), CUDA high-water marks
+(`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
+`selection_groups/<action type>/<terminal distance>/rows` and
+`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline readers use
 `manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
+
+The Perf panel's "Update time" series shows where an update goes:
+`environment_step_and_encoding`, which compares a run to retained ones, divides by
+the engine's own clock into `native_stepping` and `observation_encoding`, beside
+preparation, inference, `stream_bookkeeping`, assembly and learning.
+`TrainingRun.host` names the machine the attempt got. With one producer
+(`execution.workers` 1) training occupies one CPU thread, so host single-thread
+speed sets its pace, not vCPU count or GPU size; see
+[training update time](../experiments/training-update-time.md) before choosing a
+machine. `scripts/bench_training_update.py` prints the same split for one machine.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
 PPO value loss is half the squared lambda-target residual; categorical move
