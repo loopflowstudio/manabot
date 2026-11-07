@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (draft, not frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 1 frozen)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -57,6 +57,44 @@ Retained fast-L4 receipts read 17.6 s collecting and 15.1 s learning per update
 update and left collection mostly alone, so collection's share should now be
 higher. The idle share (.63-.67 of stream slots in two-seat runs) is a bound,
 not a measurement. Step 1 measures both on real CUDA.
+
+**Step 1 freeze receipt (2026-11-06).** Software review passed on main
+`70d79ccb8`, so step 1 is bound to that commit. The launch revision is
+`70d79ccb82be9a06ee662ae6fd3c7d8140ebe38c`. That commit contains #435 and #436.
+c5fba4's `collection.py` change has not landed and is not included. This
+receipt is recorded after that commit and changes no executable byte.
+- Source bundle: `runs("70d79ccb8")` freezes 1,463 tracked files (bundle JSON
+  SHA-256 `394b055b…bb35`). Pod admission re-verifies them through
+  `bind_etude_source`. Key files: `experiments/training_throughput.py`
+  `e529f50b…b379`, `scripts/bench_training_update.py` `fff75a6a…f40a`,
+  `experiments/elemental_variants.py` `eca02a6c…8074`, frozen regime
+  `elemental-long-183-v1.json` `be9de376…64ad`, `uv.lock` `b562227a…7c58`.
+- Probe config (without the bundle, sorted-key SHA-256 `785c962a…2f3e`):
+  control `experiments.elemental_variants:elemental_recipe`, CUDA, 256 streams,
+  phases solo 1×12 (26001), pack-2 2×12 (26002-3), pack-4 4×8 (26004-7),
+  cuda-counts 1×3 (26008), memory fraction .85, 1 s samples.
+- Resolved child regime: `bench-training-update` on w17, both seats, complete
+  games, at least 64 decisions, `recover_capacity` true, CUDA, 3,600 s wall.
+  Model-dump SHA-256 at 12 / 8 / 3 updates: `d76f17b4…7c23` / `69fa12c0…f705` /
+  `46098f8b…dc9b`.
+- Job: `training-throughput-probe`, entry
+  `etude.call --function experiments.training_throughput:run`, an importable
+  module rather than a discovery namespace. Cleanup runs
+  `python -m experiments.training_throughput`, with one attempt per run, 1.5 h
+  and $1.05 per L4 run (the A4000 run is launched with `--usd-per-run 0.70`).
+  Etude discovery read this file and built run seeds 1-2 without executing
+  games or training.
+- Isolation: step 1 uses no evaluation deals. Its seeds 26001-26008 are disjoint
+  from the strength seeds 26101-26104 and from the `ELEMENTAL_PAIRS` deals.
+- Admission and quote with the etude-sdk 0.2.14 overlay (the locked 0.2.12
+  client rejects the launcher's Vast provider records): the A4000 run quoted
+  RTX A4000, at least 16 vCPUs, 48 GB, $.25/hour, planned $.44 within its $.70
+  line. **The L4 quote remains open:** the provider reported no available
+  machines (cohort `training-throughput-probe-l4`, 2 machines, $2.10). Re-quote
+  before launch. This availability gap changes no frozen identity.
+- Authority: execution stays under comment 9f9d0956's $50 inclusive cap and the
+  $2.80 step-1 lines above. Freezing confers no new spending authority. Launch
+  still waits for execution review.
 
 **Job.** `experiments/training_throughput.py` `probe`: one Etude run per
 machine. A driver runs these phases in sequence on the same host, each as

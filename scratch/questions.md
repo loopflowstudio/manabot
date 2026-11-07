@@ -60,3 +60,10 @@ Reversible choices:
 - Quote 2026-11-06 at `8d178f40e`: `--rent l4 --machines 2` plans $2.06 (reservation
   $2.10); `--rent a4000` refused, no stock at quote time. Re-quote before launch.
 
+
+## experiment-freeze b015d5 (2026-11-06): step 1
+
+Bound to main `70d79ccb8`. Receipt is in the protocol. The A4000 quote
+succeeded ($.44); the L4 quote is still open because RunPod reported no
+available L4 machines. Quoting needs the 0.2.14 overlay and nested Doppler
+(see the launch-client memory). Re-quote L4 at execution review.
