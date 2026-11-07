@@ -764,7 +764,9 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
-            frame.execution_requires_v8 = !selected.is_empty() || frame.legacy_decision.is_none();
+            // A migrated domain keeps its frozen obligation code across picks:
+            // its predecessor never encoded the picks already made either.
+            frame.execution_requires_v8 = frame.legacy_decision.is_none();
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {

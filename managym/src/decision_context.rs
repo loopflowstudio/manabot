@@ -360,6 +360,7 @@ impl Game {
                 Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
                 Decision::Discard { .. } => ("discard", "Choose a card to discard, or decline when offered."),
+                Decision::SelectCards { origin: crate::flow::decision::SelectionOrigin::Library, .. } => ("private_search", "Inspect the permitted library candidates. Choose a card, then finish searching when offered."),
                 Decision::SelectCards { .. } => ("select_cards", "Choose from the eligible cards, then finish selection when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
                 Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),

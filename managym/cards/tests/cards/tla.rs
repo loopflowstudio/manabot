@@ -29,6 +29,7 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::{EventEntityKind, KeywordData, Observation, PermanentData},
+        observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
         policy_history::HistoryReference,
         structured_offer::{AtomicCommand, OfferSubmission, StructuredOfferError},
     },
@@ -2914,6 +2915,24 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
     select_card(&mut s, sacrificed);
     let one = library_card(&s, 0, "Forest");
     select_card(&mut s, one);
+    // Between picks the search keeps its frozen library obligation, so every
+    // policy input, including the fresh v6 default, encodes the pause.
+    let obs = Observation::for_player(s.game(), PlayerId(0));
+    for version in 1..=9 {
+        let config = ObservationEncoderConfig {
+            policy_input_version: version,
+            ..Default::default()
+        };
+        // The five-color fixture deck exceeds small legacy card capacities;
+        // only admission of the retained selection is under test.
+        assert!(
+            !matches!(
+                encode(&obs, &config),
+                Err(ObservationEncodeError::UnsupportedExecutionInput(_))
+            ),
+            "v{version}"
+        );
+    }
     let two = library_card(&s, 0, "Swamp");
     select_card(&mut s, two);
     settle(&mut s);
