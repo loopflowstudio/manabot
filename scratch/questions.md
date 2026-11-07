@@ -71,3 +71,43 @@ until launch):
 - **Equal-hours head-to-head after a loss, declared now and built only if needed** (eighth concept
   review). Implied by "matched updates/compute" once a loss is about as likely as not; the survivor's
   last export at or before the lost run's hours. Reversible until launch.
+
+## Design revision (2026-11-06, headless, after design review)
+
+- **Four producers, no one-producer calibration arm.** "Two arms only" read as
+  covering calibration too, so producer value is not measured on a rental; the
+  software's acceptance check proves equal draws, and calibration reads the step
+  phase. Reversible before freeze: add a w64 one-producer pod (about USD0.30).
+- **Horizon S = min(10,000, ⌊194,400 / s⌋)**, s = calibration's median s/update
+  over updates 2–5, no slowdown allowance. The end of the curve is flat, so a run
+  reaching 55% of S ends at a rate near 3.8e-5 instead of 2.0e-5.
+- **Update cap raised to 10,000** so the wall binds and the scale reading is not
+  lost to the cap at four producers; milestones extend to 6400 (1000 and 2000
+  dropped).
+- **Equal-hours pairs: w64's last checkpoint at or before w160l8's hours**,
+  scheduled in `eval` from an Etude `Checkpoint.wall_ms` (an Etude PR, per
+  etude-is-ours) rather than a manabot `hours` clock on checkpoints.
+- **Evaluation USD14, reserve USD10** to cover about 45 comparisons with the
+  equal-hours series; host-screen cancellations no longer draw on the reserve.
+- **Defaults land in recipe builders, not Pydantic field defaults**, so saved
+  configurations omitting `workers` or `iteration_schedule` keep their meaning.
+- **Scale stays the endpoint head-to-head when both finish at the wall**; the
+  equal-hours curve replaces direction 25's post-loss pair.
+- **Protocol prose tests** now expect two `etude launch` blocks and five rented
+  commands, since the `--size` relaunch block is cut; the code paths they
+  describe are deleted in the software change.
+
+## Design revision for steer 82d2041b (2026-11-06, headless)
+
+- **"Compute parameters" after consolidation excludes embedding lookup tables**,
+  so the recount stays comparable with the brief's definition. If shared token
+  embeddings make that line unclear, report both counts. A recount outside
+  10–100× returns the size choice to review. Reversible before calibration.
+- **Policy input stays v9.** Consolidation is read as a model-architecture change,
+  not a new observation version; if 30df0c's merge moves the version, the
+  protocol takes what lands and the freeze pins it.
+- **The 25% rolling game-error stop stays** beside `recover_capacity`. Aborting
+  one game does not remove the run-level stop; a run that hits it ends at its
+  last export and is reported like any ended run.
+- **No calibration gate on overflow counts.** Calibration reports them per label;
+  fresh-policy counts say little about trained games.

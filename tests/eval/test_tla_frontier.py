@@ -428,7 +428,7 @@ def test_one_size_relaunches_alone_with_its_own_ceiling() -> None:
 def test_protocol_launches_set_cohort_limits_only_on_a_cohort() -> None:
     """`etude launch` refuses `--max-usd` or `--parallel` without `--cohort`."""
     launches = [block for block in _protocol_blocks() if "etude launch" in block]
-    assert len(launches) == 3
+    assert len(launches) == 2
     for block in launches:
         assert "--cohort" in block or not {"--max-usd", "--parallel"} & set(
             block.split()
@@ -446,7 +446,7 @@ def test_protocol_commands_name_their_rentals() -> None:
         for command in block.split('"${control[@]}"')
         if "--rent" in command
     ]
-    assert len(commands) == 6
+    assert len(commands) == 5
     for command in commands:
         rented = command[command.index("--rent") + 1]
         assert rented == ("l4" if "launch" in command else "cpu32")

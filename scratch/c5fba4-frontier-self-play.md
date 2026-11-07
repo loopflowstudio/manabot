@@ -1,6 +1,55 @@
 # c5fba4 — frontier self-play on TLA trophy decks at two sizes
 
-Status: protocol v1 drafted 2026-11-05 (headless), concept-reviewed eight times through
+## Revised design (2026-11-06, after design review) — current
+
+The design review (scratch/direction.md, steers d52dc416 and a3318c8a) returned
+protocol v1. The revised design is in `experiments/protocols/tla-frontier-c5fba4-v1.md`,
+marked "revised design, not frozen". Its JSON, regime and runner still hold the
+reviewed draft, so the text below this section ("as implemented") describes the
+draft code, not the design.
+
+- Arms: w64 (64/2/4, 385,538 compute params) and w160l8 (160/8/8, 5,538,242;
+  14.4×), counted on f6f171d34 with six 4096-row tables excluded. Provisional:
+  Task 30df0c's input consolidation (steer 82d2041b) removes those tables and
+  merges before freeze; both arms use it and counts are retaken on main after it.
+- 96 permanents per seat (from 64), both arms; calibration reads the cost.
+- `recover_capacity` stays on: engine errors and overflows abort one game,
+  labelled `engine_error` / `resource_limit`; analysis and calibration report
+  per-label counts from `TrainingRun.game_errors.by_cell`. Fresh recipes
+  default to recovering capacity (builders, not the Pydantic default). w256 L4
+  (8,663,554; 22.5×) is the fallback if w160l8 misses the 1,500 s/update gate.
+- Four producers for both; roster sampling must work with 2–4 producers.
+- Damping horizon per size: `iteration_schedule.steps` = min(10,000,
+  ⌊194,400 / calibrated s/update⌋), reference 10,000. Update cap 10,000.
+- Equal-hours head-to-heads at every w160l8 milestone and its endpoint (w64's last
+  checkpoint at or before the same hours), plus equal-update and endpoint games.
+- Host screen, `--size` relaunch, continuation and the direction-25 post-loss
+  pair are cut. A lost run stops at its last export and is reported.
+- Budget: 2 × USD38 training + USD14 evaluation; USD10 reserve (calibration ≤ 2,
+  rehearsal ≤ 2).
+- Order: #435 and 30df0c merge → parameter recount → software (protocol "Before freeze" items 1–4) merges →
+  calibration (two pods, ≤ USD2) + rehearsal → horizons written, freeze →
+  execution review → launch.
+
+Software needed (built on main after #435 and 30df0c; none started):
+1. `ShardedVectorEnv` roster forwarding; drop one-producer validators
+   (`collection.py:276`, `regime.py:235,476-484,712`). Accept: 1/2/4-producer
+   draws, exposure, batch agree; regime files round-trip.
+2. Recipe builders: required expected updates → `IterationSchedule(steps=…)`,
+   four producers for deck-source/Elemental, `recover_capacity=True` for new
+   self-play recipes; docs. Accept: existing modules'
+   regime dumps unchanged.
+3. Etude `Checkpoint.wall_ms` in `ExperimentState` + release; move the control pin.
+4. Runner/JSON/tests: w160l8, horizons, cap, milestones, equal-hours schedule and
+   analysis, USD14, 96 permanents, recounted parameters, per-label game-error
+   counts; delete `read_screen`/`--screen`/`--size` and their tests.
+
+Not changed: execution authority. Nothing is launched; spend waits for
+`experiment-execution-review`.
+
+## Draft as reviewed
+
+Status: protocol v1 drafted 2026-11-05 (headless), concept-reviewed nine times through
 2026-11-06. Nothing has launched or spent money. Directions 1–25 are implemented. `frozen()`
 passes, so `runtime_world` needed no re-freeze. Brief: Task c5fba4; direction comment 694f4190
 in [direction.md](direction.md). Contract: `experiments/protocols/tla-frontier-c5fba4-v1.{md,json}`;
@@ -285,6 +334,17 @@ not reverse it; `scale` and the runner stay as they are.
 
 - A real loss whose survivor export sits too far from the lost run's hours to mean anything: report the
   gap and leave the reading out rather than move the rule.
+
+## Ninth concept review (2026-11-06, headless)
+
+Nothing to change and no open product choice. Main has not moved from the checkout base and PR #435
+is still open. Direction 25 is in the protocol's "Lost rental" section as recorded. Its `hours` is
+`TrainingPoint.hours`, `wall_ms` since the run's first stored checkpoint (`tla_frontier_analysis.py`).
+That checkpoint is update 0 for both sizes, so pre-training setup counts for neither, and "at or
+before" never gives the survivor more compute. The brief's deliverables, the direction's progress
+readings at milestones (each size against the heuristic, plus equal-update head-to-heads) and the
+cost bounds each still have one owner in the protocol. The remaining decisions belong to the
+`experiment` graph's tail, not here: freeze revision, launch timing against #435, and spend.
 
 ## Proposed wave memory (not written)
 

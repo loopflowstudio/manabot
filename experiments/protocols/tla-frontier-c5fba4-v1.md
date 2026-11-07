@@ -1,19 +1,33 @@
 # TLA frontier self-play at two model sizes (c5fba4 v1)
 
-This protocol is fixed before any scoring. The runner is
+**Status: revised design, not frozen.** The 2026-11-06 design review returned the
+reviewed draft for revision. This text is the revised design. The JSON protocol,
+regime and runner on this branch still hold the reviewed draft, and they change in
+the software listed under [Before freeze](#before-freeze), which builds on main
+after PR #435 and Task 30df0c's input consolidation merge. Two values enter the
+JSON only from calibration: each size's damping horizon.
+Nothing has launched, and no score exists.
+
+Once frozen, this protocol is fixed before any scoring. The runner is
 `experiments/tla_frontier.py`; the bytes are
 [the JSON protocol](tla-frontier-c5fba4-v1.json) and the w64 regime
-`experiments/regimes/tla-frontier-c5fba4-w64.json`. The w256 regime is that
-regime with the protocol's width, depth and heads. `frozen()` rejects a change
-to the regime's hash, the runtime world or the derived tensor shapes. A changed
-world before launch needs a new protocol version, not edited bytes.
+`experiments/regimes/tla-frontier-c5fba4-w64.json`. The w160l8 regime is that
+regime with the protocol's width, depth, heads and damping horizon. `frozen()`
+rejects a change to the regime's hash, the runtime world or the derived tensor
+shapes. A changed world before launch needs a new protocol version, not edited
+bytes.
 
 ## Question
 
 How far can self-play on the frozen 17Lands TLA trophy population push play
-strength at the current recipe size, and does a network about 15× larger in
+strength at the current recipe size, and does a network about 14× larger in
 compute parameters get further on the same budget? This is a frontier push with
 one seed per size, not an ablation grid.
+
+The run also moves the default training recipe toward what is best for USD10–100
+runs. The defaults it establishes are four observation producers for
+deck-source training and a damping horizon fitted to the run's expected
+updates. Frozen regimes and experiment identities keep their bytes.
 
 ## What is trained
 
@@ -22,39 +36,90 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 - **Population.** The same 134 frozen whole lists (corpus SHA256
   `21736009…`), sampled independently and uniformly per seat. No held-out-deck
   claim follows.
-- **Learning rule.** The damped policy rule MTG-213 inherited from
-  MTG-183's Elemental study (λ_policy 0.5, λ_value 0.8, quantile filter,
-  action-type-uniform reference, learning rate 0.5 / iteration^1.1 clamped to
-  [5e-6, 1e-4], EMA 0.999), 256 streams × 64 transitions, both seats learning.
-  The rule's schedule is absolute in iterations, so the update target is a cap,
-  not a schedule input. The open review of this rule for full TLA (MTG-213
-  comment 81ec3f17) is closed for this protocol by keeping it: the frontier
+- **Learning rule.** The damped policy rule MTG-213 inherited from MTG-183's
+  Elemental study (λ_policy 0.5, λ_value 0.8, quantile filter,
+  action-type-uniform reference, learning rate 0.5 / position^1.1 clamped to
+  [5e-6, 1e-4], τ 0.05 / position^0.3, EMA 0.999), 256 streams × 64 transitions,
+  both seats learning. The open review of this rule for full TLA (MTG-213
+  comment 81ec3f17) is closed for this protocol by keeping it. The frontier
   question is about scale, and changing the rule would confound the first
   reading of it.
+- **Damping horizon, fitted per size.** Each size declares
+  `iteration_schedule.steps` equal to its expected updates, so its schedule spans
+  the run it will actually have. The reference stays the rule's 10,000 updates.
+  Without a horizon, the position is the raw update count, and a run of about
+  100–1,300 updates barely moves along a curve built for 10,000. The learning
+  rate stays clamped at 1e-4 until position 2,305, so it would never decay, and τ
+  would end near 0.006 rather than 0.003. With the horizon, update `u` of a size
+  with `steps` S sits at position 1 + 9,999 × (u − 1)/(S − 1). The rate leaves its
+  1e-4 clamp about 23% of the way in and ends near 2.0e-5, and τ ends near 0.0032,
+  for either size.
+
+  Expected updates come from calibration. For each size, S = min(10,000,
+  ⌊194,400 / s⌋), where s is calibration's median seconds per update over updates
+  2–5 at the frozen producer count on the chosen GPU. The fit is not sensitive to
+  error at the end of the run, where the curve is flat. A size that reaches only
+  55% of S, the 1.8× slow-host case, ends at position about 5,500 with a rate near
+  3.8e-5. A size that passes S holds the reference end. Calibration times a fresh
+  policy, and later games may run longer, so a size falling short of S is
+  expected and reported, not corrected.
+- **Producers.** Both sizes collect with four observation producers
+  (`execution.workers` 4), 64 streams each. With one producer, collection
+  occupies one CPU thread, which MTG-213 v10 measured at 75% of a 150-second
+  update. Roster sampling draws each game's decks from its stream's native seed,
+  and producer streams keep global seeds, so the draws do not depend on the
+  producer count. That is an acceptance check of the software, not an
+  assumption. Calibration reads the step phase at four producers; it has no
+  one-producer arm.
 - **Input.** Policy input v9 (v8 layer-state layout plus naming candidates),
-  512 local facts, 128 cards and 64 permanents per seat, 64 policy action
-  slots with the accepted matched first-64 overflow for every policy.
-  Game-local resource recovery as accepted for v10 (25% rolling threshold).
-- **Sizes.** Only width, depth and heads differ:
+  512 local facts, 128 cards and 96 permanents per seat, 64 policy action
+  slots with the accepted matched first-64 overflow for every policy. The
+  permanent capacity rises from v10's 64 because agent permanents overflowed
+  it in MTG-213; it is `max_permanents_per_player` in the selected
+  `ObservationSpace`, from which every buffer derives. Slots add no parameters;
+  calibration reads what they cost per update.
+- **Input architecture.** Both sizes use the consolidated input of Task 30df0c:
+  fact and effect ids embed through the card encoder's exact token vocabulary,
+  and sources join the card table, replacing the six hashed 4096-row tables.
+  It merges before this protocol freezes, and the freeze pins it.
+- **Failed games.** `game_errors.recover_capacity` stays on, as in v10 and as
+  decided for MTG-252. An engine error or a capacity overflow (for example
+  `continuation relations 65 > 64`, or a permanent past 96) aborts that one
+  game; its samples are discarded and training continues. The two stay
+  labelled apart, `engine_error` and `resource_limit`, in each run's game-error
+  state. The rolling stop is unchanged: a run ends when more than 25% of the
+  last 100 settled games failed, after 100 games. The analysis reports both
+  labels' counts per size.
+- **Sizes.** Only width, depth, heads and horizon differ. Two arms:
 
   | Label | Width | Attention layers | Heads | Compute parameters | Total parameters |
   | --- | ---: | ---: | ---: | ---: | ---: |
-  | w64 | 64 | 2 | 4 | 647,682 | 1,958,402 |
-  | w256 | 256 | 4 | 8 | 9,712,130 | 14,955,010 |
+  | w64 | 64 | 2 | 4 | 385,538 | 1,958,402 |
+  | w160l8 | 160 | 8 | 8 | 5,538,242 | 9,470,402 |
 
-  Compute parameters exclude the five 4096-bucket hashed lookup tables, whose
-  bucket count is unchanged; their width follows the model width. The ratio is
-  15.0×, inside the requested 10–100× and toward its low end, because the
-  larger size's update cost on a GPU has not been measured.
+  These counts are provisional. They were taken on the checkout base `f6f171d34`
+  (main on 2026-11-06), before input consolidation, and exclude the six
+  4096-bucket hashed lookup tables (three for facts, three for shared effects).
+  Consolidation removes those tables, so the counts are retaken on main after
+  Task 30df0c merges, before calibration, excluding embedding lookup tables
+  likewise, and written here and in the JSON. On the provisional count the ratio
+  is 14.4×, inside the requested 10–100×, and the large arm grows in depth as
+  well as width. A recount outside 10–100× returns the size choice to review
+  before calibration. The earlier draft's w256 (4 layers, 8 heads) has 8,663,554
+  compute parameters on the same base, 22.5×; its 15.0× was counted when the
+  model had five tables. W256 is the fallback: if w160l8 misses calibration's
+  speed gate, a new protocol version replaces it with w256 before any scoring.
 - **Budget per size.** One GPU allocation of at most USD38 and 56 hours; the
-  regime wall budget is 54 hours (194,400 s) and the update cap 3,000. Training
-  stops at whichever comes first and exports the last complete raw learner.
-  The sizes therefore receive equal wall-clock compute, not equal updates.
-  Training seed 21501 for both. No automatic retry. Every command in this
-  protocol runs through one control prefix. The nested Doppler projects supply
-  provider and artifact access. Etude 0.2.14 is the control client only: the
-  locked 0.2.12 cannot read the launcher's Vast provider rows, and workers keep
-  0.2.12. It is an array, not a function, so `caffeinate` can run it:
+  regime wall budget is 54 hours (194,400 s). The update cap is 10,000, the
+  horizon's ceiling, so the wall is the stop that binds. Training exports the
+  last complete raw learner when it stops. The sizes therefore receive equal
+  wall-clock compute, not equal updates. Training seed 21501 for both. No
+  automatic retry. Every command in this protocol runs through one control
+  prefix. The nested Doppler projects supply provider and artifact access. The
+  control client is Etude 0.2.14 or the later release that adds checkpoint wall
+  time ([Before freeze](#before-freeze)). The locked 0.2.12 cannot read the
+  launcher's Vast provider rows, and workers keep 0.2.12. The prefix is an
+  array, not a function, so `caffeinate` can run it:
 
   ```bash
   control=(doppler run -p etude -c prd -- doppler run -p manabot -c prd
@@ -62,204 +127,165 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
       --with "etude-sdk[s3,eval]==0.2.14")
   ```
 
-  Both sizes train at once, so equal-update comparisons appear as they go; a
-  cohort's default is one machine at a time, so the launch names two:
+  Both sizes train at once, so comparisons appear as they go. A cohort's
+  default is one machine at a time, so the launch names two:
 
   ```bash
   "${control[@]}" etude launch experiments/tla_frontier.py --revision <frozen> \
       --rent l4 --cohort tla-frontier-c5fba4 --parallel 2 --max-usd 76
   ```
 - **Exports.** Each size exports its raw learner every 25 updates and at every
-  milestone. Only milestones and endpoints are played; the other exports bound
-  what a lost rental can cost, to 25 updates: about 1 hour at 150 s/update and
-  10.4 hours at the 1,500 s/update launch gate.
+  milestone. Milestones and endpoints are played against the heuristic. Every
+  export is a candidate for the w64 side of an equal-hours pair.
 - **Hardware.** Both sizes run on the same GPU model, chosen at launch and
   recorded before any score is read; different models void the equal-compute
-  reading. The protocol rents the `l4` on-demand, and `mtg252-a40` only if L4 stock
-  is empty, in which case that name replaces `l4` in every command of the launch
-  and calibration reruns on it. On retained Elemental runs A40 was no faster at
-  the same price, and every A40 host read slow. This regime has one worker, so
-  one CPU thread sets the pace. At a fixed GPU label update time moved 1.6–1.8×
-  with the host, and vCPU count explained none of it. The check therefore records
-  each pod's host speed: its median
-  `time/collection/environment_step_and_encoding` per row over updates 2–6, a
-  phase with no network work, so w64's pod compares directly with w256's. It also
-  records `host.cpu_model` from `training/run.json` when the revision has it.
-  A difference is reported and does not void the reading: equal wall at one
-  price is still equal dollars. USD38 over 56 hours admits at most USD0.67/hour,
-  which covers the USD0.59/hour L4 and A40 of earlier receipts but not the
-  USD0.96/hour RTX 5090, where the dollar ceiling would stop training first.
-- **Calibration.** Before the training runs, and after this protocol merges,
-  `experiments/tla_frontier_calibration.py` runs each size for five updates on
-  the chosen GPU: at most USD1 and 1.2 hours per size, USD2 in total, inside the
-  reserve:
+  reading. The protocol rents the `l4` on-demand, and `mtg252-a40` only if L4
+  stock is empty, in which case that name replaces `l4` in every command of the
+  launch and calibration reruns on it. USD38 over 56 hours admits at most
+  USD0.67/hour, which covers the USD0.59/hour L4 and A40 of earlier receipts but
+  not the USD0.96/hour RTX 5090. Each run records its host (`TrainingRun.host`:
+  CPU model, schedulable CPUs, quota) and its step phase. The analysis reports
+  both, and neither voids a reading. A slow pod is kept: equal wall at one price
+  is still equal dollars.
 
-  ```bash
-  "${control[@]}" etude launch experiments/tla_frontier_calibration.py \
-      --revision <frozen> --rent l4 --cohort tla-frontier-c5fba4-calibration \
-      --parallel 2 --max-usd 2
-  "${control[@]}" python -m experiments.tla_frontier_calibration --source <store>
-  ```
+## Calibration
 
-  It reads seconds per update, CUDA peak, peak host memory, median rows per
-  update and host speed (updates 2–5 of its five), under its own experiment and
-  regime ids, so it is never a frontier run. Each stored run is named by its
-  launcher id, so a reading shows its job name. Host memory and rows add no gate;
-  they show how far the regime's 40 GiB stop is from a fresh policy's reading.
-  W256 launches at 1,500 s/update or less, about 130 updates in 54 hours. That
-  reach is an upper estimate: calibration times a fresh policy, and MTG-183
-  slowed 1.55× between windows (confounded by a host change), which would leave
-  about 83 updates. A size at the gate therefore has head-to-heads at 25, 50 and
-  75, and at 100 only if it holds its calibrated speed. If it cannot fit or reads
-  above that line, the size changes in a new protocol version, still before any
-  scoring. A gate reading depends on its host: a slow pod reads up to 1.8× above
-  a fast one, so read the size's cost beside its pod's host speed.
-- **Evaluation rehearsal.** A game past its limit is stored as a delivered match
-  and is never replayed, so the first rented evaluation pass must not be a scored
-  one. Once both calibration runs have ended, calibration plays one pass of its
-  own through the same job as a frontier pass: `tla_frontier.play`, a `cpu32`
-  rental, 28 workers, the journal in `/dev/shm`, the 600-second limit and the USD2
-  pass ceiling. Its two comparisons on the frozen pairs, 32 matches, keep every
-  worker busy: w256's last checkpoint vs its update 0, the heaviest shape, and
-  w256's last vs w64's last. Runs are selected by their
-  `tla-frontier-c5fba4-calibration-*` regime tags, which also proves a tag on a
-  really delivered checkpoint. These games sit under calibration's experiment and
-  an environment of their own, so they touch no frontier slot, match key or score.
+Before the training runs, at a merged revision carrying the software below,
+`experiments/tla_frontier_calibration.py` runs each size for five updates
+on the chosen GPU, under its own experiment and regime ids, so it is never a
+frontier run. One pod per size, at four producers: at most USD0.50 for w64 and
+USD1.50 for w160l8, USD2 together, from the reserve.
 
-  ```bash
-  "${control[@]}" etude eval experiments/tla_frontier_calibration.py \
-      --source <store> --rent cpu32
-  "${control[@]}" etude wait <run>
-  "${control[@]}" python -m experiments.tla_frontier_calibration \
-      --source <store> --rehearsal
-  ```
+```bash
+"${control[@]}" etude launch experiments/tla_frontier_calibration.py \
+    --revision <merged> --rent l4 --cohort tla-frontier-c5fba4-calibration \
+    --parallel 2 --max-usd 2
+"${control[@]}" python -m experiments.tla_frontier_calibration --source <store>
+```
 
-  `etude eval` returns at launch and prints the pass's run id, so `etude wait` holds
-  the read until the pass is over; read earlier, it sees no games. The wait is
-  unproven against a real rental, like the rest of this block.
+It reads, per size, seconds per update (median over updates 2–5), the expected
+updates S that horizon fitting would take from it, CUDA peak, peak host memory,
+median rows per update, the step phase, the pod's host and its game-error counts
+by label. Each stored run is
+named by its launcher id, so a reading shows its job name. Host memory and rows
+add no gate. They show how far the regime's 40 GiB stop is from a fresh
+policy's reading, with rows wider for 96 permanents.
 
-  The reading shows games, invalid games, median and slowest game seconds and the
-  cost of the passes that stored a match; a pass that stored none still billed, and
-  its cost comes from `etude status <run>`. The second launch gate is a rough line like the first: all 128 games
-  valid, so none killed, and the slowest under 300 seconds, half the limit.
-  Otherwise `game_seconds` or the size changes in a new protocol version, before
-  any scoring. The policies are nearly fresh, so the reading shows what a pass does
-  on a rental, not how long a trained policy's games run. If w256 stored nothing past
-  update 0 the rehearsal refuses to play, because the first gate has already failed.
-  A calibration pod the launcher closed counts as ended at its last export, so the
-  rehearsal plays what it stored.
+The readings set two things before freeze:
 
-  A rehearsal pass that fails or delivers nothing recovers as under
-  [Failed pass](#failed-pass), which rehearses that recovery too, with
-  `C5FBA4_PASS_ATTEMPT` set on the `etude eval` line above. A match it stored as
-  failed stays failed, so that reading fails this gate.
-- **Host screen.** Over 54 hours a slow pod costs a size up to about 40% of its
-  updates, so before any scoring the operator reads each pod's host speed and
-  replaces a slow one. This is a declared operator step, not an automatic retry:
-  jobs keep one attempt, and any retry after the screen is a new protocol version.
+1. **Size gate.** W160l8 launches at 1,500 s/update or less, S ≥ 129. If it
+   cannot fit or reads above that line, a new protocol version replaces it with
+   w256 (4 layers), still before any scoring, and calibrates that.
+2. **Horizons.** Each size's S from its reading.
 
-  - Read each pod once it passes update 6, while it is below update 25, and start
-    the evaluation driver only after both reads, so no game exists when it acts.
-    Only a pod below the first milestone can be replaced: an ended run past it
-    stays its size's run, and a second run of that size stops evaluation and
-    analysis. W64 can pass update 25 in about an hour, before a slow w256 passes
-    update 6, so w64 is read against calibration's pods and whatever else the
-    store holds. A pod found slow only later is kept and reported.
+A gate reading depends on its host: a slow pod reads up to 1.8× above a fast
+one, so the reading shows the pod's step phase and CPU beside it.
 
-    ```bash
-    "${control[@]}" python -m experiments.tla_frontier_calibration \
-        --source <store> --screen
-    ```
+### Evaluation rehearsal
 
-  - A pod reads slow above 1.3× the lowest host speed among this launch's pods
-    and calibration's, so both pods can read slow against calibration. That line
-    is rough, taken from Elemental's bands; TLA has no anchor of its own.
-  - Cancel a slow pod with `etude cancel <run>` and do not delete it. The worker
-    takes Etude's SIGTERM and records the run as failed at its last export. Confirm
-    that the run is over before relaunching, because `size_run` admits one live run
-    per size. `state` in the screen's output is the store's, so a pod lost outright
-    still reads `running` there; confirm that one from `etude status`. Evaluation and
-    analysis read the launcher's end themselves, so a lost pod below the first
-    milestone relaunches like a cancelled one. Relaunch that size once, alone and
-    with no cohort. Its job carries the USD38 ceiling, and `--max-usd` is a cohort
-    limit that Etude refuses without a cohort:
+A game past its limit is stored as a delivered match and is never replayed, so
+the first rented evaluation pass must not be a scored one. Once the calibration
+runs have ended, calibration plays one pass of its own through the same job as a
+frontier pass: `tla_frontier.play`, a `cpu32` rental, 28 workers, the journal in
+`/dev/shm`, the 600-second limit and the USD2 pass ceiling. Its two comparisons
+on the frozen pairs, 32 matches, keep every worker busy: `w160l8`'s last
+checkpoint vs its update 0, the heaviest shape, and `w160l8`'s last vs
+`w64`'s last. Runs are selected by their `tla-frontier-c5fba4-calibration-*`
+regime tags, which also proves a tag on a really delivered checkpoint. These
+games sit under calibration's experiment and an environment of their own, so
+they touch no frontier slot, match key or score.
 
-    ```bash
-    "${control[@]}" etude launch experiments/tla_frontier.py --revision <frozen> \
-        --size <w64|w256> --rent l4
-    ```
+```bash
+"${control[@]}" etude eval experiments/tla_frontier_calibration.py \
+    --source <store> --rent cpu32
+"${control[@]}" etude wait <run>
+"${control[@]}" python -m experiments.tla_frontier_calibration \
+    --source <store> --rehearsal
+```
 
-  - A size that reads slow twice keeps its second run. A replacement starts from
-    update 0, and the cancelled pod's cost, at most about USD1.50, comes from the
-    reserve.
-  - A run that ends below the first milestone, by its own record or the launcher's,
-    is set aside. It is no size's run, plays nothing, and analysis lists it, since
-    every attempt is reported.
-  - A pod that never started stores no run and trained nothing, so it is not the
-    screen's one replacement. Relaunch that size with the command above, and report
-    the launcher's record of the pod with the attempts. A refused cohort launch
-    leaves no cohort and boots nothing that stays, so it reruns unchanged.
-  - The screen holds only if the step phase is steady on one pod. If calibration
-    shows `step_spread` above 1.3× on either pod, there is no screen for this
-    launch and host speed is reported only.
+`etude eval` returns at launch and prints the pass's run id, so `etude wait`
+holds the read until the pass is over; read earlier, it sees no games.
+
+The reading shows games, invalid games, median and slowest game seconds and the
+cost of the passes that stored a match; a pass that stored none still billed, and
+its cost comes from `etude status <run>`. The rehearsal gate is a rough line: all
+128 games valid, so none killed, and the slowest under 300 seconds, half the
+limit. Otherwise `game_seconds` or the size changes in a new protocol version,
+before any scoring. The policies are nearly fresh, so the reading shows what a
+pass does on a rental, not how long a trained policy's games run. If `w160l8`
+stored nothing past update 0 the rehearsal refuses to play, because the size
+gate has already failed. A rehearsal pass that fails or delivers nothing
+recovers as under [Failed pass](#failed-pass), with `C5FBA4_PASS_ATTEMPT` set on
+the `etude eval` line above. A match it stored as failed stays failed, so that
+reading fails this gate.
 
 ## Launch sequence
 
-1. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
-   supply with none holds its whole window: for training, a size silently not
-   training for up to 56 hours. `l4` has 900 seconds; set the others where absent.
-   `cpu32` allows one machine, which fits one pass at a time.
+1. PR #435 and Task 30df0c's PR merge on main. The parameter counts are
+   retaken. The software under [Before freeze](#before-freeze) merges after
+   them.
+2. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
+   supply with none holds its whole window. `l4` has 900 seconds; set the others
+   where absent. `cpu32` allows one machine, which fits one pass at a time.
 
    ```bash
    "${control[@]}" etude ondemand startup cpu32 --seconds 900
    "${control[@]}" etude ondemand startup mtg252-a40 --seconds 900
    ```
 
-2. Calibration, then the evaluation rehearsal.
-3. Both launch gates: w256 at 1,500 s/update or less, and the rehearsal's.
-4. The training launch.
-5. The host screen.
-6. The evaluation driver.
+3. Calibration, then the evaluation rehearsal.
+4. Both gates, and each size's horizon written into the JSON
+   protocol and regime. Freeze at the merged revision that carries them.
+5. Execution review.
+6. The training launch, then the evaluation driver.
 
 ## Evaluation schedule
 
 Every comparison plays the same 16 fixed pairs (deck seed 21590001, deals
 21591000–21591015), four legs per pair swapping decks and seats: 64 games. The
 heuristic is the matched first-64 heuristic. Shared update milestones are 25,
-50, 75, 100, 150, 200, 300, 400, 600, 800, 1000, 1200, 1600, 2000 and 2400.
+50, 75, 100, 150, 200, 300, 400, 600, 800, 1200, 1600, 2400, 3200, 4800 and
+6400.
 
 - At update 0 and every reached milestone: each size vs the heuristic.
-- At every milestone both sizes reached: w256 vs w64 at equal updates.
+- **Equal hours.** At every w160l8 milestone and at its endpoint: w160l8 vs w64's
+  last checkpoint at or before the same hours. Hours are a checkpoint's wall time
+  since its run's first checkpoint, update 0, so pre-training setup counts for
+  neither size. The pair is fixed once w64 has stored a checkpoint later than
+  that hour, or has ended. If w64 ended earlier than that hour, the slot is
+  unreached. The rule never gives w64 more time than w160l8, and gives it up to
+  one export interval less, which the analysis reports in hours.
+- **Equal updates.** At every milestone both sizes reached: w160l8 vs w64.
 - At each endpoint: that size vs the heuristic (unless the endpoint is a
   milestone) and vs its own update-0 initialization.
-- Once both runs end: w256 endpoint vs w64 endpoint, the comparison at equal
-  wall-clock compute when both finished.
+- Once both runs end: w160l8 endpoint vs w64 endpoint, the comparison at equal
+  wall-clock compute when both finished at the wall.
 
 A size's endpoint is the last stored checkpoint of its ended run, including a
-failed run, so its reach is still played. A run has ended when the worker recorded
-its end or the launcher closed it with any outcome but `succeeded`. Only a worker
-writes a stored end, so both `eval`s and the analysis command ask the launcher about
-each run still reading `running`. A `succeeded` run with no stored end is still
-delivering and stays running. A running run the launcher does not know raises, so
-these reads need the launcher, and a read away from it fails rather than taking a
-dead pod for a live one.
+failed run, so its reach is still played. A run has ended when the worker
+recorded its end or the launcher closed it with any outcome but `succeeded`.
+Only a worker writes a stored end, so both `eval`s and the analysis command ask
+the launcher about each run still reading `running`. A `succeeded` run with no
+stored end is still delivering and stays running. A running run the launcher
+does not know raises, so these reads need the launcher, and a read away from it
+fails rather than taking a dead pod for a live one.
 
 Evaluation runs on rented CPU through Etude while training continues, so
 progress is visible as it goes. Each pass is one 32-vCPU rental with 28
 workers, capped at USD2 and 1.75 hours plus setup across up to three attempts;
-cumulative evaluation spend is capped at USD12. Etude retries a machine lost or
-refused after admission, resuming the same run and skipping stored matches, so no
-game result can be replaced; training keeps no automatic retry. A create refused
-before admission is not retried: see [Evaluation driver](#evaluation-driver).
+cumulative evaluation spend is capped at USD14. Etude retries a machine lost or
+refused after admission, resuming the same run and skipping stored matches, so
+no game result can be replaced; training keeps no automatic retry. A create
+refused before admission is not retried: see
+[Evaluation driver](#evaluation-driver).
 
 Each game has a 600-second wall limit, enforced by killing the game and counting
 it failed. MTG-213's 120 seconds could penalize the larger network for its own
-latency on a loaded rental. The limit was sized from single-observation readings
-of about 0.4 s at w256 and 0.15 s at w64. A real fresh-w256 match on a development
-Mac then ran about 0.05 s per decision, so the limit may be generous; the
-rehearsal reads it on a rental. The arena journals in memory and copies
-its files out afterward, because its per-record sync takes about 0.1 s on a
-rented container disk and counts against that limit.
+latency on a loaded rental; a real fresh-w256 match on a development Mac ran
+about 0.05 s per decision, so the limit may be generous, and the rehearsal reads
+it on a rental. The arena journals in memory and copies its files out afterward,
+because its per-record sync takes about 0.1 s on a rented container disk and
+counts against that limit.
 
 Milestones past a size's endpoint stay in the schedule as unreached slots; failed
 or truncated games stay failed in their scheduled slots and are never replaced,
@@ -268,10 +294,11 @@ so no pass uses Etude's `--retry-failed`.
 ### Evaluation driver
 
 One command drives every pass, from a checkout of the frozen revision on an
-always-on host beside the controller. It starts after the host screen. If that
-host is a laptop, prefix it with `caffeinate -is`, and check from `etude status` that
-the controller is ticking. A booted pod ends itself at its deadline or budget, but
-only a ticking controller ends a pod that never booted and hands passes on:
+always-on host beside the controller. It starts with the training launch. If that
+host is a laptop, prefix it with `caffeinate -is`, and check from `etude status`
+that the controller is ticking. A booted pod ends itself at its deadline or
+budget, but only a ticking controller ends a pod that never booted and hands
+passes on:
 
 ```bash
 "${control[@]}" etude eval experiments/tla_frontier.py --source <store> \
@@ -281,33 +308,37 @@ only a ticking controller ends a pod that never booted and hands passes on:
 Every pass must run from that revision: a later commit changes `seats.source`,
 which analysis flags as a mixed cohort. The four-hour period batches both sizes'
 new milestones, so each milestone is played within one period of arriving.
-Expect about 36 comparisons over about 15 rentals, for about USD8.50 with setup
-included and unmeasured, assuming no dud pods. Etude does not enforce the USD12
-cap across passes:
-the operator reads spend after each pass and stops the loop when it reaches
-USD12. That stop and the USD12 reserve cover pods that never boot but still bill.
+
+Expect about 45 comparisons over about 15 rentals, for about USD11 with setup,
+if w64 reaches about 3,000 updates and w160l8 about 400. Those reaches are guesses
+from v10's 150-second update, three quarters of it collection, before four
+producers and #435; calibration replaces them, and the count follows the reached
+milestones. Etude does not enforce
+the USD14 cap across passes: the operator reads spend after each pass and stops
+the loop when it reaches USD14. If the projection runs over, milestones 75 and
+150 are the first dropped, by recorded operator decision before their games.
 
 Any launcher error ends the loop, silently for a create refused before admission,
-which leaves no ledger entry to find. Restarting it is safe, because stored matches
-are skipped, and a stopped driver costs only timeliness: every checkpoint stays
-playable. So check the process is alive whenever spend is read. Stop it once both
-runs have ended and a pass reports nothing new.
+which leaves no ledger entry to find. Restarting it is safe, because stored
+matches are skipped, and a stopped driver costs only timeliness: every
+checkpoint stays playable. So check the process is alive whenever spend is read.
+Stop it once both runs have ended and a pass reports nothing new.
 
-To see progress at any time, draw the report from the same checkout, with launcher
-access, since it asks `eval` what is wanted:
+To see progress at any time, draw the report from the same checkout, with
+launcher access, since it asks `eval` what is wanted:
 
 ```bash
 "${control[@]}" etude report experiments/tla_frontier.py --source <store>
 ```
 
-The report is descriptive curves by update; `experiments/tla_frontier_analysis.py`
-owns every reading below. A relaunched pass adds a second tournament to its selector.
-Each shows the same curves, whichever pass played a match.
+The report is descriptive curves by update and by hours;
+`experiments/tla_frontier_analysis.py` owns every reading below. A relaunched
+pass adds a second tournament to its selector. Each shows the same curves,
+whichever pass played a match.
 
-Reading progress changes nothing. Past the host screen, no run is cancelled,
-relaunched or extended because of a score. A stop for cost, a dead run or any
-outside reason is a recorded decision that keeps its evidence and has no scale
-reading.
+Reading progress changes nothing. No run is cancelled, relaunched or extended
+because of a score. A stop for cost, a dead run or any outside reason is a
+recorded decision that keeps its evidence.
 
 Etude's launch ledger, `~/.etude/experiments/launched.json`, is one file for
 every experiment on the computer, and any entry for a failed pass raises
@@ -332,17 +363,27 @@ C5FBA4_PASS_ATTEMPT=2 "${control[@]}" etude eval experiments/tla_frontier.py \
     --source <store> --rent cpu32 --watch 14400
 ```
 
-The variable suffixes the tournament's name (`-attempt-2`), which changes the pass's
-id and nothing scored: names sit outside match keys and environments. The attempt
-plays exactly the matches no pass attempted, leaves failed games failed, and analysis
-reads one comparison across both passes. A milestone delayed this way is still played.
+The variable suffixes the tournament's name (`-attempt-2`), which changes the
+pass's id and nothing scored: names sit outside match keys and environments. The
+attempt plays exactly the matches no pass attempted, leaves failed games failed,
+and analysis reads one comparison across both passes. A milestone delayed this
+way is still played.
+
+## Lost run
+
+A run whose rental dies stops at its last export, which is its endpoint. It keeps
+its learning and strength readings, its equal-hours pairs up to that point and
+its state, hours and cost in the report. It has no scale reading. Until the
+controller declares the pod lost, the size's endpoint stays unknown. This
+version builds no continuation, replacement or restart; any further training is a
+new protocol version.
 
 ## Reading
 
 `experiments/tla_frontier_analysis.py` produces these readings. Scores are the
 candidate's mean game score with 95% whole-pair bootstrap intervals (seed
 21592001), for comparisons whose 16 pairs all completed. Head-to-head rows put
-w256 first. A milestone past an ended run's endpoint is unreached and expects
+w160l8 first. A milestone past an ended run's endpoint is unreached and expects
 no games; any other absent comparison leaves that reading unknown.
 
 A failed game narrows a reading rather than erasing it. Once every pair of a
@@ -357,8 +398,11 @@ Any unscored game leaves the analysis incomplete, with an issue naming the count
   rejected when `best`'s lower bound is at or below 0.5, and unknown between.
 - **Strength**, per size: the milestone curve and endpoint vs the heuristic,
   with the same bounds.
-- **Scale**: the equal-compute endpoint head-to-head is primary, with the same
-  bounds; equal-update head-to-heads describe sample efficiency.
+- **Scale**: the endpoint head-to-head is primary, with the same bounds, when
+  both runs finished at the wall. The equal-hours curve shows the same
+  comparison through training, with each pair's two hours. Equal-update
+  head-to-heads describe sample efficiency. With a lost run, scale is absent and
+  the equal-hours curve stands as a descriptive reading up to the loss.
 
 The analysis runs where the launcher is, because a lost pod's end lives there:
 
@@ -367,12 +411,11 @@ The analysis runs where the launcher is, because a lost pod's end lives there:
     --source <store> --out <analysis.json>
 ```
 
-A failed size keeps its learning and strength readings at its last stored
-checkpoint, reported beside the run's state. Its endpoint head-to-head is still
-reported, but not as equal compute. The update cap is a second stop, so a size
-reaching it spent less than the wall budget. The scale reading therefore needs
-both runs finished with neither endpoint at the cap, and is otherwise absent,
-with an issue saying so.
+The analysis also reports each size's horizon S beside the updates it reached,
+its producer count, host and step phase, and the run's settled game attempts
+with their `engine_error` and `resource_limit` counts and discarded samples, read
+from `TrainingRun.game_errors`. A run that hits the rolling stop ends there; its
+endpoint is its last export, as for any ended run.
 
 Each comparison and the whole analysis also total the first-64 cutoff: decisions
 and dropped actions, over the games that returned a count. A game killed at its
@@ -380,53 +423,56 @@ limit returns none, so those totals can be low. An overflow is accepted behavior
 a nonzero count is reported, adds no issue and leaves `complete` unchanged. The
 totals span both players, so they support no per-policy rate.
 
-Report every attempt, failure, resource-limit discard, set-aside run, unreached
-milestone and cost. One seed per size supports a descriptive frontier reading, not a
-controlled claim that one size is better in general.
+Report every attempt, failure, resource-limit discard, unreached milestone and
+cost. One seed per size supports a descriptive frontier reading, not a controlled
+claim that one size is better in general.
 
-## Lost rental
+## Before freeze
 
-A size whose rental dies stops at its last export. By default that is its
-endpoint: it keeps its learning and strength readings and has no scale reading.
-A pod that dies without recording an end reads `running` in the store for good, and
-the launcher's closed status ends it there, as under
-[Evaluation schedule](#evaluation-schedule). Until the controller declares the pod
-lost, the size's endpoint stays unknown.
+Software, built on main after PR #435 and Task 30df0c merge, each with its
+acceptance check:
 
-Any further training is a recorded decision within the unspent part of that
-size's USD38. It continues from the last export under a new protocol version and
-does not restart: a restart cannot be afforded late and would compare a shorter
-run. The precedent is MTG-183's w3 to w4, through
-`LearnerContinuation.from_monitoring`: raw weights, the EMA reset to them and a
-fresh Adam, a declared discontinuity.
+1. **Roster sampling with 2–4 producers** (`manabot/training/rollout/producers.py`,
+   `collection.py`, `regime.py`). `ShardedVectorEnv` forwards training decks and
+   the uniform roster to every shard and concatenates `current_player_configs` and
+   exposure. The one-producer restrictions on deck sources and
+   `elemental-uniform` go. Check: with one seed, per-stream roster draws, exposure
+   counts and the collected batch under a fixed policy agree for 1, 2 and 4
+   producers on CPU; every committed regime file round-trips to the same bytes.
+2. **Defaults for new runs** (`manabot/recipes/builders.py`, `docs/training.md`,
+   `docs/learning.md`). New damped self-play recipes take their expected updates
+   and declare `IterationSchedule(steps=expected)`; deck-source and Elemental
+   recipes default to four producers. New self-play recipes recover capacity
+   overflows (`GameErrorPolicy(recover_capacity=True)`), so an overflow aborts
+   one labelled game rather than the run. Pydantic field defaults stay, so saved
+   configurations keep their meaning. Check: every existing experiment module's
+   regime ids and dumps are unchanged, and a fresh recipe's dump carries the
+   four producers, the fitted horizon and `recover_capacity`.
+3. **Checkpoint wall time in `ExperimentState`** (Etude PR and release:
+   `Checkpoint.wall_ms`, from `training_checkpoints`). `eval` needs it to choose
+   equal-hours pairs during training. The control client pin moves to that
+   release, and workers stay 0.2.12. Check: the Etude test reads `wall_ms` on a
+   stored checkpoint, and match keys are unchanged.
+4. **Frontier runner** (`experiments/tla_frontier*.py`, protocol JSON, regime,
+   tests). Producers and horizons per size from the protocol, update cap 10,000,
+   the milestones above, the equal-hours schedule and its analysis, evaluation
+   USD14, the w160l8 size and label, 96 permanents per seat, the recounted
+   parameters, calibration's expected-updates reading, and per-label game-error
+   counts in calibration and the analysis. Delete:
+   the host screen (`read_screen`, `--screen`), the one-size relaunch (`--size`),
+   and their tests. Check: `uv run --extra dev --extra evaluation --extra artifacts
+   pytest tests/eval/test_tla_frontier.py -q`, an equal-hours schedule test
+   over fixture checkpoints with hours, and an analysis test whose fixture runs
+   carry both labels in `game_errors.by_cell`.
 
-This version does not build that path, and two limits stand in its way.
-`size_run` admits one run per size, so the new version must read a chain of runs.
-`stage_monitoring` in `experiments/elemental_long.py` needs the parent's
-`run.json`, which a truly dead pod may not have delivered; this is unproven.
-
-If a run ends unfinished, whatever the scores show, one equal-hours head-to-head
-is played: the lost run's endpoint against the other size's last export at or
-before the same `TrainingPoint.hours`, the time since each run's first checkpoint.
-It uses the 16 frozen pairs and four legs, w256 first, and is read with the same
-bounds. If both runs are lost, the earlier-ending run is the one paired. This pair
-is fixed here because one chosen after seeing curves would be chosen by its result.
-
-It is a descriptive secondary reading: `scale` stays absent, and both hours are
-reported. The pairing never gives the survivor more compute, so the gap favors the
-lost run, by up to 10.4 hours when w256 survives at the launch gate's speed.
-
-The survivor's export need only be stored, so the game can wait until its run
-passes that hour. It costs one comparison, inside the USD12. This version does not
-build this path either: a small follow-up file plays it through
-`tla_frontier.play`'s conditions, and its environment is its own, as the
-rehearsal's is.
+Calibration runs from the merged revision of 1–4. The freeze is a second, small
+change carrying both horizons and the regime hash.
 
 ## Budget
 
 The Task's ceiling is USD100 including setup, failures, retries and evaluation:
-2 × USD38 training + USD12 evaluation = USD88, leaving USD12 for calibration
-(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected),
-cancelled pods at the host screen (about USD3 at most), setup and failure costs.
-Any retry needs a recorded decision that keeps the total within USD100.
-Evaluation never runs on a laptop.
+2 × USD38 training + USD14 evaluation = USD90, leaving USD10 for calibration
+(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected), setup
+and failure costs. Evaluation is about 18% of training's ceiling. Any retry needs
+a recorded decision that keeps the total within USD100. Evaluation never runs on
+a laptop.
