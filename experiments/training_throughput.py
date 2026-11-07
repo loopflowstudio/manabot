@@ -9,14 +9,14 @@ and, where `nvidia-smi` exists, GPU utilization and per-process device memory.
 Every child writes its whole `TrainingRun` receipt and keeps its run folder
 (`run/`), whose Etude metrics run holds each update's `time/*`, idle and learner
 rows, so the phase tree, idle stream steps, CPU seconds and host come from the
-training code itself. Nothing here
-trains for strength or changes a learning rule.
+training code itself. Nothing here trains for strength or changes a learning rule.
 
 A child after the first phase is skipped when the previous phase's largest child
-peak, times this phase's child count, exceeds `memory_fraction` of the machine.
-Results are journaled under `/dev/shm` when it exists (outside the attempt's
-output, which the courier publishes) and copied to `ETUDE_OUTPUT_DIR` at each phase
-end; the job's cleanup copies whatever an interrupted phase left.
+peak, times this phase's child count, exceeds `memory_fraction` of the pod's
+memory allowance, or of host memory when no allowance is readable; each phase
+records which it read. Results are journaled under `/dev/shm` when it exists (outside
+the attempt's output, which the courier publishes) and copied to `ETUDE_OUTPUT_DIR` at
+each phase end; the job's cleanup copies whatever an interrupted phase left.
 
     uv run etude launch experiments/training_throughput.py --rent l4 \\
         --revision COMMIT --machines 2
@@ -42,6 +42,7 @@ import psutil
 from pydantic import BaseModel, ConfigDict, Field
 
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
+from manabot.infra.host import MemoryLimit, MemorySource, memory_limit
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -126,7 +127,10 @@ class PhaseResult(BaseModel):
     status: Literal["completed", "failed", "skipped"]
     reason: str | None = None
     wall_seconds: float = 0
+    # The memory the gate compared against, and where it read it. "host" is the
+    # whole node, which on a rented pod cannot trip the gate.
     machine_bytes: int
+    memory_source: MemorySource = "host"
     children: list[ChildResult] = []
     # The largest child peak memory seen (VmHWM where readable, else sampled RSS).
     peak_child_bytes: int | None = None
@@ -245,18 +249,21 @@ def run_phase(
     phase: Phase, probe: Probe, root: Path, previous_peak: int | None
 ) -> PhaseResult:
     """Start the phase's children at once, sample until all exit, keep everything."""
-    machine = psutil.virtual_memory().total
+    gate = memory_limit() or MemoryLimit(
+        bytes=psutil.virtual_memory().total, source="host"
+    )
     folder = root / phase.name
     folder.mkdir(parents=True, exist_ok=True)
     if previous_peak is not None and (
-        previous_peak * phase.children > probe.memory_fraction * machine
+        previous_peak * phase.children > probe.memory_fraction * gate.bytes
     ):
         result = PhaseResult(
             phase=phase,
             status="skipped",
             reason=f"{phase.children} x {previous_peak} B peak exceeds "
-            f"{probe.memory_fraction:g} of {machine} B",
-            machine_bytes=machine,
+            f"{probe.memory_fraction:g} of {gate.bytes} B ({gate.source})",
+            machine_bytes=gate.bytes,
+            memory_source=gate.source,
         )
         (folder / "phase.json").write_text(result.model_dump_json(indent=2))
         return result
@@ -315,7 +322,8 @@ def run_phase(
         status="failed" if failed else "completed",
         reason=f"children failed: seeds {failed}" if failed else None,
         wall_seconds=time.monotonic() - started,
-        machine_bytes=machine,
+        machine_bytes=gate.bytes,
+        memory_source=gate.source,
         children=results,
         peak_child_bytes=sampler.peak_bytes,
     )
