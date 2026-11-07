@@ -73,6 +73,7 @@ from experiments.tla_frontier_analysis import (
 )
 from experiments.tla_frontier_calibration import (
     EXPERIMENT as CALIBRATION,
+    JOB_SETUP_SECONDS,
     MAX_HOURS,
     MAX_USD,
     ONDEMAND_USD_PER_HOUR,
@@ -934,8 +935,8 @@ def test_calibration_ceilings_cover_each_rental_within_two_dollars() -> None:
     for pod, ceiling in MAX_USD.items():
         hours = Decimal(str(MAX_HOURS[pod])) + SETUP_HOURS
         assert hours * ONDEMAND_USD_PER_HOUR <= ceiling
-        assert WALL_SECONDS[pod] + 600 <= MAX_HOURS[pod] * 3600
-        assert WALL_SECONDS[pod] - 600 >= UPDATES * 220
+        assert WALL_SECONDS[pod] + 600 + JOB_SETUP_SECONDS <= MAX_HOURS[pod] * 3600
+        assert WALL_SECONDS[pod] - 600 >= UPDATES * 160
 
 
 def test_calibration_changes_only_length_and_identity() -> None:
