@@ -148,11 +148,6 @@ Code matches the protocol's five items; no code changed. Protocol corrected:
 - Digest watchdog checked: 46 s of 600 s, laptop, 24 streams, 3 updates, real worker. It
   shows margin only; it is no timing evidence.
 
-Decision for Jack Heart at execution review: should "standard shape" apply to new
-four-producer recipes before anyone measures them together? Options: scope it to
-one-producer recipes for now, or add a four-producer K=4 leg to step 2 (needs an amendment
-and a new quote). c5fba4's calibration gives producers unpacked, not packed.
-
 Before freeze: this branch is one commit behind main (`e5114c7db`, c5fba4 calibration
 ceilings; unrelated to step 2 and it touches `scratch/questions.md`). Re-quote both
 on-demands at the launch commit. Etude main has moved to `199335c`; the pin stays `a7718f5`.
@@ -174,15 +169,35 @@ terminate. No design change and no code direction; implement need not iterate.
 - `PhaseResult.machine_bytes` can now hold a pod allowance. The name is retained step 1
   evidence, and `memory_source` says which it is; not worth a rename.
 
-Unresolved product choice, for Jack Heart at execution review; no approval is implied:
-does "standard shape" (comment 9d671e78) cover four-producer recipes before anyone
-measures them packed? Evidence: both steps run one producer per seed; `sampled_self_play`
-now defaults to four, 16 producers on a 6-vCPU L4 at K=4; step 1's gain came from one busy
-core per seed filling an idle GPU. Options: scope the standard to one-producer recipes
-for now, or amend step 2 with a four-producer K=4 leg and a new quote.
-Assumption until answered: step 2 stays as accepted, one producer. This is reversible and
-spends nothing, and neither answer changes the five software items. A leg would add to
-the launch file and need a re-freeze, so ask this before the execution-review approval.
-
 Separate and already recorded: others cannot pack until an Etude release moves the shared
 launcher, so "standard" is unavailable to other Tasks until that decision.
+
+## implement b015d5 (2026-11-07): seeds x producers legs (comment ceff7d63)
+
+Resolves the four-producer question above: speed legs S14, S22, S44 run after M3 in
+`experiments/training_throughput_packing.py`; protocol and budget amended (reservation
+$4.50, window 5 h). Still not frozen; review, land, freeze and execution review follow.
+Checks: focused launch and sampler tests pass; a four-producer control variant (8 streams,
+1 update, CPU) finished through the real worker; the quote at `a1c83043e` with the new
+launch file: M1 and S44 each on one L4 at 4 slots, $.59/hour, nothing rented; A4000
+refused for stock. Re-quote at the launch commit.
+Reversible choices, for review:
+- GPU busy share needed a sampler that `TrainingJob` runs lack, so every CUDA leg prepends
+  a backgrounded `nvidia-smi -l 1` writing `gpu-samples.csv` to its output. This changes
+  job bytes, not regime bytes. CPU needs nothing: producers are threads, so
+  `process_cpu_seconds` already counts them.
+- Step 1 read 128 CPUs and no quota on every pod, so the vCPU count comes from the provider
+  (`runpodctl`), not `HostFacts`.
+- Speed legs: `max_hours` .75, `max_usd` $.60 (the hours plus 15 minutes at the ceiling),
+  seeds are the first K of 26211-26214.
+- Only one machine class is rented, so the recommendation for the other is an inference
+  from busy cores, labeled as one. Measuring both classes would need a second rental that
+  comment ceff7d63 does not ask for.
+- This branch is one commit behind origin/main (`711b9d839`, frontier stores); not synced here.
+
+## compress b015d5 (2026-11-07): seeds x producers legs
+
+`Leg.updates` is gone (read from the regime); `_speed_leg(seeds=, producers=)` names the
+shape; `elemental_variants.self_play_stage` is now public and replaces the local assert.
+Launch docstring corrected to `--hours 5`. `pytest tests/training/test_training_throughput.py
+tests/infra/test_host_facts.py tests/training/test_elemental_closure_lambda.py`: passed.

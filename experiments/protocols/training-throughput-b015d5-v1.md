@@ -5,15 +5,18 @@ shape and training regime give the most strength per dollar and per hour? The
 candidates were packing several seeds on one machine, not waiting for each
 batch's slowest game, and overlapping collection with learning. Step 1 measured
 all three. Packing is adopted and validated below, stop-waiting is deferred and
-overlap is dropped. Multi-producer collection belongs to Task c5fba4 and is read
-from its result, not repeated here.
+overlap is dropped. Whether several producers learn as one does belongs to Task
+c5fba4 and is cited, not retested; how producers combine with packing is measured
+for speed in step 2.
 
 Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
 comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Step 1 has
 run (see its execution record). Jack Heart accepted its evidence and chose step 2
 (2026-11-07, comment 9d671e78) and accepted its design, including running from Etude
-main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Step 2's software is
-built; it has not frozen or launched, and execution review returns to Jack Heart.
+main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Jack Heart then
+asked this step to own how packing combines with multiple producers (2026-11-07,
+comment ceff7d63), which added legs S14, S22 and S44. Step 2's software is built; it
+has not frozen or launched, and execution review returns to Jack Heart.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -25,8 +28,8 @@ its runs.
   evaluation, failures and machine setup, and the comment asks to spend no more
   than needed. The same comment sends design and execution review to Jack Heart
   in the Task conversation, so no launch happens before that review.
-- **Proposed spend.** Step 1 cost about $1.06. Step 2 reserves $3.50, under Jack
-  Heart's "well under $5". Total reserved: about $4.56 of the $50 cap, which still
+- **Proposed spend.** Step 1 cost about $1.06. Step 2 reserves $4.50, the most
+  comment ceff7d63 allows. Total reserved: about $5.56 of the $50 cap, which still
   includes step 1. Anything further needs an amendment made before the run that
   would spend it.
 
@@ -201,8 +204,9 @@ Etude `--slots 4`, on an A4000 when one is available and an L4 otherwise. Step 1
 reason: at K=4 throughput rose 1.66-2.35x and dollars per million learner decisions
 fell to $.023 (A4000) and $.046-.047 (L4). A seed takes 1.7-2.4x longer per update,
 so packing buys dollars and total throughput, not time to one result.
-Step 1 and this step measure one producer per seed; whether the standard extends to
-four-producer recipes is open (see "What this does and does not settle").
+Step 1 measured one producer per seed. New recipes default to four producers
+(`manabot.recipes.builders.sampled_self_play`, c5fba4), so this step also reads speed
+at K seeds of P producers each, and the report recommends a shape per machine class.
 
 **Claim under test.** A packed seed learns as a solo seed does. Each seed is its own
 process with its own seed, model, optimizer and environments, and they share only
@@ -210,7 +214,8 @@ hardware, so this holds by construction unless something leaks between them: a
 shared path, a wall-clock dependency, or Etude's new concurrent worker. No strength
 runs are needed, because the learning rule is unchanged. Strength per dollar is the
 control's strength per update times updates per dollar. This step plays no
-evaluation deals and scores no checkpoint.
+evaluation deals and scores no checkpoint. The speed legs make no learning claim:
+that a run learns the same at any producer count is c5fba4's result.
 
 ### What runs
 
@@ -226,6 +231,9 @@ sequences them, because a free slot would otherwise take the next run early.
 | M1 packed | control, 20 updates | CUDA | 4 | 26211-26214 | per-update metrics, K=4 speed |
 | M2 solo | control, 20 updates | CUDA | 1 | 26211-26214 in turn | per-update metrics, K=1 speed |
 | M3 solo repeat | control, 20 updates | CUDA | 1 | 26211 | run-to-run noise at a fixed seed |
+| S14 | producers-4, 8 updates | CUDA | 1 | 26211 | speed at (K, P) = (1, 4) |
+| S22 | producers-2, 8 updates | CUDA | 2 | 26211, 26212 | speed at (2, 2) |
+| S44 | producers-4, 8 updates | CUDA | 4 | 26211-26214 | speed at (4, 4) |
 
 - **Digest variant** `elemental-throughput-digest-v1`: the control recipe at 24
   streams, 3 updates, device CPU, one thread. It is a check, not a training shape.
@@ -233,6 +241,9 @@ sequences them, because a free slot would otherwise take the next run early.
   (`elemental_recipe`) to 20 updates at 256 streams, CUDA, with the same regime
   bytes in M1, M2 and M3. Damped-policy rates follow the absolute iteration, so
   the shorter endpoint leaves the learning schedule unchanged.
+- **Speed variants** `elemental-throughput-producers-2-v1` and `-4-v1`: the control
+  recipe to 8 updates, differing from it only in `execution.workers` (and the watchdog
+  the launch sets). M1 is shape (4, 1) and M2 is (1, 1).
 - **Seeds** are disjoint from 26001-26008, from strength seeds 26101-26104 and from
   the `ELEMENTAL_PAIRS` deals.
 - **Source.** One launch commit containing the software below. Main's `43150799f`
@@ -302,6 +313,39 @@ These come at no extra cost and are the first measurements of the real launch pa
 - Whether each run's outputs and metrics stayed separate. Etude gives every run on a
   machine one `ETUDE_TRACK_DIR`.
 
+### Seeds and producers (M1, M2, S14, S22, S44)
+
+Speed only. For each of the five (K, P) shapes, on the one rented machine:
+
+- **Sustained s/update.** Median of updates 2-8 per run, averaged over the shape's
+  runs. M1 and M2 use the same updates, so all five shapes read equal spans, and their
+  full 20 updates are reported beside that. M2 uses its four solo runs.
+- **M learner decisions per hour** across the machine, summed over concurrent runs,
+  and **per dollar** at the rental's billed rate, excluding setup as step 1 did.
+- **GPU busy share.** Every CUDA run samples `nvidia-smi` once a second into
+  `gpu-samples.csv` in its output. The sampler reads the whole GPU, and its timestamps
+  bound the run. For a shape, take the mean utilization from the last run's first row to
+  the first run's last row, dropping the first eighth for start-up, as step 1 did.
+- **CPU saturation.** Producers are threads of the run's process, so the update rows'
+  `process_cpu_seconds` over `training_seconds` is each run's busy cores, as in step 1.
+  Sum over the shape's runs, then divide by the machine's vCPUs. Spinning CUDA waits
+  count as busy, so read this beside s/update, not alone.
+- **vCPU count.** The provider's figure for the rented pod (`runpodctl`), recorded in
+  the report. The pod cannot show it: step 1 read 128 CPUs and no quota on every pod,
+  so `HostFacts` does not hold it. Busy cores above that figure would mean the pod can
+  use more than it rents, and the report says so.
+
+Each shape is one leg on one machine, with no repeat, and step 1's runs of 8 updates
+differed by up to 10% across seeds at K=4. Smaller differences are not read.
+
+**Recommendation.** The report names one seeds x producers shape for each machine
+class, A4000 (16 vCPUs) and L4 (6 vCPUs), by dollars per million decisions, and also
+gives the fastest shape per seed. Only the rented class is measured. The other's shape
+is inferred from busy cores per shape against its vCPUs, labeled as an inference, with
+the machine that would confirm it. Expect (4, 4) to oversubscribe an L4: 16 producer
+threads and 4 learners on 6 vCPUs. Running it there is deliberate, and a slow reading is
+the finding, not a failure.
+
 ### Machine and launch
 
 - **On-demands**, new, `--slots 4`, at most 1 machine: `b015d5-a4000x4` (RTX A4000,
@@ -310,23 +354,28 @@ These come at no extra cost and are the first measurements of the real launch pa
   source, venv and native build. The existing `a4000` carries two ghost records
   against its limit. Both are recorded in the isolated home `~/.etude-b015d5-step2`,
   with storage `r2` and provider `runpod` matching the shared launcher.
-- **Launch.** `experiments/training_throughput_packing.py --leg d1|d2|m1|m2|m3`, with
-  `--cohort` for a leg of several runs. M2 launches one seed at a time with
-  `--seeds`, so a free slot cannot take the next seed early.
-- **Selection.** Try `etude rent b015d5-a4000x4 --hours 4`. If RunPod has no
+- **Launch.** `experiments/training_throughput_packing.py --leg
+  d1|d2|m1|m2|m3|s14|s22|s44`, with `--cohort` for a leg of several runs, in the order
+  of the table. M2 launches one seed at a time with `--seeds`, so a free slot cannot
+  take the next seed early.
+- **Selection.** Try `etude rent b015d5-a4000x4 --hours 5`. If RunPod has no
   A4000 at launch, rent `b015d5-l4x4` instead. Step 1's A4000 took 16 minutes to
   appear after queueing, so try for up to 30 minutes first. The report names the GPU
   used; A4000 and L4 are not compared in this step.
-- **Window.** Expected 2.7 hours: setup about 5 minutes per attempt, D1 and D2 about
-  10 minutes each, M1 about 35, and 5 solo runs of about 20. The window is held by hand,
-  so `etude terminate` ends it when M3 finishes. It does not end itself.
+- **Window.** Expected 3.5 hours: setup about 5 minutes per attempt, D1 and D2 about
+  10 minutes each, M1 about 35, 5 solo runs of about 20, S14 and S22 about 10 each and
+  S44 about 20. The window is held by hand, so `etude terminate` ends it when S44
+  finishes. It does not end itself.
 - **Run limits.** Each CUDA run: `max_hours` 1.0, `max_usd` $.75. After
   `training_runs`' 900 s setup and 300 s finalization reserves, that leaves a 2,400 s
   watchdog, against about 1,500 s for 20 packed updates. Each digest run: `max_hours`
   .5, `max_usd` $.45, leaving a 600 s watchdog; one run took 46 s on a laptop through
-  the real worker (2026-11-07), so slower rented cores still fit. Etude prices each run as if it had the machine alone, and a run
-  must fit the rental's remaining time, so M3 needs its whole hour left when it
-  starts, at about 2.4 hours. This is why the window is 4 hours.
+  the real worker (2026-11-07), so slower rented cores still fit. Each speed run:
+  `max_hours` .75, `max_usd` $.60, leaving a 1,500 s watchdog, or 187 s per update
+  against step 1's 61-71 s at K=4. A watchdog stop keeps its exports and the updates it
+  reached still read. Etude prices each run as if it had the machine alone, and a run
+  must fit the rental's remaining time, so S44 needs .75 hours left when it starts, at
+  about 3.2 hours. The 5-hour window leaves room for one retry.
 - **Setup deadline.** An attempt's `max_hours` starts before setup, and the worker
   refuses to train with less left than its watchdog plus finalization. So setup must
   finish within 900 s or the run fails at admission, having trained nothing. Step 1's
@@ -377,10 +426,11 @@ No learning code changes. No frozen world, observation version or recipe changes
    later change. The job's setup bytes change for every launch from this commit on,
    which is new job identity, not new behavior.
 4. **Launch file** (`experiments/training_throughput_packing.py`, new). Declares the
-   two regimes and a `runs(revision, leg, seeds)` with CLI-readable parameters,
+   four regimes and a `runs(revision, leg, seeds)` with CLI-readable parameters,
    giving each leg its own Etude job identity while the regime bytes stay equal across
    legs, so that repeated seeds are separate runs. It also holds `training_digest` and
-   the comparison named above.
+   the comparison named above. CUDA legs prepend `GPU_SAMPLER` to the job's command, a
+   backgrounded `nvidia-smi -l 1`. The digest legs run without it.
 5. **Tests** (`tests/training/test_training_throughput.py` and `tests/infra/test_host_facts.py`).
    Allowance from injected cgroup v1, v2 and environment fixtures, smallest wins,
    absent stays None. Gate trips on an injected allowance below host memory. Digest
@@ -388,12 +438,14 @@ No learning code changes. No frozen world, observation version or recipe changes
    A two-process CPU test (8 streams, 2 updates, one seed solo then beside a neighbor)
    gives equal digests. Etude's `read_job_file` discovers the launch file and each
    leg's runs; `read_experiment` is not used, because it requires an `eval` and this
-   step evaluates nothing.
+   step evaluates nothing. Speed legs differ from M1's regime only in id, updates,
+   producers and watchdog. Only CUDA legs sample, and the sampler writes rows, stops
+   with the job and leaves its exit status.
 
 Acceptance before freeze: those tests pass, `etude launch ... --quote` under the
-isolated home shows the four M1 runs on one machine with 4 slots, and the regime
-digests of M1, M2 and M3 are equal. Nothing is deleted. `Probe` and `PHASES` stay as
-step 1's frozen record.
+isolated home shows the four M1 runs and the four S44 runs each on one machine with 4
+slots, and the regime digests of M1, M2 and M3 are equal. Nothing is deleted. `Probe`
+and `PHASES` stay as step 1's frozen record.
 
 ### Stop rules
 
@@ -404,7 +456,7 @@ step 1's frozen record.
 - A slot OOM or SIGKILL at K=4 is itself the finding, and ends the step.
 - No machine by the end of the selection wait: nothing is spent, and the wait is
   reported. Both machines are terminated before the report.
-- Spend stops at $3.50 against the bill.
+- Spend stops at $4.50 against the bill.
 
 ### What this does and does not settle
 
@@ -414,12 +466,12 @@ compare A4000 with L4 as a learning machine, does not show K above 4, and does n
 recommend for the long run beyond the 20 updates measured. Long runs' watchdogs must be
 sized from K=4's s/update, roughly twice solo.
 
-It also covers one producer per seed only. Main's new-recipe default
-(`manabot.recipes.builders.sampled_self_play`, c5fba4) now uses four producers, which
-would put 16 producers on a 6-vCPU L4 at K=4. Step 1's gain came from filling an idle
-GPU with one busy core per seed, so it does not carry over without a measurement.
-c5fba4's calibration reads one against four producers on an unpacked pod. Which default
-wins when the two are combined stays open.
+The digest and metric legs cover one producer per seed. The speed legs add what that
+leaves out, at speed only. They read the control's world, and not c5fba4's recipe with
+its wider input and roster. They show which shape is cheapest on the rented machine
+over 8 updates. They do not show that a packed multi-producer run learns as a solo one
+does: the producer half is c5fba4's, the packing half rests on this step's one-producer
+legs, and nothing here runs the two together for learning.
 
 ## Step 3: stop waiting for the slowest game (deferred)
 
@@ -504,11 +556,11 @@ its ceiling.
 | Line | Runs | Window | Reserved | Spent |
 |---|---:|---:|---:|---:|
 | Step 1 probes | 3 | | $2.80 | about $1.06 |
-| Step 2 machine, L4 worst case | 12 on one rental | 4 h | $2.40 | |
-| Step 2 failed attempts and a replaced host | | | $1.10 | |
-| **Step 2 total** | | | **$3.50** | |
+| Step 2 machine, L4 worst case | 19 on one rental | 5 h | $3.00 | |
+| Step 2 failed attempts and a replaced host | | | $1.50 | |
+| **Step 2 total** | | | **$4.50** | |
 
-Expected step 2 cost: about $.70 on an A4000, about $1.60 on an L4. Step 1's unspent
+Expected step 2 cost: about $.90 on an A4000, about $2.10 on an L4. Step 1's unspent
 $1.74 is released. Step 3's lines were $17.40 at most: calibration, control and exact
 quota seeds, their evaluation and its reserve. They come back in an amendment if step 3 is
 chosen; overlap's are gone. Every line falls under the $50 cap, which includes step 1.
@@ -533,5 +585,5 @@ chosen; overlap's are gone. Every line falls under the $50 cap, which includes s
 store. It contains the step-1 table (per machine and K: s/update, phase tree,
 idle share, CPU cores, GPU busy share, peak memory, $/M learner decisions), the
 step readings and choices, step 2's digest result, metric comparison and shape
-readings, cost against this budget, and the machine recommendation that updates
-`experiments/training-update-time.md`.
+readings, its seeds x producers table and shape per machine class, cost against this
+budget, and the machine recommendation that updates `experiments/training-update-time.md`.

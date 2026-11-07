@@ -9,12 +9,16 @@ Every leg runs through `TrainingJob` on one rented machine, one leg at a time:
   must give the same `training_digest` in both.
 - M1 packs four seeds of the control recipe to 20 updates on CUDA; M2 repeats them
   solo, and M3 repeats one solo seed for the scale of run-to-run CUDA noise.
+- S14, S22 and S44 read speed alone at K seeds of P producers each, 8 updates, as
+  regime variants differing from the control only in `execution.workers`. M1 and M2
+  are the (4, 1) and (1, 1) shapes.
 
 `LEGS` gives each leg a job identity of its own while the regime bytes stay equal
 across M1, M2 and M3, so a repeated seed is a separate run. Launch M2's seeds one at
-a time, because a free slot would otherwise take the next seed early.
+a time, because a free slot would otherwise take the next seed early. Every CUDA leg
+samples the GPU into its output; a run's CPU use is already in its update rows.
 
-    etude rent b015d5-a4000x4 --hours 4
+    etude rent b015d5-a4000x4 --hours 5
     etude launch experiments/training_throughput_packing.py --rent b015d5-a4000x4 \\
         --revision COMMIT --leg d1
     etude wait ...
@@ -30,19 +34,21 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
+from functools import partial
 import hashlib
 import json
 from pathlib import Path
 import sys
+from typing import Literal
 
 from etude.launch.records import Run, Variable
 import torch
 
-from experiments.elemental_variants import elemental_recipe
+from experiments.elemental_variants import elemental_recipe, self_play_stage
 from experiments.learning_signal import training_runs
 from manabot.infra.identity import file_sha256
 from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import TrainingRegime
 
 EXPERIMENT = "training_throughput_packing"
 DIGEST_REGIME = "elemental-throughput-digest-v1"
@@ -51,8 +57,21 @@ DIGEST_STREAMS = 24
 DIGEST_UPDATES = 3
 METRIC_UPDATES = 20
 METRIC_SEEDS = (26211, 26212, 26213, 26214)
+SPEED_UPDATES = 8
+GPU_SAMPLES = "gpu-samples.csv"
 # Names the leg in the job's identity; nothing reads it at run time.
 LEG_VARIABLE = "TRAINING_THROUGHPUT_LEG"
+# Reads the whole GPU, so runs sharing a machine record the same device; the rows'
+# timestamps give each run's span. Etude ends an attempt by process group, and the
+# trap covers an ordinary exit, whose status it leaves unchanged.
+GPU_SAMPLER = (
+    'mkdir -p "$ETUDE_OUTPUT_DIR"\n'
+    "nvidia-smi --query-gpu=timestamp,utilization.gpu,memory.used "
+    "--format=csv,noheader,nounits -l 1 "
+    f'> "$ETUDE_OUTPUT_DIR/{GPU_SAMPLES}" &\n'
+    "sampler=$!\n"
+    "trap 'kill \"$sampler\"' EXIT\n"
+)
 
 
 def digest_recipe(
@@ -60,8 +79,7 @@ def digest_recipe(
 ) -> TrainingRegime:
     """The control recipe, small and single-threaded on CPU: a check, not a shape."""
     regime = elemental_recipe(DIGEST_REGIME, updates)
-    stage = regime.stages[0]
-    assert isinstance(stage, TrainSelfPlay)
+    stage = self_play_stage(regime)
     stage.streams = streams
     stage.execution.device = "cpu"
     stage.execution.threads = 1
@@ -72,21 +90,38 @@ def metric_recipe() -> TrainingRegime:
     return elemental_recipe(METRIC_REGIME, METRIC_UPDATES)
 
 
+def speed_recipe(producers: Literal[2, 4]) -> TrainingRegime:
+    """The control recipe at another producer count: a speed reading, not an arm."""
+    regime = elemental_recipe(
+        f"elemental-throughput-producers-{producers}-v1", SPEED_UPDATES
+    )
+    self_play_stage(regime).execution.workers = producers
+    return regime
+
+
 @dataclass(frozen=True)
 class Leg:
     recipe: Callable[[], TrainingRegime]
-    updates: int
     seeds: tuple[int, ...]
     hours: float
     usd_per_run: float
 
 
 def _digest_leg(*seeds: int) -> Leg:
-    return Leg(digest_recipe, DIGEST_UPDATES, seeds, hours=0.5, usd_per_run=0.45)
+    return Leg(digest_recipe, seeds, hours=0.5, usd_per_run=0.45)
 
 
 def _metric_leg(*seeds: int) -> Leg:
-    return Leg(metric_recipe, METRIC_UPDATES, seeds, hours=1.0, usd_per_run=0.75)
+    return Leg(metric_recipe, seeds, hours=1.0, usd_per_run=0.75)
+
+
+def _speed_leg(seeds: int, producers: Literal[2, 4]) -> Leg:
+    return Leg(
+        partial(speed_recipe, producers),
+        METRIC_SEEDS[:seeds],
+        hours=0.75,
+        usd_per_run=0.60,
+    )
 
 
 LEGS: dict[str, Leg] = {
@@ -95,6 +130,9 @@ LEGS: dict[str, Leg] = {
     "m1": _metric_leg(*METRIC_SEEDS),
     "m2": _metric_leg(*METRIC_SEEDS),
     "m3": _metric_leg(METRIC_SEEDS[0]),
+    "s14": _speed_leg(seeds=1, producers=4),
+    "s22": _speed_leg(seeds=2, producers=2),
+    "s44": _speed_leg(seeds=4, producers=4),
 }
 
 
@@ -107,19 +145,22 @@ def runs(revision: str, leg: str, seeds: str = "") -> list[Run]:
     if unknown := set(selected) - set(chosen.seeds):
         raise ValueError(f"leg {leg} declares no seeds {sorted(unknown)}")
     regime = chosen.recipe()
+    stage = self_play_stage(regime)
     job = training_runs(
         (regime,),
-        updates=chosen.updates,
+        updates=stage.updates,
         revision=revision,
         experiment=EXPERIMENT,
         seeds=selected,
         hours=chosen.hours,
         usd_per_run=chosen.usd_per_run,
     )[0].job
+    sampled = stage.execution.device == "cuda"
     return job.model_copy(
         update={
             "name": f"{regime.id}-{leg}",
             "environment": (Variable(name=LEG_VARIABLE, value=leg),),
+            "command": (GPU_SAMPLER if sampled else "") + job.command,
         }
     ).runs(*selected)
 

@@ -21,7 +21,7 @@ CLOSURE_COMPLETE_FLOOR = 64
 CLOSURE_QUOTA: int | None = 121
 
 
-def _stage(regime: TrainingRegime) -> TrainSelfPlay:
+def self_play_stage(regime: TrainingRegime) -> TrainSelfPlay:
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     return stage
@@ -32,7 +32,7 @@ def elemental_recipe(regime_id: str, updates: int) -> TrainingRegime:
     regime = TrainingRegime.model_validate_json(REGIME.read_bytes())
     regime.id = regime_id
     regime.world = managym.WORLD_VERSION
-    stage = _stage(regime)
+    stage = self_play_stage(regime)
     # Damped-policy rates follow the absolute iteration, so the endpoint leaves the
     # learning schedule unchanged; the launch sets the watchdog.
     stage.updates = updates
@@ -59,7 +59,7 @@ def closure_comparison(
     if transitions is None:
         raise ValueError("the exact arm's quota is set by calibration")
     regime = elemental_recipe(f"elemental-closure-{closure}-v1", updates)
-    stage = _stage(regime)
+    stage = self_play_stage(regime)
     stage.learning_seats = "one"
     stage.batch_closure = closure
     stage.transitions = transitions
@@ -73,7 +73,7 @@ def lambda_sweep(
     regime = elemental_recipe(
         f"elemental-lambda-p{policy_lambda:g}-v{value_lambda:g}-v1", updates
     )
-    stage = _stage(regime)
+    stage = self_play_stage(regime)
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
     return TrainingRegime.model_validate(regime.model_dump())

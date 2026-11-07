@@ -201,6 +201,9 @@ def test_launch_file_declares_every_leg() -> None:
         "m1": [26211, 26212, 26213, 26214],
         "m2": [26211, 26212, 26213, 26214],
         "m3": [26211],
+        "s14": [26211],
+        "s22": [26211, 26212],
+        "s44": [26211, 26212, 26213, 26214],
     }
     assert {r.job.name for r in found["m1"]} == {
         "elemental-throughput-pack-check-v1-m1"
@@ -220,6 +223,79 @@ def test_metric_legs_share_regime_bytes_and_stay_separate_jobs() -> None:
     assert frozen.regime.wall_seconds == 2400
     assert metric[0].job.max_hours == 1.0
     assert str(metric[0].job.max_usd) == "0.75"
+
+
+@pytest.mark.parametrize(("leg", "producers"), [("s14", 4), ("s22", 2), ("s44", 4)])
+def test_speed_legs_differ_from_the_control_only_in_producers(
+    leg: str, producers: int
+) -> None:
+    def regime(name: str) -> dict[str, object]:
+        run = packing.runs("HEAD", name)[0]
+        frozen = TrainingJob.model_validate_json(run.job.config or "").regime
+        return frozen.model_dump(mode="json")
+
+    speed, control = regime(leg), regime("m1")
+    stage = speed["stages"][0]
+    assert stage["updates"] == 8
+    assert stage["execution"]["workers"] == producers
+    assert speed["id"] == f"elemental-throughput-producers-{producers}-v1"
+
+    for declared in (speed, control):
+        declared["id"] = declared["wall_seconds"] = None
+        moved = declared["stages"][0]
+        moved["updates"] = None
+        moved["execution"]["workers"] = moved["execution"]["wall_seconds"] = None
+    assert speed == control
+
+
+def test_speed_legs_fit_the_rental_and_keep_separate_jobs() -> None:
+    legs = [packing.runs("HEAD", leg)[0].job for leg in ("s14", "s22", "s44")]
+
+    assert len({job.environment for job in legs}) == 3
+    assert {job.max_hours for job in legs} == {0.75}
+    # Etude asks a run's dollars to cover its hours plus setup at the ceiling rate.
+    assert all(float(job.max_usd or 0) >= 1.0 * 0.60 for job in legs)
+    frozen = TrainingJob.model_validate_json(legs[0].config or "")
+    assert frozen.regime.wall_seconds == 1500
+
+
+def test_only_cuda_legs_sample_the_gpu() -> None:
+    sampled = {
+        leg
+        for leg in packing.LEGS
+        if packing.GPU_SAMPLER in packing.runs("HEAD", leg)[0].job.command
+    }
+    assert sampled == set(packing.LEGS) - {"d1", "d2"}
+
+
+def test_gpu_sampler_writes_rows_and_leaves_the_jobs_exit_status(
+    tmp_path: Path,
+) -> None:
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    stand_in = tools / "nvidia-smi"
+    stand_in.write_text(
+        '#!/bin/sh\necho "$$" > "$PIDFILE"\n'
+        'echo "2026/11/07 13:00:00.000, 41, 1024"\nexec sleep 60\n'
+    )
+    stand_in.chmod(stand_in.stat().st_mode | stat.S_IEXEC)
+    output = tmp_path / "output"
+    pid_file = tmp_path / "sampler-pid"
+
+    done = subprocess.run(
+        ["sh", "-c", f"{packing.GPU_SAMPLER}\nsleep 1\nexit 3"],
+        env={
+            "ETUDE_OUTPUT_DIR": str(output),
+            "PATH": f"{tools}:/usr/bin:/bin",
+            "PIDFILE": str(pid_file),
+        },
+        timeout=30,
+    )
+
+    assert done.returncode == 3
+    assert (output / packing.GPU_SAMPLES).read_text().count("\n") == 1
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid_file.read_text()), 0)
 
 
 def test_digest_legs_run_the_small_cpu_variant() -> None:
