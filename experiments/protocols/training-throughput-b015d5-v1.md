@@ -11,10 +11,12 @@ from its result, not repeated here.
 Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
 comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Step 1 has
 run (see its execution record). Jack Heart accepted its evidence and chose step 2
-(2026-11-07, comment 9d671e78). The step 2 amendment below is a design and has not
-frozen or launched; execution review returns to Jack Heart. Acceptance confers no
-spending authority beyond that review. Each step freezes after the previous
-step's readings have been discussed and that step chosen, before any of its runs.
+(2026-11-07, comment 9d671e78) and accepted its design, including running from Etude
+main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Step 2's software is
+built; it has not frozen or launched, and execution review returns to Jack Heart.
+Acceptance confers no spending authority beyond that review. Each step freezes after
+the previous step's readings have been discussed and that step chosen, before any of
+its runs.
 
 ## Authority and budget
 
@@ -298,7 +300,13 @@ These come at no extra cost and are the first measurements of the real launch pa
 
 - **On-demands**, new, `--slots 4`, at most 1 machine: `b015d5-a4000x4` (RTX A4000,
   16 vCPUs, 48 GB, under $.40/hour) and `b015d5-l4x4` (L4, 6 vCPUs, 48 GB, under
-  $.60/hour). The existing `a4000` carries two ghost records against its limit.
+  $.60/hour). Both ask for an 80 GB disk, because four attempts each keep their own
+  source, venv and native build. The existing `a4000` carries two ghost records
+  against its limit. Both are recorded in the isolated home `~/.etude-b015d5-step2`,
+  with storage `r2` and provider `runpod` matching the shared launcher.
+- **Launch.** `experiments/training_throughput_packing.py --leg d1|d2|m1|m2|m3`, with
+  `--cohort` for a leg of several runs. M2 launches one seed at a time with
+  `--seeds`, so a free slot cannot take the next seed early.
 - **Selection.** Try `etude rent b015d5-a4000x4 --hours 4`. If RunPod has no
   A4000 at launch, rent `b015d5-l4x4` instead. Step 1's A4000 took 16 minutes to
   appear after queueing, so try for up to 30 minutes first. The report names the GPU
@@ -328,10 +336,10 @@ No learning code changes. No frozen world, observation version or recipe changes
    `psutil.virtual_memory().total`, the 540 GB host, so it could not trip. Add one
    reader of the pod's allowance: the smallest of cgroup v2 `memory.max`, cgroup v1
    `memory/memory.limit_in_bytes`, and `RUNPOD_MEM_GB` if the pod sets it (the name is
-   unverified), or nothing if none is readable. `HostFacts` gains optional `memory_limit_bytes` and
-   `memory_limit_source`, excluded when absent, so retained receipts still load. Step 1
-   read `cpu_quota` as None on every pod, so cgroup v2 at that path may not be
-   visible there. Etude's job environment also drops `RUNPOD_*`, so the RunPod figure
+   unverified), or nothing if none is readable. `HostFacts` gains an optional
+   `memory_limit` holding the bytes and their source, excluded when absent, so retained
+   receipts still load. Step 1 read `cpu_quota` as None on every pod, so cgroup v2 at
+   that path may not be visible there. Etude's job environment also drops `RUNPOD_*`, so the RunPod figure
    has to come from `/proc/1/environ`. Which source works on a pod is unknown until
    step 2's first receipt.
 2. **Probe gate** (`experiments/training_throughput.py`). `run_phase` gates on that
@@ -348,9 +356,10 @@ No learning code changes. No frozen world, observation version or recipe changes
    builds cost minutes per rental, which the shape readings report. Etude's
    `Preparation` builds once per machine, but it does not fit yet: the editable install
    and its `.so` live in the source tree it copies. If setup proves costly, that is a
-   later change.
+   later change. The job's setup bytes change for every launch from this commit on,
+   which is new job identity, not new behavior.
 4. **Launch file** (`experiments/training_throughput_packing.py`, new). Declares the
-   two regimes and a `runs(revision, leg, seeds, ...)` with CLI-readable parameters,
+   two regimes and a `runs(revision, leg, seeds)` with CLI-readable parameters,
    giving each leg its own Etude job identity while the regime bytes stay equal across
    legs, so that repeated seeds are separate runs. It also holds `training_digest` and
    the comparison named above.
@@ -359,8 +368,9 @@ No learning code changes. No frozen world, observation version or recipe changes
    absent stays None. Gate trips on an injected allowance below host memory. Digest
    comparison reports an injected change at its path and ignores only the listed fields.
    A two-process CPU test (8 streams, 2 updates, one seed solo then beside a neighbor)
-   gives equal digests. `read_experiment` discovers the launch file and each leg's
-   runs.
+   gives equal digests. Etude's `read_job_file` discovers the launch file and each
+   leg's runs; `read_experiment` is not used, because it requires an `eval` and this
+   step evaluates nothing.
 
 Acceptance before freeze: those tests pass, `etude launch ... --quote` under the
 isolated home shows the four M1 runs on one machine with 4 slots, and the regime

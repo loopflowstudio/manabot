@@ -100,3 +100,35 @@ execution review with Jack Heart. Reversible assumptions, for review:
 - The A4000 selection wait is 30 minutes, then L4.
 Open: whether cgroup or `RUNPOD_MEM_GB` shows a pod's allowance is unknown until the
 first step 2 receipt. Step 1's `cpu_quota` was None on every pod.
+
+## implement b015d5 (2026-11-07): step 2 software
+
+Built the protocol's five items. `uv run --extra dev pytest
+tests/training/test_training_throughput.py tests/infra/test_host_facts.py -q`: 26 passed,
+including the two-process digest through the real worker on a shared track folder.
+Open or assumed:
+- Acceptance quote, 2026-11-07 about 13:20 UTC, isolated home, `--revision HEAD`: on
+  `b015d5-l4x4` the four M1 runs share one L4 at 4 slots, $.59/hour, planned first-wave
+  rental $.74, cohort budget $3.00, nothing rented. `b015d5-a4000x4` refused: RunPod
+  had no A4000 (offer $.25/hour when asked at 13:14). L4 had also refused minutes
+  earlier, so stock moves. Re-quote both at the launch commit for execution review.
+- Isolated home is `~/.etude-b015d5-step2`; run the client as
+  `ETUDE_HOME=... doppler ... uv run --with "etude-sdk[s3,eval] @
+  git+file:///Users/jack/src/etude@a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11" etude ...`.
+  Never run that client without `ETUDE_HOME`: it would upgrade the shared database.
+- 80 GB disks are my choice (the shared on-demands use 40-50), for four venvs and builds.
+- `RUNPOD_MEM_GB` is read as decimal GB, the smaller reading if it means GiB.
+- Main moved to `405223165` (c5fba4's sampled-roster producers) after this branch's last
+  sync. Not merged here; only `scratch/questions.md` conflicts. Delivery syncs it, and
+  the protocol says the launch commit includes it.
+- `flock` is not on macOS, so `machine_setup` is Linux-only; every rented machine is.
+  The script's order and failure handling are tested with stand-in tools; real lock
+  contention first happens on the rental.
+
+## compress b015d5 (2026-11-07): step 2 software
+
+`uv run --extra dev pytest tests/training/test_training_throughput.py
+tests/infra/test_host_facts.py -q`: 26 passed. `HostFacts.memory_limit` is now one nested
+field, replacing `memory_limit_bytes`/`memory_limit_source`; the protocol says so.
+`machine_setup` bytes changed after the 13:20 acceptance quote, so the launch-commit
+re-quote also covers that.
