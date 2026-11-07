@@ -110,4 +110,4 @@ four producers help.
   Etude's `Checkpoint.wall_ms`. Gaps in Etude are fixed with Etude PRs (we
   write Etude), not manabot workarounds such as reconstructing hours on the
   manabot side. Leave equal-hours pairing marked as waiting on that Etude
-  change; the operator conversation handles filing it.
+  change; filed as Etude Task 3d4f40 (not started; running it is Jack Heart's call).

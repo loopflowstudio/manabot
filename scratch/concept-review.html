@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>c5fba4 concept review 11</title>
+<style>
+:root{--bg:#fbf8f2;--fg:#2b2620;--mute:#7a6f60;--rule:#e2d9c8;--prop:#8a4b12;--code:#f1ebdf}
+@media (prefers-color-scheme:dark){:root{--bg:#1d1a16;--fg:#ece5d8;--mute:#a59a88;--rule:#3a342b;--prop:#e8a35c;--code:#2a251f}}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif;margin:0}
+main{max-width:42rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+h1{font-size:1.5rem;margin:.2rem 0 1rem}h2{font-size:1.1rem;margin-top:2.2rem;border-top:1px solid var(--rule);padding-top:1rem}
+.meta{color:var(--mute);font-size:.85rem}
+code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.88em}
+.prop{border-left:3px solid var(--prop);padding-left:.8rem}
+.tag{color:var(--prop);font-variant:small-caps;letter-spacing:.04em}
+ol li,ul li{margin:.3rem 0}
+</style></head><body><main>
+<p class="meta">Task c5fba4 · experiment graph, concept review (headless, 11th) · 2026-11-06<br>
+Built from: <code>scratch/direction.md</code>, <code>scratch/c5fba4-frontier-self-play.md</code>,
+<code>experiments/protocols/tla-frontier-c5fba4-v1.md</code>, origin/main <code>70d79ccb8</code>
+(<code>experiments/protocols/training-throughput-b015d5-v1.md</code>), PR #437 state</p>
+
+<h1>Decision: let this Task's software land before #437</h1>
+<p>No product choice is open. The design changes in one place: the order of steps.</p>
+
+<h2>Order of steps</h2>
+<p><b>Existing (branch protocol):</b> #435 → #437 → recount → software merges → coverage → calibration → horizons → freeze.</p>
+<p class="prop"><span class="tag">proposed</span><br>
+#435 → <b>software merges</b> → #437 → recount → coverage → calibration → horizons → freeze.</p>
+
+<h2>The mismatch</h2>
+<ul>
+<li>The accepted direction says to build the software on main after #435, and that 30df0c lands
+before the protocol <em>freezes</em>. It does not hold the software merge for #437.</li>
+<li>b015d5's new protocol on main leaves multi-producer collection to this Task and builds its
+exact-quota step "after c5fba4's <code>collection.py</code> change lands". The stricter order
+holds up a second Task for nothing.</li>
+<li>Items 1, 2 and 4 do not read #437. Item 5 already works before and after it:
+<code>HAS_RECORD_VOCABULARY</code> picks the matching test.</li>
+</ul>
+
+<h2>What the next implement pass changes</h2>
+<ul>
+<li>Change the protocol's "Before freeze" opening line and Launch sequence step 1 to the proposed order.</li>
+<li>Item 5 stops citing #437 head <code>bab2e80d6</code>, because the head is now <code>40ecda6be</code>. The coverage sweep is rerun on the frozen revision instead.</li>
+<li>Merge origin/main. The only conflict is <code>scratch/questions.md</code>; keep both Tasks' entries.</li>
+</ul>
+<p>What survives: freeze still waits for #437 and the recount, both arms still use the consolidated input, and nothing is launched or spent.</p>
+
+<h2>Questions</h2>
+<ol><li>None. Equal-hours pairing still waits on Etude's <code>Checkpoint.wall_ms</code>; the operator conversation files that.</li></ol>
+</main></body></html>

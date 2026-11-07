@@ -28,14 +28,16 @@ otherwise.
   pair are cut. A lost run stops at its last export and is reported.
 - Budget: 2 × USD38 training + USD14 evaluation; USD10 reserve (calibration ≤ 2,
   rehearsal ≤ 2).
-- Order: #435 (merged) and #437 (30df0c) merge → parameter recount → software
-  (protocol "Before freeze" 1–5) merges → record coverage sweep (seed 0) →
+- Order (revised, eleventh review): #435 (merged) → software (protocol "Before
+  freeze" 1, 2, 4, 5) merges without waiting for #437 → #437 (30df0c) merges →
+  parameter recount → record coverage sweep (seed 0) →
   calibration (three pods, `--parallel 3`, ≤ USD2) + rehearsal → horizons
   written, freeze → catalog-vs-hashed check → execution review → launch.
 
 Software (protocol "Before freeze" 1–5). #435 merged 2026-11-06 and is synced in;
-#437 (30df0c, head bab2e80d6) is still open. origin/main (ebed0963e, ten-deck
-Elemental studies) is merged in; nothing on main beyond it.
+#437 (30df0c) is still open, head now 40ecda6be (was bab2e80d6). origin/main has
+one commit beyond the last sync, 70d79ccb8 (b015d5's throughput probe protocol); it
+conflicts only in `scratch/questions.md`.
 
 1. Done: `ShardedVectorEnv` forwards rosters/decks and concatenates
    `current_player_configs`/`current_matchup_indices`; deck-source,
@@ -73,10 +75,37 @@ Elemental studies) is merged in; nothing on main beyond it.
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed, 1 skipped (needs #437) (compress, direction 26, 2026-11-06). Gate owns wider suites.
+83 passed, 1 skipped (needs #437) (realign after direction 26, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
+
+## Eleventh concept review (2026-11-06, headless): software lands ahead of #437
+
+Main moved to 70d79ccb8, which adds b015d5's draft throughput protocol. That protocol leaves
+multi-producer collection to this Task ("read from its result, not repeated here") and builds
+its two-seat exact-quota step "after c5fba4's `collection.py` change lands". This branch's
+order holds every software merge behind #437 (protocol "Before freeze" opening line and Launch
+sequence step 1). The accepted direction does not ask for that: software builds on main after
+#435, and 30df0c lands "before this protocol freezes". The stricter order now delays a second
+Task with no gain, because nothing in items 1, 2 or 4 reads #437, and item 5 already runs on
+both sides of it (`HAS_RECORD_VOCABULARY` picks the refusing test before #437 and the arm test
+after it).
+
+### Direction, for implement
+
+27. Software merges once #435 is in, not after #437. Edit the protocol's "Before freeze" opening
+    line and Launch sequence step 1 so they agree: software merges after #435; #437 merges before
+    freeze; the parameter recount follows #437 and comes before calibration. The status paragraph
+    already puts freeze after #437 and the recount, and stays. Item 4's "recounted parameters" is
+    a freeze step, not a merge blocker. Item 5's citation of #437 head `bab2e80d6` gives way to
+    "rerun on the frozen revision", because the head has moved (40ecda6be). Sync origin/main; the
+    only conflict is `scratch/questions.md`, which main rewrote for b015d5. Keep this Task's
+    entries and main's.
+
+What would reopen this: #437 changes `ModelConfig`, the regime builders or `collection.py` in a
+way that conflicts with items 1 and 2. In that case the later of the two PRs rebases; the order
+of freeze steps does not change. No product choice is open.
 
 ## Tenth concept review (2026-11-06): lost runs are not replaced
 
