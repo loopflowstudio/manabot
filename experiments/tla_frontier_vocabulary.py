@@ -75,19 +75,18 @@ from manabot.training.regime import TrainingRegime
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
 VOCABULARIES: tuple[Vocabulary, Vocabulary] = ("catalog", "hashed")
-UPDATES = 100
+UPDATES = 75
 # Interior exports; the job exports update UPDATES itself when training stops.
-MILESTONES = (25, 50, 75)
-# 100 updates fit 8,400 usable seconds under the 600 s stop reserve at up to
-# 84 s/update. Calibration reads w64's cost first; a slower reading changes the
-# length here, by recorded decision, before the check runs.
-WALL_SECONDS = 9000.0
-# Etude's 15-minute setup allowance and the wall fit each arm's ceiling at the
-# USD0.67/hour the training budget admits; USD4 together, from the reserve.
-MAX_HOURS = 3.0
-MAX_USD = Decimal("2")
+MILESTONES = (25, 50)
+# Calibration read w64 at 167 s/update. 75 updates fit 15,000 usable seconds under
+# the 600 s stop reserve at up to 200 s/update, a fifth above that reading.
+WALL_SECONDS = 15600.0
+# The wall, finalization, job setup and Etude's 15-minute allowance fit each arm's
+# ceiling at the on-demand's USD0.60/hour limit; USD6 together, from the reserve.
+MAX_HOURS = 4.6
+MAX_USD = Decimal("3")
 # Rule 3: the second half of the run, past the first export's warm-up.
-LATE_UPDATES = range(51, UPDATES + 1)
+LATE_UPDATES = range(38, UPDATES + 1)
 VALUE_LOSS_RATIO = 1.10
 
 

@@ -151,7 +151,7 @@ def _state(reached: dict[Vocabulary, int], *, ended: bool = True) -> ExperimentS
                 state="finished" if ended else "running",
                 checkpoints=Checkpoints(
                     _checkpoint(vocabulary, update)
-                    for update in (0, 25, 50, 75, 100)
+                    for update in (0, 25, 50, 75)
                     if update <= end
                 ),
             )
@@ -165,9 +165,9 @@ def test_the_check_plays_three_comparisons_once_both_arms_end_at_full_length() -
     benchmark = evaluation_spec(job).tournament
     assert benchmark.environment.name == "tla-frontier-c5fba4-vocabulary-v1"
     assert [m.name for m in benchmark.matchups] == [
-        "catalog u100 vs catalog u0",
-        "hashed u100 vs hashed u0",
-        "catalog u100 vs hashed u100",
+        "catalog u75 vs catalog u0",
+        "hashed u75 vs hashed u0",
+        "catalog u75 vs hashed u75",
     ]
     assert all(len(m.matches()) == len(frozen()[1].pairs) for m in benchmark.matchups)
 
@@ -175,7 +175,7 @@ def test_the_check_plays_three_comparisons_once_both_arms_end_at_full_length() -
 def test_the_check_waits_for_both_arms() -> None:
     assert eval(_state({"catalog": UPDATES, "hashed": UPDATES}, ended=False)) == []
     # An arm that ended short of full length leaves the check unplayed.
-    assert eval(_state({"catalog": UPDATES, "hashed": 75})) == []
+    assert eval(_state({"catalog": UPDATES, "hashed": 50})) == []
     schedule = check_schedule(_state({"catalog": UPDATES}), frozen()[1])
     assert all(planned.matchup is None for planned in schedule)
 
