@@ -133,3 +133,56 @@ tests/infra/test_host_facts.py -q`: 26 passed. `HostFacts.memory_limit` is now o
 field, replacing `memory_limit_bytes`/`memory_limit_source`; the protocol says so.
 `machine_setup` bytes changed after the 13:20 acceptance quote, so the launch-commit
 re-quote also covers that.
+
+## realign b015d5 (2026-11-07): step 2 plan against code and upstream
+
+Code matches the protocol's five items; no code changed. Protocol corrected:
+- New rule "Setup deadline". Etude's `max_hours` clock starts before setup, and
+  `run_worker` refuses to train with less than watchdog plus finalization left, so setup
+  over 900 s fails admission. Four concurrent native builds are unmeasured. The 7-minute
+  D2 trigger and staggering M1 in two pairs are my reversible choice, for execution review.
+- Limit added: step 2 covers one producer per seed. `sampled_self_play` now defaults to
+  four producers, which is 16 on a 6-vCPU L4 at K=4.
+- Exact isolated client invocation moved from these notes into the protocol, since
+  scratch is removed before landing. Source lines and step 3's stale c5fba4 dependency updated.
+- Digest watchdog checked: 46 s of 600 s, laptop, 24 streams, 3 updates, real worker. It
+  shows margin only; it is no timing evidence.
+
+Decision for Jack Heart at execution review: should "standard shape" apply to new
+four-producer recipes before anyone measures them together? Options: scope it to
+one-producer recipes for now, or add a four-producer K=4 leg to step 2 (needs an amendment
+and a new quote). c5fba4's calibration gives producers unpacked, not packed.
+
+Before freeze: this branch is one commit behind main (`e5114c7db`, c5fba4 calibration
+ceilings; unrelated to step 2 and it touches `scratch/questions.md`). Re-quote both
+on-demands at the launch commit. Etude main has moved to `199335c`; the pin stays `a7718f5`.
+
+## concept-review b015d5 (2026-11-07): step 2 against the accepted design
+
+Walked one person's path: rent a four-slot machine by hand, run the legs in turn, compare,
+terminate. No design change and no code direction; implement need not iterate.
+- Normal path holds at Etude `a7718f5`: a hand rental stays until its deadline or
+  `terminate` (`docs/launcher.md`), and placement fills machines with free slots first
+  (`scheduler.py`), so cohorts land on the held machine and `--max 1` is not hit. Not yet
+  exercised on a held rental: the acceptance quote placed runs on a new one.
+- Failure and recovery hold: the booted pod's guardian ends it at its deadline without a
+  controller, bounding a lost session at the 4-hour window (about $2.36 on L4, under the
+  $3.50 stop). Failing one run leaves its neighbors running. An unbooted pod still needs
+  the isolated controller's tick.
+- Shape stays out of the regime. Slots belong to the on-demand, so packing changes no
+  recipe and no frozen identity. That is the right owner.
+- `PhaseResult.machine_bytes` can now hold a pod allowance. The name is retained step 1
+  evidence, and `memory_source` says which it is; not worth a rename.
+
+Unresolved product choice, for Jack Heart at execution review; no approval is implied:
+does "standard shape" (comment 9d671e78) cover four-producer recipes before anyone
+measures them packed? Evidence: both steps run one producer per seed; `sampled_self_play`
+now defaults to four, 16 producers on a 6-vCPU L4 at K=4; step 1's gain came from one busy
+core per seed filling an idle GPU. Options: scope the standard to one-producer recipes
+for now, or amend step 2 with a four-producer K=4 leg and a new quote.
+Assumption until answered: step 2 stays as accepted, one producer. This is reversible and
+spends nothing, and neither answer changes the five software items. A leg would add to
+the launch file and need a re-freeze, so ask this before the execution-review approval.
+
+Separate and already recorded: others cannot pack until an Etude release moves the shared
+launcher, so "standard" is unavailable to other Tasks until that decision.

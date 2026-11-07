@@ -34,9 +34,9 @@ its runs.
 
 - **Source.** Main after PR #435 (`45cc961a2`) and PR #436 (`ebed0963e`, 07c490's
   `elemental_variants.elemental_recipe` declaration and
-  `learning_signal.ELEMENTAL_PAIRS`). If c5fba4's change to
-  `manabot/training/rollout/collection.py` lands first, it is included. Each
-  launch pins one commit, and the report names it.
+  `learning_signal.ELEMENTAL_PAIRS`). Step 1 ran before c5fba4's change to
+  `manabot/training/rollout/collection.py` landed; step 2 includes it. Each launch
+  pins one commit, and the report names it.
 - **Recipe.** The control is `elemental_variants.elemental_recipe`. That is
   MTG-181/183's frozen `experiments/regimes/elemental-long-183-v1.json` with
   07c490's two compatibility changes: the world label moves to the current
@@ -201,6 +201,8 @@ Etude `--slots 4`, on an A4000 when one is available and an L4 otherwise. Step 1
 reason: at K=4 throughput rose 1.66-2.35x and dollars per million learner decisions
 fell to $.023 (A4000) and $.046-.047 (L4). A seed takes 1.7-2.4x longer per update,
 so packing buys dollars and total throughput, not time to one result.
+Step 1 and this step measure one producer per seed; whether the standard extends to
+four-producer recipes is open (see "What this does and does not settle").
 
 **Claim under test.** A packed seed learns as a solo seed does. Each seed is its own
 process with its own seed, model, optimizer and environments, and they share only
@@ -234,9 +236,11 @@ sequences them, because a free slot would otherwise take the next run early.
 - **Seeds** are disjoint from 26001-26008, from strength seeds 26101-26104 and from
   the `ELEMENTAL_PAIRS` deals.
 - **Source.** One launch commit containing the software below. Main's `43150799f`
-  (fact and shared-effect embeddings) arrives with it. That commit's model change
-  does not touch this comparison, since every leg shares the commit, but step 1's
-  absolute speeds are from `70d79ccb8` and are not re-measured against it.
+  (fact and shared-effect embeddings) and `405223165` (c5fba4's sampled-roster
+  producers) arrive with it. For this one-producer control, the latter's
+  `collection.py` change only lifts a restriction. Every leg shares the commit, so
+  neither touches this comparison, but step 1's absolute speeds are from `70d79ccb8`
+  and are not re-measured against it.
 
 ### Digest check (D1, D2)
 
@@ -290,11 +294,13 @@ These come at no extra cost and are the first measurements of the real launch pa
 - Sustained s/update and M decisions/hour at K=4 and K=1 over 20 updates on one host
   (step 1 had 8-12), and $/M decisions at the rental's billed rate.
 - Time from placement to first update when four attempts set up at once.
-- Peak RSS per run against the memory allowance reported on the pod.
+- Peak RSS per run against the memory allowance reported on the pod, and each run's
+  peak CUDA bytes (`memory/peak_reserved_cuda_bytes`, new in `405223165`) against the
+  GPU's memory.
 - Etude's `shared by 4 runs` cost split against `runpodctl billing pods`. Step 1's run
   list understated the bill, so the bill stays the cost of record.
-- Whether each run's outputs and metrics stayed separate under the shared
-  `ETUDE_TRACK_DIR`.
+- Whether each run's outputs and metrics stayed separate. Etude gives every run on a
+  machine one `ETUDE_TRACK_DIR`.
 
 ### Machine and launch
 
@@ -317,16 +323,28 @@ These come at no extra cost and are the first measurements of the real launch pa
 - **Run limits.** Each CUDA run: `max_hours` 1.0, `max_usd` $.75. After
   `training_runs`' 900 s setup and 300 s finalization reserves, that leaves a 2,400 s
   watchdog, against about 1,500 s for 20 packed updates. Each digest run: `max_hours`
-  .5, `max_usd` $.45. Etude prices each run as if it had the machine alone, and a run
+  .5, `max_usd` $.45, leaving a 600 s watchdog; one run took 46 s on a laptop through
+  the real worker (2026-11-07), so slower rented cores still fit. Etude prices each run as if it had the machine alone, and a run
   must fit the rental's remaining time, so M3 needs its whole hour left when it
   starts, at about 2.4 hours. This is why the window is 4 hours.
+- **Setup deadline.** An attempt's `max_hours` starts before setup, and the worker
+  refuses to train with less left than its watchdog plus finalization. So setup must
+  finish within 900 s or the run fails at admission, having trained nothing. Step 1's
+  setups took about 5 minutes alone; four at once have never run, and each builds the
+  native extension. D2 is the first reading, so read its `phase setup` times from the
+  logs before M1. If two at once took over 7 minutes, launch M1 as two pairs about 8
+  minutes apart, still all four on the machine for the speed reading. A run that fails
+  this way is retried staggered, and counts as that leg's first failure.
 - **Client.** `--slots` is on Etude main (`a7718f5`, PR #85) and unreleased; PyPI's
   latest is 0.2.14. The launcher packages its own client for the pod, so no release is
   needed to run it. But main's launcher schema is version 12, and opening the shared
   `~/.etude/launcher.db` (version 11) upgrades it in place, after which 0.2.14 clients
   in other Tasks refuse it. Step 2 therefore runs from Etude `a7718f5` under an isolated
-  `ETUDE_HOME`, as PR #85's canary did, with its own controller. Moving the shared
-  launcher is a release decision outside this step.
+  `ETUDE_HOME`, as PR #85's canary did, with its own controller. Every Etude command in
+  this step sets `ETUDE_HOME=~/.etude-b015d5-step2`, nested Doppler as for step 1, and
+  `uv run --with "etude-sdk[s3,eval] @ <Etude at a7718f5>"`. That client must never run
+  without `ETUDE_HOME`. Etude main's later `199335c` adds only a checkpoint timestamp,
+  so the pin stands. Moving the shared launcher is a release decision outside this step.
 
 ### Software before step 2 freezes
 
@@ -375,8 +393,7 @@ No learning code changes. No frozen world, observation version or recipe changes
 Acceptance before freeze: those tests pass, `etude launch ... --quote` under the
 isolated home shows the four M1 runs on one machine with 4 slots, and the regime
 digests of M1, M2 and M3 are equal. Nothing is deleted. `Probe` and `PHASES` stay as
-step 1's frozen record. The `digest2.py` reference is gone: no such file was kept, and
-the exclusions are now listed above.
+step 1's frozen record.
 
 ### Stop rules
 
@@ -397,6 +414,13 @@ compare A4000 with L4 as a learning machine, does not show K above 4, and does n
 recommend for the long run beyond the 20 updates measured. Long runs' watchdogs must be
 sized from K=4's s/update, roughly twice solo.
 
+It also covers one producer per seed only. Main's new-recipe default
+(`manabot.recipes.builders.sampled_self_play`, c5fba4) now uses four producers, which
+would put 16 producers on a 6-vCPU L4 at K=4. Step 1's gain came from filling an idle
+GPU with one busy core per seed, so it does not carry over without a measurement.
+c5fba4's calibration reads one against four producers on an unpacked pod. Which default
+wins when the two are combined stays open.
+
 ## Step 3: stop waiting for the slowest game (deferred)
 
 Jack Heart deferred this on 2026-11-07 because it needs paid strength runs. Step 1
@@ -416,8 +440,7 @@ its game. There are two candidates:
   30-update calibration as 07c490 did (about 190 at 48,555 rows over 256
   streams). Capacity recovery discards a failed game's unlearned rows.
   Software: let `batch_closure: "exact"` accept `learning_seats: "both"`, with
-  per-seat carry-over. Build it after c5fba4's `collection.py` change lands.
-  Acceptance: with the closure set to complete games, digests are unchanged.
+  per-seat carry-over. Acceptance: with the closure set to complete games, digests are unchanged.
   Unit tests cover carry-over across a batch boundary for both seats, rows
   per stream equal to the quota, and the bootstrap index of carried rows.
 - **Refill, rejected unless its bias is small.** Finished streams start new
