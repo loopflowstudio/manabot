@@ -84,8 +84,8 @@ run, size None without a checkpoint.
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_experiment_files.py tests/eval/test_tla_frontier.py
 tests/eval/test_tla_frontier_vocabulary.py tests/eval/test_tla_frontier_facts.py -q` 92
-passed on 546b496d5 plus the working-tree fix (2026-11-07). CI on PR #439 owns the
-Integration suites; a head with the fix has not yet run there.
+passed on 0f9736f21 (2026-11-07). CI run 42347918751 on that head passed all three
+Integration suites, Python Unit Tests and Tests Result.
 
 ### Concept review 13 (2026-11-06, headless): nothing to change
 
@@ -151,6 +151,18 @@ Nothing is launched. Concept review 15 states the authority for each paid step.
   but not equal-hours code. Running it first would also spare a new protocol version if
   catalog fails. That reorders an accepted protocol, so it is Jack Heart's to decide.
 
+### Concept review 16 (2026-11-07, headless): nothing to change
+
+- Reviewed at 0f9736f21. Main has not moved, PR #439 is mergeable and clean, and every
+  check that ran passed. Since review 15 only the discovery test's expected set changed.
+- `sampled_self_play` has no production caller, so the default could have drifted from
+  the run. Rebuilt from the committed w64 regime's own inputs, its dump matches with no
+  differences. Do not pin that in a test: the next frontier run moves the builder while
+  this regime stays frozen, so such a test would fail on the intended change.
+- Etude Task 3d4f40 is still unstarted, unowned and has no PR; it holds the freeze only.
+  Review 15's authority question stays open for Jack Heart at the freeze boundary. It is
+  execution authority, so it does not block delivery of PR #439.
+
 ### Realign after demo (2026-11-07, headless)
 
 Main has not moved past this branch's base (43150799f). PR #439 is open at 546b496d5:
@@ -158,7 +170,8 @@ mergeable, Python Unit Tests, packages and the Linux install passed. CI run 4234
 failed Integration (ubuntu-latest, evaluation), 1 failed, 481 passed, 1 skipped, and Tests
 Result with it: `test_etude_finds_each_current_experiment_and_nothing_else` did not list
 `tla_frontier`, `tla_frontier_calibration` or `tla_frontier_vocabulary`. The expected set now
-names them; `tla_frontier_facts` and `tla_frontier_analysis` are helpers Etude rightly does
+names them at 0f9736f21, where CI run 42347918751 is green and the PR is mergeable and clean;
+`tla_frontier_facts` and `tla_frontier_analysis` are helpers Etude rightly does
 not discover. The protocol's Launch sequence now
 matches "Before freeze": step 1 needs items 1, 2 and 4–6, and the freeze in step 5 also needs
 item 3. Plan items now use the protocol's numbers.
@@ -213,7 +226,7 @@ unchanged.
 
 ## Remaining work
 
-- PR #439 finishes CI and merges (items 1, 2, 4–6). Etude Task 3d4f40 (item 3) must start
+- PR #439 merges (items 1, 2, 4–6); its CI is green at 0f9736f21. Etude Task 3d4f40 (item 3) must start
   and release before the freeze; it does not hold calibration.
 - Then the protocol's "Launch sequence": on-demand checks, coverage sweep, calibration and
   rehearsal (paid, USD2 ceiling each), both gates, horizons, freeze, the catalog-vs-hashed
