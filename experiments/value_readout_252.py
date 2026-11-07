@@ -26,7 +26,9 @@ parent's `run.json` and exports fetched to `DIR/<parent run>/`:
         --out continuations.json
 
 then launch as above with `--continuations continuations.json --hours 1.5
---usd-per-run 1.05`, at the parents' revision.
+--usd-per-run 1.05`, at the parents' revision. The third segment (150 -> 300)
+stages the update-150 runs with `--after 2` and launches with `--after 2
+--updates 300 --recover-capacity yes --hours 3.75 --usd-per-run 2.4`.
 
 Evaluation (`eval`) scores updates 20, 40 and 75 of each first segment and 150 of
 its continuation against the heuristic, and the three final policies of each seed
@@ -42,7 +44,7 @@ import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
-from itertools import combinations
+from itertools import combinations, product
 import json
 from pathlib import Path
 
@@ -109,7 +111,17 @@ FINALS: dict[tuple[ValueAggregation, int], str] = {
     ("value_token", 25203): "03eab5232afd",
     ("attention_readout", 25203): "551b7e26e666",
 }
+# The continuation that took each update-150 learner to update 300, with
+# capacity recovery in every arm.
+THIRDS: dict[tuple[ValueAggregation, int], str] = {}
+# Each segment's parents: segment 2 continues the first segments, segment 3
+# the update-150 runs.
+SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {
+    1: PARENTS,
+    2: FINALS,
+}
 FIRST_SEGMENT_UPDATES = (20, 40, 75)
+THIRD_SEGMENT_UPDATES = (200, 250, 300)
 EVALUATION = "value-readout-252-v1"
 # About 2,250 pairings (9,000 games); 07c490's pass played about one pairing a
 # second on this host. The limit covers 1.25 h plus setup at the $2/h ceiling.
@@ -192,11 +204,13 @@ def runs(
     continuations: str = "",
     arms: str = ",".join(ARMS),
     recover_capacity: str = "",
+    after: int = 1,
 ) -> list[EtudeRun]:
     """Etude training runs: every arm under the same comma-separated seeds.
 
     `continuations` names a file from `stage`; each run then continues its
-    parent's learner to `updates` instead of starting fresh. `arms` narrows a
+    parent's learner to `updates` instead of starting fresh; `after` names the
+    segment whose runs are the parents (`SEGMENT_PARENTS`). `arms` narrows a
     continuation to some arms, and any non-empty `recover_capacity` makes a game
     that overflows observation capacity end alone instead of stopping the run.
     """
@@ -211,7 +225,11 @@ def runs(
             for run in segment(
                 planned_run,
                 LearnerContinuation.model_validate(
-                    staged[PARENTS[planned_run.aggregation, planned_run.seed]]
+                    staged[
+                        SEGMENT_PARENTS[after][
+                            planned_run.aggregation, planned_run.seed
+                        ]
+                    ]
                 ),
                 hours,
                 bool(recover_capacity),
@@ -266,6 +284,11 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             (update, _checkpoint(state, parent, update))
             for update in FIRST_SEGMENT_UPDATES
         ] + [(UPDATES, _checkpoint(state, FINALS[aggregation, seed], UPDATES))]
+        if (aggregation, seed) in THIRDS:
+            scheduled += [
+                (update, _checkpoint(state, THIRDS[aggregation, seed], update))
+                for update in THIRD_SEGMENT_UPDATES
+            ]
         found += [
             Matchup(
                 name=f"{aggregation} s{seed} u{update} vs heuristic",
@@ -277,15 +300,20 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             for update, checkpoint in scheduled
             if checkpoint is not None
         ]
+    finals = [(FINALS, UPDATES), (THIRDS, THIRD_SEGMENT_UPDATES[-1])]
     for seed in sorted({seed for _, seed in PARENTS}):
-        for first, second in combinations(ARMS, 2):
-            left = _checkpoint(state, FINALS[first, seed], UPDATES)
-            right = _checkpoint(state, FINALS[second, seed], UPDATES)
+        for (runs_at, update), (first, second) in product(
+            finals, combinations(ARMS, 2)
+        ):
+            if (first, seed) not in runs_at or (second, seed) not in runs_at:
+                continue
+            left = _checkpoint(state, runs_at[first, seed], update)
+            right = _checkpoint(state, runs_at[second, seed], update)
             if left is None or right is None:
                 continue
             found.append(
                 Matchup(
-                    name=f"{first} v {second} s{seed} u{UPDATES}",
+                    name=f"{first} v {second} s{seed} u{update}",
                     players=(left.model(inference), right.model(inference)),
                     conditions=conditions,
                     games=legs,
@@ -328,6 +356,12 @@ def segment(
     return TrainingJob(
         regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
         experiment=EXPERIMENT,
+        # Scored updates inside this segment; its end is saved regardless.
+        milestones=tuple(
+            u
+            for u in (*FIRST_SEGMENT_UPDATES, *THIRD_SEGMENT_UPDATES)
+            if continuation.from_update < u < stage.updates
+        ),
         finalization_seconds=FINALIZATION_SECONDS,
         continuation=continuation,
     )
@@ -404,13 +438,14 @@ def main() -> None:
     stage = sub.add_parser("stage", help="upload parents' exports as Etude inputs")
     stage.add_argument("--parents", type=Path, required=True)
     stage.add_argument("--out", type=Path, required=True)
+    stage.add_argument("--after", type=int, default=1, choices=SEGMENT_PARENTS)
     args = parser.parse_args()
     storage = storage_from_uri(STAGING_BUCKET)
     staged = {
         parent: stage_parent(
             args.parents / parent, storage, f"{STAGING_PREFIX}/{parent}", seed
         ).model_dump(mode="json")
-        for (_, seed), parent in PARENTS.items()
+        for (_, seed), parent in SEGMENT_PARENTS[args.after].items()
     }
     args.out.write_text(json.dumps(staged, indent=2) + "\n")
 
