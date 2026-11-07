@@ -112,3 +112,16 @@ Reversible choices:
 - Quote 2026-11-06 at `8d178f40e`: `--rent l4 --machines 2` plans $2.06 (reservation
   $2.10); `--rent a4000` refused, no stock at quote time. Re-quote before launch.
 
+
+## Fact-contribution reading (implement, 2026-11-07, headless)
+
+Reversible choices for Jack Heart's review:
+- Positions come from seeded random-action play on the frozen pairs, not the
+  heuristic or a checkpoint, so they are identical for every checkpoint and need
+  no policy. Random play may under-represent late-game fact kinds; per-kind counts
+  are reported so a thin kind is visible.
+- The denominator is the object's embedding entering the fact encoder (after
+  permanent links, before facts) for both fact and shared-effect ratios, as the
+  direction says; shared effects are measured on objects named by a membership row.
+- It runs on CPU where the analysis runs (no rental): about 1 s per w64 checkpoint
+  on 495 positions here, so a full frontier read is minutes, not paid compute.

@@ -111,3 +111,13 @@ four producers help.
   write Etude), not manabot workarounds such as reconstructing hours on the
   manabot side. Leave equal-hours pairing marked as waiting on that Etude
   change; filed as Etude Task 3d4f40 (not started; running it is Jack Heart's call).
+- **Fact-contribution reading (Jack Heart, 2026-11-07).** Neither the hashed
+  nor the catalog fact embeddings has learning evidence: no experiment ever
+  measured them, and their output layers start at zero. Add a descriptive,
+  no-training reading over retained checkpoints (vocabulary-check arms and each
+  long run's milestones): on a fixed sample of positions from the frozen pairs,
+  the norm of the fact and of the shared-effect contribution added to each
+  object, relative to that object's pre-fact embedding, by fact kind. Report it
+  beside learning; it gates nothing. Declare it in the protocol before freeze and
+  implement it in this PR (#439). A reading near zero after training is a
+  finding that neither design is being used.

@@ -35,7 +35,8 @@ both sizes' hours. Each size also shows its damping horizon and producers beside
 updates it reached, and its pod's host speed and settled games by label
 (`engine_error`, `resource_limit`), reported beside the reading and voiding
 nothing. The CLI writes JSON; it neither runs games nor
-replaces evidence.
+replaces evidence. The fact-contribution reading, which loads checkpoints
+rather than reading matches, is `experiments.tla_frontier_facts`.
 """
 
 from __future__ import annotations

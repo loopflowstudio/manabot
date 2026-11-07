@@ -70,9 +70,21 @@ protocol (70d79ccb8) and #437 (30df0c, 2026-11-07, merge 43150799f) are merged i
    scale absent. `FrontierAnalysis.runs` (`Attempt`) lists every stored run, size None without
    a checkpoint.
 
+7. Built (demo review, steer 6472bb87): the fact-contribution reading,
+   protocol "Reading › Fact contribution" and "Before freeze" 6.
+   `experiments/tla_frontier_facts.py`: `sample_positions` (one seeded
+   random-action game per frozen pair, every 4th decision, ≤32 per pair; 495
+   positions, 0.3 s), `read_model` (forward hooks on `FactEncoder`, its output
+   layer and `SharedEffectEncoder`; ratio to the pre-fact object norm, total, per
+   kind and shared effects), `read_checkpoints`/`read` and a CLI over either
+   experiment. Fresh w64: facts exactly 0; shared effects median about .21 (no
+   zero-init), so update 0 is the shared-effect baseline.
+
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
-tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed (Question ratio fix, with #437 merged, 2026-11-06). Gate owns wider suites.
+tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py
+tests/eval/test_tla_frontier_facts.py -q` 88 passed (2026-11-07; one protocol-block
+filter in test_tla_frontier.py narrowed because the new command block also names
+the vocabulary experiment). Gate owns wider suites.
 
 ### Concept review 13 (2026-11-06, headless): nothing to change
 
@@ -137,7 +149,7 @@ played (the endpoint head-to-head name carries no updates, so Etude raises `matc
 Deleted 2026-11-06: `read_screen`, `ScreenReading`, `SLOW_HOST_RATIO`, `--screen`,
 `runs(size=…)`/`--size` and their tests; the one-producer validators for sampled
 rosters; `is_set_aside`, `SetAside`, `FrontierAnalysis.set_aside` and their two tests
-(direction 26). Kept: `host_speed` (reported, not a gate). `experiments/tla_pilot_v10.py` is executed
+(direction 26); `ModelContribution.positions` (the reading's top-level count holds it). Kept: `host_speed` (reported, not a gate). `experiments/tla_pilot_v10.py` is executed
 evidence and stays unchanged.
 
 ## Remaining work

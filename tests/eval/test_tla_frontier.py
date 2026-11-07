@@ -565,7 +565,9 @@ def test_protocol_waits_for_each_pass_and_names_the_relaunch() -> None:
         < rehearsal.index("--rehearsal")
     )
     (check,) = [
-        block for block in _protocol_blocks() if "tla_frontier_vocabulary" in block
+        block
+        for block in _protocol_blocks()
+        if "etude eval experiments/tla_frontier_vocabulary" in block
     ]
     assert (
         check.index("etude eval")

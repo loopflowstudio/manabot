@@ -441,6 +441,35 @@ Report every attempt, failure, resource-limit discard, unreached milestone and
 cost. One seed per size supports a descriptive frontier reading, not a controlled
 claim that one size is better in general.
 
+### Fact contribution
+
+Neither the hashed nor the catalog fact embedding has learning evidence, and
+both fact output layers start at zero, so this descriptive reading asks whether
+training uses them. It trains nothing, plays no scored game and gates nothing;
+it is reported beside learning. `experiments/tla_frontier_facts.py` fixes one
+sample of positions from the 16 frozen pairs: one random-action game per pair
+(leg 0, the pair's deal seed, action seed 21593001, forced decisions skipped),
+keeping every fourth decision up to 32 per pair; a game past a capacity stops
+there. Every checkpoint reads the same positions. For each object a valid fact
+row or a shared-effect membership names, it reports the norm of the fact
+contribution added to that object, in total and per fact kind, and the norm of
+the shared-effect contribution, each relative to the object's embedding before
+facts: the median and mean over (position, object) rows, with their counts.
+The shared-effect reducer has no zero-initialized output, so its update-0
+reading is the baseline its trained readings are read against.
+
+It covers each vocabulary-check arm at every export (update 0 included) and
+each frontier run at update 0, every reached milestone and its endpoint. A
+fact reading near zero after training is a finding that neither design is
+being used. It runs on CPU where the analysis runs:
+
+```bash
+"${control[@]}" python -m experiments.tla_frontier_facts \
+    --experiment tla_frontier_vocabulary --source <store> --out <facts.json>
+"${control[@]}" python -m experiments.tla_frontier_facts \
+    --experiment tla_frontier --source <store> --out <facts.json>
+```
+
 ## Before freeze
 
 Software, merged on main after PRs #435 and #437, each with its acceptance
@@ -519,6 +548,13 @@ check:
    "${control[@]}" etude wait <run>
    "${control[@]}" python -m experiments.tla_frontier_vocabulary --source <store>
    ```
+
+6. **Fact-contribution reading** (`experiments/tla_frontier_facts.py`, its
+   tests; declared under [Fact contribution](#fact-contribution)). Check:
+   `uv run --extra dev --extra evaluation --extra artifacts pytest
+   tests/eval/test_tla_frontier_facts.py -q`: the positions repeat exactly, a
+   fresh model's fact contribution is zero, weighted fact output registers per
+   kind, and the reader covers the frontier and vocabulary checkpoints it names.
 
 Calibration runs from the merged revision of 1–4. The freeze is a second, small
 change carrying both horizons and the regime hash.
