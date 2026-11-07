@@ -78,13 +78,15 @@ UPDATES = 5
 ONE_PRODUCER = "w64-p1"
 type Pod = Literal["w64", "w160l8", "w64-p1"]
 # A pod's updates stop once another one plus the 600 s stop reserve no longer fits
-# its wall, and its hours must also cover the 600 s finalization. W160l8 keeps
-# 3,000 s, one update well past the protocol's 1,500 s launch gate; each w64 pod
-# keeps 1,100 s, five updates at 220 s.
+# its wall. Its hours run from the machine's start, so they cover the wall, the
+# 600 s finalization and the job's setup, which took about 170 s on an L4; a job
+# with too little left refuses to start. W160l8 keeps 2,700 s, one update well
+# past the protocol's 1,500 s launch gate; each w64 pod keeps 800 s, five updates
+# at 160 s.
 WALL_SECONDS: dict[Pod, float] = {
-    SMALL: 1700.0,
-    ONE_PRODUCER: 1700.0,
-    LARGE: 3600.0,
+    SMALL: 1400.0,
+    ONE_PRODUCER: 1400.0,
+    LARGE: 3300.0,
 }
 MAX_HOURS: dict[Pod, float] = {
     SMALL: 0.65,
@@ -96,6 +98,7 @@ MAX_HOURS: dict[Pod, float] = {
 # USD0.60/hour limit. USD2 in total, inside the protocol's reserve.
 ONDEMAND_USD_PER_HOUR = Decimal("0.60")
 SETUP_HOURS = Decimal("0.25")
+JOB_SETUP_SECONDS = 300.0
 MAX_USD: dict[Pod, Decimal] = {
     SMALL: Decimal("0.55"),
     ONE_PRODUCER: Decimal("0.55"),
