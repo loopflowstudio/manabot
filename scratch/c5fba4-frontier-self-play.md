@@ -74,21 +74,26 @@ Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
 83 passed (Question ratio fix, with #437 merged, 2026-11-06). Gate owns wider suites.
 
-### Concept review 12 (2026-11-06, headless): next implement direction
+### Concept review 13 (2026-11-06, headless): nothing to change
 
-- Done: the protocol's Question now says about 17× in compute parameters (17.4×;
-  13.6× in total), matching the counts section; no other copy of the old ratio remains.
-- Not a change, kept for the freeze: Etude's store already holds `wall_ms` in
-  `training_checkpoints`, so the hours are on record from the first export. Item 3
-  only exposes them, so it gates when equal-hours slots can be played, not training.
-  It does not gate calibration either, which runs from 1, 2 and 4.
-- Unresolved (Jack Heart's call, not yet blocking): if Etude Task 3d4f40 has not
-  released by the time calibration's horizons are written, does the freeze wait for
-  it (the protocol as written, item 3 before freeze), or does it freeze and play
-  equal-hours slots retroactively once a new version moves the client pin?
-  Evidence: `training_checkpoints.wall_ms` is already in the store
-  (`etude/eval/query.py`), and `checkpoint_hours` returns None until the Etude
-  change lands.
+- Software items 1, 2, 4 and 5 match the accepted design; item 3 waits on Etude Task
+  3d4f40. No implement direction follows from the design.
+- Settled by the accepted design as written, so no longer open: the freeze waits
+  for item 3. Jack Heart accepted a protocol that lists item 3 under "Before freeze",
+  and equal-hours slots read `checkpoint_hours`, which is runner code and cannot change
+  after the freeze. Calibration and the coverage sweep do not need item 3. Freezing
+  without it, and playing equal-hours slots later in a new version, would be a revision
+  of the accepted design for Jack Heart to decide, not a choice this step can make.
+  Evidence: `training_checkpoints.wall_ms` is already in the store and the analysis's
+  `_training_points` reads it for `TrainingPoint.hours`, so the hours exist from the
+  first export; item 3 only lets `eval` see them.
+- Operator risk, not a design question: 3d4f40 has not started, and starting it is
+  Jack Heart's call. If it is still unstarted when calibration's horizons are written,
+  the freeze waits there.
+- Wording for the gate: the protocol's status says the two horizons "enter the JSON".
+  w160l8's goes in the protocol JSON (`large.expected_updates`, provisional 129) and
+  w64's in its regime JSON (`iteration_schedule.steps`, provisional 1,296). Name both
+  files.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
