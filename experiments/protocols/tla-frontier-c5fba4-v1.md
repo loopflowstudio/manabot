@@ -242,9 +242,10 @@ reading fails this gate.
 
 3. The record coverage sweep on the revision calibration runs from:
    `uv run python -m manabot.verify.record_coverage --games 200 --seed 0`.
-   Every card and id must map; it is rerun on the frozen revision. Its seed 1 ran about 25× slower per decision on very large boards,
-   a game-time and per-update cost risk that calibration's seconds per update
-   and the rehearsal's slowest game read; it is not a vocabulary failure.
+   Every card and id must map; it is rerun on the frozen revision. Its seed 1
+   ran about 25× slower per decision on very large boards, a game-time and
+   per-update cost risk that calibration's seconds per update and the
+   rehearsal's slowest game read; it is not a vocabulary failure.
 4. Calibration, then the evaluation rehearsal.
 5. Both gates, and each size's horizon written into the JSON
    protocol and regime. Freeze at the merged revision that carries them.
@@ -488,9 +489,9 @@ freeze step, not as a condition of merging:
    one pair played once under both slots), and an analysis test whose fixture
    runs carry both labels in `game_errors.by_cell`.
 
-5. **Catalog against hashed fact ids** (accepted with the design; the field is
-   Task 30df0c's, PR #437, which lets fresh regimes select
-   `record_vocabulary: hashed`; rerun on the frozen revision). Before either 54-hour run,
+5. **Catalog against hashed fact ids** (accepted with the design). The field is
+   Task 30df0c's: PR #437 lets fresh regimes select `record_vocabulary: hashed`,
+   and this item's tests rerun on the frozen revision. Before either 54-hour run,
    `experiments/tla_frontier_vocabulary.py` trains two arms of the frozen w64
    regime that differ only in `ModelConfig.record_vocabulary`, catalog and
    hashed: same recipe, seed 21501, decks, four producers, 100 updates, exports

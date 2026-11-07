@@ -72,67 +72,45 @@ throughput protocol) is merged in.
 
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-83 passed, 1 skipped (needs #437) (implement, direction 27, after merging 70d79ccb8, 2026-11-06). Gate owns wider suites.
+83 passed, 1 skipped (needs #437) (compress, after merging 70d79ccb8, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
 
-## Concept reviews ten and eleven (2026-11-06, headless; full text at `6304f0e28`)
+## History (full text at `739f95b8d:scratch/c5fba4-frontier-self-play.md`)
 
-- Tenth (direction 26, item 6): a lost run is its size's only run; no replacement. An update-0
-  endpoint is unreached, not played. Reopens if a launcher stores a second run under one tag.
-- Eleventh (direction 27, implemented): software merges after #435 without waiting for #437,
-  because items 1, 2 and 4 do not read #437 and item 5 runs on both sides of it
-  (`HAS_RECORD_VOCABULARY`); b015d5's throughput protocol (main 70d79ccb8) builds on item 1's
-  `collection.py`. #437 merges before freeze; the parameter recount follows it and precedes
-  calibration. The protocol's "Before freeze" opening and Launch step 1 now say so, and item 5
-  and the coverage sweep cite "rerun on the frozen revision" instead of a #437 head. Reopens if
-  #437 changes `ModelConfig`, the regime builders or `collection.py` against items 1–2; the
-  later PR rebases.
+Protocol v1 was drafted 2026-11-05 (headless) and concept-reviewed eleven times; the
+pre-review design (w256, one producer, host screen) is at `8e4ed4a9c`, reviews 1–6 at
+`1ef23d800`. Directions 1–27 are implemented and stated in the protocol. Live facts:
 
-## Draft as reviewed
+- **Identity.** `EXPERIMENT` is the file stem; a launched run's stored name is its launcher
+  id, so `size_run` reads the regime tag `RunContext` records. `TrainingRun.job_name` would
+  be the better owner (Etude proposal).
+- **Lost runs** (directions 22, 26). `with_launcher_ends` closes a `running` run whose launcher
+  status is done and unsuccessful; only a worker writes `state.json`. A lost run is its size's
+  only run; an update-0 endpoint is unreached. Reopens if a launcher stores two runs under one tag.
+- **Passes** (direction 23). A pass id digests its pending matches and the launcher refuses a known
+  id, so `C5FBA4_PASS_ATTEMPT` renames a relaunched pass. `etude eval` leaves failed matches alone
+  without `--retry-failed`; a failed launched pass blocks later passes from that computer
+  (`launched_pass_failed`), untested on a real rental. `etude report` calls `eval`, so it needs
+  launcher access.
+- **Order** (direction 27). Software merges after #435 without #437: items 1, 2, 4 do not read it
+  and item 5 runs on both sides (`HAS_RECORD_VOCABULARY`); b015d5's throughput protocol builds on
+  item 1's `collection.py`. Reopens if #437 changes `ModelConfig`, the regime builders or
+  `collection.py` against items 1–2; the later PR rebases.
+- **Clients.** Locked 0.2.12 `etude ondemands` fails on a `vast` row; the 0.2.14 overlay with
+  nested Doppler works and its evaluation keys match 0.2.12's. The GPU model lives in the
+  launcher's session record (`etude status`), so same-GPU is an operator check.
+- **Disks.** Arena journals go to `/dev/shm` (MTG-251's fsync cost); capacity with 28 workers is
+  inherited, not measured.
 
-Protocol v1 drafted 2026-11-05 (headless) and concept-reviewed nine times; its
-design (w256, one producer, absolute schedule, host screen) and checks are at
-`8e4ed4a9c:scratch/c5fba4-frontier-self-play.md`, earlier reviews at
-`1ef23d800:scratch/c5fba4-frontier-self-play.md`. Nothing has launched or spent money.
-
-## Reconciliation findings (2026-11-05)
-
-Observed:
-
-- Resolved and in the protocol (full text at `6304f0e28`): `game_seconds` 600 s, `eval()`
-  machine setup as in `learning_signal.py`, real update-0 exports, and checkpoint `wall_ms`
-  retained in `training_checkpoints` but dropped by `ExperimentState` (item 3).
-- Installed Etude source, read 2026-11-05: `etude eval` counts a failed match and
-  leaves it alone unless given `--retry-failed`, so a default pass never trips
-  analysis's repeated-match error. Its launch ledger (one file per computer)
-  skips matches a rented pass still has in flight, so overlapping passes from
-  one computer do not duplicate games.
-- The same ledger raises `launched_pass_failed` on every later rented pass once
-  any launched pass ends unsuccessfully, and nothing clears the entry, so a
-  genuine pass failure stops evaluation until someone intervenes. This is
-  untested against a real rental; direction 6 removes the routine trigger.
-- The GPU model is held in the launcher's session record, shown by `etude
-  status`, not in the training store, so analysis cannot check the same-model
-  rule. It stays an operator check.
-- `uv run etude ondemands` on locked 0.2.12 fails today on a `vast` provider row;
-  the overlay with nested Doppler lists offers, so the protocol's bare commands
-  could not have launched. Under 0.2.14 the 22 tests pass, and an evaluation job,
-  its environment identity and match keys are byte-identical to 0.2.12's, so a
-  0.2.14 planner, 0.2.12 worker and either analysis agree on keys.
-- Frontier `play` wrote its fsync-per-record arena journal to the rented disk,
-  inside the 600 s limit. MTG-251 found that at about 0.1 s per record and
-  `learning_signal` works around it. Now mirrored; `/dev/shm` capacity with 28
-  workers is inherited from that study, not measured here.
-
-Estimates, not measurements: w64 about 1,300 updates at v10's 150 s/update (v9
-inputs may cost more); w256 per-update GPU cost and CUDA memory are unknown. About 36 comparisons
-would cost about USD8.50 with per-rental setup (see directions 4 and 11), within
-the USD12 cap. At
-USD0.59/hour the 54-hour wall spends about USD33 per size, so USD38 is a ceiling,
-not an expected cost.
-
+Counterexamples still live: `best`/`worst` straddling every threshold (rules or capacity fix,
+new version); exports denting large-arm throughput or a pass costing well above USD0.45 (widen
+cadence or drop milestones 75/150 by operator stop); calibration peak RSS above about 27 GB;
+dropped actions at a meaningful rate (64 slots limit strength; the reading stands); tags failing
+on a real checkpoint (Etude `job_name` first); a rental unable to read calibration's checkpoints;
+trained games far longer than fresh ones; a late delivery moving an endpoint after its comparisons
+played (the endpoint head-to-head name carries no updates, so Etude raises `matchup_conflict`).
 
 ## Delete — do not maintain
 
@@ -152,7 +130,7 @@ evidence and stays unchanged.
   horizons, the catalog-vs-hashed check, training (paid; needs an execution
   decision), evaluation driver.
   `etude launch` refuses several runs without
-  `--cohort`, and a cohort's default `--parallel 1` would train w256 only after
+  `--cohort`, and a cohort's default `--parallel 1` would train the large arm only after
   w64's 54 hours, so both commands name a cohort and two machines.
 - Unproven until the first real rental: delivery to the training store, setup cost
   per rental, `/dev/shm` with 28 workers, and calibration's stock worker on CUDA. The
@@ -168,178 +146,6 @@ evidence and stays unchanged.
   scale score, hours per checkpoint and every failed, missing or unreached slot. `report()` stays
   descriptive curves. A repeated match key fails analysis loudly, inherited from
   `pair_result`.
-
-## Concept reviews one to six (digest)
-
-Full text: `1ef23d800:scratch/c5fba4-frontier-self-play.md`. Directions 1–21 are implemented and
-stated in the protocol. Live facts and choices:
-
-- **Identity.** `EXPERIMENT` is the file stem. A launched run's stored name is its launcher id, so
-  `size_run` reads the regime tag `RunContext.checkpoint` records; tags stay out of match keys.
-  `TrainingRun.job_name` would be the better owner, an Etude proposal.
-- **Reach.** `endpoint` is the last stored checkpoint of any ended run. `scale` needs both finished
-  below the cap. `execute_regime` closes a wall stop `finished`. SIGTERM ends a `TrainingJob` as
-  `interrupted`/`failed`, so a cancelled pod records its end.
-- **Failure.** Failed legs bound a reading (`worst`/`best`); nothing is replayed, and a killed game is
-  a delivered match. `etude eval` leaves failed matches alone without `--retry-failed`. Cutoff counts
-  ride on `games` rows (`PolicyActions.games` says how many returned one).
-- **Gates.** Calibration: 5 updates, 3,600 s, USD1 per size, w256 at 1,500 s/update or less. Rehearsal:
-  all 128 games valid and the slowest under 300 s. A real fresh w256 match here ran about 0.05 s a
-  decision, against the protocol's 0.4 s single-observation reading.
-- **Host screen.** Step speed over updates 2–6, 1.3× line, one replacement per size, below update 25;
-  a pod past 25 is kept. `--size` relaunches alone with no `--max-usd`. A never-started pod is not that
-  replacement. Past the screen no run moves because of a score.
-- **Rentals.** `l4`, `mtg252-a40` if L4 is empty, `cpu32` for passes; `ondemand startup --seconds 900`
-  where absent. A booted pod's guardian ends it; only an unbooted pod needs the controller.
-- **Estimates.** Expected spend about USD77 of USD100. Host memory follows rows (fit 11.1 GB + 131 KB
-  a row at v7; v9's row 207 KB). About 15 rentals at USD0.45. Rental ceiling follows storage (R2 a
-  week). One loss over 108 pod-hours is about as likely as not (one event, crude). Launch disks hold.
-- **Left alone.** Launch timing against b015d5 (PR #435, open) is a launch decision: it projects about
-  25% off an update, touches no protocol file, and conflicts only in `scratch/questions.md`. Ledger
-  scoping, heuristic saturation, `workers: 1`, a hand-assembled final report, Academy loading of the
-  deliverable checkpoints, and clip rates at w256 belong to the final read or later proposals.
-
-Counterexamples still live:
-
-- `best` and `worst` straddle every threshold: a rules or capacity fix and a new version.
-- A retried pass replays a stored match (`repeated match`): passes go back to one attempt.
-- Monitoring exports dent w256 throughput, or a pass costs well above USD0.45: widen the cadence, or
-  drop milestones 75 and 150 by operator stop.
-- Calibration's peak RSS exceeds about 27 GB: review host and limit in a new version.
-- Dropped actions at a meaningful rate: 64 slots limit strength; the reading stands.
-- Tags fail on a really delivered checkpoint: Etude's `job_name` first, and launch waits.
-- `step_spread` above 1.3× on one pod: no screen for that launch, reporting only.
-- A corrected one-size launch refused at a real rental: the screen needs another shape.
-- A rental cannot read calibration's checkpoints: rehearse from a small file of its own.
-- Trained games run far longer than fresh ones: failed-leg bounds report it; the next limit moves.
-
-## Seventh concept review (2026-11-06, headless)
-
-Read the protocol's recovery sentences against what Etude does when something is lost. Only a
-worker writes `state.json`, so a lost pod read `running` for good and its size lost its endpoint,
-learning and strength readings. A pass's id is a digest of its pending matches and the launcher
-refuses a known id, refused creates included, which stranded the endpoint pass and the rehearsal.
-`etude eval` returns at launch, and a refused first create ends `--watch` silently.
-
-Evidence, from Etude 0.2.14 source:
-
-- Nothing under `etude/launch` writes `state.json` or names `RunState`. `Status.done` with `lost`,
-  `out_of_time` or `over_budget` already says the attempt is over, and a guardian deletion leaves the
-  same store as any death that gives the worker no time.
-- On the real scheduler in a scratch `ETUDE_HOME`: a failed run, then `run '...' already admitted`,
-  while a fresh id is accepted. A refused create pins its id too (`reconciling existing request`, seen
-  live in MTG-251 and 07c490). Stock refusals are ordinary: an `available` offer is not stock.
-- `played` counts what any eval run of the experiment delivered in its environment, "whichever
-  tournament it was held for", and analysis reads by key and environment.
-- `max_attempts` covers a machine lost after admission; `advance` calls `client.launch`, which raises,
-  and the CLI catches only `KeyboardInterrupt`.
-- Checked and closed: a pass's stored run is its launcher id (`ETUDE_RUN` wins, `tournament.py:155`);
-  `observe` skips `kind == "evaluation"`; main matched this checkout's base, PR #435 was still open,
-  and Etude main had no fix for either finding.
-
-### Directions, implemented
-
-22. `tla_frontier.with_launcher_ends` joins `Status` to the store: a `running` run `done` with an
-    outcome other than `succeeded` becomes `failed`. Both `eval`s and analysis's `main` call it;
-    `comparison_schedule` and `analyze` stay pure.
-23. `C5FBA4_PASS_ATTEMPT`, read only in `pass_name`, suffixes both benchmark names.
-24. `etude wait <run>` before `--rehearsal`; the driver's stop and restart rules; "retries" narrowed
-    to machines lost or refused after admission.
-
-Implementation notes (2026-11-06):
-
-- The default status callable is a wrapper, `_launcher_status`, not `client.status` itself. It is the
-  behavior the direction names, resolved at call time, so a test's replacement reaches an `eval` that
-  Etude loaded through `runpy`. `read_rehearsal` calls `client.status` directly for a pass's cost.
-- A run with a stored end is never asked about, so "unknown raises" applies to `running` runs only.
-  Finished history reads with no launcher; the real 0.2.14 and 0.2.12 clients raise `no run`.
-- **`etude report` calls `eval` too** (`page._wanted`), so it now needs launcher access. Its protocol
-  command already runs under `control`, and the text says so.
-- **Report tag curves do not split.** `played` counts delivery by any run, so over a store with both
-  passes each tournament shows identical tag totals, with or without the variable. The only effect is
-  a second name in the selector, which is cosmetic. A test holds it.
-- A rehearsal match stored as failed stays failed, so the attempt recovers a pass that delivered
-  nothing or part, never a failed match; that reading fails the gate. The protocol says so.
-- `etude ondemand max cpu32 2` and `etude wait <run>` match the real 0.2.14 `--help`.
-- `read_rehearsal` finds its runs from match receipts, so `pass_usd` omits a pass that stored nothing,
-  the case the attempt recovers. The gate reads no cost, so the protocol names the gap and sends
-  that pass's cost to `etude status`.
-- The endpoint head-to-head's name, `w256 final vs w64 final`, carries no updates. A late delivery
-  moving an endpoint would define that name two ways, so Etude would raise `matchup_conflict` and end
-  the driver, not merely leave games unread (read from source, not run). A dead pod delivers nothing
-  later, so this is left alone. Recorded under the counterexample below.
-
-### Left alone
-
-- **Etude owners.** `observe` joining launcher ends and `advance` taking a fresh id belong in Etude
-  ([[etude-is-ours]]) and should be proposed, beside ledger scoping and `job_name`. Each would move
-  the control client's pin and hold this PR. Each manabot side has one reader and goes when Etude lands.
-- **Continuation after a loss** stays a recorded decision under a new version.
-- **A supervised driver** would also restart past a failed pass someone should read.
-
-### Counterexamples that would reopen this
-
-- A real lost rental's status reads anything but `done` once its attempts end: the helper's condition
-  moves.
-- `played` or `statsdb` refuses two tournaments over one environment on a real store (it does not on
-  a local one): 23 needs the Etude change first.
-- A late delivery moves an endpoint after its comparisons played: report the unread games, and give
-  the endpoint head-to-head's name its updates so the driver keeps running.
-
-## Eighth concept review (2026-11-06, headless)
-
-Walked the normal path, a lost pod and recovery against the brief and direction 694f4190, looking
-past recovery mechanics to what the experiment can still say. The schedule, gates and recovery hold.
-The checks were not rerun for this review beyond the frontier tests: 68 passed at this worktree.
-Main has not moved, and PR #435 is still open.
-
-One mismatch. The first review kept equal-compute head-to-head at the endpoint only, with equal-hour
-pairs left "if someone later wants" them, and that reasoning assumed both runs finish. The third review
-then estimated a loss over 108 pod-hours at about 47% (1 − exp(−108/170.5), one event, crude). So the
-primary scale reading is absent about as often as present, while the evidence to read equal compute
-after a loss is already stored: every 25-update export, and each checkpoint's wall time, which
-`TrainingPoint.hours` reads. Nothing needs building now, since the comparison can be played after the
-loss. What cannot wait is the rule: a pair chosen after seeing curves is the choice this protocol exists
-to prevent, so it has to be written before scoring. This narrows the first review's decision and does
-not reverse it; `scale` and the runner stay as they are.
-
-### Direction, implemented
-
-25. Add to the protocol's "Lost rental" section, with no code change. If a run ends unfinished, whatever
-    the scores show, one equal-hours head-to-head is played: the lost run's endpoint against the other
-    size's last export at or before the same `TrainingPoint.hours`, on the 16 frozen pairs and four legs,
-    w256 first, read with the same bounds. It is a descriptive secondary reading: `scale` stays absent,
-    and both hours are reported. The pairing never gives the survivor more compute, so the gap favors the
-    lost run, by up to 10.4 hours when w256 is the survivor at the gate speed; say so. If both runs are
-    lost, the earlier-ending run is the one paired. The survivor's export need only be stored, so the
-    game can wait for the survivor's run to pass that hour. It costs one comparison, inside the USD12.
-    Like continuation, this version does not build the path: a small follow-up file plays it through
-    `tla_frontier.play`'s conditions, and its environment is its own, as the rehearsal's is.
-
-### Left alone
-
-- Mid-run equal-hour pairs on the normal path: still the first review's decision. Both heuristic curves
-  and `TrainingPoint.hours` show strength per hour; a reading of more than that wants a `wall_ms` on
-  `ExperimentState`, an Etude proposal.
-- A `hours` clock on checkpoints would let `eval` schedule this pair itself, at the cost of a change to
-  shared training code for a conditional reading.
-- `<store>` is a placeholder through the protocol. Launch names it, like `<frozen>`.
-
-### Counterexample that would reopen this
-
-- A real loss whose survivor export sits too far from the lost run's hours to mean anything: report the
-  gap and leave the reading out rather than move the rule.
-
-## Ninth concept review (2026-11-06, headless)
-
-Nothing to change and no open product choice. Main has not moved from the checkout base and PR #435
-is still open. Direction 25 is in the protocol's "Lost rental" section as recorded. Its `hours` is
-`TrainingPoint.hours`, `wall_ms` since the run's first stored checkpoint (`tla_frontier_analysis.py`).
-That checkpoint is update 0 for both sizes, so pre-training setup counts for neither, and "at or
-before" never gives the survivor more compute. The brief's deliverables, the direction's progress
-readings at milestones (each size against the heuristic, plus equal-update head-to-heads) and the
-cost bounds each still have one owner in the protocol. The remaining decisions belong to the
-`experiment` graph's tail, not here: freeze revision, launch timing against #435, and spend.
 
 ## Proposed wave memory (not written)
 
