@@ -1272,6 +1272,27 @@ def test_rehearsal_fails_on_one_killed_game(tmp_path: Path) -> None:
     assert reading.slowest_game_seconds == 103 and not reading.passed
 
 
+def test_rehearsal_counts_a_capacity_abort_and_passes(tmp_path: Path) -> None:
+    _calibrated(tmp_path)
+    aborted: list[str] = []
+
+    def played(match: Match) -> Tables:
+        tables = _timed(100.0)(match)
+        if not aborted:
+            aborted.append(match.key)
+            for row in tables["games"]:
+                if row["game"] == 3:
+                    row |= _KILLED | {
+                        "failure": "ValueError: observation capacity exceeded: cards"
+                    }
+        return tables
+
+    _rehearsed(tmp_path, played)
+    reading = read_rehearsal(tmp_path)
+    assert (reading.invalid_games, reading.capacity_aborts) == (1, 1)
+    assert reading.passed
+
+
 def test_rehearsal_fails_when_every_game_was_killed(tmp_path: Path) -> None:
     """Etude then stores no `seconds` column at all."""
     _calibrated(tmp_path)
