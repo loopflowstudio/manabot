@@ -228,27 +228,27 @@
         },
         {
           "path": "managym/src/agent/continuation.rs",
-          "sha256": "50fce5dd577c7b396bbcbe4a550e63f5c676455273b0fec52241c89c0ab8e351"
+          "sha256": "29359fc08e46584dbf7474048eff6161e587758a88678efc99f029693163e9eb"
+        },
+        {
+          "path": "managym/src/agent/effect_execution.rs",
+          "sha256": "196bc1730cf2b21a821a8ebc8a370aad825b91d33e5a81b1dc57980f7cc214a8"
         },
         {
           "path": "managym/src/agent/env.rs",
           "sha256": "8f8eb2043eeeca57e72c77e9e1e6d954b7a883d65c88b58baf3a4ae41d04c097"
         },
         {
-          "path": "managym/src/agent/execution.rs",
-          "sha256": "9ae6dee56d5c16ef8149cfe0f2325ba1bedfaabed37bc81c7c9ae5c0a6457b34"
-        },
-        {
           "path": "managym/src/agent/mod.rs",
-          "sha256": "84456bbba388e757ef6beb7f42c9dc75f52f08cfbb319186be173a26d47ac1e5"
+          "sha256": "c17ce4461607e6e0eb3739189820b71cf2e98030d8ebbea0c6d3f5d65c23f637"
         },
         {
           "path": "managym/src/agent/observation.rs",
-          "sha256": "d59f0f2b39e897e5ee1db6e2648ddf9a50f19c4be1a45b28ceefa97107deee44"
+          "sha256": "a596d81b064771cf91581bf022bd0bc702fdba48a05a52639c80f8d006c4be7c"
         },
         {
           "path": "managym/src/agent/observation_encoder.rs",
-          "sha256": "b29f2d3f2743414112c4d2ea8676ac497e5eaa2290bae24100a4558b4d18cb2f"
+          "sha256": "ade7df09d9828029bb179711b62b6e083030f571eecba2eb765f7d477e378289"
         },
         {
           "path": "managym/src/agent/observation_json.rs",
@@ -261,6 +261,10 @@
         {
           "path": "managym/src/agent/policy_history.rs",
           "sha256": "067189dd5d50fc3d72f05ad1766be92539cd8d482e9f51fec5be3a85421ade4c"
+        },
+        {
+          "path": "managym/src/agent/record_vocabulary.rs",
+          "sha256": "8697ad74b4631b1f5a8ef55cfaa19214e8a8f481247d171a11d520eef8dbb8ad"
         },
         {
           "path": "managym/src/agent/rollout_pool.rs",
@@ -340,11 +344,11 @@
         },
         {
           "path": "managym/src/decision_capture.rs",
-          "sha256": "ff397aefc4ae434d163534e82670ca354adc09a2b3e176e1afd2f2caefc56b5b"
+          "sha256": "02d6e4e5771ef6f5db02d84d1efd0cb8b6eab897107611f16234c5273d27ae3d"
         },
         {
           "path": "managym/src/decision_context.rs",
-          "sha256": "8da1b8ddfa48ab6d014f1c92e2c09635c26ae4c9c3076523fe57d00c2eac467d"
+          "sha256": "dfc48412ff9422654d453e5d5b1ff0242afd0b33df084772f51831f6b1e569e0"
         },
         {
           "path": "managym/src/experience.rs",
@@ -408,7 +412,7 @@
         },
         {
           "path": "managym/src/flow/naming_tests.rs",
-          "sha256": "8622c14d5ecf79f1b58bebda9b7183b6a75b69ee4f4d21b9f74e71df367d2363"
+          "sha256": "fbc181ac154390eaa47fcc4920889d4b78f6f2ab6f7e2c188e600456c9b27258"
         },
         {
           "path": "managym/src/flow/play.rs",
@@ -428,7 +432,7 @@
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
-          "sha256": "a0af7f111a2072bdd355e32c822ebb10f25e72392528c85327c436527a51653d"
+          "sha256": "8e7447feb9bd500da1bedc84466c1f7081f422e72976f674e0639c3c9301db74"
         },
         {
           "path": "managym/src/flow/retarget.rs",
@@ -508,7 +512,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "9b89f7cb658f3744720413c74b61b073091edf6ee2f297c129812cd1e481bcb5"
+          "sha256": "c82ca509b1fea2f2762264fcf2cd0097608450beb4772c014284a0a07c2113d7"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -524,7 +528,7 @@
         },
         {
           "path": "managym/src/python/vector_env_bindings.rs",
-          "sha256": "75d49efeb5a0b809467f9a36d35ea5c2204bcad4bc4c0934943330497ae177a6"
+          "sha256": "c9014b90aa7ef6a3d3cbdb1a76a83d004ea460df3d58a14e1f8e520ec43a7ff9"
         },
         {
           "path": "managym/src/search_state.rs",
@@ -568,7 +572,7 @@
         },
         {
           "path": "managym/state/src/card.rs",
-          "sha256": "0d10bbdaf9052bf28f6a2aeaa1aabfa19e6eca740d842c6942035182880f7e9b"
+          "sha256": "ecc3160c0d296426a601faae77eeac37f4c13e2076b32a110e5babbfa4564173"
         },
         {
           "path": "managym/state/src/effect.rs",
@@ -592,7 +596,7 @@
         },
         {
           "path": "managym/state/src/predicate.rs",
-          "sha256": "ebab88cd58f476df13dab5ff1e595ceced4cd1f70604139cf41941ac6e229f6e"
+          "sha256": "f80dabac08f84aac3eaebe6365f816e42c2ca9ae24e71d924d5f5362afca7dbb"
         },
         {
           "path": "managym/state/src/stack_object.rs",
@@ -600,7 +604,7 @@
         },
         {
           "path": "managym/state/src/subtype.rs",
-          "sha256": "0bd357665db4ba3dfd54bd260e0f2430eedfdb33b8fe9c30ec7275489e61af47"
+          "sha256": "9b7742cad568ec4976016cbd4b84864e80721123b8bd48a7b9d096edcf3ff221"
         },
         {
           "path": "managym/state/src/target.rs",
@@ -623,7 +627,7 @@
           "sha256": "2418277760950967fef1763dcf8cc71b4d19bfe9ac0cfb13d0848d12b4e55b06"
         }
       ],
-      "sha256": "d0e8869380a0b56dc9fe862e6e7b6b4a81446d569d200f5c6b70ff8a2fb4b243"
+      "sha256": "a91d6f8e291ab8c40d2902547e2901fad5796cc651bc27674209f32376f9aca7"
     },
     "seed": 0
   },

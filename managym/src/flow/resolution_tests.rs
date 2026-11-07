@@ -3653,7 +3653,7 @@ fn frozen_operation_obligations_admit_their_implied_completion_events() {
 }
 
 #[test]
-fn retained_execution_inputs_separate_results_iteration_and_completion() {
+fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation::Observation;
     use crate::agent::observation_encoder::{
         encode, ObservationEncodeError, ObservationEncoderConfig,
@@ -3805,7 +3805,7 @@ fn retained_execution_inputs_separate_results_iteration_and_completion() {
                                 ..config
                             }
                         ),
-                        Err(ObservationEncodeError::UnsupportedExecutionInput(_))
+                        Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
                     ));
                 }
             }
@@ -3833,7 +3833,7 @@ fn retained_execution_inputs_separate_results_iteration_and_completion() {
             "retained distinction: {case}"
         );
     }
-    if let Ok(path) = std::env::var("RETAINED_EXECUTION_EVIDENCE") {
+    if let Ok(path) = std::env::var("EFFECT_EXECUTION_EVIDENCE") {
         std::fs::write(path, serde_json::to_string(&evidence).unwrap()).unwrap();
     }
 }

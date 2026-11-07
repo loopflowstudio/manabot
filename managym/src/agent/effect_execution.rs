@@ -1,4 +1,4 @@
-//! Viewer-safe retained execution, derived from the native frame and event owners.
+//! Viewer-safe effect execution, derived from the native frame and event owners.
 //!
 //! One exhaustive walk over the suspended caller chain writes the policy
 //! occurrence: learning tokens carrying rules payloads and scalar progress, with
@@ -84,7 +84,7 @@ impl<'a> Projection<'a> {
     fn field<T: Serialize + std::fmt::Debug>(&mut self, name: &str, value: &T) {
         if !self.started {
             self.started = true;
-            self.field("retained execution", &true);
+            self.field("effect execution", &true);
         }
         self.note(|| format!("{name}: {value:?}"));
         self.tokens
@@ -220,14 +220,14 @@ impl<'a> Projection<'a> {
         );
         let tokens = self.tokens.into_rules_tokens();
         debug_assert!(
-            frame.execution.is_empty() || frame.execution == tokens,
+            frame.effect_execution.is_empty() || frame.effect_execution == tokens,
             "the text pass must reproduce the policy occurrence"
         );
-        frame.execution = tokens;
-        frame.execution_references = self.references;
+        frame.effect_execution = tokens;
+        frame.effect_execution_references = self.references;
         if let Some(text) = self.text {
-            frame.execution_summary = text.summary;
-            frame.execution_description = Some(text.notes.join("; "));
+            frame.effect_execution_summary = text.summary;
+            frame.effect_execution_description = Some(text.notes.join("; "));
         }
     }
 
@@ -706,7 +706,7 @@ pub(crate) fn project_frame(
     }
     // Ordinary catalog execution keeps its frozen projection. These retained
     // domains have no predecessor representation and must be admitted explicitly.
-    frame.execution_requires_v8 = effect.batch.is_some()
+    frame.effect_execution_requires_v8 = effect.batch.is_some()
         || effect.iteration.is_some()
         || !effect.selected.is_empty()
         || !effect.created.is_empty()
@@ -766,7 +766,7 @@ pub(crate) fn project_decision(
             out.effects("if none selected", if_declined);
             // A migrated domain keeps its frozen obligation code across picks:
             // its predecessor never encoded the picks already made either.
-            frame.execution_requires_v8 = frame.legacy_decision.is_none();
+            frame.effect_execution_requires_v8 = frame.legacy_decision.is_none();
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {
@@ -775,7 +775,7 @@ pub(crate) fn project_decision(
                 out.field("replacement", &candidate.effect);
                 out.note(|| candidate.description());
             }
-            frame.execution_requires_v8 = true;
+            frame.effect_execution_requires_v8 = true;
         }
         Decision::Scry {
             looked,

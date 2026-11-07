@@ -826,11 +826,11 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
-    execution: list[tuple[int, int]]
-    execution_references: list[VisibleReference]
-    execution_description: str | None
-    execution_summary: list[str]
-    execution_requires_v8: bool
+    effect_execution: list[tuple[int, int]]
+    effect_execution_references: list[VisibleReference]
+    effect_execution_description: str | None
+    effect_execution_summary: list[str]
+    effect_execution_requires_v8: bool
     program: list[tuple[int, int]]
     program_description: str | None
     remembered: list[VisibleReference]

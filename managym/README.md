@@ -320,7 +320,7 @@ trigger placement still waits for resolution. Explicit input v8 projects the
 retained program, results, completion and proposals through fact-kind 14 as bare
 name/value facts, with viewer-safe reference slots in relation kind 10; a frame
 that retains nothing emits no occurrence. Academy's pending-resolution summary
-and LLM text are rendered by the same walk only through `describe_execution`
+and LLM text are rendered by the same walk only through `describe_effect_execution`
 (decision context and capture), never by a policy observation. Earlier inputs reject
 novel retained state before buffer writes; migrated searches retain their frozen
 obligation codes and implied completion events.

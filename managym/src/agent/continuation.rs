@@ -77,23 +77,23 @@ pub struct ContinuationFrame {
     pub program: Vec<(u16, i32)>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub program_description: Option<String>,
-    /// Retained execution tokens, a separate ordered occurrence from the source program.
+    /// Effect execution tokens, a separate ordered occurrence from the source program.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub execution: Vec<(u16, i32)>,
-    /// v8 kind-10 relation rows link the one-based slots in execution tokens.
+    pub effect_execution: Vec<(u16, i32)>,
+    /// v8 kind-10 relation rows link the one-based slots in effect execution tokens.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub execution_references: Vec<VisibleReference>,
+    pub effect_execution_references: Vec<VisibleReference>,
     /// Every retained fact as `name: value` text. Filled only by
-    /// `Game::describe_execution` (decision context and capture); a policy
+    /// `Game::describe_effect_execution` (decision context and capture); a policy
     /// observation leaves it absent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub execution_description: Option<String>,
+    pub effect_execution_description: Option<String>,
     /// Plain-language pending work for the same viewer-safe Academy decision,
-    /// filled with `execution_description`.
+    /// filled with `effect_execution_description`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub execution_summary: Vec<String>,
+    pub effect_execution_summary: Vec<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub execution_requires_v8: bool,
+    pub effect_execution_requires_v8: bool,
     /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<VisibleReference>,
@@ -816,15 +816,19 @@ impl Game {
             ..ContinuationFrame::default()
         };
         frame.program(&effect.program);
-        super::execution::project_frame(self, effect, viewer, &mut frame, false);
+        super::effect_execution::project_frame(self, effect, viewer, &mut frame, false);
         frame
     }
 
-    /// Render the viewer's own suspended frames' retained execution as text:
+    /// Render the viewer's own suspended frames' effect execution as text:
     /// the complete `name: value` description and plain-language summaries.
     /// This is a presentation product of decision context and capture; the
     /// policy observation leaves both fields empty and never builds strings.
-    pub(crate) fn describe_execution(&self, viewer: PlayerId, frames: &mut [ContinuationFrame]) {
+    pub(crate) fn describe_effect_execution(
+        &self,
+        viewer: PlayerId,
+        frames: &mut [ContinuationFrame],
+    ) {
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()
         {
@@ -839,11 +843,11 @@ impl Game {
             match parts.next() {
                 Some(ResolutionRef::Frame(effect)) => {
                     debug_assert_eq!(frame.kind, 5);
-                    super::execution::project_frame(self, effect, viewer, frame, true);
+                    super::effect_execution::project_frame(self, effect, viewer, frame, true);
                 }
                 Some(ResolutionRef::Decision(decision)) => {
                     debug_assert_eq!(frame.kind, 6);
-                    super::execution::project_decision(self, decision, viewer, frame, true);
+                    super::effect_execution::project_decision(self, decision, viewer, frame, true);
                 }
                 None => unreachable!("suspended frames outnumber the retained caller chain"),
             }
@@ -924,7 +928,7 @@ impl Game {
             }
             _ => {}
         };
-        super::execution::project_decision(self, decision, viewer, &mut frame, false);
+        super::effect_execution::project_decision(self, decision, viewer, &mut frame, false);
         frame
     }
 
@@ -1038,7 +1042,7 @@ pub fn encode_into(
         .iter()
         .map(|f| {
             1 + if version >= 8 {
-                f.execution_references.len()
+                f.effect_execution_references.len()
             } else {
                 0
             } + f.targets.len()
@@ -1151,7 +1155,7 @@ pub fn encode_into(
             reference_row(4.0, target, 0, 0, None);
         }
         if version >= 8 {
-            for (ordinal, reference) in frame.execution_references.iter().enumerate() {
+            for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
                 reference_row(10.0, *reference, 0, ordinal, None);
             }
         }

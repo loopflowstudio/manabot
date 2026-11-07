@@ -635,9 +635,9 @@ class _Renderer:
             )
         if relation.program_description is not None:
             details.append(f"captured program: {relation.program_description}")
-        if relation.execution_description is not None:
-            details.append(f"retained execution: {relation.execution_description}")
-        for slot, reference in enumerate(relation.execution_references, 1):
+        if relation.effect_execution_description is not None:
+            details.append(f"effect execution: {relation.effect_execution_description}")
+        for slot, reference in enumerate(relation.effect_execution_references, 1):
             details.append(f"E{slot}: {self.fact_reference(reference)}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")

@@ -2695,11 +2695,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
-        execution => [FactOccurrence(FactKind::ContinuationProgram)],
-        execution_references => [Rows("v8 retained execution reference slots, relation kind 10")],
-        execution_description => [Definition],
-        execution_summary => [Definition],
-        execution_requires_v8 => [Rows("shared version admission before encoding")],
+        effect_execution => [FactOccurrence(FactKind::ContinuationProgram)],
+        effect_execution_references => [Rows("v8 effect execution reference slots, relation kind 10")],
+        effect_execution_description => [Definition],
+        effect_execution_summary => [Definition],
+        effect_execution_requires_v8 => [Rows("shared version admission before encoding")],
         legacy_decision => [Rows("v1-v7 obligation class in relation column 28; v8 uses shared selection")],
         program => [Fact(FactKind::ContinuationProgram)],
         program_description => [Definition],

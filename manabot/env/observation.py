@@ -583,7 +583,7 @@ class ObservationEncoder:
         for index, frame in enumerate(obs.continuation):
             programs = [frame.program]
             if self.config.policy_input_version >= 8:
-                programs.append(frame.execution)
+                programs.append(frame.effect_execution)
             for program in programs:
                 for ordinal, (kind, value) in enumerate(program):
                     push(
@@ -760,7 +760,7 @@ class ObservationEncoder:
                     _reference(context_row, reference)
                     rows.append(context_row)
             if self.config.policy_input_version >= 8:
-                for ordinal, reference in enumerate(frame.execution_references, 1):
+                for ordinal, reference in enumerate(frame.effect_execution_references, 1):
                     retained = row.copy()
                     retained[0], retained[22], retained[29] = 10, 1, ordinal
                     _reference(retained, reference)

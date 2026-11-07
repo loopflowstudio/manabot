@@ -189,7 +189,7 @@ impl Game {
     /// details. Other viewers receive the public owner/kind and committed facts.
     pub fn decision_context(&self, viewer: PlayerId) -> Option<DecisionContextView> {
         let mut frames = self.continuation_frames(viewer);
-        self.describe_execution(viewer, &mut frames);
+        self.describe_effect_execution(viewer, &mut frames);
         let mut view = self.decision_context_from_frames(viewer, &frames)?;
         view.recent_facts = self
             .state
@@ -260,7 +260,7 @@ impl Game {
         }
         view.pending = frames
             .iter()
-            .flat_map(|frame| frame.execution_summary.iter().cloned())
+            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
             .collect();
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.

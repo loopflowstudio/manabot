@@ -2928,7 +2928,7 @@ fn cycle_sacrifices_during_resolution_and_searches_two_distinct_basics() {
         assert!(
             !matches!(
                 encode(&obs, &config),
-                Err(ObservationEncodeError::UnsupportedExecutionInput(_))
+                Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
             ),
             "v{version}"
         );

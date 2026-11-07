@@ -1,7 +1,7 @@
 """Native retained-state pairs reach the reference encoder, text and real model.
 
-The fixture is produced by retained_execution_inputs_separate_results_iteration_and_completion
-with RETAINED_EXECUTION_EVIDENCE set. It records constructed positions, not a
+The fixture is produced by effect_execution_inputs_separate_results_iteration_and_completion
+with EFFECT_EXECUTION_EVIDENCE set. It records constructed positions, not a
 training receipt or an admitted replay world.
 """
 
@@ -46,7 +46,7 @@ class CapturedObservation:
 
 def _evidence() -> list[ExecutionEvidence]:
     return TypeAdapter(list[ExecutionEvidence]).validate_json(
-        (Path(__file__).parents[1] / "fixtures/retained-execution-v8.json").read_text()
+        (Path(__file__).parents[1] / "fixtures/effect-execution-v8.json").read_text()
     )
 
 
@@ -82,7 +82,7 @@ def test_real_fetch_search_keeps_frozen_input_admission_and_encoder_parity() -> 
 
 
 @pytest.mark.parametrize("state_encoder", ["rows", "typed_pool", "typed_gru"])
-def test_retained_execution_pairs_reach_actual_model_and_text(
+def test_effect_execution_pairs_reach_actual_model_and_text(
     state_encoder: Literal["rows", "typed_pool", "typed_gru"],
 ) -> None:
     torch.set_num_threads(1)
@@ -129,7 +129,7 @@ def test_retained_execution_pairs_reach_actual_model_and_text(
                 )
             encoded.append(tensors)
             text = render_decision(capture_json).text
-            assert "retained execution:" in text
+            assert "effect execution:" in text
             texts.append(text)
         assert texts[0] != texts[1]
         batch = {

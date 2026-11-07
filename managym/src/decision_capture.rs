@@ -59,9 +59,9 @@ impl Game {
         if observation.decision.is_none() {
             return Err(SemanticError::NoActiveDecision);
         }
-        // Captured frames carry the retained execution text the LLM view and
+        // Captured frames carry the effect execution text the LLM view and
         // pending summaries read; the policy observation itself never does.
-        self.describe_execution(viewer, &mut agent.continuation);
+        self.describe_effect_execution(viewer, &mut agent.continuation);
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
@@ -171,17 +171,21 @@ impl Game {
             ids.extend(frame.remembered.iter().filter_map(|r| r.definition));
             ids.extend(
                 frame
-                    .execution_references
+                    .effect_execution_references
                     .iter()
                     .filter_map(|r| r.definition),
             );
             ids.extend(frame.inherited_from.and_then(|r| r.definition));
-            ids.extend(frame.program.iter().chain(&frame.execution).filter_map(
-                |&(kind, value)| {
-                    (kind == crate::cards::tokens::TokenKind::DefinitionRef as u16)
-                        .then_some(value as u32)
-                },
-            ));
+            ids.extend(
+                frame
+                    .program
+                    .iter()
+                    .chain(&frame.effect_execution)
+                    .filter_map(|&(kind, value)| {
+                        (kind == crate::cards::tokens::TokenKind::DefinitionRef as u16)
+                            .then_some(value as u32)
+                    }),
+            );
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
         let mut definitions = BTreeMap::new();
