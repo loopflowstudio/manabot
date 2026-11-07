@@ -9,8 +9,10 @@ leaves the analysis incomplete and its reading unknown. A failed run keeps its
 learning and strength readings at its last stored checkpoint, with `state`
 beside them, but its head-to-head score is not equal compute, so `scale` needs
 both runs finished under the wall budget, neither stopped by the update cap.
-A run that ended below the first milestone is no size's run; `set_aside` lists
-it, because every attempt is reported. `analyze` reads the state it is given, and
+A run that ended below the first milestone is still its size's run, with every
+milestone and endpoint comparison unreached and no learning, strength or scale
+reading. `runs` lists every stored attempt, including one that saved no
+checkpoint and so names no size. `analyze` reads the state it is given, and
 `main` first joins the launcher's ends (`with_launcher_ends`), so the CLI needs
 launcher access and refuses to read a run it cannot place.
 
@@ -66,7 +68,6 @@ from experiments.tla_frontier import (
     environment,
     frozen,
     horizon,
-    is_set_aside,
     last_update,
     pod_reading,
     size_label,
@@ -160,8 +161,8 @@ class SizeReading(StrictModel):
     pod: PodReading | None
 
 
-class SetAside(StrictModel):
-    """An attempt that ended below the first milestone; it enters no reading."""
+class Attempt(StrictModel):
+    """A stored run; `size` is None when it saved no checkpoint."""
 
     run: str
     size: SizeLabel | None
@@ -177,7 +178,7 @@ class FrontierAnalysis(StrictModel):
     policy_actions: PolicyActions
     comparisons: list[Comparison]
     sizes: list[SizeReading]
-    set_aside: list[SetAside]
+    runs: list[Attempt]
     # The large size's score at equal wall-clock compute, the primary scale
     # reading. None unless both runs finished below the update cap;
     # `comparisons` keeps the score.
@@ -319,7 +320,11 @@ def _reading(
     pods: Mapping[str, PodReading],
     regime: TrainingRegime,
 ) -> SizeReading:
-    """A size with no endpoint yet has endpoint slots of update None and no score."""
+    """A size with no endpoint yet has endpoint slots of update None and no score.
+
+    A run that ended below the first milestone has an unreached initialization
+    slot; its update-0 baseline against the heuristic is no endpoint reading.
+    """
     end = endpoint(run)
     initial = next(c for c in comparisons if c.tag == f"initial-{label}")
     heuristic = next(
@@ -331,7 +336,7 @@ def _reading(
         endpoint=end,
         training=training,
         against_initial=initial.result,
-        against_heuristic=heuristic.result,
+        against_heuristic=None if initial.unreached else heuristic.result,
         learned=learned(initial.result),
         horizon=horizon(regime),
         workers=regime.stages[0].execution.workers,
@@ -351,7 +356,7 @@ def analyze(
     columns = game_columns(db)
     actions = policy_actions_by_match(db, environment_id)
     indices = bootstrap_indices(protocol)
-    trained = {label: size_run(state, label, protocol) for label in SIZES}
+    trained = {label: size_run(state, label) for label in SIZES}
     comparisons = [
         read_comparison(
             planned, db, protocol, environment_id, columns, actions, indices
@@ -408,15 +413,14 @@ def analyze(
         ),
         comparisons=comparisons,
         sizes=sizes,
-        set_aside=[
-            SetAside(
+        runs=[
+            Attempt(
                 run=run.name,
                 size=size_label(run),
                 state=run.state,
                 last_update=last_update(run),
             )
             for run in state.runs
-            if is_set_aside(run, protocol)
         ],
         scale=endpoints.result if finished and not capped else None,
         complete=not issues,

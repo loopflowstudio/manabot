@@ -21,7 +21,8 @@ lost rental can cost, and only milestones and endpoints are evaluated.
 A launched run is stored under its launcher id, so `size_run` knows a size by
 the regime tag on its checkpoints. `host_speed` reads each run's step phase and
 `run_receipt` its host and game-error counts; both are reported and void
-nothing. A lost run stops at its last export.
+nothing. A lost run stops at its last export, which is its endpoint even
+below the first milestone; then its endpoint comparisons are unreached.
 
 A pass's launcher id is a digest of its pending matches, and the launcher refuses
 a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
@@ -399,6 +400,7 @@ class ScheduledComparison:
     `update` is the first player's, None for an endpoint its run has not
     reached. Head-to-head rows put the large size first, so their score is the
     large size's. `unreached` marks a milestone past an ended run's endpoint,
+    or an endpoint comparison of a run that ended below the first milestone,
     which no later evidence can fill and no missing evidence explains. An
     equal-hours slot's `hours` are the large size's and its w64 partner's.
     """
@@ -470,25 +472,13 @@ def last_update(run: TrainingRun) -> int | None:
     return int(last.clocks["updates"]) if last else None
 
 
-def is_set_aside(run: TrainingRun, protocol: Protocol) -> bool:
-    """Whether a run ended below the first milestone.
+def size_run(state: ExperimentState, label: SizeLabel) -> TrainingRun | None:
+    """The size's one run: the checkpoints' regime tag names it, not its stored name.
 
-    Such a run has nothing to evaluate. Analysis lists it, since every attempt
-    is reported, but it is no size's run.
+    A run lost at any update is still its size's run; a second run under one
+    regime tag is a new protocol version, so it raises.
     """
-    reached = last_update(run)
-    return run.ended and (reached is None or reached < min(protocol.milestones))
-
-
-def size_run(
-    state: ExperimentState, label: SizeLabel, protocol: Protocol
-) -> TrainingRun | None:
-    """The size's one run: the checkpoints' regime tag names it, not its stored name."""
-    found = [
-        run
-        for run in state.runs
-        if size_label(run) == label and not is_set_aside(run, protocol)
-    ]
+    found = [run for run in state.runs if size_label(run) == label]
     if len(found) > 1:
         raise ValueError(f"frontier admits one {label} run, found {len(found)}")
     return found[0] if found else None
@@ -536,13 +526,16 @@ def comparison_schedule(
     """Every expected comparison, playable or not, in one order for play and analysis.
 
     Milestones past a wall-bounded endpoint remain expected but unplayable, so
-    analysis can report how far each size reached. A milestone that is also an
+    analysis can report how far each size reached. A run that ended below the
+    first milestone reached none, and its endpoint comparisons are unreached
+    too: an update-0 endpoint against initialization would play a policy
+    against itself and read as learning rejected. A milestone that is also an
     endpoint is scheduled once, as a milestone. Equal-hours slots need `hours`
     for both sizes' checkpoints; without them they stay unplayable.
     """
     inference = checkpoint_inference()
     heuristic = Code(name="heuristic", source=_source(), config=HEURISTIC)
-    trained = {label: size_run(state, label, protocol) for label in SIZES}
+    trained = {label: size_run(state, label) for label in SIZES}
     endpoints = {label: endpoint(run) for label, run in trained.items()}
     saved: dict[SizeLabel, dict[int, Checkpoint]] = {
         label: {int(c.clocks["updates"]): c for c in run.checkpoints} if run else {}
@@ -570,7 +563,7 @@ def comparison_schedule(
                 tag=tag,
                 update=update,
                 matchup=paired_matchup(name, (candidate, opponent), tag, protocol)
-                if candidate is not None and opponent is not None
+                if candidate is not None and opponent is not None and not unreached
                 else None,
                 unreached=unreached,
             )
@@ -579,6 +572,9 @@ def comparison_schedule(
     def past_endpoint(label: SizeLabel, update: int) -> bool:
         end = endpoints[label]
         return end is not None and update > end
+
+    def short(label: SizeLabel) -> bool:
+        return past_endpoint(label, min(protocol.milestones))
 
     updates = (0, *protocol.milestones)
     for update in updates:
@@ -609,6 +605,7 @@ def comparison_schedule(
                 end,
                 heuristic,
                 f"{label} final u{end} vs heuristic",
+                unreached=short(label),
             )
         expect(
             f"initial-{label}",
@@ -616,6 +613,7 @@ def comparison_schedule(
             end,
             model(label, 0),
             f"{label} final u{end} vs {label} u0",
+            unreached=short(label),
         )
 
     def run_hours(label: SizeLabel) -> Mapping[int, float]:
@@ -628,8 +626,11 @@ def comparison_schedule(
             "equal-hours",
             update,
             None,
-            unreached=update is not None and past_endpoint(LARGE, update),
+            unreached=short(LARGE)
+            or (update is not None and past_endpoint(LARGE, update)),
         )
+        if unplayable.unreached:
+            return unplayable
         small_run, small_hours = trained[SMALL], run_hours(SMALL)
         at = run_hours(LARGE).get(update) if update is not None else None
         if at is None or small_run is None or not small_hours:
@@ -661,6 +662,7 @@ def comparison_schedule(
         endpoints[LARGE],
         model(SMALL, endpoints[SMALL]),
         f"{LARGE} final vs {SMALL} final",
+        unreached=any(short(label) for label in SIZES),
     )
     # Last, so a pair that is also an equal-update or endpoint pair keeps that
     # comparison's name and tag when `eval` plays it once.

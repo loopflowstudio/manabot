@@ -65,12 +65,28 @@ Elemental studies) is merged in; nothing on main beyond it.
    regime test is skipped until #437 is merged in, so rerun
    `tests/eval/test_tla_frontier_vocabulary.py` after syncing #437.
 
+6. Built (direction 26): the set-aside rule is gone. `size_run(state, label)` admits the one
+   tagged run of a size; a run lost below update 25 is its size's run, endpoint at its last
+   export, its milestone and endpoint slots unreached (no matchup), its endpoint readings None,
+   scale absent. `FrontierAnalysis.runs` (`Attempt`) lists every stored run, size None without
+   a checkpoint.
+
 Check: `uv run --extra dev --extra evaluation --extra artifacts pytest
 tests/eval/test_tla_frontier.py tests/eval/test_tla_frontier_vocabulary.py -q`
-81 passed, 1 skipped (needs #437) (realign, after 1aa39cac4, 2026-11-06). Gate owns wider suites.
+83 passed, 1 skipped (needs #437) (compress, direction 26, 2026-11-06). Gate owns wider suites.
 
 Not changed: execution authority. Nothing is launched; spend waits for
 `experiment-execution-review`.
+
+## Tenth concept review (2026-11-06): lost runs are not replaced
+
+The accepted design cut replacement ("a lost run stops at its last export and is reported";
+protocol §Lost run), but `is_set_aside` still admitted a second run when the first ended below
+update 25, so a w160l8 pod lost early left its size with no run and the analysis could never be
+complete. Direction 26 (item 6 above) removed it. An update-0 endpoint is unreached rather than
+played, because a policy played against itself would read as learning rejected. What would reopen
+this: any launcher path that stores a second run under one regime tag (Etude `max_attempts` is
+unused). The admission rule would then need an owner, preferably Etude's run identity.
 
 ## Draft as reviewed
 
@@ -130,8 +146,8 @@ not an expected cost.
 
 Deleted 2026-11-06: `read_screen`, `ScreenReading`, `SLOW_HOST_RATIO`, `--screen`,
 `runs(size=…)`/`--size` and their tests; the one-producer validators for sampled
-rosters. Kept: `host_speed` (reported, not a gate) and `is_set_aside` (lists an
-attempt that ended below update 25). `experiments/tla_pilot_v10.py` is executed
+rosters; `is_set_aside`, `SetAside`, `FrontierAnalysis.set_aside` and their two tests
+(direction 26). Kept: `host_speed` (reported, not a gate). `experiments/tla_pilot_v10.py` is executed
 evidence and stays unchanged.
 
 ## Remaining work

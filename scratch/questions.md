@@ -146,3 +146,8 @@ equal-hours pairs throughout).
 - **Fact-embedding check: 100 updates, 9,000 s wall, USD2/3 h per arm**, and its
   three-rule criterion (protocol item 5). Value loss is the learning curve
   because it costs no games. Reversible until the check runs.
+
+- Direction 26 asked that a run lost below update 25 leave `analyze` "complete". Read as: every
+  scheduled slot is played or unreached (no "schedule is incomplete" issue). `complete` stays
+  False because any lost run carries "A run did not finish", as the existing failed-run test pins;
+  changing that is a separate decision. (implement, 2026-11-06)

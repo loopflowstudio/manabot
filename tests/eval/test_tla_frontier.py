@@ -62,10 +62,10 @@ from experiments.tla_frontier import (
     with_launcher_ends,
 )
 from experiments.tla_frontier_analysis import (
+    Attempt,
     Comparison,
     FrontierAnalysis,
     PolicyActions,
-    SetAside,
     analyze,
     main as analysis_main,
     read_pods,
@@ -432,7 +432,7 @@ def test_exports_between_milestones_are_stored_but_not_played() -> None:
     state = _failed(
         _state({SMALL: 1300, LARGE: 525}, export_every=protocol.export_every), LARGE
     )
-    run = size_run(state, LARGE, protocol)
+    run = size_run(state, LARGE)
     assert run is not None
     assert {125, 525} <= {int(c.clocks["updates"]) for c in run.checkpoints}
     (job,) = eval(state)
@@ -474,9 +474,8 @@ def test_etude_eval_observes_the_runs_training_records(tmp_path: Path) -> None:
     for launched in launches:
         _tracked(launched, tmp_path, {25: {"loss": 0.1}}, (0, 25))
     state = observe(tmp_path, experiment.name)
-    protocol = frozen()[1]
-    assert size_run(state, SMALL, protocol) is not None
-    assert size_run(state, LARGE, protocol) is not None
+    assert size_run(state, SMALL) is not None
+    assert size_run(state, LARGE) is not None
     (job,) = experiment.eval(state)
     names = {matchup.name for matchup in evaluation_spec(job).tournament.matchups}
     assert {
@@ -496,10 +495,9 @@ def test_a_real_run_context_names_its_size_under_a_launcher_id(tmp_path: Path) -
         LARGE: _tracked(large, tmp_path, {}, (0, 25), end=None),
     }
     state = observe(tmp_path, EXPERIMENT)
-    protocol = frozen()[1]
     assert {run.name for run in state.runs} == set(names.values())
     for label, name in names.items():
-        found = size_run(state, label, protocol)
+        found = size_run(state, label)
         assert found is not None and found.name == name
         assert not found.ended
     assert len(evaluation_spec(eval(state)[0]).tournament.matchups) == 5
@@ -577,26 +575,13 @@ def test_protocol_waits_for_each_pass_and_names_the_relaunch() -> None:
     assert f'{PASS_ATTEMPT}=2 "${{control[@]}}" etude eval' in relaunch
 
 
-def test_a_replaced_pod_is_set_aside_and_listed(
-    tmp_path: Path, frontier_db: duckdb.DuckDBPyConnection
-) -> None:
-    """A run that ended below the first milestone is listed, and no size's run."""
-    small, large = runs("HEAD")
-    retired = _tracked(large, tmp_path, {}, (0,), end="failed")
-    _tracked(small, tmp_path, {}, (0, 25), end=None)
-    replacement = _tracked(large, tmp_path, {}, (0, 25), end=None)
-    state = observe(tmp_path, EXPERIMENT)
-    protocol = frozen()[1]
-    found = size_run(state, LARGE, protocol)
-    assert found is not None and found.name == replacement
-    assert not any(
-        retired in str(comparison.matchup)
-        for comparison in comparison_schedule(state, protocol)
-    )
-    report = analyze(state, frontier_db, {})
-    assert report.set_aside == [
-        SetAside(run=retired, size=LARGE, state="failed", last_update=0)
-    ]
+def test_a_second_tagged_run_after_an_early_loss_raises(tmp_path: Path) -> None:
+    """A loss before update 25 is still the size's run, so no replacement is admitted."""
+    _, large = runs("HEAD")
+    _tracked(large, tmp_path, {}, (0,), end="failed")
+    _tracked(large, tmp_path, {}, (0, 25), end=None)
+    with pytest.raises(ValueError, match="admits one w160l8 run"):
+        size_run(observe(tmp_path, EXPERIMENT), LARGE)
 
 
 def test_a_pod_ended_past_the_first_milestone_keeps_its_size(
@@ -607,7 +592,7 @@ def test_a_pod_ended_past_the_first_milestone_keeps_its_size(
     _tracked(small, tmp_path, {}, (0, 25), end="failed")
     _tracked(small, tmp_path, {}, (0,), end=None)
     with pytest.raises(ValueError, match="admits one w64 run"):
-        size_run(observe(tmp_path, EXPERIMENT), SMALL, frozen()[1])
+        size_run(observe(tmp_path, EXPERIMENT), SMALL)
 
 
 def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
@@ -615,7 +600,7 @@ def test_two_live_runs_of_one_size_stay_an_error(tmp_path: Path) -> None:
     _tracked(large, tmp_path, {}, (0, 25), end=None)
     _tracked(large, tmp_path, {}, (0, 25), end=None)
     with pytest.raises(ValueError, match="admits one w160l8 run"):
-        size_run(observe(tmp_path, EXPERIMENT), LARGE, frozen()[1])
+        size_run(observe(tmp_path, EXPERIMENT), LARGE)
 
 
 def test_a_lost_pod_past_the_first_milestone_ends_at_its_last_export(
@@ -628,9 +613,9 @@ def test_a_lost_pod_past_the_first_milestone_ends_at_its_last_export(
     launcher[lost] = "lost"
     stored = observe(tmp_path, EXPERIMENT)
     protocol = frozen()[1]
-    assert endpoint(size_run(stored, SMALL, protocol)) is None
+    assert endpoint(size_run(stored, SMALL)) is None
     closed = with_launcher_ends(stored)
-    found = size_run(closed, SMALL, protocol)
+    found = size_run(closed, SMALL)
     assert found is not None and found.state == "failed"
     assert endpoint(found) == 50
     schedule = comparison_schedule(closed, protocol)
@@ -645,22 +630,59 @@ def test_a_lost_pod_past_the_first_milestone_ends_at_its_last_export(
     assert {"w64 final u50 vs w64 u0", "w160l8 final vs w64 final"} <= names
 
 
-def test_a_lost_pod_below_the_first_milestone_is_set_aside(
-    tmp_path: Path, launcher: dict[str, Outcome], frontier_db: duckdb.DuckDBPyConnection
+@pytest.mark.parametrize("lost_at", [0, 10])
+def test_a_pod_lost_below_the_first_milestone_is_its_sizes_run(
+    tmp_path: Path,
+    launcher: dict[str, Outcome],
+    frontier_db: duckdb.DuckDBPyConnection,
+    lost_at: int,
 ) -> None:
-    _, large = runs("HEAD")
-    lost = _tracked(large, tmp_path, {}, (0,), end=None)
-    replacement = _tracked(large, tmp_path, {}, (0, 25), end=None)
+    """Its endpoint is its last export, and no slot past update 0 is played."""
+    small, large = runs("HEAD")
+    kept = _tracked(small, tmp_path, {}, (0, 25, 50))
+    lost = _tracked(large, tmp_path, {}, tuple(sorted({0, lost_at})), end=None)
     launcher[lost] = "out_of_time"
-    stored = observe(tmp_path, EXPERIMENT)
+    closed = with_launcher_ends(observe(tmp_path, EXPERIMENT))
     protocol = frozen()[1]
-    with pytest.raises(ValueError, match="admits one w160l8 run"):
-        size_run(stored, LARGE, protocol)
-    closed = with_launcher_ends(stored)
-    found = size_run(closed, LARGE, protocol)
-    assert found is not None and found.name == replacement and not found.ended
-    assert analyze(closed, frontier_db, {}).set_aside == [
-        SetAside(run=lost, size=LARGE, state="failed", last_update=0)
+    found = size_run(closed, LARGE)
+    assert found is not None and found.name == lost
+    assert endpoint(found) == lost_at
+    schedule = comparison_schedule(closed, protocol, _fixture_hours(closed))
+    played = {c.matchup.name for c in schedule if c.matchup is not None}
+    assert not any("w160l8" in name for name in played - {"w160l8 u0 vs heuristic"})
+    for c in schedule:
+        if c.tag in {
+            "initial-w160l8",
+            "head-to-head",
+            "equal-hours",
+            "endpoint-head-to-head",
+        } or (c.tag == "heuristic-w160l8" and c.update != 0):
+            assert c.unreached and c.matchup is None, (c.tag, c.update)
+    _outcomes(frontier_db, closed)
+    report = analyze(closed, frontier_db, {})
+    # Every expected slot is played or unreached; only the lost run is reported.
+    assert report.issues == ["A run did not finish; no equal-compute scale reading."]
+    assert report.scale is None
+    _, reading = report.sizes
+    assert (reading.state, reading.endpoint) == ("failed", lost_at)
+    assert reading.against_initial is None and reading.against_heuristic is None
+    assert reading.learned is None
+    assert [reading.update for reading in reading.training] == sorted({0, lost_at})
+    assert {(a.run, a.size, a.state, a.last_update) for a in report.runs} == {
+        (kept, SMALL, "finished", 50),
+        (lost, LARGE, "failed", lost_at),
+    }
+
+
+def test_a_run_without_checkpoints_is_listed_without_a_size(
+    tmp_path: Path, frontier_db: duckdb.DuckDBPyConnection
+) -> None:
+    small, _ = runs("HEAD")
+    bare = _tracked(small, tmp_path, {}, (), end="failed")
+    state = observe(tmp_path, EXPERIMENT)
+    assert size_run(state, SMALL) is None
+    assert analyze(state, frontier_db, {}).runs == [
+        Attempt(run=bare, size=None, state="failed", last_update=None)
     ]
 
 
@@ -1005,9 +1027,8 @@ def test_calibration_reads_cost_and_memory_and_stays_out_of_the_frontier(
     assert observe(tmp_path, EXPERIMENT).runs == ()
     assert observe(tmp_path, CALIBRATION).runs != ()
     misnamed = replace(observe(tmp_path, CALIBRATION), experiment=EXPERIMENT)
-    protocol = frozen()[1]
-    assert size_run(misnamed, SMALL, protocol) is None
-    assert size_run(misnamed, LARGE, protocol) is None
+    assert size_run(misnamed, SMALL) is None
+    assert size_run(misnamed, LARGE) is None
 
 
 def _calibrated(source: Path, last: int = 5) -> tuple[str, str]:
