@@ -863,6 +863,10 @@ Etude stays at `a7718f5` under `~/.etude-b015d5-step2`, as in step 2.
 - On-demand `b015d5-fast` in the isolated home: `NVIDIA GeForce RTX 4090`, 8 vCPUs,
   48 GB, 80 GB disk, under $.95/hour, `--slots 4`, storage `r2`. The freeze may swap the
   GPU for the quoted best of the four candidates.
+- Quotes, 2026-11-07 about 01:48 UTC, isolated home, `--revision HEAD` at `e3ccbb0d7`,
+  leg `<gpu>-w128l4-k4-float32`. Each on-demand places all four seeds on one machine at 4
+  slots: A4000 $.25/hour (first-wave $.25), L4 $.59 ($.59), RTX 4090 $.89 ($.89). Nothing
+  rented. Stock moves, so re-quote at the launch commit.
 - Checks: `pytest tests/training/test_precision.py tests/training/test_training_throughput_sizes.py
   tests/training/test_training_throughput.py tests/infra/test_host_facts.py
   tests/training/test_elemental_closure_lambda.py tests/training/test_two_seat_learning.py
