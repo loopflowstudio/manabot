@@ -3447,60 +3447,60 @@
    "bytes": 6737
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-0.jsonl.gz": {
-   "sha256": "32ed40ed32d776f53a13b8a42f8dd0122f272fb7eac95d91e86fb1dec80ae839",
-   "bytes": 2412254
+   "sha256": "a6f38250721696e4518085a3e26c79548341c1d336c95c58650679002896ac71",
+   "bytes": 2490696
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-1.jsonl.gz": {
-   "sha256": "682fb437c9113b0950695e3b09297754f3a77e2d50d44fe12c4d08339bb42a08",
-   "bytes": 2457968
+   "sha256": "3d5b97378c82a6302628b4df259c0c720e6447de8f5688378b6ec2c455be42b2",
+   "bytes": 2539618
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-2.jsonl.gz": {
-   "sha256": "02f081ee9c44477a93fec704c4b791e208b0dc0f1ba6727bbfaa6529cb6287c7",
-   "bytes": 2628496
+   "sha256": "8acf38db3ce38e57f681e7a549b0e96ed24224f485cd42e06799f0c99d12f6cc",
+   "bytes": 2685171
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-3.jsonl.gz": {
-   "sha256": "7c68693c10f0506c91405010d89e75917d5d40c7f11cb30cadb8450ace0329e1",
-   "bytes": 2524335
+   "sha256": "4ac922a3655394fa59d66b000f16d9bf133ecff0ecbc232bedc75c76bdc3f85b",
+   "bytes": 2594598
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-4.jsonl.gz": {
-   "sha256": "df8a728092b2bf5ed2cc5175b8aa31dd70d7574129b912340c5b398e1b356062",
-   "bytes": 2426113
+   "sha256": "33b3ce8038c93751da8d935c4b67a5a9e7b86eac2814f9f0094259570ac09b59",
+   "bytes": 2519781
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-5.jsonl.gz": {
-   "sha256": "44bef37ad1245d8d2914121d98566876bef98eaa1ace5e10dc1bf8bd7dbcf9a5",
-   "bytes": 2479726
+   "sha256": "8c2cace6a7784339e0615a3324a383495a3436890269c02e6f80df6ad1cb1c0d",
+   "bytes": 2567970
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-6.jsonl.gz": {
-   "sha256": "1af9a933fa43ad5e535eae3c75fb2c5b07f3525e199f08d292342f24b68684db",
-   "bytes": 2445834
+   "sha256": "abd31a059bd6c913406cea4fdb0c75736b9d152ad69a8bd04c75a9444d0ecd7e",
+   "bytes": 2539766
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-0.jsonl": {
-   "sha256": "ea736030051a80372fa6915cfcec24cd98b10bfd63ad0fb0f1fea5ae5f10d26b",
-   "bytes": 240122
+   "sha256": "244b6e86591fb3a18f7709fb760bda75ed50755c66c37656f6c3a5cc70b0482a",
+   "bytes": 250250
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-1.jsonl": {
-   "sha256": "328a477f1c5968485f159cb5983d719d9a1d02dffe4f7071265c77a20ec2769b",
-   "bytes": 247256
+   "sha256": "4a56ff35717f80d3642772416944d5902cd194fdcbd192a17e10f6ae6e0545b8",
+   "bytes": 259241
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-2.jsonl": {
-   "sha256": "a9e8b779ca4978c01228212a7f2dbb6b9307ffd2c20e9be97aa7c1d96d018985",
-   "bytes": 281741
+   "sha256": "b23d1f99e12d6da468dd03e36f7e03b2d79b6fa54c0754d2521f3d8e445b3d1a",
+   "bytes": 288128
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-3.jsonl": {
-   "sha256": "4d7770c8d6265fbe4179d48d570d35869460e86f27a1f569f235d75da89d3381",
-   "bytes": 258906
+   "sha256": "2ce83a724ed265cade40b2d8fb03c186b8f19f0044ba1fec8a561ffe23c40cb9",
+   "bytes": 264918
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-4.jsonl": {
-   "sha256": "07dd685e9f651cf659baa23455844bc5a5995f3a35e4624cca83233726a571e6",
-   "bytes": 246901
+   "sha256": "6d68203d5baccd2de47164ea8116c493e958d4d9fd32bbcc8de09f5c80149c4a",
+   "bytes": 260008
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-5.jsonl": {
-   "sha256": "ec1b696b7e140ca3703e1b5e1ce8df62948a05fb1f3647f165d4323f90dc0676",
-   "bytes": 249148
+   "sha256": "9195583353107d9ea1d1169229dc9c94b9e27440a2d615e7944392cfdfb02722",
+   "bytes": 261143
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-6.jsonl": {
-   "sha256": "9e2be9187f1fccb43d01b3da765de1f2cab5ffb6ec67afd3c845c47c31e305fc",
-   "bytes": 240136
+   "sha256": "7fd65cf7700fa27beab4269d93d480e7043b26a3c525a88ac7c227b0ed986e33",
+   "bytes": 254368
   },
   "experiments/data/search-mirror-v1/noise/games-mini-heart.local-0.txt": {
    "sha256": "ba71682a89290fa37acd2af5bf1795aeb7f4041f0a6c5d55618afa18a1d52320",
@@ -3515,12 +3515,12 @@
    "bytes": 1938
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "aac801e8cd6d9b04b3c8487c62adf44ecb629171f306b4c19d98b96a65039118",
-   "bytes": 59931
+   "sha256": "3d1c29f739031eed158c9586fcb05f2720c5715343e87e4d2042cd040b3e0a00",
+   "bytes": 59598
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "a34334b2e16ce1533027f16c30420c882b3c6a5f2fea7f900eb90ca1379700d1",
-   "bytes": 21269
+   "sha256": "5adef4e02f9d2fabeac362cc123238f744fe1af90829ea614068f5baf6516414",
+   "bytes": 21204
   },
   "experiments/data/search-scaling-v1/hosts/0e52711de5ad/decisions-9c254ae462cd-32.jsonl.gz": {
    "sha256": "afb0d9ec66e488f0bf7fa0e8ff18e527ca41a86c87bd429ac5535d09d82d8770",
