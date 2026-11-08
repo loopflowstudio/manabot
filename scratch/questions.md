@@ -1,83 +1,139 @@
 # MTG-268 — batched local-update rollouts
 
-The Task directive and `manabot/README.md#local-update-search` supplied the plan;
-no separate accepted design was present. The implementation follows those docs.
-Reversible choice: one live frontier across all sampled worlds and supported root
-actions, independent policy RNGs, stable world/action receipt order, and a single
-batched predictor that also owns singleton root inference. No batching flag.
+The Task directive is the design; no separate accepted design was present.
+It says: "Batching should bring 8-16 worlds near today's one-world cost."
+That latency outcome remains unmet. Neither implementation progress nor the
+measurements below relax it. `manabot/README.md#local-update-search` describes
+the current behavior.
 
-Delete — do not maintain (done): the nested production per-branch rollout loop
-and singleton-only prediction implementation. Complete private audit tapes,
-observation hashes, branch seeds, native Command application, terminal/sign
-semantics, sampling identities, deadline errors and historical receipt readers
-survive. Compound execution was already removed; it was not restored.
-The benchmark loads the old implementation from git only as a comparison oracle.
-Compression also removed the redundant singleton-prediction test adapter and
-full Observation parsing for materialized-root hash checks. No deletion remains.
+Iteration direction: "extend scripts/bench_local_update.py to distinguish
+observation encoding, tensor assembly, native stepping and model costs; optimize
+the dominant measured cost while preserving complete receipts and legal support."
 
-No product question is open. The docs' 16-world, depth-20, 30-second example is an
-illustrative budget, not a latency promise. Docs now explain float32 batching
-rounding and possible trajectory changes at sampling thresholds. Runtime replay
-still requires the retained implementation and allocation identities.
+## Design and deletion cut
 
-## Measurement (2026-11-08)
+One live frontier spans all sampled worlds and supported root actions, with
+independent policy RNGs and stable world/action receipt order. Singleton root
+inference uses the same batched predictor. No batching flag. Complete private
+audits, native Commands, hashes, terminal/sign semantics, sampling identities,
+deadline failures and historical receipt readers survive. Compound execution
+remains removed.
 
-`uv run --extra dev python scripts/bench_local_update.py --reference 841b1c50c`
-passed discrete receipt comparison and numeric tolerance checks for every cell.
-Raw result: `scratch/mtg-268-timing.json`. Apple M4 Max, macOS 26.0.1, Torch 2.10.0,
-one CPU/inter-op thread, initialized 64-wide/two-layer scalar policy, current
-observation defaults. Two seeded opening positions (42 and 43), search seed 17,
-depth 20; four/five supported root actions. One timed decision per cell; warm
-singleton inference, then before/after on the same root. Separate profiling pass.
-These are bounded fixed-position searches, not full games or evaluations.
+Reversible choice for this iteration: CPU inference attention removes only
+columns unused by every row in the batch, then restores the original coordinates
+before action joins and value pooling. Historical mean keeps its padded
+denominator; the value token stays last and neutral. Training retains its dense
+autograd path; device inference avoids synchronization for a dynamic shape.
+Checkpoint parameters and observation schemas remain unchanged.
+
+### Delete — do not maintain
+
+- Production sequential rollout loop and singleton-only predictor: replaced by
+  the shared frontier; old source exists only as the benchmark oracle in git.
+- Full semantic Observation parsing at every ply/materialized root: native
+  canonical hashes are read from JSON; complete receipt content survives.
+- CPU inference attention over globally empty object columns: compact, attend,
+  restore. Keep all legal actions and original object joins.
+- Benchmark loading only the old teacher: load the old ActorCritic too, so the
+  baseline does not silently inherit optimized attention.
+- Duplicate root decision-frame projection and registration config parsing:
+  reuse the parsed frame and config. Restore attention objects and the optional
+  value token in one scatter.
+
+## Implementation measurement (2026-11-08)
+
+`uv run --extra dev python scripts/bench_local_update.py` passed all six cells.
+Raw output: `scratch/mtg-268-timing-final.json`; reference `841b1c50c` supplies
+both teacher and model. Apple M4 Max, macOS 26.0.1, Torch 2.10.0, one CPU/inter-op
+thread. Initialized 64-wide/two-layer scalar policy, current observation defaults,
+checkpoint SHA256 `5e3e03fb91c9fba2ea75bb7736d797505ea5385cf9dd538a9d0bab6b582899a6`.
+Two seeded opening positions (42/43), search seed 17, depth 20, four/five supported
+root actions. One timed decision per cell, warm singleton inference, then
+before/after on the same root; separate profiling pass at position 42/16 worlds.
+Bounded fixed-position searches only; no games or evaluations.
 
 | Worlds | Position 42 before → after (s) | Position 43 before → after (s) |
 | --- | --- | --- |
-| 1 | 0.266 → 0.195 | 0.312 → 0.240 |
-| 4 | 0.940 → 0.679 | 1.215 → 0.860 |
-| 16 | 3.833 → 2.647 | 4.699 → 3.321 |
+| 1 | 0.243 → 0.149 | 0.302 → 0.175 |
+| 4 | 0.968 → 0.514 | 1.211 → 0.647 |
+| 16 | 3.775 → 1.950 | 5.658 → 2.466 |
 
-Speedup 1.30–1.45x. At 16 worlds/position 42, network forwards fell from 1,281
-to 21 (one root plus 20 plies); profiled inclusive network time 2.436 → 1.130 s.
-All RolloutReceipt fields except numeric values matched exactly. Largest value
-error 5.96e-8, largest target error 7.09e-9; tests use atol 1e-6 / rtol 1e-5.
+Measured speedup 1.62–2.29x; 16 worlds still cost **8.0–8.2x the old one-world
+search**. These single samples are not a variance estimate or production claim.
+All discrete RolloutReceipt fields (including complete audit JSON and every
+observation hash), support and allocation matched. Maximum base-probability error
+1.49e-10, rollout value error 5.96e-8, target error 6.93e-9; enforced tolerances
+atol 1e-6 / rtol 1e-5. Float32 batching and attention shapes can change rounding;
+a sampling-threshold crossing can change trajectories elsewhere. Replay still
+requires the retained source, runtime, checkpoint and allocation identities.
 
-Outside-network costs at the same position/allocation:
-- Native semantic JSON plus viewer hashing: 1,298 calls, 0.302 → 0.259 s
-  (~233 → 200 μs/call). This canonical witness remains required.
-- Full Python Observation parsing: 1,298 → 18 calls, 0.149 → 0.0011 s.
-  Per-ply code now reads the native hash from JSON without rebuilding and
-  reserializing the unused DecisionFrame. Ordinary JSON decoding remains; the
-  latter figure measures full-model parsing only, not all JSON decoding.
-- Session snapshot: 64 calls, 0.0103 → 0.0070 s (~161 → 109 μs/rollout).
-  Under 1% of elapsed decision time; kept unchanged, with complete audit content.
+Expanded initial profile (`scratch/mtg-268-profile-initial.json`, same position
+and allocation before this iteration) identified model cost 1.162 s, of which
+attention was 0.770 s. Native step/audit was 0.940 s, Python encoding 0.280 s,
+semantic JSON/hash 0.262 s and tensor assembly 0.014 s. This selected attention
+as the optimization target. Final profiles:
 
-Limit: 16 worlds are **not** near the old one-world cost on this fixture. The
-study's MTG-183/w13 trained checkpoint was not measured or rebound to this world.
-There is no trained strength or production-latency claim. Wider rollout batches
-retain all native branches and tensors together, so memory scales with worlds
-and supported root actions. Native stepping, encoding and per-row network work
-remain; further optimization would need its own measured choice.
+| Inclusive category | Original sequential (s) | Final (s) |
+| --- | --- | --- |
+| Model | 2.294 | 0.451 |
+| Attention (inside model) | 0.985 | 0.076 |
+| Object embeddings (inside model) | 1.074 | 0.357 |
+| Native Command step and audit | 0.941 | 0.916 |
+| Observation encoding | 0.331 | 0.273 |
+| Native observation extraction | 0.005 | 0.007 |
+| Tensor assembly | 0.017 | 0.013 |
+| Semantic JSON and native viewer hash | 0.274 | 0.255 |
+| Full Python Observation parsing | 0.134 | 0.00014 |
+| Session snapshot | 0.0084 | 0.0069 |
 
-## Validation and handoff
+Model forwards fell 1,281 → 21. Native steps remain 1,280; canonical semantic
+witnesses 1,298; snapshots 64. Full Python parsing fell 1,298 → 2. Nested model
+categories must not be added to their parent. JSON/hash still includes canonical
+serialization; the parsing category does not count ordinary JSON decoding.
+Native stepping includes Command checks, retained audit and returned observation.
+The initial attention profile and final profile are separate runs, not paired
+microbenchmarks. Prior batching evidence remains in `scratch/mtg-268-timing.json`
+and `63f7d6a:scratch/questions.md` (1.30–1.45x, before final root parsing removal).
 
-Focused pytest selections: 10 distinct checks passed (seven new batching,
-terminal/sign, support, nonfinite and deadline cases; existing exact-belief replay
-and direct/learned lifecycle cases). Hash-path change rechecked the four affected
-parity/frontier cases. Ruff check/format and `git diff --check` passed.
-Gate owns the broader affected suites. No new test module or Rust change.
-No games, evaluations, training, servers or watchers were started.
+## Validation and remaining work
 
-A prior docs presentation failed because Desktop had no window for this checkout;
-the reviewable files remain `manabot/README.md` and `README.md`.
-Inherited b015d5 and older Task notes remain at
-`841b1c50c:scratch/questions.md`; they select no work here.
+`uv run --extra dev pytest tests/model/test_value_aggregation.py tests/sim/test_local_update_sampling.py tests/sim/test_local_update.py -q -k 'inference_attention or batched or frontier or batch_ or real_root_replay'`
+— 14 passed, 30 deselected after compression. Six attention cases cover all value aggregations,
+one/two layers, interior padding, varying per-row support, original coordinates,
+and gradients after inference; eight retained cases cover root replay, frontier
+receipt parity, terminal/sign handling, full support, nonfinite values and deadlines.
+Ruff check/format and `git diff --check` passed; `lf context` is within both limits.
 
-## Compression (2026-11-08)
+Compression rerun: `uv run --extra dev python scripts/bench_local_update.py`
+passed all six cells (`scratch/mtg-268-timing-compress.json`, same checkpoint and
+settings). For worlds 1/4/16, position 42 before → after seconds:
+0.247 → 0.153 / 0.982 → 0.520 / 3.863 → 1.986; position 43:
+0.308 → 0.189 / 1.258 → 0.658 / 4.967 → 2.498. Discrete evidence still matches;
+maximum base/value/target errors remain 1.49e-10 / 5.96e-8 / 6.93e-9.
+Speedup is 1.62–1.99x and 16 worlds still cost 8.0–8.1x the old singleton.
+These independent single samples establish no compression speedup. Native
+step/audit is still dominant (0.933 s); forwards remain 1,281 → 21.
+The benchmark now checks and reports each numeric channel through one helper;
+the attention test runs a fresh autograd forward after inference.
 
-Materialized roots and rollout plies now share the native hash reader; root
-support is computed once. Singleton rollout execution alone supplies the parity
-oracle, and the configurable test fixture avoids loading a second teacher.
-The timings above predate these cuts and were not rerun.
+Gate still owns complete local-update suites and affected model suites
+(`tests/model/test_value_aggregation.py`, `tests/model/test_inference.py`,
+`tests/model/test_agent.py`), plus required model-cost/action-selection checks:
+`tests/training/test_active_training.py`, `tests/env/test_observation.py`,
+`tests/training/test_action_cutoff.py`, `tests/verify/test_native_buffer_capacities.py`.
+No Rust, input shape or world change needs native/admission validation.
 
-`uv run --extra dev pytest tests/sim/test_local_update_sampling.py -q -k 'batched or frontier or batch_'`: 7 passed. Separate exact-belief replay and direct/learned lifecycle selection: 3 passed. Ruff check/format and `git diff --check` passed.
+The next measured bottleneck is native Command stepping/audit (0.916 s), which
+alone exceeds old one-world search time, followed by model object embedding,
+Python encoding and semantic hashes. Further latency work needs a native
+step/audit design that preserves every witness; simply removing network overhead
+cannot meet the current target on this fixture. No acceptance decision relaxing
+the target is recorded. The Task outcome remains incomplete pending further work
+or an explicit design/review decision.
+MTG-183/w13 remains unmeasured and was not rebound to this world; no trained
+strength claim. Memory still scales with worlds × supported root actions.
+
+The README's depth-20, 16-world, 30-second example is an illustrative budget,
+not a latency promise. Reviewable files are `manabot/README.md` and `README.md`;
+an earlier Desktop presentation had no window for this checkout. Older Task
+notes remain at `841b1c50c:scratch/questions.md`.

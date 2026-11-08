@@ -21,7 +21,8 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import types
-from typing import cast
+from typing import Sequence, cast
+from unittest.mock import patch
 
 from managym.decision import Observation
 import numpy as np
@@ -43,25 +44,25 @@ from manabot.sim.search.local_update import (
 import managym
 
 
-def reference_teacher(revision: str) -> type[LocalUpdateTeacher]:
+def reference_module(revision: str, relative_path: str) -> types.ModuleType:
     """Load retained code for timing; its module path uses the current checkout.
 
     Compare rollout content, not this temporary teacher's source receipt identity.
     """
-    path = Path(__file__).resolve().parents[1] / "manabot/sim/search/local_update.py"
+    path = Path(__file__).resolve().parents[1] / relative_path
     source = subprocess.check_output(
-        ["git", "show", f"{revision}:manabot/sim/search/local_update.py"], text=True
+        ["git", "show", f"{revision}:{relative_path}"], text=True
     )
-    module = types.ModuleType("_local_update_benchmark_reference")
+    module = types.ModuleType(f"_local_update_benchmark_{path.stem}")
     module.__file__ = str(path)
     sys.modules[module.__name__] = module
     exec(compile(source, str(path), "exec"), module.__dict__)
-    # This git-loaded class is a benchmark-only untyped boundary.
-    return cast(type[LocalUpdateTeacher], module.LocalUpdateTeacher)
+    return module
 
 
 @dataclass(frozen=True)
 class Parity:
+    max_base_error: float
     max_value_error: float
     max_target_error: float
 
@@ -85,6 +86,7 @@ class Timing:
 class Cost:
     calls: int = 0
     seconds: float = 0.0
+    self_seconds: float = 0.0
 
 
 def compare(before: LocalUpdateReceipt, after: LocalUpdateReceipt) -> Parity:
@@ -93,34 +95,47 @@ def compare(before: LocalUpdateReceipt, after: LocalUpdateReceipt) -> Parity:
         raise AssertionError("rollout counts differ")
     for left, right in zip(before.rollouts, after.rollouts, strict=True):
         assert asdict(replace(left, signed_value=right.signed_value)) == asdict(right)
-    for key in ("base", "reference", "offer_ids", "allocation_counts"):
+    for key in ("reference", "offer_ids", "allocation_counts"):
         assert getattr(before, key) == getattr(after, key), key
-    value_error = max(
-        abs(left.signed_value - right.signed_value)
-        for left, right in zip(before.rollouts, after.rollouts, strict=True)
+    return Parity(
+        max_base_error=_prediction_error(before.base, after.base),
+        max_value_error=_prediction_error(
+            [row.signed_value for row in before.rollouts],
+            [row.signed_value for row in after.rollouts],
+        ),
+        max_target_error=_prediction_error(before.target, after.target),
     )
-    target_error = float(np.max(np.abs(np.asarray(before.target) - after.target)))
-    np.testing.assert_allclose(
-        [row.signed_value for row in before.rollouts],
-        [row.signed_value for row in after.rollouts],
-        rtol=1e-5,
-        atol=1e-6,
-    )
-    np.testing.assert_allclose(before.target, after.target, rtol=1e-5, atol=1e-6)
-    return Parity(value_error, target_error)
+
+
+def _prediction_error(before: Sequence[float], after: Sequence[float]) -> float:
+    """Check and report the same tolerance for every numeric prediction."""
+    np.testing.assert_allclose(before, after, rtol=1e-5, atol=1e-6)
+    return float(np.max(np.abs(np.asarray(before) - after)))
 
 
 def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
-    """Inclusive costs; semantic serialization includes the native viewer hash."""
+    """Inclusive and self costs, from a separate instrumented search.
+
+    Model subcosts overlap ``network``; do not add them to it. Tensor assembly
+    counts NumPy stacking and Torch's zero-copy wrappers, not model operations.
+    Native stepping includes Command validation, audit and returned observation.
+    Semantic serialization includes the native viewer hash.
+    """
     groups: dict[str, Cost] = {}
     for entry in profile.getstats():
         code = entry.code
         if isinstance(code, str):
-            name = (
-                "semantic_json_and_hash"
-                if "semantic_observation_json" in code
-                else None
-            )
+            name = None
+            for method, group in (
+                ("semantic_observation_json", "semantic_json_and_hash"),
+                ("observation_for_player", "native_observation"),
+                ("encode_observation_into", "observation_encoding"),
+                ("apply_policy_choice", "native_step_and_audit"),
+                ("as_tensor", "tensor_assembly"),
+            ):
+                if method in code:
+                    name = group
+                    break
         elif code.co_qualname == "ActorCritic.forward" and code.co_filename.endswith(
             "model/actor_critic.py"
         ):
@@ -133,12 +148,24 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
             "managym/decision.py"
         ):
             name = "semantic_python_parsing"
+        elif code.co_qualname == "ObservationSpace.encode":
+            name = "observation_encoding"
+        elif code.co_name == "stack" and "numpy" in code.co_filename:
+            name = "tensor_assembly"
+        elif code.co_filename.endswith("model/actor_critic.py") and code.co_name in (
+            "_gather_object_embeddings",
+            "_attend_objects",
+            "_gather_informed_actions",
+            "_value_from_objects",
+        ):
+            name = "model/" + code.co_name.removeprefix("_")
         else:
             name = None
         if name is not None:
             bucket = groups.setdefault(name, Cost())
             bucket.calls += entry.callcount
             bucket.seconds += entry.totaltime
+            bucket.self_seconds += entry.inlinetime
     return groups
 
 
@@ -152,7 +179,15 @@ def main() -> None:
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
     torch.manual_seed(15)
-    reference = reference_teacher(args.reference)
+    # Retain both changed execution owners. Loading only the old teacher would
+    # silently give the baseline today's optimized attention implementation.
+    reference = cast(
+        type[LocalUpdateTeacher],
+        reference_module(
+            args.reference, "manabot/sim/search/local_update.py"
+        ).LocalUpdateTeacher,
+    )
+    reference_model = reference_module(args.reference, "manabot/model/actor_critic.py")
     match = Match(
         MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
@@ -177,8 +212,10 @@ def main() -> None:
             )
         digest = file_sha256(checkpoint)
         config = LocalSearchConfig(depth=20, decision_seconds=120)
+        with patch("manabot.model.checkpoint.ActorCritic", reference_model.ActorCritic):
+            before = reference(checkpoint, digest, config)
         teachers = {
-            "before": reference(checkpoint, digest, config),
+            "before": before,
             "after": LocalUpdateTeacher(checkpoint, digest, config),
         }
         for teacher in teachers.values():

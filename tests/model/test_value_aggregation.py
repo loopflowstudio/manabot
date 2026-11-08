@@ -14,6 +14,44 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 Aggregation = Literal["historical_mean", "masked_mean", "value_token"]
 
 
+@pytest.mark.parametrize(
+    "aggregation", ["historical_mean", "masked_mean", "value_token"]
+)
+@pytest.mark.parametrize("depth", [1, 2])
+def test_inference_attention_preserves_padded_coordinates_and_values(
+    aggregation: Aggregation, depth: Literal[1, 2]
+) -> None:
+    torch.manual_seed(106)
+    agent = ActorCritic(
+        ObservationSpace(),
+        ModelConfig(value_aggregation=aggregation, attention_layers=depth),
+    ).eval()
+    # Interior holes, different supports, the last slot and asymmetric owners
+    # exercise restoration at original focus coordinates, not just a prefix.
+    objects = torch.randn(3, 11, 64)
+    owners = torch.rand(3, 11) > 0.5
+    validity = torch.zeros(3, 11)
+    validity[0, [0, 3, 10]] = 1
+    validity[1, [1, 3]] = 1
+    validity[2, [0, 10]] = 1
+    with torch.enable_grad():
+        dense = agent._attend_objects(objects, owners, validity)
+        expected = agent._value_from_objects(dense, validity)
+    with torch.inference_mode():
+        compact = agent._attend_objects(objects, owners, validity)
+        actual = agent._value_from_objects(compact, validity)
+    torch.testing.assert_close(compact, dense, atol=1e-6, rtol=1e-5)
+    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+    assert torch.count_nonzero(compact[:, :11][validity == 0]) == 0
+    # The same method still supports gradients after inference. Compaction
+    # must not cache detached state or alter learning's dense representation.
+    with torch.enable_grad():
+        trained = agent._attend_objects(objects, owners, validity)
+        agent._value_from_objects(trained, validity).square().sum().backward()
+    assert agent.attention.mha.in_proj_weight.grad is not None
+    assert torch.isfinite(agent.attention.mha.in_proj_weight.grad).all()
+
+
 @pytest.mark.parametrize("aggregation", ["masked_mean", "value_token"])
 @pytest.mark.parametrize("depth", [1, 2])
 @pytest.mark.parametrize("kind", ["scalar", "categorical_wdl"])

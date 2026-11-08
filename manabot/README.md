@@ -162,13 +162,17 @@ selects a cheaper allocation of `min(cheap_worlds, worlds)` on the remaining
 decisions (`cheap_worlds=1` by default). The local update uses `alpha=0.02` and
 `beta=1.0` by default, retaining zero probability outside the base policy's
 support. Batching does not establish a playing-strength gain or a fixed latency.
+CPU inference omits object columns unused by the entire batch from attention,
+then restores their original coordinates before action scoring and value pooling.
+Legal choices, observation capacities and checkpoint parameters stay intact.
 
 After a successful choice, `player.last_receipt` holds the target distribution,
 root-action values and per-rollout seeds, signed values, terminal flags,
 actor-observation hashes and branch audits. These are private replay evidence.
 Replay requires the original root and viewer history, checkpoint, native runtime
 and teacher source; keep their identities with the receipt. Batched float32
-inference can round slightly differently from singleton inference. Rollout seeds
+inference and attention padding removal can round slightly differently from
+singleton inference over the full padded layout. Rollout seeds
 remain independent, but a probability at a sampling threshold can turn that
 rounding into a different trajectory; replay uses the retained allocation and
 implementation identity.

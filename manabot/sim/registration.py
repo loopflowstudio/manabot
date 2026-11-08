@@ -159,7 +159,6 @@ class PlayerRegistration(StrictModel):
                     raise ValueError(
                         "local-update inference spec must be fully explicit"
                     )
-                config = LocalSearchConfig.model_validate(self.player_spec["config"])
                 if config.model_dump() != self.player_spec["config"]:
                     raise ValueError("local-update config must include every parameter")
                 digest = self.player_spec["implementation_source_sha256"]

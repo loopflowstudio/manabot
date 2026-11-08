@@ -408,6 +408,25 @@ class ActorCritic(nn.Module):
             and (validity.sum(1) == 0).any()
         ):
             raise ValueError("value aggregation requires a valid object")
+        original_slots = objects.shape[1]
+        columns = None
+        if (
+            self.config.attention_on
+            and objects.device.type == "cpu"
+            and not torch.is_grad_enabled()
+        ):
+            # Padding is never an attention key and every layer zeros its query
+            # output. Omit columns unused by the entire inference batch, then
+            # restore the original coordinates for focus joins and historical
+            # mean pooling (whose denominator includes padding). Learning keeps
+            # fixed shapes and its existing autograd path; device inference
+            # avoids a host synchronization to discover the compact shape.
+            used = (validity != 0).any(0).nonzero().flatten()
+            if 0 < used.numel() < original_slots:
+                columns = used
+                objects = objects.index_select(1, columns)
+                is_agent = is_agent.index_select(1, columns)
+                validity = validity.index_select(1, columns)
         key_padding_mask = validity == 0
         if self.value_token is not None:
             objects = torch.cat(
@@ -422,6 +441,15 @@ class ActorCritic(nn.Module):
             )
             for layer in self.extra_attention:
                 objects = layer(objects, is_agent, key_padding_mask)
+        if columns is not None:
+            # Restore the optional neutral value token in the same scatter,
+            # at the slot immediately after the original object coordinates.
+            if self.value_token is not None:
+                columns = torch.cat((columns, columns.new_tensor([original_slots])))
+                original_slots += 1
+            objects = objects.new_zeros(
+                (objects.shape[0], original_slots, objects.shape[2])
+            ).index_copy(1, columns, objects)
         return objects
 
     def _value_from_objects(

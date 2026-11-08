@@ -738,7 +738,10 @@ class LocalUpdateTeacher:
                 belief.model_id,
             )
             sampling_probabilities = tuple(float(p) for p in belief.probabilities)
-        frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
+        # The acting viewer's observation already carries this revision's frame.
+        frame = observation.decision
+        if frame is None:
+            raise ValueError("local search requires an acting-viewer decision")
         base, _ = self.predict(engine)
         reference = np.full(len(base), 1.0 / len(base))
         if len(frame.offers) != len(base):
