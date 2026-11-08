@@ -23,8 +23,8 @@ Once frozen, this protocol is fixed before any scoring. The runner is
 `experiments/regimes/tla-frontier-c5fba4-w64.json`. The w160l8 regime is that
 regime with the protocol's width, depth, heads and damping horizon. `frozen()`
 rejects a change to the regime's hash, the runtime world or the derived tensor
-shapes. A changed world before launch needs a new protocol version, not edited
-bytes.
+shapes. After the freeze, a changed world needs a new protocol version, even
+before launch; the November 8 amendment above precedes that freeze.
 
 ## Question
 

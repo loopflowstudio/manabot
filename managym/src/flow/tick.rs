@@ -262,19 +262,18 @@ impl Game {
                 let events = self
                     .battlefield_permanents(active)
                     .into_iter()
-                    .filter_map(|id| {
-                        self.characteristics(id).final_chapter().is_some().then(|| {
-                            crate::flow::proposed_event::ProposedEvent::CounterChange {
-                                provenance: crate::flow::proposed_event::CounterProvenance::new(
-                                    crate::flow::proposed_event::EventCause::TurnAction,
-                                ),
-                                target: self.permanent_object_ref(id).expect("battlefield"),
-                                kind: CounterKind::Lore,
-                                delta: 1,
-                                by: Some(active),
-                            }
-                        })
-                    })
+                    .filter(|&id| self.characteristics(id).final_chapter().is_some())
+                    .map(
+                        |id| crate::flow::proposed_event::ProposedEvent::CounterChange {
+                            provenance: crate::flow::proposed_event::CounterProvenance::new(
+                                crate::flow::proposed_event::EventCause::TurnAction,
+                            ),
+                            target: self.permanent_object_ref(id).expect("battlefield"),
+                            kind: CounterKind::Lore,
+                            delta: 1,
+                            by: Some(active),
+                        },
+                    )
                     .collect();
                 let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
                 frame.batch = Some(self.event_batch(events));

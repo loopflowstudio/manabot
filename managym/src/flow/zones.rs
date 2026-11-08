@@ -542,6 +542,9 @@ impl Game {
         printed.is_saga()
     }
 
+    // Keep the evaluated proposal fields together with its pre-move LKI and
+    // consequent-event sink at this single commit boundary.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn commit_zone_move(
         &mut self,
         card: CardId,

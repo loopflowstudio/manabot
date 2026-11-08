@@ -3476,12 +3476,16 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         let encoded = encode(&obs, &config).unwrap();
         let facts = encoded
             .facts
-            .chunks_exact(12)
+            .as_chunks::<12>()
+            .0
+            .iter()
             .filter(|row| row[11] == 1.0)
             .count();
         let relations = encoded
             .relations
-            .chunks_exact(49)
+            .as_chunks::<49>()
+            .0
+            .iter()
             .filter(|row| row[31] == 1.0)
             .count();
         serde_json::json!({"facts":facts,"relations":relations,"default_overflow":facts > 512})
@@ -3777,12 +3781,16 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             let input = encode(&obs, &config).unwrap();
             let used = input
                 .facts
-                .chunks_exact(12)
+                .as_chunks::<12>()
+                .0
+                .iter()
                 .filter(|row| row[11] == 1.0)
                 .count();
             let relations = input
                 .relations
-                .chunks_exact(49)
+                .as_chunks::<49>()
+                .0
+                .iter()
                 .filter(|row| row[31] == 1.0)
                 .count();
             assert!(matches!(

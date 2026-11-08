@@ -1,9 +1,10 @@
 //! Every name the fact and shared-effect encoders hash into an id column.
 //!
 //! Fact rows (`observation_encoder::facts`) and shared-effect records
-//! (`shared_effects`) carry open-vocabulary names as `name_value` hashes:
+//! (`shared_effects`) and retained execution programs (`effect_execution`)
+//! carry open-vocabulary names as `name_value` hashes:
 //! counter kinds, colors, subtypes, keywords, modifications, set names and
-//! combat restrictions. The hash keeps the transport exact, but a model needs
+//! combat restrictions, projection labels and runtime-only rules payloads. The hash keeps the transport exact, but a model needs
 //! the finite set of names to embed each one as its own row. This module
 //! lists that set, each name with the learning token card text uses for the
 //! same concept when there is one (a granted `flying` and a printed
@@ -184,7 +185,14 @@ fn execution_names(out: &mut Vec<RecordName>) {
             ][..],
         ),
         ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
-        ("Effect", &["PlaceTargetInLibrary", "RestoreController"][..]),
+        (
+            "Effect",
+            &[
+                "PlaceTargetInLibrary",
+                "RestoreController",
+                "SelectTargetRequirement",
+            ][..],
+        ),
     ] {
         for variant in variants {
             let name = format!("{owner}::{variant}");
@@ -201,6 +209,7 @@ fn execution_names(out: &mut Vec<RecordName>) {
         "replaced",
         "result",
         "second_from_top",
+        "index",
         "kind",
         "attacking",
         "kicked",
@@ -255,6 +264,105 @@ fn combat_restrictions(value: &serde_json::Value) -> Vec<CardPredicate> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn runtime_only_programs_have_catalog_tokens() {
+        use crate::{
+            cards::tokens::{learning_catalog, rules_tokens},
+            flow::{
+                event::GameEvent,
+                game::CastChoices,
+                proposed_event::{CounterProvenance, EventBinding, EventCause},
+                turn::Bending,
+            },
+            state::{
+                ability::{Effect, LibraryEnd},
+                game_object::PlayerId,
+            },
+        };
+        let pack = default_content_pack();
+        let catalog = learning_catalog(pack).unwrap();
+        let known: std::collections::HashSet<_> = catalog
+            .token_kind
+            .into_iter()
+            .zip(catalog.token_value)
+            .chain(record_names().into_iter().filter_map(|entry| entry.token))
+            .collect();
+        let mut tokens = rules_tokens(
+            &[
+                Effect::PlaceTargetInLibrary {
+                    second_from_top: true,
+                },
+                Effect::RestoreController(PlayerId(1)),
+                Effect::SelectTargetRequirement { index: 1 },
+            ],
+            pack,
+        )
+        .unwrap();
+        tokens.extend(
+            rules_tokens(
+                &[
+                    GameEvent::Scried {
+                        player: PlayerId(0),
+                    },
+                    GameEvent::Surveilled {
+                        player: PlayerId(0),
+                    },
+                    GameEvent::LibrarySearched {
+                        player: PlayerId(0),
+                    },
+                ],
+                pack,
+            )
+            .unwrap(),
+        );
+        tokens.extend(
+            rules_tokens(
+                &[
+                    EventBinding::None,
+                    EventBinding::ThisWay,
+                    EventBinding::Deaths,
+                    EventBinding::Combat,
+                    EventBinding::Damage { result: Some(1) },
+                    EventBinding::PlaceInLibrary {
+                        second_from_top: true,
+                    },
+                    EventBinding::Shuffle {
+                        player: PlayerId(0),
+                    },
+                    EventBinding::Bending {
+                        player: PlayerId(0),
+                        kind: Bending::Earth,
+                    },
+                    EventBinding::Created { attacking: true },
+                ],
+                pack,
+            )
+            .unwrap(),
+        );
+        tokens.extend(
+            rules_tokens(
+                &CastChoices {
+                    kicked: true,
+                    x: 1,
+                    free: true,
+                    resolving: true,
+                },
+                pack,
+            )
+            .unwrap(),
+        );
+        for cause in [EventCause::Effect, EventCause::Cost, EventCause::TurnAction] {
+            tokens.extend(rules_tokens(&CounterProvenance::new(cause), pack).unwrap());
+        }
+        tokens.extend(rules_tokens(&[LibraryEnd::Top, LibraryEnd::Bottom], pack).unwrap());
+        for (kind, value) in tokens {
+            assert!(
+                matches!(kind, 4 | 5 | 7) || known.contains(&(kind, value)),
+                "unregistered runtime token: kind {kind}, value {value}"
+            );
+        }
+    }
 
     #[test]
     fn record_names_are_unambiguous_within_a_namespace() {
