@@ -242,3 +242,43 @@ quoted and rentable at about 19:28 UTC; A4000 quote stays open, no stock. For ex
 - Proposed, not in the protocol: `etude rent ... --hours 5 --max-usd 3.00`, so the provider
   window itself holds the machine line. Etude's `--max-usd` ends the window early.
 - The isolated controller still needs starting before the rental, under `caffeinate -is`.
+
+## pool-validation b015d5 (2026-11-07): step 2 execution log
+
+Approved by Jack Heart (comment e89d4889). Client: `~/.etude-b015d5-step2/e` (sets
+`ETUDE_HOME`, nested Doppler, Etude `a7718f5`); controller under `caffeinate -is` from the
+same home, pid in `~/.etude-b015d5-step2/controller.pid`.
+- 20:42 UTC: both on-demands reported "rentable now"; `launch --quote` and the first rent
+  were refused for no stock. The second rent at 20:44:43 got `b015d5-a4000x4-27c8c5c7f309`
+  (RunPod `nbc3u0h4ot5rv0`, $.25/h), `--hours 5 --max-usd 3.00`, until 01:44 UTC.
+- `etude launch --rent` refuses a held rental ("it is busy; etude queue would wait"),
+  recording no run. Legs therefore go through `etude queue --rent b015d5-a4000x4`, same job
+  bytes; placement on the held rental works.
+- `etude fetch ... etude-result.json` returns StorageUnavailable 404 on every run; the
+  `training/` files fetch and verify. Not needed for any reading.
+- D1 `7e76419f958a`, D2 `9f8373c2ce24` (26201) / `c1a9aa5e1b72` (26202): all succeeded.
+  `training_digest` D1 vs D2 26201: **digests equal**. D2 admission to finish 4.2-4.5 min
+  including training, so concurrent setup is far under 7 min: M1 launched unstaggered.
+- M1 `613540c9f282 2ce4ba18dedb c5610eb166a4 8814aa882b83` succeeded (20 updates, 87-105 s
+  attempt start to first GPU sample with four at once). M2 26211 `673dd2a0dd9f`, 26212
+  `36485589780f`, 26213 `66143fded9b1` succeeded.
+- **M2 26214 `91e148fbd392` hung**: updates 1-2 normal (~40 s each), then no rows and GPU 0%
+  (0.8-1.0 GB held) from ~22:12 until Etude's 1-hour limit killed it (out_of_time, exit -9,
+  23:09). No error, traceback or job output after `phase run: started`. Not a dud host (the
+  same host ran 7 runs clean). Counted as M2's first failure; retried once at 23:12 as
+  `b3f331e7c50b`. From here a stall watcher cancels a run with no new update row for
+  600 s (counts as a failure) so a second hang cannot eat the window. Cause unknown; a
+  hang that reproduces goes to a bug Task with these ids.
+- Pod facts (runpodctl): vcpuCount 16, memoryInGb 62. Receipts read `memory_limit` 62.0 GB
+  from cgroup v1, so the memory-gate fix works on RunPod. Step 1's ~61 GB SIGKILLs match it.
+- Retry `b3f331e7c50b`, M3 `7fc74afa2f41`, S14 `cb64b1093e57`, S22 `f1fc4986886b
+  33f0bbe20401`, S44 `483303fadcad dbbc464c364c d265997f8111 a4dec36539bd`: all succeeded;
+  watcher never fired. Machine terminated about 00:36 UTC (after killing the controller
+  mid-tick, its 5-minute lease had to expire first). Bill $.807 posted to ~23:55; total
+  about $.98. Report "Step 2" section published with `step-2/` evidence.
+- For evidence review: packed games about 5% shorter over updates 11-20 (paired interval
+  excludes zero; M3 moves the same way at 60% of the size); producers buy no speed at
+  K=1 or K=4 on the A4000; L4 shape is an inference.
+- Etude gaps worth Etude Tasks (not filed from this headless run): `launch --rent` and
+  `terminate` refused while the controller holds the placement lease; `etude-result.json`
+  fetch 404s; SDK 0.2.12 reads `a7718f5` metrics as empty.

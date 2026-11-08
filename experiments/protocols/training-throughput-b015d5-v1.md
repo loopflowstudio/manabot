@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 2 frozen, not launched)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 2 executed)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -16,8 +16,9 @@ run (see its execution record). Jack Heart accepted its evidence and chose step 
 main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Jack Heart then
 asked this step to own how packing combines with multiple producers (2026-11-07,
 comment ceff7d63), which added legs S14, S22 and S44. Step 2's software landed as
-`668212567` (PR #442) and step 2 is frozen at that commit (see its freeze receipt). It
-has not launched, and execution review returns to Jack Heart.
+`668212567` (PR #442) and step 2 is frozen at that commit (see its freeze receipt).
+Jack Heart approved execution (2026-11-07, comment e89d4889), and step 2 has run (see
+its execution record).
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -270,6 +271,22 @@ no executable byte.
 - Authority: step 2 stays under comment 9f9d0956's $50 inclusive cap and comment ceff7d63's
   $4.50, about $5.56 reserved with step 1. Freezing confers no spending authority. Nothing
   launches or rents before execution review with Jack Heart.
+
+**Step 2 execution record (2026-11-07/08).** All 8 legs ran at `668212567` on one A4000
+rental, `b015d5-a4000x4-27c8c5c7f309` (RunPod `nbc3u0h4ot5rv0`, 16 vCPUs, 62 GB,
+$.25/hour), held 20:44-00:36 UTC.
+- **Selection.** The second rent attempt got the A4000, so no L4 was rented.
+- **Placement.** Legs were placed with `etude queue --rent` (same job bytes): `etude
+  launch --rent` refuses a held rental while the controller holds its lease.
+- **Runs.** All 19 declared runs succeeded. The digests are equal.
+- **Failure.** One attempt hung after update 2 with the GPU idle: M2's seed 26214,
+  `91e148fbd392`. Etude's 1-hour limit killed it, and its one retry succeeded. After
+  that, a stall watcher, cancelling at 600 s with no new update row, guarded the
+  remaining legs and never fired. No stop rule was reached.
+- **Cost.** About $.98 against the $4.50 line: $.807 posted, the rest estimated at
+  the billed rate. The machine is terminated and the isolated controller stopped.
+- **Results.** Readings, recommendation and evidence locations are in
+  `experiments/data/training-throughput-b015d5-v1/report.md`, "Step 2".
 
 ### What runs
 
@@ -632,8 +649,8 @@ its ceiling.
 | Line | Runs | Window | Reserved | Spent |
 |---|---:|---:|---:|---:|
 | Step 1 probes | 3 | | $2.80 | about $1.06 |
-| Step 2 machine, L4 worst case | 19 on one rental | 5 h | $3.00 | |
-| Step 2 failed attempts and a replaced host | | | $1.50 | |
+| Step 2 machine, L4 worst case | 19 on one rental | 5 h | $3.00 | about $.98 (A4000, 3.85 h) |
+| Step 2 failed attempts and a replaced host | | | $1.50 | in the line above (one hung attempt, about $.25) |
 | **Step 2 total** | | | **$4.50** | |
 
 Expected step 2 cost: about $.90 on an A4000, about $2.10 on an L4. Step 1's unspent
