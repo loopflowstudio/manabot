@@ -6,7 +6,8 @@ the one-producer calibration pod and the fact-embedding check (item 5 under
 [Before freeze](#before-freeze)). The JSON protocol, regime and runner on this
 branch follow it except where that section lists remaining software. Task
 30df0c's input consolidation (PR #437) merged on 2026-11-07, and the parameters
-below are recounted on it. Two values come only from calibration: each size's
+below include MTG-241's catalog execution vocabulary. Two values come only
+from calibration: each size's
 damping horizon, w64's as `iteration_schedule.steps` in its regime JSON and
 w160l8's as `large.expected_updates` in the protocol JSON.
 Calibration, rehearsal and the fact-embedding check ran before MTG-241 on
@@ -30,7 +31,7 @@ before launch; the November 8 amendment above precedes that freeze.
 
 How far can self-play on the frozen 17Lands TLA trophy population push play
 strength at the current recipe size, and does a network about 17× larger in
-compute parameters (17.4×; 13.6× in total parameters) get further on the same
+compute parameters (17.4×; 12.7× in total parameters) get further on the same
 budget? This is a frontier push with one seed per size, not an ablation grid.
 
 The run also moves the default training recipe toward what is best for USD10–100
@@ -106,13 +107,14 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
 
   | Label | Width | Attention layers | Heads | Compute parameters | Total parameters |
   | --- | ---: | ---: | ---: | ---: | ---: |
-  | w64 | 64 | 2 | 4 | 307,010 | 412,482 |
-  | w160l8 | 160 | 8 | 8 | 5,341,922 | 5,605,602 |
+  | w64 | 64 | 2 | 4 | 307,010 | 449,154 |
+  | w160l8 | 160 | 8 | 8 | 5,341,922 | 5,697,282 |
 
   Compute parameters exclude the embedding lookup tables (the card token table
-  and the fact-kind, effect-detail-kind and name tables). They were counted with
-  PR #437 merged, at `563ae37dd`; the freeze revision's tests check the ratio.
-  The ratio is 17.4× (13.6× in total parameters), inside the requested 10–100×,
+  and the fact-kind, effect-detail-kind and name tables). They were recounted with
+  MTG-241's execution vocabulary; the compute counts are unchanged from
+  `563ae37dd`. The freeze revision's tests check the compute ratio.
+  The ratio is 17.4× (12.7× in total parameters), inside the requested 10–100×,
   and the large arm grows in depth as well as width. The counts taken before
   consolidation (385,538 and 5,538,242, 14.4×) excluded six 4096-bucket hashed
   tables that PR #437 removed. The earlier draft's w256 (4 layers, 8 heads) had
@@ -239,7 +241,7 @@ reading fails this gate.
 ## Launch sequence
 
 1. Items 1, 2 and 4–6 under [Before freeze](#before-freeze) merge on main. PRs
-   #435 and #437 have merged, and the parameter counts above are taken with both.
+   #435 and #437 have merged; the parameter counts above also include MTG-241.
 2. Operator checks. Every rented on-demand has a startup limit, or a dud pod on a
    supply with none holds its whole window. `l4` has 900 seconds; set the others
    where absent. `cpu32` allows one machine, which fits one pass at a time.

@@ -232,7 +232,7 @@
         },
         {
           "path": "managym/src/agent/effect_execution.rs",
-          "sha256": "c8611ccc2eb71021d2a6ffb2c25397e0443a28e36e5276c2ee0d1cff4d6eff13"
+          "sha256": "e9c38abc8a780399a0d895c0c81eb17263464aee5ebcff1da423de846d2a7ad6"
         },
         {
           "path": "managym/src/agent/env.rs",
@@ -264,7 +264,7 @@
         },
         {
           "path": "managym/src/agent/record_vocabulary.rs",
-          "sha256": "8697ad74b4631b1f5a8ef55cfaa19214e8a8f481247d171a11d520eef8dbb8ad"
+          "sha256": "7747a0d288c248eb4c0614bc036f845725caa59be6b779b617bc422006262c58"
         },
         {
           "path": "managym/src/agent/rollout_pool.rs",
@@ -432,7 +432,7 @@
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
-          "sha256": "959929c1e50e7c79243f4284ff4f579b837bb3f85ad31859377ce4738941cd7d"
+          "sha256": "0a6b1bf7cf78edf02ba4790f7d1e38e01c921f42239bfecba8caa835485c75d1"
         },
         {
           "path": "managym/src/flow/retarget.rs",
@@ -472,7 +472,7 @@
         },
         {
           "path": "managym/src/flow/tick.rs",
-          "sha256": "ac95fa946b4171286453be97f15adea32cfc7ac56447c5a9260173ed3f0ce0df"
+          "sha256": "ef6af919571cdfcd3fab6b21ac12a9056874d5aa2b9a71432dcb711e0dc25bfb"
         },
         {
           "path": "managym/src/flow/trigger.rs",
@@ -488,7 +488,7 @@
         },
         {
           "path": "managym/src/flow/zones.rs",
-          "sha256": "71f624433bfe6799f80c93aa26c7f2a5f35ba401aecf2fca0b4e484b92f5f601"
+          "sha256": "d50f42b3d87286b0f9138080f8ab34ae037a07ef486b00b95557e8862885270c"
         },
         {
           "path": "managym/src/infra/mod.rs",
@@ -627,7 +627,7 @@
           "sha256": "2418277760950967fef1763dcf8cc71b4d19bfe9ac0cfb13d0848d12b4e55b06"
         }
       ],
-      "sha256": "0818b7d75ef334aa366eeaae38c06440ed166e31fe70a246acbdfc96d2f60f87"
+      "sha256": "59a8353efe2a0f965c2d5880b0c350f208d22409abeff9e3bb65d608783008bf"
     },
     "seed": 0
   },
