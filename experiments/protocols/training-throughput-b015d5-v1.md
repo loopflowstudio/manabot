@@ -838,10 +838,12 @@ project's `etude-sdk` to Etude main `199335c`, whose only change over `a7718f5` 
 run SDK `199335c` under an `a7718f5` client. Older-client-to-newer-job is the direction that
 commit found safe; no step 3 leg has run that pairing yet. The shared `~/.etude/launcher.db`
 now reads schema 12, as the isolated home does, so the reason step 2 gave for isolation (an
-upgrade locking out 0.2.14 clients) has already happened. Two choices for the freeze,
-undecided: keep the accepted `a7718f5` client in the isolated home, or move the client to
-`199335c` (matching the jobs) and keep or drop the isolated home. The acceptance quotes above
-used the isolated home at `a7718f5`; any change re-quotes.
+upgrade locking out 0.2.14 clients) has already happened. The freeze keeps the accepted
+client: Etude `a7718f5` in `~/.etude-b015d5-step2`, which the acceptance quotes used and
+step 2 ran. That is the setting the design accepted, and its remaining reason is a client
+that step 2 has exercised on every launch path. Moving the client to `199335c`, or dropping
+the isolated home, would be an amendment with its own re-quote. The re-quote at the launch
+commit is the first check of an `a7718f5` client placing `199335c` jobs.
 
 **As built (2026-11-07).**
 - Sizes: `elemental_variants.sized`; `training_throughput_sizes.recipe(size, precision,

@@ -356,3 +356,14 @@ main pins jobs to Etude `199335c` and the shared launcher database is already sc
 the isolation rationale is spent. Client pin and home are a choice for the freeze, unmade.
 Still to do: land step 3's software (no open PR; #442 merged), freeze, re-quote, execution
 review with Jack Heart.
+
+## concept-review b015d5 (2026-11-07): step 3 built, against the accepted design
+
+No product choice is open. Built behavior is the accepted design's, with three narrowings
+that follow from it and need no new decision: bf16 wraps only the forward (the design kept
+"loss reductions" in float32, and casting outputs back keeps log-softmax and targets there
+too); the model's seven dtype joins are a no-op at float32 (D1 checked by hand, not in CI);
+and `-check` IDs follow from regime bytes naming identity. The Etude client question
+recorded by realign is settled by the accepted design (keep `a7718f5` in the isolated home)
+and is now written as such in the protocol. Next: land step 3's software, freeze, re-quote
+all three on-demands, execution review with Jack Heart.
