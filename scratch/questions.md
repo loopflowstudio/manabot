@@ -346,3 +346,13 @@ Reversible choices, for review:
   4-update cells at the same size and precision.
 - `--pace` is a launch parameter, so the regime's watchdog (and its digest) depends on
   the pace given. Each launch records it in the job.
+
+## realign b015d5 (2026-11-07): step 3 built, against code and main
+
+Code matches the protocol's "As built": 42 legs, w64 float32 equals the control outside its
+ID after `f150bbce3`'s single size path, `--pace` limits, `-check` IDs; size and precision
+tests pass (20). One upstream change, recorded in the protocol's "Etude since the design":
+main pins jobs to Etude `199335c` and the shared launcher database is already schema 12, so
+the isolation rationale is spent. Client pin and home are a choice for the freeze, unmade.
+Still to do: land step 3's software (no open PR; #442 merged), freeze, re-quote, execution
+review with Jack Heart.

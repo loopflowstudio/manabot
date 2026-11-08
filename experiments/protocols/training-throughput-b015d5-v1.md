@@ -491,6 +491,8 @@ Jack Heart with the recommendation. This step adopts no producer count.
   `uv run --with "etude-sdk[s3,eval] @ <Etude at a7718f5>"`. That client must never run
   without `ETUDE_HOME`. Etude main's later `199335c` adds only a checkpoint timestamp,
   so the pin stands. Moving the shared launcher is a release decision outside this step.
+  (Since then the shared database has reached schema 12 through MTG-267's client; see step 3's
+  "Etude since the design".)
 
 ### Software before step 2 freezes
 
@@ -829,6 +831,17 @@ Acceptance: the tests pass; `read_job_file` discovers each leg; a CPU run of one
 and one a384l8 leg at 8 streams and 1 update finishes through the real worker; and
 `etude launch ... --quote` under the isolated home places a K=4 leg on each on-demand.
 Etude stays at `a7718f5` under `~/.etude-b015d5-step2`, as in step 2.
+
+**Etude since the design (checked 2026-11-07).** Main's `adf319ee0` (MTG-267) pins the job
+project's `etude-sdk` to Etude main `199335c`, whose only change over `a7718f5` is
+`Checkpoint.wall_ms`, and this branch carries it through `e8dbf0b02`. Step 3's jobs therefore
+run SDK `199335c` under an `a7718f5` client. Older-client-to-newer-job is the direction that
+commit found safe; no step 3 leg has run that pairing yet. The shared `~/.etude/launcher.db`
+now reads schema 12, as the isolated home does, so the reason step 2 gave for isolation (an
+upgrade locking out 0.2.14 clients) has already happened. Two choices for the freeze,
+undecided: keep the accepted `a7718f5` client in the isolated home, or move the client to
+`199335c` (matching the jobs) and keep or drop the isolated home. The acceptance quotes above
+used the isolated home at `a7718f5`; any change re-quotes.
 
 **As built (2026-11-07).**
 - Sizes: `elemental_variants.sized`; `training_throughput_sizes.recipe(size, precision,
