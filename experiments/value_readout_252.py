@@ -150,10 +150,19 @@ DEEPER: dict[tuple[ValueAggregation, int], str] = {
     ("masked_mean", 25201): "bdcf25600bf7",
     ("masked_mean", 25202): "f9b2f54106e3",
     ("masked_mean", 25203): "aaf586b81509",
+    ("value_token", 25201): "1c4aef332e5b",
+    ("value_token", 25202): "8f11bcda7841",
+    ("value_token", 25203): "7d5cba6b285a",
 }
-DEEPER_THIRDS: dict[tuple[ValueAggregation, int], str] = {}
-# The first depth segment ends at update 150.
-DEPTH_SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {1: DEEPER}
+DEEPER_THIRDS: dict[tuple[ValueAggregation, int], str] = {
+    ("masked_mean", 25201): "f1e5c84269d0",
+    ("masked_mean", 25202): "072977f3704d",
+    ("masked_mean", 25203): "f1664004d74e",
+}
+# Only masked mean has an update-150 restart; the token trains straight to 300.
+DEPTH_SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {
+    1: {key: run for key, run in DEEPER.items() if key[0] == "masked_mean"}
+}
 # Inputs live in the bucket of the machines' storage, keyed from its root.
 STAGING_BUCKET = "r2://manabot"
 STAGING_PREFIX = "mtg252/continue"

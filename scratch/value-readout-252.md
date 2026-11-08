@@ -28,9 +28,9 @@ on its machine. Raw machine inventory receipt: `/tmp/mtg252-machines-20261108.tx
 The first depth-4 parent's learner record reports 8,862.50 seconds for 150
 updates. Do not budget another 150 updates from the prior USD.97 estimate.
 
-Continuation exports are being verified/staged under `/tmp/mtg252-depth-parents/`
-and `r2://manabot/mtg252/continue/<parent>/`. Latest code completes the
-depth/readout selection and evaluation path; no new training launched yet.
+All three continuation exports were verified/staged under
+`/tmp/mtg252-depth-parents/` and `r2://manabot/mtg252/continue/<parent>/`.
+The final `continuations.json` matches the quote's input digests and sizes.
 
 In this resumed conversation the budget reply was "Raise cap to $55; complete
 both arms". Allocation: USD6 masked mean (3 × 3.1 hours, USD2 each), USD11.10
@@ -39,6 +39,21 @@ ceilings is USD54.9156. All three saved parent regimes differ from the proposed
 continuations only in absolute updates (150 → 300) and the two watchdog fields.
 Focused tests: 16 passed; Ruff lint and formatting passed. Setup is pushed at
 `18e4ae9a8`; the subsequent documentation commit records the raised cap.
+
+Both cohorts launched at source `18e4ae9a8c68981bfc837e8702c260d90e74e650`:
+- `mtg252-depth4-token300`: 25201 `1c4aef332e5b`, 25202 `8f11bcda7841`,
+  25203 `7d5cba6b285a`; all passed update 1. Quote USD11.06, cap USD11.10.
+- `mtg252-depth4-mean300`: 25201 `f1e5c84269d0`, 25202 `072977f3704d`,
+  25203 `f1664004d74e`; initially setting up. Quote USD5.93, cap USD6.
+
+`/tmp/mtg252-finish-depth4.sh` waits for the six runs, requires each to succeed
+at exactly update 300, and checks the experiment/worker source is unchanged
+before launching one USD3-capped evaluation. It makes no automatic retries.
+Its log will be `/tmp/mtg252-finish-depth4.log`; final status and eval launch
+receipts use `/tmp/mtg252-depth4-final-status.txt` and
+`/tmp/mtg252-depth4-eval-launch.txt`. Existing scratchpad scoring scripts
+still need their old `DEEPER` integer keys updated to `(aggregation, seed)`
+and `DEEPER_THIRDS` included before reading the new results.
 
 Brief: Task MTG-252 directive. Study document: `experiments/value-readout-252.md`
 (draft protocol; nothing frozen or launched; no compute authorized).

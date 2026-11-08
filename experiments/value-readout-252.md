@@ -38,6 +38,17 @@ value-token runs (6-hour windows), and USD3 for evaluation: USD54.9156 including
 the retained prior cost. A watchdog stop retains learner state but does not
 establish completion at update 300; any retry must fit the unspent balance.
 
+The six extension runs launched on A40s from source
+`18e4ae9a8c68981bfc837e8702c260d90e74e650`. The masked-mean cohort is
+`mtg252-depth4-mean300`; the fresh value-token cohort is
+`mtg252-depth4-token300`.
+
+| Seed | Masked mean, 150 → 300 | Value token, 0 → 300 |
+| --- | --- | --- |
+| 25201 | `f1e5c84269d0` | `1c4aef332e5b` |
+| 25202 | `072977f3704d` | `8f11bcda7841` |
+| 25203 | `f1664004d74e` | `7d5cba6b285a` |
+
 ## Execution record
 
 - **Hardware.** RunPod had no L4 stock, so every run trained on an A40
