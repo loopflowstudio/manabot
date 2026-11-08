@@ -70,6 +70,23 @@ def make_teacher(
     return teacher, env
 
 
+def test_teacher_identity_tracks_fact_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
+    original = local_update.local_search_source_sha256()
+    fact_revision = "fact-encoder-revision-one"
+
+    def source_hash(path: Path) -> str:
+        if path.parts[-3:] == ("manabot", "model", "facts.py"):
+            return canonical_sha256(fact_revision)
+        return file_sha256(path)
+
+    monkeypatch.setattr(local_update, "file_sha256", source_hash)
+    first = local_update.local_search_source_sha256()
+    assert first != original
+    assert local_update.local_search_source_sha256() == first
+    fact_revision = "fact-encoder-revision-two"
+    assert local_update.local_search_source_sha256() != first
+
+
 def test_two_kl_optimum_and_shift_invariance() -> None:
     base = np.array([0.2, 0.8])
     reference = np.array([0.5, 0.5])

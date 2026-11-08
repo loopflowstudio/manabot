@@ -606,6 +606,15 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    /// The exact semantic observation identity, without its composite envelope.
+    pub fn semantic_viewer_state_hash(&self, viewer: usize) -> Result<String, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.semantic_viewer_state_hash called before reset".into()))?
+            .semantic_viewer_state_hash(PlayerId(viewer))
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
     /// Project hidden-hand constraints without enumerating compatible hands.
     pub fn hidden_hand_constraints(
         &self,

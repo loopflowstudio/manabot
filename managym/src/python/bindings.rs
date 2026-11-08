@@ -3750,8 +3750,21 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let observation = env.semantic_observation(viewer).map_err(map_agent_err)?;
+        #[cfg(feature = "benchmark")]
+        let _serialization =
+            crate::benchmark_search::Timer::new("semantic/composite_serialization");
         serde_json::to_string(&observation)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Exact semantic viewer-state SHA-256, rebuilt under the Env lock.
+    fn semantic_viewer_state_hash(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.semantic_viewer_state_hash(viewer)
+            .map_err(map_agent_err)
     }
 
     /// Viewer-safe hand-count constraints; never enumerates possible worlds.

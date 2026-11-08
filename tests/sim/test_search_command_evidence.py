@@ -9,17 +9,50 @@ from manabot.infra.config import MatchConfig
 import managym
 
 
-@pytest.mark.parametrize("audit", [False, True])
-def test_selected_command_rejects_bad_identity_without_mutation(audit: bool) -> None:
+@pytest.fixture
+def players() -> list[managym.PlayerConfig]:
+    return Match(
+        MatchConfig(
+            hero_deck={"Mountain": 8, "Gray Ogre": 8},
+            villain_deck={"Forest": 8, "Llanowar Elves": 8},
+        )
+    ).to_rust()
+
+
+def test_semantic_direct_hash_matches_composite_across_forks_and_commands(
+    players: list[managym.PlayerConfig],
+) -> None:
     root = managym.Env(seed=42)
-    root.reset(
-        Match(
-            MatchConfig(
-                hero_deck={"Mountain": 8, "Gray Ogre": 8},
-                villain_deck={"Forest": 8, "Llanowar Elves": 8},
+    with pytest.raises(managym.AgentError, match="before reset"):
+        root.semantic_viewer_state_hash(0)
+    root.reset(players)
+    before = root.search_witness_json()
+    original = [root.semantic_viewer_state_hash(viewer) for viewer in (0, 1)]
+    runtime = managym.SelectedBranchRuntime("direct-hash-test", True)
+    branch = runtime.fork_exact(root, "child")
+    for step in range(4):
+        for viewer in (0, 1):
+            composite = json.loads(branch.semantic_observation_json(viewer))
+            assert (
+                branch.semantic_viewer_state_hash(viewer)
+                == composite["identity"]["viewer_state_hash"]
             )
-        ).to_rust()
-    )
+            assert root.semantic_viewer_state_hash(viewer) == original[viewer]
+        if step == 3:
+            break
+        runtime.apply_policy_choice(branch, "child", 0, "{}")
+    assert branch.semantic_viewer_state_hash(0) != original[0]
+    assert root.search_witness_json() == before
+    with pytest.raises(managym.AgentError, match="viewer 2 is out of bounds"):
+        branch.semantic_viewer_state_hash(2)
+
+
+@pytest.mark.parametrize("audit", [False, True])
+def test_selected_command_rejects_bad_identity_without_mutation(
+    audit: bool, players: list[managym.PlayerConfig]
+) -> None:
+    root = managym.Env(seed=42)
+    root.reset(players)
     runtime = managym.SelectedBranchRuntime("identity-test", audit)
     branch = runtime.fork_exact(root, "child")
     context = json.loads(branch.search_context_json(True))

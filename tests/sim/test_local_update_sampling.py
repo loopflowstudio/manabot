@@ -1,13 +1,11 @@
 """Fixture-only direct sampling, replay and lifecycle checks; no optimizer runs."""
 
 from dataclasses import asdict, dataclass, replace
-import json
 from pathlib import Path
 from typing import Callable, Sequence, cast
 
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
-    SEMANTIC_DECISION_VERSION,
     Command,
     DecisionFrame,
     Observation,
@@ -348,20 +346,8 @@ class _ScriptedBranch:
     def winner_index(self) -> int | None:
         return self.winner
 
-    def semantic_observation_json(self, actor: int) -> str:
-        return json.dumps(
-            {
-                "identity": {
-                    "schema_version": SEMANTIC_DECISION_VERSION,
-                    "revision": self.steps,
-                    "viewer": actor,
-                    "viewer_state_hash": f"actor-{actor}-step-{self.steps}",
-                },
-                "viewer_state": {},
-                "events": [],
-                "decision": None,
-            }
-        )
+    def semantic_viewer_state_hash(self, actor: int) -> str:
+        return f"actor-{actor}-step-{self.steps}"
 
 
 @dataclass

@@ -419,24 +419,12 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/local_update.py",
         "manabot/sim/search/sampling.py",
         "manabot/model/actor_critic.py",
+        "manabot/model/facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
     )
     return _digest({path: file_sha256(root / path) for path in paths})
-
-
-def _viewer_state_hash(branch: managym.Env, viewer: int) -> str:
-    """Retain the native viewer hash without rebuilding its unused decision frame.
-
-    The native observation already owns the canonical hash. Full semantic-model
-    parsing would serialize and parse the embedded decision a second time.
-    """
-    payload = json.loads(branch.semantic_observation_json(viewer))
-    value = payload["identity"]["viewer_state_hash"]
-    if not isinstance(value, str):
-        raise ValueError("native observation lacks a viewer-state hash")
-    return value
 
 
 @dataclass
@@ -598,7 +586,7 @@ class LocalUpdateTeacher:
             for row in live:
                 check()
                 actor = int(row.branch.current_agent_index())
-                row.hashes.append(_viewer_state_hash(row.branch, actor))
+                row.hashes.append(row.branch.semantic_viewer_state_hash(actor))
                 choice = (
                     row.action_index
                     if ply == 0
@@ -688,16 +676,17 @@ class LocalUpdateTeacher:
                 )
             # Compare against an independent native snapshot before trusting an
             # injected sampler's preparation or executing any branch.
+            constraints = json.loads(prepared.constraints_json)
             if (
                 prepared.distribution_identity != self.hand_sampler.identity
                 or prepared.history_identity != belief.identity
-                or json.loads(prepared.constraints_json)
+                or constraints
                 != json.loads(engine.hidden_hand_constraints_json(viewer))
             ):
                 raise ValueError(
                     "injected sampler preparation differs from source root"
                 )
-            world_identity = _digest(json.loads(prepared.constraints_json))
+            world_identity = _digest(constraints)
             belief_digest = _digest(asdict(prepared))
             belief_model = (
                 f"approximate-learned-hand/sha256:{self.hand_sampler.identity}"
@@ -805,7 +794,10 @@ class LocalUpdateTeacher:
                 world = belief.space.materialize(index, seed=world_seed)
             # All root actions see the same sampled deal; subsequent decisions
             # use only their own viewer observation, never determinized truth.
-            if _viewer_state_hash(world, viewer) != observation.viewer_state_hash:
+            if (
+                world.semantic_viewer_state_hash(viewer)
+                != observation.viewer_state_hash
+            ):
                 raise ValueError("materialization changed acting viewer information")
             world_frame = DecisionFrame.from_json(world.semantic_decision_frame_json())
             if world_frame.offers != frame.offers:

@@ -168,6 +168,12 @@ impl std::fmt::Display for SemanticError {
 
 impl std::error::Error for SemanticError {}
 
+fn semantic_viewer_hash(viewer_state_json: &str) -> String {
+    #[cfg(feature = "benchmark")]
+    let _hash = crate::benchmark_search::Timer::new("semantic/viewer_hash");
+    sha256_hex(viewer_state_json.as_bytes())
+}
+
 fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -302,21 +308,13 @@ impl Game {
         &self,
         viewer: PlayerId,
     ) -> Result<(Observation, AgentObservation), SemanticError> {
-        if viewer.0 >= self.state.players.len() {
-            return Err(SemanticError::ViewerOutOfBounds(viewer.0));
-        }
-        let agent_obs = AgentObservation::for_player(self, viewer);
-        if !agent_obs.opponent_cards.iter().all(|card| {
-            card.zone != ZoneType::Hand
-                || self.shares_information(viewer, PlayerId(1 - viewer.0))
-                || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
-        }) {
-            return Err(SemanticError::ViewerSafetyViolation);
-        }
-        let viewer_state_json = agent_obs.to_json();
+        let (agent_obs, viewer_state_json) = self.semantic_viewer_input(viewer)?;
+        let viewer_state_hash = semantic_viewer_hash(&viewer_state_json);
+        #[cfg(feature = "benchmark")]
+        let composite_timer =
+            crate::benchmark_search::Timer::new("semantic/composite_construction");
         let viewer_state: Value =
             serde_json::from_str(&viewer_state_json).expect("agent observation is valid json");
-        let viewer_state_hash = sha256_hex(viewer_state_json.as_bytes());
 
         let decision = if self.is_game_over() {
             None
@@ -344,7 +342,44 @@ impl Game {
             events: Vec::new(),
             decision,
         };
+        #[cfg(feature = "benchmark")]
+        drop(composite_timer);
         Ok((observation, agent_obs))
+    }
+
+    /// The composite observation's SHA-256 identity without constructing its
+    /// decision frame or JSON envelope. Rebuild from this immutable game read;
+    /// no projection is retained across mutations. Fixed-viewer presentation
+    /// events remain absent, exactly as in `semantic_observation`.
+    pub fn semantic_viewer_state_hash(&self, viewer: PlayerId) -> Result<String, SemanticError> {
+        let (_, viewer_state_json) = self.semantic_viewer_input(viewer)?;
+        Ok(semantic_viewer_hash(&viewer_state_json))
+    }
+
+    /// One owner for viewer validation, privacy and canonical projection bytes.
+    fn semantic_viewer_input(
+        &self,
+        viewer: PlayerId,
+    ) -> Result<(AgentObservation, String), SemanticError> {
+        #[cfg(feature = "benchmark")]
+        let projection_timer = crate::benchmark_search::Timer::new("semantic/viewer_projection");
+        if viewer.0 >= self.state.players.len() {
+            return Err(SemanticError::ViewerOutOfBounds(viewer.0));
+        }
+        let agent_obs = AgentObservation::for_player(self, viewer);
+        if !agent_obs.opponent_cards.iter().all(|card| {
+            card.zone != ZoneType::Hand
+                || self.shares_information(viewer, PlayerId(1 - viewer.0))
+                || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
+        }) {
+            return Err(SemanticError::ViewerSafetyViolation);
+        }
+        #[cfg(feature = "benchmark")]
+        drop(projection_timer);
+        #[cfg(feature = "benchmark")]
+        let _serialization = crate::benchmark_search::Timer::new("semantic/viewer_serialization");
+        let viewer_state_json = agent_obs.to_json();
+        Ok((agent_obs, viewer_state_json))
     }
 
     /// Validate one revision-bound Command against the current authority,

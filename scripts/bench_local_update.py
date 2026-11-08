@@ -14,6 +14,8 @@ reference receipts and times. After rebuilding, --native-reference DIR compares
 against that original runtime as well as both reference Python implementations.
 Native categories are inclusive: witness subcategories overlap construction;
 returned observation build and Python conversion are separate from rules work.
+Semantic categories separate fixed-viewer projection, canonical serialization
+and SHA-256 from composite construction/serialization skipped by direct hashes.
 """
 
 from __future__ import annotations
@@ -208,7 +210,8 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
     Model subcosts overlap ``network``; do not add them to it. Tensor assembly
     counts NumPy stacking and Torch's zero-copy wrappers, not model operations.
     Native stepping includes Command validation, audit and returned observation.
-    Semantic serialization includes the native viewer hash.
+    Semantic serialization includes the native viewer hash; direct hashes have
+    a separate bucket so composite reads and hash-only reads remain visible.
     """
     groups: dict[str, Cost] = {}
     for entry in profile.getstats():
@@ -217,6 +220,7 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
             name = None
             for method, group in (
                 ("semantic_observation_json", "semantic_json_and_hash"),
+                ("semantic_viewer_state_hash", "semantic_direct_hash"),
                 ("observation_for_player", "native_observation"),
                 ("encode_observation_into", "observation_encoding"),
                 ("apply_policy_choice", "native_step_and_audit"),

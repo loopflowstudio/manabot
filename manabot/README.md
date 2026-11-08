@@ -172,6 +172,10 @@ Legal choices, observation capacities and checkpoint parameters stay intact.
 After a successful choice, `player.last_receipt` holds the target distribution,
 root-action values and per-rollout seeds, signed values, terminal flags,
 actor-observation hashes and branch audits. These are private replay evidence.
+Per-ply hashes remain SHA-256 of the semantic observation's fixed-viewer JSON.
+Search reads them without constructing the unused composite decision envelope.
+Each read rebuilds the projection; presentation events and witness hashes keep
+their separate meanings.
 Replay requires the original root and viewer history, checkpoint, native
 runtime and teacher source; keep their identities with the receipt. Batched float32
 inference and padding removal can round slightly differently from
