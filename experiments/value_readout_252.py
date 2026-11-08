@@ -132,23 +132,29 @@ SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {
 }
 FIRST_SEGMENT_UPDATES = (20, 40, 75)
 THIRD_SEGMENT_UPDATES = (200, 250, 300)
+_SCORED = (*FIRST_SEGMENT_UPDATES, UPDATES, *THIRD_SEGMENT_UPDATES)
 EVALUATION = "value-readout-252-v1"
 # About 2,250 pairings (9,000 games); 07c490's pass played about one pairing a
 # second on this host. The limit covers 1.25 h plus setup at the $2/h ceiling.
 EVALUATION_HOURS = 1.25
 EVALUATION_USD = 3.0
-# Inputs live in the bucket of the machines' storage, keyed from its root.
-# A second axis, read against the masked-mean runs above: the same baseline
-# with four attention layers instead of two, from scratch to update 150 under
-# the same seeds. It asks whether encoder depth, not the readout, limits play.
+# A second axis, read against the depth-2 runs above: the same arms with four
+# attention layers instead of two, fresh under the same seeds, recovering
+# capacity from the start (a first masked-mean launch without it stopped at
+# update 2 on 65 continuation relations, 64 slots, and was cancelled). It asks
+# whether encoder depth, not the readout, limits play. The masked-mean runs
+# stopped at update 150 and continue to 300 in `DEEPER_THIRDS`; the value-token
+# runs train to 300 in one segment.
 DEPTH_LAYERS = 4
-# Recover capacity from the start: a first launch without it stopped at
-# update 2 on 65 continuation relations (64 slots) and was cancelled.
-DEEPER: dict[int, str] = {
-    25201: "bdcf25600bf7",
-    25202: "f9b2f54106e3",
-    25203: "aaf586b81509",
+DEEPER: dict[tuple[ValueAggregation, int], str] = {
+    ("masked_mean", 25201): "bdcf25600bf7",
+    ("masked_mean", 25202): "f9b2f54106e3",
+    ("masked_mean", 25203): "aaf586b81509",
 }
+DEEPER_THIRDS: dict[tuple[ValueAggregation, int], str] = {}
+# The first depth segment ends at update 150.
+DEPTH_SEGMENT_PARENTS: dict[int, dict[tuple[ValueAggregation, int], str]] = {1: DEEPER}
+# Inputs live in the bucket of the machines' storage, keyed from its root.
 STAGING_BUCKET = "r2://manabot"
 STAGING_PREFIX = "mtg252/continue"
 
@@ -187,13 +193,15 @@ def arm(aggregation: ValueAggregation, updates: int | None = None) -> TrainingRe
     return derived
 
 
-def deeper(layers: int, updates: int | None = None) -> TrainingRegime:
-    """The masked-mean arm with `layers` attention blocks; nothing else changes."""
-    baseline = arm(ARMS[0], updates)
+def deeper(
+    aggregation: ValueAggregation, layers: int, updates: int | None = None
+) -> TrainingRegime:
+    """An arm with `layers` attention blocks; nothing else changes."""
+    baseline = arm(aggregation, updates)
     agent = baseline.agent
     derived = with_capacity(
         baseline,
-        id=f"value-readout-252-{ARMS[0]}-depth{layers}",
+        id=f"value-readout-252-{aggregation}-depth{layers}",
         width=agent.hidden_dim,
         depth=layers,
         heads=agent.num_attention_heads,
@@ -254,26 +262,26 @@ def runs(
     `continuations` names a file from `stage`; each run then continues its
     parent's learner to `updates` instead of starting fresh; `after` names the
     segment whose runs are the parents (`SEGMENT_PARENTS`). A non-zero `depth`
-    launches only the masked-mean baseline at that depth, fresh, with
-    `recover_capacity` applying to it alike. `arms` narrows a
+    launches the `arms` at that depth instead, fresh or continuing
+    `DEPTH_SEGMENT_PARENTS[after]`, with `recover_capacity` alike. `arms` narrows a
     continuation to some arms, and any non-empty `recover_capacity` makes a game
     that overflows observation capacity end alone instead of stopping the run.
     """
     chosen = tuple(int(seed) for seed in seeds.split(","))
+    if not chosen or len(set(chosen)) != len(chosen):
+        raise ValueError("readout runs need distinct seeds shared by every arm")
     if depth:
-        recipe = deeper(depth, updates)
-        if recover_capacity:
-            stage = recipe.stages[0]
-            assert isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
-            stage.game_errors.recover_capacity = True
-        return training_runs(
-            [recipe],
+        return _depth_runs(
+            revision,
+            chosen,
+            tuple(_aggregation(name) for name in arms.split(",")),
+            depth,
             updates=updates,
-            revision=revision,
-            experiment=EXPERIMENT,
-            seeds=chosen,
             hours=hours,
             usd_per_run=usd_per_run,
+            continuations=continuations,
+            recover_capacity=bool(recover_capacity),
+            after=after,
         )
     planned = grid(chosen, updates)
     if continuations:
@@ -310,6 +318,71 @@ def runs(
         seeds=tuple(sorted({run.seed for run in planned})),
         hours=hours,
         usd_per_run=usd_per_run,
+    )
+
+
+def _aggregation(name: str) -> ValueAggregation:
+    for aggregation in ARMS:
+        if aggregation == name:
+            return aggregation
+    raise ValueError(f"unknown arm {name!r}")
+
+
+def _depth_runs(
+    revision: str,
+    seeds: tuple[int, ...],
+    aggregations: tuple[ValueAggregation, ...],
+    depth: int,
+    *,
+    updates: int,
+    hours: float,
+    usd_per_run: float,
+    continuations: str,
+    recover_capacity: bool,
+    after: int,
+) -> list[EtudeRun]:
+    """Depth arms, fresh or continuing their parents, scored at every update
+    this study scores that falls inside the segment."""
+    staged = json.loads(Path(continuations).read_text()) if continuations else {}
+    found: list[EtudeRun] = []
+    for seed in seeds:
+        for aggregation in aggregations:
+            planned = Run(aggregation, seed, deeper(aggregation, depth, updates))
+            if continuations:
+                parent = DEPTH_SEGMENT_PARENTS[after][aggregation, seed]
+                job = segment(
+                    planned,
+                    LearnerContinuation.model_validate(staged[parent]),
+                    hours,
+                    recover_capacity,
+                )
+            else:
+                job = _fresh(planned.regime, hours, recover_capacity)
+            found += job.job(
+                repo=ROOT,
+                revision=revision,
+                max_hours=hours,
+                max_usd=Decimal(str(usd_per_run)),
+            ).runs(seed)
+    return found
+
+
+def _fresh(regime: TrainingRegime, hours: float, recover_capacity: bool) -> TrainingJob:
+    """A first segment exporting every scored update before its end."""
+    wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
+    regime = regime.model_copy(deep=True)
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    regime.wall_seconds = wall_seconds
+    stage.execution.wall_seconds = wall_seconds
+    if recover_capacity:
+        assert stage.game_errors is not None
+        stage.game_errors.recover_capacity = True
+    return TrainingJob(
+        regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
+        experiment=EXPERIMENT,
+        milestones=tuple(u for u in _SCORED if u < stage.updates),
+        finalization_seconds=FINALIZATION_SECONDS,
     )
 
 
@@ -360,30 +433,53 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             for update, checkpoint in scheduled
             if checkpoint is not None
         ]
-    for seed, run in DEEPER.items():
+    deep = f"depth{DEPTH_LAYERS}"
+    for aggregation, seed in DEEPER:
         found += [
             Matchup(
-                name=f"{ARMS[0]} depth{DEPTH_LAYERS} s{seed} u{update} vs heuristic",
+                name=f"{aggregation} {deep} s{seed} u{update} vs heuristic",
                 players=(checkpoint.model(inference), heuristic),
                 conditions=conditions,
                 games=legs,
-                tags=("heuristic", f"{ARMS[0]}-depth{DEPTH_LAYERS}"),
+                tags=("heuristic", f"{aggregation}-{deep}"),
             )
-            for update in (*FIRST_SEGMENT_UPDATES, UPDATES)
-            if (checkpoint := _checkpoint(state, run, update)) is not None
+            for update in _SCORED
+            if (checkpoint := _deep(state, aggregation, seed, update)) is not None
         ]
-        shallow = _checkpoint(state, FINALS[ARMS[0], seed], UPDATES)
-        deep = _checkpoint(state, run, UPDATES)
-        if shallow is not None and deep is not None:
+    # Each depth-4 arm against the same arm at depth 2, then depth-4 arms
+    # against each other, at 150 and 300; the depth-2 or earlier arm plays first.
+    shallow_at = {UPDATES: FINALS, THIRD_SEGMENT_UPDATES[-1]: THIRDS}
+    for (aggregation, seed), update in product(DEEPER, shallow_at):
+        shallow = _checkpoint(state, shallow_at[update][aggregation, seed], update)
+        deeper_one = _deep(state, aggregation, seed, update)
+        if shallow is not None and deeper_one is not None:
             found.append(
                 Matchup(
-                    name=f"{ARMS[0]} v depth{DEPTH_LAYERS} s{seed} u{UPDATES}",
-                    players=(shallow.model(inference), deep.model(inference)),
+                    name=(
+                        f"{ARMS[0]} v {deep} s{seed} u{update}"
+                        if aggregation == ARMS[0]
+                        else f"{aggregation} v {aggregation} {deep} s{seed} u{update}"
+                    ),
+                    players=(shallow.model(inference), deeper_one.model(inference)),
                     conditions=conditions,
                     games=legs,
                     tags=("head-to-head", "depth"),
                 )
             )
+    for seed, update in product(sorted({s for _, s in DEEPER}), shallow_at):
+        for first, second in combinations(ARMS, 2):
+            left = _deep(state, first, seed, update)
+            right = _deep(state, second, seed, update)
+            if left is not None and right is not None:
+                found.append(
+                    Matchup(
+                        name=f"{first} {deep} v {second} {deep} s{seed} u{update}",
+                        players=(left.model(inference), right.model(inference)),
+                        conditions=conditions,
+                        games=legs,
+                        tags=("head-to-head", deep),
+                    )
+                )
     finals = [(FINALS, UPDATES), (THIRDS, THIRD_SEGMENT_UPDATES[-1])]
     for seed in sorted({seed for _, seed in PARENTS}):
         for (runs_at, update), (first, second) in product(
@@ -405,6 +501,18 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
                 )
             )
     return tuple(found)
+
+
+def _deep(
+    state: ExperimentState, aggregation: ValueAggregation, seed: int, updates: int
+) -> Checkpoint | None:
+    """A depth arm's checkpoint, from its continuation when it has one."""
+    for runs_at in (DEEPER_THIRDS, DEEPER):
+        if (aggregation, seed) in runs_at:
+            found = _checkpoint(state, runs_at[aggregation, seed], updates)
+            if found is not None:
+                return found
+    return None
 
 
 def _checkpoint(state: ExperimentState, run: str, updates: int) -> Checkpoint | None:
@@ -442,9 +550,7 @@ def segment(
         experiment=EXPERIMENT,
         # Scored updates inside this segment; its end is saved regardless.
         milestones=tuple(
-            u
-            for u in (*FIRST_SEGMENT_UPDATES, *THIRD_SEGMENT_UPDATES)
-            if continuation.from_update < u < stage.updates
+            u for u in _SCORED if continuation.from_update < u < stage.updates
         ),
         finalization_seconds=FINALIZATION_SECONDS,
         continuation=continuation,
@@ -523,13 +629,15 @@ def main() -> None:
     stage.add_argument("--parents", type=Path, required=True)
     stage.add_argument("--out", type=Path, required=True)
     stage.add_argument("--after", type=int, default=1, choices=SEGMENT_PARENTS)
+    stage.add_argument("--depth", type=int, default=0, choices=(0, DEPTH_LAYERS))
     args = parser.parse_args()
+    parents = DEPTH_SEGMENT_PARENTS if args.depth else SEGMENT_PARENTS
     storage = storage_from_uri(STAGING_BUCKET)
     staged = {
         parent: stage_parent(
             args.parents / parent, storage, f"{STAGING_PREFIX}/{parent}", seed
         ).model_dump(mode="json")
-        for (_, seed), parent in SEGMENT_PARENTS[args.after].items()
+        for (_, seed), parent in parents[args.after].items()
     }
     args.out.write_text(json.dumps(staged, indent=2) + "\n")
 

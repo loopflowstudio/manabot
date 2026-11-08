@@ -1,5 +1,8 @@
 """MTG-252 readout arms vary only the critic readout of the re-pinned 183 recipe."""
 
+import json
+from pathlib import Path
+
 from etude.experiment import (
     Checkpoint,
     Checkpoints,
@@ -16,8 +19,13 @@ from experiments import learning_signal, value_readout_252
 from experiments.learning_signal import ELEMENTAL_PAIRS
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.experiment.job import LearnerContinuation, StagedExport
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.experiment.job import LearnerContinuation, StagedExport, TrainingJob
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RewardConfig,
+    ValueAggregation,
+)
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_agent
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -41,11 +49,14 @@ def test_arms_change_only_the_value_readout() -> None:
         value_readout_252.require_single_axis(baseline, wider)
 
 
-def test_the_depth_arm_changes_only_the_attention_depth() -> None:
-    shallow = value_readout_252.arm("masked_mean", 150)
-    deep = value_readout_252.deeper(4, 150)
+@pytest.mark.parametrize("aggregation", value_readout_252.ARMS)
+def test_the_depth_arm_changes_only_the_attention_depth(
+    aggregation: ValueAggregation,
+) -> None:
+    shallow = value_readout_252.arm(aggregation, 150)
+    deep = value_readout_252.deeper(aggregation, 4, 150)
     assert deep.agent.attention_layers == 4 != shallow.agent.attention_layers
-    assert deep.agent.value_aggregation == "masked_mean"
+    assert deep.agent.value_aggregation == aggregation
     assert deep.stages == shallow.stages
     assert deep.observation == shallow.observation
 
@@ -53,7 +64,9 @@ def test_the_depth_arm_changes_only_the_attention_depth() -> None:
 def test_depth_runs_are_scored_and_meet_their_shallow_baseline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(value_readout_252, "DEEPER", {25201: "deep25201"})
+    monkeypatch.setattr(
+        value_readout_252, "DEEPER", {("masked_mean", 25201): "deep25201"}
+    )
     state = ExperimentState(
         experiment=value_readout_252.EXPERIMENT,
         runs=(
@@ -66,6 +79,77 @@ def test_depth_runs_are_scored_and_meet_their_shallow_baseline(
     assert len(deep) == 4
     (versus,) = [m for m in matchups if "depth" in m.tags]
     assert versus.name == "masked_mean v depth4 s25201 u150"
+
+
+def test_depth_continuation_and_fresh_token_share_the_scoring_schedule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        value_readout_252,
+        "DEEPER",
+        {("masked_mean", 25201): "mean150", ("value_token", 25201): "token300"},
+    )
+    monkeypatch.setattr(
+        value_readout_252, "DEEPER_THIRDS", {("masked_mean", 25201): "mean300"}
+    )
+    state = ExperimentState(
+        experiment=value_readout_252.EXPERIMENT,
+        runs=(
+            _stored("mean150", 20, 40, 75, 150),
+            _stored("mean300", 200, 250, 300),
+            _stored("token300", 20, 40, 75, 150, 200, 250, 300),
+            *(
+                _stored(value_readout_252.THIRDS[aggregation, 25201], 300)
+                for aggregation in ("masked_mean", "value_token")
+            ),
+        ),
+    )
+    matchups = value_readout_252.evaluation_matchups(state)
+    deep = [m for m in matchups if "depth4" in m.name and "heuristic" in m.tags]
+    assert len(deep) == 14
+    names = {m.name for m in matchups}
+    assert "masked_mean v depth4 s25201 u300" in names
+    assert "value_token v value_token depth4 s25201 u300" in names
+    assert "masked_mean depth4 v value_token depth4 s25201 u150" in names
+    assert "masked_mean depth4 v value_token depth4 s25201 u300" in names
+
+
+def test_depth_runs_restore_the_learner_and_export_scored_updates(
+    tmp_path: Path,
+) -> None:
+    export = StagedExport(key="k", sha256="0" * 64, bytes=1)
+    continuation = LearnerContinuation(
+        from_update=150,
+        source_stage="self-play",
+        source_run=export,
+        raw=export,
+        ema=export,
+        optimizer=export,
+    )
+    staged = tmp_path / "continuations.json"
+    parent = value_readout_252.DEEPER["masked_mean", 25201]
+    staged.write_text(json.dumps({parent: continuation.model_dump(mode="json")}))
+    for aggregation, inputs, expected in (
+        ("masked_mean", str(staged), (200, 250)),
+        ("value_token", "", (20, 40, 75, 150, 200, 250)),
+    ):
+        (run,) = value_readout_252.runs(
+            revision="HEAD",
+            seeds="25201",
+            arms=aggregation,
+            depth=4,
+            updates=300,
+            hours=3.0,
+            continuations=inputs,
+            recover_capacity="yes",
+        )
+        job = TrainingJob.model_validate_json(run.job.config)
+        assert job.regime.agent.attention_layers == 4
+        assert job.regime.agent.value_aggregation == aggregation
+        assert job.updates == 300
+        assert job.milestones == expected
+        assert job.regime.stages[0].game_errors.recover_capacity
+        assert job.continuation == (continuation if inputs else None)
 
 
 def test_static_costs_and_initialization_sharing() -> None:

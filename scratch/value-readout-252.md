@@ -1,5 +1,37 @@
 # MTG-252 — critic readout comparison: implementation status (2026-11-05)
 
+## Resumed conversation (2026-11-08)
+
+The older notes below predate completed depth-2/update-300 and
+depth-4/masked-mean/update-150 evaluations. The native Claude transcript is
+`/Users/jack/.claude/projects/-Users-jack-src-manabot-mtg-252-compare-learned-value/4265433e-e023-42b4-93b4-1d05d7c08a66.jsonl`.
+
+At 11:34:17 UTC the participant wrote: "continue the depth 4 runs, and add
+depth 4 with a value token you get to to update 300?" At 11:35:16 UTC the
+budget question's answer was "Raise cap to $45 (Recommended)" for three
+seeds per arm. The turn was interrupted after partially editing
+`experiments/value_readout_252.py`; neither new batch had launched.
+
+Recovered result at update 150: depth-4 masked mean scored .512 versus
+depth-2's .492 against the heuristic; paired difference +.020
+[-.023, +.058]. Head-to-head depth-4 score .563 [.488, .658]. These are the
+previous session's retained report, not newly recomputed results. Its
+scripts/data are under
+`/private/tmp/claude-501/-Users-jack-src-manabot-mtg-252-compare-learned-value/4265433e-e023-42b4-93b4-1d05d7c08a66/scratchpad/`.
+
+Fresh Etude 0.2.15 reads confirm all three depth-4 parents succeeded at 150.
+Whole-rental billing plus estimates: training USD31.7143, evaluations
+USD0.9124 + 1.1054 + 1.0835 = 3.1013; total USD34.8156, remaining USD10.1844.
+This supersedes the prior USD32.90 budgeting estimate. Run status cost omits
+some rental time: the third evaluation shows USD.22 there but USD1.0835
+on its machine. Raw machine inventory receipt: `/tmp/mtg252-machines-20261108.txt`.
+The first depth-4 parent's learner record reports 8,862.50 seconds for 150
+updates. Do not budget another 150 updates from the prior USD.97 estimate.
+
+Continuation exports are being verified/staged under `/tmp/mtg252-depth-parents/`
+and `r2://manabot/mtg252/continue/<parent>/`. Latest code completes the
+depth/readout selection and evaluation path; no new training launched yet.
+
 Brief: Task MTG-252 directive. Study document: `experiments/value-readout-252.md`
 (draft protocol; nothing frozen or launched; no compute authorized).
 

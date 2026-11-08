@@ -1,9 +1,38 @@
 # Critic readout comparison — MTG-252
 
-**Status: trained; evaluation launched, no score read.** Jack Heart
-(2026-11-05) authorized 3 arms × 3 seeds (25201–25203) × 150 updates inside a
-USD20 cap covering training, evaluation and retries. No promotion or rejection
-threshold is set; the result is reported as measured.
+**Status: depth-2 arms evaluated through update 300; depth-4 masked mean
+evaluated through update 150.** The initial three-arm, three-seed study had a
+USD20 cap; subsequent extensions raised the total cap to USD45 on 2026-11-08.
+No promotion or rejection threshold is set; results are reported as measured.
+
+## Depth-4 extension (2026-11-08)
+
+Continue the three depth-4 masked-mean learners from update 150 to 300 and
+train three fresh depth-4 value-token learners to 300, seeds 25201–25203.
+Width, heads, inputs, action support and learning rule remain fixed. Both
+arms enable the existing capacity-error recovery throughout this extension;
+the executed depth-2 histories retain their original recovery policies.
+Depth-4 attention readout is not part of this extension.
+
+The masked-mean parents are `bdcf25600bf7`, `f9b2f54106e3` and `aaf586b81509`,
+respectively. Continuations restore their raw policy, EMA and Adam state.
+Game streams and RNGs restart at update 150; fresh token runs have no matching
+restart boundary. Shared seeds therefore do not promise identical subsequent
+training games. The value token also changes the actor's contextual inputs.
+
+Use the existing fifty Elemental pairings and four deck/seat legs. Score each
+arm against the heuristic at updates 20, 40, 75, 150, 200, 250 and 300, retaining
+existing results. At 150 and 300 compare each depth-4 arm against its depth-2
+counterpart and the two depth-4 arms against each other. Keep missing and
+failed slots explicit. Report paired seed/pairing uncertainty, actual learner
+exposures and whole-rental costs; this exploratory extension selects no new
+promotion threshold.
+
+Before this extension launches, retained whole-rental records on 2026-11-08
+sum to USD31.7143 for training (billed plus estimates) and USD3.1013 for the
+three evaluations, USD34.8156 total. This replaces the earlier USD32.90
+estimate for budgeting. Some training costs remain estimated. The USD45 cap
+includes all prior attempts, this extension and evaluation.
 
 ## Execution record
 
@@ -22,7 +51,8 @@ threshold is set; the result is reported as measured.
 - **Capacity recovery.** The value_token seed 25202 continuation stopped at
   update 124 when a legal position needed 65 continuation relations (64 slots).
   Its repeat, `89dd4b6d2b8e`, sets `game_errors.recover_capacity`, which
-  discards and replaces only a game that overflows. No other run sets it.
+  discards and replaces only a game that overflows. Later update-300 segments
+  and the successful depth-4 runs also enable recovery.
 - **Spend.** First segments USD8.76; failed continues about USD.12;
   continuations and the repeat about USD6 (per-run readings are incomplete).
   Evaluation is limited to USD3.
