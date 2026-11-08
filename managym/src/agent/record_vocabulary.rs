@@ -16,7 +16,10 @@
 //! Entry point: [`record_names`].
 
 use crate::{
-    agent::{ability_description::predicate_description, observation::MODIFICATION_NAMES},
+    agent::{
+        ability_description::predicate_description, effect_execution::EXECUTION_TEXT,
+        observation::MODIFICATION_NAMES,
+    },
     cards::{
         content_pack::default_content_pack,
         tokens::{name_value, TokenKind},
@@ -119,9 +122,96 @@ pub fn record_names() -> Vec<RecordName> {
             out.push(record(Restriction, &description, None));
         }
     }
+    execution_names(&mut out);
     out.sort_by(|a, b| (a.namespace, &a.name).cmp(&(b.namespace, &b.name)));
     out.dedup();
     out
+}
+
+/// Runtime-only programs have no printed card span from which to discover
+/// their vocabulary. Register their serde names and projection labels explicitly.
+fn execution_names(out: &mut Vec<RecordName>) {
+    let mut add = |kind: TokenKind, name: &str| {
+        let token = (kind as u16, name_value(name));
+        if !out.iter().any(|entry| entry.token == Some(token)) {
+            out.push(record(
+                RecordNamespace::Token,
+                &format!("execution/{}/{name}", kind as u16),
+                Some((kind, name)),
+            ));
+        }
+    };
+    for candidate in default_content_pack().name_candidates().iter() {
+        add(TokenKind::Text, &candidate.name);
+    }
+    for name in EXECUTION_TEXT {
+        add(TokenKind::Text, name);
+    }
+    for name in [
+        "PlayerId",
+        "CardDefId",
+        "ZoneSelection",
+        "CounterProvenance",
+        "CastChoices",
+        "EffectiveTrigger",
+    ] {
+        add(TokenKind::Structure, name);
+        add(TokenKind::Structure, &format!("/{name}"));
+    }
+    for (owner, variants) in [
+        (
+            "GameEvent",
+            &["Scried", "Surveilled", "LibrarySearched"][..],
+        ),
+        ("LibraryEnd", &["Top", "Bottom"][..]),
+        (
+            "ReplacementEffect",
+            &["PreventDamageToController", "DoubleDamageToController"][..],
+        ),
+        ("EventCause", &["Effect", "Cost", "TurnAction"][..]),
+        (
+            "EventBinding",
+            &[
+                "None",
+                "ThisWay",
+                "Damage",
+                "Deaths",
+                "Combat",
+                "PlaceInLibrary",
+                "Shuffle",
+                "Bending",
+                "Created",
+            ][..],
+        ),
+        ("Bending", &["Water", "Earth", "Fire", "Air"][..]),
+        ("Effect", &["PlaceTargetInLibrary", "RestoreController"][..]),
+    ] {
+        for variant in variants {
+            let name = format!("{owner}::{variant}");
+            add(TokenKind::Variant, &name);
+            add(TokenKind::Structure, &format!("/{name}"));
+        }
+    }
+    for field in [
+        "player",
+        "owner",
+        "zone",
+        "predicate",
+        "cause",
+        "replaced",
+        "result",
+        "second_from_top",
+        "kind",
+        "attacking",
+        "kicked",
+        "x",
+        "free",
+        "resolving",
+        "ability",
+        "program",
+    ] {
+        add(TokenKind::Field, field);
+    }
 }
 
 /// Every JSON object nested in a serialized definition.

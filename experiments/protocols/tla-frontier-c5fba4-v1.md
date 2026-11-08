@@ -9,7 +9,13 @@ branch follow it except where that section lists remaining software. Task
 below are recounted on it. Two values come only from calibration: each size's
 damping horizon, w64's as `iteration_schedule.steps` in its regime JSON and
 w160l8's as `large.expected_updates` in the protocol JSON.
-Nothing has launched, and no score exists.
+Calibration, rehearsal and the fact-embedding check ran before MTG-241 on
+card digest `6a818cbcc0c48e0d9b6abb42fee4cbea288312a271e0e9514b5683f0ea3d1cd9`;
+no scored run has launched. The November 8 pre-freeze amendment moves
+`runtime_world.card_digest` to MTG-241's composable-execution world
+`0798b2c7` (full digest in the JSON). Retained preflight results keep their original
+world identity. Recalibrate on this world before freezing; the fact-embedding
+verdict remains the preflight reading, not a scored result on the amended world.
 
 Once frozen, this protocol is fixed before any scoring. The runner is
 `experiments/tla_frontier.py`; the bytes are

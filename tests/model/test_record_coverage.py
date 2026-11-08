@@ -33,3 +33,9 @@ def test_a_name_missing_from_the_vocabulary_fails_the_sweep(
     )
     with pytest.raises(ValueError, match="outside the catalog record vocabulary"):
         record_coverage.coverage_sweep(_GAMES, seed=0)
+
+
+def test_elemental_execution_ids_have_catalog_rows() -> None:
+    torch.set_num_threads(1)
+    report = record_coverage.coverage_sweep(4, seed=1000, decks="elemental")
+    assert report.decisions > 0 and report.fact_rows > 0
