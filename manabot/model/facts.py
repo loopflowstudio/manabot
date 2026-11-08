@@ -110,12 +110,6 @@ class FactEncoder(nn.Module):
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
 
-    def _bucket(self, rows: torch.Tensor, index: int) -> torch.Tensor:
-        """The vocabulary id at `index` (two 16-bit halves) as a bucket."""
-        high = rows[..., index].long()
-        low = rows[..., index + 1].long()
-        return ((high << 16) | low) % self.buckets
-
     def _programs(
         self, hidden: torch.Tensor, facts: torch.Tensor, program: torch.Tensor
     ) -> torch.Tensor:
@@ -160,9 +154,7 @@ class FactEncoder(nn.Module):
         )
         if not torch.equal(owners, expected_owners):
             raise ValueError("fact program changes owner or provenance")
-        word = (rows[:, FACT_DETAIL_INDEX].long() << 16) | rows[
-            :, FACT_DETAIL_INDEX + 1
-        ].long()
+        word = _word(rows, FACT_DETAIL_INDEX)
         signed = torch.where(word >= 2**31, word - 2**32, word).float()
         token_kind = rows[:, FACT_VALUE_INDEX]
         # TokenKind Integer (4) and Boolean (5) retain their numeric value.
@@ -236,7 +228,17 @@ class FactEncoder(nn.Module):
         valid = facts[..., FACT_VALID_INDEX]
         if not ((valid == 0) | (valid == 1)).all():
             raise ValueError("fact validity must be binary")
-        facts = torch.where(valid.bool().unsqueeze(-1), facts, 0)
+        valid = valid.bool()
+        if facts.device.type == "cpu" and not torch.is_grad_enabled():
+            # Padding contributes no object delta. Select the ordered union of
+            # live columns for this forward only, including the empty union;
+            # ordinals, batch ownership and duplicate program occurrences stay
+            # intact. No encoded state survives a call. Learning retains fixed
+            # shapes and device inference avoids a host synchronization.
+            used = valid.any(0).nonzero().flatten()
+            facts = facts.index_select(1, used)
+            valid = valid.index_select(1, used)
+        facts = torch.where(valid.unsqueeze(-1), facts, 0)
         links = facts[..., FACT_OBJECT_INDEX]
         kinds = facts[..., FACT_KIND_INDEX]
         if not (
@@ -255,8 +257,8 @@ class FactEncoder(nn.Module):
         ]
         if self.vocabulary == "hashed":
             ids = (
-                self.ident(self._bucket(facts, FACT_ID_INDEX))
-                + self.detail(self._bucket(facts, FACT_DETAIL_INDEX))
+                self.ident(_word(facts, FACT_ID_INDEX) % self.buckets)
+                + self.detail(_word(facts, FACT_DETAIL_INDEX) % self.buckets)
                 + self.source(facts[..., FACT_SOURCE_INDEX].long() % self.buckets)
             )
         elif catalog is None:
@@ -277,7 +279,7 @@ class FactEncoder(nn.Module):
             )
             hidden = self._programs(hidden, facts, program)
         encoded = self.output(torch.tanh(hidden))
-        linked = (valid.bool() & (links > 0)).unsqueeze(-1)
+        linked = (valid & (links > 0)).unsqueeze(-1)
         targets = (
             (links.long() - 1)
             .clamp_min(0)

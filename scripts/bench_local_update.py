@@ -19,6 +19,8 @@ returned observation build and Python conversion are separate from rules work.
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 import cProfile
 from dataclasses import asdict, dataclass, replace
 import json
@@ -29,7 +31,7 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import types
-from typing import Sequence, cast
+from typing import ParamSpec, Sequence, TypeVar, cast
 from unittest.mock import patch
 
 from managym.decision import Observation
@@ -95,6 +97,65 @@ class Cost:
     calls: int = 0
     seconds: float = 0.0
     self_seconds: float = 0.0
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def _timed(function: Callable[_P, _T], cost: Cost) -> Callable[_P, _T]:
+    def measured(*args: _P.args, **kwargs: _P.kwargs) -> _T:
+        started = time.perf_counter()
+        try:
+            return function(*args, **kwargs)
+        finally:
+            cost.calls += 1
+            cost.seconds += time.perf_counter() - started
+
+    return measured
+
+
+@contextmanager
+def object_embedding_costs(agent: ActorCritic) -> Iterator[dict[str, Cost]]:
+    """Instrument encoder components only during the separate CPU profile.
+
+    These inclusive times overlap gather_object_embeddings, not each other.
+    Patching bound methods also measures the retained reference model without
+    changing its source. No hooks or timers survive into unprofiled searches.
+    """
+    components: list[tuple[str, object | None, str]] = [
+        ("players", agent.player_embedding, "forward"),
+        ("cards", agent.card_embedding, "forward"),
+        ("permanents", agent.perm_embedding, "forward"),
+        ("generic_definitions", agent, "_generic_definitions"),
+        ("permanent_links", agent, "_join_permanent_links"),
+        ("facts", agent.facts, "forward"),
+        ("shared_effects", agent.shared_effects, "forward"),
+        ("recent_events", agent.recent_events, "forward"),
+        ("semantic_cards", agent.semantic_cards, "forward"),
+        ("semantic_programs", agent.semantic_cards, "definitions"),
+    ]
+    if agent.continuation is not None:
+        if hasattr(agent.continuation, "encode_rows"):
+            components.extend(
+                (name, agent.continuation, method)
+                for name, method in (
+                    ("continuation_rows", "encode_rows"),
+                    ("continuation_frames", "frame_context"),
+                )
+            )
+        else:
+            components.append(("continuation", agent.continuation, "forward"))
+    costs: dict[str, Cost] = {}
+    with ExitStack() as stack:
+        for name, owner, method in components:
+            if owner is None:
+                continue
+            cost = costs[name] = Cost()
+            # nn.Module and the reference loaded from git have dynamic methods.
+            function = cast(Callable[..., object], getattr(owner, method))
+            stack.enter_context(patch.object(owner, method, _timed(function, cost)))
+        yield costs
 
 
 def compare(before: LocalUpdateReceipt, after: LocalUpdateReceipt) -> Parity:
@@ -218,8 +279,8 @@ def main() -> None:
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
     torch.manual_seed(15)
-    # Retain both changed execution owners. Loading only the old teacher would
-    # silently give the baseline today's optimized attention implementation.
+    # Retain the changed execution owners. Current imported encoders would
+    # otherwise silently give the baseline today's optimizations.
     reference = cast(
         type[LocalUpdateTeacher],
         reference_module(
@@ -227,6 +288,8 @@ def main() -> None:
         ).LocalUpdateTeacher,
     )
     reference_model = reference_module(args.reference, "manabot/model/actor_critic.py")
+    reference_facts = reference_module(args.reference, "manabot/model/facts.py")
+    reference_model.FactEncoder = reference_facts.FactEncoder
     match = Match(
         MatchConfig(
             hero_deck={"Mountain": 8, "Gray Ogre": 8},
@@ -261,6 +324,7 @@ def main() -> None:
             validate_agent_setup(teacher.agent, match.to_rust())
         results: list[Timing] = []
         profiles: dict[str, dict[str, Cost]] = {}
+        object_profiles: dict[str, dict[str, Cost]] = {}
         native_profiles: dict[str, object] = {}
         original_timings: list[Timing] = []
         original_runtime_sha256: str | None = None
@@ -334,8 +398,12 @@ def main() -> None:
                     if native_profile:
                         managym.SelectedBranchRuntime.start_benchmark()
                     try:
-                        with profiler:
+                        with (
+                            object_embedding_costs(teacher.agent) as object_costs,
+                            profiler,
+                        ):
                             teacher.search(engine, history, seed=17)
+                        object_profiles[name] = object_costs
                     finally:
                         if native_profile:
                             native_profiles[name] = json.loads(
@@ -379,6 +447,13 @@ def main() -> None:
                         and singleton.worlds == 1
                     },
                     "native_profile_at_max_worlds": native_profiles,
+                    "object_embedding_profile_at_max_worlds": {
+                        name: {
+                            key: {"calls": cost.calls, "seconds": cost.seconds}
+                            for key, cost in costs.items()
+                        }
+                        for name, costs in object_profiles.items()
+                    },
                     "profile_at_max_worlds": {
                         name: {key: asdict(cost) for key, cost in costs.items()}
                         for name, costs in profiles.items()

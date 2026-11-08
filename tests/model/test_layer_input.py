@@ -16,6 +16,7 @@ from manabot.env.observation import (
     FACT_DIM,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
+    FACT_KINDS,
     FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_VALID_INDEX,
@@ -314,6 +315,69 @@ def _program_rows(holder: int, frame: int, values: tuple[int, ...]) -> torch.Ten
     return rows
 
 
+@pytest.mark.parametrize("kinds", [FACT_KINDS, FACT_KINDS_V8])
+@pytest.mark.parametrize("empty", [False, True])
+def test_fact_inference_preserves_sparse_rows_and_fresh_state(
+    kinds: int, empty: bool
+) -> None:
+    torch.set_num_threads(1)
+    torch.manual_seed(268)
+    encoder = FactEncoder(8, 32, kinds=kinds)
+    with torch.no_grad():
+        encoder.output.weight.copy_(torch.eye(8))
+        encoder.output.bias.fill_(0.2)
+    # Different supports, interior holes, duplicate occurrences and a last-slot
+    # fact exercise ordered compaction without changing batch/object ownership.
+    facts = torch.full((3, 32, FACT_DIM), float("nan"))
+    facts[..., FACT_VALID_INDEX] = 0
+    if not empty:
+        for batch, slots in ((0, [0, 4, 19]), (1, [2, 20, 31])):
+            rows = _program_rows(batch + 1, 1, (1, -2, 3))
+            if kinds == FACT_KINDS:
+                rows[:, FACT_KIND_INDEX] = 1
+            facts[batch, slots] = rows
+        facts[0, [21, 25, 30]] = facts[0, [0, 4, 19]]
+    objects = torch.randn(3, 2, 8, requires_grad=True)
+    expected = encoder(facts, objects)
+    with torch.inference_mode():
+        actual = encoder(facts, objects)
+    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+    torch.testing.assert_close(actual[2], objects[2])
+    if empty:
+        torch.testing.assert_close(actual, objects)
+    else:
+        assert not torch.allclose(actual[:2], objects[:2])
+        # A subsequent batch with new facts and changed weights must read both.
+        changed = facts.flip(0)
+        with torch.no_grad():
+            encoder.output.bias.add_(0.3)
+        dense = encoder(changed, objects)
+        with torch.inference_mode():
+            torch.testing.assert_close(
+                encoder(changed, objects), dense, atol=1e-6, rtol=1e-5
+            )
+        assert not torch.allclose(dense, actual)
+    # Inference never leaves detached data in the later learning computation.
+    trained = encoder(facts, objects)
+    trained.square().sum().backward()
+    assert objects.grad is not None and torch.isfinite(objects.grad).all()
+    assert encoder.output.weight.grad is not None
+    if not empty:
+        assert encoder.output.weight.grad.abs().sum() > 0
+
+
+@pytest.mark.parametrize(
+    "column,value",
+    [(FACT_VALID_INDEX, 0.5), (FACT_OBJECT_INDEX, 3), (FACT_KIND_INDEX, 99)],
+)
+def test_fact_inference_retains_input_validation(column: int, value: float) -> None:
+    facts = torch.zeros(1, 32, FACT_DIM)
+    facts[0, 31, FACT_VALID_INDEX] = 1
+    facts[0, 31, column] = value
+    with torch.inference_mode(), pytest.raises(ValueError, match="fact"):
+        FactEncoder(8, 32)(facts, torch.zeros(1, 2, 8))
+
+
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
     torch.set_num_threads(1)
     torch.manual_seed(244)
@@ -372,7 +436,10 @@ def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() ->
 
 
 @pytest.mark.parametrize("malformed", ["ordinal", "holder", "frame"])
-def test_local_program_rejects_broken_boundaries(malformed: str) -> None:
+@pytest.mark.parametrize("grad_enabled", [False, True])
+def test_local_program_rejects_broken_boundaries(
+    malformed: str, grad_enabled: bool
+) -> None:
     rows = _program_rows(1, 1, (1, 2, 3))
     if malformed == "ordinal":
         rows[1, FACT_VALUE_INDEX + 1] = 3
@@ -381,7 +448,10 @@ def test_local_program_rejects_broken_boundaries(malformed: str) -> None:
     else:
         rows[1, FACT_ID_INDEX + 1] = 2
     encoder = FactEncoder(8, len(rows), kinds=FACT_KINDS_V8)
-    with pytest.raises(ValueError, match="fact program"):
+    with (
+        torch.set_grad_enabled(grad_enabled),
+        pytest.raises(ValueError, match="fact program"),
+    ):
         encoder(rows[None], torch.zeros(1, 2, 8))
 
 
