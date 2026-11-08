@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 stopped at failure rules)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 3 continuation designed)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -28,6 +28,10 @@ that commit (see its freeze receipt). Jack Heart replied "sounds fine" at execut
 review (2026-11-08, comment 9b373121), approving the frozen A4000/L4/A40 run within
 the $10 step reservation and $50 inclusive cap. Step 3 stopped at its frozen failure
 rules on all three GPUs. Its evidence is retained; all rentals are released.
+Jack Heart then said "keep going" after the recommendation to repair BF16,
+lengthen packed cells and complete missing measurements (2026-11-08, comment
+079b3f46). The prospective continuation below governs new runs; the original
+step-3 design, freeze and results remain historical evidence.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -43,6 +47,12 @@ its runs.
   $1.74, so about $3.78 of the $50 cap is spent. Step 3's $10 reservation was not exhausted.
   Its posted bill is partial; see the report's inclusive accounting.
   Anything further needs an amendment made before the run that would spend it.
+- **Continuation authority.** Comment 079b3f46 and
+  `scratch/step-3-continuation.md` authorize the bounded repair, CUDA admission
+  and missing measurements within the original $10 inclusive step-3 envelope
+  and $50 experiment cap. Routine execution within these bounds needs no new
+  spending decision. This design launches nothing; software admission, freeze,
+  bill reconciliation and refreshed quotes still precede the campaign.
 
 ## Fixed identities
 
@@ -1054,6 +1064,250 @@ that a precision learns as float32 does beyond a gross check, or that four updat
 long run. The planner after this step takes these speeds, the curves that c5fba4 and later
 runs measure, and a measured seed spread; the w64 table above shows the planner's choice
 at ($100, 336 h) turns on that spread and on the late curve.
+
+## Step 3 continuation C1 (prospective amendment, 2026-11-08)
+
+### Question, retained evidence and scope
+
+At the same Elemental recipe, where does packing stop buying machine throughput
+as model size grows, and what does a384l8 cost on A4000, L4 and A40? Complete the
+missing BF16 measurements after repairing its real CUDA path. The architecture
+ladder and execution precision are interventions; the ten-deck card pool and
+learning rule are controls. This is a speed experiment with a gross numeric
+health check, not a strength or generalization experiment.
+
+The original `cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e` results remain under
+`step-3/`: 11 valid solo cells, seven packed cells with insufficient overlap,
+six BF16 startup failures and no a384l8 runs. They motivate this amendment but
+are never pooled into a same-host/source comparison. TF32's clip-fraction
+difference was 3.45 times the float32 repeat difference; equivalence is unproved.
+The retained `step-3/overhead-audit.md` lists hypotheses, not measured fixes.
+
+### Identities and isolation
+
+- Freeze a new integrated source commit and source-bundle digest after the
+  software below lands. Record native build/world identity, deck-definition
+  and roster digests, resolved observation/model/regime bytes, dependency lock,
+  CUDA/PyTorch/driver versions, GPU, CPU, quotas and actual precision switches.
+  The source is presently **unfrozen**; no old commit stands in for the repair.
+- Keep `elemental_recipe`, 256 streams, both learning seats, complete games,
+  at least 64 decisions per stream, one producer, damped-policy schedules,
+  capacity recovery and trivial skipping. Freeze input v6 / 512 facts and all
+  remaining capacities from the resolved control. Assert effective **hashed**
+  records; semantic card-program encoding still runs and must pass CUDA tests.
+- Original evidence is w17. Re-run current-world admission after integration.
+  If the runtime world or definitions changed, bind that actual identity in C1,
+  keep the same ten-deck roster and rerun every comparison's controls there.
+  Never relabel old receipts or load their checkpoints across a world boundary.
+  A changed roster, observation layout or learning recipe requires redesign.
+- All runs initialize fresh weights and optimizer state; no selected checkpoint
+  or resume is an input. Save output checkpoint hashes for audit, not selection.
+  Use independent training seeds **26401–26404**, K taking the first K seeds.
+  Solo/packed and precision comparisons reuse seed 26401 for pairing; distinct
+  seeds are independent replicas, whereas same-seed CUDA repeats are not.
+  Admission uses 26400; bounded diagnostic fixtures use 26410.
+- No evaluation games, opponents, anchor scores or evaluation draws are needed
+  for this claim. Do not consume `ELEMENTAL_PAIRS` or select checkpoints using
+  held-out data. Training opponents are the unchanged self-play recipe. There
+  are no new held-out cards, deck combinations or unseen-mechanic claims. This
+  is not a growing-pool campaign and changes none of its splits or tickets.
+
+### Schedule and sample sufficiency
+
+Use new experiment/cohort names containing `sizes-c1` and new regime IDs
+`elemental-throughput-c1-<size>-<precision>-u<updates>-v1`. The count is part of
+identity, including retries with a longer endpoint. Preserve original launch
+declarations and their four-update IDs. Use the isolated Etude client/home
+from step 3; no launcher upgrade or replacement GPU is required.
+
+1. **Admission first, one rental only.** Prefer the A40; if unavailable within
+   the existing 30-minute selection window, use an available L4 or A4000.
+   Run the fixed-input CUDA regression and one w160l8 BF16 job, 256 streams,
+   two updates, seed 26400, through the actual worker. Require cached inference,
+   selected-row training, backward, optimizer update and checkpoint reload to
+   succeed with finite metrics. Retain actual intermediate dtypes, precision
+   settings and logs. This is execution proof, excluded from speed readings.
+   Do not rent the other classes until it passes. Stop if it exposes another
+   deterministic software failure; fix and freeze again before new paid work.
+2. **Secure the largest missing baseline early.** On each admitted rental,
+   measure a384l8 K=1 float32 before spending the window on smaller packing
+   cells. Use it for memory/pace admission only until its matched comparisons
+   run. This prevents a later optional precision failure from leaving the
+   largest size wholly unmeasured again.
+3. **Float32 ladder on that same host:** w128l4 K=1,2, then K=4 if admitted;
+   w160l8 K=1,2, then K=4 if admitted; a384l8 K=2,4 if admitted, reusing its
+   new-source solo control. All speed runs have **8 updates**. This leaves
+   seven post-warmup candidates instead of exactly three. Prior step-2
+   eight-update cells retained at least six per run; this is evidence for
+   feasibility, not a guarantee on another host.
+4. **Precision:** w160l8 and a384l8, K=1, TF32 and BF16 on each GPU. On A40,
+   w160l8 float32, its same-seed repeat, TF32 and BF16 run **12 updates** each;
+   the first float32 run is also its ladder control. Run this four-leg block
+   together before the A40 packing cells, in that order. All other precision
+   cells use eight updates. The repaired numeric path must pass admission on
+   each GPU before that GPU's BF16 leg; reuse the fixed-input test, no extra
+   two-update training smoke on those additional GPUs.
+5. **Lower bracket if needed:** after the missing large-size and precision
+   cells, w64 K=1,2,4 on each host where w128l4 did not establish a gain >=1.10
+   or was inadmissible. Also complete the original missing A40 w64 comparison
+   if budget remains. These are new same-host controls; historical w64 evidence
+   remains context. Do not imply a measured lower bracket from another host.
+
+The original memory and crossover rules remain: K times solo peak reserved
+CUDA/RSS must fit 85% of the device/pod, K=4 requires valid K=2 gain >=1.30,
+and a valid K=2 gain <1.10 skips larger-size packing on that GPU. A skip after
+that point rests on monotonicity, not a measurement of each larger size.
+Insufficient overlap never establishes a crossover and does not skip larger
+K=2 cells. K=4 still requires its own size's admitted K=2 gain.
+
+Keep the existing reader's concurrent span and minimum of **three complete
+post-warmup updates per run**. Report exact included update indices and counts.
+Do not trim slow updates to improve a reading. If an eight-update packed cell
+fails only overlap sufficiency, allow **one twelve-update rerun of the whole
+cell**, all its seeds fresh at their original initial state, when the remaining
+window/budget admits it. Compare against solo at matching update indices; extend
+the solo to a separate fresh twelve-update control if needed. Retain both
+attempts and select the first admissible scheduled cell, never the faster one.
+If the rerun also lacks three samples per run, mark it inconclusive and move on.
+No synchronization barrier or change to the learner/collector is needed.
+
+### Readings, uncertainty and exposure
+
+Primary clocks are wall time and billed dollars per million **learner
+decisions**, with s/update and per-seed latency alongside machine throughput.
+Use the existing span reader. Match update ordinals in solo and packed runs,
+report `K * solo_seconds / packed_seconds`, and independently report decision
+throughput so differing game lengths cannot masquerade as equal work. Record
+phase trees, GPU busy share, busy CPU cores, CUDA reserved/allocated peaks,
+RSS, startup time and whole-rental cost including idle/setup/failures.
+
+Show per-seed measurements, update ranges and the seed-26401 paired difference.
+Report early/late-window sensitivity and same-seed float32 repeat differences.
+Updates are dependent and only one host per GPU is sampled: do not bootstrap
+updates into a population confidence interval or claim a hardware-only ranking.
+Mark threshold decisions provisional if window sensitivity crosses 1.10 or
+1.30. An absent bracket or invalid packing cell leaves crossover unknown; the
+hard thresholds choose execution, not statistical significance.
+
+For the A40 gross check, compare means over updates 5–12 against the first
+float32 run, alongside its float32 repeat, for losses, entropy, both KLs, clip
+fraction, learner rows, games and decisions/game. Report absolute differences
+as well as ratios; near-zero repeat differences are not stable denominators.
+Finite values prove execution only. Neither TF32 nor BF16 becomes a training
+default or a demonstrated strength-per-dollar improvement through this check.
+
+Training has no fixed game count because complete-game closure is retained.
+Its hard bounds are **1,600 aggregate updates**, **15 aggregate GPU rental
+hours**, and the tighter monetary/rental limits below, including admission,
+failed/retried work and diagnostics. These are ceilings, not targets. Capture
+actual starts/completions, environment and learner decisions, rows, deck-pair
+draws, failed games, discarded/replaced samples and replacement debt through
+existing receipts and game ledgers. Stop at update/cell boundaries when possible;
+retain partial-run/game evidence when a hard deadline terminates a run.
+Evaluation games, draws and actions are explicitly zero. No per-card training
+exposure instrument is needed for this unchanged-pool throughput claim.
+
+### Software and admission before final freeze
+
+The software route is necessary. Deliver the **ed2300** BF16 repair in this
+Task's next software PR, linking [ed2300](loopflow://manabot/task/ed2300) in the
+delivery and recording its validation there. Its status on 2026-11-08 was
+unstarted, with no Graph or PR. Recheck before implementation; keep one repair
+owner and do not start a competing ed2300 checkout. Software verification does
+not complete this parent experiment. Required work:
+
+1. Repair `SemanticCardEncoder.definitions` and any demonstrated adjoining
+   dtype boundary. The observed Float/Half error occurred under requested BF16;
+   inspect the actual CUDA GRU/autocast output instead of assuming its dtype.
+   Preserve float32 outputs/gradients and unchanged default checkpoint bytes.
+   Test full/cached and selected/empty definition rows with real CUDA forward
+   and backward, including the semantic catalog on effective hashed input v6.
+   Delete the CPU test's claim that it catches every CUDA dtype failure; keep
+   that useful CPU coverage and add a CUDA-required admission test that cannot
+   report a skipped CUDA test as successful campaign admission.
+2. Add the C1 schedule to the existing launch owner, with distinct IDs, the
+   eight/twelve-update endpoints, independent seeds, two-update admission and
+   explicit per-cell limits. Preserve legacy discovery and job identities.
+   Discover each leg with `read_job_file`; test recipe equality outside declared
+   size/precision/endpoint/identity fields and frozen scheduling limits.
+3. Extend the analysis owner to read C1 in its own directory, retain legacy
+   results, match solo update indices and reconcile every declared cell to a
+   run, conditional skip, unavailable/budget skip or failure. Test uneven
+   starts/finishes, insufficient samples, ordinal matching and cost admission
+   with injected fixtures. Do not weaken the three-update check.
+4. Retain a bounded diagnostic for the audit's first-update recording anomaly
+   and device/host minibatch transfers: fixed retained-shape inputs, at most
+   one instrumented update or 120 seconds per diagnostic, at most two on the
+   admission rental after CUDA proof. Separate cold allocation/page faults
+   from copying and device synchronization. Exclude instrumented timings from
+   speed cells. No extra host or induced load. Optional production optimization
+   is not a freeze dependency: only include one if measured fixed-input
+   before/after evidence and output/gradient/sample/RNG parity justify it before
+   freeze. Otherwise retain the finding. c5fba4 keeps its catalog-repair owner.
+
+Run the affected precision, semantic-card, size-launch and active-training
+tests, plus the validation-by-change-area suites for any collector/observation
+edits actually made. Local CPU tests prove wiring, not CUDA admission. Perform
+the required CUDA proof on one bounded rental after source freeze, before the
+rest of the campaign; a failed proof requires new repair/source admission.
+Delete no historical data, four-update declarations or failure receipts.
+No general planner, new precision default, changed minibatch, CUDA graph,
+engine optimization or launcher rewrite is required.
+
+### Inclusive budget, deadlines and recovery
+
+Reconcile final provider billing for the first pass and earlier steps before
+allocating new rentals. The first-pass estimate is $1.741 and experiment total
+$3.781; these are not final invoices. Let `S` be reconciled prior step-3 spend
+and `T` prior experiment spend, including any unposted upper bounds. New
+committed liability must fit `min(10 - S, 50 - T, 8.00)` dollars. If final bills
+are still unavailable, reserve a defensible upper bound for their remaining
+liability; if none can be established, stop before renting. Never count a
+partial posted bill as the whole cost.
+
+| Proposed C1 line | Aggregate window ceiling | Dollar ceiling |
+|---|---:|---:|
+| A40, including first CUDA admission and diagnostics if used | 5 h | $3.30 |
+| A4000, including admission if used | 6 h | $1.60 |
+| L4, including admission if used | 4 h | $2.40 |
+| Failure/cleanup contingency within those windows | no extra hours | $.70 |
+| **New maximum reservation** | **15 GPU h** | **$8.00** |
+
+These are prospective allocations under existing authority, not new spending
+authority or guaranteed complete-grid costs. At the current estimate they leave
+$.259 of the $10 envelope unallocated. A higher reconciled bill reduces these
+lines before launch. Do not borrow from the rest of the $50 cap to exceed $10.
+Re-quote A4000/L4/A40; keep their original rate ceilings and provider/host
+requirements. Set each rental's deadline to the lesser of its window and its
+line divided by the all-in hourly liability, reserving cleanup/rounding. Do not
+substitute a fourth GPU or grow the step. A class unavailable after 30 minutes
+is unmeasured. Prefer A40 admission/large-model evidence, then A4000 cost evidence,
+then L4 fallback; stop at the first binding cap even with missing cells.
+
+Before every cell reserve its declared watchdog liability plus teardown time,
+not its optimistic expected duration. Use prior same-size measurements to set
+pace (otherwise the previous size); retain the original watchdog and stall
+formulas, clipped by rental/campaign remaining limits. Decline a cell that
+cannot fit a useful run in that interval. Retry a failed cell at most once on
+the same rental, except a known deterministic admission defect which stops
+immediately. A second failure ends that GPU ladder. An admitted OOM is evidence
+and skips larger K at that size; do not repeatedly reproduce it. Stop on
+nonfinite/rejected learning steps and retain diagnostics. Insufficient overlap
+uses only the one longer rerun specified above, never an unbounded retry loop.
+
+End each rental after its last admitted cell. Verify provider deletion as well
+as Etude termination; the first pass's 429s show why both matter. Retain cleanup
+receipts and charge time until deletion. Stop and reap controllers, samplers and
+watchers owned by execution. Do not launch a new host while an old host's
+unresolved liability could breach the cap.
+
+Publish C1 evidence under
+`experiments/data/training-throughput-b015d5-v1/step-3-c1/`, with source/freeze
+receipt, original run outputs, per-cell disposition, exposure reconciliation,
+bills and a speed table keyed by source/world/input/host/seed/precision/K.
+Publish bytes through the artifact store and commit its manifest. Extend the
+report with a separately labelled C1 result; preserve the first pass. Return
+remaining unknowns and the measured packing recommendation for evidence review.
 
 ## Stop waiting for the slowest game (deferred candidate)
 

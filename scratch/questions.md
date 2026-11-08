@@ -452,3 +452,27 @@ reported no existing step-3 runs or rentals. Source bundle recheck: 1,483 files,
 - The earlier w64 planner scenario says “dollars bind” at $100/336 h, but its
   $.256/hour machine costs about $86 for that window: hours bind. The step-3
   report records that arithmetic correction without rewriting the frozen design.
+
+## experiment-design b015d5 (2026-11-08): continuation C1
+
+Reversible design choices under comment 079b3f46's "keep going":
+- Use eight-update speed cells: step 2 retained at least six concurrent samples
+  with eight updates, while every four-update packed cell in step 3 failed the
+  unchanged minimum of three. Permit one twelve-update rerun only for overlap
+  insufficiency, within the same budget, rather than add training barriers.
+- Deliver unstarted ed2300's repair in this Task's software PR, linked to ed2300,
+  rather than start a second checkout. Its fresh status had no Graph or PR.
+- Reserve at most $8.00 new liability, conditional on final prior billing and
+  the tighter $10/$50 caps. The $.259 margin at the current estimate is not a
+  claim about the unposted invoice. No new spending authority is inferred.
+- Prioritize a384l8 solo and the repaired CUDA path, then missing packing and
+  precision comparisons. Same-host/new-source solo controls are necessary;
+  historical controls cannot establish the new packing gain. Extra w64 runs
+  are for a lower bracket or the missing A40 cell, not a full-grid rerun.
+- Preserve the fixed Elemental pool and effective hashed v6 input; no evaluation
+  deals or strength fitting are needed for speed. Current-world admission and
+  exact executable source remain for freeze after integration.
+
+Owning protocol: Step 3 continuation C1. Scratch handoff:
+`scratch/step-3-continuation.md`. Design only; no rental, training or evaluation
+was launched and no provider quote or billing claim was refreshed.
