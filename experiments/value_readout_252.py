@@ -67,7 +67,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import LearnerContinuation, TrainingJob
 from manabot.infra.config import ValueAggregation
 from manabot.model.actor_critic import ActorCritic
-from manabot.recipes.builders import with_value_aggregation
+from manabot.recipes.builders import with_capacity, with_value_aggregation
 from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 import managym
@@ -138,6 +138,11 @@ EVALUATION = "value-readout-252-v1"
 EVALUATION_HOURS = 1.25
 EVALUATION_USD = 3.0
 # Inputs live in the bucket of the machines' storage, keyed from its root.
+# A second axis, read against the masked-mean runs above: the same baseline
+# with four attention layers instead of two, from scratch to update 150 under
+# the same seeds. It asks whether encoder depth, not the readout, limits play.
+DEPTH_LAYERS = 4
+DEEPER: dict[int, str] = {}
 STAGING_BUCKET = "r2://manabot"
 STAGING_PREFIX = "mtg252/continue"
 
@@ -173,6 +178,27 @@ def arm(aggregation: ValueAggregation, updates: int | None = None) -> TrainingRe
         regime, id=f"value-readout-252-{aggregation}", aggregation=aggregation
     )
     require_single_axis(regime, derived)
+    return derived
+
+
+def deeper(layers: int, updates: int | None = None) -> TrainingRegime:
+    """The masked-mean arm with `layers` attention blocks; nothing else changes."""
+    baseline = arm(ARMS[0], updates)
+    agent = baseline.agent
+    derived = with_capacity(
+        baseline,
+        id=f"value-readout-252-{ARMS[0]}-depth{layers}",
+        width=agent.hidden_dim,
+        depth=layers,
+        heads=agent.num_attention_heads,
+    )
+    left = baseline.model_dump(mode="json")
+    right = derived.model_dump(mode="json")
+    for dump in (left, right):
+        dump.pop("id")
+        dump["agent"].pop("attention_layers")
+    if left != right:
+        raise ValueError("depth arm changes more than agent.attention_layers")
     return derived
 
 
@@ -215,16 +241,28 @@ def runs(
     arms: str = ",".join(ARMS),
     recover_capacity: str = "",
     after: int = 1,
+    depth: int = 0,
 ) -> list[EtudeRun]:
     """Etude training runs: every arm under the same comma-separated seeds.
 
     `continuations` names a file from `stage`; each run then continues its
     parent's learner to `updates` instead of starting fresh; `after` names the
-    segment whose runs are the parents (`SEGMENT_PARENTS`). `arms` narrows a
+    segment whose runs are the parents (`SEGMENT_PARENTS`). A non-zero `depth`
+    launches only the masked-mean baseline at that depth, fresh. `arms` narrows a
     continuation to some arms, and any non-empty `recover_capacity` makes a game
     that overflows observation capacity end alone instead of stopping the run.
     """
     chosen = tuple(int(seed) for seed in seeds.split(","))
+    if depth:
+        return training_runs(
+            [deeper(depth, updates)],
+            updates=updates,
+            revision=revision,
+            experiment=EXPERIMENT,
+            seeds=chosen,
+            hours=hours,
+            usd_per_run=usd_per_run,
+        )
     planned = grid(chosen, updates)
     if continuations:
         staged = json.loads(Path(continuations).read_text())
@@ -310,6 +348,30 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
             for update, checkpoint in scheduled
             if checkpoint is not None
         ]
+    for seed, run in DEEPER.items():
+        found += [
+            Matchup(
+                name=f"{ARMS[0]} depth{DEPTH_LAYERS} s{seed} u{update} vs heuristic",
+                players=(checkpoint.model(inference), heuristic),
+                conditions=conditions,
+                games=legs,
+                tags=("heuristic", f"{ARMS[0]}-depth{DEPTH_LAYERS}"),
+            )
+            for update in (*FIRST_SEGMENT_UPDATES, UPDATES)
+            if (checkpoint := _checkpoint(state, run, update)) is not None
+        ]
+        shallow = _checkpoint(state, FINALS[ARMS[0], seed], UPDATES)
+        deep = _checkpoint(state, run, UPDATES)
+        if shallow is not None and deep is not None:
+            found.append(
+                Matchup(
+                    name=f"{ARMS[0]} v depth{DEPTH_LAYERS} s{seed} u{UPDATES}",
+                    players=(shallow.model(inference), deep.model(inference)),
+                    conditions=conditions,
+                    games=legs,
+                    tags=("head-to-head", "depth"),
+                )
+            )
     finals = [(FINALS, UPDATES), (THIRDS, THIRD_SEGMENT_UPDATES[-1])]
     for seed in sorted({seed for _, seed in PARENTS}):
         for (runs_at, update), (first, second) in product(

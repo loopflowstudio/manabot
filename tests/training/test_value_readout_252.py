@@ -41,6 +41,33 @@ def test_arms_change_only_the_value_readout() -> None:
         value_readout_252.require_single_axis(baseline, wider)
 
 
+def test_the_depth_arm_changes_only_the_attention_depth() -> None:
+    shallow = value_readout_252.arm("masked_mean", 150)
+    deep = value_readout_252.deeper(4, 150)
+    assert deep.agent.attention_layers == 4 != shallow.agent.attention_layers
+    assert deep.agent.value_aggregation == "masked_mean"
+    assert deep.stages == shallow.stages
+    assert deep.observation == shallow.observation
+
+
+def test_depth_runs_are_scored_and_meet_their_shallow_baseline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(value_readout_252, "DEEPER", {25201: "deep25201"})
+    state = ExperimentState(
+        experiment=value_readout_252.EXPERIMENT,
+        runs=(
+            _stored("deep25201", 20, 40, 75, 150),
+            _stored(value_readout_252.FINALS["masked_mean", 25201], 150),
+        ),
+    )
+    matchups = value_readout_252.evaluation_matchups(state)
+    deep = [m for m in matchups if "depth4" in m.name and "heuristic" in m.tags]
+    assert len(deep) == 4
+    (versus,) = [m for m in matchups if "depth" in m.tags]
+    assert versus.name == "masked_mean v depth4 s25201 u150"
+
+
 def test_static_costs_and_initialization_sharing() -> None:
     costs = {cost.aggregation: cost for cost in value_readout_252.costs()}
     masked, token, readout = (costs[arm] for arm in value_readout_252.ARMS)
