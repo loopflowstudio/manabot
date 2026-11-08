@@ -381,3 +381,74 @@ protocol. Helper scripts used for digests and discovery live outside the repo in
 - A4000 has no stock at quote time; L4 and A40 are rentable.
 - Regime digests are recorded with `wall_seconds` removed, because `--pace` sets it per launch.
 - The isolated controller still needs starting under `caffeinate -is` before any rental.
+
+## pool-validation b015d5 (2026-11-08 UTC): step 3
+
+Jack Heart replied "sounds fine" to execution review (comment 9b373121), approving
+the frozen A4000/L4/A40 protocol at `cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e`,
+the $10 reservation and $50 inclusive cap. The isolated Etude `a7718f5` client
+reported no existing step-3 runs or rentals. Source bundle recheck: 1,483 files,
+`dc98b968…6746`, matching the freeze.
+- 11:43 UTC quotes: A4000 and L4 unavailable; A40 $.59/hour. Their 30-minute
+  availability window starts here. No GPU substitutions.
+- 11:44:26 UTC: rented `b015d5-a40-b1aa969b00bd`, provider pod `5l3dz0elsfosio`,
+  with `--hours 5 --max-usd 4.75`; Etude's effective cap is $2.95, deadline
+  16:44:26 UTC. The isolated controller runs under `caffeinate -is`.
+- First control run: `1b0f5001d306`, `fast-w64-k1-float32`, seed 26301,
+  frozen revision and pace 37. Evidence goes under the report's `step-3/`.
+- 11:50:58 UTC: L4 stock appeared and its refreshed launch quote passed at
+  $.59/hour. Rented `b015d5-l4x4-190abeae6bbc` (pod `9433nbnl6sw3t5`,
+  6 vCPUs, 62 GB) for 4 hours with `--max-usd 2.40`; effective cap $2.36,
+  deadline 15:50:58 UTC. A4000 still unavailable.
+- 11:53 UTC: A4000 appeared within the selection window, quoted $.25/hour,
+  and rented as `b015d5-a4000x4-bb3d92eb921e` (pod `baybcye3wziawd`),
+  `--hours 6 --max-usd 1.56`. All three frozen GPU classes were obtained.
+- Reversible execution choice: a K=2 cell lacking the frozen minimum of three
+  overlapping updates supplies no gain; skip K=4 because gain >= 1.30 cannot
+  be established. Do not call this a measured crossover. The unchanged reader
+  and per-cell ledger retain the counts.
+- 12:04 UTC: L4 w128l4 K=2 succeeded, but frozen concurrent-span counts were
+  `[3, 2]`, so no packing gain is read and K=4 is skipped. Four total updates
+  leave only updates 2-4; unequal finish times remove the last update from at
+  least one run. The frozen reading rule is kept; any longer cell or changed
+  minimum would need a protocol amendment, not an execution-time rewrite.
+- 12:45–12:46 UTC: w160l8 BF16 failed before a decision/update on A4000 and
+  L4, including each same-rental retry. Original error: `RuntimeError:
+  index_copy_(): self and source expected to have the same dtype, but got
+  (self) Float and (source) Half`, at `SemanticCardEncoder.definitions` line 300.
+  Both ladders stopped under the frozen second-failure rule. Repair filed,
+  not launched: [ed2300](loopflow://manabot/task/ed2300), infrastructure Wave
+  `8c4a50d4-a51e-4ceb-8944-446f9175c6fd`. Name-only `lf wave status
+  infrastructure` resolved Loopflow's same-named Wave; the UUID read verified
+  the correct Manabot Wave before filing. No duplicate precision Task/open PR
+  was found; c5fba4's shared-effect catalog repair stays separate.
+- Cleanup: repeated `etude terminate` calls failed on RunPod GET 429; the pinned
+  Etude guardian's `PodHTTP.delete_self` also received DELETE 429. The isolated
+  controller was stopped gracefully at 12:46 UTC to reduce polling. After
+  checking each pod's identity and zero live attempts, RunPod CLI deletion
+  confirmed A4000 at 12:49:18 UTC and L4 at 12:49:20 UTC. Provider cleanup
+  receipts are in `step-3/execution/`; reconcile Etude's records separately.
+  The A40 worker continued its declared float32 repeat while control was paused.
+- Final step-3 reading, 2026-11-08: A40 float32/repeat/TF32 completed 12 updates
+  each (63.1/62.9/59.9 s/update); BF16 `24a28f677f46` and retry `3ab1ac818b07`
+  reproduced the Float/Half join error before a decision/update. All three GPU
+  ladders ended at their second-failure rule, leaving a384l8 unrun. All seven
+  packed cells lacked the frozen three overlapping updates per run, so the
+  crossover is unknown. TF32 clip fraction moved 3.45x the float32 repeat
+  difference; no learning-equivalence claim follows from finite metrics.
+- Reconciled 33 runs/attempts: 27 succeeded, 6 startup failures; 132 updates,
+  6,909,047 learner decisions, 33,989 completed games of 33,990 attempts, one
+  retained `ObservationCapacity` resource limit, no abandoned games, zero
+  nonfinite/rejected steps. Every executed regime matches its declared leg;
+  every ledger's valid samples match the receipt. Callback results are embedded
+  in attempt records: pinned SDK courier deliberately omits the separate
+  `etude-result.json` blob, explaining that fetch 404 without a missing callback.
+- Provider inventory confirmed all three pods absent at 13:19 UTC. Etude had
+  reconciled A4000/L4 at 13:00:04/11 and terminated A40 at 13:18:42. All supervisors
+  and the isolated controller stopped. Inclusive estimate: step 3 $1.741,
+  experiment $3.781 including earlier $2.04; $.720 of step 3 had posted at 13:19.
+  Original bills, cleanup confirmations, reports, scripts and full run projections
+  are in `experiments/data/training-throughput-b015d5-v1/step-3/` for publication.
+- The earlier w64 planner scenario says “dollars bind” at $100/336 h, but its
+  $.256/hour machine costs about $86 for that window: hours bind. The step-3
+  report records that arithmetic correction without rewriting the frozen design.

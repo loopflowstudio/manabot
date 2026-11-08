@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 frozen, not run)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 3 stopped at failure rules)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -24,7 +24,10 @@ its execution record). Jack Heart accepted step 2's evidence and set step 3's ob
 (2026-11-07, comment 1f4c2872), then refocused it on large-model speed (comments
 8ac4eb82, 518e5f09 and b9215b8a). Jack Heart accepted step 3's design (2026-11-07,
 comment 17799706). Its software landed as `cb722dc8c` (PR #448), and step 3 is frozen at
-that commit (see its freeze receipt). Nothing has been rented for it.
+that commit (see its freeze receipt). Jack Heart replied "sounds fine" at execution
+review (2026-11-08, comment 9b373121), approving the frozen A4000/L4/A40 run within
+the $10 step reservation and $50 inclusive cap. Step 3 stopped at its frozen failure
+rules on all three GPUs. Its evidence is retained; all rentals are released.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -36,8 +39,9 @@ its runs.
   evaluation, failures and machine setup, and the comment asks to spend no more
   than needed. The same comment sends design and execution review to Jack Heart
   in the Task conversation, so no launch happens before that review.
-- **Proposed spend.** Step 1 cost about $1.06 and step 2 about $.98, so about $2.04
-  of the $50 cap is spent. Step 3 proposes a $10.00 reservation (see its budget).
+- **Execution spend.** Step 1 cost about $1.06, step 2 about $.98 and step 3 about
+  $1.74, so about $3.78 of the $50 cap is spent. Step 3's $10 reservation was not exhausted.
+  Its posted bill is partial; see the report's inclusive accounting.
   Anything further needs an amendment made before the run that would spend it.
 
 ## Fixed identities
@@ -959,6 +963,63 @@ executable byte.
 - Authority: step 3 stays under comment 9f9d0956's $50 inclusive cap, with $10.00 reserved
   beside the $2.04 spent. Freezing confers no spending authority. Nothing launches or rents
   before execution review with Jack Heart.
+
+**Step 3 execution (2026-11-08 UTC, stopped at failure rules).** The isolated `a7718f5` client
+reported no pre-existing step-3 jobs or rentals. The source bundle was rechecked as
+1,483 files, `dc98b968…6746`, matching the frozen revision.
+- At 11:43 UTC, A4000 and L4 quotes reported no stock; their 30-minute availability
+  window began. A40 quoted $.59/hour.
+- At 11:44:26 UTC, `etude rent b015d5-a40 --hours 5 --max-usd 4.75` rented
+  `b015d5-a40-b1aa969b00bd` (provider pod `5l3dz0elsfosio`, 9 vCPUs, 50 GB).
+  Its effective rental cap is $2.95 and deadline is 16:44:26 UTC.
+- At 11:50:58 UTC, L4 stock appeared and the refreshed quote passed at $.59/hour.
+  `b015d5-l4x4-190abeae6bbc` (pod `9433nbnl6sw3t5`, 6 vCPUs, 62 GB) was rented
+  for four hours under $2.40, effective cap $2.36, deadline 15:50:58 UTC.
+- At 11:53:03 UTC, A4000 stock appeared and the refreshed quote passed at $.25/hour.
+  `b015d5-a4000x4-bb3d92eb921e` (pod `baybcye3wziawd`, 16 vCPUs, 62 GB) was rented
+  for six hours under $1.56, effective cap $1.50, deadline 17:53:03 UTC.
+  All three frozen classes were obtained inside the availability window.
+- The first cell is `fast-w64-k1-float32`, run `1b0f5001d306`, seed 26301,
+  pace 37, at the frozen revision. Evidence is retained under
+  `experiments/data/training-throughput-b015d5-v1/step-3/`, with Etude's original
+  attempts and training files in `r2://manabot/jobs`.
+- Vocabulary clarification during execution (comment 5f70beea): Jack Heart said
+  "for now probably better to test with ashed, but also use this as a lesson to look for other places we could have similar unnecessary slow downs".
+  Launched receipts specify input v6 / 512 facts; the frozen model's catalog
+  guard requires input >=8, so this ladder already uses **effective hashed
+  records**. Runs are unchanged. Report projections verify that mode per receipt.
+  c5fba4's separate fixed-input catalog/hashed diagnostic does not supply a
+  whole-update multiplier for this ladder; its shared-effect repair remains
+  with that Task. A retained overhead audit uses existing phase receipts,
+  the earlier bounded CUDA-count probe and source inspection; no new paid arm
+  or repair is part of this frozen execution.
+- Final reconciliation: 33 runs/attempts, 27 succeeded and 6 BF16 startup failures;
+  132 updates, 6,909,047 learner decisions, 33,989 completed games, one retained
+  `ObservationCapacity` resource limit and no abandoned games. All executed regimes
+  match their declared legs. Nonfinite values and rejected steps were zero.
+- BF16 failed before any game/update on every GPU, including the one permitted
+  retry, with `index_copy_(): self and source expected to have the same dtype,
+  but got (self) Float and (source) Half` in `SemanticCardEncoder.definitions`.
+  Each second failure ended that GPU's ladder. Repair is [ed2300](loopflow://manabot/task/ed2300);
+  no source repair or replacement run occurred here. All 15 a384l8 cells remain unrun.
+- Seven packed cells completed but did not meet the frozen minimum of three
+  overlapping post-warmup updates per run. No packing gain/crossover is read;
+  six K=4 cells were skipped because K=2 gain >=1.30 was unestablished. The
+  four-update schedule and unequal finish times caused this reading limitation.
+- Solo timings through w160l8 are retained. A40 float32/repeat/TF32 each completed
+  12 updates. TF32's clip-fraction difference was 3.45 times the float32 repeat's;
+  its speed is measured, but the short check does not establish learning equivalence.
+- A4000 and L4 were deleted at the provider at 12:49:18/20 UTC after Etude and its
+  guardian received RunPod 429s; the controller reconciled their deletion at
+  13:00:04/11. A40 ended through Etude at 13:18:42. Final provider inventory and
+  Etude agree that all three are deleted; no attempt, supervisor or isolated
+  controller remains running. Inclusive step-3 cost is about $1.74 ($.72 posted
+  at 13:19), about $3.78 including earlier steps, pending final billing.
+- Report, planner speed table, per-cell dispositions, export/game audit, costs
+  and figure: `experiments/data/training-throughput-b015d5-v1/report.md` (Step 3)
+  and its `step-3/` directory. Artifact bytes are published through the existing
+  store before the manifest is committed. These results do not settle a384l8,
+  the packing crossover, BF16 performance, strength or the long-run learning curve.
 
 ### Stop rules
 
