@@ -388,7 +388,7 @@ class ActorCritic(nn.Module):
         # Only the legal rows entered the action networks; objects/programs were
         # encoded once for the batch, independent of each row's support size.
         logits = scores.new_full(obs["actions_valid"].shape, -1e8)
-        logits = logits.index_put((batches, slots), scores)
+        logits = logits.index_put((batches, slots), scores.to(logits.dtype))
         if self.debug:
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
@@ -697,8 +697,12 @@ class ActorCritic(nn.Module):
             targets = (
                 (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
             )
+            # Autocast leaves scatter's operands in their own dtypes; float32
+            # runs convert nothing.
             delta = delta.scatter_add(
-                1, targets, to_target(permanents).masked_fill(~linked, 0)
+                1,
+                targets,
+                to_target(permanents).masked_fill(~linked, 0).to(delta.dtype),
             )
             delta[:, start : start + links.shape[1]] += from_target(
                 objects.gather(1, targets)

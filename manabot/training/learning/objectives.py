@@ -72,9 +72,11 @@ def update_iteration(
         rewards = torch.as_tensor(batch.rewards, device=dev)
         ends = torch.as_tensor(batch.dones, device=dev)
         with torch.no_grad():
-            next_value = (bootstrap_agent or learner.agent).get_value(
-                observation_tensors(batch.next_obs, dev)
-            )
+            with learner.forward_precision():
+                next_value = (bootstrap_agent or learner.agent).get_value(
+                    observation_tensors(batch.next_obs, dev)
+                )
+            next_value = next_value.float()
             advantages, _ = transition_gae(
                 rewards,
                 values,
@@ -177,7 +179,9 @@ def update_iteration(
                     valid = legal_mask(obs["actions_valid"])
                     behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
                     reference = reference_distribution(obs, learning.reference)
-                    logits, value = learner.agent(obs)
+                    with learner.forward_precision():
+                        logits, value = learner.agent(obs)
+                    logits, value = logits.float(), value.float()
                     logs = policy_logs(logits, valid)
                     log_ratio = (
                         logs.gather(-1, actions[indices, None]).squeeze(-1)

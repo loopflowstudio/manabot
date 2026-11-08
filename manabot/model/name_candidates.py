@@ -95,5 +95,5 @@ class NameCandidateEncoder(nn.Module):
         assert self.program_rows is not None
         named = self.definitions != 0
         return programs.index_add(
-            0, self.program_rows[named], self.embedding.weight[named]
+            0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
         )

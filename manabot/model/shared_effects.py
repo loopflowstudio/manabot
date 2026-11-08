@@ -81,7 +81,7 @@ class SharedEffectEncoder(nn.Module):
         # Duplicate memberships accumulate; every target's gradient reaches the
         # same payload. Retained v7 keeps its original expansion and reduction.
         return objects + torch.zeros_like(objects).index_add(
-            0, torch.cat(routes), repeated
+            0, torch.cat(routes), repeated.to(objects.dtype)
         )
 
     def forward(
