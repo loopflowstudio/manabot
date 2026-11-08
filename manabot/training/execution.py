@@ -43,6 +43,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -519,6 +520,7 @@ def _execute_regime(
         store.claim_training_recovery(parent.id, run)
     self_play_session = None
     resources = ExitStack()
+    resources.callback(apply_matmul_precision, "float32")
     producers = resources.enter_context(ExitStack())
     game_index = 0
     last_monitor_seconds = 0.0
@@ -781,6 +783,7 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
+            apply_matmul_precision(stage.execution.precision)
             cuda = stage.execution.device == "cuda"
             if cuda and not torch.cuda.is_available():
                 raise ValueError(
@@ -1187,6 +1190,7 @@ def _execute_regime(
                         deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
+                        precision=stage.execution.precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1240,7 +1244,10 @@ def _execute_regime(
                         )
                         record.export_seconds += time.perf_counter() - tick
                     learner = Learner(
-                        agent, experiment.device, minibatch_rows=stage.streams
+                        agent,
+                        experiment.device,
+                        minibatch_rows=stage.streams,
+                        precision=stage.execution.precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0

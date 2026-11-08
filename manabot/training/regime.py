@@ -207,9 +207,14 @@ class DampedPolicyLearning(Strict):
         )
 
 
+# float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
+# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
+Precision = Literal["float32", "tf32", "bf16"]
+
+
 class Execution(Strict):
     device: Literal["cpu", "cuda"] = "cpu"
-    precision: Literal["float32"] = "float32"
+    precision: Precision = "float32"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
@@ -218,6 +223,12 @@ class Execution(Strict):
     # Historical opt-in; phase timers are now always recorded. Retained so
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def reduced_precision_on_cuda(self) -> "Execution":
+        if self.precision != "float32" and self.device != "cuda":
+            raise ValueError(f"precision {self.precision} requires CUDA")
+        return self
 
 
 class Stage(Strict):

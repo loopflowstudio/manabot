@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 2 amendment, not frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 3 built, not frozen)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -7,7 +7,9 @@ batch's slowest game, and overlapping collection with learning. Step 1 measured
 all three. Packing is adopted and validated below, stop-waiting is deferred and
 overlap is dropped. Whether several producers learn as one does belongs to Task
 c5fba4 and is cited, not retested; how producers combine with packing is measured
-for speed in step 2.
+for speed in step 2. Step 3 measures how training speed and packing change with
+model size, GPU and numeric precision, as the first input to a planner that turns
+(hours, dollars) into a training plan.
 
 Status: design accepted by Jack Heart at experiment-design review (2026-11-06,
 comment 14e6cc54), with fixed gates replaced by step-at-a-time choice. Step 1 has
@@ -15,8 +17,14 @@ run (see its execution record). Jack Heart accepted its evidence and chose step 
 (2026-11-07, comment 9d671e78) and accepted its design, including running from Etude
 main `a7718f5` under an isolated `ETUDE_HOME` (comment 850a636c). Jack Heart then
 asked this step to own how packing combines with multiple producers (2026-11-07,
-comment ceff7d63), which added legs S14, S22 and S44. Step 2's software is built; it
-has not frozen or launched, and execution review returns to Jack Heart.
+comment ceff7d63), which added legs S14, S22 and S44. Step 2's software landed as
+`668212567` (PR #442) and step 2 is frozen at that commit (see its freeze receipt).
+Jack Heart approved execution (2026-11-07, comment e89d4889), and step 2 has run (see
+its execution record). Jack Heart accepted step 2's evidence and set step 3's objective
+(2026-11-07, comment 1f4c2872), then refocused it on large-model speed (comments
+8ac4eb82, 518e5f09 and b9215b8a). Jack Heart accepted step 3's design (2026-11-07,
+comment 17799706). Its software is built (see "Software before step 3 freezes"); it is
+not yet landed or frozen, and nothing has been rented for it.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -28,10 +36,9 @@ its runs.
   evaluation, failures and machine setup, and the comment asks to spend no more
   than needed. The same comment sends design and execution review to Jack Heart
   in the Task conversation, so no launch happens before that review.
-- **Proposed spend.** Step 1 cost about $1.06. Step 2 reserves $4.50, the most
-  comment ceff7d63 allows. Total reserved: about $5.56 of the $50 cap, which still
-  includes step 1. Anything further needs an amendment made before the run that
-  would spend it.
+- **Proposed spend.** Step 1 cost about $1.06 and step 2 about $.98, so about $2.04
+  of the $50 cap is spent. Step 3 proposes a $10.00 reservation (see its budget).
+  Anything further needs an amendment made before the run that would spend it.
 
 ## Fixed identities
 
@@ -186,7 +193,7 @@ recorded here as an amendment before that step's runs. The readings that inform 
 
 | Reading | Points toward |
 |---|---|
-| Collection share and the measured idle share | Step 3 (stop waiting), sized by (collection - assembly) x idle share |
+| Collection share and the measured idle share | Stop waiting (then numbered step 3), sized by (collection - assembly) x idle share |
 | Overlap bound, spare cores and GPU busy share | Step 4 (overlap) |
 | Packing gain per machine, dollars per M learner decisions, memory headroom | Step 2 (seeds per machine) and its slot count |
 
@@ -221,6 +228,70 @@ policy, observations, actions, game seeds and draws agree at 1, 2 and 4 producer
 (`test_uniform_draws_agree_across_producer_counts`, this control's roster). Its
 protocol is accepted, not frozen, and plans no trained comparison across producer
 counts: its one-producer pod reads speed only.
+
+**Step 2 freeze receipt (2026-11-07).** Jack Heart accepted software review and directed
+this freeze at PR #442's commit (comment 258f3c96). The launch revision is
+`668212567d8dbe17882f7c857274f6a7d3c494db`, on main, for every leg. It contains #435,
+#436, `43150799f` and `405223165`. This receipt is recorded after that commit and changes
+no executable byte.
+- Source bundle: every leg's job carries one bundle of 1,479 files, sorted-key SHA-256
+  `6334a27b…1ff3`: all 1,480 tracked files except `CLAUDE.md`, which is a symlink. Key files:
+  `experiments/training_throughput_packing.py` `9d1cd47b…2f4d`,
+  `experiments/training_throughput.py` `f36641e3…cd19`,
+  `experiments/elemental_variants.py` `0e51b536…0df4`,
+  `experiments/learning_signal.py` `836230fd…9cb0`, `manabot/experiment/job.py`
+  `62aa4fd3…5aca`, `manabot/infra/host.py` `7cd0dbbd…208b`, frozen regime
+  `elemental-long-183-v1.json` `be9de376…64ad` (as step 1), `uv.lock` `b562227a…7c58`
+  (as step 1).
+- Regimes, on w17, by sorted-key SHA-256 of the job's regime:
+  - digest `elemental-throughput-digest-v1` `0366ff8d…1c3e`: 24 streams, 3 updates, CPU,
+    600 s watchdog, equal in D1 and D2;
+  - metric `elemental-throughput-pack-check-v1` `57823471…728a`: 256 streams, 20 updates,
+    CUDA, one producer, 2,400 s watchdog, equal in M1, M2 and M3;
+  - `elemental-throughput-producers-2-v1` `53867f36…59c1`: S22;
+  - `elemental-throughput-producers-4-v1` `8c414618…5f26`: equal in S14 and S44. Both
+    speed regimes run 256 streams, 8 updates, CUDA, 1,500 s watchdog.
+- Discovery: Etude `read_job_file`, client `a7718f5`, read all eight legs at this revision
+  without executing games or training: 19 runs (1, 2, 4, 4, 1, 1, 2, 4), each leg with its
+  own job name and the seeds in the table. Limits match "Run limits".
+- Acceptance: `tests/training/test_training_throughput.py`, `tests/infra/test_host_facts.py`
+  and `tests/training/test_elemental_closure_lambda.py` pass on this tree (38 tests).
+- Isolation: step 2 plays no evaluation deals and scores no checkpoint, so no held-out set
+  or anchor is touched. Seeds 26201-26202 and 26211-26214 are disjoint from 26001-26008,
+  26101-26104 and the `ELEMENTAL_PAIRS` deals. M3 is the noise reference.
+- Client: `ETUDE_HOME=$HOME/.etude-b015d5-step2 doppler run -p etude -c prd -- doppler run
+  -p manabot -c prd --preserve-env=RUNPOD_API_KEY -- uv run --with "etude-sdk[s3,eval] @
+  git+file:///Users/jack/src/etude@a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11" etude ...`.
+  The shared `~/.etude/launcher.db` stays at schema 11. Its isolated home holds both
+  on-demands at 4 slots and at most 1 machine, and no rented machine.
+- Quote, 2026-11-07 about 19:28 UTC, at this revision, nothing rented:
+  - `b015d5-l4x4`: L4, 6 vCPUs, 48 GB, $.59/hour, rentable. D1 alone plans $.44 within
+    $.45. The four M1 runs share one L4 at 4 slots, planned $.74 within $3.00. The four
+    S44 runs share one at 4 slots, planned $.59 within $2.40.
+  - `b015d5-a4000x4`: **open.** RunPod reports no A4000 ($.25/hour offer, ceiling $.40), so
+    Etude refuses the quote at every leg. The selection rule's 30-minute wait covers this.
+  - These quotes plan a new rental per leg. Etude's `rent` has no quote, so the 5-hour hand
+    rental is priced from the rate: at most $2.95 on an L4 and $1.25 at the A4000 offer.
+    Placement on a held rental has not been exercised.
+- Authority: step 2 stays under comment 9f9d0956's $50 inclusive cap and comment ceff7d63's
+  $4.50, about $5.56 reserved with step 1. Freezing confers no spending authority. Nothing
+  launches or rents before execution review with Jack Heart.
+
+**Step 2 execution record (2026-11-07/08).** All 8 legs ran at `668212567` on one A4000
+rental, `b015d5-a4000x4-27c8c5c7f309` (RunPod `nbc3u0h4ot5rv0`, 16 vCPUs, 62 GB,
+$.25/hour), held 20:44-00:36 UTC.
+- **Selection.** The second rent attempt got the A4000, so no L4 was rented.
+- **Placement.** Legs were placed with `etude queue --rent` (same job bytes): `etude
+  launch --rent` refuses a held rental while the controller holds its lease.
+- **Runs.** All 19 declared runs succeeded. The digests are equal.
+- **Failure.** One attempt hung after update 2 with the GPU idle: M2's seed 26214,
+  `91e148fbd392`. Etude's 1-hour limit killed it, and its one retry succeeded. After
+  that, a stall watcher, cancelling at 600 s with no new update row, guarded the
+  remaining legs and never fired. No stop rule was reached.
+- **Cost.** About $.98 against the $4.50 line: $.807 posted, the rest estimated at
+  the billed rate. The machine is terminated and the isolated controller stopped.
+- **Results.** Readings, recommendation and evidence locations are in
+  `experiments/data/training-throughput-b015d5-v1/report.md`, "Step 2".
 
 ### What runs
 
@@ -420,6 +491,8 @@ Jack Heart with the recommendation. This step adopts no producer count.
   `uv run --with "etude-sdk[s3,eval] @ <Etude at a7718f5>"`. That client must never run
   without `ETUDE_HOME`. Etude main's later `199335c` adds only a checkpoint timestamp,
   so the pin stands. Moving the shared launcher is a release decision outside this step.
+  (Since then the shared database has reached schema 12 through MTG-267's client; see step 3's
+  "Etude since the design".)
 
 ### Software before step 2 freezes
 
@@ -500,9 +573,360 @@ does: the producer half rests on c5fba4's fixed-policy collection check, which h
 trained counterpart, the packing half rests on this step's one-producer legs, and
 nothing here runs the two together for learning.
 
-## Step 3: stop waiting for the slowest game (deferred)
+## Step 3: model size, GPU and precision (designed and accepted 2026-11-07)
 
-Jack Heart deferred this on 2026-11-07 because it needs paid strength runs. Step 1
+**Direction.** Jack Heart accepted step 2's evidence (comment 1f4c2872): four seeds per
+machine with one producer is the standard cost-efficient shape. He set the objective in
+his words: "you have N hours and M dollars, get me the strongest model you can". The
+deliverable is a reusable planner that, given hours and dollars, chooses machines, seeds
+per machine, host class, the recipe's horizon at the shape's measured seconds per update,
+and how the final model is selected, with selection's evaluation counted against the
+dollars. He then made model size a planner input (comment 8ac4eb82) and refocused this step
+on large-model speed (comment 518e5f09): "i think the bigger models are the ones where speed
+is likely more important to figure out", "lets start focus on that". The planner stays the
+goal, and this step measures its first input itself rather than waiting for c5fba4's
+calibration. Comment b9215b8a adds "where we stop wanting to group seeds": the model size
+at which packing stops paying.
+
+**Questions.**
+1. Seconds per update, updates per hour and dollars per update for each (model size, GPU,
+   precision), with the phase split that explains it.
+2. The packing gain, K × s/update(K=1) / s/update(K), against compute parameters for each
+   GPU, and the size where K=1 becomes the cheapest shape.
+3. Whether TF32 matmul or bf16 autocast buys speed at the larger sizes, and whether a short
+   learning-metrics check shows a gross change in learning.
+4. What those readings imply for $100 over two weeks at each size.
+
+This step measures speed only. It plays no evaluation deals, scores no checkpoint and makes
+no strength claim. Whether a larger model is worth choosing at all is c5fba4's equal-hours
+question, which this step does not answer.
+
+### The planner's current reading at w64 ($0, existing evidence)
+
+This is the planner's arithmetic applied to what already exists. The arithmetic is in
+`scratch/planner_sketch.py` until the planner is built. Its inputs:
+
+- **Speed.** Seconds per update per seed at w64 (step 2, A4000, EPYC 7702): 37 solo, 50 at
+  K=2, 62 at K=4. L4 (step 1): solo 25.4 or 37.0 by host class (31 is used), 36.5 at K=2,
+  62 at K=4. Billed $.256/hour (A4000) and $.59 (L4). A run's seconds per update fall as
+  its games shorten, and 20 updates cannot show where they settle; MTG-183 ran 34.8 s on
+  an L4 over its long windows.
+- **Continuation.** RunPod jobs last at most 12 hours, so a two-week seed is about 28
+  learner continuations (`manabot.experiment.job.LearnerContinuation`; MTG-183 ran 7).
+  Each continuation restarts streams and RNGs and may land on a different host class.
+  Taken: 10 minutes of setup and staging per window, and step 2's hang rate (1 of 21
+  attempts) at a 600-second stall watcher and one re-setup. That leaves 98.5% of rented
+  time training.
+- **Curve.** MTG-183's one seed, on world w13 with full heuristic grids (rating, heuristic
+  = 1000): 961 at u100, 1031 at u200, 1077 at u400, 1118 at u800, 1166 at u1600, 1206 at
+  u3200, 1248 at u5950. Past u400 that is 40-48 Elo per doubling of updates. Nothing is
+  measured past u5950, so the late slope is a scenario: 44 per doubling, or 20. The
+  current world is w17, and 07c490's baseline (.258 / .335 / .417 at u20 / u40 / u75 on
+  `ELEMENTAL_PAIRS`) is the only w17 reading of this recipe's curve.
+- **Seed spread.** 07c490 scored 3 baseline seeds at u40: .365, .325, .315. With the three
+  arms that sat within .03 of it, 12 seeds have a standard deviation of .027. A
+  200-game checkpoint alone has about .033 of game noise, so this spread is consistent with
+  no seed effect at all. The seed component's rough 95% upper bound is .023, about 18 Elo
+  at that score. There is
+  no seed spread past u75 on any world, and 07c490 has no u150 scores: its lambda runs
+  stopped at 75 updates and closure's 150-update target was not reached.
+- **Selection.** Best of N gains E[max of N] × σ²/√(σ² + σₑ²), with σₑ about 10 Elo at
+  2,000 selection games per candidate, discounted by the rank correlation ρ between a cut
+  and the end when a plan prunes early. Selection costs a cpu32 pass at $1/hour and about
+  13,000 games/hour (07c490), plus 15 minutes of setup: about $.87 to choose among 4.
+
+The plans compared are one seed solo per machine ("solo"), four packed per machine
+throughout ("pack-4"), and successive halving on each machine, 4 → 2 → 1 over 3:4:7 of
+the window ("halve"). Central scenario: late slope 44, σ = 10 Elo, ρ = .8. Flip marks the
+cells where σ = 0 or (slope 20, σ = 18) chooses another plan. "Machines" means the
+assumed limit of three A4000s at once; stock has often allowed one.
+
+| Dollars | Hours | Binds | Central plan (A4000, at most 3) | Final updates | Dollars | Flips to (σ = 0; slope 20 with σ = 18) |
+|---:|---:|---|---|---:|---:|---|
+| 10 | 6 | hours, machines | solo × 3, best of 3 | 575 | $5.32 | solo × 1; none |
+| 10 | 24 | hours; dollars allow 1 machine | solo × 1 | 2,300 | $6.14 | none; halve × 1 |
+| 10 | 72 | dollars | solo × 1 | 3,743 | $10.00 | none; none |
+| 50 | 6 | hours, machines | solo × 3 | 575 | $5.32 | solo × 1; none |
+| 50 | 24 | hours, machines | solo × 3 | 2,300 | $19.14 | solo × 1; none |
+| 50 | 72 | hours; dollars allow 2 machines | solo × 2 | 6,899 | $37.42 | solo × 1; halve × 2 |
+| 100 | 6 | hours, machines | solo × 3 | 575 | $5.32 | solo × 1; none |
+| 100 | 24 | hours, machines | solo × 3 | 2,300 | $19.14 | solo × 1; none |
+| 100 | 72 | hours, machines | solo × 3 | 6,899 | $56.01 | solo × 1; halve × 3 |
+| 100 | 120 | hours, dollars, machines | solo × 3 | 11,498 | $92.87 | solo × 1; halve × 3 |
+| 100 | 336 | dollars | solo × 1 | 32,195 | $86.02 | none; halve × 1 |
+
+What the table supports:
+- **Pack-4 throughout never wins a strength plan.** It is the cheapest shape per decision,
+  but in a fixed budget a final seed's own updates count, and four seeds share them. At
+  ($100, 336 h) on one A4000 it reaches 19,213 updates against 32,195 solo, 0.74
+  doublings fewer, which best of 4 recovers only if σ is above about 30 Elo.
+- **The worked example, ($100, 336 h).** Dollars bind: one A4000 for 14 days is about
+  $86. Halving reaches 27,021 updates for its survivor, at $87.44 including three selection
+  passes. Solo reaches 32,195. Halving pays when σ exceeds about 13.5 Elo at slope 44, or
+  about 8 at slope 20, with ρ = 1 (16 and 9 at ρ = .8). The u40 bound is 18 Elo, and no
+  late spread is known. **This choice is decided by the two unknowns, not by the
+  evidence.** Halving is the safer choice when the late curve flattens, when late seeds
+  spread more than early ones, or when a seed can fail in ways a stall watcher does not
+  catch. Solo is the safer choice when the curve keeps its slope and seeds converge.
+- **L4 only, ($100, 336 h).** $100 buys about 169 L4 hours, so the plan is dollar-bound in
+  a week: solo reaches 19,383 updates, and halving compresses 4 → 2 → 1 into that week.
+- **When hours bind,** spare dollars buy more solo seeds on more machines (best of N),
+  never packing. Two levers then raise a seed's own speed: renting the faster host class
+  (step 1's EPYC 9254 L4 ran 1.46× faster than the EPYC 7702 hosts), and the deferred
+  stop-waiting and overlap candidates. Only these cells give those candidates a use.
+- **Model size moves every row.** At a larger model each seed's update costs more, so
+  every horizon shrinks and the curve's early, steep part matters more. That is why this
+  step measures size first.
+
+### Sizes
+
+Declared variants of the control, `elemental_variants.elemental_recipe`, that differ only
+in the agent's width, depth, heads and feed-forward width, each with its own regime ID.
+Compute parameters exclude embedding tables, counted as c5fba4 counts them, on this
+control's input as it resolves, policy input v6 with 512 facts (counted 2026-11-07 at
+`98573bdf9`; 07c490's protocol calls the recipe's input v1, and the resolved regime
+reads v6):
+
+| Label | Width | Layers | Heads | Feed-forward | Compute parameters | × w64 |
+|---|---:|---:|---:|---:|---:|---:|
+| w64 (the control) | 64 | 2 | 4 | 256 | 243,842 | 1.0 |
+| w128l4 | 128 | 4 | 4 | 512 | 1,334,786 | 5.5 |
+| w160l8 | 160 | 8 | 8 | 1,280 | 4,953,602 | 20.3 |
+| a384l8 | 384 | 8 | 8 | 1,536 | 18,868,226 | 77.4 |
+
+The ladder steps about 4× in compute. W160l8 has c5fba4's shape, but on this control's
+input, so its count differs from c5fba4's 5,341,922 on the TLA input. A384l8 is the
+Ataraxos-sized network Jack Heart named (384 × 8, feed-forward 1,536). Feed-forward is the
+model's default (heads × width) except for a384l8. Nothing in c5fba4's frozen regimes
+changes. If c5fba4's w160l8 calibration reads first, it is a cross-check of the trend
+only: its input, roster and producer count differ.
+
+### Precision
+
+Training is float32 only: `Execution.precision` admits only `"float32"`, and nothing in
+`manabot/` enables TF32, autocast or bfloat16. This step adds two declared execution
+options, used only by step 3's variants:
+
+- `"tf32"`: TF32 tensor-core matmul and convolution (`torch.backends.cuda.matmul` and
+  `cudnn` `allow_tf32`) for the run's process. Weights and activations stay float32.
+- `"bf16"`: `torch.autocast("cuda", dtype=torch.bfloat16)` around the policy forward in
+  collection and the learner's forward and losses. Weights, optimizer state, targets and
+  the loss reductions stay float32, and no gradient scaler is used, as bf16 does not need
+  one.
+
+Both change numerics, so each is a new regime, never an edit to the control. Omitting the
+field still means float32, so retained regimes keep their bytes. CUDA only: a CPU regime
+naming either is rejected. A4000 (Ampere), L4 and RTX 4090 (Ada) support both.
+
+**Learning-metrics check.** At w160l8 on the third GPU, seed 26301: float32 twice
+(the repeat is the noise scale, as M3 was), TF32 once and bf16 once, 12 updates each, K=1.
+Step 2's metrics (losses, entropy, both KLs, clip fraction, rows, games and decisions per
+game), compared over updates 5-12 as differences from the first float32 run, beside the
+float32 repeat's difference. One seed and 12 updates can show a gross change only. Same-seed
+CUDA runs already diverge at update 2, so equal metrics are not expected. A precision whose
+differences are several times the repeat's goes to evidence review, and no reading here
+approves a precision for training. These four runs are also that size's K=1 cells on that GPU:
+the first float32 run replaces the ladder's 4-update cell.
+
+### Machines
+
+One hand-held rental per GPU, legs run in turn as in step 2, so every cell on a GPU shares
+a host. Each GPU's report names its host CPU and the provider's vCPU count.
+
+- **A4000** (`b015d5-a4000x4`, $.25/hour, 16 vCPUs, 16 GB): the standard shape's machine.
+- **L4** (`b015d5-l4x4`, under $.60/hour, 6 vCPUs, 24 GB): the fallback machine.
+- **A third, faster GPU**, chosen at freeze from live RunPod quotes: the card with the most
+  dense bf16 tensor throughput per quoted dollar among RTX 4090, RTX 5090, A40 and L40S,
+  with at least 24 GB and 8 vCPUs, under $.95/hour. RTX 4090 is the default. A new
+  on-demand `b015d5-fast` in the isolated home, `--slots 4`, 80 GB disk.
+
+If one GPU cannot be rented within 30 minutes, its cells are reported as not read, and the
+other GPUs run. Nothing is substituted without an amendment.
+
+### Cells
+
+Every cell is the control at 256 streams, both seats, one producer, CUDA, on seeds
+26301-26304, with no evaluation. Speed cells run 4 updates and read updates 2-4 inside the
+concurrent span, as step 2 read its legs. The packing ladder on each GPU, float32:
+
+| Size | K | Runs |
+|---|---|---|
+| w64 | 1, 4 | new only on the third GPU; A4000 from step 2 and L4 from step 1 |
+| w128l4 | 1, 2, 4 | each GPU |
+| w160l8 | 1, 2, 4 | each GPU |
+| a384l8 | 1, 2, 4 | each GPU |
+
+Precision cells, K=1: w160l8 and a384l8 at TF32 and bf16 on each GPU, w160l8's on the third
+GPU being the learning-metrics check.
+
+Rules, applied in order, smallest size first, so later cells are sized by earlier ones:
+
+- **Memory.** K runs only where K × the size's K=1 peak reserved CUDA bytes
+  (`memory/peak_reserved_cuda_bytes`) fits in 85% of the GPU's memory, and K × peak RSS fits
+  in 85% of the pod's allowance. A skipped cell says which limit stopped it.
+- **Crossover.** Once a size's K=2 gain on a GPU is under 1.10, the larger sizes on that GPU
+  skip K=2 and K=4: packing is taken not to pay past its crossover. Step 1 saw 10% spread
+  across K=4 seeds, so a gain under 1.10 is not distinguishable from 1. This assumes the
+  gain falls with size; the report says each place it rests on the assumption.
+- **K=4** runs only where the K=2 gain is at least 1.30.
+- **Precision skip.** If TF32 or bf16 at w160l8 is within 10% of float32 on a GPU, a384l8
+  still runs it, since larger matmuls are where tensor cores should matter.
+
+### Readings
+
+Per cell, from the run receipts and `gpu-samples.csv`, as step 2:
+- s/update (median over the read updates, averaged over the cell's runs), updates per hour
+  per seed, machine M learner decisions per hour, dollars per update and per M decisions
+  at the billed rate;
+- the phase split: native stepping, encoding, inference, learning, and the remainder;
+- GPU busy share, busy cores against the pod's vCPUs, peak reserved CUDA bytes and peak RSS;
+- the packing gain at K=2 and K=4.
+
+Then per GPU and precision:
+- **Packing gain against compute parameters,** on a log axis with the w64 rows, and the
+  crossover: the smallest size whose K=2 gain is under 1.10, bracketed by the two sizes on
+  either side.
+- **Launch-bound or compute-bound.** Learning seconds per update against compute
+  parameters at K=1. Learning that grows far slower than parameters, with the GPU less than
+  half busy, is launch-bound: the learner takes about 190 optimizer steps of 256 rows
+  per update (`minibatch_rows` = streams). If the larger sizes read launch-bound, the
+  report names the learning pass's minibatch and launch shape as the next candidate. It is
+  not built here. A larger minibatch changes optimization, so it would be a declared
+  variant with its own learning check, and kernel fusion or CUDA graphs would need a digest
+  check.
+- **$100 over two weeks, per size.** On the cheapest measured (GPU, precision, K): updates
+  per hour, the hours $100 buys after an evaluation and continuation allowance, whether
+  hours or dollars bind, and the final seed's updates under one solo seed, halving and
+  pack-4, with a curve for each size marked unknown. Curves for the larger sizes do not
+  exist, so this gives updates, not strength.
+- **The planner's speed table,** one row per measured (size, GPU, precision, K) with its
+  receipts, for the planner that follows this step.
+
+### Software before step 3 freezes
+
+No learning-rule change. No frozen world, observation version or recipe changes.
+
+1. **Size variants** (`experiments/elemental_variants.py`): `sized(regime_id, updates,
+   width, layers, heads, feedforward=None)` over `elemental_recipe`, changing only those
+   agent fields. Test: each variant's dump equals the control's outside the agent's size
+   fields and its ID, and the compute-parameter counts above.
+2. **Precision options** (`manabot/training/regime.py`, `manabot/training/execution.py`):
+   `Execution.precision` admits `"tf32"` and `"bf16"`; one helper applies the run's
+   precision at the collection forward and the learner's forward. Tests: float32 regimes
+   keep their bytes and digests (the CPU digest of step 2's D1 unchanged); CPU regimes
+   naming either option are rejected; with an injected CUDA flag, `tf32` sets the two
+   `allow_tf32` switches and `bf16` enters autocast only around the declared forwards.
+   No local test can measure CUDA numerics; the learning-metrics check is that test.
+3. **Launch file** (`experiments/training_throughput_sizes.py`, new): the cells above as
+   legs `--leg <gpu>-<size>-k<K>-<precision>`, each a declared regime, reusing step 2's
+   `GPU_SAMPLER` and speed-leg helpers from `experiments/training_throughput_packing.py`.
+   Run limits from each size's expected time: the watchdog is the larger of 1,500 s and 6×
+   the previous size's K=1 s/update × the cell's updates, so a large model does not trip
+   it. The stall watcher is the larger of 600 s and 3× that s/update.
+4. **Readings** (`experiments/data/training-throughput-b015d5-v1/step-3/readings.py`),
+   producing every report figure, as step 2's.
+5. **On-demand** `b015d5-fast` in the isolated home, and a quote for every GPU.
+
+Acceptance: the tests pass; `read_job_file` discovers each leg; a CPU run of one w128l4
+and one a384l8 leg at 8 streams and 1 update finishes through the real worker; and
+`etude launch ... --quote` under the isolated home places a K=4 leg on each on-demand.
+Etude stays at `a7718f5` under `~/.etude-b015d5-step2`, as in step 2.
+
+**Etude since the design (checked 2026-11-07).** Main's `adf319ee0` (MTG-267) pins the job
+project's `etude-sdk` to Etude main `199335c`, whose only change over `a7718f5` is
+`Checkpoint.wall_ms`, and this branch carries it through `e8dbf0b02`. Step 3's jobs therefore
+run SDK `199335c` under an `a7718f5` client. Older-client-to-newer-job is the direction that
+commit found safe; no step 3 leg has run that pairing yet. The shared `~/.etude/launcher.db`
+now reads schema 12, as the isolated home does, so the reason step 2 gave for isolation (an
+upgrade locking out 0.2.14 clients) has already happened. The freeze keeps the accepted
+client: Etude `a7718f5` in `~/.etude-b015d5-step2`, which the acceptance quotes used and
+step 2 ran. That is the setting the design accepted, and its remaining reason is a client
+that step 2 has exercised on every launch path. Moving the client to `199335c`, or dropping
+the isolated home, would be an amendment with its own re-quote. The re-quote at the launch
+commit is the first check of an `a7718f5` client placing `199335c` jobs.
+
+**As built (2026-11-07).**
+- Sizes: `elemental_variants.sized`; `training_throughput_sizes.recipe(size, precision,
+  updates)` names each regime `elemental-throughput-<size>-<precision>[-check]-v1` (the
+  12-update check legs carry `-check`). W64 float32 is the control's bytes.
+- Precision: `manabot/training/precision.py` owns both options. `apply_matmul_precision`
+  sets the TF32 switches at each stage's start and restores the process's own at the run's
+  end, so float32 keeps PyTorch's defaults (cuDNN's allows TF32, as before). Collection
+  and the learner wrap each policy forward in `forward_precision` and cast its outputs to
+  float32, so behavior log-probabilities, targets and losses are computed in float32.
+  This covers the damped rule and the clipped-surrogate rule alike.
+- **Not anticipated in the design: the network did not run under autocast.** Its
+  scatter, `index_add`, `index_put` and `masked_scatter` joins (permanent links, facts,
+  shared effects, state records, name candidates, action logits) refuse mixed dtypes,
+  and autocast leaves them mixed. Each now converts its source to the destination's dtype.
+  For float32 that is a no-op. Checked on CPU: step 2's D1 variant (24 streams, 3 updates,
+  seed 26201) through the real worker at `0d3af321e` and on this tree gives digests that
+  differ only in `training_source_sha256`, across 72 game attempts, all three policy
+  exports and the optimizer. That is the float32-unchanged acceptance, run by hand once.
+  It is not a CI test, because a pinned training digest would move with every rules change.
+- bf16 is exercised on CPU autocast by a real two-stream collection and damped update
+  (`tests/training/test_precision.py`): every agent forward ran under autocast, and
+  outputs and parameters stay float32. CPU autocast stands in for CUDA's here. It covers
+  the same forwards but says nothing of CUDA numerics.
+- Launch file: 42 legs. `--pace` passes the previous size's K=1 s/update (default 37,
+  step 2's solo A4000 w64). Hours round up to quarter hours and the watchdog takes the
+  slack. `max_usd` is hours plus 15 minutes at the on-demand's ceiling. `limits()` and
+  `python -m experiments.training_throughput_sizes LEG PACE` print a cell's stall time.
+- Readings: `step-3/readings.py` and `collect.py` (step 2's, for this experiment) read
+  `legs.json`, `machines.json` and `runs/`. Dry-run on step 2's runs relabeled as cells:
+  every section printed. Unpublished until step 3's evidence exists.
+- On-demand `b015d5-fast` in the isolated home: `NVIDIA GeForce RTX 4090`, 8 vCPUs,
+  48 GB, 80 GB disk, under $.95/hour, `--slots 4`, storage `r2`. The freeze may swap the
+  GPU for the quoted best of the four candidates.
+- Quotes, 2026-11-07 about 01:48 UTC, isolated home, `--revision HEAD` at `e3ccbb0d7`,
+  leg `<gpu>-w128l4-k4-float32`. Each on-demand places all four seeds on one machine at 4
+  slots: A4000 $.25/hour (first-wave $.25), L4 $.59 ($.59), RTX 4090 $.89 ($.89). Nothing
+  rented. Stock moves, so re-quote at the launch commit.
+- Checks: `pytest tests/training/test_precision.py tests/training/test_training_throughput_sizes.py
+  tests/training/test_training_throughput.py tests/infra/test_host_facts.py
+  tests/training/test_elemental_closure_lambda.py tests/training/test_two_seat_learning.py
+  tests/training/test_rl_objectives.py tests/training/test_regimes.py tests/model` passed,
+  after rebuilding the native extension that main's Rust had outdated.
+
+### Stop rules
+
+- A failed run is retried once on the same rental unless the host is plainly a dud; a
+  second failure of the same cell ends that GPU's ladder with its evidence kept.
+- A CUDA out-of-memory at a K the memory rule admitted is itself a reading: the cell is
+  recorded and the larger K on that size is skipped.
+- A precision whose learning-metrics differences exceed several times the float32 repeat's
+  is reported, and its speed cells are still read.
+- Each rental ends by `etude terminate` after its last cell, and spend stops at the line.
+
+### Budget
+
+| Line | Window | Reserved |
+|---|---:|---:|
+| A4000 rental, all cells | 6 h | $1.56 |
+| L4 rental, all cells | 4 h | $2.40 |
+| Third GPU rental, all cells and the learning check | 5 h | $4.75 |
+| Failed attempts and a replaced host | | $1.29 |
+| **Step 3 total** | | **$10.00** |
+
+Cell times at the larger sizes are what this step measures, so the windows are estimates:
+about 3.5 hours of cells on the A4000 if a384l8 runs near 350 s/update at float32. The
+crossover rule removes the slowest cells. With the $2.04 spent, the experiment's reserved
+total is about $12.04 of the $50 cap.
+
+### What this does and does not settle
+
+It gives the speed of each size per GPU and precision, the size where packing stops paying,
+and the updates $100 buys at each size. It does not show that a larger model is stronger,
+that a precision learns as float32 does beyond a gross check, or that four updates predict a
+long run. The planner after this step takes these speeds, the curves that c5fba4 and later
+runs measure, and a measured seed spread; the w64 table above shows the planner's choice
+at ($100, 336 h) turns on that spread and on the late curve.
+
+## Stop waiting for the slowest game (deferred candidate)
+
+This was numbered step 3 until comment 1f4c2872 gave that number to the planner. Jack
+Heart deferred it on 2026-11-07 because it needs paid strength runs, and comment
+1f4c2872 keeps it a candidate only where the time budget binds. Step 1
 read its ceiling as 33-38% of an update, and probably loose. It is not authorized
 and nothing below is built. The design stands for a later choice.
 
@@ -540,7 +964,7 @@ Jack Heart dropped this on 2026-11-07. Step 1's bound was .39-.42 of an update, 
 packing already fills the GPU that overlap would use, so the two savings do not
 add. The design is at `0e8937f26`.
 
-## Strength arms (step 3, if chosen)
+## Stop-waiting strength arms (if chosen)
 
 - **Seeds.** Four per arm, seeds 26101-26104. Every arm and the control share
   each seed's initial weights. The control is trained fresh on the frozen
@@ -583,14 +1007,14 @@ its ceiling.
 | Line | Runs | Window | Reserved | Spent |
 |---|---:|---:|---:|---:|
 | Step 1 probes | 3 | | $2.80 | about $1.06 |
-| Step 2 machine, L4 worst case | 19 on one rental | 5 h | $3.00 | |
-| Step 2 failed attempts and a replaced host | | | $1.50 | |
+| Step 2 machine, L4 worst case | 19 on one rental | 5 h | $3.00 | about $.98 (A4000, 3.85 h) |
+| Step 2 failed attempts and a replaced host | | | $1.50 | in the line above (one hung attempt, about $.25) |
 | **Step 2 total** | | | **$4.50** | |
 
 Expected step 2 cost: about $.90 on an A4000, about $2.10 on an L4. Step 1's unspent
-$1.74 is released. Step 3's lines were $17.40 at most: calibration, control and exact
-quota seeds, their evaluation and its reserve. They come back in an amendment if step 3 is
-chosen; overlap's are gone. Every line falls under the $50 cap, which includes step 1.
+$1.74 is released. Stop waiting's lines were $17.40 at most: calibration, control and
+exact quota seeds, their evaluation and its reserve. They come back in an amendment if it
+is chosen; overlap's are gone. Step 3's lines are in its own budget table. Every line falls under the $50 cap, which includes step 1.
 
 ## Stop and recovery
 
@@ -603,7 +1027,7 @@ chosen; overlap's are gone. Every line falls under the $50 cap, which includes s
   the report says why. A run stopped by its watchdog keeps its exports;
   comparisons extend only as far as every run reached.
 - Calibration failure, or no quota within 10% of the realized rows, stops
-  step 3 before scoring.
+  stop waiting before scoring.
 - Seeds are cut equally across arms before launch, never after scoring.
 
 ## Deliverable
@@ -612,5 +1036,7 @@ chosen; overlap's are gone. Every line falls under the $50 cap, which includes s
 store. It contains the step-1 table (per machine and K: s/update, phase tree,
 idle share, CPU cores, GPU busy share, peak memory, $/M learner decisions), the
 step readings and choices, step 2's digest result, metric comparison and shape
-readings, its seeds x producers table and shape per machine class, cost against this
-budget, and the machine recommendation that updates `experiments/training-update-time.md`.
+readings, its seeds x producers table and shape per machine class, step 3's speed table
+per (size, GPU, precision, K) with its packing crossover and $100-over-two-weeks reading,
+cost against this budget, and the machine recommendation that updates
+`experiments/training-update-time.md`.
