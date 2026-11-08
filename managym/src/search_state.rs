@@ -39,6 +39,16 @@ pub struct ViewerProjectionWitness {
     pub hash: String,
 }
 
+impl ViewerProjectionWitness {
+    fn new(observation: Observation) -> Self {
+        let bytes = observation.to_json().into_bytes();
+        Self {
+            hash: blake3::hash(&bytes).to_hex().to_string(),
+            bytes,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ContractDiagnostics {
     pub event_boundary: [usize; 3],
@@ -70,14 +80,27 @@ struct CanonicalAuthorityState<'a> {
     rng_probe: [u64; 8],
 }
 
-/// Derive independent authority, legal-surface, viewer, and diagnostic evidence
-/// for one exact logical rules state using fixed serialization order.
-pub fn witness(game: &Game) -> SearchStateWitness {
+/// The authority and legal surface checked before committing a search Command.
+/// Viewer projections belong to post-apply evidence, not Command validation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct SearchStateIdentity {
+    pub authority: AuthorityFingerprint,
+    pub legal_surface: LegalSurfaceFingerprint,
+}
+
+fn rng_probe(game: &Game) -> [u64; 8] {
     let mut rng = game.state.rng.clone();
-    let mut rng_probe = [0_u64; 8];
-    for value in &mut rng_probe {
-        *value = rng.next_u64();
-    }
+    std::array::from_fn(|_| rng.next_u64())
+}
+
+#[cfg(feature = "python")]
+pub(crate) fn identity(game: &Game) -> SearchStateIdentity {
+    identity_with_rng(game, rng_probe(game))
+}
+
+fn identity_with_rng(game: &Game, rng_probe: [u64; 8]) -> SearchStateIdentity {
+    #[cfg(feature = "benchmark")]
+    let _authority = crate::benchmark_search::Timer::new("witness/authority");
     let authority_state = CanonicalAuthorityState {
         schema_version: SEARCH_WITNESS_SCHEMA_VERSION,
         match_state: game.state.deterministic_hash_value(),
@@ -91,19 +114,7 @@ pub fn witness(game: &Game) -> SearchStateWitness {
     let authority_bytes = serde_json::to_vec(&authority_state).expect("authority state serializes");
     let action_bytes = serde_json::to_vec(&game.current_action_space)
         .expect("action space serializes deterministically");
-    let viewer_bytes = [
-        Observation::for_player(game, PlayerId(0))
-            .to_json()
-            .into_bytes(),
-        Observation::for_player(game, PlayerId(1))
-            .to_json()
-            .into_bytes(),
-    ];
-    let [player_zero_view, player_one_view] = viewer_bytes;
-    let acting_projection_bytes = Observation::new(game, &game.state.observation_events)
-        .to_json()
-        .into_bytes();
-    SearchStateWitness {
+    SearchStateIdentity {
         authority: AuthorityFingerprint {
             hash: blake3::hash(&authority_bytes).to_hex().to_string(),
             bytes: authority_bytes,
@@ -116,20 +127,42 @@ pub fn witness(game: &Game) -> SearchStateWitness {
                 .map_or(0, |space| space.actions.len()),
             bytes: action_bytes,
         },
-        acting_projection: ViewerProjectionWitness {
-            hash: blake3::hash(&acting_projection_bytes).to_hex().to_string(),
-            bytes: acting_projection_bytes,
-        },
-        viewers: [
-            ViewerProjectionWitness {
-                hash: blake3::hash(&player_zero_view).to_hex().to_string(),
-                bytes: player_zero_view,
-            },
-            ViewerProjectionWitness {
-                hash: blake3::hash(&player_one_view).to_hex().to_string(),
-                bytes: player_one_view,
-            },
-        ],
+    }
+}
+
+/// Derive independent authority, legal-surface, viewer, and diagnostic evidence
+/// for one exact logical rules state using fixed serialization order.
+pub fn witness(game: &Game) -> SearchStateWitness {
+    #[cfg(feature = "benchmark")]
+    let _witness = crate::benchmark_search::Timer::new("witness_construction");
+    let rng_probe = rng_probe(game);
+    let SearchStateIdentity {
+        authority,
+        legal_surface,
+    } = identity_with_rng(game, rng_probe);
+    #[cfg(feature = "benchmark")]
+    let _views = crate::benchmark_search::Timer::new("witness/projections_and_hashes");
+    let viewers = [PlayerId(0), PlayerId(1)]
+        .map(|viewer| ViewerProjectionWitness::new(Observation::for_player(game, viewer)));
+    // The acting projection includes presentation events and exposes actions.
+    // With no events and a published chooser, its inputs equal that fixed
+    // viewer's projection. Reuse bytes and hash only in that exact case.
+    let acting_projection = if game.state.observation_events.is_empty()
+        && game
+            .current_action_space
+            .as_ref()
+            .and_then(|space| space.player)
+            == Some(game.agent_player())
+    {
+        viewers[game.agent_player().0].clone()
+    } else {
+        ViewerProjectionWitness::new(Observation::new(game, &game.state.observation_events))
+    };
+    SearchStateWitness {
+        authority,
+        legal_surface,
+        acting_projection,
+        viewers,
         diagnostics: ContractDiagnostics {
             event_boundary: [
                 game.state.events.len(),

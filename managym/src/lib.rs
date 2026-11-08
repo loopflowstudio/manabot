@@ -3,6 +3,8 @@ pub mod agent;
 pub mod benchmark_allocations;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_layers;
+#[cfg(feature = "benchmark")]
+pub mod benchmark_search;
 pub mod canonical_replay;
 pub mod cards;
 pub mod conformance;

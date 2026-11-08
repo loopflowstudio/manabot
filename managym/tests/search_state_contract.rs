@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use managym::{
     agent::observation::Observation,
+    flow::event::GameEvent,
     match_fixtures::build_fixture,
     search_state::witness,
     state::{
@@ -11,6 +12,42 @@ use managym::{
         zone::ZoneType,
     },
 };
+
+#[test]
+fn witness_preserves_acting_events_and_fixed_viewer_bytes() {
+    let root = build_fixture("interactive-midgame-48-w4-v1").expect("witness fixture");
+    for with_events in [false, true] {
+        for with_chooser in [false, true] {
+            let mut game = root.clone();
+            game.state.observation_events.clear();
+            if with_events {
+                let turn_number = game.state.turn.turn_number;
+                game.state.observation_events.push(GameEvent::TurnStarted {
+                    player: PlayerId(0),
+                    turn_number,
+                });
+            }
+            if !with_chooser {
+                game.current_action_space = None;
+            }
+            let evidence = witness(&game);
+            let acting = Observation::new(&game, &game.state.observation_events).to_json();
+            assert_eq!(evidence.acting_projection.bytes, acting.as_bytes());
+            assert_eq!(
+                evidence.acting_projection.hash,
+                blake3::hash(acting.as_bytes()).to_hex().to_string()
+            );
+            for (seat, projection) in evidence.viewers.iter().enumerate() {
+                let expected = Observation::for_player(&game, PlayerId(seat)).to_json();
+                assert_eq!(projection.bytes, expected.as_bytes());
+                assert_eq!(
+                    projection.hash,
+                    blake3::hash(expected.as_bytes()).to_hex().to_string()
+                );
+            }
+        }
+    }
+}
 
 #[test]
 fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {

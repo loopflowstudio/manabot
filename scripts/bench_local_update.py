@@ -6,6 +6,14 @@ at depth 20, on one CPU thread. By default the policy is initialized (64 x 2),
 not trained; --checkpoint selects an admitted observation-only checkpoint.
 The reference is loaded from git, never installed as another production path.
 Timings are unprofiled; a separate search profiles the largest allocation.
+For native attribution, build the extension with --features python,benchmark;
+ordinary wheels omit those timers. Instrumented builds also include existing
+layer/allocation instrumentation, so use an ordinary wheel for final latency.
+Before replacing the native library, --retain-reference DIR saves complete
+reference receipts and times. After rebuilding, --native-reference DIR compares
+against that original runtime as well as both reference Python implementations.
+Native categories are inclusive: witness subcategories overlap construction;
+returned observation build and Python conversion are separate from rules work.
 """
 
 from __future__ import annotations
@@ -91,26 +99,46 @@ class Cost:
 
 def compare(before: LocalUpdateReceipt, after: LocalUpdateReceipt) -> Parity:
     """All discrete evidence must match; only numeric predictions may round."""
-    if len(before.rollouts) != len(after.rollouts):
-        raise AssertionError("rollout counts differ")
     for left, right in zip(before.rollouts, after.rollouts, strict=True):
         assert asdict(replace(left, signed_value=right.signed_value)) == asdict(right)
-    for key in ("reference", "offer_ids", "allocation_counts"):
-        assert getattr(before, key) == getattr(after, key), key
+    # Compare all fields by default, including future receipt additions. These
+    # exceptions are either measured below or intentionally differ across runs.
+    # asdict also handles the reference loaded under a different module name.
+    assert asdict(
+        replace(
+            before,
+            runtime_sha256=after.runtime_sha256,
+            teacher_source_sha256=after.teacher_source_sha256,
+            seconds=after.seconds,
+            belief_seconds=after.belief_seconds,
+            base=after.base,
+            values=after.values,
+            target=after.target,
+            rollouts=after.rollouts,
+        )
+    ) == asdict(after)
     return Parity(
         max_base_error=_prediction_error(before.base, after.base),
-        max_value_error=_prediction_error(
-            [row.signed_value for row in before.rollouts],
-            [row.signed_value for row in after.rollouts],
+        max_value_error=max(
+            _prediction_error(before.values, after.values),
+            _prediction_error(
+                [row.signed_value for row in before.rollouts],
+                [row.signed_value for row in after.rollouts],
+            ),
         ),
         max_target_error=_prediction_error(before.target, after.target),
     )
 
 
-def _prediction_error(before: Sequence[float], after: Sequence[float]) -> float:
-    """Check and report the same tolerance for every numeric prediction."""
-    np.testing.assert_allclose(before, after, rtol=1e-5, atol=1e-6)
-    return float(np.max(np.abs(np.asarray(before) - after)))
+def _prediction_error(
+    before: Sequence[float | None], after: Sequence[float | None]
+) -> float:
+    """Require identical support and the same tolerance for all predictions."""
+    assert [value is None for value in before] == [value is None for value in after]
+    left = np.asarray([value for value in before if value is not None])
+    right = np.asarray([value for value in after if value is not None])
+    np.testing.assert_allclose(left, right, rtol=1e-5, atol=1e-6)
+    return float(np.max(np.abs(left - right), initial=0.0))
 
 
 def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
@@ -175,6 +203,17 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path)
     parser.add_argument("--worlds", type=int, nargs="+", default=[1, 4, 16])
     parser.add_argument("--position-seeds", type=int, nargs="+", default=[42, 43])
+    retention = parser.add_mutually_exclusive_group()
+    retention.add_argument(
+        "--retain-reference",
+        type=Path,
+        help="Save original-runtime timings and complete reference receipts",
+    )
+    retention.add_argument(
+        "--native-reference",
+        type=Path,
+        help="Compare against previously retained original-runtime receipts",
+    )
     args = parser.parse_args()
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
@@ -222,6 +261,9 @@ def main() -> None:
             validate_agent_setup(teacher.agent, match.to_rust())
         results: list[Timing] = []
         profiles: dict[str, dict[str, Cost]] = {}
+        native_profiles: dict[str, object] = {}
+        original_timings: list[Timing] = []
+        original_runtime_sha256: str | None = None
         for position_seed in args.position_seeds:
             engine = managym.Env(seed=position_seed, skip_trivial=True)
             engine.reset(match.to_rust())
@@ -250,14 +292,55 @@ def main() -> None:
                         compare(receipts["before"], receipts["after"]),
                     )
                 )
+                evidence_name = f"{position_seed}-{worlds}.json"
+                if args.retain_reference:
+                    args.retain_reference.mkdir(parents=True, exist_ok=True)
+                    (args.retain_reference / evidence_name).write_text(
+                        json.dumps(
+                            {
+                                "reference": args.reference,
+                                "seconds": seconds["before"],
+                                "receipt": asdict(receipts["before"]),
+                            }
+                        )
+                    )
+                if args.native_reference:
+                    retained = json.loads(
+                        (args.native_reference / evidence_name).read_text()
+                    )
+                    original = LocalUpdateReceipt.from_json(
+                        json.dumps(retained["receipt"])
+                    )
+                    if original_runtime_sha256 is not None:
+                        assert original.runtime_sha256 == original_runtime_sha256
+                    original_runtime_sha256 = original.runtime_sha256
+                    assert retained["reference"] == args.reference
+                    original_timings.append(
+                        replace(
+                            results[-1],
+                            before_seconds=retained["seconds"],
+                            parity=compare(original, receipts["after"]),
+                        )
+                    )
             if position_seed == args.position_seeds[0]:
                 for name, teacher in teachers.items():
                     teacher.config = config.model_copy(
                         update={"worlds": max(args.worlds)}
                     )
                     profiler = cProfile.Profile()
-                    with profiler:
-                        teacher.search(engine, history, seed=17)
+                    native_profile = hasattr(
+                        managym.SelectedBranchRuntime, "start_benchmark"
+                    )
+                    if native_profile:
+                        managym.SelectedBranchRuntime.start_benchmark()
+                    try:
+                        with profiler:
+                            teacher.search(engine, history, seed=17)
+                    finally:
+                        if native_profile:
+                            native_profiles[name] = json.loads(
+                                managym.SelectedBranchRuntime.finish_benchmark_json()
+                            )
                     profiles[name] = profile_costs(profiler)
         print(
             json.dumps(
@@ -270,9 +353,32 @@ def main() -> None:
                     "model": teachers["after"].agent.config.model_dump(mode="json"),
                     "depth": 20,
                     "threads": 1,
+                    "runtime_sha256": receipts["after"].runtime_sha256,
+                    "native_instrumented_build": bool(native_profiles),
+                    "reference_native": "shared with current teacher",
+                    "singleton_ratio_reference": (
+                        "retained original runtime"
+                        if original_timings
+                        else "shared runtime"
+                    ),
                     "timings": [
                         {**asdict(row), "speedup": row.speedup} for row in results
                     ],
+                    "original_runtime_sha256": original_runtime_sha256,
+                    "original_runtime_timings": [
+                        {**asdict(row), "speedup": row.speedup}
+                        for row in original_timings
+                    ],
+                    "sixteen_worlds_over_reference_singleton": {
+                        str(row.position_seed): row.after_seconds
+                        / singleton.before_seconds
+                        for row in (original_timings or results)
+                        if row.worlds == 16
+                        for singleton in (original_timings or results)
+                        if singleton.position_seed == row.position_seed
+                        and singleton.worlds == 1
+                    },
+                    "native_profile_at_max_worlds": native_profiles,
                     "profile_at_max_worlds": {
                         name: {key: asdict(cost) for key, cost in costs.items()}
                         for name, costs in profiles.items()
