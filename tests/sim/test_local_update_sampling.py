@@ -12,13 +12,14 @@ from managym.decision import (
 )
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
-from numpy.typing import NDArray
 import pytest
 import torch
 
 from manabot.belief.sampling import AutoregressiveBeliefSampler, SamplerSchema
 from manabot.belief.sampling_data import _digest
 from manabot.belief.state import ViewerHistory
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.local_update import (
@@ -441,19 +442,16 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     teacher, env = make_teacher(tmp_path)
-    encode = teacher.space.encode
-    calls = 0
-
-    def incomplete(raw: managym.Observation) -> dict[str, NDArray[np.generic]]:
-        nonlocal calls
-        encoded = encode(raw)
-        calls += 1
-        if calls == 2:
-            encoded["actions_valid"].fill(0)
-        return encoded
-
     with monkeypatch.context() as patch:
-        patch.setattr(teacher.space, "encode", incomplete)
+        patch.setattr(
+            teacher,
+            "space",
+            ObservationSpace(
+                teacher.space.encoder.config.model_copy(
+                    update={"max_actions": 1, "action_overflow": "first-legal"}
+                )
+            ),
+        )
         with pytest.raises(ValueError, match="complete legal offers"):
             teacher.predict_batch([env._engine, env._engine])
     forward = teacher.agent.forward
@@ -468,6 +466,66 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
     monkeypatch.setattr(teacher.agent, "forward", nonfinite)
     with pytest.raises(ValueError, match="nonfinite leaf value"):
         teacher.predict_batch([env._engine, env._engine])
+
+
+@pytest.mark.parametrize("version", range(1, 10))
+@pytest.mark.parametrize("history", [0, 1])
+def test_batch_inputs_match_python_at_selected_capacities(
+    tmp_path: Path, version: int, history: int
+) -> None:
+    """Every selected key and row reaches inference, with no shared buffer state."""
+    teacher, env = make_teacher(
+        tmp_path,
+        observation=ObservationConfig(
+            policy_input_version=version,
+            policy_history_version=history,
+            max_facts=17 if version >= 6 else None,
+            max_cards_per_player=33,
+            max_permanents_per_player=7,
+            max_actions=37,
+            max_focus_objects=5,
+            max_events=3,
+        ),
+    )
+    branch = env._engine.clone_env()
+    branch.step(0)
+    engines = [env._engine, branch, env._engine]
+    witnesses = [engine.search_witness_json() for engine in engines]
+    expected = [
+        teacher.space.encode(
+            engine.observation_for_player(engine.current_agent_index())
+        )
+        for engine in engines
+    ]
+    tensors = {
+        key: torch.as_tensor(np.stack([row[key] for row in expected]))
+        for key in teacher.space.keys()
+    }
+
+    def check_inputs(module: torch.nn.Module, args: tuple[object, ...]) -> None:
+        actual = args[0]
+        assert isinstance(actual, dict)
+        assert actual.keys() == tensors.keys()
+        for key, tensor in tensors.items():
+            np.testing.assert_array_equal(
+                actual[key].numpy(), tensor.numpy(), err_msg=key
+            )
+
+    handle = teacher.agent.register_forward_pre_hook(check_inputs)
+    try:
+        predictions = teacher.predict_batch(engines)
+    finally:
+        handle.remove()
+    with torch.inference_mode():
+        logits, values = teacher.agent(tensors)
+    for i, (probabilities, value) in enumerate(predictions):
+        count = int(expected[i]["actions_valid"].sum())
+        np.testing.assert_array_equal(
+            probabilities, logits[i, :count].double().softmax(-1).numpy()
+        )
+        assert value == float(values[i])
+    assert [engine.search_witness_json() for engine in engines] == witnesses
+    assert teacher.predict_batch([]) == []
 
 
 def test_batch_retains_root_zero_support(

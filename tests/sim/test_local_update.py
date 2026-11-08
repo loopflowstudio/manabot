@@ -17,7 +17,12 @@ from manabot.belief.tracker import BeliefTracker
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
@@ -32,6 +37,7 @@ from manabot.sim.search.local_update import (
     SamplerArtifact,
     regularized_update,
 )
+import managym
 
 
 def small_match() -> MatchConfig:
@@ -42,12 +48,24 @@ def small_match() -> MatchConfig:
 
 
 def make_teacher(
-    tmp_path: Path, *, config: LocalSearchConfig | None = None
+    tmp_path: Path,
+    *,
+    config: LocalSearchConfig | None = None,
+    observation: ObservationConfig | None = None,
 ) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
-    space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    space = ObservationSpace(observation)
+    history = space.encoder.config.policy_history_version == 1
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            world=managym.WORLD_SETUP if history else None,
+            recent_events=history,
+        ),
+    )
     match = Match(small_match())
     path = tmp_path / "policy.pt"
     save_checkpoint(

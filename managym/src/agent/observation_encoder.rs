@@ -508,6 +508,8 @@ pub fn encode(
     obs: &Observation,
     config: &ObservationEncoderConfig,
 ) -> Result<EncodedObservation, ObservationEncodeError> {
+    #[cfg(feature = "benchmark")]
+    let allocation_timer = crate::benchmark_search::Timer::new("encoding/native_allocation");
     let mut encoded = EncodedObservation {
         relations: vec![0.0; config.relations_len()],
         effects: vec![0.0; config.effects_len()],
@@ -537,6 +539,10 @@ pub fn encode(
         events_valid: vec![0.0; config.max_events],
     };
 
+    #[cfg(feature = "benchmark")]
+    drop(allocation_timer);
+    #[cfg(feature = "benchmark")]
+    let _encode_timer = crate::benchmark_search::Timer::new("encoding/native_encode");
     encode_into(obs, config, encoded.buffers_mut())?;
     Ok(encoded)
 }

@@ -3,19 +3,26 @@
 The Task directive is the design; no separate accepted design was present.
 It says: "Batching should bring 8-16 worlds near today's one-world cost."
 That outcome remains unmet. No numeric definition of "near" or relaxation has
-been agreed. The direct semantic-hash path costs 3.69x/4.16x the old
+been agreed. Before the latest upstream sync, the direct semantic-hash path cost
+3.69x/4.16x the old
 singleton, versus 4.55x/4.92x after fact compression, 5.46x/5.72x after native
 optimization and compression, and 8.0–8.1x before native optimization. These are single samples, not a variance
 estimate. Implementation progress is not acceptance.
 
-Latest iteration direction: "Investigate the 0.259 s semantic JSON/hash cost."
-It asks to "implement a bounded direct-hash path if equivalence is established"
-and "Preserve exact viewer/event semantics and hash bytes; do not substitute a
-witness hash without proving equivalence."
+Prior direction: "Investigate the 0.259 s semantic JSON/hash cost" and
+"Preserve exact viewer/event semantics and hash bytes; do not substitute a
+witness hash without proving equivalence." That investigation is complete.
+The current encoding investigation is also complete: the merged ordinary wheel
+is installed, pending-entrant hash parity passes, and the teacher uses the
+existing native encoder with bulk output copies and one fresh batch allocation.
+Sixteen worlds take 4.55x/4.57x the retained merged-runtime singleton cost;
+these are a new world/checkpoint, not comparable to the original ratios above.
 
 Reversible choice: compute semantic SHA-256 under the Env lock on every read,
 without reuse. Witness BLAKE3 is not equivalent. The bounded investigation is
-complete; broad validation stays with gate and the latency objective is open.
+complete; focused merged-runtime checks now pass, broader validation remains
+for gate/CI, and the latency objective is open. Pre-sync parity below remains
+historical; current evidence is in the encoding investigation section.
 
 ## Approach and Delete — do not maintain
 
@@ -26,9 +33,12 @@ atomic precondition rejection and deadlines. No input/checkpoint/schema change
 or batching flag. Compound execution is removed; historical readers survive.
 The directive's compound fallback is obsolete under the existing removal in
 `docs/training.md#compound-decisions-removed`; restoring it is outside this work.
-The 2026-11-08 realign refresh still found `origin/main` at `841b1c50c`,
-already contained in the checkout base `b06478f43`; no upstream changes or new
-Task direction needed reconciliation.
+The 2026-11-08 refresh found `origin/main` at `0aa7dabbd` (#433), already
+included through sync target `00c7f1bba` in merge `0f5380bc9`. That sync adds
+retained resolution/selection and replacement state, observation projections
+and version-aware continuation encoding. The Task status supplied no new
+direction. The earlier `841b1c50c` remains the historical benchmark reference,
+not the current upstream revision.
 The Task has no Wave, so there is no selected Wave memory to curate.
 
 Delete — do not maintain (completed):
@@ -50,207 +60,171 @@ Delete — do not maintain (completed):
 - Duplicate prepared-constraint parsing: one decoded value serves validation
   and the world identity. Evidence tests share their match configuration.
 
-No remaining deletion target is selected; further latency cuts need measurement.
+Encoding cut completed after measurement: scalar Python-list conversion in
+native array returns and per-row Python encoding/stack-copy assembly in
+`predict_batch` are removed. The Python reference encoder remains for its real
+consumers and parity oracle. Exact arrays, selected capacities, full action
+support and independent writable outputs survive. Duplicate native profiling lifecycles and fact-program guards are also removed;
+those responsibilities each have one owner. No next deletion is selected.
 
-## Retained comparison evidence (2026-11-08)
+## Historical evidence and open work
 
-Apple M4 Max, macOS 26.0.1, Torch 2.10.0; one CPU/inter-op thread; initialized
-64-wide/two-layer scalar policy, current observation defaults; checkpoint SHA256
-`5e3e03fb91c9fba2ea75bb7736d797505ea5385cf9dd538a9d0bab6b582899a6`.
-Two seeded openings (42/43), search seed 17, depth 20, four/five supported root
-actions. One unprofiled timed decision per cell, warm singleton inference;
-separate profiling search at position 42 / 16 worlds. Bounded fixed positions
-only; no games/evaluations, stress or artificial-load tests. These single samples
-establish no variance estimate or production guarantee.
+Complete pre-sync measurement tables, commands, contrary findings and sync
+resolution are retained at `0f5380bc9:scratch/questions.md`; earlier native
+attribution is at `6b4a511:scratch/questions.md`, and fact compaction at
+`f9e3801:scratch/questions.md`. Before this curation, the full uncommitted notes
+were copied to `.cache/mtg-268/questions-before-encoding-compress.md`.
+Raw timing JSON under `scratch/` and original receipts under
+`.cache/mtg-268/reference/` remain unchanged. The reference execution owners are
+loaded from `841b1c50c`, not installed as a production fallback.
 
-The benchmark loads reference execution owners from `841b1c50c` on the current
-runtime and separately compares complete original-runtime receipts/times in
-`.cache/mtg-268/reference/`. Original binary:
-`.cache/mtg-268/reference-native.cpython-312-darwin.so`; aggregate original run:
-`scratch/mtg-268-native-before.json`. Use `--retain-reference DIR` before replacing
-a native library; `--native-reference DIR` checks saved receipts and identities.
-Original runtime SHA256:
-`fbc055ffae76c751a7f496d85388ee64adf101ffebc598a5e92d5ca12e46fda3`.
-Prior fact-compression ordinary runtime SHA256:
-`94dbd622e1449d28633e9843bbf0099a19fad22cc37f363295c4eb16dfdf9885`.
+Historical limits: all timings use two initialized opening positions, depth 20,
+one CPU/inter-op thread and one sample per cell on Apple M4 Max/macOS 26.0.1,
+Torch 2.10.0. They establish no variance estimate or production guarantee.
+The direct-hash cut passed complete discrete parity with maximum base/value/target
+errors 1.49e-10 / 5.96e-8 / 6.92e-9. Composite constructions fell 1,348 → 52;
+16-world/original-singleton ratios were 3.69/4.16. Contrary evidence: position
+43's singleton rose from 0.1261 to 0.17281 s. These are pre-sync measurements.
+The teacher-source digest was repaired to include `facts.py`; retained receipts
+predate that identity repair and were never rewritten.
 
-Native attribution uses thread-local timers under the existing Rust `benchmark`
-feature, enabled only during the separate profiling search. Build with
-`--features python,benchmark` (explicit features replace maturin defaults).
-This also includes layer/allocation instrumentation: never compare these times
-with ordinary-wheel latency. Ordinary wheels contain no timers.
-
-The native profile selected witnesses: 1.990 s of 2.085 s native step/audit,
-including 1.782 s projections/serialization/hashes and 0.145 s authority; rules
-0.048 s. After removing redundant projections, witnesses took 0.758 s of
-0.806 s step/audit (projections 0.519 s, authority 0.237 s, rules 0.025 s).
-Full projection passes fell 2,560 → 1,280; authority/legality still run before
-and after all 1,280 Commands. Raw runs:
-`scratch/mtg-268-native-profile-before.json` and
-`scratch/mtg-268-native-profile-after.json`. Categories overlap parents; conversion
-measures struct/info conversion, not outer PyO3 boxing. Separate samples are not
-paired microbenchmarks; increased authority time also shows variability.
-
-The ordinary-wheel native compression run passed six-cell complete discrete
-parity and numeric tolerance: `scratch/mtg-268-native-compress.json`. At 1/4/16
-worlds, seconds were 0.131/0.419/1.559 (42) and 0.146/0.498/1.877 (43):
-2.18–2.82x same-allocation speedup; 16-world/original-singleton 5.46x/5.72x.
-Its profile was model 0.489 s (objects 0.386 s, attention 0.083 s), native
-step/audit 0.427 s, encoding 0.289 s, semantic JSON/hash 0.268 s, tensor assembly
-0.0154 s and snapshots 0.00729 s. Comparator mutation probes rejected altered
-schema, aggregate values, missing-value support and audit JSON.
-
-Full earlier native tables and validation: `6b4a511:scratch/questions.md`;
-pre-native history: `ec39166:scratch/questions.md` and
-`63f7d6a:scratch/questions.md`. Uncommitted notes were copied before this
-curation to `.cache/mtg-268/questions-before-fact-compress.md`. Raw timing files
-remain under `scratch/`. Network-call count alone did not predict latency;
-evidence construction and remaining per-branch work still matter.
-
-## Fact-column optimization (2026-11-08)
-
-The choice was per-call CPU/no-autograd compaction of all-batch-empty fact
-columns, with no retained state. Full initial measurements and focused checks
-are in `f9e3801:scratch/questions.md` (18 fact/model cases passed). Raw files:
-`scratch/mtg-268-object-before.json` and `scratch/mtg-268-object-after.json`.
-Fact encoding fell from 0.247 s to 0.00974 s; initial final decision times at
-1/4/16 worlds were 0.109/0.343/1.277 s (42) and 0.131/0.428/1.576 s (43).
-Six-cell complete discrete parity passed; max base/value/target errors were
-1.49e-10 / 5.96e-8 / 6.93e-9. No trained or dense-position claim follows.
-
-Compression recheck:
-`uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/reference`
-— all six cells pass complete discrete parity against both reference execution
-owners and retained original-runtime receipts; output
-`scratch/mtg-268-object-compress.json`, ordinary wheel. At 1/4/16 worlds, seconds
-are 0.1087/0.3398/1.3008 (42) and 0.1261/0.4121/1.6140 (43).
-Same-allocation speedups are 2.60–3.39x; 16-world/original-singleton ratios
-4.5508/4.9226. Maximum base/value/target errors:
-1.49e-10/5.96e-8/6.93e-9. Same fixture and single-sample limits apply; this is
-parity evidence, not a claim that the cleanup improved latency. The separate
-profile reports facts 0.00890 s, objects 0.152 s and network 0.248 s.
-
-The realign check found that the teacher-source digest omitted `facts.py`.
-The digest now includes that inference owner, so changing fact encoding changes
-the implementation identity used by receipts and arena admission. Retained
-timing receipts above predate this identity repair; their measured behavior and
-latency remain evidence for the same inference computation. Historical evidence
-was not rewritten. The digest remains an explicit owner list, not a claim of
-transitive source coverage.
-
-`uv run --extra dev pytest tests/sim/test_local_update.py -q -k 'teacher_identity_tracks_fact_encoder or real_root_replay'`
-— 2 passed, 5 deselected during realign. The identity probe changes only the
-fact source hash; current-root replay still agrees. Focused Ruff check/format
-passes. No timing rerun was needed for this identity-only repair.
-
-## Direct semantic hash (2026-11-08)
-
-The direct and composite APIs share the checked fixed-viewer projection and
-exact serialization. No event/hash algorithm, Command or audit changed. Rust
-checks independently hash both viewers with/without events, a chooser and
-terminal state; Python checks pre-reset rejection, forks and three Commands.
-
-`uv run --extra dev python scripts/bench_local_update.py --worlds 16 --position-seeds 42 --native-reference .cache/mtg-268/reference`
-— instrumented parity passes against both references; attribution retained in
-`scratch/mtg-268-hash-profile.json`. Native semantic calls include 50 internal
-composite reads in addition to the Python calls. Before → after, seconds:
-
-| Native category | Before | After |
-| --- | ---: | ---: |
-| Fixed-viewer projection | 0.00854 | 0.00636 |
-| Canonical viewer serialization | 0.12520 | 0.11654 |
-| SHA-256 | 0.03591 | 0.03490 |
-| Composite construction | 0.07404 | 0.00147 |
-| Composite serialization | 0.01940 | 0.000017 |
-
-Projection/serialization/hash counts stay 1,348. Composite constructions fall
-1,348 → 52; Python composite JSON calls fall 1,298 → 2, plus 1,296 direct hash
-calls. Thus the removable native cost is about 0.093 s; canonical serialization
-and hashing still dominate direct reads. These feature-gated timings belong to
-an instrumented build and are not ordinary-wheel latency comparisons.
-
-`uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/reference`
-— all six cells pass complete discrete parity and numeric tolerance against
-reference teacher/model/FactEncoder and retained original-runtime receipts.
-Ordinary-wheel results: `scratch/mtg-268-hash-after.json`, with
-`native_instrumented_build=false`. Final installed runtime SHA256:
+The installed pre-sync binary was identified as
 `21865ee8f4b9bbde2ef6463af4d583a8edd6b305c9b5d4a98e95fe813df61476`.
-Same checkpoint, positions, depth 20, one thread, search seed and single-sample
-limitations as above; no games/evaluations or artificial load.
+Rebuilding after merge `0f5380bc9` exposed the cross-world mismatch described
+below. The completed rebuild and same-world checks do not waive original
+receipt identities or rebind MTG-183/w13.
 
-| Worlds | Position 42 original → final (s) | Position 43 original → final (s) |
-| --- | --- | --- |
-| 1 | 0.28584 → 0.09045 | 0.32787 → 0.17281 |
-| 4 | 1.05959 → 0.28020 | 1.31690 → 0.39134 |
-| 16 | 4.40426 → 1.05505 | 5.24962 → 1.36387 |
+Native attribution requires `--features python,benchmark` (explicit features
+replace maturin defaults). Those builds also instrument layers/allocations;
+never compare their times with ordinary-wheel latency. Categories overlap.
+Use `--retain-reference DIR` before replacing a runtime; `--native-reference DIR`
+checks saved receipts. The original binary remains at
+`.cache/mtg-268/reference-native.cpython-312-darwin.so`.
 
-Sixteen-world/original-singleton ratios: 3.6911 / 4.1597. Same-allocation
-speedups: 1.90–4.17x. Maximum base/value/target errors against either reference:
-1.49e-10 / 5.96e-8 / 6.92e-9 (atol 1e-6, rtol 1e-5). Complete hashes, audits,
-Commands, support, allocation and sampling identities agree. The 16-world
-position-42 profile retains 21 forwards, 1,280 Commands and 64 snapshots.
-
-Contrary timing evidence: position 43's singleton is slower than the prior
-fact-compression sample (0.17281 vs 0.1261 s). The separate ordinary-wheel
-profile also varies substantially: direct hash 0.222 s, step/audit 0.705 s,
-encoding 0.470 s and network 0.431 s. Do not infer paired speedups for this cut
-or sum overlapping profile categories; no variance estimate or production claim.
-
-`cargo test --manifest-path managym/Cargo.toml -p managym --test search_state_contract semantic_direct_hash -j 2 -- --test-threads 2`
-— 1 passed in debug, including terminal fixtures.
-`uv run --extra dev pytest tests/sim/test_search_command_evidence.py tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py -q -k 'semantic_direct_hash or selected_command or real_root_replay or batched or frontier or batch_'`
-— 11 passed, 12 deselected on the ordinary wheel. Focused Ruff check/format,
-Cargo fmt and `git diff --check` pass. Both release builds passed; the ordinary
-wheel was atomically installed last. Final Python formatting/import cleanup
-changes no measured computation. Full debug suites, Clippy and engine-budget
-checks remain for gate/CI.
-
-## Compression and remaining validation
-
-The compression pass reuses decoded prepared constraints for validation and
-identity, and one match fixture across the Python evidence tests. Native
-production code needed no further simplification. Prior uncommitted notes were
-copied to `.cache/mtg-268/questions-before-hash-compress.md` before curation;
-measurements above remain historical, not retimed cleanup claims.
-
-`uv run --extra dev pytest tests/sim/test_search_command_evidence.py tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py -q -k 'semantic_direct_hash or selected_command or real_root_replay or batched or frontier or batch_ or injected_sampler or direct_search'`
-— 14 passed, 9 deselected after compression. Focused Ruff check/format and
-`git diff --check` pass. No Rust source changed in this pass, so the ordinary
-wheel remains installed. The teacher source digest changes with this cleanup;
-retained timing receipts were not rewritten or remeasured.
-
-Earlier witness-event debug validation passed one case; attention validation
-passed 14 focused cases. Commands/results are at `f9e3801:scratch/questions.md`.
-The current ordinary release wheel was atomically installed after the
-instrumented build. No input shapes, world identity, checkpoint parameters or
-schemas changed.
-
-Gate owns complete local-update suites and affected model suites
-(`tests/model/test_value_aggregation.py`, `tests/model/test_inference.py`,
-`tests/model/test_agent.py`, `tests/model/test_layer_input.py`,
-`tests/model/test_record_vocabulary.py`), plus
-`tests/training/test_active_training.py`, `tests/env/test_observation.py`,
-`tests/training/test_action_cutoff.py`, `tests/verify/test_native_buffer_capacities.py`.
-The branch's native changes require the complete debug Rust suite (including
-search-state contracts), all-feature Clippy and applicable engine-budget CI
-checks. Focused tests and release builds do not substitute for them.
-
-Canonical serialization and SHA-256 remain on every direct read; no additional
-optimization or reuse is selected. The latency outcome is incomplete.
+Gate owns complete local-update suites, affected model suites
+(`test_value_aggregation`, `test_inference`, `test_agent`, `test_layer_input`,
+`test_record_vocabulary`), and `tests/training/test_active_training.py`,
+`tests/env/test_observation.py`, `tests/training/test_action_cutoff.py`,
+`tests/verify/test_native_buffer_capacities.py`. Native changes require the full
+debug Rust suite, all-feature Clippy and applicable engine-budget CI checks.
+Focused checks and release builds do not substitute for them.
 
 Open for demo: what maximum 8–16-world/original-singleton latency ratio, and
 which checkpoint and representative positions, define "near"? No answer or
-relaxation is recorded; the two initialized opening fixtures do not settle it.
-MTG-183/w13 remains unmeasured and was not rebound to this world; no trained
-strength claim. Memory still scales with worlds × supported root actions.
-The README's 30-second example is an illustrative budget, not a latency promise.
+relaxation is recorded. MTG-183/w13 remains unmeasured; no trained-strength
+claim. Memory still scales with worlds × supported root actions. The README's
+30-second example is a budget, not a latency promise. No additional optimization
+or reuse is selected; canonical serialization and SHA-256 remain on every read.
 
-## Sync resolution (2026-11-08)
+## Encoding investigation (2026-11-08)
 
-Combined the pinned main target `00c7f1bba206034e6aff8909efaff680e9963613`
-with the direct-hash path: pending public entrants use main's viewer-safety
-allowance in the shared `semantic_viewer_input` helper. Both direct hashes and
-composite observations therefore retain the same checked projection.
-Reversible choice: keep these branch-specific measurements and open questions
-despite main deleting its scratch notes. Historical runtime evidence above
-predates this sync; native rebuild and broad validation remain with gate/CI.
+Direction: "Rebuild and atomically install the merged ordinary wheel; add
+direct/composite hash parity coverage for the pending-public-entrant state."
+Then: "Separate allocation, conversion and native encoding costs, and implement
+a bounded reduction only where equivalence is demonstrated."
+
+Merged ordinary comparisons pass all six cells against retained Python owners
+on the same runtime (`scratch/mtg-268-merged-before.json`). The original-runtime
+comparison fails at 42/1, retained in `scratch/mtg-268-merged-before.err`; original
+receipts are unchanged. Merged references live separately in
+`.cache/mtg-268/merged-reference`. World identity, policy identity, root hash,
+history/constraints and rollout hashes/audits differ. Upstream changed catalog
+definitions and observation/continuation semantics; freshly initialized model
+bytes are now `57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb`,
+not the prior checkpoint. No cross-world speedup is claimed.
+
+The standalone encoding probe checks every array on the 1,281 reference-frontier
+observations exactly. Both encoders agree, but the existing native binding is
+slower: 1.026 s versus 0.312 s profiled Python encoding, with 0.017 s NumPy
+allocation. The Python probe includes cProfile overhead, so this is attribution,
+not a paired performance estimate. Native output currently travels through
+Python scalar lists; instrument that conversion before selecting a reduction.
+
+`cargo test --manifest-path managym/Cargo.toml -p managym --lib hidden_selection_public_entry_is_pinned_through_both_samplers -j 2 -- --test-threads 2`
+— passed in debug, now checking direct/composite/independent SHA-256 parity for
+both viewers while a hand/library entrant waits for replacement, without
+changing the authority witness.
+
+Instrumented probe (`scratch/mtg-268-encoding-profile-before.json`) confirms
+1.012 s of 1.028 s native encoding is output conversion/copy; native allocation
+0.00416 s, native encoding 0.00462 s, buffer config 0.00267 s. Python-to-Rust
+conversion is 0.00587 s across 2,562 calls (Python validation plus native encoding).
+Reversible implementation choice: use PyO3's checked bulk buffer copy into
+NumPy-owned arrays, then the existing validated copy into supplied buffers.
+No new dependencies, borrowed pointer lifetime or buffer cache. The teacher
+allocates its selected space once per frontier and encodes into contiguous rows,
+removing the final stack copy. Full support rejects before native encoding even
+when a checkpoint selected first-legal for training.
+
+Final instrumented parity passes for all 1,281 reference-frontier observations
+(`scratch/mtg-268-encoding-profile-after.json`). Native output conversion/copy
+falls from 1.012 to 0.102 s; the full standalone native call from 1.028 to
+0.117 s. Native allocation/encode remain 0.00403/0.00434 s. Python-to-Rust
+conversion is 0.00561 s across both paths' 2,562 calls. These feature-gated probe
+times and the cProfile Python timings are attribution only, not decision latency.
+
+`uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/merged-reference --compare-encoders`
+— six-cell full discrete parity against retained Python owners on the final
+runtime AND saved merged-runtime receipts; exact arrays for 1,281 views.
+Ordinary-wheel evidence: `scratch/mtg-268-encoding-after.json`, instrumented=false,
+runtime SHA256 `0b286acd043f21ecfcf8ca7e9c3ad449ee38b3dffaa0aa8914c311d733d15a46`.
+Checkpoint SHA256 remains the new merged-world `57fd8f99…42bddeb` above. Same
+bounded positions 42/43, depth 20, one CPU/inter-op thread, seed 17, initialized
+64-wide/two-layer scalar policy; one sample per cell, no variance estimate.
+
+| Worlds | Position 42 before encoding cut → final (s) | Position 43 before encoding cut → final (s) |
+| --- | ---: | ---: |
+| 1 | 0.09170 → 0.08737 | 0.11086 → 0.10685 |
+| 4 | 0.29665 → 0.26562 | 0.35659 → 0.36279 |
+| 16 | 1.07097 → 0.99607 | 1.33296 → 1.25789 |
+
+Contrary sample: position 43 / four worlds slowed slightly. The final 16-world
+costs are 4.5483/4.5722 times the saved merged-runtime sequential singleton
+(0.21900/0.27512 s), not the original-world singleton. Maximum base/value/target
+errors are 1.0243e-10 / 4.0979e-8 / 3.1307e-9 (atol 1e-6, rtol 1e-5).
+The comparator's discrete checks are unchanged. The separate final profile
+reports encoding 0.1626 s (1,281 calls), batch allocation 0.00231 s (21 calls),
+tensor assembly 0.000654 s, network 0.2558 s, step/audit 0.4745 s, direct hashes
+0.1670 s, snapshots 0.00741 s. Categories can overlap; do not sum them.
+
+`uv run --extra dev pytest tests/sim/test_search_command_evidence.py tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py tests/verify/test_native_buffer_capacities.py -q -k 'semantic_direct_hash or selected_command or real_root_replay or batched or frontier or batch_ or native_encoded_arrays or companion_shapes'`
+— 36 passed; nine new history-on fixtures initially failed model construction
+because they lacked `recent_events`/world settings. The fixture was corrected,
+without changing production admission.
+`uv run --extra dev pytest tests/sim/test_local_update_sampling.py -q -k batch_inputs_match_python_at_selected_capacities`
+— all 18 cases passed: inputs v1–v9, history off/on, nondefault card/permanent/
+action/focus/event/fact capacities, complete tensor and prediction parity.
+Thus all 45 distinct selected Python cases pass across the two runs; no unresolved
+failure. Direct-array tests also check writable independent f32/i32 storage;
+shape rejection preserves caller buffers. Focused Ruff check/format, Cargo fmt
+and `git diff --check` pass. Both feature-gated and ordinary release builds pass;
+the ordinary wheel was atomically installed last. Broader checks remain for gate.
+
+No new latency, trained-strength or acceptance claim. Pending work: the existing
+broad gate/CI suites, the definition of "near", and MTG-183/w13 admission/evidence.
+
+## Encoding compression (2026-11-08)
+
+The benchmark shares one optional native-profiler lifecycle, including cleanup
+on failure, and binds timing wrappers once per encoder probe. Native cost JSON
+is narrowed at that boundary. Fact-program admission and kind selection live
+only in `_programs`; older inputs still skip program work. No Rust changed in
+this pass, so the ordinary wheel from the encoding investigation stays installed.
+The teacher-source digest changes with the fact source; historical receipts
+remain unchanged. Headless choice: retain both reference paths and the Python
+encoder oracle, since they still serve independent parity checks.
+
+`uv run --extra dev pytest tests/model/test_layer_input.py tests/model/test_record_vocabulary.py -q -k 'fact or local_program'`
+— 18 passed, 20 deselected.
+`uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/merged-reference --compare-encoders`
+— six-cell complete discrete parity against both reference owners and saved
+merged-runtime receipts; exact arrays for 1,281 views. Ordinary-wheel output:
+`scratch/mtg-268-encoding-compress.json`. Maximum base/value/target errors:
+1.0243e-10 / 4.0979e-8 / 3.1307e-9. This is a parity recheck, not a speedup claim;
+the focused tests briefly overlapped this run's startup. A bounded injected
+lifecycle probe passed absent-timer, successful-timer and exception cleanup
+cases. Focused Ruff check/format and `git diff --check` passed.
+
+Historical notes were curated using the backup and git references above;
+`lf context` remains below both scratch targets. Broad gate/CI validation and
+the unresolved acceptance questions remain as listed above.

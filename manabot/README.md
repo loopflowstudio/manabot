@@ -168,6 +168,9 @@ It also omits unused fact columns before embedding them, preserving each
 program's row order and object joins. Both selections are rebuilt per forward;
 no state-derived embeddings are reused between decisions.
 Legal choices, observation capacities and checkpoint parameters stay intact.
+The native encoder fills fresh batch rows using the checkpoint's selected
+input layout and capacities. Search still requires every legal action, including
+for checkpoints that allow action truncation during training.
 
 After a successful choice, `player.last_receipt` holds the target distribution,
 root-action values and per-rollout seeds, signed values, terminal flags,

@@ -14,6 +14,7 @@ use std::{
 
 #[cfg(feature = "python")]
 use pyo3::{
+    buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
@@ -69,13 +70,13 @@ fn to_numpy_array_f32(
     data: &[f32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("float32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    // Bulk-copy exact f32 bits into Python-owned storage; no scalar boxing.
+    PyBuffer::<f32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -85,13 +86,12 @@ fn to_numpy_array_i32(
     data: &[i32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("int32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    PyBuffer::<i32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -4267,12 +4267,22 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
         action_overflow: &str,
     ) -> PyResult<()> {
+        #[cfg(feature = "benchmark")]
+        let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
         let rust_obs = Observation::from(obs);
+        #[cfg(feature = "benchmark")]
+        drop(conversion_timer);
+        #[cfg(feature = "benchmark")]
+        let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
         let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+        #[cfg(feature = "benchmark")]
+        drop(config_timer);
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
+        #[cfg(feature = "benchmark")]
+        let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
 }
@@ -4593,7 +4603,12 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 #[cfg(feature = "python")]
 #[pyfunction]
 fn validate_policy_input(obs: &PyObservation, version: u8) -> PyResult<()> {
-    crate::agent::observation_encoder::validate_policy_input(&obs.clone().into(), version)
+    #[cfg(feature = "benchmark")]
+    let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
+    let observation = obs.clone().into();
+    #[cfg(feature = "benchmark")]
+    drop(conversion_timer);
+    crate::agent::observation_encoder::validate_policy_input(&observation, version)
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 

@@ -111,7 +111,7 @@ class FactEncoder(nn.Module):
         nn.init.zeros_(self.output.bias)
 
     def _programs(
-        self, hidden: torch.Tensor, facts: torch.Tensor, program: torch.Tensor
+        self, hidden: torch.Tensor, facts: torch.Tensor, kinds: torch.Tensor
     ) -> torch.Tensor:
         """Reduce each complete program independently, visiting only live tokens.
 
@@ -120,11 +120,10 @@ class FactEncoder(nn.Module):
         identical provenance. Padding and independent program order carry no
         meaning; token order within each program does. No state crosses programs.
         """
-        if (
-            self.program_sequence is None
-            or self.program_numeric is None
-            or not program.any()
-        ):
+        if self.program_sequence is None or self.program_numeric is None:
+            return hidden
+        program = _isin(kinds, _PROGRAM_KINDS)
+        if not program.any():
             return hidden
         positions = program.nonzero()
         rows = facts[program]
@@ -273,11 +272,7 @@ class FactEncoder(nn.Module):
         hidden = (
             self.kind(kinds.long()) + ids + self.numeric(torch.stack(columns, dim=-1))
         )
-        if self.program_sequence is not None and self.program_numeric is not None:
-            program = (kinds == FACT_EFFECT_PROGRAM) | (
-                kinds == FACT_CONTINUATION_PROGRAM
-            )
-            hidden = self._programs(hidden, facts, program)
+        hidden = self._programs(hidden, facts, kinds)
         encoded = self.output(torch.tanh(hidden))
         linked = (valid & (links > 0)).unsqueeze(-1)
         targets = (

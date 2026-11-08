@@ -545,21 +545,25 @@ class LocalUpdateTeacher:
         """
         if not engines:
             return []
-        encodings: list[dict[str, NDArray[np.generic]]] = []
+        # The selected space owns every axis, including historical inputs and
+        # nondefault capacities. Each row is a contiguous view of this call's
+        # fresh batch; no observation buffers survive into the next frontier.
+        encodings = self.space.encoder.allocate(len(engines))
         counts: list[int] = []
-        for engine in engines:
+        for index, engine in enumerate(engines):
             actor = int(engine.current_agent_index())
             raw = engine.observation_for_player(actor)
-            encoded = self.space.encode(raw)
+            encoded = {key: value[index] for key, value in encodings.items()}
             count = len(raw.action_space.actions)
-            if int(encoded["actions_valid"].sum()) != count or count == 0:
+            if count == 0 or count > self.space.encoder.max_actions:
                 raise ValueError("policy cannot represent complete legal offers")
-            encodings.append(encoded)
+            # Search requires every legal offer, even if a checkpoint permits
+            # first-legal truncation during training.
+            engine.encode_observation_into(raw, encoded)
+            if int(encoded["actions_valid"].sum()) != count:
+                raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)
-        tensors = {
-            key: torch.as_tensor(np.stack([row[key] for row in encodings]))
-            for key in encodings[0]
-        }
+        tensors = {key: torch.as_tensor(value) for key, value in encodings.items()}
         with torch.inference_mode():
             logits, values = self.agent(tensors)
             predictions = [

@@ -57,6 +57,23 @@ def _assert_encoding_parity(
     return reference
 
 
+@pytest.mark.parametrize("version", [1, 6, 9])
+def test_native_encoded_arrays_are_writable_and_independent(version: int) -> None:
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    scalar = managym.Env(seed=213, skip_trivial=True)
+    obs, _ = scalar.reset(_players())
+    expected = encoder.encode(obs)
+    first = scalar.encode_observation(obs, version, encoder.config.max_facts)
+    second = scalar.encode_observation(obs, version, encoder.config.max_facts)
+    assert first.keys() == second.keys() == expected.keys()
+    for key, value in expected.items():
+        np.testing.assert_array_equal(first[key], value, err_msg=key)
+        assert first[key].dtype == value.dtype
+        assert first[key].flags.writeable and first[key].flags.c_contiguous
+        first[key].fill(19)
+        np.testing.assert_array_equal(second[key], value, err_msg=key)
+
+
 @pytest.mark.parametrize("capacity", [40, 41, 64])
 def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> None:
     evidence = read_failure(
