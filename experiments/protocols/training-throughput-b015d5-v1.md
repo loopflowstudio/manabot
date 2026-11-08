@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 built, not frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 3 frozen, not run)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -23,8 +23,8 @@ Jack Heart approved execution (2026-11-07, comment e89d4889), and step 2 has run
 its execution record). Jack Heart accepted step 2's evidence and set step 3's objective
 (2026-11-07, comment 1f4c2872), then refocused it on large-model speed (comments
 8ac4eb82, 518e5f09 and b9215b8a). Jack Heart accepted step 3's design (2026-11-07,
-comment 17799706). Its software is built (see "Software before step 3 freezes"); it is
-not yet landed or frozen, and nothing has been rented for it.
+comment 17799706). Its software landed as `cb722dc8c` (PR #448), and step 3 is frozen at
+that commit (see its freeze receipt). Nothing has been rented for it.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -887,6 +887,78 @@ commit is the first check of an `a7718f5` client placing `199335c` jobs.
   tests/training/test_elemental_closure_lambda.py tests/training/test_two_seat_learning.py
   tests/training/test_rl_objectives.py tests/training/test_regimes.py tests/model` passed,
   after rebuilding the native extension that main's Rust had outdated.
+
+**Step 3 freeze receipt (2026-11-08 UTC).** Jack Heart accepted software review and directed
+this freeze at PR #448's merge commit (comment a5890a28). The launch revision is
+`cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e`, on main, for every leg. Its tree equals the
+reviewed branch head `cb184cb89`. This receipt is recorded after that commit and changes no
+executable byte.
+- Source bundle: every leg's job carries one bundle of 1,483 files, sorted-key SHA-256
+  `dc98b968…6746`: all 1,484 tracked files except the `CLAUDE.md` symlink. The method
+  reproduces step 2's `6334a27b…1ff3` at `668212567`. Key files:
+  `experiments/training_throughput_sizes.py` `fa8c181e…d603`, `experiments/elemental_variants.py`
+  `3a9dd378…1bc2`, `manabot/training/precision.py` `d152bd6f…23c1`,
+  `manabot/training/regime.py` `f0856e42…814d`, `manabot/training/execution.py`
+  `2c250340…cb94`, `manabot/training/rollout/collection.py` `24eb0b15…9253`,
+  `manabot/training/learning/learner.py` `94e51ba2…1447`. Unchanged from step 2:
+  `experiments/training_throughput_packing.py` `9d1cd47b…2f4d`, `experiments/training_throughput.py`
+  `f36641e3…cd19`, `experiments/learning_signal.py` `836230fd…9cb0`, `manabot/experiment/job.py`
+  `62aa4fd3…5aca`, `manabot/infra/host.py` `7cd0dbbd…208b`, and the frozen regime
+  `elemental-long-183-v1.json` `be9de376…64ad`. `uv.lock` is now `6e3a1426…be18`, which pins
+  jobs to Etude SDK `199335c` (see "Etude since the design").
+- Regimes, on w17. Each digest is the sorted-key SHA-256 of the job's regime with
+  `wall_seconds` removed, because `--pace` sets the watchdog at launch. With the watchdog
+  left in, the digests are recorded at launch.
+  - Speed cells, 4 updates: w64 float32 `8cea4f99…5ed2`; w128l4 float32 `851217e0…58fa`;
+    w160l8 float32 `c5dc36ea…7e74`, tf32 `1dcdd470…9e93`, bf16 `827d4053…6f13`; a384l8
+    float32 `86f74df8…b65b`, tf32 `48ac0bd7…8365`, bf16 `3f8bfbe0…940a`.
+  - Learning check, 12 updates: w160l8 float32 `68e24691…f45f` (equal in the check and its
+    repeat), tf32 `af6e178b…36cd`, bf16 `56785682…857c`.
+  - A regime's bytes are equal across GPUs and K. At the default pace (37 s), every speed
+    cell's job reads 0.75 hours and the check legs read 1.25 hours.
+- Float32 unchanged: step 2's D1 regime, discovered on this tree, still digests to
+  `0366ff8d…1c3e`.
+- Discovery: Etude `read_job_file`, client `a7718f5`, read all 42 legs at this revision
+  without executing games or training. That gives 81 runs, each leg with its own job name
+  and its declared seeds: K of 26301-26304.
+- Acceptance: the "As built" checks pass on this tree, `tests/model` included: 380 passed
+  and 1 skipped. Through the real worker on CPU at 8 streams and 1 update, the w128l4 and
+  a384l8 cells complete
+  (`test_a_size_cell_trains_through_the_real_worker_on_cpu`, 2 passed). The hand D1 training
+  digest check ran at build and is not repeated here.
+- Isolation: step 3 plays no evaluation deals and scores no checkpoint, so no held-out set
+  or anchor is touched. Seeds 26301-26304 are disjoint from every earlier step's.
+- Client: as step 2's, `ETUDE_HOME=$HOME/.etude-b015d5-step2`, Etude `a7718f5` through
+  the home's `e` wrapper. The shared controller is not used. The isolated controller is
+  stopped, and the home holds no rented machine.
+- **Third GPU: A40.** The machines rule takes the card with the most dense bf16 tensor
+  throughput per quoted dollar. Only two candidates fall under $.95/hour at RunPod's
+  secure-cloud price, the price the on-demands pay: RTX 4090 at $.89 (165 dense bf16
+  TFLOPS with FP32 accumulate, NVIDIA's Ada figure; about 186 per dollar-hour) and A40 at
+  $.59 (150, NVIDIA's datasheet; about 254). RTX 5090 at $1.19 and L40S at $1.09 are over the
+  ceiling. The rule picks the **A40**, as on-demand `b015d5-a40` in the isolated home: A40,
+  at least 8 vCPUs, 48 GB, 80 GB disk, under $.95/hour, `--slots 4`, storage `r2`. Leg names
+  keep the `fast-` prefix and its $.95 ceiling. `b015d5-fast` (RTX 4090) stays defined and
+  is not used. The A40 has 48 GB, and its memory bandwidth is below the 4090's. The rule
+  reads tensor throughput only, so the 4090 may still be faster per hour. The cheaper card
+  is the one this rule selects.
+- Quote, 2026-11-08 03:30-03:31 UTC, at this revision, leg `<gpu>-w128l4-k4-float32`,
+  nothing rented:
+  - `b015d5-l4x4`: L4, at least 6 vCPUs, $.59/hour, rentable. All four seeds share one L4
+    at 4 slots, with a first wave of $.59.
+  - `b015d5-a40`: A40, at least 8 vCPUs, $.59/hour, rentable. All four seeds share one at
+    4 slots, with a first wave of $.59.
+  - `b015d5-a4000x4`: **open.** RunPod reports no A4000 ($.25/hour, ceiling $.40), and
+    Etude refuses the quote. The machines rule's 30-minute wait covers this, as in step 2.
+  - For reference, `b015d5-fast` quoted RTX 4090 at $.89/hour, rentable.
+  - These quotes are the first placement of `199335c` jobs by the `a7718f5` client. Placement
+    is planned, and no leg has run under that pairing.
+- Budget at the quoted rates, hand rentals priced from the rate as in step 2: A4000 6 h is
+  $1.50, L4 4 h is $2.36, and A40 5 h is $2.95. The $10.00 reservation and its lines stay as
+  written. The third-GPU line is now $1.80 under its $4.75.
+- Authority: step 3 stays under comment 9f9d0956's $50 inclusive cap, with $10.00 reserved
+  beside the $2.04 spent. Freezing confers no spending authority. Nothing launches or rents
+  before execution review with Jack Heart.
 
 ### Stop rules
 

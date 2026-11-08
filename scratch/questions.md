@@ -367,3 +367,17 @@ and `-check` IDs follow from regime bytes naming identity. The Etude client ques
 recorded by realign is settled by the accepted design (keep `a7718f5` in the isolated home)
 and is now written as such in the protocol. Next: land step 3's software, freeze, re-quote
 all three on-demands, execution review with Jack Heart.
+
+## experiment-freeze b015d5 (2026-11-08 UTC): step 3
+
+Bound to main `cb722dc8c` (PR #448; tree equals branch head `cb184cb89`). Receipt is in the
+protocol. Helper scripts used for digests and discovery live outside the repo in
+`/tmp/b015d5-freeze3/` (not retained). For execution review:
+- The third GPU rule chose the **A40** ($.59 secure, about 254 dense bf16 TFLOPS per
+  dollar-hour) over the default RTX 4090 ($.89, about 186). Added on-demand `b015d5-a40` in the
+  isolated home; `b015d5-fast` (4090) still exists. This is the rule as written. If Jack Heart
+  would rather have the absolute-faster card, the 4090 is one `--rent b015d5-fast` away. No
+  amendment is needed for the A40, since the design delegated the choice to the freeze.
+- A4000 has no stock at quote time; L4 and A40 are rentable.
+- Regime digests are recorded with `wall_seconds` removed, because `--pace` sets it per launch.
+- The isolated controller still needs starting under `caffeinate -is` before any rental.
