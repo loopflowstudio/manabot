@@ -1,10 +1,7 @@
 //! Naming candidates are public vocabulary, not game objects or effect programs.
 //! The offline Scryfall fixture extends only this controlled decision's vocabulary.
 
-use std::{
-    collections::{BTreeMap, VecDeque},
-    sync::Arc,
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     agent::{
@@ -17,7 +14,7 @@ use crate::{
     },
     decision::Command,
     flow::{
-        decision::{Decision, EffectFrame, FrameFinalize},
+        decision::{Decision, EffectFrame},
         game::Game,
         scenario::naming_fixture_vocabulary,
     },
@@ -41,29 +38,11 @@ fn naming_game() -> Game {
         false,
     );
     game.run_frame(EffectFrame {
-        program: Vec::new(),
-        remembered: vec![],
-        inherited_from: None,
-        source_transforms: 0,
-        source: None,
-        source_ref: None,
-        controller: PlayerId(0),
-        resolutions_this_turn: 0,
-        kicked: false,
-        x: 0,
-        excess_damage: 0,
-        this_way: vec![],
-        moved: vec![],
-        chosen: None,
-        created: None,
-        targets: vec![],
-        active_requirement: 0,
         context_target: Some(Target::Player(PlayerId(1))),
-        triggering_player: None,
-        grantor: None,
-        ability: None,
-        queue: VecDeque::from([Effect::NameAndExileFromTargetPlayer { count: 4 }]),
-        finalize: FrameFinalize::None,
+        ..EffectFrame::new(
+            PlayerId(0),
+            vec![Effect::NameAndExileFromTargetPlayer { count: 4 }],
+        )
     });
     game.scenario_naming_vocabulary().unwrap();
     game

@@ -43,6 +43,7 @@ export function subjectLabel(observation: Observation, object: DecisionObjectVie
 
 export function stageLabel(stage: string): string {
   return ({
+    order_replacement: 'Choose the next replacement',
     order_triggers: 'Choose the next ability to stack', trigger_targets: 'Choose trigger targets',
     trigger_mode: 'Choose a trigger mode',
     priority: 'Choose an action', targets: 'Choose a target', mode: 'Choose a spell mode',
@@ -51,9 +52,10 @@ export function stageLabel(stage: string): string {
     declare_blockers: 'Declare blockers', resolution_choice: 'Choose a permanent during resolution',
     name_card: 'Name a card', private_search: 'Search cards', learn: 'Learn', private_inspection: 'Inspect cards',
     scry: 'Scry', surveil: 'Surveil', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',
-    discard: 'Choose a discard', select_milled: 'Choose a milled card', legend_rule: 'Choose a legend to keep',
+    discard: 'Choose a discard', select_milled: 'Choose a milled card', select_cards: 'Choose cards', legend_rule: 'Choose a legend to keep',
     keep_creatures: 'Choose creatures to keep', retarget: 'Choose a new target',
     resolution_cast: 'Cast a spell now',
     order_library_bottom: 'Order the bottom cards',
+    order_library_top: 'Order the kept cards',
   } as Record<string, string>)[stage] ?? 'Pending decision';
 }

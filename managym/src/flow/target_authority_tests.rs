@@ -816,6 +816,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let mut delayed = trigger(
         source,
         vec![Effect::Move {
+            library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
             tapped: true,

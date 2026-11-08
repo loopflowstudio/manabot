@@ -42,11 +42,11 @@ struct FiredTrigger {
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct TriggerSourceSnapshot {
-    card: CardId,
-    controller: PlayerId,
-    lki: ObjectLki,
+    pub(crate) card: CardId,
+    pub(crate) controller: PlayerId,
+    pub(crate) lki: ObjectLki,
 }
 
 /// A set of `EventKind`s, one bit per variant.
@@ -61,7 +61,11 @@ impl EventKinds {
     }
 
     fn contains(self, kind: EventKind) -> bool {
-        self.0 & Self::of(kind).0 != 0
+        self.intersects(Self::of(kind))
+    }
+
+    fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
     }
 }
 
@@ -121,6 +125,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         }
         TriggerCondition::YouBend => EventKinds::of(EventKind::Bent),
         TriggerCondition::YouScry => EventKinds::of(EventKind::Scried),
+        TriggerCondition::YouScryOrSurveil => {
+            EventKinds::of(EventKind::Scried) | EventKinds::of(EventKind::Surveilled)
+        }
     }
 }
 
@@ -823,14 +830,24 @@ impl Game {
         }
     }
 
-    /// Process a simultaneous committed batch using the same pre-batch source
-    /// facts for every event. Matching only enqueues triggers, so the snapshot
-    /// remains immutable throughout collection.
-    pub(crate) fn process_game_events_with_sources(&mut self, sources: &[TriggerSourceSnapshot]) {
+    /// Departures look back to the whole pre-batch battlefield. Entry and
+    /// counter events see the completed battlefield, including every entrant.
+    pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
             for event in events {
-                self.check_triggers_for_event(&event, sources);
+                if matches!(
+                    event,
+                    GameEvent::CardMoved {
+                        from: Some(ZoneType::Battlefield),
+                        ..
+                    } | GameEvent::PermanentSacrificed { .. }
+                ) {
+                    self.check_triggers_for_event(&event, before);
+                } else {
+                    let sources = self.trigger_ability_sources(&event);
+                    self.check_triggers_for_event(&event, &sources);
+                }
             }
         }
     }
@@ -1324,19 +1341,30 @@ impl Game {
         }
     }
 
-    /// Cards whose triggered abilities can see this event: every permanent on
-    /// the battlefield, plus — for zone changes — the moved card itself, so
-    /// that leave-the-battlefield abilities look back in time (CR 603.6c).
+    /// The sources whose abilities can see a battlefield departure or a
+    /// sacrifice, as they exist before the event: the indexed permanents with a
+    /// printed or granted ability of those kinds, including a departing
+    /// object's own, so leave-the-battlefield abilities look back in time
+    /// (CR 603.6c, 603.10a).
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
-        let mut sources: Vec<_> = self
-            .state
-            .permanents
+        self.indexed_sources(
+            EventKinds::of(EventKind::CardMoved) | EventKinds::of(EventKind::PermanentSacrificed),
+        )
+    }
+
+    /// Current snapshots of the indexed permanents with an ability of any of
+    /// `kinds`, in object order.
+    fn indexed_sources(&self, kinds: EventKinds) -> Vec<TriggerSourceSnapshot> {
+        let index = self.trigger_index();
+        let mut sources: Vec<_> = index
+            .sources
             .iter()
-            .flatten()
-            .filter_map(|permanent| {
-                self.snapshot_current_permanent(permanent.card)
+            .filter(|entry| entry.kinds.intersects(kinds))
+            .filter_map(|entry| {
+                let permanent = self.state.permanents[entry.permanent].as_ref()?;
+                self.snapshot_current_permanent(entry.card)
                     .map(|lki| TriggerSourceSnapshot {
-                        card: permanent.card,
+                        card: entry.card,
                         controller: permanent.controller,
                         lki,
                     })
@@ -1393,22 +1421,7 @@ impl Game {
     /// `snapshot_trigger_sources` reads, less sources nothing could fire
     /// for), plus a moved card's last battlefield object.
     fn trigger_ability_sources(&self, event: &GameEvent) -> Vec<TriggerSourceSnapshot> {
-        let kind = event.kind();
-        let index = self.trigger_index();
-        let mut sources: Vec<TriggerSourceSnapshot> = index
-            .sources
-            .iter()
-            .filter(|entry| entry.kinds.contains(kind))
-            .filter_map(|entry| {
-                let permanent = self.state.permanents[entry.permanent].as_ref()?;
-                self.snapshot_current_permanent(entry.card)
-                    .map(|lki| TriggerSourceSnapshot {
-                        card: entry.card,
-                        controller: permanent.controller,
-                        lki,
-                    })
-            })
-            .collect();
+        let mut sources = self.indexed_sources(EventKinds::of(event.kind()));
 
         if let GameEvent::CardMoved {
             card, controller, ..
@@ -1770,7 +1783,11 @@ impl Game {
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
             }
-            (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
+            (
+                TriggerCondition::YouScry | TriggerCondition::YouScryOrSurveil,
+                GameEvent::Scried { player },
+            )
+            | (TriggerCondition::YouScryOrSurveil, GameEvent::Surveilled { player }) => {
                 *player == source_controller
             }
             (

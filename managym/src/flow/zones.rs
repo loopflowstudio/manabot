@@ -16,7 +16,9 @@ use crate::{
     state::{
         card::{Card, CardDefId, Restriction, StaticAbility},
         effect::{CopyEffect, Modification},
-        game_object::{CardId, Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{
+            CardId, Incarnation, ObjectId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target,
+        },
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
@@ -38,25 +40,6 @@ impl Game {
         } else {
             known.insert(definition, count);
         }
-    }
-
-    /// A sacrifice is a committed event distinct from destruction (CR 701.21
-    /// and 701.8 in the September 25, 2026 rules). Indestructible does not
-    /// prevent it; the departing object's controller pays this cost.
-    /// Match its triggers against the pre-departure battlefield, including the
-    /// sacrificed source, before replacement effects can change its destination.
-    /// Returns the object the card became, if it left ("if you do").
-    pub(crate) fn sacrifice_permanent(&mut self, permanent: PermanentId) -> Option<ObjectRef> {
-        let source = self.state.permanents[permanent].as_ref()?;
-        let card = source.card;
-        let controller = source.controller;
-        let before = self.permanent_object_ref(permanent);
-        let sources = self.snapshot_trigger_sources();
-        self.state.turn.history[controller.0].permanents_sacrificed += 1;
-        self.emit(GameEvent::PermanentSacrificed { card, controller });
-        self.process_game_events_with_sources(&sources);
-        self.move_card(card, ZoneType::Graveyard);
-        self.moved_object(card, before)
     }
 
     /// Tapped creatures the opponent of `player` controls.
@@ -98,43 +81,12 @@ impl Game {
             .collect()
     }
 
-    /// Stable private search candidates, independent of library order.
-    pub(crate) fn basic_land_search_candidates(
-        &self,
-        player: PlayerId,
-        subtype: &Option<String>,
-        to_hand: bool,
-    ) -> Vec<CardId> {
-        let mut predicate = CardPredicate {
-            subtype: subtype.clone(),
-            ..Default::default()
-        };
-        // Landcycling finds any card of the subtype ("a Plains card"); a
-        // search to hand without a subtype is for "a basic land card".
-        if !to_hand || subtype.is_none() {
-            predicate.card_type = Some(crate::state::card::CardType::Land);
-            predicate.supertype = Some("basic".into());
-        }
-        self.library_search_candidates(player, &predicate)
-    }
-
-    /// Library cards matching `predicate`, in a stable order independent of
-    /// library order.
-    pub(crate) fn library_search_candidates(
-        &self,
-        player: PlayerId,
-        predicate: &CardPredicate,
-    ) -> Vec<CardId> {
-        let mut candidates: Vec<CardId> = self
-            .state
-            .zones
-            .zone_cards(ZoneType::Library, player)
-            .iter()
-            .copied()
-            .filter(|card| self.card_matches_predicate(*card, predicate))
-            .collect();
-        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
-        candidates
+    /// Zone inspection never reveals a library's order. All consumers use
+    /// this stable order for private selection candidates and visible cards.
+    pub(crate) fn selection_zone_cards(&self, owner: PlayerId, zone: ZoneType) -> Vec<CardId> {
+        let mut cards = self.state.zones.zone_cards(zone, owner).to_vec();
+        cards.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        cards
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
@@ -367,6 +319,28 @@ impl Game {
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
+        let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
+            definition: Box::new(crate::flow::proposed_event::TokenDefinition::Registered(
+                name.into(),
+            )),
+            controller,
+            count: 1,
+            entry: ZoneEntry {
+                tapped: tapped_and_attacking,
+                ..Default::default()
+            },
+        }]);
+        let results = self.complete_immediate_batch(batch);
+        for object in results.iter().filter_map(|result| result.moved) {
+            self.finish_created_token(CardId::from(object.entity), tapped_and_attacking);
+        }
+        results
+            .iter()
+            .filter_map(|result| result.moved)
+            .find_map(|object| self.lookup_current_permanent(object).ok())
+    }
+
+    pub(crate) fn prepare_token(&mut self, name: &str, controller: PlayerId) -> Option<CardId> {
         let object_id = self.state.id_gen_mut().next_id();
         let Some(card) = default_content_pack().instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
@@ -375,30 +349,19 @@ impl Game {
         debug_assert!(card.is_token, "created token must be a token definition");
 
         let card_id = self.add_card(card);
-        self.move_card_with_entry(
-            card_id,
-            ZoneType::Battlefield,
-            ZoneEntry {
-                tapped: tapped_and_attacking,
-                ..ZoneEntry::default()
-            },
-        );
+        Some(card_id)
+    }
 
-        if tapped_and_attacking {
-            if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
-                if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                    permanent.attacking = true;
-                }
-                // A token put onto the battlefield attacking joins combat but
-                // was never declared, so no attack triggers fire (CR 508.4a).
+    pub(crate) fn finish_created_token(&mut self, card: CardId, attacking: bool) {
+        if let Some(id) = self.state.card_to_permanent[card] {
+            if attacking {
+                self.state.permanents[id].as_mut().expect("token").attacking = true;
                 if let Some(combat) = self.state.combat.as_mut() {
-                    combat.attackers.push(permanent_id);
-                    combat.attacker_to_blockers.entry(permanent_id).or_default();
+                    combat.attackers.push(id);
+                    combat.attacker_to_blockers.entry(id).or_default();
                 }
             }
         }
-        self.invalidate_mana_cache(controller);
-        self.state.card_to_permanent[card_id]
     }
 
     /// Create a token that's a copy of `source` under `controller` (CR 707.2,
@@ -409,13 +372,12 @@ impl Game {
     /// copied as it last existed there. `exceptions` become part of the
     /// token's copiable values after the source's own (CR 707.9b); the
     /// token's `CopyEffect` records both and the definition at the root.
-    pub(crate) fn create_token_copy(
+    pub(crate) fn prepare_token_copy(
         &mut self,
-        source: CardId,
+        mut copy: Card,
         controller: PlayerId,
         exceptions: Vec<Modification>,
-    ) -> Option<PermanentId> {
-        let mut copy = self.state.cards[source].clone();
+    ) -> CardId {
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
         // Any write detaches the shared definition (`DerefMut`), so a copy
@@ -433,10 +395,7 @@ impl Game {
         });
         effect.exceptions.extend(exceptions);
         copy.copy = Some(effect);
-        let card_id = self.add_card(copy);
-        self.move_card(card_id, ZoneType::Battlefield);
-        self.invalidate_mana_cache(controller);
-        self.state.card_to_permanent[card_id]
+        self.add_card(copy)
     }
 
     /// Add a card created during play to the game, outside every zone.
@@ -542,24 +501,50 @@ impl Game {
         to_zone: ZoneType,
         entry: ZoneEntry,
     ) {
+        let event = self.zone_move_proposal(card, to_zone, entry);
+        self.apply_immediate_event(event);
+    }
+
+    pub(crate) fn zone_move_proposal(
+        &self,
+        card: CardId,
+        to_zone: ZoneType,
+        mut entry: ZoneEntry,
+    ) -> ProposedEvent {
         let from = self.state.zones.zone_of(card);
         let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
             && self.find_spell_on_stack_index(card).is_some_and(|index| {
                 matches!(&self.state.stack_objects[index], StackObject::Spell(spell) if spell.flashback)
             }) { ZoneType::Exile } else { to_zone };
         let object = from.and_then(|_| self.current_object_ref(card));
-        let committed = self.apply_proposed_event(ProposedEvent::ZoneMove {
+        entry = entry.for_zone(to_zone);
+        if to_zone == ZoneType::Battlefield && self.enters_as_saga(card, &entry) {
+            entry.counters.change(CounterKind::Lore, 1);
+        }
+        ProposedEvent::ZoneMove {
             card,
             object,
             from,
             to: to_zone,
             entry,
-        });
-        if committed {
-            self.process_game_events();
         }
     }
 
+    /// Whether the face that enters is a Saga: the back face when it enters
+    /// transformed (CR 712.14), so a Saga returning as a creature gets no lore.
+    fn enters_as_saga(&self, card: CardId, entry: &ZoneEntry) -> bool {
+        let printed = &self.state.cards[card];
+        if entry.transformed {
+            if let Some((_, back)) = default_content_pack().back_face(printed.definition_id) {
+                return back.is_saga();
+            }
+        }
+        printed.is_saga()
+    }
+
+    // Keep the evaluated proposal fields together with its pre-move LKI and
+    // consequent-event sink at this single commit boundary.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn commit_zone_move(
         &mut self,
         card: CardId,
@@ -567,6 +552,8 @@ impl Game {
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
         entry: ZoneEntry,
+        departing_lki: Option<ObjectLki>,
+        followups: &mut Vec<ProposedEvent>,
     ) -> bool {
         let owner = self.state.cards[card].owner;
 
@@ -595,12 +582,6 @@ impl Game {
         }
 
         let mut event_controller = owner;
-        let departing_lki = if old_zone == Some(ZoneType::Battlefield) {
-            self.snapshot_current_permanent(card)
-        } else {
-            None
-        };
-
         if let Some(old_zone) = old_zone {
             self.state.advance_incarnation(card, old_zone);
         }
@@ -676,15 +657,26 @@ impl Game {
             face_down: entry.face_down,
         };
         self.emit(event);
-        // CR 714.3a: a Saga enters with a lore counter, which triggers its
-        // first chapter (CR 714.2b).
-        if to_zone == ZoneType::Battlefield && self.state.cards[card].is_saga() {
-            if let Some(saga) = self.state.card_to_permanent[card] {
-                self.put_counters(saga, CounterKind::Lore, 1, holder);
+        if to_zone == ZoneType::Battlefield {
+            if let Some(permanent) = self.state.card_to_permanent[card] {
+                let counters = self.state.permanents[permanent]
+                    .as_ref()
+                    .expect("entered")
+                    .counters
+                    .clone();
+                for (kind, count) in counters.iter() {
+                    self.emit(GameEvent::CountersPut {
+                        permanent,
+                        kind,
+                        count,
+                        total: count,
+                        by: holder,
+                    });
+                }
             }
         }
         if old_zone == Some(ZoneType::Battlefield) {
-            self.handle_leaves_battlefield(departing_ref, to_zone);
+            self.handle_leaves_battlefield(departing_ref, to_zone, followups);
         }
         // An attachment that grants or removes abilities changes the mana
         // its creature's controller, possibly the opponent, can produce.
@@ -771,7 +763,12 @@ impl Game {
     /// Leave-the-battlefield bookkeeping: fire delayed triggers watching the
     /// object (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).
-    fn handle_leaves_battlefield(&mut self, departing_ref: Option<ObjectRef>, to_zone: ZoneType) {
+    fn handle_leaves_battlefield(
+        &mut self,
+        departing_ref: Option<ObjectRef>,
+        to_zone: ZoneType,
+        followups: &mut Vec<ProposedEvent>,
+    ) {
         // Delayed triggers watching this object fire as it dies (or is
         // exiled, for earthbend) and are dropped otherwise: they watched this
         // battlefield stint only.
@@ -831,7 +828,11 @@ impl Game {
                 .zones
                 .contains(link.exiled_card, ZoneType::Exile, owner)
             {
-                self.move_card(link.exiled_card, ZoneType::Battlefield);
+                followups.push(self.zone_move_proposal(
+                    link.exiled_card,
+                    ZoneType::Battlefield,
+                    ZoneEntry::default(),
+                ));
             }
         }
     }

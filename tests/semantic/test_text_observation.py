@@ -1245,3 +1245,40 @@ def test_suki_hand_power_reaches_text_and_both_encoders() -> None:
         for line in decision.text.splitlines()
     )
     _assert_native_observation_parity(env, decision)
+
+
+def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None:
+    env = priority_root(("Ostrich-Horse",), ("Forest", "Forest", "Forest"))
+    decision = capture_text_decision(env)
+    cast = next(a for a in decision.actions if "Cast" in a.description)
+    submit_response(env, decision, cast.reference)
+    for _ in range(12):
+        decision = capture_text_decision(env)
+        if "Stage: select cards." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("shared selection not reached")
+    assert "; select cards" in decision.text
+    assert "may select up to 1 more cards" in decision.text
+    assert len(decision.actions) >= 2
+    observation = _assert_native_observation_parity(env, decision)
+    assert any(
+        frame.kind == 6 and frame.decision == 28 and frame.can_decline
+        for frame in observation.continuation
+    )
+    assert render_decision(decision.capture_json).text == decision.text
+    before = env.state_digest()
+    outcomes: set[str] = set()
+    for action in decision.actions:
+        branch = env.clone_env()
+        replay = env.clone_env()
+        captured = capture_text_decision(branch)
+        submit_response(branch, captured, action.reference)
+        submit_response(replay, capture_text_decision(replay), action.reference)
+        assert branch.state_digest() == replay.state_digest()
+        outcomes.add(branch.state_digest())
+        with pytest.raises(SemanticContractError):
+            submit_response(branch, captured, action.reference)
+    assert len(outcomes) >= 2
+    assert env.state_digest() == before

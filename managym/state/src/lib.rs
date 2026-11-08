@@ -6,6 +6,7 @@
 //! Python and the canonical match-state hash over its own flow state.
 
 pub mod ability;
+pub mod binding;
 pub mod card;
 pub mod effect;
 pub mod game_object;

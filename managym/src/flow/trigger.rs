@@ -2,6 +2,8 @@
 //! Collection owns arrivals; placement owns a detached batch until every
 //! controller has placed its abilities (CR 603.3b, 2026-09-25 rules snapshot).
 
+use crate::state::binding::ObjectBinding;
+
 use crate::state::{
     ability::{DelayedExpiry, DelayedFrequency, Effect},
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
@@ -53,7 +55,7 @@ pub struct PendingTrigger {
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remembered: Vec<ObjectRef>,
+    pub remembered: Vec<ObjectBinding>,
     pub source_card: CardId,
     pub targets: Vec<Target>,
     pub target_req_indices: Vec<usize>,
@@ -96,7 +98,7 @@ pub struct PendingTrigger {
 pub struct DelayedTrigger {
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remembered: Vec<ObjectRef>,
+    pub remembered: Vec<ObjectBinding>,
     pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
     pub source_card: CardId,

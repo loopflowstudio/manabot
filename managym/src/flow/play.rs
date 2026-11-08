@@ -13,15 +13,17 @@
 use crate::{
     agent::action::AgentError,
     flow::{
+        decision::{EffectFrame, FrameCompletion},
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
+        proposed_event::ProposedEvent,
     },
     state::{
         ability::TargetRequirement,
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
-        stack_object::{ActivatedAbilityOnStack, StackObject},
+        stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
 };
@@ -245,8 +247,14 @@ impl Game {
 
         // CR 305.2 — Track one normal land play per turn.
         self.state.turn.lands_played += 1;
-        self.move_card(card, ZoneType::Battlefield);
-
+        let mut frame = EffectFrame::new(player, Vec::new());
+        frame.batch = Some(self.event_batch(vec![self.zone_move_proposal(
+            card,
+            ZoneType::Battlefield,
+            Default::default(),
+        )]));
+        frame.completion = FrameCompletion::Continue;
+        self.run_frame(frame);
         Ok(())
     }
 
@@ -1602,28 +1610,16 @@ impl Game {
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
         self.spend_mana(player, &cost)?;
-        if let Some(selected) = sacrifice {
-            self.sacrifice_permanent(selected);
+        let mut events = Vec::new();
+        if let Some(target) = sacrifice.and_then(|id| self.permanent_object_ref(id)) {
+            events.push(ProposedEvent::Sacrifice { target });
         }
         if waterbend {
             self.record_bending(player, crate::flow::turn::Bending::Water);
         }
         self.pending_choice = None;
-        match payment {
-            Payment::Spell {
-                card,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-            } => {
-                self.cast_spell(player, card, targets, target_req_indices, cast)?;
-                if let Some(StackObject::Spell(spell)) = self.state.stack_objects_mut().last_mut() {
-                    spell.mode = mode;
-                }
-                self.restart_priority_round();
-                Ok(())
-            }
+        let completion = match payment {
+            Payment::Spell { .. } => FrameCompletion::Paid { player, payment },
             Payment::Activation {
                 source,
                 ability_index,
@@ -1632,21 +1628,36 @@ impl Game {
             } => {
                 let life = self
                     .activation_ability(source, ability_index)
-                    .ok_or_else(|| {
-                        AgentError("activation source sacrificed as another cost".into())
-                    })?
+                    .ok_or_else(|| AgentError("missing activation source".into()))?
                     .life_cost;
                 self.change_life(player, -(life as i32));
-                match source {
-                    ActivationSource::Permanent(permanent) => {
-                        self.push_activated_ability(player, permanent, ability_index, targets, x)
-                    }
+                let (ability, cost) = match source {
+                    ActivationSource::Permanent(permanent) => self.prepare_activated_ability(
+                        player,
+                        permanent,
+                        ability_index,
+                        targets,
+                        x,
+                    )?,
                     ActivationSource::Card(card) => {
-                        self.push_card_activated_ability(player, card, ability_index, targets)
+                        self.prepare_card_activated_ability(player, card, ability_index, targets)?
                     }
+                };
+                events.extend(cost);
+                FrameCompletion::Activated {
+                    ability,
+                    source_after_cost: match source {
+                        ActivationSource::Card(card) => Some(card),
+                        ActivationSource::Permanent(_) => None,
+                    },
                 }
             }
-        }
+        };
+        let mut frame = EffectFrame::new(player, Vec::new());
+        frame.batch = Some(self.event_batch(events));
+        frame.completion = completion;
+        self.run_frame(frame);
+        Ok(())
     }
 
     /// Other untapped creatures `player` controls that can help crew
@@ -1893,16 +1904,16 @@ impl Game {
         self.commit_payment(player, *payment, None, None, tapped)
     }
 
-    /// Costs are paid: put the activated ability on the stack (handling
-    /// sacrifice-as-cost) and reset the priority round.
-    fn push_activated_ability(
+    /// Capture the ability before its source can leave, commit its tap cost,
+    /// and propose its sacrifice cost. Frame completion puts it on the stack.
+    fn prepare_activated_ability(
         &mut self,
         player: PlayerId,
         permanent_id: PermanentId,
         ability_index: usize,
         targets: Vec<Target>,
         x: u8,
-    ) -> Result<(), AgentError> {
+    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
         };
@@ -1938,75 +1949,72 @@ impl Game {
             self.tap_permanent(permanent_id, false);
         }
         self.record_activation(permanent_id, ability_index, &ability);
-        if ability.sacrifice_source {
-            // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
-            // moves the source to its owner's graveyard immediately.
-            self.sacrifice_permanent(permanent_id);
-        }
+        let cost = ability
+            .sacrifice_source
+            .then_some(ProposedEvent::Sacrifice { target: source_ref });
 
         let id = self.state.id_gen_mut().next_id();
-        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
-        self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
-            effects: ability.effects,
-            program,
-            source_transforms,
-            inherited_from,
-            id,
-            controller: player,
-            source_definition_id,
-            source_card,
-            source_ref,
-            ability_index,
-            targets,
-            attached,
-            x,
-            granted_by: ability.granted_by,
-        }));
-        self.restart_priority_round();
-        Ok(())
+        Ok((
+            ActivatedAbilityOnStack {
+                effects: ability.effects,
+                program,
+                source_transforms,
+                inherited_from,
+                id,
+                controller: player,
+                source_definition_id,
+                source_card,
+                source_ref,
+                ability_index,
+                targets,
+                attached,
+                x,
+                granted_by: ability.granted_by,
+            },
+            cost,
+        ))
     }
 
-    /// Costs are paid: discard the source if the ability says so (CR 602.2b)
-    /// and put the ability on the stack. It exists independently of the card
-    /// (CR 113.7a) and refers to the card by its identity after costs.
-    fn push_card_activated_ability(
+    /// Capture an off-battlefield ability and propose its discard cost.
+    /// Frame completion binds the post-cost source identity (CR 602.2b, 113.7a)
+    /// before putting the ability on the stack.
+    fn prepare_card_activated_ability(
         &mut self,
         player: PlayerId,
         card: CardId,
         ability_index: usize,
         targets: Vec<Target>,
-    ) -> Result<(), AgentError> {
+    ) -> Result<(ActivatedAbilityOnStack, Option<ProposedEvent>), AgentError> {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("activation source left its zone".into()))?;
-        if ability.discard_source {
-            self.move_card(card, ZoneType::Graveyard);
-        }
-        // The card as it stands once costs are paid: a discarded source is
-        // referenced in the graveyard, where "it" still deals its damage.
+        let cost = ability
+            .discard_source
+            .then(|| self.zone_move_proposal(card, ZoneType::Graveyard, Default::default()));
+        // The completion replaces this identity after the proposed cost commits.
         let source_ref = self
             .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen_mut().next_id();
-        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
-        self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
-            effects: ability.effects,
-            program: false,
-            source_transforms: 0,
-            inherited_from: None,
-            id,
-            controller: player,
-            source_definition_id: self.state.cards[card].definition_id,
-            source_card: card,
-            source_ref,
-            ability_index,
-            targets,
-            attached: None,
-            x: 0,
-            granted_by: None,
-        }));
-        self.restart_priority_round();
-        Ok(())
+        Ok((
+            ActivatedAbilityOnStack {
+                effects: ability.effects,
+                program: false,
+                source_transforms: 0,
+                inherited_from: None,
+                id,
+                controller: player,
+                source_definition_id: self.state.cards[card].definition_id,
+                source_card: card,
+                source_ref,
+                ability_index,
+                targets,
+                attached: None,
+                x: 0,
+                granted_by: None,
+            },
+            cost,
+        ))
     }
 
     /// Legal targets for one targeting requirement of `card`, cast by
