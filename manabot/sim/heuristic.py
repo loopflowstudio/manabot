@@ -376,6 +376,14 @@ class Abilities:
     pump: frozenset[str]
 
 
+def _fetches_basic_land(kind: str, body: Any) -> bool:
+    """Whether an effect is a library selection of basic lands."""
+    if kind != "SelectCards" or body["from"] != {"Zone": "Library"}:
+        return False
+    predicate = body["predicate"]
+    return predicate["supertype"] == "basic" and predicate["card_type"] == "Land"
+
+
 @cache
 def abilities() -> Abilities:
     prompt: set[str] = set()
@@ -388,7 +396,7 @@ def abilities() -> Abilities:
                 continue
             for effect in ability["effects"]:
                 kind, body = _variant(effect)
-                if kind == "SearchBasicLand":
+                if _fetches_basic_land(kind, body):
                     prompt.add(name)
                 elif kind in {"DrawCards", "GainLife"}:
                     spare.add(name)

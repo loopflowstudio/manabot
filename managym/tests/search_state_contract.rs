@@ -149,13 +149,13 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
     let viewer = PlayerId(0);
     let opponent = PlayerId(1);
     let mut first = root.clone();
-    first.determinize(viewer, 1);
+    first.determinize(viewer, 1).unwrap();
     let first_witness = witness(&first);
 
     let second_witness = (2_u64..64)
         .find_map(|seed| {
             let mut candidate = root.clone();
-            candidate.determinize(viewer, seed);
+            candidate.determinize(viewer, seed).unwrap();
             let candidate = witness(&candidate);
             (candidate.authority.hash != first_witness.authority.hash
                 && candidate.viewers[viewer.0] == first_witness.viewers[viewer.0]

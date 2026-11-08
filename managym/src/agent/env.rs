@@ -102,7 +102,8 @@ pub struct FlatMcResult {
 struct NativeActionTrace {
     #[serde(skip)]
     seed: u64,
-    player_configs: Vec<PlayerConfig>,
+    /// Fixed at reset; forks share it rather than copying the decklists.
+    player_configs: Arc<[PlayerConfig]>,
     actions: Vec<usize>,
 }
 
@@ -257,7 +258,7 @@ impl Env {
         }
         self.action_trace = Some(NativeActionTrace {
             seed: self.seed,
-            player_configs: player_configs.clone(),
+            player_configs: Arc::from(player_configs.clone()),
             actions: Vec::new(),
         });
         let mut game = if self.capture_cards {
@@ -347,7 +348,7 @@ impl Env {
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
             .as_ref()
-            .map_or(&[], |trace| trace.player_configs.as_slice())
+            .map_or(&[], |trace| &trace.player_configs[..])
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
@@ -1013,7 +1014,7 @@ impl Env {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1208,7 +1209,7 @@ impl Env {
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1249,7 +1250,7 @@ impl Env {
             |game, hero, world_index| {
                 let world_seed = mix_seed(seed, world_index as u64);
                 let mut world = game.clone();
-                world.determinize(hero, world_seed);
+                world.determinize(hero, world_seed)?;
                 Ok((world, world_seed))
             },
         )

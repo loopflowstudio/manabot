@@ -244,3 +244,13 @@ relaxation is recorded; the two initialized opening fixtures do not settle it.
 MTG-183/w13 remains unmeasured and was not rebound to this world; no trained
 strength claim. Memory still scales with worlds × supported root actions.
 The README's 30-second example is an illustrative budget, not a latency promise.
+
+## Sync resolution (2026-11-08)
+
+Combined the pinned main target `00c7f1bba206034e6aff8909efaff680e9963613`
+with the direct-hash path: pending public entrants use main's viewer-safety
+allowance in the shared `semantic_viewer_input` helper. Both direct hashes and
+composite observations therefore retain the same checked projection.
+Reversible choice: keep these branch-specific measurements and open questions
+despite main deleting its scratch notes. Historical runtime evidence above
+predates this sync; native rebuild and broad validation remain with gate/CI.

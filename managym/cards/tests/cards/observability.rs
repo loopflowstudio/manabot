@@ -405,28 +405,36 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
+        ObjectSelector::Targets(_) => "ObjectSelector::Targets",
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
+        ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
+        ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 11] {
+fn selector_witnesses() -> [ObjectSelector; 15] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
+        ObjectSelector::Targets(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Remembered,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
+        ObjectSelector::CardsThisWay,
+        ObjectSelector::Selected,
+        ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::You,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
@@ -603,11 +611,9 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
         Effect::MillCards { .. } => "Effect::MillCards",
-        Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
+        Effect::SelectCards { .. } => "Effect::SelectCards",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
-        Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
-        Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
         Effect::If { .. } => "Effect::If",
@@ -643,6 +649,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
         Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
@@ -660,8 +667,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::ReturnMilledThisWay { .. } => "Effect::ReturnMilledThisWay",
-        Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
@@ -669,13 +674,12 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
-        Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
     }
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 78;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -726,11 +730,13 @@ fn effect_witnesses() -> Vec<Effect> {
             count: EffectValue::Fixed(2),
             target: None,
         },
-        Effect::MillAndSelect {
-            count: 2,
+        Effect::SelectCards {
+            from: ObjectSelector::CardsThisWay,
             predicate: creature(),
+            min: 0,
+            max: EffectValue::Fixed(2),
+            effects: draw(),
             if_declined: draw(),
-            if_milled: None,
         },
         Effect::DrainLife { amount: value() },
         Effect::TargetClause {
@@ -738,15 +744,6 @@ fn effect_witnesses() -> Vec<Effect> {
             effects: draw(),
         },
         Effect::SelectTargetRequirement { index: 0 },
-        Effect::SearchBasicLand {
-            subtype: None,
-            count: EffectValue::Fixed(1),
-            tapped: true,
-            untap_if_lands: None,
-            bottom_source: false,
-            to_hand: false,
-        },
-        Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
         Effect::destroy(ObjectSelector::Target(target())),
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -842,6 +839,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 ..Default::default()
             },
         },
+        Effect::ShuffleLibrary,
         Effect::ShuffleGraveyardIntoLibrary,
         Effect::OwnerPutsIntoLibrary {
             target: TargetSpec::Permanent {
@@ -874,7 +872,7 @@ fn effect_witnesses() -> Vec<Effect> {
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
         Effect::AttachSourceTo {
-            target: TargetSpec::CreatureYouControl,
+            what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
         },
         Effect::DistributeCountersToTappedOpponentCreatures {
             kind: CounterKind::Stun,
@@ -893,12 +891,6 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::ReturnMilledThisWay {
-            predicate: CardPredicate::creature(),
-        },
-        Effect::MayDiscard {
-            then: vec![Effect::discard()],
-        },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -945,12 +937,6 @@ fn effect_witnesses() -> Vec<Effect> {
             amount: EffectValue::GreatestSharedCreatureType,
         },
         Effect::FightLastTarget,
-        Effect::SearchLibraryToHand {
-            predicate: CardPredicate {
-                subtypes_any: vec!["Lesson".into(), "Noble".into()],
-                ..Default::default()
-            },
-        },
     ]
 }
 
@@ -989,6 +975,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YouPutCountersOnCreature"
         }
         TriggerCondition::YouScry => "TriggerCondition::YouScry",
+        TriggerCondition::YouScryOrSurveil => "TriggerCondition::YouScryOrSurveil",
         TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
@@ -1042,6 +1029,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             kind: CounterKind::PlusOnePlusOne,
         },
         TriggerCondition::YouScry,
+        TriggerCondition::YouScryOrSurveil,
         TriggerCondition::LeavesTheBattlefield {
             subject: TriggerSubject::This,
         },
@@ -1116,7 +1104,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
-        Condition::DiscardedThisWay(_) => "Condition::DiscardedThisWay",
+        Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
         Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
@@ -1154,7 +1142,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
-        Condition::DiscardedThisWay(CardPredicate::creature()),
+        Condition::CardsThisWayMatch(CardPredicate::creature()),
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,
         Condition::TargetControlledByYou,
@@ -1845,6 +1833,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     for player in player_selector_witnesses() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
+            library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
             tapped: false,
@@ -2437,6 +2426,9 @@ enum Encoded {
     Rows(&'static str),
     /// Fact rows of this kind, joined to the field's object.
     Fact(FactKind),
+    /// A further ordered occurrence of a fact kind another field owns,
+    /// separated by an ordinal reset.
+    FactOccurrence(FactKind),
     /// Not a decision input, for the stated reason.
     Excluded(&'static str),
 }
@@ -2703,6 +2695,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        effect_execution => [FactOccurrence(FactKind::ContinuationProgram)],
+        effect_execution_references => [Rows("v8 effect execution reference slots, relation kind 10")],
+        effect_execution_description => [Definition],
+        effect_execution_summary => [Definition],
+        effect_execution_requires_v8 => [Rows("shared version admission before encoding")],
+        legacy_decision => [Rows("v1-v7 obligation class in relation column 28; v8 uses shared selection")],
         program => [Fact(FactKind::ContinuationProgram)],
         program_description => [Definition],
         remembered => [Rows("v5 captured object reference relations, kind 8")],
@@ -2797,6 +2795,10 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
                 Encoded::Fact(kind) => {
                     assert_eq!(fact_field(kind), field, "{kind:?} states another field");
                     fact_kinds.insert(kind as u8);
+                    continue;
+                }
+                Encoded::FactOccurrence(kind) => {
+                    assert_ne!(fact_field(kind), field, "{kind:?} is this field's own");
                     continue;
                 }
                 Encoded::Columns(buffer, start, len) => (buffer, start, len),
@@ -4348,8 +4350,14 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 ..Default::default()
             };
             let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
-            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
-                .unwrap();
+            managym::agent::continuation::encode_into(
+                &[frame],
+                0,
+                8,
+                &Default::default(),
+                &mut rows,
+            )
+            .unwrap();
             assert_eq!(rows[28], 6.0, "event code stays on header");
             assert_eq!(rows[RELATION_DIM_V5], 9.0);
             assert_eq!(rows[RELATION_DIM_V5 + 28], f32::from(code));
@@ -4359,4 +4367,31 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
             );
         }
     }
+}
+
+/// Replacement definitions reach the same catalog as spell programs; these
+/// two cards differ in both causal applicability and transformation, not text.
+#[test]
+fn counter_and_creation_replacements_reach_learning_tokens() {
+    let doubling = tokens_of(&card_definition("Doubling Season"));
+    let caradora = tokens_of(&card_definition("Caradora, Heart of Alacria"));
+    for variant in [
+        "ReplacementEffect::ModifyCounters",
+        "ReplacementEffect::MultiplyTokens",
+    ] {
+        assert!(doubling.contains(&(TokenKind::Variant, name_value(variant))));
+    }
+    assert!(caradora.contains(&(
+        TokenKind::Variant,
+        name_value("ReplacementEffect::ModifyCounters")
+    )));
+    assert!(caradora.contains(&(TokenKind::Text, name_value("Vehicle"))));
+    let mut definition = card_definition("Doubling Season");
+    let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } =
+        &mut definition.replacement_effects[1]
+    else {
+        panic!("counter rule")
+    };
+    *effects_only = false;
+    assert_ne!(doubling, tokens_of(&definition));
 }

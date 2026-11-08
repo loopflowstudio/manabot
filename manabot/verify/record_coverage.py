@@ -7,7 +7,8 @@ the encoders, so an encoder that starts hashing a new name without listing it
 would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
 v9 and runs a tiny catalog policy over the batch, so a missing name fails here
-with the game that produced it.
+with the game that produced it. `--decks elemental` instead exercises the curated
+Elemental matchups, whose searches and composed effects retain execution state.
 
 Entry points: `coverage_sweep` (library) and
 `uv run python -m manabot.verify.record_coverage --games 200` (CLI).
@@ -16,6 +17,7 @@ Entry points: `coverage_sweep` (library) and
 import argparse
 from dataclasses import dataclass
 import random
+from typing import Literal
 
 import numpy as np
 import torch
@@ -79,7 +81,9 @@ def _player(name: str, spells: list[str]) -> managym.PlayerConfig:
     return managym.PlayerConfig(name, deck)
 
 
-def coverage_sweep(games: int, seed: int = 0) -> CoverageReport:
+def coverage_sweep(
+    games: int, seed: int = 0, *, decks: Literal["world", "elemental"] = "world"
+) -> CoverageReport:
     """Play `games` seeded random games and embed every decision through a
     catalog policy; raises `ValueError` naming the game on an unknown id."""
     torch.manual_seed(seed)
@@ -92,10 +96,28 @@ def coverage_sweep(games: int, seed: int = 0) -> CoverageReport:
     rng = random.Random(seed)
     decisions = facts = effects = overflows = 0
     played: set[str] = set()
-    for game, (first, second) in enumerate(_decks(games, seed)):
+    if decks == "elemental":
+        keys = managym.authored_deck_keys("elemental-world-v2")
+        pairs = [
+            (first, second) for first in keys for second in keys if first != second
+        ]
+        players = [
+            [
+                managym.authored_deck_setup("elemental-world-v2", key)
+                for key in pairs[game % len(pairs)]
+            ]
+            for game in range(games)
+        ]
+    else:
+        players = [
+            [_player("first", first), _player("second", second)]
+            for first, second in _decks(games, seed)
+        ]
+    for game, seats in enumerate(players):
+        first, second = [sorted(set(seat.decklist) - set(_BASICS)) for seat in seats]
         played.update(first, second)
         env = managym.Env(seed=seed * 100_003 + game)
-        env.reset([_player("first", first), _player("second", second)])
+        env.reset(seats)
         pending: list[dict[str, np.ndarray]] = []
         for _ in range(_MAX_DECISIONS):
             player = env.current_agent_index()
@@ -158,9 +180,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--games", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--decks", choices=("world", "elemental"), default="world")
     args = parser.parse_args()
     torch.set_num_threads(1)
-    report = coverage_sweep(args.games, args.seed)
+    report = coverage_sweep(args.games, args.seed, decks=args.decks)
     print(
         f"{report.games} games, {report.decisions} decisions "
         f"({report.fact_rows} fact rows, {report.effect_rows} effect rows; "

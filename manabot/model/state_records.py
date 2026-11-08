@@ -6,7 +6,8 @@ TypedContinuationEncoder separates frame headers from their variable-length
 edge lists, uses parent handles only as joins, and pools stack, execution and
 trigger frames separately. Both treatments read identical fields; their only
 within-record difference is a sum versus a GRU. Neither retains temporal state.
-The v5 admission limits and missing exact effect-source links still apply.
+Frozen inputs retain their original admission limits. Explicit v8 adds retained
+execution reference edges without changing the encoder's parameter shapes.
 """
 
 import torch
@@ -101,8 +102,11 @@ class TypedContinuationEncoder(nn.Module):
     cycles and dangling parents are rejected before encoding.
     """
 
-    def __init__(self, width: int, reduction: RecordReduction) -> None:
+    def __init__(
+        self, width: int, reduction: RecordReduction, *, version: int = 5
+    ) -> None:
         super().__init__()
+        self.max_relation_kind = 10 if version >= 8 else 9
         # Header values: kind/controller, mode..decline, decision, resolutions,
         # X/keywords/delayed duration; references are separate learned joins.
         self.header_columns = (3, 4, *range(7, 22), 28, 30, *range(33, 49))
@@ -146,7 +150,9 @@ class TypedContinuationEncoder(nn.Module):
             # remembered subjects and delayed frequency are edges 7/8/9;
             # their existing payload columns and joins use the same reducers.
             kinds = record_indexes(active[:, 3], 12, "frame kind")
-            row_kinds = record_indexes(active[:, 0], 9, "relation kind")
+            row_kinds = record_indexes(
+                active[:, 0], self.max_relation_kind, "relation kind"
+            )
             if (handles == 0).any() or (kinds == 0).any() or (row_kinds == 0).any():
                 raise ValueError("live relation lacks frame or kind")
             sources = record_indexes(active[:, 6], len(table), "source object")
