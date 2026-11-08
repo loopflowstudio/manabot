@@ -297,3 +297,35 @@ same home, pid in `~/.etude-b015d5-step2/controller.pid`.
   manifest does not list it.
 - Open for evidence review, unchanged: the 5% shorter late packed games, the inferred L4
   shape, the hung attempt, step 3.
+
+## experiment-design b015d5 (2026-11-07): step 3, model size, GPU and precision
+
+Design: protocol section "Step 3: model size, GPU and precision". Nothing built, frozen or
+launched; design review returns to Jack Heart. Steers folded in: 1f4c2872 (planner
+objective), 0216b052 and af047a69 (worked examples; af047a69's $100 / 336 h supersedes
+5 days), 8ac4eb82 (size as input), 518e5f09 (refocus on large-model speed, measure
+ourselves), b9215b8a (packing crossover ladder).
+- w64 planner table is $0 arithmetic in `scratch/planner_sketch.py` (stdlib; `python3
+  scratch/planner_sketch.py`). Its curve, seed-spread and selection models are my
+  simplifications for review: piecewise log-linear MTG-183 rating, late slope 44 or 20 per
+  doubling, Gaussian seed spread with eval-noise shrinkage, halving at 3:4:7, at most 3
+  A4000s at once. The worked example matches the conversation's figures (~32k solo, ~27k
+  halving, ~19-20k pack-4).
+- 8ac4eb82 says to take w160l8 speed from c5fba4's calibration. That calibration has not
+  run (MTG-267 at experiment-software-review, PR #445 open; its protocol says nothing has
+  launched). 518e5f09 then says to measure ourselves, which the design does.
+- The steer asked for 07c490's seed spread at 20/40/75/150. Per-seed scores exist only at
+  u40 in `results.json`; u20/u75 per seed need the eval database (a fetch was tried and
+  stopped, it held 16 GB). No 07c490 run reached u150.
+- `elemental_variants.elemental_recipe` resolves to policy input v6 with 512 facts, while
+  07c490's protocol describes the recipe's input as v1. Not investigated; step 3's
+  parameter counts use the resolved regime. Possibly a bug Task (how a frozen regime with no
+  `policy_input_version` loads), not this step's.
+- Reversible choices: ladder w128l4 (4 heads, default ff) as the intermediate; a384l8 heads 8,
+  ff 1536; third GPU chosen at freeze by quoted bf16 dense throughput per dollar, default RTX
+  4090, ceiling $.95/hour; crossover threshold K=2 gain < 1.10; K=4 only at K=2 gain >= 1.30;
+  4 updates per speed cell; learning check at w160l8, seed 26301, fp32 x2 / tf32 / bf16,
+  12 updates; seeds 26301-26304; reservation $10.
+- bf16 autocast covers collection inference too, so behavior numerics change as well as
+  learning. Mixed precision limited to inference only would be a narrower option; not
+  proposed.
