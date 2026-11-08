@@ -282,3 +282,18 @@ same home, pid in `~/.etude-b015d5-step2/controller.pid`.
 - Etude gaps worth Etude Tasks (not filed from this headless run): `launch --rent` and
   `terminate` refused while the controller holds the placement lease; `etude-result.json`
   fetch 404s; SDK 0.2.12 reads `a7718f5` metrics as empty.
+
+## experiment-analysis b015d5 (2026-11-07): step 2 reconciled
+
+- `readings.py` reproduced `readings.txt` byte for byte before any change. Two report
+  figures had no producer: M1 over updates 2-8 (68.8 s, 10.88 M/h) and the phase table.
+  Both now print from `readings.py` and agree with the report. Its (1, 1) phase row is M3
+  (seed 26211, S14's seed); M2's four-seed mean is 7.2/8.3/15.7. The report now says so.
+- Reconciled: 19 declared runs plus the hung attempt, and each run's update count and learner decisions match its own receipt.
+  Exposure is 11,337,315 CUDA learner decisions in the succeeded runs plus 104,653 in the hung one.
+- Added to the report: track-dir separation and GPU memory (3,620 MiB peak against 16 GB).
+  Labelled the M1 table row as updates 2-8; the frozen concurrent-span reading is 60.2 s.
+- An unreferenced `readings.cpython-312.pyc` object was uploaded to R2 by mistake. The
+  manifest does not list it.
+- Open for evidence review, unchanged: the 5% shorter late packed games, the inferred L4
+  shape, the hung attempt, step 3.
