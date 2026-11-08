@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 designed)
+# Training throughput on the ten-deck Elemental recipe, v1 (step 3 built, not frozen)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -22,8 +22,9 @@ comment ceff7d63), which added legs S14, S22 and S44. Step 2's software landed a
 Jack Heart approved execution (2026-11-07, comment e89d4889), and step 2 has run (see
 its execution record). Jack Heart accepted step 2's evidence and set step 3's objective
 (2026-11-07, comment 1f4c2872), then refocused it on large-model speed (comments
-8ac4eb82, 518e5f09 and b9215b8a). Step 3's design below awaits design review; nothing
-in it is built or frozen.
+8ac4eb82, 518e5f09 and b9215b8a). Jack Heart accepted step 3's design (2026-11-07,
+comment 17799706). Its software is built (see "Software before step 3 freezes"); it is
+not yet landed or frozen, and nothing has been rented for it.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -570,7 +571,7 @@ does: the producer half rests on c5fba4's fixed-policy collection check, which h
 trained counterpart, the packing half rests on this step's one-producer legs, and
 nothing here runs the two together for learning.
 
-## Step 3: model size, GPU and precision (designed 2026-11-07)
+## Step 3: model size, GPU and precision (designed and accepted 2026-11-07)
 
 **Direction.** Jack Heart accepted step 2's evidence (comment 1f4c2872): four seeds per
 machine with one producer is the standard cost-efficient shape. He set the objective in
@@ -828,6 +829,45 @@ Acceptance: the tests pass; `read_job_file` discovers each leg; a CPU run of one
 and one a384l8 leg at 8 streams and 1 update finishes through the real worker; and
 `etude launch ... --quote` under the isolated home places a K=4 leg on each on-demand.
 Etude stays at `a7718f5` under `~/.etude-b015d5-step2`, as in step 2.
+
+**As built (2026-11-07).**
+- Sizes: `elemental_variants.sized`; `training_throughput_sizes.recipe(size, precision,
+  updates)` names each regime `elemental-throughput-<size>-<precision>[-check]-v1` (the
+  12-update check legs carry `-check`). W64 float32 is the control's bytes.
+- Precision: `manabot/training/precision.py` owns both options. `apply_matmul_precision`
+  sets the TF32 switches at each stage's start and restores the process's own at the run's
+  end, so float32 keeps PyTorch's defaults (cuDNN's allows TF32, as before). Collection
+  and the learner wrap each policy forward in `forward_precision` and cast its outputs to
+  float32, so behavior log-probabilities, targets and losses are computed in float32.
+  This covers the damped rule and the clipped-surrogate rule alike.
+- **Not anticipated in the design: the network did not run under autocast.** Its
+  scatter, `index_add`, `index_put` and `masked_scatter` joins (permanent links, facts,
+  shared effects, state records, name candidates, action logits) refuse mixed dtypes,
+  and autocast leaves them mixed. Each now converts its source to the destination's dtype.
+  For float32 that is a no-op. Checked on CPU: step 2's D1 variant (24 streams, 3 updates,
+  seed 26201) through the real worker at `0d3af321e` and on this tree gives digests that
+  differ only in `training_source_sha256`, across 72 game attempts, all three policy
+  exports and the optimizer. That is the float32-unchanged acceptance, run by hand once.
+  It is not a CI test, because a pinned training digest would move with every rules change.
+- bf16 is exercised on CPU autocast by a real two-stream collection and damped update
+  (`tests/training/test_precision.py`): every agent forward ran under autocast, and
+  outputs and parameters stay float32. CPU autocast stands in for CUDA's here. It covers
+  the same forwards but says nothing of CUDA numerics.
+- Launch file: 42 legs. `--pace` passes the previous size's K=1 s/update (default 37,
+  step 2's solo A4000 w64). Hours round up to quarter hours and the watchdog takes the
+  slack. `max_usd` is hours plus 15 minutes at the on-demand's ceiling. `limits()` and
+  `python -m experiments.training_throughput_sizes LEG PACE` print a cell's stall time.
+- Readings: `step-3/readings.py` and `collect.py` (step 2's, for this experiment) read
+  `legs.json`, `machines.json` and `runs/`. Dry-run on step 2's runs relabeled as cells:
+  every section printed. Unpublished until step 3's evidence exists.
+- On-demand `b015d5-fast` in the isolated home: `NVIDIA GeForce RTX 4090`, 8 vCPUs,
+  48 GB, 80 GB disk, under $.95/hour, `--slots 4`, storage `r2`. The freeze may swap the
+  GPU for the quoted best of the four candidates.
+- Checks: `pytest tests/training/test_precision.py tests/training/test_training_throughput_sizes.py
+  tests/training/test_training_throughput.py tests/infra/test_host_facts.py
+  tests/training/test_elemental_closure_lambda.py tests/training/test_two_seat_learning.py
+  tests/training/test_rl_objectives.py tests/training/test_regimes.py tests/model` passed,
+  after rebuilding the native extension that main's Rust had outdated.
 
 ### Stop rules
 

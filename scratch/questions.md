@@ -329,3 +329,20 @@ ourselves), b9215b8a (packing crossover ladder).
 - bf16 autocast covers collection inference too, so behavior numerics change as well as
   learning. Mixed precision limited to inference only would be a narrower option; not
   proposed.
+
+## implement b015d5 (2026-11-07): step 3 software
+
+Built the five items (protocol "As built"). Not landed or frozen, nothing rented.
+Reversible choices, for review:
+- The network needed dtype conversions at seven join sites to run under autocast at all
+  (no-ops at float32; D1 digest checked by hand). This touches `manabot/model/`, which
+  the design did not list. The alternative, autocast only around attention and linear
+  blocks, would put the precision inside the model.
+- Autocast wraps only the forward. Outputs go back to float32 before log-softmax,
+  targets and losses, which is narrower than the design's "forward and losses".
+- TF32 is set per stage, absolutely: tf32 sets on, anything else restores the process's
+  defaults, and the run's end restores them as well. Float32 never forces cuDNN TF32 off.
+- Regime IDs carry `-check` for the 12-update legs, because their bytes differ from the
+  4-update cells at the same size and precision.
+- `--pace` is a launch parameter, so the regime's watchdog (and its digest) depends on
+  the pace given. Each launch records it in the job.

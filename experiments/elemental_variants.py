@@ -77,3 +77,24 @@ def lambda_sweep(
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
     return TrainingRegime.model_validate(regime.model_dump())
+
+
+def sized(
+    regime_id: str,
+    updates: int,
+    *,
+    width: int,
+    layers: int,
+    heads: int,
+    feedforward: int | None = None,
+) -> TrainingRegime:
+    """The recipe at another network size; nothing else of the recipe changes.
+
+    `feedforward` None keeps the model's default of heads × width.
+    """
+    regime = elemental_recipe(regime_id, updates)
+    regime.agent.hidden_dim = width
+    regime.agent.attention_layers = layers
+    regime.agent.num_attention_heads = heads
+    regime.agent.attention_feedforward_dim = feedforward
+    return TrainingRegime.model_validate(regime.model_dump())

@@ -174,7 +174,9 @@ def _targets(
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
     next_obs = observation_tensors(batch.next_obs, device)
-    _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    with learner.forward_precision():
+        _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    next_raw = next_raw.float()
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
     if learner.agent.config.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
@@ -322,7 +324,9 @@ def update_damped_iteration(
                 obs = observation_tensors(rows.observation, device)
                 valid = legal_mask(obs["actions_valid"])
                 behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
-                logits, value_logits = learner.agent.forward_distribution(obs)
+                with learner.forward_precision():
+                    logits, value_logits = learner.agent.forward_distribution(obs)
+                logits, value_logits = logits.float(), value_logits.float()
                 reference = reference_distribution(obs, learning.reference)
                 policy_loss = damped_policy_loss(
                     logits,
