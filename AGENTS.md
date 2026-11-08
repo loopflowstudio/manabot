@@ -172,7 +172,15 @@ checkpoints or experiment evidence.
   V8 defaults to 512 local facts; v7 retains 128 and fresh input remains v6.
   Shared admission rejects new unrepresentable layer payloads on v1–v7 before
   either encoder writes buffers. A stacked activation owns its chosen effects;
-  catalog joins are observation provenance, never resolution lookup authority.
+  catalog joins are observation provenance, never resolution lookup authority. V8
+  also carries effect execution as a separate fact-kind-14 occurrence (ordinal
+  reset), with one-based visible reference slots in relation kind 10. The native
+  frame/batch owners project rules payloads; raw storage identities never enter
+  these tokens. Frozen selection obligations retain codes 5/6/7 on v1–v7, while
+  v8 uses 28. Earlier instructions' results (selected, moved, created) stay out
+  of v1–v7, which remain admissible; open event batches, iterations and new
+  completions are novel and reject earlier inputs before buffer writes;
+  fact/relation overflow is a typed Capacity error, never truncation.
 - Naming is ordinary native decisions: `Decision::NameCard` holds a
   `NameScope`; scopes over `NAME_BRANCHING` (64) names offer balanced groups of
   sorted names, and only a name choice commits. Explicit input v9 retains v8
@@ -182,6 +190,12 @@ checkpoints or experiment evidence.
   modal choices. Names are not game objects; do not use card slots or invent
   definitions for them. Native scalar/vector paths select v9 from this buffer's
   presence. V1–v8 and fresh v6 defaults remain unchanged.
+- Fact and shared-effect ids on v8/v9 read the card encoder's token rows
+  (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
+  regimes); native `agent/record_vocabulary.rs` lists every name the encoders
+  hash, so a new hashed name must appear there or the policy rejects it.
+  Checkpoints keep hashed ids: load through `ModelConfig.from_checkpoint` and
+  save `checkpoint_payload()`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -432,7 +446,8 @@ choice by paying a real cost and checking the remaining mana.
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from
 their canonical importable module, not the discovery file's `<run_path>`
-namespace. Exercise discovery with `read_experiment` in runner tests. Local
+namespace. Exercise discovery with `read_experiment` in runner tests, or
+`etude.launch.job_file.read_job_file` for a launch file with no `eval`. Local
 evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
 only launched jobs receive that directory automatically.
 

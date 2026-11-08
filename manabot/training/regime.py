@@ -207,9 +207,14 @@ class DampedPolicyLearning(Strict):
         )
 
 
+# float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
+# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
+Precision = Literal["float32", "tf32", "bf16"]
+
+
 class Execution(Strict):
     device: Literal["cpu", "cuda"] = "cpu"
-    precision: Literal["float32"] = "float32"
+    precision: Precision = "float32"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
@@ -218,6 +223,12 @@ class Execution(Strict):
     # Historical opt-in; phase timers are now always recorded. Retained so
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def reduced_precision_on_cuda(self) -> "Execution":
+        if self.precision != "float32" and self.device != "cuda":
+            raise ValueError(f"precision {self.precision} requires CUDA")
+        return self
 
 
 class Stage(Strict):
@@ -421,9 +432,10 @@ class TrainSelfPlay(Stage):
     # `transitions` as a per-stream floor and finishes the game in progress, so
     # every return ends at a real result. "exact-quota" pauses each stream at
     # `transitions` learner rows, usually mid-game, and bootstraps from
-    # V(next_obs). A new stage defaults here; a saved one that omits the field is
-    # resolved by TrainingRegime, so it serializes only when `_implied_closure`
-    # would say otherwise.
+    # V(next_obs). Under capacity recovery a failed game loses only the rows no
+    # update has learned from and its stream refills. A new stage defaults here; a
+    # saved one that omits the field is resolved by TrainingRegime, so it serializes
+    # only when `_implied_closure` would say otherwise.
     batch_closure: BatchClosure = "complete-games"
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
@@ -462,9 +474,12 @@ class TrainSelfPlay(Stage):
                     "the acting seat has a next observation, so the other seat's "
                     "pending row has no successor"
                 )
-            if self.games_per_stream is not None or self.game_errors is not None:
+            if self.games_per_stream is not None:
+                raise ValueError("games_per_stream requires complete games")
+            if self.game_errors is not None and not self.game_errors.recover_capacity:
                 raise ValueError(
-                    "games_per_stream and game error recovery require complete games"
+                    "game error recovery without capacity recovery requires "
+                    "complete games"
                 )
         if self.learning_seats == "both" and self.behavior not in (
             "current-self",
@@ -476,13 +491,9 @@ class TrainSelfPlay(Stage):
         if self.execution.workers != 1 and self.root is not None:
             raise ValueError("diagnostic roots require one producer")
         if self.matchup_curriculum == "elemental-uniform":
-            if (
-                self.behavior != "current-self"
-                or self.execution.workers != 1
-                or self.root is not None
-            ):
+            if self.behavior != "current-self" or self.root is not None:
                 raise ValueError(
-                    "elemental-uniform requires current-self, one producer and ordinary roots"
+                    "elemental-uniform requires current-self and ordinary roots"
                 )
         elif self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
@@ -709,13 +720,12 @@ class TrainingRegime(Strict):
         if self.deck_source is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"
-            or stage.execution.workers != 1
             or stage.root is not None
             or stage.matchup_curriculum != "fixed"
             for stage in self.stages
         ):
             raise ValueError(
-                "a deck source requires current-self, one producer, ordinary roots and no curriculum"
+                "a deck source requires current-self, ordinary roots and no curriculum"
             )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None

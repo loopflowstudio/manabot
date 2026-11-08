@@ -1,9 +1,10 @@
 //! Throne of Eldraine.
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
+    ability::{Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -44,13 +45,29 @@ fn fabled_passage() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             sacrifice_source: true,
-            effects: vec![Effect::SearchBasicLand {
-                subtype: None,
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: Some(4),
-                bottom_source: false,
-                to_hand: false,
+            effects: vec![Effect::SelectCards {
+                from: ObjectSelector::Zone(ZoneType::Library),
+                predicate: CardPredicate::basic_land(),
+                min: 0,
+                max: EffectValue::Fixed(1),
+                effects: vec![
+                    Effect::return_to_battlefield(ObjectSelector::Selected, true),
+                    Effect::ShuffleLibrary,
+                    Effect::If {
+                        condition: Condition::ControlsAtLeast {
+                            count: 4,
+                            predicate: CardPredicate {
+                                card_type: Some(CardType::Land),
+                                ..Default::default()
+                            },
+                        },
+                        then: vec![Effect::Untap {
+                            what: ObjectSelector::Moved,
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+                if_declined: vec![Effect::ShuffleLibrary],
             }],
             ..Default::default()
         }],

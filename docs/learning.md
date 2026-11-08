@@ -335,7 +335,14 @@ Step sizes depend on the absolute iteration $i$:
 
 $$\text{lr}_i = \mathrm{clip}(0.5\,/\,i^{1.1},\ 5\times10^{-6},\ 10^{-4}) \qquad \tau_i = 0.05\,/\,i^{0.3}$$
 
-An `IterationSchedule` can rescale $i$ so a short run covers the same curve.
+An `IterationSchedule` can rescale $i$ so a short run covers the same curve:
+update $u$ of a run with horizon $S$ sits at $i = 1 + 9{,}999\,(u-1)/(S-1)$.
+Without one, a run of a few hundred updates never leaves the learning-rate
+clamp, which holds until $i \approx 2{,}305$. New sampled-roster recipes
+(`manabot.recipes.builders.sampled_self_play`) take the measured seconds per
+update and declare $S$ as the updates the wall reaches at that cost
+(`fitted_horizon`), capped at 10,000; regimes that omit a schedule keep the
+absolute iteration.
 
 The PPO-style `Learning` rule remains as a control. It normalizes advantages
 and shuffles minibatches, and may take several epochs.

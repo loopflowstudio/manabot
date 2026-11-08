@@ -1,11 +1,97 @@
-"""Complete typed card programs joined to viewer-safe card and knowledge rows."""
+"""Complete typed card programs joined to viewer-safe card and knowledge rows.
+
+`SemanticCardEncoder` owns the one token vocabulary of card text. With
+`records`, it also owns the exact vocabulary of fact and shared-effect ids
+(`RecordNamespace` keys): every name native `learning_record_names` lists reads
+the row of the card token for the same concept, or a row appended after the
+card tokens when no card text contains it. Nothing is hashed; an id outside
+the vocabulary fails loudly.
+"""
 
 from dataclasses import dataclass
+from enum import IntEnum
 
 import torch
 from torch import nn
 
 from manabot.semantic.policy_catalog import bind_policy_catalog
+import managym
+
+
+class RecordNamespace(IntEnum):
+    """Id column families of fact and shared-effect rows (native namespaces)."""
+
+    TOKEN = 1
+    NAME = 2
+    RESTRICTION = 3
+
+
+# Learning token kinds whose value is a number, not an id.
+NUMBER_TOKEN_KINDS = (4, 5)
+
+
+def record_key(high: torch.Tensor, low: torch.Tensor) -> torch.Tensor:
+    """One int64 key from a family (namespace or token kind) and a u32 word."""
+    return (high.long() << 32) | (low.long() & 0xFFFFFFFF)
+
+
+@dataclass(frozen=True)
+class _RecordTables:
+    """Token-embedding rows of record ids: `names` by (namespace, value),
+    `tokens` by (kind, value) over card tokens and appended ones, `numbers` by
+    numeric token kind. `size` is the embedding's row count."""
+
+    names: dict[tuple[int, int], int]
+    tokens: dict[tuple[int, int], int]
+    numbers: dict[int, int]
+    size: int
+
+
+def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
+    """A name whose card token exists reads that token's row, so a granted
+    keyword and the printed keyword share one embedding; every other name,
+    token and numeric kind gets a row appended after the card tokens."""
+    tokens = dict(vocabulary)
+    names: dict[tuple[int, int], int] = {}
+    size = len(vocabulary) + 1
+
+    def append() -> int:
+        nonlocal size
+        size += 1
+        return size - 1
+
+    for space, name, value, kind, token in managym.learning_record_names():
+        key = (int(RecordNamespace[space.upper()]), value)
+        if key in names:
+            raise ValueError(f"record name {name!r} shares an id with another")
+        if kind is None or token is None:
+            names[key] = append()
+        else:
+            if (kind, token) not in tokens:
+                tokens[(kind, token)] = append()
+            names[key] = tokens[(kind, token)]
+    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}
+    return _RecordTables(names, tokens, numbers, size)
+
+
+def _sorted_keys(
+    table: dict[tuple[int, int], int],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pairs = torch.tensor(list(table), dtype=torch.long)
+    keys = record_key(pairs[:, 0], pairs[:, 1])
+    order = keys.argsort()
+    return keys[order], torch.tensor(list(table.values()))[order]
+
+
+def _lookup(
+    keys: torch.Tensor, rows: torch.Tensor, query: torch.Tensor, message: str
+) -> torch.Tensor:
+    if len(query) == 0:
+        return query.new_zeros(0, dtype=torch.long)
+    index = torch.searchsorted(keys, query).clamp_max(len(keys) - 1)
+    if not torch.equal(keys[index], query):
+        raise ValueError(message)
+    return rows[index]
 
 
 @dataclass(frozen=True)
@@ -56,9 +142,17 @@ class CardReferences:
 
 
 class SemanticCardEncoder(nn.Module):
-    def __init__(self, pack_key: str, hidden_dim: int, decklists: bool = False) -> None:
+    def __init__(
+        self,
+        pack_key: str,
+        hidden_dim: int,
+        decklists: bool = False,
+        *,
+        records: bool = False,
+    ) -> None:
         """`decklists` (policy input v5) adds a projection of the pooled
-        decklist rows into each player's knowledge vector."""
+        decklist rows into each player's knowledge vector; `records` adds the
+        fact and shared-effect id vocabulary (see the module docstring)."""
         super().__init__()
         pack = bind_policy_catalog(pack_key)
         catalog = pack.catalog
@@ -106,7 +200,11 @@ class SemanticCardEncoder(nn.Module):
             maximum_program_tokens=width,
             padded_tokens=len(rows) * width,
         )
-        self.token_embedding = nn.Embedding(len(vocabulary) + 1, hidden_dim)
+        tables = _record_tables(vocabulary) if records else None
+        # Appended record rows follow the card tokens, whose rows are unchanged.
+        self.token_embedding = nn.Embedding(
+            len(vocabulary) + 1 if tables is None else tables.size, hidden_dim
+        )
         self.encoder = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
         self.register_buffer(
             "tokens",
@@ -128,6 +226,51 @@ class SemanticCardEncoder(nn.Module):
         self.decklist_projection = (
             nn.Linear(4 * hidden_dim, hidden_dim) if decklists else None
         )
+        self.records = records
+        if tables is not None:
+            # Sorted int64 keys for `searchsorted`.
+            for prefix, table in (
+                ("record_name", tables.names),
+                ("record_token", tables.tokens),
+            ):
+                keys, rows = _sorted_keys(table)
+                self.register_buffer(f"{prefix}_keys", keys)
+                self.register_buffer(f"{prefix}_rows", rows)
+            self.register_buffer(
+                "record_number_rows",
+                torch.tensor([tables.numbers.get(kind, 0) for kind in range(6)]),
+            )
+
+    def record_names(
+        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
+    ) -> torch.Tensor:
+        """Embed name ids (u32 words) of one namespace, or of one namespace
+        each; [*] -> [*, D]."""
+        rows = _lookup(
+            self.record_name_keys,
+            self.record_name_rows,
+            record_key(torch.as_tensor(namespace), words).reshape(-1),
+            "policy received an id outside the record vocabulary",
+        )
+        return self.token_embedding(rows).reshape(
+            *words.shape, self.token_embedding.embedding_dim
+        )
+
+    def record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+        """Embed program learning tokens: ids read their vocabulary row; numbers
+        read their kind's row (callers add the exact value). [*] -> [*, D]."""
+        kinds, words = kinds.long().reshape(-1), words.reshape(-1)
+        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
+        if bool(((kinds < 1) | (kinds > 9)).any()):
+            raise ValueError("policy received an invalid program token kind")
+        rows = self.record_number_rows[kinds.clamp(0, 5)].clone()
+        rows[~number] = _lookup(
+            self.record_token_keys,
+            self.record_token_rows,
+            record_key(kinds[~number], words[~number]),
+            "policy received a program token outside the vocabulary",
+        )
+        return self.token_embedding(rows)
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return admit_definition_ids(
@@ -250,3 +393,24 @@ class SemanticCardEncoder(nn.Module):
             ).flatten(start_dim=2)
             known = known + self.decklist_projection(pooled)
         return cards, known
+
+
+@dataclass(frozen=True)
+class RecordEmbeddings:
+    """The card encoder's record vocabulary bound to one forward pass's
+    definition table: what catalog fact and shared-effect ids read."""
+
+    cards: SemanticCardEncoder
+    definitions: torch.Tensor
+
+    def names(
+        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
+    ) -> torch.Tensor:
+        return self.cards.record_names(namespace, words)
+
+    def tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+        return self.cards.record_tokens(kinds, words)
+
+    def sources(self, ids: torch.Tensor) -> torch.Tensor:
+        """Source definition ids (definition id + 1) to their program rows."""
+        return self.cards.embed_definitions(ids, self.definitions)

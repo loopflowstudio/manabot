@@ -160,7 +160,7 @@ struct CanonicalMatchState<'a> {
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,
     mana_cache: &'a [Option<crate::state::mana::Mana>; 2],
-    events: &'a [crate::flow::event::GameEvent],
+    events: &'a crate::flow::event::EventLedger,
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],

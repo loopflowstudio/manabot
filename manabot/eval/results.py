@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from manabot.eval.models import EvaluationKey
+from manabot.eval.models import EvaluationKey, PolicyActionCounts
 
 
 class EvaluationRow(BaseModel):
@@ -35,6 +35,16 @@ class EvaluationRow(BaseModel):
         if value not in (None, 0.0, 0.5, 1.0):
             raise ValueError("arena score must be loss, draw, win or unavailable")
         return value
+
+    @property
+    def policy_action_counts(self) -> PolicyActionCounts | None:
+        """The row's cutoff counts; None when its game returned none.
+
+        Read from the extras: a declared field would dump as None and change the
+        digest `_verify_block` recomputes for frozen rows.
+        """
+        counts = (self.model_extra or {}).get("policy_actions")
+        return None if counts is None else PolicyActionCounts.model_validate(counts)
 
     @property
     def valid(self) -> bool:

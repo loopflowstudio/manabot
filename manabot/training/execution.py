@@ -29,6 +29,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
+from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -42,6 +43,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -108,6 +110,20 @@ def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
         )
         for path, stats in profiler.get_stats().items()
         if path.startswith(f"{root}/")
+    }
+
+
+def cuda_peak_metrics(device: str) -> dict[str, int]:
+    """This process's CUDA high-water marks so far; absent off CUDA.
+
+    Reserved bytes include the allocator's cache, so they are what a card must
+    hold; allocated bytes are what the tensors themselves needed.
+    """
+    if device != "cuda":
+        return {}
+    return {
+        "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
+        "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
     }
 
 
@@ -504,6 +520,7 @@ def _execute_regime(
         store.claim_training_recovery(parent.id, run)
     self_play_session = None
     resources = ExitStack()
+    resources.callback(apply_matmul_precision, "float32")
     producers = resources.enter_context(ExitStack())
     game_index = 0
     last_monitor_seconds = 0.0
@@ -681,6 +698,7 @@ def _execute_regime(
         space = ObservationSpace(regime.observation)
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
+        run.host = host_facts()
         if snapshot is not None:
             admit_recovery_identities(
                 snapshot.identities, identities, source_repair_reason
@@ -765,6 +783,7 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
+            apply_matmul_precision(stage.execution.precision)
             cuda = stage.execution.device == "cuda"
             if cuda and not torch.cuda.is_available():
                 raise ValueError(
@@ -1171,6 +1190,7 @@ def _execute_regime(
                         deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
+                        precision=stage.execution.precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1184,6 +1204,7 @@ def _execute_regime(
                             log_level="WARNING",
                         ),
                         experiment=experiment or stage.id,
+                        regime=regime.id,
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,
@@ -1223,7 +1244,10 @@ def _execute_regime(
                         )
                         record.export_seconds += time.perf_counter() - tick
                     learner = Learner(
-                        agent, experiment.device, minibatch_rows=stage.streams
+                        agent,
+                        experiment.device,
+                        minibatch_rows=stage.streams,
+                        precision=stage.execution.precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
@@ -1416,7 +1440,9 @@ def _execute_regime(
                     spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        metric_row(diagnostic) | time_since(timed, spent),
+                        metric_row(diagnostic)
+                        | time_since(timed, spent)
+                        | cuda_peak_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]

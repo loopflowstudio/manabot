@@ -15,6 +15,8 @@ import torch.nn as nn
 from manabot.env.observation import (
     FACT_KINDS,
     FACT_KINDS_V8,
+    FACT_SOURCE_INDEX,
+    FACT_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
@@ -23,12 +25,16 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.continuation import ContinuationEncoder
-from manabot.model.facts import FactEncoder
+from manabot.model.facts import FactEncoder, RecordVocabulary
 from manabot.model.inference import PreparedObservation
 from manabot.model.name_candidates import NameCandidateEncoder
 from manabot.model.policy_distribution import legal_mask
 from manabot.model.recent_events import RecentEventEncoder
-from manabot.model.semantic_cards import admit_definition_ids
+from manabot.model.semantic_cards import (
+    RecordEmbeddings,
+    SemanticCardEncoder,
+    admit_definition_ids,
+)
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
 import managym
@@ -107,12 +113,11 @@ class ActorCritic(nn.Module):
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
         if config.world is not None:
-            from .semantic_cards import SemanticCardEncoder
-
             self.semantic_cards = SemanticCardEncoder(
                 config.world,
                 embed_dim,
                 decklists=enc.config.policy_input_version >= 5,
+                records=config.catalog_records(enc.config.policy_input_version),
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -250,7 +255,7 @@ class ActorCritic(nn.Module):
         self.continuation: ContinuationEncoder | TypedContinuationEncoder | None
         if config.state_encoder != "rows":
             self.continuation = TypedContinuationEncoder(
-                embed_dim, config.state_encoder
+                embed_dim, config.state_encoder, version=enc.config.policy_input_version
             )
         else:
             self.continuation = (
@@ -278,6 +283,12 @@ class ActorCritic(nn.Module):
         # Policy input v5 fact rows (counter kinds, added subtypes, set
         # characteristics, spent abilities, continuous-effect records) join
         # their objects. Built last so earlier parameters keep their draws.
+        # Catalog ids share the card encoder's token and definition rows.
+        record_vocabulary: RecordVocabulary = (
+            "catalog"
+            if config.catalog_records(enc.config.policy_input_version)
+            else "hashed"
+        )
         self.facts: FactEncoder | SharedFactEncoder | None
         if config.state_encoder != "rows" and enc.config.policy_input_version == 5:
             self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
@@ -289,6 +300,7 @@ class ActorCritic(nn.Module):
                     kinds=FACT_KINDS_V8
                     if enc.config.policy_input_version >= 8
                     else FACT_KINDS,
+                    vocabulary=record_vocabulary,
                 )
                 if enc.shows_everything
                 else None
@@ -299,6 +311,7 @@ class ActorCritic(nn.Module):
                 embed_dim,
                 "typed_gru" if config.state_encoder == "typed_gru" else "typed_pool",
                 version=enc.config.policy_input_version,
+                vocabulary=record_vocabulary,
             )
             if enc.config.policy_input_version >= 7
             else None
@@ -375,7 +388,7 @@ class ActorCritic(nn.Module):
         # Only the legal rows entered the action networks; objects/programs were
         # encoded once for the batch, independent of each row's support size.
         logits = scores.new_full(obs["actions_valid"].shape, -1e8)
-        logits = logits.index_put((batches, slots), scores)
+        logits = logits.index_put((batches, slots), scores.to(logits.dtype))
         if self.debug:
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
@@ -584,11 +597,22 @@ class ActorCritic(nn.Module):
         objects = torch.cat(object_parts, dim=1)
         if self._link_columns:
             objects = self._join_permanent_links(obs, objects)
-        if self.facts is not None:
+        # Catalog fact and effect ids read the card encoder's rows.
+        catalog = None
+        if self.semantic_cards is not None and self.semantic_cards.records:
+            assert definitions is not None
+            catalog = RecordEmbeddings(self.semantic_cards, definitions)
+        if isinstance(self.facts, FactEncoder):
+            objects = self.facts(obs["facts"], objects, catalog)
+        elif self.facts is not None:
             objects = self.facts(obs["facts"], objects)
         if self.shared_effects is not None:
             objects = self.shared_effects(
-                obs["effects"], obs["effect_details"], obs["effect_members"], objects
+                obs["effects"],
+                obs["effect_details"],
+                obs["effect_members"],
+                objects,
+                catalog,
             )
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
@@ -673,8 +697,12 @@ class ActorCritic(nn.Module):
             targets = (
                 (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
             )
+            # Autocast leaves scatter's operands in their own dtypes; float32
+            # runs convert nothing.
             delta = delta.scatter_add(
-                1, targets, to_target(permanents).masked_fill(~linked, 0)
+                1,
+                targets,
+                to_target(permanents).masked_fill(~linked, 0).to(delta.dtype),
             )
             delta[:, start : start + links.shape[1]] += from_target(
                 objects.gather(1, targets)
@@ -707,6 +735,16 @@ class ActorCritic(nn.Module):
             ids.extend(events[..., column][valid == 1] for column in (2, 7))
         if self.continuation is not None:
             ids.append(obs["relations"][..., [5, 23]])
+        if self.semantic_cards.records:
+            # Catalog fact and effect sources read their definitions' rows.
+            if self.facts is not None:
+                facts = obs["facts"]
+                ids.append(
+                    facts[..., FACT_SOURCE_INDEX][facts[..., FACT_VALID_INDEX] == 1]
+                )
+            if self.shared_effects is not None:
+                effects = obs["effects"]
+                ids.append(effects[..., 11][effects[..., 17] == 1])
         if self.name_candidates is not None:
             # Names share the same program table as objects. Only legal naming
             # rows widen the learner's support to the complete naming catalog.

@@ -125,7 +125,6 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
                 token_name: "Ally".to_string(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
-                attach_source: false,
             }],
         },
     );

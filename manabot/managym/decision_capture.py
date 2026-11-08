@@ -14,6 +14,7 @@ from managym.decision import Observation
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     SkipValidation,
     ValidationInfo,
     field_validator,
@@ -101,6 +102,7 @@ class Continuation(CaptureModel):
     reserved_sacrifice: DecisionObject | None
     mana_cost: str | None
     chosen_mode: int | None
+    pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
 
 
 class ObjectLink(CaptureModel):

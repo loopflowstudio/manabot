@@ -14,6 +14,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training import execution
+from manabot.training.decks import UniformDecks
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -26,6 +27,7 @@ from manabot.training.regime import (
 from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
+from managym import Deck
 from tests.training.test_recovery import tracked_updates
 
 
@@ -192,6 +194,37 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     for key, value in admitted.optimizer["state"].items():
         assert final["state"][key]["step"].item() > value["step"].item()
     assert parent_export.read_bytes() == frozen
+
+
+def test_a_deck_source_run_continues_from_its_final_exports(tmp_path: Path) -> None:
+    """A per-game roster has no match; the parent export is admitted for its decks."""
+    regime = recipe(2).model_copy(
+        update={
+            "match": None,
+            "deck_source": UniformDecks(
+                decks=tuple(
+                    Deck({name: 10}, {"Forest": 1}) for name in ("Plains", "Mountain")
+                )
+            ),
+            "agent": ModelConfig(
+                hidden_dim=8,
+                num_attention_heads=2,
+                value_kind="categorical_wdl",
+                world=managym.WORLD_SETUP,
+            ),
+        }
+    )
+    regime = TrainingRegime.model_validate(regime.model_dump(mode="json"))
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        parent = execution.execute_regime(regime, 197, tmp_path / "parent", store)
+        child = execution.execute_regime(
+            continuation(parent, tmp_path / "parent/run.json", 3),
+            197,
+            tmp_path / "child",
+            store,
+        )
+    assert parent.status == child.status == "completed"
+    assert child.updates_through() == 3
 
 
 @pytest.mark.parametrize(

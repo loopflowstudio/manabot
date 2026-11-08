@@ -20,7 +20,9 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardDefId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum CardType {
     Creature,
     Instant,
@@ -431,10 +433,8 @@ pub enum Restriction {
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
-/// This is intentionally not a general replacement language. The event
-/// pipeline applies matching definitions once in deterministic source order;
-/// unsupported affected-player ordering choices are documented alongside the
-/// pipeline.
+/// The event pipeline rechecks applicability after each replacement and retains
+/// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
     /// Prevent `amount` damage that would be dealt to this permanent's
@@ -467,6 +467,21 @@ pub enum ReplacementEffect {
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
     UnspentManaBecomesRed,
+    /// Replace a positive placement on a matching permanent you control with
+    /// `count * multiplier + additional` counters. Entry counters are placements
+    /// too (CR 122.6). `None` matches every counter kind.
+    ModifyCounters {
+        /// Only placements caused by effects, including replacement effects
+        /// applied to an original cost or turn action (CR 614.16).
+        effects_only: bool,
+        kind: Option<CounterKind>,
+        predicate: CardPredicate,
+        multiplier: i32,
+        additional: i32,
+    },
+    /// Replace a logical creation under your control, before any token enters
+    /// (CR 616.1g). Entry and copy terms belong to every resulting token.
+    MultiplyTokens { multiplier: i32 },
 }
 
 impl ActivatedAbilityDefinition {
@@ -998,6 +1013,16 @@ impl Card {
         self.front.is_some()
     }
 
+    /// The front face's row while the back face is up.
+    pub fn front_face(&self) -> Option<&(CardDefId, Arc<CardDefinition>)> {
+        self.front.as_ref()
+    }
+
+    /// Carry a copied object's front face, keeping its mana value (CR 712.8).
+    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<CardDefinition>)>) {
+        self.front = front;
+    }
+
     /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
     pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
         let front = (self.definition_id, Arc::clone(&self.definition));
@@ -1029,6 +1054,11 @@ impl Card {
             }
             self.copy = Some(copy);
         }
+    }
+
+    /// Snapshot the current copiable face without copying its ability programs.
+    pub fn copiable_definition(&self) -> Arc<CardDefinition> {
+        Arc::clone(&self.definition)
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {
@@ -1068,7 +1098,7 @@ impl Card {
             return None;
         }
         self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::AttachSourceTo { target } => Some(target),
+            Effect::AttachSourceTo { what } => what.target_spec(),
             _ => None,
         })
     }

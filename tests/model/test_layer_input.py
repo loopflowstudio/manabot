@@ -58,7 +58,7 @@ def test_v8_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -
     try:
         model = ActorCritic(space, recipe.agent)
         batch = collector.collect(model, 1)
-        assert batch.obs["effect_details"].shape == (1, 1, 4096, 3)
+        assert batch.ordered_obs()["effect_details"].shape == (1, 1, 4096, 3)
         assert batch.actions.size == 1
         path = tmp_path / "explicit-v8.pt"
         save_checkpoint(

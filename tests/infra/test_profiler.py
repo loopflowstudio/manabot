@@ -67,6 +67,22 @@ def test_labels_nest_relative_to_the_running_node(clock: Clock) -> None:
                 pass
 
 
+def test_recorded_intervals_nest_below_the_running_node(clock: Clock) -> None:
+    profiler = Profiler(enabled=True)
+    with profiler.track("step"):
+        clock.advance(3)
+        profiler.record("native", 1.0)
+        profiler.record("native", 0.5)
+    stats = profiler.get_stats()
+    assert stats["step"]["total_time"] == pytest.approx(3)
+    assert stats["step/native"]["total_time"] == pytest.approx(1.5)
+    assert stats["step/native"]["count"] == 2
+
+    disabled = Profiler(enabled=False)
+    disabled.record("native", 1.0)
+    assert disabled.get_stats() == {}
+
+
 def test_hierarchy_percentages(clock: Clock) -> None:
     profiler = Profiler(enabled=True)
     with profiler.track("group1"):

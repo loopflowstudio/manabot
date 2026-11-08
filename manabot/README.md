@@ -416,6 +416,23 @@ or caching trainable outputs across updates. Completed states return to their
 original definition rows. These counts describe representation cost, not
 observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
+On explicit inputs v8 and v9, fresh models (`ModelConfig.record_vocabulary`,
+default `catalog`) embed fact and shared-effect ids through the same token
+embedding. Native `learning_record_names` lists every counter kind, color,
+subtype, keyword, modification, set name and combat restriction the encoders
+hash. Each reads the row of the card token for the same concept (a granted
+`flying` and a printed `Keyword::flying` share one row) or a row appended after
+the card tokens. Captured program tokens read their card-token rows; integers
+and booleans read one row per kind plus their exact value. Fact and effect
+sources read the card encoder's row for that definition, and ability or frame
+ordinals are numbers. An id outside the vocabulary fails. V8+ world checkpoints
+that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
+(elsewhere both values build the same model and omission reads as the default): 4096
+learned rows per id column, which held 80% of a w64 L2 v9 model (1,958,402
+parameters; 412,482 with catalog ids) and 42% at w160 L8 h8 (9,470,402;
+5,605,602). Inputs before v8 and models without a world keep only the hashed
+layout.
+
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's
 content digest and complete native coverage before joining transport IDs. A

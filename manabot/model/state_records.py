@@ -8,6 +8,8 @@ TypedContinuationEncoder separates frame headers from their variable-length
 edge lists, uses parent handles only as joins, and pools stack, execution and
 trigger frames separately over the relation layout shared by v5–v7. Pool and
 GRU treatments read identical fields; neither retains temporal state.
+Frozen inputs retain their original admission limits. Explicit v8 adds retained
+execution reference edges without changing the encoder's parameter shapes.
 """
 
 import torch
@@ -85,7 +87,9 @@ class SharedFactEncoder(nn.Module):
                 1,
             )
             encoded = self.reducer(tokens.flatten(0, 1), [5] * len(tokens))[inverse]
-            delta = torch.zeros_like(table).index_add(0, links - 1, encoded)
+            delta = torch.zeros_like(table).index_add(
+                0, links - 1, encoded.to(table.dtype)
+            )
             results[batch] = table + delta
         return torch.stack(results)
 
@@ -100,8 +104,11 @@ class TypedContinuationEncoder(nn.Module):
     cycles and dangling parents are rejected before encoding.
     """
 
-    def __init__(self, width: int, reduction: RecordReduction) -> None:
+    def __init__(
+        self, width: int, reduction: RecordReduction, *, version: int = 5
+    ) -> None:
         super().__init__()
+        self.max_relation_kind = 10 if version >= 8 else 9
         # Header values: kind/controller, mode..decline, decision, resolutions,
         # X/keywords/delayed duration; references are separate learned joins.
         self.header_columns = (3, 4, *range(7, 22), 28, 30, *range(33, 49))
@@ -139,7 +146,9 @@ class TypedContinuationEncoder(nn.Module):
         handles = record_indexes(active[:, 1], RELATION_ROWS, "frame")
         parents = record_indexes(active[:, 2], RELATION_ROWS, "parent")
         kinds = record_indexes(active[:, 3], 12, "frame kind")
-        row_kinds = record_indexes(active[:, 0], 9, "relation kind")
+        row_kinds = record_indexes(
+            active[:, 0], self.max_relation_kind, "relation kind"
+        )
         if (handles == 0).any() or (kinds == 0).any() or (row_kinds == 0).any():
             raise ValueError("live relation lacks frame or kind")
         sources = record_indexes(active[:, 6], object_count, "source object")
@@ -235,7 +244,7 @@ class TypedContinuationEncoder(nn.Module):
             header_batches * RELATION_ROWS + handles[header_indexes] - 1
         ).to(device)
         frames = objects.new_zeros((batch * RELATION_ROWS, width)).index_add(
-            0, frame_indexes, local
+            0, frame_indexes, local.to(objects.dtype)
         )
         header_parents = parents[header_indexes]
         resolved = local + self.parent(
@@ -245,12 +254,12 @@ class TypedContinuationEncoder(nn.Module):
                 header_parents,
             )
         )
-        frames = frames.index_copy(0, frame_indexes, resolved)
+        frames = frames.index_copy(0, frame_indexes, resolved.to(frames.dtype))
         header_kinds = kinds[header_indexes]
         groups = torch.where(header_kinds <= 3, 0, torch.where(header_kinds <= 6, 1, 2))
         group_indexes = (header_batches * 3 + groups).to(device)
         sums = objects.new_zeros((batch * 3, width)).index_add(
-            0, group_indexes, resolved
+            0, group_indexes, resolved.to(objects.dtype)
         )
         counts = objects.new_zeros(batch * 3).index_add(
             0, group_indexes, objects.new_ones(len(resolved))

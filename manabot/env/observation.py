@@ -15,7 +15,9 @@ Additional updates in this version:
   is_valid flag.
 """
 
-from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
+from collections import Counter
+from collections.abc import Sequence
+from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
 
@@ -195,6 +197,17 @@ def _timestamp_ranks(
         for timestamp in perm.keyword_counter_timestamps.values()
     )
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
+
+
+def _card_rows(cards: Sequence[Any], sideboard: int) -> str:
+    """Where a seat's card rows sit, for a capacity failure's retained text."""
+    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in cards)
+    tokens = Counter(card.name for card in cards if card.is_token)
+    parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
+    parts.append(f"sideboard {sideboard}")
+    parts.append(f"tokens {sum(tokens.values())}")
+    parts.extend(f"{name} {count}" for name, count in tokens.most_common(3))
+    return ", ".join(parts)
 
 
 class ObservationEncoder:
@@ -422,7 +435,9 @@ class ObservationEncoder:
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:
             raise ValueError(
-                "observation capacity exceeded: agent_cards plus sideboard"
+                "observation capacity exceeded: agent_cards plus sideboard "
+                f"{start + len(outside)} > {self.cards_per_player} "
+                f"({_card_rows(obs.agent_cards, len(outside))})"
             )
         for offset, card in enumerate(outside):
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
@@ -581,16 +596,20 @@ class ObservationEncoder:
                 )
 
         for index, frame in enumerate(obs.continuation):
-            for ordinal, (kind, value) in enumerate(frame.program):
-                push(
-                    obs.agent.id
-                    if frame.controller == obs.agent.player_index
-                    else obs.opponent.id,
-                    FACT_CONTINUATION_PROGRAM,
-                    index + 1,
-                    (float(kind), float(ordinal)),
-                    detail=value,
-                )
+            programs = [frame.program]
+            if self.config.policy_input_version >= 8:
+                programs.append(frame.effect_execution)
+            for program in programs:
+                for ordinal, (kind, value) in enumerate(program):
+                    push(
+                        obs.agent.id
+                        if frame.controller == obs.agent.player_index
+                        else obs.opponent.id,
+                        FACT_CONTINUATION_PROGRAM,
+                        index + 1,
+                        (float(kind), float(ordinal)),
+                        detail=value,
+                    )
             if frame.attackers is not None:
                 push(
                     obs.agent.id
@@ -717,7 +736,18 @@ class ObservationEncoder:
                 row[12:19] = frame.cost
             row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
             row[30] = frame.resolutions_this_turn
-            row[28] = frame.decision
+            if (
+                self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+            ):
+                row[7] = 0.0
+                row[21] = 0.0
+            row[28] = (
+                frame.legacy_decision
+                if self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+                else frame.decision
+            )
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
@@ -744,6 +774,12 @@ class ObservationEncoder:
                     context_row[0], context_row[22], context_row[29] = kind, 1, 1
                     _reference(context_row, reference)
                     rows.append(context_row)
+            if self.config.policy_input_version >= 8:
+                for ordinal, reference in enumerate(frame.effect_execution_references, 1):
+                    retained = row.copy()
+                    retained[0], retained[22], retained[29] = 10, 1, ordinal
+                    _reference(retained, reference)
+                    rows.append(retained)
             if self.shows_everything and frame.inherited_from is not None:
                 inherited = row.copy()
                 inherited[0], inherited[22], inherited[29] = 7, 1, 1

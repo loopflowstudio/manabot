@@ -169,3 +169,12 @@ completed v7 study, report adapter and encoder speedups, preserving the negative
 result, frozen evidence and defaults. No further experiments or spending are
 selected. Verify the merged report and implementation before reconciling Task
 completion; temporal memory remains a proposed separate outcome.
+
+## Sync resolution — 2026-11-08
+
+Assumption (reversible): retain main's Etude 0.2.15 release pin rather than
+restore this completed study's older Git dependency. Main commit 66ccc881e
+records that the launcher database and Checkpoint.wall_ms require the newer
+SDK. Frozen study source, lock and receipt bytes remain in their original
+commits. Combine batched encoders with catalog vocabulary, v8 execution edges
+and dtype-safe accumulation; retain both sets of experiment discovery entries.

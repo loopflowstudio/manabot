@@ -5,6 +5,10 @@ existing unnormalized fact-sum convention: repeated memberships contribute
 repeatedly. A mean would erase multiplicity. This learned sum is compression,
 not an injective semantic representation; tensor transport retains the records.
 V8 adds ordered program tokens; v7 retains its original reducer and embeddings.
+
+`hashed` ids (every frozen model) hash modifications, details and sources into
+4096 learned rows each; `catalog` ids (v8 onward) read the card encoder's
+token rows and its row for the source definition, as fact rows do.
 """
 
 import torch
@@ -18,6 +22,7 @@ from manabot.env.shared_effects import (
     MEMBER_ROWS,
     shared_effect_shapes,
 )
+from manabot.model.facts import RecordVocabulary
 from manabot.model.records import (
     RecordReducer,
     RecordReduction,
@@ -26,21 +31,32 @@ from manabot.model.records import (
     program_number,
     record_indexes,
 )
+from manabot.model.semantic_cards import RecordEmbeddings, RecordNamespace
 
 
 class SharedEffectEncoder(nn.Module):
     def __init__(
-        self, width: int, reduction: RecordReduction = "typed_pool", *, version: int = 7
+        self,
+        width: int,
+        reduction: RecordReduction = "typed_pool",
+        *,
+        version: int = 7,
+        vocabulary: RecordVocabulary = "hashed",
     ) -> None:
         super().__init__()
-        self.modification = nn.Embedding(4096, width)
-        self.detail = nn.Embedding(4096, width)
+        if vocabulary == "catalog" and version < 8:
+            raise ValueError("catalog effect ids require policy input v8")
+        self.vocabulary = vocabulary
+        if vocabulary == "hashed":
+            self.modification = nn.Embedding(4096, width)
+            self.detail = nn.Embedding(4096, width)
         self.version = version
         self.detail_rows = shared_effect_shapes(version)["effect_details"][0]
         self.detail_kind = nn.Embedding(20 if version >= 8 else 4, width)
         if version >= 8:
             self.detail_number = nn.Linear(1, width)
-        self.source = nn.Embedding(4096, width)
+        if vocabulary == "hashed":
+            self.source = nn.Embedding(4096, width)
         self.header = nn.Linear(8 + 2 * width, width)
         self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
 
@@ -50,7 +66,13 @@ class SharedEffectEncoder(nn.Module):
         details: torch.Tensor,
         members: torch.Tensor,
         objects: torch.Tensor,
+        catalog: RecordEmbeddings | None = None,
     ) -> torch.Tensor:
+        """Catalog ids need `catalog`; hashed ids ignore it."""
+        if self.vocabulary == "hashed":
+            catalog = None
+        elif catalog is None:
+            raise ValueError("catalog effect ids require the card encoder")
         # One metadata transfer admits the entire batch. Numerical features and
         # object joins below still read the original tensors, retaining gradients.
         host = masked_record_rows(headers.detach().cpu(), EFFECT_ROWS, EFFECT_DIM, 17)
@@ -141,14 +163,26 @@ class SharedEffectEncoder(nn.Module):
             objects, batches[:, None], links
         ).unbind(1)
         header = self.header(torch.cat((numeric, controller, source_object), -1))
-        mod = self.modification(
-            (((halves[:, 0] << 16) | halves[:, 1]) % 4096).to(device)
-        )
-        sources = self.source((source % 4096).to(device))
-        unsigned = (ids[:, 0] << 16) | ids[:, 1]
-        detail_tokens = self.detail((unsigned % 4096).to(device)) + self.detail_kind(
-            kinds.to(device)
-        )
+        modification = ((halves[:, 0] << 16) | halves[:, 1]).to(device)
+        source = source.to(device)
+        if catalog is None:
+            mod = self.modification(modification % 4096)
+            sources = self.source(source % 4096)
+        else:
+            mod = catalog.names(RecordNamespace.TOKEN, modification)
+            sources = catalog.sources(source)
+        unsigned = ((ids[:, 0] << 16) | ids[:, 1]).to(device)
+        kinds = kinds.to(device)
+        if catalog is None:
+            detail = self.detail(unsigned % 4096)
+        else:
+            # Kinds 1-3 name a keyword, subtype or color; 11-19 carry
+            # a learning token of kind 1-9.
+            program = kinds > 10
+            detail = mod.new_zeros((len(kinds), mod.shape[-1]))
+            detail[~program] = catalog.names(RecordNamespace.TOKEN, unsigned[~program])
+            detail[program] = catalog.tokens(kinds[program] - 10, unsigned[program])
+        detail_tokens = detail + self.detail_kind(kinds)
         if self.version >= 8:
             # Integer/boolean tokens retain signed numeric meaning;
             # the GRU retains the ordered shared program structure.
@@ -172,5 +206,5 @@ class SharedEffectEncoder(nn.Module):
         routes = (member_batches * object_count + targets - 1).to(device)
         repeated = encoded[torch.tensor(member_records, device=device)]
         table = objects.reshape(-1, width)
-        delta = torch.zeros_like(table).index_add(0, routes, repeated)
+        delta = torch.zeros_like(table).index_add(0, routes, repeated.to(table.dtype))
         return objects + delta.reshape_as(objects)

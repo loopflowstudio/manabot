@@ -17,63 +17,24 @@ use crate::{
 };
 
 impl Game {
-    pub(crate) fn apply_player_damage(
-        &mut self,
-        source: Option<ObjectRef>,
-        player: PlayerId,
-        amount: i32,
-    ) {
-        self.apply_proposed_event(ProposedEvent::Damage {
-            source,
-            target: ProposedDamageTarget::Player(player),
-            amount,
-            combat: false,
-        });
-    }
-
-    pub(crate) fn apply_permanent_damage(
-        &mut self,
-        source: Option<ObjectRef>,
-        permanent_id: PermanentId,
-        amount: i32,
-    ) {
-        let Some(target) = self.permanent_object_ref(permanent_id) else {
-            return;
-        };
-        self.apply_proposed_event(ProposedEvent::Damage {
-            source,
-            target: ProposedDamageTarget::Object(target),
-            amount,
-            combat: false,
-        });
-    }
-
-    /// Deal noncombat damage to a creature and return the excess damage
-    /// actually dealt (CR 120.4a): the damage marked beyond lethal damage,
-    /// which counts damage already marked (CR 120.6) and is 1 from a
-    /// deathtouch source (CR 702.2c). Replacements apply first, so prevented
-    /// damage is never excess.
-    pub(crate) fn apply_creature_damage_measuring_excess(
-        &mut self,
+    /// Excess after replacement, measured against the pre-commit creature.
+    /// Deathtouch makes one remaining damage lethal (CR 120.4a).
+    pub(crate) fn excess_for_damage(
+        &self,
         source: Option<ObjectRef>,
         permanent_id: PermanentId,
         amount: i32,
     ) -> i32 {
-        let marked = |game: &Self| {
-            game.state.permanents[permanent_id]
-                .as_ref()
-                .map(|permanent| permanent.damage)
-        };
-        let Some(before) = marked(self) else {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return 0;
         };
-        if !self.characteristics(permanent_id).is_creature() {
-            self.apply_permanent_damage(source, permanent_id, amount);
+        let characteristics = self.characteristics(permanent_id);
+        if !characteristics.is_creature() {
             return 0;
         }
-        let remaining = (self.characteristics(permanent_id).toughness - before).max(0);
-        let deathtouch = source.is_some_and(|object_ref| {
-            self.source_keywords(object_ref)
+        let remaining = (characteristics.toughness - permanent.damage).max(0);
+        let deathtouch = source.is_some_and(|object| {
+            self.source_keywords(object)
                 .is_some_and(|keywords| keywords.has(Keyword::Deathtouch))
         });
         let lethal = if deathtouch {
@@ -81,41 +42,7 @@ impl Game {
         } else {
             remaining
         };
-        self.apply_permanent_damage(source, permanent_id, amount);
-        let dealt = marked(self).unwrap_or(before) - before;
-        (dealt - lethal).max(0)
-    }
-
-    /// Whether any damage was dealt (prevention may leave none).
-    pub(crate) fn apply_combat_player_damage(
-        &mut self,
-        source: Option<ObjectRef>,
-        player: PlayerId,
-        amount: i32,
-    ) -> bool {
-        self.apply_proposed_event(ProposedEvent::Damage {
-            source,
-            target: ProposedDamageTarget::Player(player),
-            amount,
-            combat: true,
-        })
-    }
-
-    pub(crate) fn apply_combat_permanent_damage(
-        &mut self,
-        source: Option<ObjectRef>,
-        permanent_id: PermanentId,
-        amount: i32,
-    ) {
-        let Some(target) = self.permanent_object_ref(permanent_id) else {
-            return;
-        };
-        self.apply_proposed_event(ProposedEvent::Damage {
-            source,
-            target: ProposedDamageTarget::Object(target),
-            amount,
-            combat: true,
-        });
+        (amount - lethal).max(0)
     }
 
     pub(crate) fn commit_damage(
@@ -188,10 +115,10 @@ impl Game {
                     permanent.dealt_damage_this_turn = true;
                 }
                 if view.types.is_planeswalker() {
-                    self.change_counters(permanent_id, CounterKind::Loyalty, -amount);
+                    self.commit_counter_change(object_ref, CounterKind::Loyalty, -amount, None);
                 }
                 if view.types.is_battle() {
-                    self.change_counters(permanent_id, CounterKind::Defense, -amount);
+                    self.commit_counter_change(object_ref, CounterKind::Defense, -amount, None);
                 }
                 self.emit(GameEvent::DamageDealt {
                     source: source_card,
@@ -209,13 +136,13 @@ impl Game {
         }
 
         if let Some(controller) = lifelink_controller {
-            self.change_life(controller, amount);
+            self.commit_life_change(controller, amount);
         }
         true
     }
 
     pub(crate) fn change_life(&mut self, player: PlayerId, delta: i32) -> bool {
-        self.apply_proposed_event(ProposedEvent::LifeChange { player, delta })
+        self.apply_immediate_event(ProposedEvent::LifeChange { player, delta })
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {

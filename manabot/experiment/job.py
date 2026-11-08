@@ -24,6 +24,8 @@ A segment ends before its wall budget rather than at it: the stage stops at an
 update boundary once another update plus `stop_reserve_seconds` no longer fits,
 exports raw/EMA/Adam and ends `paused`. That paused segment is a successful
 attempt reporting the update it reached, and its successor continues normally.
+A launcher's SIGTERM ends the attempt `interrupted`, recording the run as failed
+at its last export.
 
 A job's runs track under its `experiment`, the experiment file's stem
 (`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
@@ -36,7 +38,9 @@ import json
 import math
 import os
 from pathlib import Path
+import signal
 import time
+from types import FrameType
 
 from etude.launch.records import Input, Job
 from etude.run.storage import SAFE_NAME
@@ -137,15 +141,23 @@ TOOLCHAIN_ENV = (
 def machine_setup(extras: str) -> str:
     """Setup script installing the pinned Rust toolchain and locked venv.
 
-    `extras` is appended verbatim to `uv sync` (e.g. `" --extra dev"`).
+    `extras` is appended verbatim to `uv sync` (e.g. `" --extra dev"`). Etude runs
+    setup once per attempt, and attempts sharing a machine share `$HOME/.cargo`, so
+    a `flock` serializes the toolchain install. `uv sync` stays outside it: each
+    attempt has its own source directory, and uv and cargo lock their own caches.
+    Linux machines supply `flock`; macOS has none, so a local attempt installs
+    unserialized.
     """
     return (
         "set -eu\n"
+        "{\n"
+        "if command -v flock >/dev/null; then flock 9; fi\n"
         'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
         "https://sh.rustup.rs | sh -s -- -y --profile minimal "
         f"--default-toolchain {RUST_TOOLCHAIN}\n"
         f"{TOOLCHAIN_ENV}\n"
         f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
+        '} 9>"$HOME/.manabot-rust-setup.lock"\n'
         f"uv sync --locked --python 3.12{extras}\n"
     )
 
@@ -396,5 +408,14 @@ def run_worker() -> TrainingRun:
     return run
 
 
+def _interrupt(signum: int, frame: FrameType | None) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 if __name__ == "__main__":
+    # Etude ends an attempt with SIGTERM, within 0.1 s of a cancellation and well
+    # before training polls its stop file. Unhandled, it kills the process with
+    # no end state, so the run reads as running for good. KeyboardInterrupt
+    # because game-error isolation catches Exception.
+    signal.signal(signal.SIGTERM, _interrupt)
     run_worker()

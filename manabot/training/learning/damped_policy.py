@@ -28,7 +28,7 @@ from manabot.model.policy_distribution import (
 from manabot.training.learning.health import OptimizerHealth, batch_health
 from manabot.training.learning.learner import Learner, observation_tensors
 from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.returns import reverse_waves, transition_gae
 from manabot.training.learning.selection import (
     UpdateDiagnostics,
     selected_mean,
@@ -135,17 +135,22 @@ def categorical_lambda_returns(
     ends = ends.bool()
     if (rewards[~ends] != 0).any():
         raise ValueError("nonterminal outcome reward must be zero")
-    targets = torch.empty_like(probabilities)
-    tail = bootstrap
-    for step in reversed(range(len(rewards))):
-        next_prediction = (
-            bootstrap if step == len(rewards) - 1 else probabilities[step + 1]
+    # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
+    host_probabilities = probabilities.cpu()
+    host_ends = ends.cpu()
+    last_row = bootstrap.cpu()[None]
+    following = torch.cat([host_probabilities[1:], last_row])
+    terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
+    # The extra row is the trace past each column's last row.
+    targets = torch.cat([torch.empty_like(host_probabilities), last_row])
+    for steps, columns in reverse_waves(host_ends):
+        continuation = (1 - trace_lambda) * following[
+            steps, columns
+        ] + trace_lambda * targets[steps + 1, columns]
+        targets[steps, columns] = torch.where(
+            host_ends[steps, columns, None], terminal[steps, columns], continuation
         )
-        continuation = (1 - trace_lambda) * next_prediction + trace_lambda * tail
-        terminal = F.one_hot((rewards[step] + 1).long(), 3).to(probabilities.dtype)
-        tail = torch.where(ends[step, :, None], terminal, continuation)
-        targets[step] = tail
-    return targets
+    return targets[:-1].to(probabilities.device)
 
 
 @dataclass(frozen=True)
@@ -169,7 +174,9 @@ def _targets(
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
     next_obs = observation_tensors(batch.next_obs, device)
-    _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    with learner.forward_precision():
+        _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    next_raw = next_raw.float()
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
     if learner.agent.config.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
@@ -317,7 +324,9 @@ def update_damped_iteration(
                 obs = observation_tensors(rows.observation, device)
                 valid = legal_mask(obs["actions_valid"])
                 behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
-                logits, value_logits = learner.agent.forward_distribution(obs)
+                with learner.forward_precision():
+                    logits, value_logits = learner.agent.forward_distribution(obs)
+                logits, value_logits = logits.float(), value_logits.float()
                 reference = reference_distribution(obs, learning.reference)
                 policy_loss = damped_policy_loss(
                     logits,
