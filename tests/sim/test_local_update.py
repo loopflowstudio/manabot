@@ -41,7 +41,9 @@ def small_match() -> MatchConfig:
     )
 
 
-def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
+def make_teacher(
+    tmp_path: Path, *, config: LocalSearchConfig | None = None
+) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
@@ -58,7 +60,8 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     teacher = LocalUpdateTeacher(
         path,
         file_sha256(path),
-        LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
+        config
+        or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
     env = Env(
         match, space, Reward(RewardConfig()), auto_reset=False, enable_profiler=False

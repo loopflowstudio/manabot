@@ -209,9 +209,9 @@ These exist and run, and none of them is on the training path today.
   `LocalUpdateTeacher` is the current search-improvement code: for one
   checkpoint it maximizes `Σ p(a)Q(a) − α KL(p‖uniform) − β KL(p‖base)` over
   rolled-out worlds, following Ataraxos supplement S3.7, and retains a
-  replayable receipt. Worlds come from the compatible-deal prior, a learned
-  sampler, or the small exact tracker. None has shown a strength gain over the
-  policy alone.
+  replayable receipt ([local-update usage](manabot/README.md#local-update-search)).
+  Worlds come from the compatible-deal prior, a learned sampler, or the small
+  exact tracker. None has shown a strength gain over the policy alone.
 - **Beliefs** (`manabot/belief`). `managym/src/possible_worlds.rs` owns the
   hidden-hand domain; `manabot.belief` puts probability on it: `BeliefState`
   over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the

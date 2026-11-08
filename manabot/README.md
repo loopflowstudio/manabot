@@ -116,6 +116,72 @@ Local Etude evaluation needs an explicit directory for the pilot's replay eviden
 ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v10.py --source r2://manabot/jobs
 ```
 
+## Local-update search
+
+Construct a search player around an admitted local checkpoint:
+
+```python
+from pathlib import Path
+
+from manabot.infra.identity import file_sha256
+from manabot.sim.search.flat_mc import make_player
+
+checkpoint = Path(".runs/policy.pt")  # Your existing compatible checkpoint.
+player, observation_space = make_player(
+    {
+        "kind": "local_update",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": file_sha256(checkpoint),
+        "config": {"worlds": 16, "depth": 20, "decision_seconds": 30},
+    },
+    seed=42,
+)
+```
+
+This constructs a `LocalUpdatePlayer` and its checkpoint's observation space;
+it does not start a game. Use it through the simulation player lifecycle, which
+starts viewer history and advances it after each transition. The checkpoint
+must match the match's world, use observation-only inputs, and supply either a
+categorical win/draw/loss value or a scalar declared as `signed_outcome`.
+Search requires open decklists.
+
+At each decision, search samples 16 worlds and rolls out every root action with
+positive base-policy probability in each world, for up to 20 policy choices
+including the root action. Native trivial-decision skipping remains enabled.
+All live branches advance together: after each step, branches needing a policy
+and value share one network forward. Finished games leave the batch. Each
+branch retains its own random stream and uses only its acting player's
+observation. Terminal wins, losses and draws score +1, −1 and 0 for the root
+player; unfinished leaves use the critic value, sign-flipped when the leaf's
+actor is the other player.
+
+Batching is automatic; `worlds` and `depth` still control search work. Defaults
+are one world, depth two and a one-second decision budget. Sampling defaults to
+`compatible_prior`; `full_probability=1` uses all requested worlds. Lowering it
+selects a cheaper allocation of `min(cheap_worlds, worlds)` on the remaining
+decisions (`cheap_worlds=1` by default). The local update uses `alpha=0.02` and
+`beta=1.0` by default, retaining zero probability outside the base policy's
+support. Batching does not establish a playing-strength gain or a fixed latency.
+
+After a successful choice, `player.last_receipt` holds the target distribution,
+root-action values and per-rollout seeds, signed values, terminal flags,
+actor-observation hashes and branch audits. These are private replay evidence.
+Replay requires the original root and viewer history, checkpoint, native runtime
+and teacher source; keep their identities with the receipt. Batched float32
+inference can round slightly differently from singleton inference. Rollout seeds
+remain independent, but a probability at a sampling threshold can turn that
+rounding into a different trajectory; replay uses the retained allocation and
+implementation identity.
+
+The decision budget includes viewer-history work. Exceeding it raises
+`TimeoutError` with no target; increase `decision_seconds` or reduce `worlds` or
+`depth` before retrying. The 30-second example is an explicit budget, not a
+timing estimate. An incompatible checkpoint, incomplete legal-action encoding
+or stale history is an error, not a partial search result. Use a compatible
+checkpoint and observation space, and keep the player lifecycle current.
+[Removed compound policies](../docs/training.md#compound-decisions-removed)
+remain rejected; their historical receipts remain readable.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from

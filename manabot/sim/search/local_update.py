@@ -2,6 +2,7 @@
 
 `LocalUpdateTeacher` owns no learning state. It estimates signed root-action
 values using canonical worlds, actor-view policy rollouts and signed leaf values.
+Live branches share one policy/value forward per ply and keep independent RNGs.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -10,12 +11,12 @@ rollouts preclude an equilibrium guarantee. Receipts are private training data.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Callable, Literal, Sequence
 
 import managym._managym as native
 from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
@@ -41,7 +42,7 @@ from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.sim.search.branch import SelectedFullCloneBackend
+from manabot.sim.search.branch import BranchSession, SelectedFullCloneBackend
 from manabot.sim.search.sampling import (
     HandBatch,
     HandSample,
@@ -425,6 +426,60 @@ def local_search_source_sha256() -> str:
     return _digest({path: file_sha256(root / path) for path in paths})
 
 
+def _viewer_state_hash(branch: managym.Env, viewer: int) -> str:
+    """Retain the native viewer hash without rebuilding its unused decision frame.
+
+    The native observation already owns the canonical hash. Full semantic-model
+    parsing would serialize and parse the embedded decision a second time.
+    """
+    payload = json.loads(branch.semantic_observation_json(viewer))
+    value = payload["identity"]["viewer_state_hash"]
+    if not isinstance(value, str):
+        raise ValueError("native observation lacks a viewer-state hash")
+    return value
+
+
+@dataclass
+class _Rollout:
+    """One independently seeded branch, retained in world/action receipt order."""
+
+    branch: managym.Env
+    session: BranchSession
+    world_index: int | None
+    world_seed: int
+    action_index: int
+    rollout_seed: int
+    sampled_hand: HandSample | None
+    probabilities: FloatArray
+    policy_rng: np.random.Generator = field(init=False)
+    hashes: list[str] = field(default_factory=list)
+    value: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.policy_rng = np.random.default_rng(self.rollout_seed)
+
+    def receipt(self, viewer: int) -> RolloutReceipt:
+        terminal = bool(self.branch.is_game_over())
+        value = self.value
+        if terminal:
+            winner = self.branch.winner_index()
+            value = 0.0 if winner is None else (1.0 if winner == viewer else -1.0)
+        elif int(self.branch.current_agent_index()) != viewer:
+            value = -value
+        return RolloutReceipt(
+            canonical_commands=len(self.hashes),
+            world_index=self.world_index,
+            sampled_hand=self.sampled_hand,
+            world_seed=self.world_seed,
+            action_index=self.action_index,
+            rollout_seed=self.rollout_seed,
+            signed_value=value,
+            terminal=terminal,
+            actor_observation_hashes=tuple(self.hashes),
+            branch_audit_json=json.dumps(self.session.snapshot(), sort_keys=True),
+        )
+
+
 class LocalUpdateTeacher:
     """One admitted policy supplies rollouts, V and the belief-generating identity."""
 
@@ -490,24 +545,86 @@ class LocalUpdateTeacher:
         self.source_sha256 = local_search_source_sha256()
 
     def predict(self, engine: managym.Env) -> tuple[FloatArray, float]:
-        actor = int(engine.current_agent_index())
-        raw = engine.observation_for_player(actor)
-        encoded = self.space.encode(raw)
-        count = len(raw.action_space.actions)
-        if int(encoded["actions_valid"].sum()) != count or count == 0:
-            raise ValueError("policy cannot represent complete legal offers")
+        return self.predict_batch([engine])[0]
+
+    def predict_batch(
+        self, engines: Sequence[managym.Env]
+    ) -> list[tuple[FloatArray, float]]:
+        """Evaluate actor views together; each row keeps its complete legal support.
+
+        Float32 matrix kernels can round differently from singleton inference.
+        Probability normalization remains float64, over each row's legal offers.
+        """
+        if not engines:
+            return []
+        encodings: list[dict[str, NDArray[np.generic]]] = []
+        counts: list[int] = []
+        for engine in engines:
+            actor = int(engine.current_agent_index())
+            raw = engine.observation_for_player(actor)
+            encoded = self.space.encode(raw)
+            count = len(raw.action_space.actions)
+            if int(encoded["actions_valid"].sum()) != count or count == 0:
+                raise ValueError("policy cannot represent complete legal offers")
+            encodings.append(encoded)
+            counts.append(count)
         tensors = {
-            key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
+            key: torch.as_tensor(np.stack([row[key] for row in encodings]))
+            for key in encodings[0]
         }
         with torch.inference_mode():
-            logits, value = self.agent(tensors)
-            probabilities = logits[0, :count].double().softmax(-1).numpy()
-        signed_value = float(value[0])
-        if not np.isfinite(signed_value):
+            logits, values = self.agent(tensors)
+            predictions = [
+                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
+                for i, count in enumerate(counts)
+            ]
+        if any(not np.isfinite(value) for _, value in predictions):
             raise ValueError("nonfinite leaf value")
-        # Scalar PPO heads are unconstrained; retain their actual estimate rather
-        # than silently turning it into a sigmoid probability or clipping it.
-        return probabilities, signed_value
+        # Scalar PPO heads are unconstrained; retain their actual signed estimate.
+        return predictions
+
+    def _run_rollouts(
+        self, rollouts: list[_Rollout], check: Callable[[], None]
+    ) -> None:
+        """Advance one Command per live branch, then one forward for the frontier.
+
+        The last forward supplies leaf values too. Finished branches leave the
+        frontier immediately; independent RNGs make scheduling immaterial to
+        sampling, apart from floating-point differences in batched inference.
+        """
+        live = [row for row in rollouts if not row.branch.is_game_over()]
+        for ply in range(self.config.depth):
+            pending: list[_Rollout] = []
+            for row in live:
+                check()
+                actor = int(row.branch.current_agent_index())
+                row.hashes.append(_viewer_state_hash(row.branch, actor))
+                choice = (
+                    row.action_index
+                    if ply == 0
+                    else int(
+                        row.policy_rng.choice(
+                            len(row.probabilities), p=row.probabilities
+                        )
+                    )
+                )
+                _, _, _, truncated, _ = row.session.apply_policy_choice(
+                    row.branch, site="child", policy_index=choice
+                )
+                if truncated:
+                    raise RuntimeError(
+                        "local rollout truncated before an authoritative outcome"
+                    )
+                if not row.branch.is_game_over():
+                    pending.append(row)
+            if not pending:
+                break
+            check()
+            predictions = self.predict_batch([row.branch for row in pending])
+            check()
+            for row, (probabilities, value) in zip(pending, predictions, strict=True):
+                row.probabilities, row.value = probabilities, value
+            live = pending
 
     def verify_replay(
         self,
@@ -666,9 +783,8 @@ class LocalUpdateTeacher:
         else:
             assert isinstance(belief, BeliefState)
             indexes = list(belief.sample_indexes(world_count, seed=seed))
-        sums = np.zeros(len(base), dtype=np.float64)
-        counts = np.zeros(len(base), dtype=np.int64)
-        receipts: list[RolloutReceipt] = []
+        supported_actions = [int(action) for action in np.flatnonzero(base > 0)]
+        rollouts: list[_Rollout] = []
         for sample_number, index in enumerate(indexes):
             check()
             world_seed = int(rng.integers(0, 2**63))
@@ -686,77 +802,39 @@ class LocalUpdateTeacher:
                 world = belief.space.materialize(index, seed=world_seed)
             # All root actions see the same sampled deal; subsequent decisions
             # use only their own viewer observation, never determinized truth.
-            if (
-                Observation.from_json(
-                    world.semantic_observation_json(viewer)
-                ).viewer_state_hash
-                != observation.viewer_state_hash
-            ):
+            if _viewer_state_hash(world, viewer) != observation.viewer_state_hash:
                 raise ValueError("materialization changed acting viewer information")
             world_frame = DecisionFrame.from_json(world.semantic_decision_frame_json())
             if world_frame.offers != frame.offers:
                 raise ValueError("materialization changed semantic root offers")
-            for action in np.flatnonzero(base > 0):
-                action = int(action)
+            for action in supported_actions:
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
-                policy_rng = np.random.default_rng(rollout_seed)
                 session = SelectedFullCloneBackend().open_session(
-                    match_id=f"local-{seed}-{len(receipts)}", audit=True
+                    match_id=f"local-{seed}-{len(rollouts)}", audit=True
                 )
-                branch = session.fork_exact(world, "world")
-                hashes: list[str] = []
-                probabilities, value = base, 0.0
-                for ply in range(self.config.depth):
-                    check()
-                    if branch.is_game_over():
-                        break
-                    actor = int(branch.current_agent_index())
-                    hashes.append(
-                        Observation.from_json(
-                            branch.semantic_observation_json(actor)
-                        ).viewer_state_hash
-                    )
-                    choice = (
-                        action
-                        if ply == 0
-                        else int(policy_rng.choice(len(probabilities), p=probabilities))
-                    )
-                    _, _, _, truncated, _ = session.apply_policy_choice(
-                        branch, site="child", policy_index=choice
-                    )
-                    if truncated:
-                        raise RuntimeError(
-                            "local rollout truncated before an authoritative outcome"
-                        )
-                    if not branch.is_game_over():
-                        probabilities, value = self.predict(branch)
-                terminal = bool(branch.is_game_over())
-                if terminal:
-                    winner = branch.winner_index()
-                    value = (
-                        0.0 if winner is None else (1.0 if winner == viewer else -1.0)
-                    )
-                elif int(branch.current_agent_index()) != viewer:
-                    value = -value
-                sums[action] += value
-                counts[action] += 1
-                receipts.append(
-                    RolloutReceipt(
-                        canonical_commands=len(hashes),
+                rollouts.append(
+                    _Rollout(
+                        branch=session.fork_exact(world, "world"),
+                        session=session,
                         world_index=index,
-                        sampled_hand=sampled_hand,
                         world_seed=world_seed,
                         action_index=action,
                         rollout_seed=rollout_seed,
-                        signed_value=value,
-                        terminal=terminal,
-                        actor_observation_hashes=tuple(hashes),
-                        branch_audit_json=json.dumps(
-                            session.snapshot(), sort_keys=True
-                        ),
+                        sampled_hand=sampled_hand,
+                        probabilities=base,
                     )
                 )
+        self._run_rollouts(rollouts, check)
+        sums = np.zeros(len(base), dtype=np.float64)
+        counts = np.zeros(len(base), dtype=np.int64)
+        receipts: list[RolloutReceipt] = []
+        for row in rollouts:
+            check()
+            receipt = row.receipt(viewer)
+            sums[row.action_index] += receipt.signed_value
+            counts[row.action_index] += 1
+            receipts.append(receipt)
         check()
         values = np.divide(
             sums, counts, out=np.full_like(sums, np.nan), where=counts > 0
