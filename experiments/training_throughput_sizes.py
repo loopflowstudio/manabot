@@ -33,7 +33,7 @@ from typing import Literal
 
 from etude.launch.records import Run, Variable
 
-from experiments.elemental_variants import elemental_recipe, self_play_stage, sized
+from experiments.elemental_variants import self_play_stage, sized
 from experiments.learning_signal import (
     FINALIZATION_SECONDS,
     SETUP_SECONDS,
@@ -82,19 +82,15 @@ SIZES: dict[Size, Shape] = {
 def recipe(size: Size, precision: Precision, updates: int) -> TrainingRegime:
     """The control at `size` and `precision`; w64 float32 is the control itself."""
     check = "-check" if updates == CHECK_UPDATES else ""
-    regime_id = f"elemental-throughput-{size}-{precision}{check}-v1"
-    if size == "w64":
-        regime = elemental_recipe(regime_id, updates)
-    else:
-        shape = SIZES[size]
-        regime = sized(
-            regime_id,
-            updates,
-            width=shape.width,
-            layers=shape.layers,
-            heads=shape.heads,
-            feedforward=shape.feedforward,
-        )
+    shape = SIZES[size]
+    regime = sized(
+        f"elemental-throughput-{size}-{precision}{check}-v1",
+        updates,
+        width=shape.width,
+        layers=shape.layers,
+        heads=shape.heads,
+        feedforward=shape.feedforward,
+    )
     self_play_stage(regime).execution.precision = precision
     return TrainingRegime.model_validate(regime.model_dump())
 
@@ -114,22 +110,22 @@ class Leg:
         return f"{self.gpu}-{self.size}-k{self.packed}-{self.precision}{suffix}"
 
 
+def _leg(gpu: Gpu, size: Size, packed: Literal[1, 2, 4], precision: Precision) -> Leg:
+    # The third GPU's solo w160l8 cells are the learning-metrics check.
+    check = (gpu, size, packed) == ("fast", "w160l8", 1)
+    return Leg(gpu, size, packed, precision, CHECK_UPDATES if check else SPEED_UPDATES)
+
+
 def _legs() -> dict[str, Leg]:
     legs: list[Leg] = []
     for gpu in ("a4000", "l4", "fast"):
         # A4000's w64 comes from step 2 and L4's from step 1.
         if gpu == "fast":
-            legs += [Leg(gpu, "w64", k, "float32") for k in (1, 4)]
+            legs += [_leg(gpu, "w64", k, "float32") for k in (1, 4)]
         for size in ("w128l4", "w160l8", "a384l8"):
-            legs += [Leg(gpu, size, k, "float32") for k in (1, 2, 4)]
+            legs += [_leg(gpu, size, k, "float32") for k in (1, 2, 4)]
         for size in ("w160l8", "a384l8"):
-            legs += [Leg(gpu, size, 1, p) for p in ("tf32", "bf16")]
-    legs = [
-        Leg(leg.gpu, leg.size, 1, leg.precision, CHECK_UPDATES)
-        if (leg.gpu, leg.size, leg.packed) == ("fast", "w160l8", 1)
-        else leg
-        for leg in legs
-    ]
+            legs += [_leg(gpu, size, 1, p) for p in ("tf32", "bf16")]
     legs.append(Leg("fast", "w160l8", 1, "float32", CHECK_UPDATES, repeat=True))
     return {leg.name: leg for leg in legs}
 
