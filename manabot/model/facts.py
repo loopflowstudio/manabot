@@ -174,7 +174,9 @@ class FactEncoder(nn.Module):
             pack_sequence(list(tokens.split(lengths)), enforce_sorted=False)
         )
         sequence = torch.cat(unpack_sequence(packed))
-        return hidden.masked_scatter(program.unsqueeze(-1), tokens + sequence)
+        return hidden.masked_scatter(
+            program.unsqueeze(-1), (tokens + sequence).to(hidden.dtype)
+        )
 
     def _catalog_ids(
         self, facts: torch.Tensor, kinds: torch.Tensor, catalog: RecordEmbeddings
@@ -202,7 +204,9 @@ class FactEncoder(nn.Module):
         )
 
         def scatter(mask: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
-            return zeros.index_put(torch.nonzero(mask, as_tuple=True), rows)
+            return zeros.index_put(
+                torch.nonzero(mask, as_tuple=True), rows.to(zeros.dtype)
+            )
 
         return (
             scatter(named, catalog.names(id_space[named], ident[named]))
@@ -281,6 +285,6 @@ class FactEncoder(nn.Module):
             .expand(-1, -1, objects.shape[-1])
         )
         delta = torch.zeros_like(objects).scatter_add(
-            1, targets, encoded.masked_fill(~linked, 0)
+            1, targets, encoded.masked_fill(~linked, 0).to(objects.dtype)
         )
         return objects + delta

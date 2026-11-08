@@ -50,7 +50,8 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.regime import BatchClosure
+from manabot.training.precision import forward_precision
+from manabot.training.regime import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.matchups import (
     Curriculum,
@@ -344,6 +345,7 @@ class SeatRoutedCollector:
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
+        precision: Precision = "float32",
     ) -> None:
         # The source's identity is fixed for the collector; every snapshot and
         # game attempt records it, so hash it once.
@@ -401,6 +403,7 @@ class SeatRoutedCollector:
         self.games_per_stream = games_per_stream
         self.opponent_agent = opponent_agent
         self.device = torch.device(device)
+        self.precision: Precision = precision
         self.stats = CollectorStats()
         if game_errors is not None and (
             record_attempt is None
@@ -642,7 +645,9 @@ class SeatRoutedCollector:
         if self.opponent_mode == "self":
             obs = self._slice_obs_tensors(rows, inference)
             with torch.inference_mode():
-                logits, _ = agent.forward(obs)
+                with forward_precision(self.precision, self.device):
+                    logits, _ = agent.forward(obs)
+                logits = logits.float()
                 probs = self._policy_logs(logits, obs).exp()
                 actions = torch.multinomial(probs, 1, generator=self._self_rng).squeeze(
                     -1
@@ -1149,13 +1154,16 @@ class SeatRoutedCollector:
         with self.profiler.track("Policy inference and action selection"):
             with torch.no_grad():
                 outcomes: np.ndarray | None = None
+                with forward_precision(self.precision, self.device):
+                    if agent.config.value_kind == "categorical_wdl":
+                        logits, value_t = agent.forward_distribution(obs_t)
+                    else:
+                        logits, value_t = agent(obs_t)
+                logits, value_t = logits.float(), value_t.float()
                 if agent.config.value_kind == "categorical_wdl":
-                    logits, outcome_logits = agent.forward_distribution(obs_t)
-                    outcome_t = outcome_logits.softmax(dim=-1)
+                    outcome_t = value_t.softmax(dim=-1)
                     value_t = outcome_t[:, 2] - outcome_t[:, 0]
                     outcomes = outcome_t.cpu().numpy()
-                else:
-                    logits, value_t = agent(obs_t)
                 logs = self._policy_logs(logits, obs_t)
                 require(
                     torch.isfinite(value_t),
