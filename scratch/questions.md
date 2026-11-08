@@ -153,3 +153,19 @@ it verifies monitor receipts and supplies read-side grouping without changing
 frozen declarations or running new games. Detailed training telemetry remains
 available for only five learners and is explicitly labeled. Study merge and
 further spending remain unapproved.
+
+Jack Heart, 2026-11-06: "lg2m" confirms approval of the corrected report after
+clarification of "ilg2m". The operator acknowledged this as report approval.
+PR421's current checks are green and GitHub reports it mergeable. This does
+not select further experiments, a memory implementation, or additional spend.
+The authored deliver step includes `land --wait-and-fix`; no explicit request
+to ship or land this study accompanied the report approval.
+
+## Landing approval — 2026-11-08
+
+Jack Heart: "you can land this" explicitly authorizes landing PR421 after the
+corrected report review. This supersedes the prior study-merge stop. Land the
+completed v7 study, report adapter and encoder speedups, preserving the negative
+result, frozen evidence and defaults. No further experiments or spending are
+selected. Verify the merged report and implementation before reconciling Task
+completion; temporal memory remains a proposed separate outcome.
