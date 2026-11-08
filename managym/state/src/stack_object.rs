@@ -1,6 +1,7 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
+use crate::binding::ObjectBinding;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
@@ -65,7 +66,7 @@ pub struct TriggeredAbilityOnStack {
     pub program: bool,
     /// Exact subjects captured at delayed-trigger creation, independent of event context.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub remembered: Vec<ObjectRef>,
+    pub remembered: Vec<ObjectBinding>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub source_transforms: u32,
     pub id: ObjectId,

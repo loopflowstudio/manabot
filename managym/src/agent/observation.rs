@@ -1196,6 +1196,15 @@ impl Observation {
             }
         };
 
+        // A replacement question identifies prospective battlefield entrants
+        // publicly before their retained zone moves commit.
+        for object in game.pending_public_entries() {
+            let card = CardId::from(object.entity);
+            if let Some(zone) = game.state.zones.zone_of(card) {
+                add_card(card, zone);
+            }
+        }
+
         for perspective in [agent_player, PlayerId(1 - agent_player.0)] {
             if !game.shares_information(agent_player, perspective) {
                 continue;
@@ -1216,45 +1225,36 @@ impl Observation {
             // decision. Search candidates are derived from the current library;
             // scry/look choices retain their exact cards. Native information
             // sharing admits the deciding player and their controller.
-            let Some(suspended) = game
-                .state
-                .suspended_decision
-                .as_ref()
-                .filter(|suspended| suspended.decision.player() == perspective)
-            else {
+            let Some(suspended) = game.state.suspended_decision.as_ref() else {
                 continue;
             };
-            let cards = match &suspended.decision {
-                Decision::SearchNamed { owner, .. } => game
-                    .named_search_cards(*owner)
-                    .filter(|card| {
-                        game.state.zones.zone_of(*card) == Some(ZoneType::Library)
-                            || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                && game.state.cards[*card].owner != perspective)
-                    })
-                    .collect(),
-                Decision::SearchBasicLand {
-                    player,
-                    subtype,
-                    to_hand,
-                    ..
-                } => game.basic_land_search_candidates(*player, subtype, *to_hand),
-                Decision::SearchLibraryToHand { player, predicate } => {
-                    game.library_search_candidates(*player, predicate)
+            for decision in suspended.decisions().filter(|d| d.player() == perspective) {
+                let cards = match decision {
+                    Decision::SearchNamed { owner, .. } => game
+                        .named_search_cards(*owner)
+                        .filter(|card| {
+                            game.state.zones.zone_of(*card) == Some(ZoneType::Library)
+                                || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
+                                    && game.state.cards[*card].owner != perspective)
+                        })
+                        .collect(),
+                    Decision::SelectCards {
+                        from: Some(source), ..
+                    } => game.selection_zone_cards(source.owner, source.zone),
+                    decision @ Decision::DiscardFromRevealedHand { .. } => {
+                        game.revealed_hand_candidates(decision)
+                    }
+                    decision @ Decision::SearchDistinctLands { selected, .. } => {
+                        let mut cards = selected.clone();
+                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards
+                    }
+                    decision => decision.revealed_cards().to_vec(),
+                };
+                for card in cards {
+                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                    add_card(card, zone);
                 }
-                decision @ Decision::DiscardFromRevealedHand { .. } => {
-                    game.revealed_hand_candidates(decision)
-                }
-                decision @ Decision::SearchDistinctLands { selected, .. } => {
-                    let mut cards = selected.clone();
-                    cards.extend(game.distinct_land_search_candidates(decision));
-                    cards
-                }
-                decision => decision.revealed_cards().to_vec(),
-            };
-            for card in cards {
-                let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
-                add_card(card, zone);
             }
         }
 
@@ -1810,6 +1810,7 @@ impl Observation {
             | GameEvent::LibrarySearched { .. }
             | GameEvent::CountersPut { .. }
             | GameEvent::Scried { .. }
+            | GameEvent::Surveilled { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }
@@ -1949,8 +1950,23 @@ impl Observation {
                 .as_ref()
                 .map(|perm| vec![perm.id])
                 .unwrap_or_default(),
-            // Decisions about the resolving/cast object: focus its card.
             Action::Decline { .. } | Action::PayCost { .. } | Action::ChooseMode { .. } => {
+                if let (
+                    Action::ChooseMode { mode, .. },
+                    Some(Decision::OrderReplacement { candidates, .. }),
+                ) = (
+                    action,
+                    game.state.suspended_decision.as_ref().map(|s| &s.decision),
+                ) {
+                    return candidates
+                        .get(*mode)
+                        .map(|candidate| {
+                            game.state.cards[CardId::from(candidate.source().entity)].id
+                        })
+                        .into_iter()
+                        .collect();
+                }
+                // Other decisions focus the resolving or cast object's card.
                 let card = game
                     .state
                     .suspended_decision
