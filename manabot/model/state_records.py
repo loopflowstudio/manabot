@@ -85,7 +85,9 @@ class SharedFactEncoder(nn.Module):
                 1,
             )
             encoded = self.reducer(list(tokens.unbind(0)))[inverse]
-            delta = torch.zeros_like(table).index_add(0, links - 1, encoded)
+            delta = torch.zeros_like(table).index_add(
+                0, links - 1, encoded.to(table.dtype)
+            )
             results[batch] = table + delta
         return torch.stack(results)
 
@@ -213,10 +215,10 @@ class TypedContinuationEncoder(nn.Module):
                     tokens.append(torch.tanh(self.edge(edge)))
                 records.append(torch.stack(tokens))
             local = self.reducer(records)
-            frames = frames.index_add(0, header_handles - 1, local)
+            frames = frames.index_add(0, header_handles - 1, local.to(frames.dtype))
             parent_messages = self.parent(join_rows(frames, parents[headers]))
             resolved = local + parent_messages
-            frames = frames.index_copy(0, header_handles - 1, resolved)
+            frames = frames.index_copy(0, header_handles - 1, resolved.to(frames.dtype))
             groups = (
                 kinds[headers] <= 3,
                 (kinds[headers] >= 4) & (kinds[headers] <= 6),

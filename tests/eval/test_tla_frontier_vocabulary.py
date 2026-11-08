@@ -24,6 +24,7 @@ from experiments.tla_frontier import SMALL, frozen
 from experiments.tla_frontier_analysis import Bounded, learned
 from experiments.tla_frontier_vocabulary import (
     EXPERIMENT,
+    FIRST_UPDATES,
     LATE_UPDATES,
     UPDATES,
     VALUE_LOSS_RATIO,
@@ -125,9 +126,15 @@ def test_a_missing_input_leaves_the_check_unread() -> None:
     assert verdict(_arm("catalog"), _arm("hashed"), None) == ([], None)
 
 
-def _checkpoint(vocabulary: Vocabulary, update: int) -> Checkpoint:
+def _regime(vocabulary: Vocabulary, update: int) -> str:
+    """The segment's regime id: the first holds updates through FIRST_UPDATES."""
+    base = f"tla-frontier-c5fba4-vocabulary-{vocabulary}"
+    return base if update <= FIRST_UPDATES else f"{base}-to{UPDATES}"
+
+
+def _checkpoint(vocabulary: Vocabulary, update: int, segment: str) -> Checkpoint:
     return Checkpoint(
-        run=vocabulary,
+        run=segment,
         experiment=EXPERIMENT,
         ordinal=update + 1,
         artifact=ArtifactRef(
@@ -137,45 +144,85 @@ def _checkpoint(vocabulary: Vocabulary, update: int) -> Checkpoint:
         ),
         clocks={"updates": update},
         line=vocabulary,
-        tags=(regime_tag(f"tla-frontier-c5fba4-vocabulary-{vocabulary}"),),
+        tags=(regime_tag(_regime(vocabulary, min(update, FIRST_UPDATES + 1))),),
     )
 
 
 def _state(reached: dict[Vocabulary, int], *, ended: bool = True) -> ExperimentState:
-    return ExperimentState(
-        experiment=EXPERIMENT,
-        runs=tuple(
-            TrainingRun(
-                name=vocabulary,
-                experiment=EXPERIMENT,
-                state="finished" if ended else "running",
-                checkpoints=Checkpoints(
-                    _checkpoint(vocabulary, update)
-                    for update in (0, 25, 50, 75)
-                    if update <= end
-                ),
+    """Each arm's segments through `reached`; the last one ended when `ended`."""
+    runs: list[TrainingRun] = []
+    for vocabulary, end in reached.items():
+        segments = [("first", (0, 25, 50, FIRST_UPDATES))]
+        if end > FIRST_UPDATES:
+            segments.append(("extension", (100, 125, UPDATES)))
+        for index, (segment, updates) in enumerate(segments):
+            name = f"{vocabulary}-{segment}"
+            last = index == len(segments) - 1
+            stored = [
+                _checkpoint(vocabulary, update, name)
+                for update in updates
+                if update <= end
+            ]
+            runs.append(
+                TrainingRun(
+                    name=name,
+                    experiment=EXPERIMENT,
+                    state="finished" if ended or not last else "running",
+                    checkpoints=Checkpoints(
+                        # A first segment's own tag even at an extension's update.
+                        checkpoint.model_copy(
+                            update={
+                                "tags": (
+                                    regime_tag(
+                                        _regime(vocabulary, 0)
+                                        if segment == "first"
+                                        else _regime(vocabulary, UPDATES)
+                                    ),
+                                )
+                            }
+                        )
+                        for checkpoint in stored
+                    ),
+                )
             )
-            for vocabulary, end in reached.items()
-        ),
-    )
+    return ExperimentState(experiment=EXPERIMENT, runs=tuple(runs))
 
 
 def test_the_check_plays_three_comparisons_once_both_arms_end_at_full_length() -> None:
     (job,) = eval(_state({"catalog": UPDATES, "hashed": UPDATES}))
     benchmark = evaluation_spec(job).tournament
     assert benchmark.environment.name == "tla-frontier-c5fba4-vocabulary-v1"
-    assert [m.name for m in benchmark.matchups] == [
-        "catalog u75 vs catalog u0",
-        "hashed u75 vs hashed u0",
-        "catalog u75 vs hashed u75",
+    assert [m.name for m in benchmark.matchups][-3:] == [
+        "catalog u150 vs catalog u0",
+        "hashed u150 vs hashed u0",
+        "catalog u150 vs hashed u150",
     ]
     assert all(len(m.matches()) == len(frozen()[1].pairs) for m in benchmark.matchups)
 
 
+def _matchups(state: ExperimentState) -> list[str]:
+    return [
+        m.name for job in eval(state) for m in evaluation_spec(job).tournament.matchups
+    ]
+
+
 def test_the_check_waits_for_both_arms() -> None:
-    assert eval(_state({"catalog": UPDATES, "hashed": UPDATES}, ended=False)) == []
-    # An arm that ended short of full length leaves the check unplayed.
-    assert eval(_state({"catalog": UPDATES, "hashed": 50})) == []
+    early = [
+        f"{a} u{n} vs {b}"
+        for n in (25, 50, 100)
+        for a, b in (
+            ("catalog", "catalog u0"),
+            ("hashed", "hashed u0"),
+            ("catalog", f"hashed u{n}"),
+        )
+    ]
+    assert (
+        _matchups(_state({"catalog": UPDATES, "hashed": UPDATES}, ended=False)) == early
+    )
+    # An arm that ended short of full length leaves the endpoint unplayed.
+    assert _matchups(_state({"catalog": UPDATES, "hashed": 125})) == early
+    # A first segment that stopped early still shows its interior exports.
+    assert _matchups(_state({"catalog": 64, "hashed": FIRST_UPDATES})) == early[:6]
     schedule = check_schedule(_state({"catalog": UPDATES}), frozen()[1])
     assert all(planned.matchup is None for planned in schedule)
 
@@ -193,7 +240,22 @@ def test_arms_differ_only_in_record_vocabulary() -> None:
     exclude = {"id": True, "agent": {"record_vocabulary"}}
     assert catalog.model_dump(exclude=exclude) == hashed.model_dump(exclude=exclude)
     stage = catalog.stages[0]
-    assert stage.updates == UPDATES
+    assert stage.updates == FIRST_UPDATES
+    extension = vocabulary_regime(small, "catalog", extension=True)
+    assert extension.stages[0].updates == UPDATES
+    assert extension.model_dump(
+        exclude={
+            "id": True,
+            "wall_seconds": True,
+            "stages": {0: {"updates", "execution"}},
+        }
+    ) == catalog.model_dump(
+        exclude={
+            "id": True,
+            "wall_seconds": True,
+            "stages": {0: {"updates", "execution"}},
+        }
+    )
     assert stage.execution.workers == small.stages[0].execution.workers
     launched = runs("HEAD")
     assert len(launched) == 2 and {r.seed for r in launched} == {
@@ -201,31 +263,34 @@ def test_arms_differ_only_in_record_vocabulary() -> None:
     }
 
 
-def _tracked(source: Path, vocabulary: Vocabulary, loss: float) -> str:
-    """A real worker's records for one arm: value loss and checkpoints to UPDATES."""
-    name = uuid4().hex[:12]
-    regime = f"tla-frontier-c5fba4-vocabulary-{vocabulary}"
-    with pytest.MonkeyPatch.context() as environment:
-        environment.setenv("ETUDE_RUN", name)
-        environment.setenv("ETUDE_TRACK_DIR", str(source))
-        environment.setenv("ETUDE_JOB_NAME", regime)
-        context = RunContext(
-            RuntimeConfig(name=name, runs_dir=source / "local", seed=21501),
-            experiment=EXPERIMENT,
-            regime=regime,
-        )
-        for update in range(UPDATES + 1):
-            context.log_update(
-                {"value_loss": loss} if update else {},
-                updates=update,
-                transitions=update * 100,
+def _tracked(source: Path, vocabulary: Vocabulary, loss: float) -> None:
+    """A real worker's records for one arm: two segments, value loss to UPDATES."""
+    for segment, updates in (
+        ("first", range(0, FIRST_UPDATES + 1)),
+        ("extension", range(FIRST_UPDATES, UPDATES + 1)),
+    ):
+        name = uuid4().hex[:12]
+        regime = _regime(vocabulary, 0 if segment == "first" else UPDATES)
+        with pytest.MonkeyPatch.context() as environment:
+            environment.setenv("ETUDE_RUN", name)
+            environment.setenv("ETUDE_TRACK_DIR", str(source))
+            environment.setenv("ETUDE_JOB_NAME", regime)
+            context = RunContext(
+                RuntimeConfig(name=name, runs_dir=source / "local", seed=21501),
+                experiment=EXPERIMENT,
+                regime=regime,
             )
-            if update % 25 == 0:
-                path = source / f"{name}-u{update}.pt"
-                path.write_text(f"synthetic export {name} {update}")
-                context.checkpoint(path, transitions=update * 100)
-        context.close("finished")
-    return name
+            for update in updates:
+                context.log_update(
+                    {"value_loss": loss} if update else {},
+                    updates=update,
+                    transitions=update * 100,
+                )
+                if update % 25 == 0 and (segment == "first" or update > FIRST_UPDATES):
+                    path = source / f"{name}-u{update}.pt"
+                    path.write_text(f"synthetic export {name} {update}")
+                    context.checkpoint(path, transitions=update * 100)
+            context.close("finished")
 
 
 def _first_wins(legs: int) -> Callable[[Match], Tables]:

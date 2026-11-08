@@ -157,6 +157,16 @@ replaces this with a measurement.
 
 ## Machine recommendation
 
+- **Pack four seeds per machine, one producer each,** through Etude `--slots 4`.
+  On one A4000 (16 vCPUs, $.25/hour) four seeds gave 2.3x the learner decisions of
+  one, at $.023 against $.053 per million. Packed and solo runs of a seed learn
+  identically on CPU (training digests equal). On CUDA they stay within run-to-run
+  noise over 20 updates; packed games ran about 5% shorter late in the run, which that
+  check cannot tell from noise. Each seed takes about 1.7x longer per update, so pack
+  for cost and total throughput, not time to one result, and size watchdogs from
+  packed s/update. Four producers per seed bought no speed at one seed or four. Rent an
+  A4000 when one is available, else an L4; the L4 shape is inferred, not measured.
+  Evidence: `experiments/data/training-throughput-b015d5-v1/report.md`.
 - **Choose single-thread speed, not vCPUs.** Do not pay for vCPUs above the current
   6-vCPU floor for one run. Lower floors were not tested.
 - **Rent L4, not A40,** for this recipe: A40 was no faster on matching hosts.
@@ -189,7 +199,6 @@ replaces this with a measurement.
 
 Next levers, not attempted: `elemental-uniform` requires one producer, so stepping
 (about 20% of an update) cannot overlap inference; inference runs ~700 calls of ~76
-rows per update, which rewards fewer launches. Packing several seeds on one host
-was not tested.
+rows per update, which rewards fewer launches. Packing is measured above.
 
 Reproduce: `uv run python scripts/bench_training_update.py --streams 256 --updates 3`.
