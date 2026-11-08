@@ -8,7 +8,7 @@ The learner's profiler times learning phases between existing device waits;
 it adds no synchronization and draws no training randomness.
 """
 
-from typing import ContextManager
+from contextlib import AbstractContextManager
 
 import numpy as np
 from numpy.typing import NDArray
@@ -43,7 +43,7 @@ class Learner:
         self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
         self.profiler = Profiler()
 
-    def forward_precision(self) -> ContextManager[object]:
+    def forward_precision(self) -> AbstractContextManager[object]:
         """Wrap each policy forward; callers cast its outputs to float32."""
         return forward_precision(self.precision, self.device)
 

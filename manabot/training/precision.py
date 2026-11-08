@@ -14,8 +14,7 @@ Both reduced precisions change numerics, so they are declared regime variants,
 never edits of a float32 regime; `Execution` rejects them off CUDA.
 """
 
-from contextlib import nullcontext
-from typing import ContextManager
+from contextlib import AbstractContextManager, nullcontext
 
 import torch
 
@@ -35,7 +34,7 @@ def apply_matmul_precision(precision: Precision) -> None:
 
 def forward_precision(
     precision: Precision, device: torch.device
-) -> ContextManager[object]:
+) -> AbstractContextManager[object]:
     """The context one policy forward runs in: bf16 autocast, else nothing."""
     if precision != "bf16":
         return nullcontext()
