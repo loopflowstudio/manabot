@@ -4,6 +4,26 @@ MTG-174/MTG-176 preflight, payment-repair and recovery assumptions are retained 
 `003644bda6d3ed2e1e6754186960b135ff815e76:scratch/{questions,elemental-baseline-preflight,elemental-mana-repair}.md`.
 They do not select current work or authorize paid execution.
 
+# MTG-269 design assumptions (2026-11-08)
+
+- The existing runner is the retained campaign's authority for settings and
+  schedule; `experiments/protocols/search-mirror-v1.md` reconstructs it without
+  retroactive preregistration. The original source copy lacks a complete launch
+  inventory, so current disk hashes cannot prove what every worker loaded.
+- Simpler proposed follow-up: reuse the 500 existing deals per opponent and
+  existing controls, label selection exploratory, add only beta 0.01 at 8/16
+  oracle shuffles and uniform comparisons at those settings and the four-world
+  reference. The 5,000-game / 96-hour / 672-worker-hour / $0 ceilings are design
+  choices for review, not numbers supplied or approved by Jack Heart.
+- No new training seed or fitting: this is one frozen trained policy. New
+  shuffle samples and noise resamples cannot substitute for independent learners.
+- The current directive's interactive-review boundary takes precedence over
+  interpreting the broad continuation request as authority to launch follow-ups.
+  Leave the six live mini workers alone; worker 2 has completed its assigned keys.
+- MTG-268 is idle, not still implementing. Its recorded unmet latency target
+  and unresolved w13 admission remain dependency limits; this step does not
+  restart it or choose a relaxed performance acceptance threshold.
+
 # MTG-183 assumptions (2026-10-23)
 
 - A RunPod job cannot exceed twelve hours, so "one long seed" is one cohort of

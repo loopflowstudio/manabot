@@ -1,5 +1,37 @@
 # Mirror search continuation
 
+## Design handoff — 2026-11-08 23:40 UTC
+
+The reconstructed owning protocol is
+`experiments/protocols/search-mirror-v1.md`. It separates the retained executable
+sweep from proposed beta-0.01 / 8–16-shuffle and uniform-hand follow-ups. This
+experiment-design step ends at interactive design review; it launches nothing.
+
+Read-only SSH inventory at 23:40:23 UTC: 7,657 unique games, no duplicate keys,
+zero invalid, 477–481 games per arm. Worker 2 has completed all assigned keys
+and exited; six workers remain live. Missing keys by original shard 0–6:
+76, 42, 0, 23, 47, 79, 76. No restart or extra worker is needed. Noise-v1 has
+300 positions on 21 distinct deals, all at grid index 5. These live inventory
+counts do not replace the published 4,899-game snapshot or its strength estimates.
+
+`lf task status MTG-268 --json` now reports idle, no PR; its code graph stopped
+at loop-or-next, pass 6, updated 12:29:26 UTC. Its current `scratch/questions.md`
+says the latency target remains unmet and w13 admission unresolved. Latest
+benchmarks use a different, initialized merged-world checkpoint. Leave ownership
+there; neither those timings nor a generic sync admits batching to this study.
+
+The mini source is a copy without `.git`; its `REVISION` predates mirror code.
+Current runner/local-update/lock hashes match this checkout; the protocol records
+them and the mini native hash. They are observations of disk bytes, not launch
+receipts. Complete source/runtime admission remains necessary before new games.
+
+Review proposal: reuse existing deals and controls for 2,000 oracle candidate
+games plus 3,000 matched uniform games, at most 96 elapsed hours / 672 worker-hours
+on the mini, $0 rental spend. These are proposed ceilings, not an ETA or authority.
+Reuse makes the follow-up exploratory; fresh confirmation would need a separately
+frozen untouched cohort and controls. Report fixes and follow-up capture/admission
+requirements are listed in the owning protocol, with no duplicate batching effort.
+
 ## Task and workflow
 
 This study is now MTG-269 (`task_ed311b47c8704f18965f6a0ae8cbb370`), with
