@@ -2,7 +2,7 @@
 
 **Status: depth-2 arms evaluated through update 300; depth-4 masked mean
 evaluated through update 150.** The initial three-arm, three-seed study had a
-USD20 cap; subsequent extensions raised the total cap to USD45 on 2026-11-08.
+USD20 cap; subsequent extensions raised the total cap to USD55 on 2026-11-08.
 No promotion or rejection threshold is set; results are reported as measured.
 
 ## Depth-4 extension (2026-11-08)
@@ -31,8 +31,12 @@ promotion threshold.
 Before this extension launches, retained whole-rental records on 2026-11-08
 sum to USD31.7143 for training (billed plus estimates) and USD3.1013 for the
 three evaluations, USD34.8156 total. This replaces the earlier USD32.90
-estimate for budgeting. Some training costs remain estimated. The USD45 cap
-includes all prior attempts, this extension and evaluation.
+estimate for budgeting. Some training costs remain estimated. The USD55 cap
+includes all prior attempts, this extension and evaluation. Reserve USD6 for
+three masked-mean continuations (3.1-hour windows), USD11.10 for three fresh
+value-token runs (6-hour windows), and USD3 for evaluation: USD54.9156 including
+the retained prior cost. A watchdog stop retains learner state but does not
+establish completion at update 300; any retry must fit the unspent balance.
 
 ## Execution record
 

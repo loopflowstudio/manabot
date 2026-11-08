@@ -32,6 +32,14 @@ Continuation exports are being verified/staged under `/tmp/mtg252-depth-parents/
 and `r2://manabot/mtg252/continue/<parent>/`. Latest code completes the
 depth/readout selection and evaluation path; no new training launched yet.
 
+In this resumed conversation the budget reply was "Raise cap to $55; complete
+both arms". Allocation: USD6 masked mean (3 × 3.1 hours, USD2 each), USD11.10
+value token (3 × 6 hours, USD3.70 each), USD3 evaluation. Prior cost plus these
+ceilings is USD54.9156. All three saved parent regimes differ from the proposed
+continuations only in absolute updates (150 → 300) and the two watchdog fields.
+Focused tests: 16 passed; Ruff lint and formatting passed. Setup is pushed at
+`18e4ae9a8`; the subsequent documentation commit records the raised cap.
+
 Brief: Task MTG-252 directive. Study document: `experiments/value-readout-252.md`
 (draft protocol; nothing frozen or launched; no compute authorized).
 
