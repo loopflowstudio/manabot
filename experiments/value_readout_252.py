@@ -144,7 +144,11 @@ EVALUATION_USD = 3.0
 DEPTH_LAYERS = 4
 # Recover capacity from the start: a first launch without it stopped at
 # update 2 on 65 continuation relations (64 slots) and was cancelled.
-DEEPER: dict[int, str] = {}
+DEEPER: dict[int, str] = {
+    25201: "bdcf25600bf7",
+    25202: "f9b2f54106e3",
+    25203: "aaf586b81509",
+}
 STAGING_BUCKET = "r2://manabot"
 STAGING_PREFIX = "mtg252/continue"
 
