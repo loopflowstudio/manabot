@@ -338,8 +338,7 @@ def read_checkpoints(
             ]
     else:
         for arm in vocabulary_check.VOCABULARIES:
-            run = vocabulary_check.arm_run(state, arm)
-            if run is not None:
+            for run in vocabulary_check.arm_runs(state, arm):
                 found += [(arm, run, checkpoint) for checkpoint in run.checkpoints]
     return sorted(found, key=lambda item: (item[0], checkpoint_update(item[2])))
 

@@ -528,11 +528,19 @@ check:
    the frontier's GPU: the length recorded after calibration read w64 at
    167 s/update, which leaves room for 200. Both arms carry the
    regime's provisional horizon of 1,296. At that horizon, and at calibration's 1,164,
-   the rate stays at its 1e-4 clamp for all 75 updates, and the horizon only moves
-   τ, equally in both arms. Once both arms
-   end at
-   update 75, one pass on the 16 frozen pairs plays each arm's update 75 against
-   its own update 0, and catalog's update 75 against hashed's, catalog first,
+   the rate stays at its 1e-4 clamp through update 150, and the horizon only moves
+   τ, equally in both arms.
+
+   **Extension (Jack Heart, 2026-11-07).** Catalog's pod read 1.6× slow per row
+   (host step spread 8.4 against 1.2), so it stopped at update 64 and the
+   75-update reading was unread. Jack Heart authorized up to USD10 more to
+   extend an inconclusive check to 150 updates, past the USD100 Task ceiling if
+   it is used. Each arm continues from its first segment's final raw/EMA/Adam
+   exports to update 150 under its own `-to150` regime id, exporting at 100 and
+   125: a 21,000-second wall and at most USD4 and 6.1 hours each, which covers
+   catalog's 86 updates at its slow pod's 234 s. Once both extensions end at
+   update 150, one pass on the 16 frozen pairs plays each arm's update 150
+   against its own update 0, and catalog's update 150 against hashed's, catalog first,
    under an environment of its own. The criterion, fixed here, fails catalog when
    any of these holds:
 
@@ -541,11 +549,13 @@ check:
    2. **Learning:** hashed's learning against its initialization is established
       (`worst` lower bound above 0.5) and catalog's is rejected (`best` lower
       bound at or below 0.5).
-   3. **Learning curve:** catalog's median `value_loss` over updates 38–75 is
+   3. **Learning curve:** catalog's median `value_loss` over updates 76–150 is
       more than 1.10 times hashed's.
 
    Otherwise catalog passes. A reading missing an input (an arm short of update
-   75, an unplayed comparison or an absent loss) is unread, which is no pass.
+   150, an unplayed comparison or an absent loss) is unread, which is no pass.
+   The same comparisons at updates 25, 50 and 100 are played as exports arrive;
+   they are descriptive and enter no rule.
    A failure, or an unread check, returns the embedding choice to review before
    the freeze. Commands, from the merged revision:
 
