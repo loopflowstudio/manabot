@@ -226,7 +226,7 @@ class NoiseRow:
     gain_with_reference_q: float
 
 
-def analyze(out: Path, draws: int = 20) -> list[NoiseRow]:
+def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow]]:
     """Subsample n rollouts per move; judge against the held-out remainder.
 
     For each position, a draw picks n of the 64 rollouts per move as the
@@ -281,26 +281,20 @@ def analyze(out: Path, draws: int = 20) -> list[NoiseRow]:
     ]
     spread = [float(np.std([np.mean(v) for v in p.values if v])) for p in positions]
     single = [float(np.std(v)) for p in positions for v in p.values if v]
-    print(
-        json.dumps(
-            {
-                "positions": len(positions),
-                "moves_per_position": round(
-                    float(np.mean([sum(1 for v in p.values if v) for p in positions])),
-                    2,
-                ),
-                "seconds_per_position": round(
-                    float(np.mean([p.seconds for p in positions])), 1
-                ),
-                "between_move_sd_of_q": round(float(np.mean(spread)), 3),
-                "single_rollout_sd": round(float(np.mean(single)), 3),
-                "single_rollout_sd_rms": round(
-                    math.sqrt(float(np.mean(np.square(single)))), 3
-                ),
-            }
-        )
-    )
-    return rows
+    summary = {
+        "positions": len(positions),
+        "moves_per_position": round(
+            float(np.mean([sum(1 for v in p.values if v) for p in positions])),
+            2,
+        ),
+        "seconds_per_position": round(
+            float(np.mean([p.seconds for p in positions])), 1
+        ),
+        "between_move_sd_of_q": round(float(np.mean(spread)), 3),
+        "single_rollout_sd": round(float(np.mean(single)), 3),
+        "single_rollout_sd_rms": round(math.sqrt(float(np.mean(np.square(single)))), 3),
+    }
+    return summary, rows
 
 
 def main() -> None:
@@ -318,7 +312,9 @@ def main() -> None:
     if args.command == "play":
         play(args.checkpoint, args.out, args.worker, args.workers, args.positions)
     else:
-        for row in analyze(args.out):
+        summary, rows = analyze(args.out)
+        print(json.dumps(summary))
+        for row in rows:
             print(json.dumps(asdict(row)))
 
 
