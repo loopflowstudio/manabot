@@ -140,7 +140,7 @@ def test_the_reader_reads_every_vocabulary_export(tmp_path: Path) -> None:
             _run(
                 arm,
                 f"tla-frontier-c5fba4-vocabulary-{arm}",
-                (0, 100),
+                (0, 75),
                 artifact=artifact,
             )
             for arm in vocabulary_check.VOCABULARIES
@@ -149,8 +149,8 @@ def test_the_reader_reads_every_vocabulary_export(tmp_path: Path) -> None:
     reading = read(state, "tla_frontier_vocabulary", tmp_path)
     assert [(c.label, c.update) for c in reading.checkpoints] == [
         ("catalog", 0),
-        ("catalog", 100),
+        ("catalog", 75),
         ("hashed", 0),
-        ("hashed", 100),
+        ("hashed", 75),
     ]
     assert all(c.reading.facts.median == 0.0 for c in reading.checkpoints)

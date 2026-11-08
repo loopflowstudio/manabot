@@ -215,10 +215,14 @@ holds the read until the pass is over; read earlier, it sees no games.
 
 The reading shows games, invalid games, median and slowest game seconds and the
 cost of the passes that stored a match; a pass that stored none still billed, and
-its cost comes from `etude status <run>`. The rehearsal gate is a rough line: all
-128 games valid, so none killed, and the slowest under 300 seconds, half the
-limit. Otherwise `game_seconds` or the size changes in a new protocol version,
-before any scoring. The policies are nearly fresh, so the reading shows what a
+its cost comes from `etude status <run>`. The rehearsal gate is a rough line: no game
+killed or left invalid except by a capacity abort, and the slowest under 300
+seconds, half the limit. Otherwise `game_seconds` or the size changes in a new
+protocol version, before any scoring. A capacity abort is labelled, counted and
+bounds a reading, as under Failed games: no game limit or size removes one. Its
+failure text gives the seat's card rows by zone, its token count and its commonest
+tokens, and its Command journal stays in the pass's `arena/` output, so
+`manabot.sim.replay.replay_prefix` rebuilds the position. The policies are nearly fresh, so the reading shows what a
 pass does on a rental, not how long a trained policy's games run. If `w160l8`
 stored nothing past update 0 the rehearsal refuses to play, because the size
 gate has already failed. A rehearsal pass that fails or delivers nothing
@@ -519,16 +523,16 @@ check:
    and this item's tests rerun on the frozen revision. Before the freeze,
    `experiments/tla_frontier_vocabulary.py` trains two arms of the w64
    regime that differ only in `ModelConfig.record_vocabulary`, catalog and
-   hashed: same recipe, seed 21501, decks, four producers, 100 updates, exports
-   at 25, 50, 75 and 100, a 9,000-second wall and at most USD2 and 3 hours each
-   on the frontier's GPU. If calibration reads w64 above 84 s/update, the length
-   changes by recorded decision before the check runs. Both arms carry the
-   regime's provisional horizon of 1,296. At that horizon, and at any fitted one
-   inside that line (S at least 2,314), the rate stays at its 1e-4 clamp for all
-   100 updates, and the horizon only moves τ, equally in both arms. Once both arms
+   hashed: same recipe, seed 21501, decks, four producers, 75 updates, exports
+   at 25, 50 and 75, a 15,600-second wall and at most USD3 and 4.6 hours each on
+   the frontier's GPU: the length recorded after calibration read w64 at
+   167 s/update, which leaves room for 200. Both arms carry the
+   regime's provisional horizon of 1,296. At that horizon, and at calibration's 1,164,
+   the rate stays at its 1e-4 clamp for all 75 updates, and the horizon only moves
+   τ, equally in both arms. Once both arms
    end at
-   update 100, one pass on the 16 frozen pairs plays each arm's update 100 against
-   its own update 0, and catalog's update 100 against hashed's, catalog first,
+   update 75, one pass on the 16 frozen pairs plays each arm's update 75 against
+   its own update 0, and catalog's update 75 against hashed's, catalog first,
    under an environment of its own. The criterion, fixed here, fails catalog when
    any of these holds:
 
@@ -537,11 +541,11 @@ check:
    2. **Learning:** hashed's learning against its initialization is established
       (`worst` lower bound above 0.5) and catalog's is rejected (`best` lower
       bound at or below 0.5).
-   3. **Learning curve:** catalog's median `value_loss` over updates 51–100 is
+   3. **Learning curve:** catalog's median `value_loss` over updates 38–75 is
       more than 1.10 times hashed's.
 
    Otherwise catalog passes. A reading missing an input (an arm short of update
-   100, an unplayed comparison or an absent loss) is unread, which is no pass.
+   75, an unplayed comparison or an absent loss) is unread, which is no pass.
    A failure, or an unread check, returns the embedding choice to review before
    the freeze. Commands, from the merged revision:
 
@@ -572,9 +576,8 @@ runner code fixed at the freeze.
 
 The Task's ceiling is USD100 including setup, failures, retries and evaluation:
 2 × USD38 training + USD14 evaluation = USD90, leaving USD10 for calibration
-(USD2), the evaluation rehearsal (a USD2 ceiling, about USD0.50 expected), the
-fact-embedding check (USD4 for its two arms and a USD2 pass ceiling, about USD3.50
-expected), setup and failure costs. The ceilings fill the reserve; expected spend
-is about USD5.50 of it. Evaluation is about 18% of training's ceiling. Any retry needs
+and the rehearsal (USD1.51 spent), the fact-embedding check (USD6 for its two arms
+and a USD2 pass ceiling, about USD5.50 expected), setup and failure costs. Those
+leave USD0.49 of the reserve at every ceiling. Evaluation is about 18% of training's ceiling. Any retry needs
 a recorded decision that keeps the total within USD100. Evaluation never runs on
 a laptop.

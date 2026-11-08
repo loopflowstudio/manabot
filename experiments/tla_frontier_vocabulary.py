@@ -66,6 +66,7 @@ from experiments.tla_frontier import (
 )
 from experiments.tla_frontier_analysis import (
     Bounded,
+    Comparison,
     learned,
     read_comparisons,
 )
@@ -75,19 +76,18 @@ from manabot.training.regime import TrainingRegime
 EXPERIMENT = Path(__file__).stem
 type Vocabulary = Literal["catalog", "hashed"]
 VOCABULARIES: tuple[Vocabulary, Vocabulary] = ("catalog", "hashed")
-UPDATES = 100
+UPDATES = 75
 # Interior exports; the job exports update UPDATES itself when training stops.
-MILESTONES = (25, 50, 75)
-# 100 updates fit 8,400 usable seconds under the 600 s stop reserve at up to
-# 84 s/update. Calibration reads w64's cost first; a slower reading changes the
-# length here, by recorded decision, before the check runs.
-WALL_SECONDS = 9000.0
-# Etude's 15-minute setup allowance and the wall fit each arm's ceiling at the
-# USD0.67/hour the training budget admits; USD4 together, from the reserve.
-MAX_HOURS = 3.0
-MAX_USD = Decimal("2")
+MILESTONES = (25, 50)
+# Calibration read w64 at 167 s/update. 75 updates fit 15,000 usable seconds under
+# the 600 s stop reserve at up to 200 s/update, a fifth above that reading.
+WALL_SECONDS = 15600.0
+# The wall, finalization, job setup and Etude's 15-minute allowance fit each arm's
+# ceiling at the on-demand's USD0.60/hour limit; USD6 together, from the reserve.
+MAX_HOURS = 4.6
+MAX_USD = Decimal("3")
 # Rule 3: the second half of the run, past the first export's warm-up.
-LATE_UPDATES = range(51, UPDATES + 1)
+LATE_UPDATES = range(38, UPDATES + 1)
 VALUE_LOSS_RATIO = 1.10
 
 
@@ -179,6 +179,53 @@ def check_schedule(
     ]
 
 
+def early_schedule(
+    state: ExperimentState, protocol: Protocol
+) -> list[ScheduledComparison]:
+    """The same three comparisons at each interior export both arms have stored.
+
+    Descriptive only: they show progress before the endpoint and enter no rule of
+    the criterion, which reads the endpoint slots alone.
+    """
+    arms = {vocabulary: arm_run(state, vocabulary) for vocabulary in VOCABULARIES}
+    inference = checkpoint_inference()
+    slots: list[ScheduledComparison] = []
+    for update in MILESTONES:
+        at = {vocabulary: _at(arms[vocabulary], update) for vocabulary in VOCABULARIES}
+        initial = {vocabulary: _at(arms[vocabulary], 0) for vocabulary in VOCABULARIES}
+        pairs: list[tuple[str, str, Checkpoint | None, Checkpoint | None]] = [
+            *(
+                (
+                    f"early-initial-{vocabulary}-u{update}",
+                    f"{vocabulary} u{update} vs {vocabulary} u0",
+                    at[vocabulary],
+                    initial[vocabulary],
+                )
+                for vocabulary in VOCABULARIES
+            ),
+            (
+                f"early-head-to-head-u{update}",
+                f"catalog u{update} vs hashed u{update}",
+                at["catalog"],
+                at["hashed"],
+            ),
+        ]
+        ready = all(checkpoint is not None for checkpoint in at.values())
+        for tag, name, first, second in pairs:
+            matchup = (
+                paired_matchup(
+                    name,
+                    (first.model(inference), second.model(inference)),
+                    tag,
+                    protocol,
+                )
+                if ready and first is not None and second is not None
+                else None
+            )
+            slots.append(ScheduledComparison(tag=tag, update=update, matchup=matchup))
+    return slots
+
+
 def _environment(protocol: Protocol) -> Environment:
     return environment(
         protocol,
@@ -188,7 +235,7 @@ def _environment(protocol: Protocol) -> Environment:
 
 
 def eval(state: ExperimentState) -> list[Job]:
-    """One pass once both arms ended at `UPDATES`; nothing before."""
+    """Early comparisons as interior exports arrive; the endpoint once both ended."""
     if state.experiment != EXPERIMENT:
         raise ValueError("the vocabulary check requires its own runs")
     _, protocol = frozen()
@@ -197,7 +244,10 @@ def eval(state: ExperimentState) -> list[Job]:
         _environment(protocol),
         [
             planned.matchup
-            for planned in check_schedule(with_launcher_ends(state), protocol)
+            for planned in (
+                *early_schedule(state, protocol),
+                *check_schedule(with_launcher_ends(state), protocol),
+            )
             if planned.matchup is not None
         ],
     )
@@ -225,6 +275,8 @@ class VocabularyCheck(StrictModel):
     # Catalog's score against hashed at `UPDATES`.
     head_to_head: Bounded | None
     loss_ratio: float | None
+    # Descriptive comparisons at interior exports; no rule reads them.
+    early: list[Comparison]
     failures: list[str]
     # None: unread, which is no pass.
     passed: bool | None
@@ -286,6 +338,12 @@ def read_check(state: ExperimentState, source: Storage | Path | str) -> Vocabula
                 _environment(protocol).identity,
             )
         }
+        early = read_comparisons(
+            early_schedule(state, protocol),
+            db,
+            protocol,
+            _environment(protocol).identity,
+        )
     arms: dict[Vocabulary, ArmReading] = {}
     for vocabulary in VOCABULARIES:
         run = arm_run(state, vocabulary)
@@ -310,6 +368,7 @@ def read_check(state: ExperimentState, source: Storage | Path | str) -> Vocabula
         loss_ratio=catalog.late_value_loss / hashed.late_value_loss
         if catalog.late_value_loss is not None and hashed.late_value_loss
         else None,
+        early=early,
         failures=failures,
         passed=passed,
     )

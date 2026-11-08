@@ -144,6 +144,10 @@ class Rehearsal(StrictModel):
     games: int
     # Killed, truncated or never finished: nothing a scored pass could replay.
     invalid_games: int
+    # Of those, games aborted past an observation capacity. They are labelled and
+    # bound a reading, and no game limit or size change would remove them, so
+    # they are reported and fail no gate.
+    capacity_aborts: int
     median_game_seconds: float | None
     slowest_game_seconds: float | None
     pass_usd: Decimal
@@ -314,17 +318,23 @@ def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
         columns = stored_game_columns(db)
         # Etude omits an all-null column, as when every game was killed.
         seconds_column = "seconds" if "seconds" in columns else "NULL"
+        failure_column = "failure" if "failure" in columns else "NULL"
         games = (
             db.execute(
-                f"SELECT valid, {seconds_column} FROM games WHERE seat = 0"
+                f"SELECT valid, {seconds_column}, {failure_column} "
+                "FROM games WHERE seat = 0"
             ).fetchall()
             if columns
             else []
         )
     runs = tuple(sorted({run for run, _ in receipts}))
     failed = sum(state != "done" for _, state in receipts)
-    invalid = sum(not valid for valid, _ in games)
-    seconds = [float(each) for _, each in games if each is not None]
+    invalid = sum(not valid for valid, _, _ in games)
+    aborted = sum(
+        not valid and "capacity exceeded" in (failure or "")
+        for valid, _, failure in games
+    )
+    seconds = [float(each) for _, each, _ in games if each is not None]
     slowest = max(seconds, default=None)
     scheduled = REHEARSAL_COMPARISONS * len(frozen()[1].pairs) * GAMES_PER_PAIR
     return Rehearsal(
@@ -333,13 +343,14 @@ def read_rehearsal(source: Storage | Path | str) -> Rehearsal:
         failed_matches=failed,
         games=len(games),
         invalid_games=invalid,
+        capacity_aborts=aborted,
         median_game_seconds=median(seconds) if seconds else None,
         slowest_game_seconds=slowest,
         pass_usd=sum((client.status(run).usd for run in runs), Decimal(0)),
         passed=(
             len(games) == scheduled
             and not failed
-            and not invalid
+            and invalid == aborted
             and slowest is not None
             and slowest < REHEARSAL_GAME_SECONDS
         ),
