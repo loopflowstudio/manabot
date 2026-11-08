@@ -44,11 +44,15 @@ Both cohorts launched at source `18e4ae9a8c68981bfc837e8702c260d90e74e650`:
 - `mtg252-depth4-token300`: 25201 `1c4aef332e5b`, 25202 `8f11bcda7841`,
   25203 `7d5cba6b285a`; all passed update 1. Quote USD11.06, cap USD11.10.
 - `mtg252-depth4-mean300`: 25201 `f1e5c84269d0`, 25202 `072977f3704d`,
-  25203 `f1664004d74e`; initially setting up. Quote USD5.93, cap USD6.
+  25203 `f1664004d74e`; all passed update 151 after restoring their parents.
+  Quote USD5.93, cap USD6.
 
-`/tmp/mtg252-finish-depth4.sh` waits for the six runs, requires each to succeed
+`/tmp/mtg252-finish-depth4.sh` is running (PID 37896 at launch), waiting for the
+six runs. It requires each to succeed
 at exactly update 300, and checks the experiment/worker source is unchanged
-before launching one USD3-capped evaluation. It makes no automatic retries.
+before launching one USD3-capped evaluation. It checks against committed
+evaluation source `504f2364f760302ccad26cf9c7843c712a04add2` and makes no
+automatic retries. The process was verified alive after detaching.
 Its log will be `/tmp/mtg252-finish-depth4.log`; final status and eval launch
 receipts use `/tmp/mtg252-depth4-final-status.txt` and
 `/tmp/mtg252-depth4-eval-launch.txt`. Existing scratchpad scoring scripts
