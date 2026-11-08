@@ -46503,8 +46503,8 @@
    "bytes": 217742
   },
   "experiments/data/training-throughput-b015d5-v1/report.md": {
-   "sha256": "37c61a7c967dc5a9074feee0d49f5c74254d0b3ed5d8ff5bd431d344d8051ae4",
-   "bytes": 35775
+   "sha256": "c66ec070e5da807bb28859c8e44df941f3ee69ee9f63acf52b711fbb37e0c90c",
+   "bytes": 39225
   },
   "experiments/data/training-throughput-b015d5-v1/step-1/04c78c2631c6/cuda-counts/phase.json": {
    "sha256": "69c4edacf2d989ddadb9219374b62302b7ce49bff605ce776de9119592049446",
@@ -47359,12 +47359,12 @@
    "bytes": 2664
   },
   "experiments/data/training-throughput-b015d5-v1/step-3/readings.py": {
-   "sha256": "094eb903252d060805c5ba3e6608519eec73e1935833004158f0ed932a94be4e",
-   "bytes": 14605
+   "sha256": "abe54450dd96220f09b7c2de591d67532c67876e02fb87be6a5add4e14da512c",
+   "bytes": 14713
   },
   "experiments/data/training-throughput-b015d5-v1/step-3/readings.txt": {
-   "sha256": "2279c91dfdbeafe5c2c525c1bd1f852985c04d9c51a135735d03efecbf966522",
-   "bytes": 6095
+   "sha256": "906974d4ba440c346936598b9b13a93326f95b90a304297a5c774da74aede23a",
+   "bytes": 6263
   },
   "experiments/data/training-throughput-b015d5-v1/step-3/reconcile_resources.py": {
    "sha256": "80ddeb8d977f9be5e3ac0e4980c1be3abac2f60373d88c306158c6a7239bef6d",
@@ -48443,8 +48443,8 @@
    "bytes": 18146
   },
   "experiments/data/training-throughput-b015d5-v1/step-3/summarize.py": {
-   "sha256": "9a82a3e669ee64753ae34dc0ebcdd4c5e11d79429bd3bd44ab888d8e1de1fe4a",
-   "bytes": 9837
+   "sha256": "5881ef022fd1d35264aeef4bb22840ceea4a9dabfa28d6c91192c3ff4110848a",
+   "bytes": 11448
   },
   "experiments/data/training-time/basic-profile-001.json": {
    "sha256": "db2b510759108d30c244a769c8377f930b7ffc9aa1bd043c18745d7eae5b7fff",
