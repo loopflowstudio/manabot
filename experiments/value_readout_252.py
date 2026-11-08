@@ -142,6 +142,8 @@ EVALUATION_USD = 3.0
 # with four attention layers instead of two, from scratch to update 150 under
 # the same seeds. It asks whether encoder depth, not the readout, limits play.
 DEPTH_LAYERS = 4
+# Recover capacity from the start: a first launch without it stopped at
+# update 2 on 65 continuation relations (64 slots) and was cancelled.
 DEEPER: dict[int, str] = {}
 STAGING_BUCKET = "r2://manabot"
 STAGING_PREFIX = "mtg252/continue"
@@ -248,14 +250,20 @@ def runs(
     `continuations` names a file from `stage`; each run then continues its
     parent's learner to `updates` instead of starting fresh; `after` names the
     segment whose runs are the parents (`SEGMENT_PARENTS`). A non-zero `depth`
-    launches only the masked-mean baseline at that depth, fresh. `arms` narrows a
+    launches only the masked-mean baseline at that depth, fresh, with
+    `recover_capacity` applying to it alike. `arms` narrows a
     continuation to some arms, and any non-empty `recover_capacity` makes a game
     that overflows observation capacity end alone instead of stopping the run.
     """
     chosen = tuple(int(seed) for seed in seeds.split(","))
     if depth:
+        recipe = deeper(depth, updates)
+        if recover_capacity:
+            stage = recipe.stages[0]
+            assert isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
+            stage.game_errors.recover_capacity = True
         return training_runs(
-            [deeper(depth, updates)],
+            [recipe],
             updates=updates,
             revision=revision,
             experiment=EXPERIMENT,
