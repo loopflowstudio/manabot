@@ -1,0 +1,184 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MTG-268 measurement</title><style>body{max-width:1120px;margin:3rem auto;padding:0 1rem;font:16px/1.5 system-ui;color:#242424;background:#faf8f2}h1{font-size:1.9rem}table{border-collapse:collapse;width:100%;font-size:.9rem;margin:1.5rem 0}th,td{padding:.65rem;border-bottom:1px solid #ccc;text-align:left}th{background:#eee9dd}.verdict{padding:1rem;border-left:5px solid #286446;background:#e8f1e8}code{font-size:.9em}pre{white-space:pre-wrap}small{color:#555}</style><h1>MTG-268: dtype validation measurement</h1><p class="verdict"><strong>Inconclusive: no measurable latency improvement.</strong> Sixteen-world medians fell 4.3% / 5.7%, but every workload’s observed ranges overlap. Five alternating samples per wheel per cell; zero latency/receipt failures. Restored the dtype cut and its tests; earlier batching work remains.</p><table><thead><tr><th>Commit</th><th>Value</th><th>Verdict</th><th>Hypothesis</th><th>Limiter</th></tr></thead><tbody><tr><td>44895a104 + uncommitted dtype cut<br><small>restored to 44895a104</small></td><td>16 worlds: 1.22505 → 1.17244 s (42); 1.68050 → 1.58390 s (43), n=5/side</td><td>Inconclusive; restore cut</td><td>Primitive dtype metadata reduces batched decision latency by 3–5%.</td><td>All six latency ranges overlap; Command/audit remains largest. Encoding profile improves but does not establish latency gain.</td></tr><tr><td>44895a104<br><small>baseline; reference owners 841b1c50c</small></td><td>3.35× / 3.62× equal-work speedup</td><td>Better; retain baseline</td><td>Batched search/model cuts reduce fixed inference overhead while preserving receipts.</td><td>Command application/audit: 40.3% of separate profile. Initialized openings only; same native runtime.</td></tr></tbody></table><h2>Batched seconds per decision</h2><p>Median [minimum, maximum], n=5 per wheel per cell. Positive reduction means a lower candidate median, not a proven gain. Only after_seconds from each unchanged harness invocation enters this comparison.</p><table><thead><tr><th>Position</th><th>Worlds</th><th>Baseline s</th><th>Candidate s</th><th>Median reduction</th><th>Verdict</th><th>Rollouts / Commands</th></tr></thead><tbody><tr><td>42</td><td>1</td><td>0.10346 [0.09089, 0.11682]</td><td>0.10834 [0.08425, 0.19892]</td><td>-4.72%</td><td>No measurable difference</td><td>4 / 80</td></tr><tr><td>42</td><td>4</td><td>0.34375 [0.29185, 0.37101]</td><td>0.35470 [0.26137, 0.76723]</td><td>-3.18%</td><td>No measurable difference</td><td>16 / 320</td></tr><tr><td>42</td><td>16</td><td>1.22505 [1.01662, 1.38053]</td><td>1.17244 [1.01458, 1.57390]</td><td>+4.29%</td><td>No measurable difference</td><td>64 / 1280</td></tr><tr><td>43</td><td>1</td><td>0.12370 [0.11262, 0.13320]</td><td>0.12940 [0.11679, 0.14463]</td><td>-4.61%</td><td>No measurable difference</td><td>5 / 100</td></tr><tr><td>43</td><td>4</td><td>0.39782 [0.37955, 0.44692]</td><td>0.40437 [0.38055, 0.45163]</td><td>-1.65%</td><td>No measurable difference</td><td>20 / 400</td></tr><tr><td>43</td><td>16</td><td>1.68050 [1.32344, 1.80968]</td><td>1.58390 [1.49736, 1.70994]</td><td>+5.75%</td><td>No measurable difference</td><td>80 / 1600</td></tr></tbody></table><h2>Separate profiled searches, position 42 / 16 worlds</h2><p>Median [minimum, maximum], n=5 per wheel. These searches are outside all latency timing regions. Categories are inclusive and overlap; cProfile amplifies Python-call overhead. Profile improvements are mechanism evidence only.</p><table><thead><tr><th>Category</th><th>Calls/search</th><th>Baseline profile s</th><th>Candidate profile s</th><th>Verdict</th></tr></thead><tbody><tr><td>native_step_and_audit</td><td>1280</td><td>0.51045 [0.45361, 0.55229]</td><td>0.58284 [0.46486, 0.78931]</td><td>No measurable difference (profile only)</td></tr><tr><td>network</td><td>21</td><td>0.30453 [0.27113, 0.35454]</td><td>0.34090 [0.27540, 0.38127]</td><td>No measurable difference (profile only)</td></tr><tr><td>semantic_direct_hash</td><td>1296</td><td>0.19909 [0.17477, 0.21178]</td><td>0.25656 [0.17967, 0.32013]</td><td>No measurable difference (profile only)</td></tr><tr><td>observation_encoding</td><td>1281</td><td>0.19549 [0.17280, 0.23433]</td><td>0.07677 [0.06826, 0.10713]</td><td>Better (profile only)</td></tr><tr><td>session_snapshot</td><td>64</td><td>0.00903 [0.00750, 0.01128]</td><td>0.00987 [0.00794, 0.01189]</td><td>No measurable difference (profile only)</td></tr><tr><td>observation_allocation</td><td>21</td><td>0.00253 [0.00228, 0.00338]</td><td>0.00263 [0.00239, 0.00279]</td><td>No measurable difference (profile only)</td></tr><tr><td>tensor_assembly</td><td>462</td><td>0.00078 [0.00071, 0.00083]</td><td>0.00081 [0.00073, 0.00086]</td><td>No measurable difference (profile only)</td></tr></tbody></table><h2>Evidence, disposition and limits</h2><pre>Inconclusive: no measurable end-to-end latency improvement. Restore the dtype
+cut to the last kept commit, 44895a104. The sixteen-world median reductions of
+4.29% (52.6 ms, position 42) and 5.75% (96.6 ms, position 43) lie inside broad
+overlapping ranges. All six cells have overlapping ranges. The four smaller
+cells have worse medians (1.65–4.72% higher), also within variability. These are
+five samples per side, not confidence intervals. The 0.76723 s candidate sample
+at 42/four worlds is retained; its cause was not measured. No latency sample
+was dropped, replaced or retried. A quieter, controlled host with a newly
+declared repeated protocol would be needed to resolve a 3–5% gain; this run
+does not establish one and does not start that further investigation.
+
+Comparison: current batched Python owners on the preserved ordinary baseline
+and candidate release binaries, five serial baseline/candidate grid pairs.
+Each swap copied to a sibling file and atomically renamed it; every benchmark
+was a fresh process. Both builds were already completed before this step.
+Same locked environment, warmed policies, Apple M4 Max/macOS 26.0.1,
+CPython 3.12.12, Torch 2.10.0, one CPU/inter-op thread, initialized scalar
+64-wide/two-layer model, seeds 42/43, search seed 17, depth 20, 1/4/16 worlds.
+No games, evaluations, artificial contention or concurrent benchmark workers.
+The new candidate comparison is not the historical sequential-to-batched gain.
+
+The unchanged harness times teacher.search itself, including the rollout work,
+but excludes setup, warming, profile searches, receipt comparisons and swaps.
+All ten latency processes exited zero: 60 live sequential-owner comparisons
+and 60 saved-receipt comparisons passed. Each wheel&#x27;s timed batched searches
+executed 945 rollouts / 18,900 Commands; its timed sequential controls executed
+the same work. Both sides distinguish the larger workload: 16 worlds execute
+16 times the singleton rollouts/Commands and take much longer. No terminal-heavy
+positions are represented. Maximum absolute base/value/target errors remain
+1.0242171e-10 / 4.09781933e-8 / 3.13064846e-9, within atol 1e-6 / rtol 1e-5.
+Full discrete receipts, legal support, Commands, hashes, audits, sampling,
+world and checkpoint identities pass. Runtime SHA is deliberately different.
+
+Profiles are separate searches, excluded from latency measurements. Across
+five profiles per wheel, encoding falls from median 0.19549 s
+[0.17280, 0.23433] to 0.07677 s [0.06826, 0.10713]: 60.7% less profiled
+encoding time, disjoint ranges. Every other listed profile bucket overlaps.
+This is a micro result under cProfile, not a 60.7% search improvement.
+
+An additional full profile on each wheel confirms 56,364 dtype _name_get calls
+become zero (1,281 encodings × 22 arrays × two names). All baseline calls are
+attributed by pstats to Env.encode_observation_into. Dtype names take 0.09052 s
+of the baseline full profile&#x27;s 1.18372 s: 7.65%, an optimistic complete-removal
+ceiling of 1/(1 - 0.0765) = 1.083×. cProfile amplifies Python-call cost; this
+is not an unprofiled bound or saving. Encoding as a whole takes 0.18232 s
+(15.4%) there, versus 0.06452 s (6.45%) of the candidate&#x27;s 1.00090 s profile.
+Those additional full-profile timings have n=1 per side and no variability
+estimate; their incidental unprofiled cells are excluded as well.
+
+The limiter remains native Command application/audit: 0.48073 s (40.6%) of the
+baseline full profile, 0.45022 s (45.0%) of the candidate profile. The candidate
+also spends 26.1% in the network and 17.3% hashing. These native/profile buckets
+do not explain unmeasured host variability and cannot support a stronger verdict.
+Source mapping: LocalUpdateTeacher._run_rollouts and predict_batch in
+manabot/sim/search/local_update.py call SelectedBranchRuntime.apply_policy_choice
+and Env.encode_observation_into in managym/src/python/bindings.rs. The dtype
+cut changes fill_encoded_into_existing_buffers and require_numpy_array in
+managym/src/python/convert.rs; the latter&#x27;s candidate is retained in candidate.patch.
+Hashing still calls Game::semantic_viewer_state_hash in managym/src/decision.rs.
+No hash, Command or model changes were made in this measurement step.
+
+Errors: zero latency/process/parity failures in the ten planned samples. One
+additional diagnostic setup failed before any search because the new wrapper
+was named profile.py and shadowed the Python standard library. Its empty JSON
+and traceback are retained as profile-baseline-setup-failed.*. Renaming only
+the diagnostic wrapper to capture_profile.py fixed it; both full profiles then
+exited zero. The frozen benchmark was unchanged. Missing failed-profile
+measurements are absent, never zero-valued timing samples.
+
+Disposition: the three Rust binding files and the dtype-added tests were
+restored exactly to HEAD; the preserved baseline extension was atomically
+reinstalled. The complete rejected diff, both ordinary binaries, candidate
+wheel, all verification evidence and all samples remain in
+.cache/mtg-268/dtype-validation. Earlier batching/model/hash/encoding work is
+unchanged. No other optimization, Graph, publication or shipping.
+
+Identity and reproduction:
+- Harness SHA256: 3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a.
+- Baseline/restored runtime: 0b286acd043f21ecfcf8ca7e9c3ad449ee38b3dffaa0aa8914c311d733d15a46.
+- Candidate runtime: 236c5a7c7683cff0f71478f2cca14ccf35f758aafbcfd5122695f98a68bf8e66.
+- Checkpoint: 57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb.
+- Ten exact commands/order/exit codes: measurement-runs.json; runner: measure.py.
+- Samples: measure-{1..5}-{baseline,candidate}.{json,err}; aggregation:
+  measurement-summary.json. Each sample retains the sequential-control timings
+  and all parity maxima as well as the batched timings used here.
+- Full profiles: profile-{baseline,candidate}-{batched,sequential}.{pstats,json};
+  diagnostic wrapper: capture_profile.py. Historic pstats/receipts are unchanged.
+
+Remaining Task limits are unchanged: no trained-strength claim, unresolved
+MTG-183/w13 admission, no measured eight-world point, and no agreed definition
+of “near” the original singleton. Broader gate/CI validation belongs to the
+remaining Task, not this rejected candidate&#x27;s focused checks.
+
+Final restoration verification: `uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/merged-reference --compare-encoders` exited zero on the restored ordinary wheel: all six live/saved receipt pairs and 1,281 exact encodings passed. Its incidental timings are excluded. All 40 retained step-3 artifacts other than the intentionally replaced installed extension reverified unchanged. The four restored source/test files match HEAD byte for byte; `git diff --check` passes. `measurement-artifacts.json` records the new artifact hashes and final installation. No process started by this step remains running.
+</pre><details><summary>Historical sequential-to-batched baseline (not this cut’s gain)</summary><h2>Seconds per decision</h2><p>Median [minimum, maximum], n=5 per side per cell. Sequential then batched; identical runtime, checkpoint, seed and depth. All samples retained.</p><table><thead><tr><th>Position</th><th>Worlds</th><th>Sequential s</th><th>Batched s</th><th>Ratio</th><th>Rollouts / Commands</th></tr></thead><tbody><tr><td>42</td><td>1</td><td>0.25963 [0.20944, 0.29722]</td><td>0.10078 [0.08264, 0.11796]</td><td>2.58×</td><td>4 / 80</td></tr><tr><td>42</td><td>4</td><td>1.05051 [0.80673, 1.19994]</td><td>0.34665 [0.29120, 0.74524]</td><td>3.03×</td><td>16 / 320</td></tr><tr><td>42</td><td>16</td><td>4.24566 [3.69680, 4.32050]</td><td>1.26913 [1.22429, 1.27389]</td><td>3.35×</td><td>64 / 1280</td></tr><tr><td>43</td><td>1</td><td>0.32751 [0.29087, 0.36039]</td><td>0.12348 [0.10428, 0.13945]</td><td>2.65×</td><td>5 / 100</td></tr><tr><td>43</td><td>4</td><td>1.30797 [1.25916, 1.72466]</td><td>0.41476 [0.38302, 0.48030]</td><td>3.15×</td><td>20 / 400</td></tr><tr><td>43</td><td>16</td><td>5.57084 [4.48144, 6.10790]</td><td>1.53841 [1.25904, 1.67621]</td><td>3.62×</td><td>80 / 1600</td></tr></tbody></table><h2>Evidence and limits</h2><pre>## Optimize baseline result (2026-11-09)
+
+**Better for equal work.** Five alternating sequential/batched samples per cell,
+30 pairs, zero benchmark errors, all 30 full discrete comparisons and all 30
+saved-receipt comparisons passed. Each side executed 945 rollouts / 18,900
+Commands inside the timed searches. No retries or deadline rejections. No
+production files changed; keep HEAD `44895a104` as the next experiment&#x27;s baseline.
+
+Seconds per decision: median [minimum, maximum]; ratio is sequential median /
+batched median, not the median of paired ratios.
+
+| Position | Worlds | Sequential seconds | Batched seconds | Speedup | Rollouts / Commands per search |
+| --- | --- | --- | --- | --- | --- |
+| 42 | 1 | 0.25963 [0.20944, 0.29722] | 0.10078 [0.08264, 0.11796] | 2.58× | 4 / 80 |
+| 42 | 4 | 1.05051 [0.80673, 1.19994] | 0.34665 [0.29120, 0.74524] | 3.03× | 16 / 320 |
+| 42 | 16 | 4.24566 [3.69680, 4.32050] | 1.26913 [1.22429, 1.27389] | 3.35× | 64 / 1280 |
+| 43 | 1 | 0.32751 [0.29087, 0.36039] | 0.12348 [0.10428, 0.13945] | 2.65× | 5 / 100 |
+| 43 | 4 | 1.30797 [1.25916, 1.72466] | 0.41476 [0.38302, 0.48030] | 3.15× | 20 / 400 |
+| 43 | 16 | 5.57084 [4.48144, 6.10790] | 1.53841 [1.25904, 1.67621] | 3.62× | 80 / 1600 |
+
+All six observed ranges are disjoint. The 16-world paired speedup ranges are
+2.910–3.487× (42) and 3.460–4.092× (43). Keep the noisy 42/four-world sample
+(0.74524 s batched); its cause was not measured. These are five samples, not a
+confidence interval. Both positions show substantially more time and work at 16
+worlds than at one, confirming that the harness distinguishes workload size.
+
+Largest absolute base/value/target errors across live and retained comparisons:
+1.0242171e-10 / 4.09781933e-08 / 3.13064846e-09
+(atol 1e-6, rtol 1e-5). Receipt support, hashes, Commands, audits, terminal flags,
+sampling identities, world identity and checkpoint identity pass unchanged.
+The two openings exercise full-depth continuations, not terminal-heavy search.
+
+Separate ordinary-wheel cProfile, position 42 / 16 worlds: total accounted
+batched time 1.22840 s, excluded from the five latency samples. The unchanged
+harness already runs separate profiles; `scratch/mtg268_profile.py` additionally
+retains full pstats and self-time totals from one extra diagnostic invocation.
+Its unprofiled timing cell is also excluded from the reported baseline.
+
+| Batched category | Calls | Profile seconds | Share of profile | Impossible full-removal ceiling |
+| --- | --- | --- | --- | --- |
+| native_step_and_audit | 1280 | 0.4950 | 40.3% | 1.675× |
+| network | 21 | 0.2917 | 23.7% | 1.311× |
+| semantic_direct_hash | 1296 | 0.1917 | 15.6% | 1.185× |
+| observation_encoding | 1281 | 0.1899 | 15.5% | 1.183× |
+| session_snapshot | 64 | 0.0090 | 0.7% | 1.007× |
+
+Source mapping: `LocalUpdateTeacher._run_rollouts` calls
+`SelectedBranchRuntime.apply_policy_choice` (`managym/src/python/bindings.rs:3064`),
+including offer/Command validation, stepping, audit and returned observation
+conversion. The Python profile cannot divide that native bucket further.
+Hash reads reach `Game::semantic_viewer_state_hash` (`managym/src/decision.rs:354`)
+and preserve canonical viewer projection / SHA-256. `predict_batch`
+(`manabot/sim/search/local_update.py:538`) reaches native encoding at
+`bindings.rs:4263`. Its buffer copy validates source and destination dtype names
+at `bindings.rs:340` and `managym/src/python/convert.rs:53`.
+The profiler attributes 56,364 NumPy `_name_get` calls, 0.09521 s inclusive, to
+`encode_observation_into`: 7.75% of the full profile, at most 1.084× if eliminated
+entirely. This is a bounded candidate for optimize-plan, not a selected change
+or an unprofiled saving; cProfile amplifies Python call costs. Preserve all shape,
+dtype, independent-output and atomic pre-write validation contracts.
+
+The measured gain is explained by network forwards falling 1,281 → 21
+(2.54701 → 0.29167 profile seconds), composite semantic reads 1,298 → 2 plus
+1,296 direct hashes, and less encoding work (0.40101 → 0.18988 s). The native
+Command count remains 1,280 (0.53381 → 0.49500 s). Snapshot work is under 1%;
+removing it cannot deliver the requested scaling. Profile categories are
+inclusive; do not add nested model or dtype costs to their parents. The full
+network-removal ceiling is only 1.311× on the current batched profile.
+
+Reproduction: five serial invocations of
+`uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/merged-reference`,
+then `uv run --extra dev python scratch/mtg268_profile.py --worlds 16 --position-seeds 42 --native-reference .cache/mtg-268/merged-reference`.
+Raw results: `scratch/mtg-268-baseline-{1..5}.json`; aggregation:
+`scratch/mtg-268-baseline-summary.json`; complete profile:
+`scratch/mtg-268-baseline-{before,after}.pstats` and corresponding profile JSON.
+The harness SHA256 stayed `3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a`.
+Native SHA256 stayed `0b286acd043f21ecfcf8ca7e9c3ad449ee38b3dffaa0aa8914c311d733d15a46`;
+checkpoint stayed `57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb`.
+Shared Apple M4 Max, macOS 26.0.1, Python 3.12.12, Torch 2.10.0, one intra/inter-op
+CPU thread, warmed policies, seed 17, depth 20, initialized scalar 64×2 model.
+uv created the checkout-local environment from locked dependencies on first run;
+setup was outside all search timings. Both sides used that environment.
+
+Limits for optimize-plan: these same-runtime Python-owner comparisons include
+all retained search/model cuts, not batching alone or a separately built
+historical native engine. No cross-world or trained-strength claim. Original
+MTG-183/w13 admission and the definition of “near” remain unresolved. The new
+16-world/current sequential-singleton median ratios are 4.89× / 4.70×, diagnostic
+only. Eight worlds remain unmeasured. No optimization was implemented, reverted,
+published or shipped in this baseline step; broad gate checks remain pending.</pre></details></html>
