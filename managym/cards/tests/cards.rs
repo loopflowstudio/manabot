@@ -14,6 +14,8 @@ mod afr;
 mod blb;
 #[path = "cards/definitions.rs"]
 mod definitions;
+#[path = "cards/dft.rs"]
+mod dft;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/fdn.rs"]
@@ -34,6 +36,8 @@ mod m20;
 mod mkm;
 #[path = "cards/observability.rs"]
 mod observability;
+#[path = "cards/rav.rs"]
+mod rav;
 #[path = "cards/roe.rs"]
 mod roe;
 #[path = "cards/scryfall.rs"]

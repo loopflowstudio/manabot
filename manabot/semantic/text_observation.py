@@ -101,6 +101,8 @@ _STAGES = frozenset(
         "name_card",
         "discard",
         "select_milled",
+        "select_cards",
+        "order_replacement",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -115,6 +117,7 @@ _STAGES = frozenset(
         "resolution_cast",
         "surveil",
         "order_library_bottom",
+        "order_library_top",
     )
 )
 
@@ -199,6 +202,9 @@ _OBLIGATIONS = (
     "choose optional payment X",
     "search named cards",
     "choose a permanent to exile",
+    "order library top",
+    "select cards",
+    "order replacements",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -544,6 +550,12 @@ class _Renderer:
             details.append(f"parent R{relation.parent + 1}")
         if relation.kind == 6 and relation.decision == 25:
             details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 6 and relation.decision == 27:
+            details.append(f"{relation.mode or 0} kept cards already ordered on top")
+        elif relation.kind == 6 and relation.decision == 28:
+            details.append(f"may select up to {relation.mode or 0} more cards")
+        elif relation.kind == 6 and relation.decision == 29:
+            details.append("choose the next event replacement")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -623,6 +635,10 @@ class _Renderer:
             )
         if relation.program_description is not None:
             details.append(f"captured program: {relation.program_description}")
+        if relation.effect_execution_description is not None:
+            details.append(f"effect execution: {relation.effect_execution_description}")
+        for slot, reference in enumerate(relation.effect_execution_references, 1):
+            details.append(f"E{slot}: {self.fact_reference(reference)}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")
         if relation.source_transforms:

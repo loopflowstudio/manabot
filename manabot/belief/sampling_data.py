@@ -225,6 +225,10 @@ def public_sampler_input(
     """
     encoded = engine.hidden_hand_constraints_json(history.viewer)
     projected = json.loads(encoded)
+    if projected.get("retained_selection", False) or projected["foretold"]:
+        raise ValueError(
+            "count-only belief sampler cannot represent retained selections or foretold slots"
+        )
     pool = _counts(projected["pool"])
     known = _counts(projected["known_hand"])
     if (set(pool) | set(known)) - set(schema.card_names):

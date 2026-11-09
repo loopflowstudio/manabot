@@ -328,6 +328,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         source_card: card,
         source_ref: Some(old_ref),
         effects: vec![Effect::Move {
+            library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
             tapped: true,
