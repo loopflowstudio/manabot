@@ -145,6 +145,21 @@ def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
     html = _extension_section(admitted)
     assert "bounded mini smoke passed" in html and "six smoke outcomes retained" in html
     assert "No native smoke" not in html
+    # Later performance diagnostics and ledger counts cannot fill sealed game slots.
+    (tmp_path / "batching").mkdir()
+    (tmp_path / "batching/summary.json").write_text(json.dumps({
+        "decision": "not admitted", "reason": "timings inconclusive",
+        "correctness": "fixed roots match", "limits": "one pair per cell", "cells": [],
+    }))
+    (receipt_dir / "batching-inventory.json").write_text(json.dumps({
+        "completed": 77, "failed": 0, "observed_utc": "later", "workers": ["worker"],
+    }))
+    diagnostics = _extension_report(tmp_path, {})
+    assert diagnostics["valid_games"] == 0 and diagnostics["missing_games"] == 3000
+    assert all(arm["search_cost"] is None for arm in diagnostics["arms"].values())
+    html = _extension_section(diagnostics)
+    assert "77/3,000 completed rows" in html and "0/3,000 valid games" in html
+    assert "not admitted" in html and "earlier closed-evidence snapshot" in html
     # A typo in the input path must not manufacture a no-games receipt.
     with pytest.raises(FileNotFoundError):
         _extension_report(tmp_path / "missing", {})

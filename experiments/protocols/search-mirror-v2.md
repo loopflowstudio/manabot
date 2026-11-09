@@ -1,5 +1,74 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Batching check — 2026-11-09 22:26 UTC
+
+The authorized MTG-268 Python batching adaptation is implemented locally and
+**not admitted to the running campaign**. The same sequential Etude run
+`mtg269-mirror-v2`, attempt `3a2b62144b9a`, session `04058802ff84`, remains
+running. No drain, source replacement, restart, continuation segment, extra game,
+new allocation or rental occurred. The six cells, raw sampled opponent, worker
+ceiling and absolute deadline `1794852989` are unchanged.
+
+The direction is “thats pretty slow” and “you might want to adopt the work from
+mtg-268”. The narrow port reuses frontier execution, per-branch RNGs and batched
+policy forwards from MTG-268 `afcee56b996175130c057cb8c01656f7b79078d8`.
+It preserves the frozen Python encoder, w13 native build, model/input shapes,
+physical/oracle samplers and compound-prefix path; no native writer or main sync.
+The original sequential source at `0063d781710928df996402957a0b30123d332875`
+is the comparison reference. The candidate remains local to this checkout;
+its presence does not authorize passing the new source through an old identity
+lock. Any later execution needs a separately bound, reconciled continuation.
+
+Eighteen paired searches used actual raw MTG-183 bytes and the exact w13 native
+build, at depth 20 / alpha .02 / beta .01, oracle and uniform, 4/8/16 worlds.
+Roots at Commands 0/100/286 were reconstructed from the sealed oracle-four-world
+smoke (deal 1819000000); all 286 historical Commands and pending witnesses match.
+All discrete receipt fields, sampled hands, action/world ordering, independent
+rollout seeds and branch audit Commands match. Each implementation executed
+616 rollouts / 11,618 Commands. Maximum absolute errors: base 0, action values
+1.79e-7, rollout values 5.67e-7, targets 2.90e-7, within the unchanged MTG-268
+atol 1e-6 / rtol 1e-5. Terminal signed values match exactly. Uniform receipts
+pass the physical-sampler reader. This is narrow observed-position correctness,
+not full-grid equivalence or a strength result.
+
+Single-pair laptop ratios span **0.928–1.454×**. Summed sequential/batched time
+is 68.06/59.40 seconds; these sums are not representative game weighting.
+Opening ratios are 1.19–1.45×, midgame 0.995–1.36×, terminal 0.928–1.33×.
+Unrelated compilation and other host activity overlapped the measurements.
+The 16-world terminal oracle case regressed; no reliable uncontended mini
+throughput improvement or campaign ETA follows. Preserve the live sequential
+campaign rather than transition based on this inconclusive speed check. No
+additional optimization campaign or favorable-result rerun was started.
+
+Two harness API errors are retained: the first after all six opening pairs,
+the second before any further comparison. Both assumed a Command parser that
+w13 does not provide. The corrected invocation reconstructed Commands through
+the existing dataclass and ran only the twelve remaining pairs. No completed
+pair was rerun or replaced. Full receipts, exact candidate/sequential source,
+errors, process logs, host-activity snapshot and diagnostics are under
+`experiments/data/search-mirror-v2/batching/`. The existing HTML/summary display
+these separately from campaign timings; they remain inference-only checks.
+
+At `2026-11-09T22:26:12.500515+00:00`, a read-only per-shard ledger inventory
+has **77/3,000 completed rows, zero failures**: oracle 4/8/16 = 27/26/24.
+Seven workers remain live, and all 349 source bindings match the immutable
+remote archive. Completed game wall time sums to 39,225.35 seconds, hero search
+to 38,810.10 seconds; these exclude ongoing work and setup and are not inclusive
+worker hours. The newer inventory did not collect private closed attempts, so
+the scientific report still uses the earlier three-game sealed snapshot.
+`reconciliation/batching-inventory.json` retains rows, hashes, worker inventory
+and uncommitted filenames; uncommitted attempts are not failures.
+
+Validation: 24 frontier/runner/report/data checks plus 26 existing fixed-position
+search/compound checks pass; 44 search tests collect together. These fixture
+checks do not claim a full integration suite. No Rust changed or wheel rebuilt.
+The established environment was preserved. No local process remains running.
+
+Publication changed 57 manifest entries; all 139 mirror artifacts match the
+published manifest. HTML and summary rebuild byte-for-byte. All original v1
+scientific fields remain unchanged. CI selection and the post-publication
+untracked-data check pass. No new resource was acquired or stopped.
+
 ## Analysis snapshot — 2026-11-09 20:46 UTC
 
 The existing report now includes the first **3/3,000 valid campaign outcomes**,

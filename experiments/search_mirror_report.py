@@ -328,6 +328,10 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         }
     valid = sum(a["coverage"]["valid"] for a in arms.values())
     return {
+        "batching": (json.loads((directory / "batching/summary.json").read_text())
+                     if (directory / "batching/summary.json").exists() else None),
+        "latest_inventory": (json.loads((receipt_dir / "batching-inventory.json").read_text())
+                             if (receipt_dir / "batching-inventory.json").exists() else None),
         "protocol": "experiments/protocols/search-mirror-v2.md", "alpha": 0.02,
         "planned_games": len(V2_ARMS) * len(games), "valid_games": valid,
         "missing_games": sum(a["coverage"]["missing"] for a in arms.values()),
@@ -353,6 +357,41 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "evidence_sha256": {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
                             for p in sorted(directory.rglob("*")) if p.is_file()},
     }
+
+
+def _batching_section(extension: dict[str, Any]) -> str:
+    """Operational diagnostics never fill scientific game slots or blend costs."""
+    batching = extension.get("batching")
+    if batching is None:
+        return ""
+    inventory = extension.get("latest_inventory")
+    status = (
+        f'<p class="note">Later ledger-only inventory: {inventory["completed"]}/3,000 '
+        f'completed rows, {inventory["failed"]} failures at {escape(inventory["observed_utc"])}; '
+        f'{len(inventory["workers"])} sequential workers. Private attempt blobs were not '
+        'collected in this inventory, so the scientific tables retain their earlier closed-evidence snapshot.</p>'
+        if inventory else ""
+    )
+    rows = ''.join(
+        f'<tr><td>{cell["step"]}</td><td>{escape(cell["sampler"])}</td><td>{cell["worlds"]}</td>'
+        f'<td>{cell["sequential_seconds"]:.3f}</td><td>{cell["batched_seconds"]:.3f}</td>'
+        f'<td>{cell["speedup"]:.2f}×</td><td>{"pass" if cell["passed"] else "FAIL"}</td></tr>'
+        for cell in batching["cells"]
+    )
+    return (
+        '<h3>W13 batching admission</h3>'
+        f'<p><strong>{escape(batching["decision"])}.</strong> {escape(batching["reason"])}</p>'
+        f'<p class="note">{escape(batching["correctness"])} {escape(batching["limits"])}</p>'
+        '<details><summary>All fixed-position timings, seconds (one pair per cell)</summary>'
+        '<div class="table-scroll" role="region" aria-label="Batching diagnostics" tabindex="0">'
+        '<table><tr><th>Root step</th><th>Hands</th><th>Shuffles</th><th>Sequential s</th>'
+        '<th>Batched s</th><th>Ratio</th><th>Receipt parity</th></tr>' + rows + '</table></div>'
+        '<p class="note">These are paired fixed searches on the laptop, separate from mini game cost. '
+        'Two harness API errors are retained; six opening cells completed before the first error, '
+        'and the corrected invocation measured only the other roots. No failed comparison was replaced. '
+        'Source, complete private receipts, process logs and errors are stored under '
+        'search-mirror-v2/batching/.</p></details>' + status
+    )
 
 
 def _extension_section(extension: dict[str, Any]) -> str:
@@ -381,7 +420,7 @@ def _extension_section(extension: dict[str, Any]) -> str:
                          f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
                          f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
     return (
-        '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
+        _batching_section(extension) + '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
         f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
         f'{escape(extension["execution"])}.</strong> Snapshot: {escape(extension["observed_utc"])}. '
         f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'

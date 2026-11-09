@@ -1,5 +1,34 @@
 # Mirror search continuation
 
+## Batching handoff — 2026-11-09 22:26 UTC
+
+The requested minimal MTG-268 Python port is in this checkout, **not deployed**.
+All 18 trained w13 fixed-root comparisons pass at unchanged tolerances, including
+full discrete receipts and terminal signs. Ratios span 0.928–1.454× on a busy
+laptop (unrelated compilation observed); this does not establish a mini speedup.
+The protocol and existing report own the details. Exact candidate source, paired
+receipts, two harness errors and every timing are in v2 `batching/`. No search
+cell was rerun after its successful comparison; the corrected harness ran only
+remaining positions. No native/model/input change or main sync.
+
+Etude remains on the original sequential attempt `3a2b62144b9a`, session
+`04058802ff84`. Latest read-only ledger snapshot: 77/3,000 rows, zero failures,
+seven live oracle workers; all 349 source bindings still match. No drain,
+restart, remote source change, extra game or allocation. **Do not launch this
+checkout over the existing identity.** The original immutable remote source
+continues to own execution. Fixed schedule, seven-worker cap, zero rentals and
+absolute deadline 1794852989 remain in force.
+
+Only the three-game closed-evidence snapshot feeds scientific tables. The later
+77-row inventory is operational evidence, not a replacement blob collection.
+A later analysis can collect more sealed outcomes without relaunching. Fifty
+focused checks pass, with 44 search tests collected; full integration is not
+claimed. No local server, watcher or benchmark remains.
+
+Publication changed 57 manifest entries; all 139 mirror artifacts verify. The
+report and summary rebuild byte-for-byte, preserving every v1 scientific field.
+The post-publication untracked-data check passes. CI selection checks also pass.
+
 ## Live analysis handoff — 2026-11-09 20:46 UTC
 
 The existing report now includes three sealed v2 campaign outcomes, with all

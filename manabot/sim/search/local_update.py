@@ -10,7 +10,8 @@ rollouts preclude an equilibrium guarantee. Receipts are private training data.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field, replace
 import hashlib
 import json
 from pathlib import Path
@@ -43,7 +44,7 @@ from manabot.belief.state import (
 )
 from manabot.env import Env
 from manabot.model.world import validate_agent_setup
-from manabot.sim.search.branch import SelectedFullCloneBackend
+from manabot.sim.search.branch import BranchSession, SelectedFullCloneBackend
 from manabot.sim.search.compound import (
     CompoundCursor,
     CompoundPrefixReceipt,
@@ -421,6 +422,50 @@ def local_search_source_sha256() -> str:
     return _digest({path: file_sha256(root / path) for path in paths})
 
 
+@dataclass
+class Rollout:
+    """One independently seeded branch, retained in world/action receipt order."""
+
+    branch: managym.Env
+    session: BranchSession
+    world_index: int | None
+    world_seed: int
+    action_index: int
+    rollout_seed: int
+    sampled_hand: HandSample | None
+    probabilities: FloatArray
+    policy_rng: np.random.Generator = field(init=False)
+    hashes: list[str] = field(default_factory=list)
+    value: float = 0.0
+    compound: CompoundRollout | None = None
+    projection: CompoundProjection | None = None
+
+    def __post_init__(self) -> None:
+        self.policy_rng = np.random.default_rng(self.rollout_seed)
+
+    def receipt(self, viewer: int) -> RolloutReceipt:
+        terminal = bool(self.branch.is_game_over())
+        value = self.value
+        if terminal:
+            winner = self.branch.winner_index()
+            value = 0.0 if winner is None else (1.0 if winner == viewer else -1.0)
+        elif int(self.branch.current_agent_index()) != viewer:
+            value = -value
+        return RolloutReceipt(
+            canonical_commands=len(self.hashes),
+            decoder_factors=self.compound.factors if self.compound else 0,
+            world_index=self.world_index,
+            sampled_hand=self.sampled_hand,
+            world_seed=self.world_seed,
+            action_index=self.action_index,
+            rollout_seed=self.rollout_seed,
+            signed_value=value,
+            terminal=terminal,
+            actor_observation_hashes=tuple(self.hashes),
+            branch_audit_json=json.dumps(self.session.snapshot(), sort_keys=True),
+        )
+
+
 class LocalUpdateTeacher:
     """One admitted policy supplies rollouts, V and the belief-generating identity."""
 
@@ -491,26 +536,110 @@ class LocalUpdateTeacher:
         self.source_sha256 = local_search_source_sha256()
 
     def predict(self, engine: managym.Env) -> tuple[FloatArray, float]:
+        return self.predict_batch([engine])[0]
+
+    def predict_batch(
+        self, engines: Sequence[managym.Env]
+    ) -> list[tuple[FloatArray, float]]:
+        """Batch actor views using the frozen encoder and complete legal support.
+
+        Float32 kernels may round differently from singleton inference; legal-row
+        normalization stays float64. No native writer or input schema is changed.
+        """
         if self.agent.config.compound_decisions:
             raise ValueError("compound inference requires a retained prefix projection")
-        actor = int(engine.current_agent_index())
-        raw = engine.observation_for_player(actor)
-        encoded = self.space.encode(raw)
-        count = len(raw.action_space.actions)
-        if int(encoded["actions_valid"].sum()) != count or count == 0:
-            raise ValueError("policy cannot represent complete legal offers")
+        if not engines:
+            return []
+        encodings = []
+        counts: list[int] = []
+        for engine in engines:
+            actor = int(engine.current_agent_index())
+            raw = engine.observation_for_player(actor)
+            encoded = self.space.encode(raw)
+            count = len(raw.action_space.actions)
+            if int(encoded["actions_valid"].sum()) != count or count == 0:
+                raise ValueError("policy cannot represent complete legal offers")
+            encodings.append(encoded)
+            counts.append(count)
         tensors = {
-            key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
+            key: torch.as_tensor(np.stack([row[key] for row in encodings]))
+            for key in encodings[0]
         }
         with torch.inference_mode():
-            logits, value = self.agent(tensors)
-            probabilities = logits[0, :count].double().softmax(-1).numpy()
-        signed_value = float(value[0])
-        if not np.isfinite(signed_value):
+            logits, values = self.agent(tensors)
+            predictions = [
+                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
+                for i, count in enumerate(counts)
+            ]
+        if any(not np.isfinite(value) for _, value in predictions):
             raise ValueError("nonfinite leaf value")
-        # Scalar PPO heads are unconstrained; retain their actual estimate rather
-        # than silently turning it into a sigmoid probability or clipping it.
-        return probabilities, signed_value
+        # Scalar PPO heads retain their actual signed, unclipped estimates.
+        return predictions
+
+    def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
+        """Advance one Command per live branch, then predict the next frontier.
+
+        Branches retain independent RNGs and world/action order. Compound policies
+        keep their existing prefix decoder; only flat policy forwards are batched.
+        The final forward supplies signed leaf estimates, including at depth one.
+        """
+        live = [row for row in rollouts if not row.branch.is_game_over()]
+        for ply in range(self.config.depth):
+            pending: list[Rollout] = []
+            for row in live:
+                check()
+                actor = int(row.branch.current_agent_index())
+                row.hashes.append(
+                    Observation.from_json(
+                        row.branch.semantic_observation_json(actor)
+                    ).viewer_state_hash
+                )
+                if row.compound is not None:
+                    assert row.projection is not None
+                    choice = (
+                        row.action_index
+                        if ply == 0
+                        else row.compound.choose(row.projection)
+                    )
+                    row.compound.advance(row.projection, choice)
+                else:
+                    choice = (
+                        row.action_index
+                        if ply == 0
+                        else int(
+                            row.policy_rng.choice(
+                                len(row.probabilities), p=row.probabilities
+                            )
+                        )
+                    )
+                _, _, _, truncated, _ = row.session.apply_policy_choice(
+                    row.branch, site="child", policy_index=choice
+                )
+                if truncated:
+                    raise RuntimeError(
+                        "local rollout truncated before an authoritative outcome"
+                    )
+                if not row.branch.is_game_over():
+                    pending.append(row)
+            if not pending:
+                break
+            check()
+            if self.agent.config.compound_decisions:
+                for row in pending:
+                    assert row.compound is not None
+                    row.projection = row.compound.project(row.branch)
+                    row.probabilities, row.value = (
+                        row.projection.probabilities,
+                        row.projection.value,
+                    )
+            else:
+                predictions = self.predict_batch([row.branch for row in pending])
+                for row, (probabilities, value) in zip(
+                    pending, predictions, strict=True
+                ):
+                    row.probabilities, row.value = probabilities, value
+            check()
+            live = pending
 
     def verify_replay(
         self,
@@ -690,9 +819,7 @@ class LocalUpdateTeacher:
         else:
             assert isinstance(belief, BeliefState)
             indexes = list(belief.sample_indexes(world_count, seed=seed))
-        sums = np.zeros(len(base), dtype=np.float64)
-        counts = np.zeros(len(base), dtype=np.int64)
-        receipts: list[RolloutReceipt] = []
+        rollouts: list[Rollout] = []
         for sample_number, index in enumerate(indexes):
             check()
             world_seed = int(rng.integers(0, 2**63))
@@ -721,91 +848,39 @@ class LocalUpdateTeacher:
             if world_frame.offers != frame.offers:
                 raise ValueError("materialization changed semantic root offers")
             for action in np.flatnonzero(base > 0):
-                action = int(action)
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
-                policy_rng = np.random.default_rng(rollout_seed)
                 session = SelectedFullCloneBackend().open_session(
-                    match_id=f"local-{seed}-{len(receipts)}", audit=True
+                    match_id=f"local-{seed}-{len(rollouts)}", audit=True
                 )
-                branch = session.fork_exact(world, "world")
-                hashes: list[str] = []
-                probabilities, value = base, 0.0
-                compound_rollout = (
-                    CompoundRollout(self.agent, compound, rollout_seed, check)
-                    if compound is not None
-                    else None
-                )
-                projection = compound
-                for ply in range(self.config.depth):
-                    check()
-                    if branch.is_game_over():
-                        break
-                    actor = int(branch.current_agent_index())
-                    hashes.append(
-                        Observation.from_json(
-                            branch.semantic_observation_json(actor)
-                        ).viewer_state_hash
-                    )
-                    if compound_rollout is not None:
-                        assert projection is not None
-                        choice = (
-                            action if ply == 0 else compound_rollout.choose(projection)
-                        )
-                        compound_rollout.advance(projection, choice)
-                    else:
-                        choice = (
-                            action
-                            if ply == 0
-                            else int(
-                                policy_rng.choice(len(probabilities), p=probabilities)
-                            )
-                        )
-                    _, _, _, truncated, _ = session.apply_policy_choice(
-                        branch, site="child", policy_index=choice
-                    )
-                    if truncated:
-                        raise RuntimeError(
-                            "local rollout truncated before an authoritative outcome"
-                        )
-                    if not branch.is_game_over():
-                        if compound_rollout is not None:
-                            projection = compound_rollout.project(branch)
-                            probabilities, value = (
-                                projection.probabilities,
-                                projection.value,
-                            )
-                        else:
-                            probabilities, value = self.predict(branch)
-                terminal = bool(branch.is_game_over())
-                if terminal:
-                    winner = branch.winner_index()
-                    value = (
-                        0.0 if winner is None else (1.0 if winner == viewer else -1.0)
-                    )
-                elif int(branch.current_agent_index()) != viewer:
-                    value = -value
-                sums[action] += value
-                counts[action] += 1
-                receipts.append(
-                    RolloutReceipt(
-                        canonical_commands=len(hashes),
-                        decoder_factors=compound_rollout.factors
-                        if compound_rollout is not None
-                        else 0,
+                rollouts.append(
+                    Rollout(
+                        branch=session.fork_exact(world, "world"),
+                        session=session,
                         world_index=index,
-                        sampled_hand=sampled_hand,
                         world_seed=world_seed,
-                        action_index=action,
+                        action_index=int(action),
                         rollout_seed=rollout_seed,
-                        signed_value=value,
-                        terminal=terminal,
-                        actor_observation_hashes=tuple(hashes),
-                        branch_audit_json=json.dumps(
-                            session.snapshot(), sort_keys=True
-                        ),
+                        sampled_hand=sampled_hand,
+                        probabilities=base,
+                        compound=CompoundRollout(
+                            self.agent, compound, rollout_seed, check
+                        )
+                        if compound is not None
+                        else None,
+                        projection=compound,
                     )
                 )
+        self._run_rollouts(rollouts, check)
+        sums = np.zeros(len(base), dtype=np.float64)
+        counts = np.zeros(len(base), dtype=np.int64)
+        receipts: list[RolloutReceipt] = []
+        for row in rollouts:
+            check()
+            rollout_receipt = row.receipt(viewer)
+            sums[row.action_index] += rollout_receipt.signed_value
+            counts[row.action_index] += 1
+            receipts.append(rollout_receipt)
         check()
         values = np.divide(
             sums, counts, out=np.full_like(sums, np.nan), where=counts > 0

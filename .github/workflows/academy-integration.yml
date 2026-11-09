@@ -55,4 +55,5 @@ jobs:
         run: |
           uv run --python 3.12 --extra dev pytest -q \
             tests/sim/test_local_update_sampling.py \
-            tests/sim/test_local_update_compound.py
+            tests/sim/test_local_update_compound.py \
+            tests/sim/test_mirror_batch_frontier.py

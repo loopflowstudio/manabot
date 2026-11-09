@@ -198,3 +198,13 @@ frozen environment and exact native bytes. Smoke means six separate smoke-key
 games (one per factorial cell), three one-thread workers, oracle then uniform,
 at most two hours inside the unchanged absolute campaign deadline. No strength
 claim follows from that tiny admission. Campaign stays seven workers/3,000 games.
+
+## W13 batching admission — 2026-11-09
+
+Jack Heart: “thats pretty slow” and “you might want to adopt the work from mtg-268”.
+The explicit continuation is bounded by the same 3,000 slots and deadline.
+Reversible admission choice: compare three roots (steps 0/100/286) reconstructed
+from the already sealed oracle-four-world smoke, both physical samplers and all
+4/8/16 allocations, with MTG-268's unchanged atol 1e-6 / rtol 1e-5. These are
+fixed-position checks on the laptop, not new games or a campaign speed claim.
+Retain all diagnostics, including harness errors, in the existing artifact store.

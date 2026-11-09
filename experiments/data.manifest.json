@@ -3571,12 +3571,228 @@
    "bytes": 16029
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "3763c88cdf32c6f6323860e40334dd10aa57e116eaef6607d9e8448dacefd311",
-   "bytes": 91074
+   "sha256": "73574e13ad179391a8f2383cdffc73e5af9cdb4a183c8354241ab0034fc206b8",
+   "bytes": 94858
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "d28cb9fb46c5fe69ab5098fc2fe287f3adab4b7234a0d5764602ca1405212f50",
-   "bytes": 1608444
+   "sha256": "f1fc3a64ec8b3061b466f79e2b61811ae800550dcaa3e456be879ae01a6da419",
+   "bytes": 1687406
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-16-batched.json.gz": {
+   "sha256": "930bf9d30fe0b91e04e3f6b0b1db819fa294efab2ba2004f0b5bf4d4f604b336",
+   "bytes": 288009
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-16-sequential.json.gz": {
+   "sha256": "e23335f7737b1d7648e68675b869620db57499f981ad4c75a2ced8c17fef23d8",
+   "bytes": 288015
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-4-batched.json.gz": {
+   "sha256": "c305614387ddccd2001dfb8f5e0e619122ef628b550cc1b3f5009b13150917d4",
+   "bytes": 75973
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-4-sequential.json.gz": {
+   "sha256": "8c2a7d08bcd8c96a770f62691bf5479ee8ec2b156bdd03884a0b1ee8dda3fdba",
+   "bytes": 75975
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-8-batched.json.gz": {
+   "sha256": "8e5209cbcd24e92580a046673ad434a1e61508d80a13f3a41252c53dd68dd0b1",
+   "bytes": 146754
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-8-sequential.json.gz": {
+   "sha256": "022843f88a669e46f0447163b8bd6fa0fc277fa7b21933f96834cd50c52183e7",
+   "bytes": 146748
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-16-batched.json.gz": {
+   "sha256": "ee3eecdd6c39abee2188a7f761c234598792f337afed225c43161944bedfcc12",
+   "bytes": 290610
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-16-sequential.json.gz": {
+   "sha256": "bbd030c55ef21bd0b681e7ff3dadc476eab2b8473b2bbc520bd2f0cad17e0189",
+   "bytes": 290605
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-4-batched.json.gz": {
+   "sha256": "d53446d29a7eac6f60b16f94df9316f2e3442f9195a62205b23ec23357d06017",
+   "bytes": 75122
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-4-sequential.json.gz": {
+   "sha256": "139a56e3ebc11820b345a099de6ee41f0eb1de786056b83937d7a645ff1e258d",
+   "bytes": 75125
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-8-batched.json.gz": {
+   "sha256": "abd8a4b32a03c827922aa96b4757d5e7c0dd1dfd263098dd249d595ae557476c",
+   "bytes": 146867
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/0-uniform-8-sequential.json.gz": {
+   "sha256": "f8a599b09a968770696e03421664034fbbb2aa00243fa047ecfe8373dba0af83",
+   "bytes": 146869
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/process.log": {
+   "sha256": "313be04846c8e1473add4d3d0b99f5920afeed3bc4dc494b13ccb74113b2e946",
+   "bytes": 2972
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/result.json": {
+   "sha256": "6bb16138a5b81e363b1c95e11a1a75f253b56aa856d703bfa0ec0e33697ff670",
+   "bytes": 25603
+  },
+  "experiments/data/search-mirror-v2/batching/admission-1/sequential.py": {
+   "sha256": "3df30ba204fade75e0974049cd054ada271176883f1eff2cf9376f287f16be4e",
+   "bytes": 42738
+  },
+  "experiments/data/search-mirror-v2/batching/admission-2/process.log": {
+   "sha256": "51080499bde781440fdefa3ebba9714cabcb499fed9361bf330050891dcd44dc",
+   "bytes": 736
+  },
+  "experiments/data/search-mirror-v2/batching/admission-2/result.json": {
+   "sha256": "bc89513f198a76c3140b961088b6db5857172061cf97c0b3c05ffd79b7b81aea",
+   "bytes": 22656
+  },
+  "experiments/data/search-mirror-v2/batching/admission-2/sequential.py": {
+   "sha256": "3df30ba204fade75e0974049cd054ada271176883f1eff2cf9376f287f16be4e",
+   "bytes": 42738
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-16-batched.json.gz": {
+   "sha256": "67d6723da8a2f04c0efffb126daa8c7815287cd06cb0f54a8dcbdc63536c5b3c",
+   "bytes": 351436
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-16-sequential.json.gz": {
+   "sha256": "c823e988361b98f0de7e18364860cce77037e6e0ac9a692ef2997fc4b9758b77",
+   "bytes": 351434
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-4-batched.json.gz": {
+   "sha256": "d957a864813040ad4e4e2f96c74969ab6b34678f03f4ad91f20d352a1827361c",
+   "bytes": 91202
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-4-sequential.json.gz": {
+   "sha256": "3cd774368203e2f6ce955da29be72b7d429186d21e0a62a4b26a5d19fe9806d5",
+   "bytes": 91210
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-8-batched.json.gz": {
+   "sha256": "83dc5f9005bb59e966311f4bcca751867b2d9c383bea1f2e2a84b2a2acc284ef",
+   "bytes": 179054
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-oracle-8-sequential.json.gz": {
+   "sha256": "8b178448a97c3704e056fa909799a2a0a0b53b46924c1b06d224a183b2822d4d",
+   "bytes": 179060
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-16-batched.json.gz": {
+   "sha256": "481fe275d51f7679ef10fc03fc528e840bbbf8c4718d0db65bd4047e50b848e8",
+   "bytes": 353945
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-16-sequential.json.gz": {
+   "sha256": "e1347b53cfa4e05ee5bd7f1be00abbcf387ebe55354b09ac179461deb26744fd",
+   "bytes": 353956
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-4-batched.json.gz": {
+   "sha256": "abed10c9cb1a25ab9efd616eb54beec1f81677d711382ee24ddc46df96c30868",
+   "bytes": 91767
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-4-sequential.json.gz": {
+   "sha256": "9a78f0a196a7c9d943f2ebfacbb04e9d021926a1f77886ada4ea6192c7c115f8",
+   "bytes": 91773
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-8-batched.json.gz": {
+   "sha256": "1ae85c4c529679f236df60ed7dcd210f1cf9b46edd43a75b15bbd789684d6694",
+   "bytes": 180654
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/100-uniform-8-sequential.json.gz": {
+   "sha256": "79eb8c076c60a109358c080c8c54c589a86ca5f2ba3a3d2c8a85b1b725a49ec2",
+   "bytes": 180667
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-16-batched.json.gz": {
+   "sha256": "85e05f994c2ca859e06fe19503a56abde4b634ba802610b6a8be0f69145f29e0",
+   "bytes": 93024
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-16-sequential.json.gz": {
+   "sha256": "3770ef5bfb1c528add39f9a4ded7a39cdb6da00bc74985003a840f019436a95c",
+   "bytes": 93024
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-4-batched.json.gz": {
+   "sha256": "cdde266925d64208d2c9b4f751a0a3052985d7df05a221a33581cc34cc458332",
+   "bytes": 25601
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-4-sequential.json.gz": {
+   "sha256": "f3cd51fbc505eed98109317df55a2c8b2d03fba09ada3e06a285df5d71f32705",
+   "bytes": 25605
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-8-batched.json.gz": {
+   "sha256": "6ac446f3926fef31f55e9e02545cb272e9d70a1b1fae12e30f485526d24f3fd5",
+   "bytes": 48331
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-oracle-8-sequential.json.gz": {
+   "sha256": "c5ac3d10c2658a16e5f21aa9174074cab63d894ba189601287a8ae07449f6191",
+   "bytes": 48334
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-16-batched.json.gz": {
+   "sha256": "d35e9bc5065d8a05dbd8f34ea4ff0e2113e65c03817f5036ed08513d3f4164c8",
+   "bytes": 93456
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-16-sequential.json.gz": {
+   "sha256": "ff374790f9467e48a61b348af66324bc82036b1ba89a6291c5c5b5a7981bf8f5",
+   "bytes": 93459
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-4-batched.json.gz": {
+   "sha256": "9ac5119580792eaae886f6b90296d18528c7a34746f62fd08e9b941bf328a2b3",
+   "bytes": 25713
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-4-sequential.json.gz": {
+   "sha256": "70d814bef353cc9f4fdd78a401e48adb1b7bd8880e0e906b63192c301b09ef64",
+   "bytes": 25716
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-8-batched.json.gz": {
+   "sha256": "3fc36b31725360964acf0c05532248dc03bf8d67aed19ace47fdfc99ce2d9268",
+   "bytes": 48595
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/286-uniform-8-sequential.json.gz": {
+   "sha256": "c0b3e7c230cf8f273c972b5a52ed2941a942585ec18ec89e1196753edbc9b058",
+   "bytes": 48597
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/host-processes.txt": {
+   "sha256": "95f325463cd23e337e7d970e380846b2b01fea0f5504d849f92561fc05085990",
+   "bytes": 150929
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/process.log": {
+   "sha256": "00b8c22be6237c57bdd4183949ef750d2a2bc4dbec8c61bf90f861f44b39d6ad",
+   "bytes": 4314
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/result.json": {
+   "sha256": "11b7e1719a4af7d331f837029cb78b7c1f9ff233d9b62eb8f883dab99f932a43",
+   "bytes": 27837
+  },
+  "experiments/data/search-mirror-v2/batching/admission-3/sequential.py": {
+   "sha256": "3df30ba204fade75e0974049cd054ada271176883f1eff2cf9376f287f16be4e",
+   "bytes": 42738
+  },
+  "experiments/data/search-mirror-v2/batching/candidate-local-update.py": {
+   "sha256": "cb82ed06d2775a26c993c2c6047b1427a0af2d2617f230b4fbc45d09f8b440d4",
+   "bytes": 45339
+  },
+  "experiments/data/search-mirror-v2/batching/etude-status.txt": {
+   "sha256": "d5870f2de1dff7f59c35fe32dfb886a171a4601344787562cdfb083462ed6b70",
+   "bytes": 933
+  },
+  "experiments/data/search-mirror-v2/batching/final-tests.log": {
+   "sha256": "60848a5da7916ceac064774c38661f92450d388a9647e646c51a4b612aeec0b3",
+   "bytes": 322
+  },
+  "experiments/data/search-mirror-v2/batching/focused-tests.log": {
+   "sha256": "1db16e6a43a5ce019ebca05aabb007761a98139b0397a7eaec4fc414cb66f706",
+   "bytes": 322
+  },
+  "experiments/data/search-mirror-v2/batching/read-inventory.py": {
+   "sha256": "4187df725b3f963d0e7b08694a8b7d0c387f398fe98a31421f4a22757a651b0f",
+   "bytes": 2467
+  },
+  "experiments/data/search-mirror-v2/batching/search-collection.log": {
+   "sha256": "7aee84d81dd73ed977e52853a4946a17b9be36f4530a48625bdfd1e62584f487",
+   "bytes": 4077
+  },
+  "experiments/data/search-mirror-v2/batching/search-tests.log": {
+   "sha256": "187eb23e45d43f4be7e72049d80021272ec69f45e2402ac284c241ba37010fb7",
+   "bytes": 337
+  },
+  "experiments/data/search-mirror-v2/batching/summary.json": {
+   "sha256": "77a54ab5d8f77e58ebea61d05d8f9a7ebceb9762a7cda633596e7271e0969997",
+   "bytes": 11157
   },
   "experiments/data/search-mirror-v2/games/attempts/1ae09a06e7cbf49eed8876b47ecf6666080e1787ba5d99a35d19d256ed4fc20e.jsonl.gz": {
    "sha256": "39f9e971d616bc3daa8f392ae7a0169bce3d34427538c63fc97635d585a78bc1",
@@ -3653,6 +3869,10 @@
   "experiments/data/search-mirror-v2/reconciliation/audit-smoke.py": {
    "sha256": "a7f137a3ebcf92659d4cd247c726f437ec43a4e2ed8c043bfb1111d9d14d6e25",
    "bytes": 5054
+  },
+  "experiments/data/search-mirror-v2/reconciliation/batching-inventory.json": {
+   "sha256": "024923c6a9727c9386fdcbfd8977b9ac54710df200ce63b066bda82505f9a24e",
+   "bytes": 52483
   },
   "experiments/data/search-mirror-v2/reconciliation/campaign-launch.json": {
    "sha256": "7d7f61a3ea12addd038b3e8b37b868593836503d970b82f2fbefd207a0b050fb",
