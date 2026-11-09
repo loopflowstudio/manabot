@@ -168,6 +168,11 @@ they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evide
 
 # MTG-269 analysis assumptions (2026-11-09)
 
+For the live v2 analysis, take a bounded dated snapshot of committed game-file
+prefixes and their sealed attempts. Leave the existing Etude job running; do not
+wait for the multi-day campaign or recopy private in-flight streams into completed
+evidence. Per-shard cutoffs are explicit rather than claiming an atomic snapshot.
+
 Use seed 26901 for whole-source-deal noise bootstrap as well as the protocol’s
 stratified game bootstrap; only the game bootstrap seed was prescribed. Keep
 noise position weighting unchanged, resampling source deals jointly across

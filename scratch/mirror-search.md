@@ -1,5 +1,27 @@
 # Mirror search continuation
 
+## Live analysis handoff — 2026-11-09 20:46 UTC
+
+The existing report now includes three sealed v2 campaign outcomes, with all
+3,000 scheduled slots retained. Seven oracle workers were verified at the dated
+snapshot; the original Etude attempt remains running. Do not duplicate or restart.
+The new `reconciliation/read-snapshot.py` reads only committed game/decision byte
+prefixes and their closed attempts over SSH; it changes no remote file. Its tar
+stream feeds the existing v2 artifact paths. Seven uncommitted attempt files
+remain private on the mini, neither read nor counted as failures.
+
+`reconciliation/audit-campaign.py` checked 330 Commands, 181 search receipts,
+seed/source/runtime/checkpoint/world bindings and update algebra; no replay was
+run. All original v1 scientific fields reproduce unchanged. Full-grid uncertainty,
+uniform-hand and shuffle effects remain unresolved. The existing report owns
+estimates and cost; the owning v2 protocol records this snapshot's scope.
+
+Publication changed 24 manifest entries; all 84 mirror artifacts verify, and a
+second report build reproduces both files byte-for-byte. Eighteen focused checks,
+Ruff and the post-publication untracked-data check pass. Prior broader collection
+errors remain unresolved; the frozen environment was not upgraded. No local
+server, watcher or new experiment process was started by this analysis.
+
 ## Live campaign handoff — 2026-11-09
 
 Etude `mtg269-mirror-v2` is running on mini: attempt `3a2b62144b9a`, session

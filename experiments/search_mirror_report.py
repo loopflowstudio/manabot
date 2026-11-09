@@ -357,12 +357,23 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
 
 def _extension_section(extension: dict[str, Any]) -> str:
     rows = []
+    costs = []
     for arm in extension["arms"].values():
         setting, coverage = arm["setting"], arm["coverage"]
         rows.append(f'<tr><td>{setting["sampler"]}</td><td>{setting["worlds"]}</td>'
                     f'<td>{coverage["valid"]}/{coverage["planned"]}</td>'
                     f'<td>{coverage["missing"]}</td><td>{coverage["invalid"]}</td>'
                     f'<td>{_interval(arm["score"])}</td></tr>')
+        cost, wall = arm["search_cost"], arm["game_wall_seconds"]
+        timing = (
+            f'<td>{cost["decisions"]:,}</td><td>{cost["seconds"]:.3f}</td>'
+            f'<td>{cost["seconds_median"]:.3f} / {cost["seconds_p95"]:.3f}</td>'
+            if cost else '<td colspan="3">unavailable</td>'
+        )
+        game_timing = f'{statistics.mean(wall):.1f}' if wall else 'unavailable'
+        hero_time = f'{arm["hero_seconds"]:.1f}' if arm["hero_seconds"] is not None else 'unavailable'
+        costs.append(f'<tr><td>{setting["sampler"]}</td><td>{setting["worlds"]}</td>'
+                     f'{timing}<td>{game_timing}</td><td>{hero_time}</td></tr>')
     contrasts = []
     for c in extension["contrasts"]:
         lo, hi = c["failure_sensitivity"]
@@ -382,6 +393,10 @@ def _extension_section(extension: dict[str, Any]) -> str:
         '<div class="table-scroll" role="region" aria-label="Extension coverage" tabindex="0">'
         '<table><tr><th>Hands</th><th>Shuffles</th><th>Valid/planned</th><th>Missing</th><th>Invalid</th>'
         '<th>Score %, nominal 95%</th></tr>' + ''.join(rows) + '</table></div>'
+        '<p class="note">Partial snapshots follow the fixed execution order; completed deals need not '
+        'represent the full grid. Sparse nominal intervals cannot establish strength or shuffle effects. '
+        'A one-deal nominal interval is degenerate by convention, not an uncertainty estimate; zero-width '
+        'intervals from a few identical observed differences do not demonstrate equivalence.</p>'
         '<details><summary>All planned paired contrasts and missing-evidence bounds</summary>'
         '<table><tr><th>Contrast</th><th>Paired/planned</th><th>Nominal 95%, points</th>'
         '<th>Stratified 95%, points</th><th>Sensitivity, points</th></tr>' + ''.join(contrasts) + '</table></details>'
@@ -390,6 +405,14 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'Bootstrap resamples those complete vectors within fixed deck cells, 10,000 times with seed 26901; '
         'an empty cell makes that interval unavailable. Full-denominator sensitivity lets every missing score '
         'range from 0 to 1; these bounds are not confidence intervals. No direction of interaction is assumed.</p>'
+        '<details><summary>Measured campaign cost for retained outcomes</summary>'
+        '<table><tr><th>Hands</th><th>Shuffles</th><th>Search decisions</th>'
+        '<th>Mean s/decision</th><th>Median / p95 s/decision</th><th>Mean wall s/game</th>'
+        '<th>Total hero search s</th></tr>' + ''.join(costs) + '</table>'
+        '<p class="note">Only closed campaign outcomes contribute. In-flight work, smoke, setup and '
+        'interrupted attempts are excluded. Game wall time includes opponent play; hero search time '
+        'does not. Game length and concurrent load confound these timings; this is not an equal-compute '
+        'strength comparison or inclusive worker-hour accounting.</p></details>'
         f'<p class="note">Health: {escape(extension["health"])}. '
         f'Native support: {escape(extension["native_support"])}. '
         f'Replay identity: {escape(extension["replay_identity"])}. '

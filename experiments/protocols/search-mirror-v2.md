@@ -1,5 +1,32 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Analysis snapshot — 2026-11-09 20:46 UTC
+
+The existing report now includes the first **3/3,000 valid campaign outcomes**,
+with 2,997 missing and no retained failed games. The per-shard snapshot began
+at `2026-11-09T20:46:26.235533+00:00`; it is not an atomic cross-worker cutoff.
+Seven oracle workers remain owned by the existing Etude attempt. No new
+execution, restart, stop, deadline change or resource allocation was performed.
+
+Only committed game-file prefixes, their closed decision gzip members and
+sealed private attempt files enter the snapshot. Seven other attempt files
+were present but were not read or classified as failures. Exact retained file
+hashes, collection code and audit results live in v2 `reconciliation/`; source
+game and attempt bytes remain unchanged on the mini. The audit reconciles 330
+Commands and 181 search receipts, both per-game seeds, legal offers/revisions,
+checkpoint/world/runtime/source bindings against the admitted smoke, and search
+allocation/update algebra. No deterministic replay was performed. Logs contain
+no warnings or failures in these dated prefixes; full campaign health is unknown.
+
+The existing HTML/summary retain all six 500-slot cells and 15 comparisons,
+including missing-evidence bounds. No full-grid stratified interval is available;
+the sparse nominal intervals cannot establish gain or equivalence. The report
+now displays measured campaign game/decision cost separately from smoke and
+policy-only cost. Training exposure remains absent, no learning or generalization
+claim is supported, and scientific acceptance remains unresolved. All v1
+scientific summary fields reproduce unchanged. Continue the existing campaign;
+the next analysis needs a later closed-evidence snapshot, not a new launch.
+
 ## Execution status — 2026-11-09: campaign running
 
 Etude run `mtg269-mirror-v2`, attempt `3a2b62144b9a`, session

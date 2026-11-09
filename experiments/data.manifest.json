@@ -3571,16 +3571,84 @@
    "bytes": 16029
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "ee7ffa85f3459bc6467bd39337e518291bcb2e53a44fd19e6bf0fcff4dce739d",
-   "bytes": 88967
+   "sha256": "3763c88cdf32c6f6323860e40334dd10aa57e116eaef6607d9e8448dacefd311",
+   "bytes": 91074
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "bfb798ebfbc4c715c6e5a743edb2862df95ad521269b34564a1df136f28cd88b",
-   "bytes": 1604840
+   "sha256": "d28cb9fb46c5fe69ab5098fc2fe287f3adab4b7234a0d5764602ca1405212f50",
+   "bytes": 1608444
+  },
+  "experiments/data/search-mirror-v2/games/attempts/1ae09a06e7cbf49eed8876b47ecf6666080e1787ba5d99a35d19d256ed4fc20e.jsonl.gz": {
+   "sha256": "39f9e971d616bc3daa8f392ae7a0169bce3d34427538c63fc97635d585a78bc1",
+   "bytes": 6121912
+  },
+  "experiments/data/search-mirror-v2/games/attempts/b3ca6667c4f2b911e045a08ea581f8f2227de5a495c443f513a1255a1ad2b34f.jsonl.gz": {
+   "sha256": "c002ba79e06c33e760fe3f1308c1647a33a6447e0898181856f388466e97db95",
+   "bytes": 3254932
+  },
+  "experiments/data/search-mirror-v2/games/attempts/ff1e1134506ff5a777baa9d0de580fe6038c5d3a3364fd9deccf5b999db212ca.jsonl.gz": {
+   "sha256": "9a14d4b0e1b9539c6515af7325926f8fea7a28f298b50b82c012f25f19f3a457",
+   "bytes": 4056887
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-3.jsonl.gz": {
+   "sha256": "5f6e3dfff504bd95ca02c87b0d405cb5392c90a902d7b0d308b4cf9af80e3d91",
+   "bytes": 2479
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-4.jsonl.gz": {
+   "sha256": "475c7ba2267450c2125396729fd9980323e56d6da14acad680b25a1e0156844b",
+   "bytes": 2458
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-6.jsonl.gz": {
+   "sha256": "167cf382850d6abe4d1ba61be3c5bd53164f9bdbdf82c8ee1149cb17e755792a",
+   "bytes": 2978
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-3.jsonl": {
+   "sha256": "5f56ae73282b8ff503ddc1d1298c04ba9e130958a50c35ec3c5dfaf7e87ca5c5",
+   "bytes": 483
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-4.jsonl": {
+   "sha256": "dc214b1b379899526713466a78a68c744b6e09c61806eb148672e1b0c31dc27e",
+   "bytes": 483
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-6.jsonl": {
+   "sha256": "0c1902cd4b497c2cae5d33ae2caeebc146937aa6c2326d652134d6fe13251908",
+   "bytes": 484
   },
   "experiments/data/search-mirror-v2/games/identity.json": {
    "sha256": "c658032f939381e72b5b906283f394ba61ba8649465f1eaae7ec447d6d886cdc",
    "bytes": 38102
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-0.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-1.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-2.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-3.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-4.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-5.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/games/logs/oracle-6.log": {
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "bytes": 0
+  },
+  "experiments/data/search-mirror-v2/reconciliation/audit-campaign.py": {
+   "sha256": "1a93ef5edfe5c6691886ae17d6a6e5f7f506c9b8371ca9373509fa54287d3d2a",
+   "bytes": 5581
   },
   "experiments/data/search-mirror-v2/reconciliation/audit-smoke.py": {
    "sha256": "a7f137a3ebcf92659d4cd247c726f437ec43a4e2ed8c043bfb1111d9d14d6e25",
@@ -3589,6 +3657,10 @@
   "experiments/data/search-mirror-v2/reconciliation/campaign-launch.json": {
    "sha256": "7d7f61a3ea12addd038b3e8b37b868593836503d970b82f2fbefd207a0b050fb",
    "bytes": 2813
+  },
+  "experiments/data/search-mirror-v2/reconciliation/campaign-validation.json": {
+   "sha256": "94b89cf9087aff2888128162cc81c75f06fd92c1868598253129b21514f2ed36",
+   "bytes": 425
   },
   "experiments/data/search-mirror-v2/reconciliation/collection.log": {
    "sha256": "807f2acbf6fa9dd1b72a5b65a6f5d82be779ce9f0b80ac2f9dfca9bd45294139",
@@ -3603,12 +3675,16 @@
    "bytes": 11062
   },
   "experiments/data/search-mirror-v2/reconciliation/launcher-inventory.json": {
-   "sha256": "e8d472ee9f7e3b397eb6789e5719140fbb826f526fdcb76568b88350ab59f6fb",
-   "bytes": 1963
+   "sha256": "fdf65d7acda67b665d943fb22dda96de02b2c684f8fea72ddf8b8b96185157da",
+   "bytes": 2305
+  },
+  "experiments/data/search-mirror-v2/reconciliation/read-snapshot.py": {
+   "sha256": "3e895e0446ff51c2119e67086c13a50d430e50f8fee252836b235c65d96db61d",
+   "bytes": 4665
   },
   "experiments/data/search-mirror-v2/reconciliation/remote-inventory.json": {
-   "sha256": "eea4aead0670756c3f704b49bc4069bacb8fb742fcc049f856ec727f358be3c0",
-   "bytes": 3078
+   "sha256": "5826057ac775bce25d0fc1a740647643b237d6a0cfeb58260a44bfe239aa3aa0",
+   "bytes": 7077
   },
   "experiments/data/search-mirror-v2/reconciliation/smoke-completion.json": {
    "sha256": "a4f7689ffa600799b88c863d7e8211b42c2104ad6fefe46271ca1636ff92cd60",
@@ -3627,8 +3703,8 @@
    "bytes": 901
   },
   "experiments/data/search-mirror-v2/reconciliation/validation.json": {
-   "sha256": "343cbf6590f46e2588ce02cc4cae9379e60169d2029fa7e4125e284bf2793dec",
-   "bytes": 2462
+   "sha256": "45f6547b0ab16741f60f3a6d4cfb98d2d87f386c51bc9430dd302ae64e32fad0",
+   "bytes": 3321
   },
   "experiments/data/search-mirror-v2/smoke/attempts/08573d967c20e4d0b1b6a179b302ee8269e319a2b3320fc2de5deeea19cc9f7c.jsonl.gz": {
    "sha256": "d6e5c98446ba6f2b09da5b13db386fcc25b55ccc8b5acbe4c3f75869c4df9439",
