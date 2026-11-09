@@ -141,7 +141,7 @@ holds every score and interval; [training summary](data/value-readout-252/traini
 holds seed-level budgets and diagnostics. The artifact manifest retains raw
 evaluation blocks and selected per-update metrics. Four evaluation IDs are
 listed in the results JSON. Reproduce score tables and graphs with
-[value_readout_report.py](value_readout_report.py), passing the retained block
+[report_value_readout.py](../scripts/report_value_readout.py), passing the retained block
 directory to `--source`, original training metrics to `--metrics`, and an output
 directory to `--out`. All published evidence remains bound to its executed
 source and world.

@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+import numpy as np
 import pytest
 import torch
 
@@ -351,7 +352,10 @@ def test_attention_readout_shares_initialization_and_actor_path() -> None:
         masked.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
     batch = collector.collect(masked, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    obs = {
+        key: torch.from_numpy(value)
+        for key, value in batch.observations(np.array([0])).observation.items()
+    }
     with torch.no_grad():
         masked_logits, masked_value = masked(obs)
         readout_logits, readout_value = readout(obs)

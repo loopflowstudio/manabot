@@ -6,10 +6,12 @@ native runtime's. The comparison then changes one serialized field,
 `agent.value_aggregation`, and nothing else: depth, width, heads, capacities,
 learning rule, filter, lambdas and execution stay those of that base. The
 study design lives in `experiments/value-readout-252.md`; this module owns the
-arm derivation, its single-axis check and the static per-arm model costs that
-the protocol reports before any training, and `runs()`, the Etude launch of
-every arm under one shared seed list (3 arms x 3 seeds x 150 updates inside a
-USD20 study cap that also covers evaluation):
+arm derivation, its single-axis check, static per-arm model costs and `runs()`,
+the Etude launch of every arm under one shared seed list. The completed study
+extended the original 3 arms x 3 seeds x 150 updates to 300 updates and two
+depth-4 arms, under a USD55 total cap. Results are in
+`experiments/value-readout-252-results.md`. The commands below record the
+historical launch procedure; executed runs require their pinned revisions:
 
     doppler run -p etude -c prd -- doppler run -p manabot -c prd \\
         --preserve-env=RUNPOD_API_KEY -- \\
@@ -35,7 +37,7 @@ its continuation against the heuristic, and the three final policies of each see
 against each other, all over 07c490's fifty fixed random Elemental pairings
 (`learning_signal.ELEMENTAL_PAIRS`, four cross legs each), on one rented CPU host:
 
-    etude eval experiments/value_readout_252.py --rent cpu32 --source r2://manabot/jobs
+    uv run etude eval experiments/value_readout_252.py --rent cpu32 --source r2://manabot/jobs
 """
 
 from __future__ import annotations

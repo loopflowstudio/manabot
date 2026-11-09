@@ -5,7 +5,7 @@ weight; bootstrap intervals resample seeds and shared pairing blocks, keeping
 each pairing's index common across seeds. Paired contrasts use the same
 resampled indices. Three seeds and an exploratory extension limit inference.
 
-    uv run --extra reports --extra evaluation python -m experiments.value_readout_report \
+    uv run --extra reports --extra evaluation python -m scripts.report_value_readout \
         --source DIR --out experiments/data/value-readout-252
 """
 

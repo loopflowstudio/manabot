@@ -296,7 +296,8 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
     )
     batch = collector.collect(agent, 1)
     obs = {
-        key: torch.from_numpy(value[0]).to(DEVICE) for key, value in batch.obs.items()
+        key: torch.from_numpy(value).to(DEVICE)
+        for key, value in batch.observations(np.array([0])).observation.items()
     }
     optimizer = torch.optim.Adam(agent.parameters())
 

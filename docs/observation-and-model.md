@@ -437,7 +437,7 @@ is not evidence for any of them:
 - **Value-token and pooling variants are unresolved**
   ([value token](../experiments/value-token-screen.md),
   [pooling follow-up](../experiments/pooling-filter-followup.md),
-  [current-world readout draft](../experiments/value-readout-252.md)).
+  [three-seed depth/readout results](../experiments/value-readout-252-results.md)).
 - **No history input has shown a training benefit**, and the v7 shared-effect
   transport is an engineering proof, not a learning result.
 
