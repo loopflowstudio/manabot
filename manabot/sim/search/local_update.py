@@ -2,7 +2,9 @@
 
 `LocalUpdateTeacher` owns no learning state. It estimates signed root-action
 values using canonical worlds, actor-view policy rollouts and signed leaf values.
-Live branches share one policy/value forward per ply and keep independent RNGs.
+Live branches share one policy/value forward per ply. `Rollout` owns each
+branch's execution state and independent RNG; immutable `RolloutReceipt` values
+carry its evidence into the local-update receipt.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -11,7 +13,7 @@ rollouts preclude an equilibrium guarantee. Receipts are private training data.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 import hashlib
 import json
 from pathlib import Path
@@ -42,7 +44,9 @@ from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
-from manabot.sim.search.branch import BranchSession, SelectedFullCloneBackend
+from manabot.sim.search.branch import SelectedFullCloneBackend
+from manabot.sim.search.rollout import Rollout
+from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling import (
     HandBatch,
     HandSample,
@@ -155,23 +159,6 @@ class CompoundPrefixReceipt:
     projection_json: str
     tokens: tuple[int, ...]
     commands: tuple[Command, ...]
-
-
-@dataclass(frozen=True)
-class RolloutReceipt:
-    world_index: int | None
-    world_seed: int
-    action_index: int
-    rollout_seed: int
-    signed_value: float
-    terminal: bool
-    actor_observation_hashes: tuple[str, ...]
-    branch_audit_json: str
-    sampled_hand: HandSample | None = None
-    # Always zero for current searches; nonzero only in historical compound
-    # receipts.
-    decoder_factors: int = 0
-    canonical_commands: int = 0
 
 
 @dataclass(frozen=True)
@@ -417,6 +404,8 @@ def local_search_source_sha256() -> str:
     root = Path(__file__).resolve().parents[3]
     paths = (
         "manabot/sim/search/local_update.py",
+        "manabot/sim/search/rollout.py",
+        "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
         "manabot/model/actor_critic.py",
         "manabot/model/facts.py",
@@ -425,47 +414,6 @@ def local_search_source_sha256() -> str:
         "manabot/belief/checkpoint.py",
     )
     return _digest({path: file_sha256(root / path) for path in paths})
-
-
-@dataclass
-class _Rollout:
-    """One independently seeded branch, retained in world/action receipt order."""
-
-    branch: managym.Env
-    session: BranchSession
-    world_index: int | None
-    world_seed: int
-    action_index: int
-    rollout_seed: int
-    sampled_hand: HandSample | None
-    probabilities: FloatArray
-    policy_rng: np.random.Generator = field(init=False)
-    hashes: list[str] = field(default_factory=list)
-    value: float = 0.0
-
-    def __post_init__(self) -> None:
-        self.policy_rng = np.random.default_rng(self.rollout_seed)
-
-    def receipt(self, viewer: int) -> RolloutReceipt:
-        terminal = bool(self.branch.is_game_over())
-        value = self.value
-        if terminal:
-            winner = self.branch.winner_index()
-            value = 0.0 if winner is None else (1.0 if winner == viewer else -1.0)
-        elif int(self.branch.current_agent_index()) != viewer:
-            value = -value
-        return RolloutReceipt(
-            canonical_commands=len(self.hashes),
-            world_index=self.world_index,
-            sampled_hand=self.sampled_hand,
-            world_seed=self.world_seed,
-            action_index=self.action_index,
-            rollout_seed=self.rollout_seed,
-            signed_value=value,
-            terminal=terminal,
-            actor_observation_hashes=tuple(self.hashes),
-            branch_audit_json=json.dumps(self.session.snapshot(), sort_keys=True),
-        )
 
 
 class LocalUpdateTeacher:
@@ -575,9 +523,7 @@ class LocalUpdateTeacher:
         # Scalar PPO heads are unconstrained; retain their actual signed estimate.
         return predictions
 
-    def _run_rollouts(
-        self, rollouts: list[_Rollout], check: Callable[[], None]
-    ) -> None:
+    def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
         """Advance one Command per live branch, then one forward for the frontier.
 
         The last forward supplies leaf values too. Finished branches leave the
@@ -586,27 +532,10 @@ class LocalUpdateTeacher:
         """
         live = [row for row in rollouts if not row.branch.is_game_over()]
         for ply in range(self.config.depth):
-            pending: list[_Rollout] = []
+            pending: list[Rollout] = []
             for row in live:
                 check()
-                actor = int(row.branch.current_agent_index())
-                row.hashes.append(row.branch.semantic_viewer_state_hash(actor))
-                choice = (
-                    row.action_index
-                    if ply == 0
-                    else int(
-                        row.policy_rng.choice(
-                            len(row.probabilities), p=row.probabilities
-                        )
-                    )
-                )
-                _, _, _, truncated, _ = row.session.apply_policy_choice(
-                    row.branch, site="child", policy_index=choice
-                )
-                if truncated:
-                    raise RuntimeError(
-                        "local rollout truncated before an authoritative outcome"
-                    )
+                row.advance(ply)
                 if not row.branch.is_game_over():
                     pending.append(row)
             if not pending:
@@ -780,7 +709,7 @@ class LocalUpdateTeacher:
             assert isinstance(belief, BeliefState)
             indexes = list(belief.sample_indexes(world_count, seed=seed))
         supported_actions = [int(action) for action in np.flatnonzero(base > 0)]
-        rollouts: list[_Rollout] = []
+        rollouts: list[Rollout] = []
         for sample_number, index in enumerate(indexes):
             check()
             world_seed = int(rng.integers(0, 2**63))
@@ -813,7 +742,7 @@ class LocalUpdateTeacher:
                     match_id=f"local-{seed}-{len(rollouts)}", audit=True
                 )
                 rollouts.append(
-                    _Rollout(
+                    Rollout(
                         branch=session.fork_exact(world, "world"),
                         session=session,
                         world_index=index,

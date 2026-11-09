@@ -1,5 +1,190 @@
 # MTG-268 — batched local-update rollouts
 
+## Gate result — 2026-11-09
+
+Ready for delivery's required CI, not a claim that all checks have passed.
+Reviewed the complete production/test diff against the preserved design and
+package guidance. No additional production change was needed; the reviewed
+Rollout/RolloutReceipt split remains intact. Added both local-update suites and
+Command-evidence tests to CI core, which previously omitted them. Updated the
+validation guide and linked a lasting measurement summary from manabot/README.md.
+`docs/benchmarks/local-update.html` is byte-identical to the complete historical
+report (SHA-256 faef56c69550eb92f713d571a58923215ec315cda12ee92bf5280a7e5325d78a).
+`scratch-evidence/` under `.cache/mtg-268/gate/` also preserves scratch's raw
+profiles, error journals and wrapper before delivery cleanup. Existing scratch
+files remain in place. No PR copy existed, so delivery still owns its generation.
+
+Fresh validation: 171 passed, six CUDA skips, five deliberately excluded cases;
+CI core's expanded exact invocation collects 1,300 tests. All-target/all-feature
+Clippy passes with one worker. Ruff passes on all 15 changed production/test/
+stub Python files without edits; Cargo format and diff checks pass. Ruff initially
+also formatted the historical scratch profiler wrapper; restored its exact HEAD
+bytes rather than alter frozen measurement evidence. No production file changed
+in this gate, so earlier review parity and the 88 selected test results remain
+reusable (counts overlap today's suite; do not sum them). Fourteen writer source/
+fixture hashes and the installed ordinary runtime match the retained validation.
+Reuse the eleven exact-byte/SHA/BLAKE3 cases, five debug contracts and prior
+1,281 encoder comparisons. No native rebuild or timing rerun was necessary.
+
+Selection deviation: five existing value-aggregation cases invoke
+`SeatRoutedCollector.collect(agent, 1)` with default complete-game closure; they
+were mistakenly included despite the laptop restriction. They finished within
+the 7.80-second focused run before this was recognized. Do not describe that run
+as exclusively fixed-position, or repeat those cases locally. The validation
+guide now explicitly calls out this default. No training optimizer/executor or
+evaluation suite was launched; all test processes exited. No server/watcher was
+started, and no process from this gate remains running.
+
+Commands and results (logs under `.cache/mtg-268/gate/`):
+
+- `git diff --no-renames --name-only -z 51d10f8 | bash .github/ci/select-tests.sh` — all CI jobs selected by native changes.
+- `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/model/test_value_aggregation.py tests/model/test_agent.py tests/model/test_layer_input.py tests/model/test_record_vocabulary.py tests/model/test_state_records.py tests/model/test_shared_effects.py tests/sim/test_search_command_evidence.py tests/infra/test_ci_selection.py tests/infra/test_release.py -k 'not test_v8_recipe_collector_and_evaluation_select_saved_input and not test_treatment_trains_with_existing_executor and not test_shared_effect_policy_uses_ordinary_learner_and_export' -q` — 171 passed, 6 CUDA skips, 5 deselected, 7.80 s; `focused-tests.log`.
+- `bash -eo pipefail .cache/mtg-268/gate/collect.sh` — exact expanded CI core invocation plus `--collect-only -q`, 1,300 collected, 4.63 s; `collection.log` (wrapper invoked through uv).
+- `PYO3_PYTHON="$PWD/.venv/bin/python" CARGO_BUILD_JOBS=1 cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` — passed, 39.00 s; `clippy.log`.
+- `uv run --extra dev ruff check --fix <changed Python/stub paths>` — passed; full literal command in `ruff.log`.
+- `uv run --extra dev ruff format <changed Python/stub paths>` — production/test/stub files unchanged; historical scratch wrapper restoration described above; full command in `ruff.log`.
+- `cargo fmt --manifest-path managym/Cargo.toml` then `cargo fmt --manifest-path managym/Cargo.toml --check` — passed, Rust files unchanged.
+- `git diff --check` — passed.
+- `uv run python` hash verification against `borrowed-json/candidate-source.json` — all 14 hashes and runtime match; `result.json` retains current Python hashes and report/runtime identities.
+
+CI deferrals, still required before merge: complete local-update suites; model
+inference and the excluded layer/state/shared-effect training cases; active
+training, observation, action-cutoff and full native-buffer capacity coverage;
+complete debug Rust suite (including search-state and pending-entry contracts);
+Engine Budget and all other selected required CI jobs. These are not local passes.
+The native runtime remains bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0;
+HEAD remains afcee56b996175130c057cb8c01656f7b79078d8 plus the reviewed split and
+gate workflow/docs edits. No publication, merge or Task completion in this step.
+
+Performance conclusions are unchanged: pre-writer equal-work 16-world speedups
+3.41×/3.45× and the separate writer A/B reductions 24.93%/23.93% are retained.
+Interrupted final scaling, original near-singleton goal, representative trained/
+terminal positions and MTG-183/w13 admission remain unresolved. Shipping direction
+below authorizes this implementation with those limits; no fresh experiment or
+acceptance reinterpretation was introduced.
+
+## Gate plan — 2026-11-09
+
+Reversible choices: keep the production implementation unchanged unless focused
+validation finds a defect; use the existing CI core job for game/training tests
+that cannot run on this laptop. Add both local-update suites and Command-evidence
+tests to that job: they were absent, so merely deferring them would skip them.
+Preserve the complete measurement report in docs/benchmarks before scratch cleanup.
+
+Diff-based validation: model CPU padding/fact changes reach value aggregation,
+agent, layer input, record vocabulary, state-record and shared-effect tests.
+Run their bounded fixed-position/tensor cases locally; defer actual collector,
+training and evaluation cases, inference collection, active-training, observation,
+action-cutoff and full capacity suites to CI core. Native writer/Command changes
+reuse the unchanged ordinary runtime and eleven exact-byte/hash fixtures plus
+five debug contracts; full debug suite and Engine Budget remain CI requirements.
+Run bounded Command evidence locally. Reuse the reviewed split's 88-test and
+fixed-position parity results; rerun CI collection because its invocation changes,
+and CI selection/release tests because the workflow changes. Finish with changed
+Python Ruff auto-fix/format, Cargo fmt, all-target/all-feature Clippy (one worker),
+and diff whitespace checks. No new timing study, games or training locally.
+
+## Shipping direction (2026-11-09)
+
+Jack Heart, after the rollout-model fix and its checks:
+> ok lg2m ship it
+
+Ship this implementation and reviewed model split. This supersedes earlier
+no-shipping instructions for the current work. The stopped code Graph completed
+implementation iterations; the two optimization passes and review fix completed
+in this conversation. Use `deliver` (gate then waited landing), not another
+implementation/optimization loop. Preserve the historical measurements and their
+limits in PR copy: equal-work speedups and the writer A/B are distinct studies;
+the original near-singleton target is not established. Do not claim that target
+passed or start another measurement campaign to reinterpret this shipping request.
+Gate owns the remaining checks listed below. Reuse the reviewed fix's valid
+88-test/collection/parity results where inputs match. Full games/evals/native
+suite stay off the laptop; use the Mac mini or CI for those, with bounded workers,
+one build at a time, and no induced load. Follow CI through merge, verify the
+delivered source/outcome, and confirm Task completion. No Co-Authored tags.
+
+## Review direction — rollout model (2026-11-09)
+
+Jack Heart, reviewing `class _Rollout:`:
+> I generally consider _ classes a code smell that the data model is not propertly split up
+
+Follow-up direction:
+> ok. fix that here.
+
+Implemented in this checkout: `rollout.py::Rollout` owns each branch's execution
+state, independent RNG, Command advancement and result construction.
+`rollout_receipt.py::RolloutReceipt` owns the immutable serialized result,
+without importing execution or the teacher. `LocalUpdateTeacher` retains batch
+scheduling/inference, world/root allocation and the regularized update. The
+source-identity hash now covers both new owners; its regression changes each
+owner independently. Receipt fields, seed order and the benchmark oracle stay
+unchanged. The walkthrough now labels this uncommitted review fix separately
+from its pinned base/head excerpts.
+
+Validation: 88 selected tests pass (64 source-identity, scripted terminal/sign/
+truncation, update-rule and CI/release checks; 24 bounded batch parity, deadline,
+legal-support and capacity checks). CI core's exact invocation collects 1,257
+tests successfully; both local-update test modules also collect. Changed-file
+Ruff lint/format and `git diff --check` pass.
+The unchanged fixed-position harness compares pre-refactor `afcee56b996175130c057cb8c01656f7b79078d8`
+with this working tree at openings 42/43, depth 20, one world: all receipt
+comparisons pass, with zero base/value/target differences (4/5 rollouts and
+80/100 Commands respectively). Its ordinary native runtime is unchanged.
+Evidence: `.cache/mtg-268/rollout-model/`. These incidental timings are not a
+performance study or an update to the kept writer result. No games, training,
+evaluation, Graph launch, publication or completion. The broader gate and
+original performance acceptance below remain open.
+
+## Second optimize step 9 — final scaling interrupted (2026-11-09)
+
+**Inconclusive.** Singleton preflight passed (2 live/2 saved receipt cells,
+81 exact encodings). Two of five primary-grid invocations completed; unrelated
+Cargo transport tests restarted during the second. Only one invocation has no
+observed overlap. The runner retained both outputs and stopped before grid-3;
+3 grid and all 5 eight-world invocations are missing, not zero. No retry or
+replacement. A new complete bounded series needs a no-test/build host window;
+this interrupted series must remain separate. No new optimization is selected.
+
+The observed-clean run's sixteen-world batched times are 0.86304 / 1.00167 s
+at 42/43, equal-work ratios 4.326× / 3.852×, and same-runtime sequential-singleton
+ratios 4.401× / 3.794× (n=1, diagnostics only). Full n=2 median/ranges and every
+sample, including the overlapping invocation, are in scratch/measure.html and
+.cache/mtg-268/final-measurement-2/report.md. No five-sample scaling claim follows.
+The writer remains kept on its **original** five-pair 24.93% / 23.93% result;
+this is neither that A/B trial nor a historical-engine comparison.
+
+Both benchmark processes exited zero with empty stderr: 12 live and 12 saved
+full receipt comparisons passed, max base/value/target error 1.0242171e-10 /
+4.09781933e-8 / 3.13064846e-9 at unchanged atol 1e-6 / rtol 1e-5. Independent
+post-stop JSON validation confirms both identities/work counts. One orchestrator
+exit 1 records host overlap, not a benchmark failure. Per side: 378 timed
+rollouts / 7,560 Commands, plus 128 profiled rollouts / 2,560 Commands. Both
+42/16 profiles retain 21 forwards and 1,280 Commands. No latency/profile mixing.
+The clean profile has Command/audit 0.25093 s, network 0.24788 s, encoding
+0.15780 s, direct hashing 0.08331 s and snapshots 0.00696 s; complete snapshot
+removal has an optimistic 1.0094× profile ceiling, not ordinary-time savings.
+
+Final source afcee56b996175130c057cb8c01656f7b79078d8; runtime
+bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0.
+Fresh identity passed: w17/catalog/checkpoint, vector API, ordinary wheel,
+world=None. All 25 step-8 frozen hashes match. Reuse eleven independent byte/
+SHA/BLAKE3 cases, five debug contracts, six live/saved cells and 1,281 exact
+encodings with frozen source/runtime; no rebuild or native-test repetition.
+Both paths use this runtime; sequential Python owners remain 841b1c50c.
+
+Full evidence, exact direction, 530 source hashes, 167 reused-artifact hashes,
+all outputs/errors, process snapshots and original notes/report are under
+.cache/mtg-268/final-measurement-2/. Earlier rows/results are preserved.
+Reversible notes choice: replace the superseded step-8 plan here with this
+current status; its full text remains in before-questions.md in that directory.
+The upstream dtype join is outside the world=None benchmark; original writer
+compatibility evidence survives the sync. Rejected trials stay rejected.
+
+All started measurement processes finished; no server/watcher started, no
+other work stopped. No Graph, shipping or Task completion. Final scaling,
+the broader gate listed below, original “near” definition, trained/terminal
+positions and MTG-183/w13 admission remain open.
+
 ## Main sync — 2026-11-09
 
 Assumption (reversible): retain MTG-268's branch-specific design, measurements
@@ -41,21 +226,7 @@ installed runtime `bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179
 All 14 frozen candidate source/fixture hashes match. No runtime replacement or
 rebuild was performed or made necessary by compression.
 
-Final measurement follows sync and realign. Reconcile the resulting source,
-lockfiles, harness, world/catalog, checkpoint and installed runtime first.
-If native source changes, rebuild an ordinary release wheel from the root with
-`CARGO_BUILD_JOBS=1 uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
-retain build/source/wheel hashes, and atomically install the cp312 extension.
-Native edits need the eleven independent byte/SHA-256/BLAKE3 cases and bounded
-debug pending-entry/event/privacy/terminal checks before final timing. Verify
-fresh runtime identity, no benchmark instrumentation or `preserve_order`, and
-live/saved receipt plus native/Python encoder parity against the retained
-merged references. Preserve original-world references separately.
-Use the frozen harness/protocol and only ordinary-wheel latency; one thread,
-fixed openings 42/43, seed 17, depth 20, no overlapping builds/tests, all samples
-and failures retained. Do not pool the kept A/B result with later post-sync
-measurements or reinterpret the two rejected trials. Full gate, MTG-183/w13
-admission and the original near-singleton definition remain separate below.
+Step 9 above now owns post-sync measurement status; the full step-8 plan is archived. This compression record describes its historical source state.
 
 Validation: `git diff --check` passes; SHA-256 preservation checks confirm all
 50 other branch files, the runtime and every Markdown table row unchanged;
@@ -480,7 +651,7 @@ all artifacts remain in `scratch/measure.html`, the preserved pre-step-3 notes,
 and `.cache/mtg-268/native-attribution-2/`. Temporary timers were removed and the
 292cc8e1 ordinary binary restored. No experiment/world/receipt was rebound.
 
-## Final post-sync measurement — optimize step 9 (2026-11-09)
+## Historical first optimize step 9 — pre-writer measurement (2026-11-09)
 
 **Better for equal work.** On synced `0bbb05512`, sixteen-world search takes
 0.97911 s / 1.22335 s at openings 42/43, versus live sequential 3.33854 s /
@@ -600,8 +771,8 @@ profiled encoding reduction. Smaller-cell medians rose; the 0.76723 s candidate
 42/four-world sample remains unexplained. Its patch, binaries, failed setup
 (traceback from a wrapper shadowing stdlib profile), all samples and restoration
 proof stay in `.cache/mtg-268/dtype-validation/`. No retry is selected.
-Pre-sync equal-work sixteen-world gains were 3.35×/3.62×, distinct from current
-post-sync 3.41×/3.45×. Original-world receipts failed comparison after the catalog
+Earlier equal-work sixteen-world gains were 3.35×/3.62×, distinct from the
+pre-writer post-sync 3.41×/3.45×. Original-world receipts failed comparison after the catalog
 merge; `.cache/mtg-268/reference/` and MTG-183/w13 remain frozen, separate from
 `.cache/mtg-268/merged-reference/`. There is no cross-world acceptance bridge.
 
@@ -609,8 +780,8 @@ The directive says: "Batching should bring 8-16 worlds near today's one-world co
 And: "Never run games/evals on the laptop; small fixed-position timing benches are fine, or use the Mac mini (mini-heart.local)."
 No numeric definition of "near" or relaxation has been agreed. The 30-second
 README value is a budget, not a latency promise. Original near-singleton acceptance
-and trained-policy admission remain unmet. Earlier source/runtime reconciliation
-is superseded by the successful post-sync rebuild above; model typed/v7+ integration
+and trained-policy admission remain unmet. Current source/runtime reconciliation
+is recorded in second optimize step 9 above; model typed/v7+ integration
 remains a gate concern. No Wave was selected or modified.
 
 ## Remaining gate and acceptance requirements
@@ -623,7 +794,7 @@ model suites `test_value_aggregation`, `test_inference`, `test_agent`,
 `tests/verify/test_native_buffer_capacities.py`. In particular, retained terminal
 frontier, sign, deadline, legal-support and selected-capacity tests cover cases
 absent from the two full-depth opening measurements. Reuse valid earlier results
-with their source/runtime identities; the sync's two focused checks do not
+with their source/runtime identities; focused sync checks do not
 replace these suites.
 
 Native gate requires `cargo fmt --check`,
@@ -642,7 +813,8 @@ worlds. Gate also retains changed-file lint/format checks and `git diff --check`
 
 Open for demo: what maximum 8–16-world/original-singleton latency ratio,
 checkpoint and representative positions define "near"? No numeric threshold or
-relaxation has been agreed. The eight-world supplement is now measured (see step 9 above); the planned openings are not terminal-heavy or trained-strength evidence.
+relaxation has been agreed. Eight worlds remain unmeasured after the writer change;
+the selected openings are not terminal-heavy or trained-strength evidence.
 MTG-183/w13 admission remains unresolved. The README's 30 seconds is a budget,
 not a promise. After the borrowed writer, Command/audit and network have similar
 profiled costs; no newly identified safe removal closes the gap. Snapshots/allocation

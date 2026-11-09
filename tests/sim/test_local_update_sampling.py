@@ -28,10 +28,10 @@ from manabot.sim.search.local_update import (
     LocalUpdatePlayer,
     LocalUpdateReceipt,
     LocalUpdateTeacher,
-    RolloutReceipt,
     SamplerArtifact,
-    _Rollout,
 )
+from manabot.sim.search.rollout import Rollout
+from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling import (
     HandBatch,
     HandSample,
@@ -306,7 +306,7 @@ def test_batched_rollouts_match_sequential_evidence(
     assert batch_sizes == [1] + [len(batched.rollouts)] * depth
     run_rollouts = teacher._run_rollouts
 
-    def serial_rollouts(rows: list[_Rollout], check: Callable[[], None]) -> None:
+    def serial_rollouts(rows: list[Rollout], check: Callable[[], None]) -> None:
         # A single live branch also makes every network forward a singleton.
         for row in rows:
             run_rollouts([row], check)
@@ -367,9 +367,11 @@ class _ScriptedSession:
 
 
 def test_frontier_drops_terminal_branches_and_signs_leaves(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    teacher, _ = make_teacher(tmp_path)
+    # Scheduling needs only the depth and injected predictions, not a model/game.
+    teacher = object.__new__(LocalUpdateTeacher)
+    teacher.config = LocalSearchConfig(depth=3)
     branches = [
         _ScriptedBranch(1, 0),
         _ScriptedBranch(2, 1),
@@ -378,7 +380,7 @@ def test_frontier_drops_terminal_branches_and_signs_leaves(
     ]
     # The fixture supplies only the native methods the rollout runner consumes.
     rows = [
-        _Rollout(
+        Rollout(
             branch=cast(managym.Env, branch),
             session=cast(BranchSession, _ScriptedSession()),
             world_index=0,

@@ -196,6 +196,10 @@ checkpoint and observation space, and keep the player lifecycle current.
 [Removed compound policies](../docs/training.md#compound-decisions-removed)
 remain rejected; their historical receipts remain readable.
 
+The [measurement record](../docs/benchmarks/local-update.md) separates the
+equal-work batching comparison from the later canonical-writer optimization,
+including the unresolved near-singleton latency target.
+
 ## World identity
 
 Ordinary checkpoints require `world_binding` from

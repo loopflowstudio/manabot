@@ -88,20 +88,30 @@ def make_teacher(
     return teacher, env
 
 
-def test_teacher_identity_tracks_fact_encoder(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "owner",
+    [
+        "manabot/model/facts.py",
+        "manabot/sim/search/rollout.py",
+        "manabot/sim/search/rollout_receipt.py",
+    ],
+)
+def test_teacher_identity_tracks_implementation_owners(
+    monkeypatch: pytest.MonkeyPatch, owner: str
+) -> None:
     original = local_update.local_search_source_sha256()
-    fact_revision = "fact-encoder-revision-one"
+    revision = "implementation-revision-one"
 
     def source_hash(path: Path) -> str:
-        if path.parts[-3:] == ("manabot", "model", "facts.py"):
-            return canonical_sha256(fact_revision)
+        if path.as_posix().endswith("/" + owner):
+            return canonical_sha256(revision)
         return file_sha256(path)
 
     monkeypatch.setattr(local_update, "file_sha256", source_hash)
     first = local_update.local_search_source_sha256()
     assert first != original
     assert local_update.local_search_source_sha256() == first
-    fact_revision = "fact-encoder-revision-two"
+    revision = "implementation-revision-two"
     assert local_update.local_search_source_sha256() != first
 
 

@@ -1,4 +1,191 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MTG-268 measurement</title><style>body{max-width:1120px;margin:3rem auto;padding:0 1rem;font:16px/1.5 system-ui;color:#242424;background:#faf8f2}h1{font-size:1.9rem}table{border-collapse:collapse;width:100%;font-size:.9rem;margin:1.5rem 0}th,td{padding:.65rem;border-bottom:1px solid #ccc;text-align:left}th{background:#eee9dd}.verdict{padding:1rem;border-left:5px solid #286446;background:#e8f1e8}code{font-size:.9em}pre{white-space:pre-wrap}small{color:#555}</style><h1>Borrowed JSON: better, candidate kept</h1><p class="verdict"><strong>24.93% / 23.93% lower median decision latency.</strong> Five samples per binary at each opening, disjoint ranges, zero correctness failures. Both predeclared thresholds pass. Original near-singleton target remains unmet.</p><h2>Sixteen worlds, depth 20: seconds per decision</h2><p>Median [minimum, maximum], n=5 per side. Baseline is the immediate batched implementation.</p><table><thead><tr><th>Opening</th><th>Baseline s</th><th>Candidate s</th><th>Reduction</th></tr></thead><tbody><tr><td>42</td><td>0.97506 [0.95206, 0.97882]</td><td>0.73197 [0.71286, 0.75503]</td><td>24.93%</td></tr><tr><td>43</td><td>1.20364 [1.19115, 1.23144]</td><td>0.91563 [0.89085, 0.92580]</td><td>23.93%</td></tr></tbody></table><details open><summary>Protocol, correctness, profiles, all samples and kept identities</summary><pre>## Second optimize step 4 — borrowed JSON measurement (2026-11-09)
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MTG-268 measurement</title><style>body{max-width:1120px;margin:3rem auto;padding:0 1rem;font:16px/1.5 system-ui;color:#242424;background:#faf8f2}h1{font-size:1.9rem}table{border-collapse:collapse;width:100%;font-size:.9rem;margin:1.5rem 0}th,td{padding:.65rem;border-bottom:1px solid #ccc;text-align:left}th{background:#eee9dd}.verdict{padding:1rem;border-left:5px solid #286446;background:#e8f1e8}code{font-size:.9em}pre{white-space:pre-wrap}small{color:#555}</style><h1>Final scaling: inconclusive</h1><p class="verdict"><strong>Interrupted by unrelated tests.</strong> Two grid processes completed; one overlapped another Cargo test run. Three grid and all five eight-world processes are missing. Correctness passed. Original writer result remains kept and separate.</p><table><thead><tr><th>Commit</th><th>Value</th><th>Verdict</th><th>Hypothesis</th><th>Limiter</th></tr></thead><tbody><tr><td>afcee56b9</td><td>16 worlds, n=2 including overlap: 0.82647 [0.78991, 0.86304] s / 0.96556 [0.92945, 1.00167] s; 8 worlds missing</td><td>Inconclusive; prior writer keep unchanged</td><td>Faster equal-work search on two fixed openings, matching receipts</td><td>Only one invocation without observed test/build overlap; Command/audit and network dominate its separate profile</td></tr></tbody></table><h2>Complete interrupted-series observations and limits</h2><pre>## Second optimize step 9 — final scaling interrupted (2026-11-09)
+
+**Inconclusive.** Two of five primary-grid processes completed; unrelated Cargo
+transport tests overlapped the second. Only one invocation has no observed
+build/test overlap. Three grid processes and all five eight-world processes are
+missing, not zero. No five-sample final scaling claim is supported. Keep the
+borrowed writer on its separate original five-pair 24.93% / 23.93% result; this
+series neither repeats nor overturns that A/B comparison.
+
+Predeclared claim: “Batched local-update search is faster for equal work on two
+fixed openings, with matching receipts.” Correctness passed on the completed
+work. Reproducibility under the declared no-overlap condition was not established.
+
+### Absolute observations, not a final performance estimate
+
+Seconds per decision, median [minimum, maximum], n=2 per side/cell, including
+the overlapping invocation. These descriptive aggregates retain every sample;
+their ratios and separated ranges do not establish a gain. No sample was retried,
+replaced, pooled with history or silently dropped. Eight-world times are missing.
+
+| Opening | Worlds | Sequential seconds | Batched seconds | Ratio of medians | Rollouts / Commands |
+| --- | --- | --- | --- | --- | --- |
+| 42 | 1 | 0.32154 [0.19612, 0.44697] | 0.07759 [0.06625, 0.08893] | 4.144× | 4 / 80 |
+| 42 | 4 | 0.89304 [0.77263, 1.01344] | 0.22519 [0.20531, 0.24507] | 3.966× | 16 / 320 |
+| 42 | 16 | 3.69693 [3.66043, 3.73343] | 0.82647 [0.78991, 0.86304] | 4.473× | 64 / 1280 |
+| 43 | 1 | 0.25781 [0.25164, 0.26399] | 0.08086 [0.08043, 0.08129] | 3.188× | 5 / 100 |
+| 43 | 4 | 0.99461 [0.99149, 0.99773] | 0.25523 [0.25460, 0.25585] | 3.897× | 20 / 400 |
+| 43 | 16 | 4.01204 [3.85828, 4.16580] | 0.96556 [0.92945, 1.00167] | 4.155× | 80 / 1600 |
+
+Every individual observation (JSON retains full precision):
+
+| Run | Overlap | Opening | Worlds | Sequential seconds | Batched seconds |
+| --- | --- | --- | --- | --- | --- |
+| 1 | none observed | 42 | 1 | 0.196122958 | 0.066251542 |
+| 1 | none observed | 42 | 4 | 0.772629334 | 0.205308917 |
+| 1 | none observed | 42 | 16 | 3.733433458 | 0.863040208 |
+| 1 | none observed | 43 | 1 | 0.263992083 | 0.081287917 |
+| 1 | none observed | 43 | 4 | 0.997727167 | 0.254604083 |
+| 1 | none observed | 43 | 16 | 3.858275375 | 1.001673458 |
+| 2 | observed | 42 | 1 | 0.446966250 | 0.088928000 |
+| 2 | observed | 42 | 4 | 1.013444500 | 0.245065750 |
+| 2 | observed | 42 | 16 | 3.660428500 | 0.789907250 |
+| 2 | observed | 43 | 1 | 0.251636042 | 0.080431709 |
+| 2 | observed | 43 | 4 | 0.991491083 | 0.255848792 |
+| 2 | observed | 43 | 16 | 4.165798375 | 0.929454000 |
+
+Same-runtime sixteen-world equal-work ratios are 4.326× / 3.852× at openings
+42/43 in run 1, and 4.634× / 4.482× in run 2 (overlap). Batched sixteen-world
+latency divided by live sequential singleton is 4.401× / 3.794× in run 1 and
+1.767× / 3.694× in run 2. The 42/singleton sequential sample rises from
+0.196123 s to 0.446966 s; no cause for that particular difference was isolated.
+Do not attribute all variability to the observed test process. The eight-world
+supplement has no observations. These are diagnostics, not the original-world
+“near” comparison or an acceptance relaxation.
+
+### Protocol stop and failures
+
+Other builds/tests were observed before measurement. They exited naturally;
+none was stopped. A fresh process check then found no build/test processes,
+and the singleton preflight passed. During grid-2, passive process snapshots
+at five-second waits observed Cargo PID 10692 and its transport-tests child
+11550 in another checkout. The second search process was allowed to finish
+and reaped, then orchestration exited 1 without launching grid-3. The journals
+retain exact start/end UTC timestamps and the overlapping process records.
+Five-second snapshots cannot prove the absence of shorter intervening activity.
+Run 1 means no overlap observed, not exclusive control of the host.
+
+Two benchmark processes exited zero, with empty stderr, zero receipt/work/
+identity failures and no deadline rejection. One orchestration stop records the
+protocol violation. Missing work: 3/5 grid and 5/5 supplement processes. Zero
+retries. The singleton preflight and identity-only process separately exited
+zero with empty stderr. Outer uv invocations warned that an unrelated
+VIRTUAL_ENV was ignored; benchmark children explicitly removed it and used the
+checkout environment. No timings from preflight or profiles enter latency.
+
+A future measurement needs an available window with no other tests/builds and
+a newly declared complete bounded series. Preserve these observations as an
+interrupted series; do not overwrite them or append replacement samples to
+claim this series met the original protocol. No further series starts here.
+
+### Correctness and actual work
+
+The excluded preflight passed two live and two saved full receipt comparisons
+and 81 exact native/Python encodings. The two completed grid invocations passed
+12 live and 12 saved comparisons. Complete discrete receipts, signed rollout
+support, Commands, canonical hashes, private audits, terminal flags, sampling
+identity and policy/world identity match under the unchanged comparator.
+Floating predictions use the existing atol 1e-6 / rtol 1e-5, with maximum
+base/value/target differences 1.0242171000207634e-10 /
+4.0978193283081055e-8 / 3.1306484626902886e-9. Numeric equality is toleranced,
+not bitwise. Existing source/runtime/time exceptions are unchanged.
+
+Each side executed 378 timed rollouts / 7,560 Commands, plus 128 separately
+profiled rollouts / 2,560 Commands: total 1,012 rollouts / 20,240 Commands across
+both sides, excluding preflight. Sixteen-world cells each did 64/80 rollouts
+and 1,280/1,600 Commands at 42/43, all depth 20. Both opening-42 profiles show
+1,280 Commands and 21 batched forwards (sequential: 1,281). The work therefore
+ran inside teacher.search rather than returning fast rejections. The workload
+also distinguishes 1, 4 and 16 worlds by exact work counts and increasing time.
+
+### Limiter: separate built-in profiles only
+
+Batched opening-42/sixteen-world profile seconds; one observed-clean profile
+and one overlapping profile, never counted as latency samples:
+
+| Category | Run 1 seconds | Run 2 seconds (overlap) |
+| --- | --- | --- |
+| native_step_and_audit | 0.25093 | 0.25565 |
+| network | 0.24788 | 0.24999 |
+| semantic_direct_hash | 0.08331 | 0.08376 |
+| observation_encoding | 0.15780 | 0.16412 |
+| session_snapshot | 0.00696 | 0.00721 |
+
+The run-1 profile maps the principal costs to Command application/audit and
+network inference, of similar size; encoding is next. LocalUpdateTeacher&#x27;s
+_run_rollouts (local_update.py:578) reaches apply_policy_choice
+(bindings.rs:3064); predict_batch (local_update.py:538) encodes via
+Env.encode_observation_into (bindings.rs:4263) before forward. Semantic direct
+hashing reaches decision.rs:354. Observation::to_json&#x27;s borrowed writer is
+shared by ViewerProjectionWitness::new (search_state.rs:43) and semantic input
+(decision.rs:360). The native sub-bucket attribution and eleven byte/hash
+fixtures from the original writer study remain valid, hash-verified evidence.
+
+Run 1 separately profiles network at 2.42943 → 0.24788 s, forwards 1,281 → 21,
+encoding 0.35288 → 0.15780 s, and composite semantic reads/parses 1,298 → 2
+with 1,296 direct hashes. Native Command count remains 1,280. This supports the
+known batching/encoding/hash mechanism, but n=1 and overlapping run 2 do not
+establish reproducible final latency. No new profiling campaign ran.
+
+For a deliberately optimistic bound, sum the five nonoverlapping top-level
+run-1 buckets: S=0.74689 s, a lower bound on total profiled search time. Snapshot
+share is at most 0.932%, so complete removal yields at most S/(S-x)=1.0094×.
+Complete network removal yields at most 1.497× and complete Command/audit removal
+1.506× on that profiled denominator. Nested model costs are excluded. These
+are profile bounds, not ordinary-time savings or new optimization proposals.
+Snapshot elimination cannot close the singleton gap; required Command/audit
+and network work remain. No serializer micro result is substituted for the
+whole teacher.search latency people wait on.
+
+### Fixed source, runtime and evidence reuse
+
+Source HEAD afcee56b996175130c057cb8c01656f7b79078d8; no production edits.
+Runtime bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0.
+Harness 3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a.
+Checkpoint 57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb.
+World w17; catalog 0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f.
+Wheel 5d575cce29c02fe7fa26fdf4b631c861f9889c388eee1718cea35f42867753b9.
+
+All 25 step-8 frozen hashes match, including locks, six references, fixtures,
+harness, installed extension and ordinary wheel. before.json additionally
+freezes 530 source files and 167 reused evidence files. Fresh identity verified
+checkpoint/catalog, vector-root API and no benchmark instrumentation. Prior
+feature trees exclude serde_json preserve_order; unchanged Cargo inputs and
+wheel preserve that evidence. Eleven independent byte/SHA-256/BLAKE3 cases,
+five bounded debug contracts, six live/saved receipt cells and 1,281 exact
+encodings are reused with hashes. No rebuild, repeated native test or fixture
+regeneration was needed. The incoming dtype join is outside this benchmark&#x27;s
+world=None policy and is not the rejected native dtype optimization.
+
+Both paths share this native runtime and dependencies; the three sequential
+Python owners load from 841b1c50c. This is retained Python-cut scaling under the
+kept writer, not writer-only savings or historical-engine speedup. Same Apple
+M4 Max/macOS 26.0.1, Python 3.12.12, Torch 2.10.0, initialized 64-wide/two-layer
+v6 scalar model; depth 20, openings 42/43, policy seed 15, search seed 17, one
+Torch CPU/inter-op thread and OMP/OpenBLAS/MKL each one. Warmed sequential then
+batched cells in fresh serial processes use the frozen harness&#x27;s fixed order;
+that order is not balanced and may bias timings. Setup, warming, comparison,
+and separate profiles stay outside the latency region. No games/evals or
+artificial load were started. No server or watcher was started; all measurement
+children finished. Other people&#x27;s processes were untouched.
+
+### Artifacts and remaining work
+
+.cache/mtg-268/final-measurement-2 contains the exact direction, before.json,
+prior notes/report, identity and singleton preflight outputs/journals, both grid
+outputs/stderr, process snapshots, orchestration and reporting scripts,
+summary.json, report.md and final-artifacts.json. Every historical HTML row is
+preserved. The prior full step-8 plan and exact notes remain in before-questions.md.
+
+Final scaling remains incomplete. The original near-singleton definition,
+MTG-183/w13 admission and representative trained/terminal positions remain
+unresolved. Complete local-update/Command evidence, model/inference and upstream
+shared-encoder suites, active-training/observation/capacity checks, changed-file
+lint, Cargo fmt/clippy, complete debug native suite, pending-entrant hash
+coverage and applicable engine-budget CI remain separate gate requirements.
+Game/training/evaluation suites belong on the Mac mini or CI. No Graph,
+publication, shipping or Task completion occurred.
+</pre><details><summary>Historical evidence — unchanged</summary><h1>Borrowed JSON: better, candidate kept</h1><p class="verdict"><strong>24.93% / 23.93% lower median decision latency.</strong> Five samples per binary at each opening, disjoint ranges, zero correctness failures. Both predeclared thresholds pass. Original near-singleton target remains unmet.</p><h2>Sixteen worlds, depth 20: seconds per decision</h2><p>Median [minimum, maximum], n=5 per side. Baseline is the immediate batched implementation.</p><table><thead><tr><th>Opening</th><th>Baseline s</th><th>Candidate s</th><th>Reduction</th></tr></thead><tbody><tr><td>42</td><td>0.97506 [0.95206, 0.97882]</td><td>0.73197 [0.71286, 0.75503]</td><td>24.93%</td></tr><tr><td>43</td><td>1.20364 [1.19115, 1.23144]</td><td>0.91563 [0.89085, 0.92580]</td><td>23.93%</td></tr></tbody></table><details open><summary>Protocol, correctness, profiles, all samples and kept identities</summary><pre>## Second optimize step 4 — borrowed JSON measurement (2026-11-09)
 
 **Better; keep the candidate.** Median sixteen-world decision latency falls
 24.93% at opening 42 and 23.93% at opening 43. Both candidate maxima are below
@@ -826,4 +1013,4 @@ its timings are excluded (16 rollouts / 320 Commands including separate profiles
 Both builds, Cargo format check and `git diff --check` passed. No server/watcher
 was started; all subprocesses finished. No optimization, commit, Graph launch,
 publication, shipping, Task completion or acceptance change occurred.
-</pre></html>
+</pre></details></html>
