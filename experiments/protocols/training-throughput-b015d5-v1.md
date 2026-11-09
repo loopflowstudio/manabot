@@ -1254,6 +1254,85 @@ Delete no historical data, four-update declarations or failure receipts.
 No general planner, new precision default, changed minibatch, CUDA graph,
 engine optimization or launcher rewrite is required.
 
+### C1 software interface
+
+`experiments/training_throughput_sizes.py` retains the original `LEGS` and
+adds `C1_LEGS`. Example keys are `c1-fast-a384l8-k1-float32-u8`,
+`c1-l4-w160l8-k2-float32-u8` and its conditional
+`c1-l4-w160l8-k2-float32-u12-overlap`. The A40 numeric block uses
+`c1-fast-w160l8-k1-{float32,tf32,bf16}-u12` and
+`c1-fast-w160l8-k1-float32-repeat-u12`. The `fast` label still means A40.
+The experiment name is `training-throughput-sizes-c1`; four-update jobs keep
+their old name/identity. Limits still derive from `--pace`.
+
+On the first rental, queue `c1-fast-w160l8-k1-bf16-u2-admission` (substitute
+`l4` or `a4000` only under the existing availability rule). That job runs:
+
+```sh
+MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -k cuda_semantic_policy_admission -q -s
+```
+
+before its actual two-update worker, then
+`uv run --locked python scripts/check_throughput_admission.py`. The test fails
+without CUDA, prints actual recurrent/table dtypes and precision settings,
+and covers full, selected, empty and cached definition paths, backward, Adam
+and weight reload. The post-worker check loads its hash-verified raw checkpoint
+with ordinary world/input admission and writes `cuda-admission.json`.
+On subsequent GPUs, run the same CUDA test before BF16, without another
+training smoke. CPU passes or ordinary pytest skips do not admit execution.
+
+C1 uses the maintained `experiments/training_throughput_readings.py` span
+reader. Historical `step-3/readings.py` stays immutable evidence. Copy the
+original per-run `run.json`, `updates.json` and `gpu-samples.csv` projections
+into `step-3-c1/runs/<id>/`, preserving attempts, logs and game ledgers alongside
+them. The collection script retained in `step-3/` describes these projections;
+C1 collection must use experiment `training-throughput-sizes-c1`.
+
+- `cells.json` maps every `C1_LEGS` key to `status`, `reason`, `runs`, `failed_runs`, `host`
+  and allocated `billed_usd`. Status is `completed`, `conditional_skip`,
+  `unavailable`, `budget_skip`, `failed` or `not_needed`. Runs are distinct
+  per cell; `failed_runs` retains unsuccessful attempts with distinct run IDs
+  without adding them to the speed sample. Skipped alternatives need an explicit reason. `host` names the
+  exact rental. Completed packed cells require every seed; failed attempt IDs
+  and partial evidence remain under their failed disposition.
+- `rentals.json` maps each exact host to `gpu` (`a4000/l4/fast`),
+  `usd_per_hour`, `billed_usd`, `outstanding_usd`, `hours`, `bill_reference`
+  and `deletion_reference`. Whole-rental bills include setup, idle, failures
+  and cleanup. Allocated cell costs never replace this accounting.
+- Run `uv run python -m experiments.training_throughput_readings
+  PATH/step-3-c1 --source FROZEN_COMMIT`. The reader rejects old identities,
+  undeclared recipes and missing dispositions, emits exact ordinals, phase
+  times, per-seed latency, window sensitivity, resource/exposure clocks,
+  separately matched decision/latency gains and the numeric health contrast.
+  Whole-run resource summaries include warmup and are labelled accordingly.
+  Failure/admission exposure still comes from their retained receipts/ledgers;
+  completed speed-cell clocks are explicitly labelled, not a campaign total.
+- Before a cell, `admit_cost(Budget(...), limits(leg, pace), ...)` checks the
+  reconciled prior spend, already committed liability, GPU-hour/update caps,
+  remaining line/window and watchdog plus cleanup. `prepaid_usd` is only for
+  liability already reserved in `committed`. It does not rent, shorten limits
+  or override the operator's memory/crossover/failure rules.
+
+Two optional diagnostics use one retained 256-stream `.npz` observation
+fixture with the frozen v6 shapes (seed 26410). On the admitted rental:
+
+```sh
+uv run python scripts/diagnose_training_transfers.py recording --fixture batch.npz --out recording.json
+uv run python scripts/diagnose_training_transfers.py transfers --fixture batch.npz --out transfers.json
+```
+
+If absent, the first diagnostic retains one initial configured-match native batch
+at the control's shapes, seed 26410, without playing games or training. Both
+diagnostics then read those exact bytes; an existing fixture is never overwritten.
+Each child is killed and reaped after 120 seconds. Recording separates virtual
+allocation, first-touch copying, resident copying and action packing, reporting
+page faults. Transfer diagnostics report device selection/host index copies,
+host gather, packed H2D plus an explicit wait, and one profiler table. They
+verify copied values, retain fixture digest/shapes, and draw no RNG or change
+training samples. This is a small fixed-input cost probe, not reproduction of
+the original whole-update recording stall. No production speed repair follows
+without the protocol's before/after and output/gradient/sample/RNG evidence.
+
 ### Inclusive budget, deadlines and recovery
 
 Reconcile final provider billing for the first pass and earlier steps before

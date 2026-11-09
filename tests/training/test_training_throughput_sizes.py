@@ -172,3 +172,45 @@ def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     receipt = TrainingRun.model_validate_json((training / "run.json").read_bytes())
     assert receipt.status == "completed"
     assert receipt.stages[0].updates == 1
+
+
+def test_c1_discovery_preserves_controls_and_declares_endpoints() -> None:
+    for name, leg in sizes.C1_LEGS.items():
+        runs = _launched("--revision", "HEAD", "--leg", name)
+        seeds = (26400,) if leg.admission else sizes.C1_SEEDS[: leg.packed]
+        assert tuple(r.seed for r in runs) == seeds
+        spec = TrainingJob.model_validate_json(runs[0].job.config or "")
+        assert spec.experiment == sizes.C1_EXPERIMENT
+        actual = spec.regime.model_dump(mode="json")
+        expected = sizes.recipe(leg.size, leg.precision, leg.updates).model_dump(
+            mode="json"
+        )
+        assert (
+            actual.pop("id")
+            == f"elemental-throughput-c1-{leg.size}-{leg.precision}-u{leg.updates}-v1"
+        )
+        expected.pop("id")
+        for regime in (actual, expected):
+            regime.pop("wall_seconds", None)
+            regime["stages"][0]["execution"].pop("wall_seconds", None)
+        assert actual == expected
+        assert sizes.limits(leg, 37).watchdog_seconds >= 6 * 37 * leg.updates
+        if leg.admission:
+            assert sizes.CUDA_ADMISSION.rstrip() in runs[0].job.command
+            assert "|| exit $?" in runs[0].job.command
+            assert runs[0].job.command.endswith("scripts/check_throughput_admission.py")
+            assert leg.updates == 2
+        elif leg.overlap_retry or (leg.gpu, leg.size, leg.packed) == (
+            "fast",
+            "w160l8",
+            1,
+        ):
+            assert leg.updates == 12
+        else:
+            assert leg.updates == 8
+
+
+@pytest.mark.parametrize("pace", [float("nan"), float("inf"), -1])
+def test_c1_refuses_nonfinite_or_negative_limits(pace: float) -> None:
+    with pytest.raises(ValueError, match="pace"):
+        sizes.limits(sizes.C1_LEGS["c1-fast-a384l8-k1-float32-u8"], pace)

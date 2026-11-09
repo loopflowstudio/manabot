@@ -19,6 +19,14 @@ update rows stop for the larger of 600 s and 3 x pace (`limits`).
     etude queue experiments/training_throughput_sizes.py --rent b015d5-a4000x4 \\
         --revision COMMIT --leg a4000-w160l8-k2-float32 --pace 52 --cohort ...
 
+C1 legs are prefixed `c1-` and include their endpoint (`-u8`, `-u12`).
+`-overlap` is a separately identified, conditional twelve-update retry;
+`-u2-admission` runs mandatory CUDA tests before its two-update BF16 worker.
+C1 uses seeds 26401–26404 (26400 for admission) and its own experiment name.
+The operator admits cells against the inclusive budget and rental deadline
+using `training_throughput_readings.admit_cost`; job limits alone are not a
+campaign budget. Neither declarations nor discovery rent a machine.
+
 Print a leg's limits at a pace:
 
     uv run python -m experiments.training_throughput_sizes a4000-a384l8-k1-bf16 140
@@ -26,7 +34,7 @@ Print a leg's limits at a pace:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 import sys
 from typing import Literal
@@ -43,6 +51,12 @@ from experiments.training_throughput_packing import GPU_SAMPLER, LEG_VARIABLE
 from manabot.training.regime import Precision, TrainingRegime
 
 EXPERIMENT = "training_throughput_sizes"
+C1_EXPERIMENT = "training-throughput-sizes-c1"
+C1_SEEDS = (26401, 26402, 26403, 26404)
+CUDA_ADMISSION = (
+    "MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest "
+    "tests/model/test_semantic_card_precision.py -k cuda_semantic_policy_admission -q -s\n"
+)
 SEEDS = (26301, 26302, 26303, 26304)
 SPEED_UPDATES = 4
 CHECK_UPDATES = 12
@@ -103,11 +117,20 @@ class Leg:
     precision: Precision
     updates: int = SPEED_UPDATES
     repeat: bool = False
+    continuation: bool = False
+    admission: bool = False
+    overlap_retry: bool = False
 
     @property
     def name(self) -> str:
         suffix = "-repeat" if self.repeat else ""
-        return f"{self.gpu}-{self.size}-k{self.packed}-{self.precision}{suffix}"
+        name = f"{self.gpu}-{self.size}-k{self.packed}-{self.precision}{suffix}"
+        if not self.continuation:
+            return name
+        name = f"c1-{name}-u{self.updates}"
+        if self.admission:
+            return name + "-admission"
+        return name + "-overlap" if self.overlap_retry else name
 
 
 def _leg(gpu: Gpu, size: Size, packed: Literal[1, 2, 4], precision: Precision) -> Leg:
@@ -133,6 +156,54 @@ def _legs() -> dict[str, Leg]:
 LEGS = _legs()
 
 
+def _continuation_legs() -> dict[str, Leg]:
+    # Original declarations remain frozen. C1 has its own endpoints and identities.
+    legs = [
+        replace(leg, updates=12 if leg.updates == 12 else 8, continuation=True)
+        for leg in LEGS.values()
+    ]
+    legs += [
+        Leg(gpu, "w64", k, "float32", 8, continuation=True)
+        for gpu in ("a4000", "l4", "fast")
+        for k in (1, 2, 4)
+        if not any(
+            existing.gpu == gpu and existing.size == "w64" and existing.packed == k
+            for existing in legs
+        )
+    ]
+    # One whole-cell overlap rerun, plus the matching solo endpoint. Execution
+    # admits these only after insufficient overlap; the reader never pools them.
+    legs += [
+        replace(leg, updates=12, overlap_retry=True)
+        for leg in legs
+        if leg.updates == 8 and leg.precision == "float32"
+    ]
+    legs += [
+        Leg(gpu, "w160l8", 1, "bf16", 2, continuation=True, admission=True)
+        for gpu in ("a4000", "l4", "fast")
+    ]
+    return {leg.name: leg for leg in legs}
+
+
+C1_LEGS = _continuation_legs()
+
+
+def leg_recipe(leg: Leg) -> TrainingRegime:
+    regime = recipe(leg.size, leg.precision, leg.updates)
+    if leg.continuation:
+        regime.id = (
+            f"elemental-throughput-c1-{leg.size}-{leg.precision}-u{leg.updates}-v1"
+        )
+        if (
+            regime.observation.policy_input_version != 6
+            or regime.observation.max_facts != 512
+        ):
+            raise ValueError("C1 requires the declared v6 / 512-fact input")
+        if regime.agent.catalog_records(regime.observation.policy_input_version):
+            raise ValueError("C1 requires effective hashed records")
+    return regime
+
+
 @dataclass(frozen=True)
 class Limits:
     watchdog_seconds: float
@@ -143,7 +214,7 @@ class Limits:
 
 def limits(leg: Leg, pace: float) -> Limits:
     """A cell's run limits at `pace`, the previous size's K=1 seconds per update."""
-    if pace <= 0:
+    if not math.isfinite(pace) or pace <= 0:
         raise ValueError("pace must be positive seconds per update")
     watchdog = max(WATCHDOG_FLOOR_SECONDS, WATCHDOG_PACES * pace * leg.updates)
     # Quarter hours keep the job's limits exact; the watchdog takes the slack.
@@ -161,36 +232,49 @@ def limits(leg: Leg, pace: float) -> Limits:
 def runs(revision: str, leg: str, seeds: str = "", pace: str = "") -> list[Run]:
     """One cell's runs. `seeds`, comma-separated, picks some of its seeds; `pace`
     is the previous size's K=1 seconds per update on this GPU (default: w64's)."""
-    if leg not in LEGS:
-        raise ValueError(f"unknown leg {leg!r}; choose from {sorted(LEGS)}")
-    chosen = LEGS[leg]
-    declared = SEEDS[: chosen.packed]
+    declarations = LEGS | C1_LEGS
+    if leg not in declarations:
+        raise ValueError(f"unknown leg {leg!r}; choose from {sorted(declarations)}")
+    chosen = declarations[leg]
+    declared = (C1_SEEDS if chosen.continuation else SEEDS)[: chosen.packed]
+    if chosen.admission:
+        declared = (26400,)
     selected = tuple(int(seed) for seed in seeds.split(",")) if seeds else declared
+    if not selected or len(set(selected)) != len(selected):
+        raise ValueError("seeds must be nonempty and distinct")
     if unknown := set(selected) - set(declared):
         raise ValueError(f"leg {leg} declares no seeds {sorted(unknown)}")
     limit = limits(chosen, float(pace) if pace else FIRST_PACE_SECONDS)
-    regime = recipe(chosen.size, chosen.precision, chosen.updates)
+    regime = leg_recipe(chosen)
     job = training_runs(
         (regime,),
         updates=chosen.updates,
         revision=revision,
-        experiment=EXPERIMENT,
+        experiment=C1_EXPERIMENT if chosen.continuation else EXPERIMENT,
         seeds=selected,
         hours=limit.max_hours,
         usd_per_run=limit.max_usd,
     )[0].job
+    command = GPU_SAMPLER + job.command
+    if chosen.admission:
+        command = (
+            CUDA_ADMISSION.rstrip()
+            + " || exit $?\n"
+            + command
+            + " || exit $?\nuv run --locked python scripts/check_throughput_admission.py"
+        )
     return job.model_copy(
         update={
             "name": f"{regime.id}-{leg}",
             "environment": (Variable(name=LEG_VARIABLE, value=leg),),
-            "command": GPU_SAMPLER + job.command,
+            "command": command,
         }
     ).runs(*selected)
 
 
 def main() -> None:
     leg, pace = sys.argv[1], float(sys.argv[2])
-    print(limits(LEGS[leg], pace))
+    print(limits((LEGS | C1_LEGS)[leg], pace))
 
 
 if __name__ == "__main__":

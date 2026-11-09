@@ -297,7 +297,11 @@ class SemanticCardEncoder(nn.Module):
         )
         if len(rows) == 0:
             return table
-        return table.index_copy(0, rows, self._encode_programs(rows))
+        # CUDA's packed GRU can return Half even inside BF16 autocast. The
+        # definition table follows the embedding weights (also for empty rows),
+        # so normalize at this join without detaching the program gradients.
+        encoded = self._encode_programs(rows).to(table.dtype)
+        return table.index_copy(0, rows, encoded)
 
     def _encode_programs(self, rows: torch.Tensor) -> torch.Tensor:
         """Encode nonempty one-based catalog rows, preserving their supplied order.

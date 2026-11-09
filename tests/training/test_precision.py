@@ -76,8 +76,8 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
 ) -> None:
     """A real attention agent collects and learns under bf16 autocast (CPU).
 
-    CPU stands in for CUDA: the same autocast covers the same forwards, so dtype
-    mixing in the network fails here as it would on a GPU. Numerics are not tested.
+    This proves CPU context wiring only. CUDA's recurrent kernels choose
+    different dtypes; the CUDA admission test covers the semantic-card path.
     """
     torch.manual_seed(5)
     torch.set_num_threads(1)

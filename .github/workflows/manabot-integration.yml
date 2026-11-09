@@ -81,6 +81,7 @@ jobs:
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
             tests/training/test_active_training.py tests/training/test_active_recovery.py \
             tests/training/test_process_tree_rss.py \
+            tests/training/test_precision.py tests/training/test_training_throughput_sizes.py tests/training/test_throughput_c1_readings.py \
             tests/training/test_experiment_data.py \
             tests/training/test_checkpoint_queue.py \
             tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \

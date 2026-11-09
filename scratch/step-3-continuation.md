@@ -104,3 +104,38 @@ repair checkout. Recheck ownership at implementation time.
 The protocol names focused tests and real CUDA admission. CPU-only success
 cannot admit the repaired numeric path. Software delivery does not complete the
 experiment; freeze, bounded execution, analysis and evidence review remain.
+
+### Delete — do not maintain
+
+- Removed the CPU BF16 test's assertion that CPU covers CUDA kernel dtypes;
+  preserve its context-wiring checks. Real CUDA admission is separate and mandatory.
+- Replaced the unsafe `definitions` index-copy join with one dtype-normalized
+  join, keeping gradients and the table's float32/empty-row contract.
+- No production path, schema or historical evidence is deleted. The original
+  artifact `step-3/readings.py` remains a frozen result producer; the maintained
+  C1 reader is `experiments/training_throughput_readings.py`, not another script
+  copied into an evidence directory. Original four-update launch identities stay.
+
+No deletion targets remain. The C1 reader obtains expected recipe identity from
+`leg_recipe`; one complete-ordinal check replaces incremental previous-ordinal
+tracking. Interval selection and seed summaries stay together, while packing
+attempt/control selection is separate from report assembly. Admission commands
+are assembled once around the ordinary worker command. These reductions preserve
+the scheduled-first selection rule, source controls and all launch identities.
+
+### Implementation handoff
+
+ed2300 was rechecked on 2026-11-08: unstarted, no Graph processes, Sessions or PR.
+Its repair is in this b015d5 diff; delivery must link that Task to the software PR.
+No competing repair was started. Semantic definitions cast the actual recurrent
+output to their destination dtype, with an exact float32 output/gradient check.
+The mandatory CUDA test emits the actual GRU dtype; it remains unknown on this
+CPU-only implementation host. Admission also checks the real worker's two-update
+raw checkpoint through the normal loader. No numerical default changes.
+
+C1 launch keys, reader schemas and diagnostic commands are documented in the
+protocol's C1 software interface. No rental, quote, bill refresh or scientific
+run occurred during implementation. Gate owns the remaining affected suites;
+freeze and bounded real CUDA admission still precede campaign execution.
+
+Check: `uv run --extra dev pytest tests/training/test_throughput_c1_readings.py tests/training/test_training_throughput_sizes.py -m 'not training' -q` — 22 passed, 2 training cases deselected; Ruff and diff whitespace checks pass. Earlier implementation checks: 7 reader tests and focused precision/semantic/discovery checks passed, two CUDA cases skipped locally, standalone fixed-fixture recording CLI passed. Gate retains affected suites/CI collection; CUDA admission retains the real-device checks.

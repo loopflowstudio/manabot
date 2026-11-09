@@ -1,478 +1,81 @@
-Inherited MTG-243 naming notes (another branch's handoff) were removed; they are at
-`c6746f3ff:scratch/questions.md` and confer nothing on b015d5. Main's 07c490 notes (arrived with PR #436) are at
-`ebed0963e:scratch/questions.md` and likewise confer nothing here. Main's c5fba4 notes
-(arrived with the sync onto `646cb9821`, updated by the sync onto `86f81c8d7`) are at
-`86f81c8d7:scratch/questions.md` and likewise confer nothing here.
+# b015d5 — remaining decisions and evidence
 
-# Task b015d5 — training seconds per update (PR #435, merged `45cc961a2`)
+Historical step-1/2/3 design, implementation, reviews and execution notes are at
+`c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
+run projections, bills and cleanup receipts remain published in
+`experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
+run IDs and dated direction; no historical result is being rewritten.
 
-History of the measurement and concept reviews: `git show 645b9be21:scratch/questions.md`.
-Live items:
-- Inherited, unrepaired: `test_resource_limit_receipt_replays_its_retained_encoding_boundary`
-  fails because `tests/fixtures/tla-pilot-permanent-capacity.jsonl` retains a schema 7
-  frame while native emits `SEMANTIC_DECISION_VERSION` 8 (`binding_mismatch`). The test
-  is in no CI selection. It needs its own bug Task; the fixture is retained evidence.
-- `HostFacts.cpu_model` reads `/proc/cpuinfo` (null off Linux); the GPU stays in run
-  identities, not `TrainingRun.host`.
-- Proposed infrastructure Wave memory (not written; `.lf/wave/` is read-only here):
-  rented-host CPU class moves update time 1.6-1.8x at a fixed GPU label, so compare
-  `host.cpu_model` and native stepping before attributing a slowdown; a packed
-  ~50,000-row column makes per-time-step device recursions launch-bound.
+## Current authority and boundaries
 
-## experiment-design b015d5 (2026-11-06): training throughput
+Jack Heart replied "keep going" to the recommendation "I recommend repairing
+BF16, lengthening the packed cells, and completing the missing measurements."
+Comment 079b3f46 authorizes the bounded continuation. Comment 8cb4c5af records
+C1 review against that authority, not a new approval. The owning protocol is
+`experiments/protocols/training-throughput-b015d5-v1.md`, C1; the implementation
+handoff and deletion list are in `scratch/step-3-continuation.md`.
 
-Design: `experiments/protocols/training-throughput-b015d5-v1.md` (draft). Reversible
-assumptions, for Jack Heart's review:
-- Control = 07c490's `elemental_variants.elemental_recipe` (world relabel + capacity
-  recovery), so the design waits for PR #436 instead of declaring a second copy of the
-  same variant. If #436 stalls, this file can declare the identical two changes under
-  its own ID.
-- Reuses 07c490's 50 `ELEMENTAL_PAIRS` evaluation deals, so scores read against its
-  baseline curve. They stay evaluation-only here; that protocol called them reserved, so
-  sharing them is a choice for review.
-- Packing is judged without strength runs, because processes share only hardware.
-  Spending strength runs on it would buy nothing a digest cannot show.
-- Proposed reservation $24.40; the remaining $25.60 of the cap is held back pending an
-  amendment.
-- An A4000 probe is included as the larger-CPU, cheaper-GPU shape. Etude's `a4000`
-  template lists several rented machines that may be ghost records; check
-  `etude machines` before launch.
+Keep effective hashed v6 / 512 facts and the Elemental learning recipe. c5fba4
+owns its shared-effect catalog repair; do not infer TLA catalog speed from the
+hashed ladder. Exact quotes and external diagnostic findings remain in
+`scratch/vocabulary-performance.md`.
 
-## implement b015d5 (2026-11-06): step-1 probe software
+The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
+six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
+`index_copy_(): self and source expected to have the same dtype, but got (self)
+Float and (source) Half`. CPU autocast had not covered CUDA's recurrent behavior.
+The repair is delivered here for unstarted ed2300, with no second checkout.
 
-Built: `scripts/bench_training_update.py` `--json` (whole receipt), `--recipe` as a file
-or `module:function(regime_id, updates)` declaration, `--cuda-counts`;
-`experiments/training_throughput.py` (phase driver, 1 Hz samplers, `/dev/shm` journal,
-module-run cleanup, `runs()`); `tests/training/test_training_throughput.py`.
-Reversible choices:
-- PR #436 is still open, so `elemental_variants` is not on main. The probe names the
-  control as the declaration string `experiments.elemental_variants:elemental_recipe`;
-  it resolves at any commit containing #436 (main since `ebed0963e`). The CPU test
-  keeps the frozen 183 file: it checks driver mechanics (receipts, samples, memory
-  skip, cleanup), which the recipe does not change; the control's own 2-update CPU
-  bench is recorded in the design status. Launch pins a commit that has both.
-  Checked: the declaration loads from #436's file (w17, 256 streams, both seats,
-  `recover_capacity` true).
-- Children drop every `ETUDE_*` variable and track locally; only the driver is the
-  launched run. Each child's `TrainingRun` receipt is the evidence.
-- A phase is skipped when the previous completed phase's largest child peak x its child
-  count exceeds `memory_fraction` (.85) of machine memory. Peak is Linux VmHWM, else the
-  largest sampled RSS.
-- Any failed phase fails the run after all phases have run; evidence is kept.
-- Quote 2026-11-06 at `8d178f40e`: `--rent l4 --machines 2` plans $2.06 (reservation
-  $2.10); `--rent a4000` refused, no stock at quote time. Re-quote before launch.
+## Execution still open
 
+- Source/world/input freeze after software integration. Original source was
+  cb722dc8c / w17; C1 never relabels those results. Current runtime admission
+  remains a freeze check. Real CUDA regression and a two-update w160l8 BF16
+  worker/reload on one rental must pass before opening other rentals.
+- Reconcile bills before allocating new liability. Step 3 $1.741 and total
+  $3.781 remain estimates, not invoices. Original caps stay $10 step 3 / $50
+  total; C1 adds at most min($10-prior step3, $50-prior total, $8), 15 GPU hours,
+  1,600 updates inclusive of failures/setup/diagnostics. No paid work in this step.
+- Same isolated client/home as the protocol. Original provider DELETE/GET 429s
+  required explicit provider deletion confirmation; all three original pods
+  were absent at 13:19 UTC on 2026-11-08. No controller was left running.
+- Original TF32 clip-fraction shift was 3.45x the float32 repeat difference;
+  finite metrics alone did not establish equivalence. Packing crossover remains
+  unknown. Step 2's accepted recipe is four seeds/one producer on A4000;
+  L4 recommendation remains an inference until these measurements.
 
-## experiment-freeze b015d5 (2026-11-06): step 1
+## Reversible implementation choices, 2026-11-08
 
-Bound to main `70d79ccb8`. Receipt is in the protocol. The A4000 quote
-succeeded ($.44); the L4 quote is still open because RunPod reported no
-available L4 machines. Quoting needs the 0.2.14 overlay and nested Doppler
-(see the launch-client memory). Re-quote L4 at execution review.
+- Keep the definition table in embedding-weight dtype, including empty rows;
+  cast recurrent outputs at the join. This is a float32 no-op with gradients.
+- C1 uses the existing launch owner and distinct `c1-...-u8/u12` keys. An
+  `-overlap` key is a conditional whole-cell retry, not automatic permission to
+  rerun or select the fastest cell. Source freeze and cost admission are external
+  execution checks; discovery never rents. Preserve legacy four-update jobs.
+- The maintained C1 reader lives under `experiments/`; historical artifact
+  readers stay immutable. Explicit per-cell dispositions and rental bills are
+  required; steady-state cost never stands in for the whole rental bill.
+- Diagnostics take one retained 256-row observation fixture. They instrument
+  fixed host recording and learner-style device/host selection/transfer only,
+  one child with a 120-second deadline each. They do not reproduce a complete
+  update or prove the cause of the original recording stall. No speculative
+  performance repair or policy/collector/learning behavior change is included.
 
-## pool-validation b015d5 (2026-11-07): step 1 executed
+## Older unresolved findings
 
-Report: `experiments/data/training-throughput-b015d5-v1/report.md` (published).
-Open for later, none blocking step 1:
-- The cause of the K=4 recording stall on L4-a is unknown. The P4 SIGKILL is also
-  unproven, but both peaks are within 13 MB of 61.05 GB, which points to a pod limit.
-- `run_phase` reads host memory, not the pod's allowance, so the memory gate cannot
-  trip on rented pods. Fix before relying on it for K above 4.
-- The bill had posted $.96 by 07:16 UTC; about $.10 of the $1.06 total is still
-  estimated. Etude's run list shows about $.44, which is below the bill.
-
-## experiment-design b015d5 (2026-11-07): step 2 amendment
-
-Design: protocol section "Step 2: seeds per machine (amended 2026-11-07)". Nothing
-frozen or launched. Route: needs software (protocol's five items), then freeze, then
-execution review with Jack Heart. Reversible assumptions, for review:
-- "Two-run digest test" runs on CPU. Same-seed CUDA runs are not expected to match, so
-  the CUDA legs are compared by metrics, with one repeated solo seed (M3) as the noise
-  scale. M3 is my addition, at about $.10-.20.
-- All legs share one hand-rented machine, so CPU digests and the K=1/K=4 readings share
-  hardware. That needs `etude wait` between legs and an explicit `etude terminate`.
-- Metric legs run 20 updates and four seeds. Enough to show a gross leak, not a small
-  effect. Any leak would appear early, and 20 matches a scored coordinate of 07c490.
-- Step 2 uses Etude main under an isolated `ETUDE_HOME`, because schema 12 would lock
-  0.2.14 clients out of the shared launcher database. Moving the shared launcher to a
-  release is a separate decision, and "standard shape" needs it before other Tasks can
-  pack. Etude's 0.2.15 release is not requested here.
-- Setup stays per attempt with a `flock` on the rustup lines; `Preparation` does not
-  fit the editable, in-tree native build yet.
-- The A4000 selection wait is 30 minutes, then L4.
-Open: whether cgroup or `RUNPOD_MEM_GB` shows a pod's allowance is unknown until the
-first step 2 receipt. Step 1's `cpu_quota` was None on every pod.
-
-## implement b015d5 (2026-11-07): step 2 software
-
-Built the protocol's five items. `uv run --extra dev pytest
-tests/training/test_training_throughput.py tests/infra/test_host_facts.py -q`: 26 passed,
-including the two-process digest through the real worker on a shared track folder.
-Open or assumed:
-- Acceptance quote, 2026-11-07 about 13:20 UTC, isolated home, `--revision HEAD`: on
-  `b015d5-l4x4` the four M1 runs share one L4 at 4 slots, $.59/hour, planned first-wave
-  rental $.74, cohort budget $3.00, nothing rented. `b015d5-a4000x4` refused: RunPod
-  had no A4000 (offer $.25/hour when asked at 13:14). L4 had also refused minutes
-  earlier, so stock moves. Re-quote both at the launch commit for execution review.
-- Isolated home is `~/.etude-b015d5-step2`; run the client as
-  `ETUDE_HOME=... doppler ... uv run --with "etude-sdk[s3,eval] @
-  git+file:///Users/jack/src/etude@a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11" etude ...`.
-  Never run that client without `ETUDE_HOME`: it would upgrade the shared database.
-- 80 GB disks are my choice (the shared on-demands use 40-50), for four venvs and builds.
-- `RUNPOD_MEM_GB` is read as decimal GB, the smaller reading if it means GiB.
-- Main's `405223165` (c5fba4's sampled-roster producers) is synced here through `646cb9821`;
-  the protocol says the launch commit includes it.
-- `flock` is not on macOS, so `machine_setup` takes the lock only where it exists (gate);
-  every rented machine has it. The script's order and failure handling are tested with
-  stand-in tools; real lock contention first happens on the rental.
-
-## compress b015d5 (2026-11-07): step 2 software
-
-`uv run --extra dev pytest tests/training/test_training_throughput.py
-tests/infra/test_host_facts.py -q`: 26 passed. `HostFacts.memory_limit` is now one nested
-field, replacing `memory_limit_bytes`/`memory_limit_source`; the protocol says so.
-`machine_setup` bytes changed after the 13:20 acceptance quote, so the launch-commit
-re-quote also covers that.
-
-## realign b015d5 (2026-11-07): step 2 plan against code and upstream
-
-Code matches the protocol's five items; no code changed. Protocol corrected:
-- New rule "Setup deadline". Etude's `max_hours` clock starts before setup, and
-  `run_worker` refuses to train with less than watchdog plus finalization left, so setup
-  over 900 s fails admission. Four concurrent native builds are unmeasured. The 7-minute
-  D2 trigger and staggering M1 in two pairs are my reversible choice, for execution review.
-- Exact isolated client invocation moved from these notes into the protocol, since
-  scratch is removed before landing. Source lines and step 3's stale c5fba4 dependency updated.
-- Digest watchdog checked: 46 s of 600 s, laptop, 24 streams, 3 updates, real worker. It
-  shows margin only; it is no timing evidence.
-
-Before freeze: re-quote both on-demands at the launch commit. Etude main is at `199335c`;
-the pin stays `a7718f5`.
-
-## concept-review b015d5 (2026-11-07): step 2 against the accepted design
-
-Walked one person's path: rent a four-slot machine by hand, run the legs in turn, compare,
-terminate. No design change and no code direction; implement need not iterate.
-- Normal path holds at Etude `a7718f5`: a hand rental stays until its deadline or
-  `terminate` (`docs/launcher.md`), and placement fills machines with free slots first
-  (`scheduler.py`), so cohorts land on the held machine and `--max 1` is not hit. Not yet
-  exercised on a held rental: the acceptance quote placed runs on a new one.
-- Failure and recovery hold: the booted pod's guardian ends it at its deadline without a
-  controller, bounding a lost session at the 5-hour window ($3.00 at the L4 ceiling, under
-  the $4.50 stop). Failing one run leaves its neighbors running. An unbooted pod still needs
-  the isolated controller's tick.
-- Shape stays out of the regime. Slots belong to the on-demand, so packing changes no
-  recipe and no frozen identity. That is the right owner.
-- `PhaseResult.machine_bytes` can now hold a pod allowance. The name is retained step 1
-  evidence, and `memory_source` says which it is; not worth a rename.
-
-Separate and already recorded: others cannot pack until an Etude release moves the shared
-launcher, so "standard" is unavailable to other Tasks until that decision.
-
-## implement b015d5 (2026-11-07): seeds x producers legs (comment ceff7d63)
-
-Resolves the four-producer question above: speed legs S14, S22, S44 run after M3 in
-`experiments/training_throughput_packing.py`; protocol and budget amended (reservation
-$4.50, window 5 h). Still not frozen; review, land, freeze and execution review follow.
-Checks: focused launch and sampler tests pass; a four-producer control variant (8 streams,
-1 update, CPU) finished through the real worker; the quote at `a1c83043e` with the new
-launch file: M1 and S44 each on one L4 at 4 slots, $.59/hour, nothing rented; A4000
-refused for stock. Re-quote at the launch commit.
-Reversible choices, for review:
-- GPU busy share needed a sampler that `TrainingJob` runs lack, so every CUDA leg prepends
-  a backgrounded `nvidia-smi -l 1` writing `gpu-samples.csv` to its output. This changes
-  job bytes, not regime bytes. CPU needs nothing: producers are threads, so
-  `process_cpu_seconds` already counts them.
-- Step 1 read 128 CPUs and no quota on every pod, so the vCPU count comes from the provider
-  (`runpodctl`), not `HostFacts`.
-- Speed legs: `max_hours` .75, `max_usd` $.60 (the hours plus 15 minutes at the ceiling),
-  seeds are the first K of 26211-26214.
-- Only one machine class is rented, so the recommendation for the other is an inference
-  from busy cores, labeled as one. Measuring both classes would need a second rental that
-  comment ceff7d63 does not ask for.
-
-## compress b015d5 (2026-11-07): seeds x producers legs
-
-`Leg.updates` is gone (read from the regime); `_speed_leg(seeds=, producers=)` names the
-shape; `elemental_variants.self_play_stage` is now public and replaces the local assert.
-Launch docstring corrected to `--hours 5`. `pytest tests/training/test_training_throughput.py
-tests/infra/test_host_facts.py tests/training/test_elemental_closure_lambda.py`: passed.
-
-## realign b015d5 (2026-11-07): seeds x producers legs against code and upstream
-
-Branch is level with origin/main at `fb626f214`; main since step 2's design touched only
-TLA frontier files. Etude pin holds. No code changed. The launch file, budget (19 runs, $3.00
-machine plus $1.50), watchdogs, on-demand rows in the isolated home and speed-leg regimes all
-match the protocol; nothing is rented in that home.
-- Corrected: the protocol called producer learning equivalence "c5fba4's result". What exists
-  is a CPU, four-stream, fixed-policy collection check, and c5fba4 is not frozen and plans no
-  trained comparison. Jack Heart's "cited, not retested" stands; the citation now says what it
-  rests on, so the execution review sees how thin it is.
-- Checked, no change: the sampler's EXIT trap fails when `nvidia-smi` died first, but the job
-  command has no `set -e`, so the job's status holds.
-
-## concept-review b015d5 (2026-11-07): seeds x producers legs against the accepted design
-
-Walked one reading: launch S44, read (4, 4), choose a shape. The legs, stop rules, budget and
-regimes match comment ceff7d63. Two protocol changes; no code follows from either.
-- **Concurrent span.** Step 1's children started together after one setup; Etude attempts each
-  set up alone, so a packed leg's runs start apart and a fixed "updates 2-8" mixes K=4 with
-  lighter load. Over 8 updates that is much of the leg. Shapes now read only updates inside
-  the span when all K train, under 3 per run means not read. Existing rows supply this:
-  `gpu-samples.csv`'s first timestamp plus `training_seconds`.
-- That exposed the stagger fallback's claim. Two pairs 8 minutes apart overlap about 5
-  minutes at M1, and probably not at all at S44. Stagger now covers S44 too (`--seeds`
-  already allows it), and the protocol states what it costs. No new approval is implied:
-  a longer S44 would be an amendment, since comment ceff7d63 set 8 updates.
-- **Owners of a shape.** K is launch-time, P is regime bytes that a live continuation must
-  preserve (`regime.py`), and machine selection happens after the regime is declared. So a
-  per-class recommendation can conflict with "A4000 when available, L4 otherwise". The
-  report now says whether one P serves both. This limits what the recommendation can
-  mean; it does not need deciding before freeze, because this step adopts no P.
-Checked, no change: speed-leg regimes, `threads: 1` retained. `producers.py` states no policy or
-CUDA state enters a producer thread, so the device does not reach the sharded env. That is
-read from code; no CUDA multi-producer run has happened here, so S14 is the first.
-
-## experiment-freeze b015d5 (2026-11-07): step 2
-
-Bound to main `668212567` (this branch's tree equals it). Receipt is in the protocol. L4
-quoted and rentable at about 19:28 UTC; A4000 quote stays open, no stock. For execution review:
-- Etude's `rent` has no quote, so the hand rental's cost is from the rate, and the per-leg
-  quotes plan new rentals. Placement on a held rental is still unexercised.
-- Proposed, not in the protocol: `etude rent ... --hours 5 --max-usd 3.00`, so the provider
-  window itself holds the machine line. Etude's `--max-usd` ends the window early.
-- The isolated controller still needs starting before the rental, under `caffeinate -is`.
-
-## pool-validation b015d5 (2026-11-07): step 2 execution log
-
-Approved by Jack Heart (comment e89d4889). Client: `~/.etude-b015d5-step2/e` (sets
-`ETUDE_HOME`, nested Doppler, Etude `a7718f5`); controller under `caffeinate -is` from the
-same home, pid in `~/.etude-b015d5-step2/controller.pid`.
-- 20:42 UTC: both on-demands reported "rentable now"; `launch --quote` and the first rent
-  were refused for no stock. The second rent at 20:44:43 got `b015d5-a4000x4-27c8c5c7f309`
-  (RunPod `nbc3u0h4ot5rv0`, $.25/h), `--hours 5 --max-usd 3.00`, until 01:44 UTC.
-- `etude launch --rent` refuses a held rental ("it is busy; etude queue would wait"),
-  recording no run. Legs therefore go through `etude queue --rent b015d5-a4000x4`, same job
-  bytes; placement on the held rental works.
-- `etude fetch ... etude-result.json` returns StorageUnavailable 404 on every run; the
-  `training/` files fetch and verify. Not needed for any reading.
-- D1 `7e76419f958a`, D2 `9f8373c2ce24` (26201) / `c1a9aa5e1b72` (26202): all succeeded.
-  `training_digest` D1 vs D2 26201: **digests equal**. D2 admission to finish 4.2-4.5 min
-  including training, so concurrent setup is far under 7 min: M1 launched unstaggered.
-- M1 `613540c9f282 2ce4ba18dedb c5610eb166a4 8814aa882b83` succeeded (20 updates, 87-105 s
-  attempt start to first GPU sample with four at once). M2 26211 `673dd2a0dd9f`, 26212
-  `36485589780f`, 26213 `66143fded9b1` succeeded.
-- **M2 26214 `91e148fbd392` hung**: updates 1-2 normal (~40 s each), then no rows and GPU 0%
-  (0.8-1.0 GB held) from ~22:12 until Etude's 1-hour limit killed it (out_of_time, exit -9,
-  23:09). No error, traceback or job output after `phase run: started`. Not a dud host (the
-  same host ran 7 runs clean). Counted as M2's first failure; retried once at 23:12 as
-  `b3f331e7c50b`. From here a stall watcher cancels a run with no new update row for
-  600 s (counts as a failure) so a second hang cannot eat the window. Cause unknown; a
-  hang that reproduces goes to a bug Task with these ids.
-- Pod facts (runpodctl): vcpuCount 16, memoryInGb 62. Receipts read `memory_limit` 62.0 GB
-  from cgroup v1, so the memory-gate fix works on RunPod. Step 1's ~61 GB SIGKILLs match it.
-- Retry `b3f331e7c50b`, M3 `7fc74afa2f41`, S14 `cb64b1093e57`, S22 `f1fc4986886b
-  33f0bbe20401`, S44 `483303fadcad dbbc464c364c d265997f8111 a4dec36539bd`: all succeeded;
-  watcher never fired. Machine terminated about 00:36 UTC (after killing the controller
-  mid-tick, its 5-minute lease had to expire first). Bill $.807 posted to ~23:55; total
-  about $.98. Report "Step 2" section published with `step-2/` evidence.
-- For evidence review: packed games about 5% shorter over updates 11-20 (paired interval
-  excludes zero; M3 moves the same way at 60% of the size); producers buy no speed at
-  K=1 or K=4 on the A4000; L4 shape is an inference.
-- Etude gaps worth Etude Tasks (not filed from this headless run): `launch --rent` and
-  `terminate` refused while the controller holds the placement lease; `etude-result.json`
-  fetch 404s; SDK 0.2.12 reads `a7718f5` metrics as empty.
-
-## experiment-analysis b015d5 (2026-11-07): step 2 reconciled
-
-- `readings.py` reproduced `readings.txt` byte for byte before any change. Two report
-  figures had no producer: M1 over updates 2-8 (68.8 s, 10.88 M/h) and the phase table.
-  Both now print from `readings.py` and agree with the report. Its (1, 1) phase row is M3
-  (seed 26211, S14's seed); M2's four-seed mean is 7.2/8.3/15.7. The report now says so.
-- Reconciled: 19 declared runs plus the hung attempt, and each run's update count and learner decisions match its own receipt.
-  Exposure is 11,337,315 CUDA learner decisions in the succeeded runs plus 104,653 in the hung one.
-- Added to the report: track-dir separation and GPU memory (3,620 MiB peak against 16 GB).
-  Labelled the M1 table row as updates 2-8; the frozen concurrent-span reading is 60.2 s.
-- An unreferenced `readings.cpython-312.pyc` object was uploaded to R2 by mistake. The
-  manifest does not list it.
-- Open for evidence review, unchanged: the 5% shorter late packed games, the inferred L4
-  shape, the hung attempt, step 3.
-
-## experiment-design b015d5 (2026-11-07): step 3, model size, GPU and precision
-
-Design: protocol section "Step 3: model size, GPU and precision". Nothing built, frozen or
-launched; design review returns to Jack Heart. Steers folded in: 1f4c2872 (planner
-objective), 0216b052 and af047a69 (worked examples; af047a69's $100 / 336 h supersedes
-5 days), 8ac4eb82 (size as input), 518e5f09 (refocus on large-model speed, measure
-ourselves), b9215b8a (packing crossover ladder).
-- w64 planner table is $0 arithmetic in `scratch/planner_sketch.py` (stdlib; `python3
-  scratch/planner_sketch.py`). Its curve, seed-spread and selection models are my
-  simplifications for review: piecewise log-linear MTG-183 rating, late slope 44 or 20 per
-  doubling, Gaussian seed spread with eval-noise shrinkage, halving at 3:4:7, at most 3
-  A4000s at once. The worked example matches the conversation's figures (~32k solo, ~27k
-  halving, ~19-20k pack-4).
-- 8ac4eb82 says to take w160l8 speed from c5fba4's calibration. That calibration has not
-  run (MTG-267 at experiment-software-review, PR #445 open; its protocol says nothing has
-  launched). 518e5f09 then says to measure ourselves, which the design does.
-- The steer asked for 07c490's seed spread at 20/40/75/150. Per-seed scores exist only at
-  u40 in `results.json`; u20/u75 per seed need the eval database (a fetch was tried and
-  stopped, it held 16 GB). No 07c490 run reached u150.
-- `elemental_variants.elemental_recipe` resolves to policy input v6 with 512 facts, while
-  07c490's protocol describes the recipe's input as v1. Not investigated; step 3's
-  parameter counts use the resolved regime. Possibly a bug Task (how a frozen regime with no
-  `policy_input_version` loads), not this step's.
-- Reversible choices: ladder w128l4 (4 heads, default ff) as the intermediate; a384l8 heads 8,
-  ff 1536; third GPU chosen at freeze by quoted bf16 dense throughput per dollar, default RTX
-  4090, ceiling $.95/hour; crossover threshold K=2 gain < 1.10; K=4 only at K=2 gain >= 1.30;
-  4 updates per speed cell; learning check at w160l8, seed 26301, fp32 x2 / tf32 / bf16,
-  12 updates; seeds 26301-26304; reservation $10.
-- bf16 autocast covers collection inference too, so behavior numerics change as well as
-  learning. Mixed precision limited to inference only would be a narrower option; not
-  proposed.
-
-## implement b015d5 (2026-11-07): step 3 software
-
-Built the five items (protocol "As built"). Not landed or frozen, nothing rented.
-Reversible choices, for review:
-- The network needed dtype conversions at seven join sites to run under autocast at all
-  (no-ops at float32; D1 digest checked by hand). This touches `manabot/model/`, which
-  the design did not list. The alternative, autocast only around attention and linear
-  blocks, would put the precision inside the model.
-- Autocast wraps only the forward. Outputs go back to float32 before log-softmax,
-  targets and losses, which is narrower than the design's "forward and losses".
-- TF32 is set per stage, absolutely: tf32 sets on, anything else restores the process's
-  defaults, and the run's end restores them as well. Float32 never forces cuDNN TF32 off.
-- Regime IDs carry `-check` for the 12-update legs, because their bytes differ from the
-  4-update cells at the same size and precision.
-- `--pace` is a launch parameter, so the regime's watchdog (and its digest) depends on
-  the pace given. Each launch records it in the job.
-
-## realign b015d5 (2026-11-07): step 3 built, against code and main
-
-Code matches the protocol's "As built": 42 legs, w64 float32 equals the control outside its
-ID after `f150bbce3`'s single size path, `--pace` limits, `-check` IDs; size and precision
-tests pass (20). One upstream change, recorded in the protocol's "Etude since the design":
-main pins jobs to Etude `199335c` and the shared launcher database is already schema 12, so
-the isolation rationale is spent. Client pin and home are a choice for the freeze, unmade.
-Still to do: land step 3's software (no open PR; #442 merged), freeze, re-quote, execution
-review with Jack Heart.
-
-## concept-review b015d5 (2026-11-07): step 3 built, against the accepted design
-
-No product choice is open. Built behavior is the accepted design's, with three narrowings
-that follow from it and need no new decision: bf16 wraps only the forward (the design kept
-"loss reductions" in float32, and casting outputs back keeps log-softmax and targets there
-too); the model's seven dtype joins are a no-op at float32 (D1 checked by hand, not in CI);
-and `-check` IDs follow from regime bytes naming identity. The Etude client question
-recorded by realign is settled by the accepted design (keep `a7718f5` in the isolated home)
-and is now written as such in the protocol. Next: land step 3's software, freeze, re-quote
-all three on-demands, execution review with Jack Heart.
-
-## experiment-freeze b015d5 (2026-11-08 UTC): step 3
-
-Bound to main `cb722dc8c` (PR #448; tree equals branch head `cb184cb89`). Receipt is in the
-protocol. Helper scripts used for digests and discovery live outside the repo in
-`/tmp/b015d5-freeze3/` (not retained). For execution review:
-- The third GPU rule chose the **A40** ($.59 secure, about 254 dense bf16 TFLOPS per
-  dollar-hour) over the default RTX 4090 ($.89, about 186). Added on-demand `b015d5-a40` in the
-  isolated home; `b015d5-fast` (4090) still exists. This is the rule as written. If Jack Heart
-  would rather have the absolute-faster card, the 4090 is one `--rent b015d5-fast` away. No
-  amendment is needed for the A40, since the design delegated the choice to the freeze.
-- A4000 has no stock at quote time; L4 and A40 are rentable.
-- Regime digests are recorded with `wall_seconds` removed, because `--pace` sets it per launch.
-- The isolated controller still needs starting under `caffeinate -is` before any rental.
-
-## pool-validation b015d5 (2026-11-08 UTC): step 3
-
-Jack Heart replied "sounds fine" to execution review (comment 9b373121), approving
-the frozen A4000/L4/A40 protocol at `cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e`,
-the $10 reservation and $50 inclusive cap. The isolated Etude `a7718f5` client
-reported no existing step-3 runs or rentals. Source bundle recheck: 1,483 files,
-`dc98b968…6746`, matching the freeze.
-- 11:43 UTC quotes: A4000 and L4 unavailable; A40 $.59/hour. Their 30-minute
-  availability window starts here. No GPU substitutions.
-- 11:44:26 UTC: rented `b015d5-a40-b1aa969b00bd`, provider pod `5l3dz0elsfosio`,
-  with `--hours 5 --max-usd 4.75`; Etude's effective cap is $2.95, deadline
-  16:44:26 UTC. The isolated controller runs under `caffeinate -is`.
-- First control run: `1b0f5001d306`, `fast-w64-k1-float32`, seed 26301,
-  frozen revision and pace 37. Evidence goes under the report's `step-3/`.
-- 11:50:58 UTC: L4 stock appeared and its refreshed launch quote passed at
-  $.59/hour. Rented `b015d5-l4x4-190abeae6bbc` (pod `9433nbnl6sw3t5`,
-  6 vCPUs, 62 GB) for 4 hours with `--max-usd 2.40`; effective cap $2.36,
-  deadline 15:50:58 UTC. A4000 still unavailable.
-- 11:53 UTC: A4000 appeared within the selection window, quoted $.25/hour,
-  and rented as `b015d5-a4000x4-bb3d92eb921e` (pod `baybcye3wziawd`),
-  `--hours 6 --max-usd 1.56`. All three frozen GPU classes were obtained.
-- Reversible execution choice: a K=2 cell lacking the frozen minimum of three
-  overlapping updates supplies no gain; skip K=4 because gain >= 1.30 cannot
-  be established. Do not call this a measured crossover. The unchanged reader
-  and per-cell ledger retain the counts.
-- 12:04 UTC: L4 w128l4 K=2 succeeded, but frozen concurrent-span counts were
-  `[3, 2]`, so no packing gain is read and K=4 is skipped. Four total updates
-  leave only updates 2-4; unequal finish times remove the last update from at
-  least one run. The frozen reading rule is kept; any longer cell or changed
-  minimum would need a protocol amendment, not an execution-time rewrite.
-- 12:45–12:46 UTC: w160l8 BF16 failed before a decision/update on A4000 and
-  L4, including each same-rental retry. Original error: `RuntimeError:
-  index_copy_(): self and source expected to have the same dtype, but got
-  (self) Float and (source) Half`, at `SemanticCardEncoder.definitions` line 300.
-  Both ladders stopped under the frozen second-failure rule. Repair filed,
-  not launched: [ed2300](loopflow://manabot/task/ed2300), infrastructure Wave
-  `8c4a50d4-a51e-4ceb-8944-446f9175c6fd`. Name-only `lf wave status
-  infrastructure` resolved Loopflow's same-named Wave; the UUID read verified
-  the correct Manabot Wave before filing. No duplicate precision Task/open PR
-  was found; c5fba4's shared-effect catalog repair stays separate.
-- Cleanup: repeated `etude terminate` calls failed on RunPod GET 429; the pinned
-  Etude guardian's `PodHTTP.delete_self` also received DELETE 429. The isolated
-  controller was stopped gracefully at 12:46 UTC to reduce polling. After
-  checking each pod's identity and zero live attempts, RunPod CLI deletion
-  confirmed A4000 at 12:49:18 UTC and L4 at 12:49:20 UTC. Provider cleanup
-  receipts are in `step-3/execution/`; reconcile Etude's records separately.
-  The A40 worker continued its declared float32 repeat while control was paused.
-- Final step-3 reading, 2026-11-08: A40 float32/repeat/TF32 completed 12 updates
-  each (63.1/62.9/59.9 s/update); BF16 `24a28f677f46` and retry `3ab1ac818b07`
-  reproduced the Float/Half join error before a decision/update. All three GPU
-  ladders ended at their second-failure rule, leaving a384l8 unrun. All seven
-  packed cells lacked the frozen three overlapping updates per run, so the
-  crossover is unknown. TF32 clip fraction moved 3.45x the float32 repeat
-  difference; no learning-equivalence claim follows from finite metrics.
-- Reconciled 33 runs/attempts: 27 succeeded, 6 startup failures; 132 updates,
-  6,909,047 learner decisions, 33,989 completed games of 33,990 attempts, one
-  retained `ObservationCapacity` resource limit, no abandoned games, zero
-  nonfinite/rejected steps. Every executed regime matches its declared leg;
-  every ledger's valid samples match the receipt. Callback results are embedded
-  in attempt records: pinned SDK courier deliberately omits the separate
-  `etude-result.json` blob, explaining that fetch 404 without a missing callback.
-- Provider inventory confirmed all three pods absent at 13:19 UTC. Etude had
-  reconciled A4000/L4 at 13:00:04/11 and terminated A40 at 13:18:42. All supervisors
-  and the isolated controller stopped. Inclusive estimate: step 3 $1.741,
-  experiment $3.781 including earlier $2.04; $.720 of step 3 had posted at 13:19.
-  Original bills, cleanup confirmations, reports, scripts and full run projections
-  are in `experiments/data/training-throughput-b015d5-v1/step-3/` for publication.
-- The earlier w64 planner scenario says “dollars bind” at $100/336 h, but its
-  $.256/hour machine costs about $86 for that window: hours bind. The step-3
-  report records that arithmetic correction without rewriting the frozen design.
-
-## experiment-design b015d5 (2026-11-08): continuation C1
-
-Reversible design choices under comment 079b3f46's "keep going":
-- Use eight-update speed cells: step 2 retained at least six concurrent samples
-  with eight updates, while every four-update packed cell in step 3 failed the
-  unchanged minimum of three. Permit one twelve-update rerun only for overlap
-  insufficiency, within the same budget, rather than add training barriers.
-- Deliver unstarted ed2300's repair in this Task's software PR, linked to ed2300,
-  rather than start a second checkout. Its fresh status had no Graph or PR.
-- Reserve at most $8.00 new liability, conditional on final prior billing and
-  the tighter $10/$50 caps. The $.259 margin at the current estimate is not a
-  claim about the unposted invoice. No new spending authority is inferred.
-- Prioritize a384l8 solo and the repaired CUDA path, then missing packing and
-  precision comparisons. Same-host/new-source solo controls are necessary;
-  historical controls cannot establish the new packing gain. Extra w64 runs
-  are for a lower bracket or the missing A40 cell, not a full-grid rerun.
-- Preserve the fixed Elemental pool and effective hashed v6 input; no evaluation
-  deals or strength fitting are needed for speed. Current-world admission and
-  exact executable source remain for freeze after integration.
-
-Owning protocol: Step 3 continuation C1. Scratch handoff:
-`scratch/step-3-continuation.md`. Design only; no rental, training or evaluation
-was launched and no provider quote or billing claim was refreshed.
+- The schema-7 retained replay fixture in
+  `test_resource_limit_receipt_replays_its_retained_encoding_boundary` differs
+  from runtime schema 8 (`binding_mismatch`); no fixture rewrite is authorized.
+- Original step-1 recording stall and step-2 M2 seed-26214 hang remain unexplained.
+  Step-1 RSS near 61.05 GB was consistent with the later measured 62 GB pod
+  allowance, not proof of memory-pressure cause. Cgroup memory admission was
+  repaired in step 2. Etude 429 cleanup, placement lease failures and absent
+  `etude-result.json` blobs remain historical launcher findings; callback results
+  were recovered from attempt records, so no missing callback is inferred.
+- Proposed infrastructure memory, not written to read-only `.lf/wave/`: compare
+  host CPU class/native time before attributing GPU speed; earlier same-label
+  host variation was 1.6–1.8x. Packed ~50k-row device recursions were launch-bound.
+- The earlier $100/336h planner sketch incorrectly said dollars bind at
+  $.256/hour; 336h costs about $86, so hours bind. The retained report corrects it.
+- Frozen Elemental recipe omitted input version but resolved to v6; investigate
+  legacy loading separately if needed. C1 pins resolved v6 explicitly by admission.
