@@ -18,6 +18,10 @@ from pydantic import (
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
 StateEncoder = Literal["rows", "typed_pool", "typed_gru"]
+# How the critic summarizes the final object board; see ActorCritic._value_from_objects.
+ValueAggregation = Literal[
+    "historical_mean", "masked_mean", "value_token", "attention_readout"
+]
 
 
 def _default_deck() -> dict[str, int]:
@@ -241,9 +245,7 @@ class ModelConfig(BaseConfig):
     )
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
-    value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
-        "historical_mean"
-    )
+    value_aggregation: ValueAggregation = "historical_mean"
     # Scale each action embedding by the pooled game state before the policy
     # head (FiLM). Omitted is the historical additive policy, so frozen
     # recipes and checkpoints keep their meaning.

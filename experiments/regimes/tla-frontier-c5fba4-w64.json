@@ -5901,7 +5901,7 @@
         "gradient": "damped_policy",
         "iteration_schedule": {
           "reference_steps": 10000,
-          "steps": 1296
+          "steps": 2474
         },
         "learning_rate_max": 0.0001,
         "learning_rate_min": 5e-06,

@@ -75,14 +75,17 @@ _PARENT_FILES = {
 }
 
 
-def stage_parent(parent: Path, storage: Storage, prefix: str) -> LearnerContinuation:
+def stage_parent(
+    parent: Path, storage: Storage, prefix: str, seed: int = SEED
+) -> LearnerContinuation:
     """Upload a parent's final exports as Etude inputs, checked against its record.
 
     The raw/EMA/Adam files must be the bytes the parent's run record published;
     the continuation starts at the record's absolute update. An object already
-    under its key is kept only when its digest matches.
+    under its key is kept only when its digest matches. `seed` is the seed the
+    parent must carry; other studies pass their own.
     """
-    run = _parent_run(parent)
+    run = _parent_run(parent, seed)
     if run.status not in {"completed", "paused"}:
         raise ValueError(f"parent did not finish its window: {run.status}")
     folder = f"{prefix.strip('/')}/"
@@ -131,10 +134,10 @@ def stage_monitoring(
     )
 
 
-def _parent_run(parent: Path) -> TrainingRun:
+def _parent_run(parent: Path, seed: int = SEED) -> TrainingRun:
     run = TrainingRun.model_validate_json((parent / "run.json").read_bytes())
-    if run.seed != SEED or [s.id for s in run.stages] != [STAGE]:
-        raise ValueError("parent is not an MTG-183 self-play window")
+    if run.seed != seed or [s.id for s in run.stages] != [STAGE]:
+        raise ValueError(f"parent is not a seed {seed} self-play window")
     return run
 
 
