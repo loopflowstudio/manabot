@@ -1250,7 +1250,8 @@ Implemented:
 Main's merged 5da5f4 v7 batching/report is related engineering context, not a
 matched control or a strength result for this hashed-v6 ladder. New integrated
 source/world/recipe admission and same-source/host controls remain necessary.
-Gate's affected suites/CI collection, software delivery, final freeze, prior-bill
+Local affected-suite checks and core CI collection are recorded in
+`scratch/step-3-continuation.md`; software delivery, final freeze, prior-bill
 reconciliation and refreshed quotes remain before campaign execution. CUDA
 admission is paid execution on the first bounded rental, after source freeze;
 it is not a claim established by local software checks.

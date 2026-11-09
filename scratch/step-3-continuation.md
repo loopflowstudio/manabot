@@ -95,8 +95,8 @@ Sessions or Graph processes; no competing repair was launched. Linking ed2300 to
 the next b015d5 software PR and recording validation there remains delivery work.
 
 Remaining acceptance:
-1. Gate's affected precision/model/active-training suites and CI collection,
-   followed by software delivery. No C1 software PR or final freeze is recorded.
+1. Publish the verified software, then complete its delivery review. Local
+   verification is recorded below; no final freeze is recorded.
 2. Freeze the integrated source, native world/definitions, roster, resolved recipe
    bytes and capacities, dependency lock and bundle digest. A roster, layout or
    learning-recipe change requires redesign; no old identity substitutes for it.
@@ -146,3 +146,26 @@ The next proof remains the existing software gate followed by frozen-source
 CUDA admission, not another product decision. This review launched no tests or
 rentals and changed no implementation. `scratch/concept-review.html` presents
 the same contract for inspection.
+
+## Publication verification — 2026-11-08
+
+`lf sync` completed cleanly against main e0832f67f. The full affected run
+(model suite, active training, precision, size jobs, C1 readings, CI selection,
+release and untracked-artifact checks) returned 379 passed, 9 skipped, one
+failure in `test_token_preserves_action_focus_indexes[1]`. The identical
+2.0954757928848267e-09 mismatch reproduced with main's semantic-card module
+loaded in memory: dense and compact float32 scoring round differently near
+zero. The test's absolute floor is now 1e-8 (relative tolerance unchanged).
+Value-aggregation and semantic precision rerun: 22 passed, two CUDA skips.
+An in-memory one-row shift of focus embeddings made both focus tests fail;
+the adjusted tolerance still detects incorrect indexing. No production scoring
+change was made.
+
+The exact core CI command collected 1,235 tests. Ruff passed on all changed
+Python files; `git diff --check` passed. All 326 changed artifact files match
+their manifest byte counts and SHA256 hashes; no manifest entries were removed.
+The two real-worker size smoke tests passed on CPU. CUDA admission was not run;
+its two local skips do not admit BF16 execution. No rental or paid run occurred.
+
+The ed2300 status read still reports unstarted with no PR. Its repair is delivered
+only here; publication will link the PR and these validation limits there.
