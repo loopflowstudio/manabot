@@ -1,16 +1,43 @@
 """Scientific summaries treat seeds as units and refuse incomplete comparisons."""
 
+from decimal import Decimal
+import json
 import math
+from pathlib import Path
+import sys
+import time
 
+from etude.launch.job_file import read_job_file
+from etude.launch.records import Input
 import pytest
 
-from experiments.state_representation import (
+from experiments import state_representation_gpu as gpu, state_representation_v7
+from experiments.state_representation_v7 import (
     compare,
     evaluation_protocol,
     paired_interval,
     recipe,
 )
-from manabot.training.regime import TrainSelfPlay
+from manabot.env.observation import ObservationConfig
+from manabot.eval.monitor import MonitorProtocol, MonitorResult
+from manabot.eval.results import RateInterval
+from manabot.experiment.job import TrainingJob
+from manabot.infra.files import atomic_json
+from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.training.records import (
+    MonitoringCheckpoint,
+    StageRecord,
+    TrainingCoordinates,
+    TrainingRun,
+)
+from manabot.training.regime import (
+    ArtifactReference,
+    DampedPolicyLearning,
+    TrainingRegime,
+    TrainSelfPlay,
+)
+from manabot.verify.store import VerifyStore
+from tests.training.test_monitor_evaluation import _manifest
 
 
 def test_paired_interval_uses_independent_seeds() -> None:
@@ -29,16 +56,499 @@ def test_paired_interval_uses_independent_seeds() -> None:
 
 
 def test_science_and_smoke_have_distinct_endpoints() -> None:
-    for arm in ("rows", "typed_pool", "typed_gru"):
+    for arm in ("typed_pool", "typed_gru"):
         scientific = recipe(arm)
         smoke = recipe(arm, smoke=True)
         stage = scientific.stages[0]
         assert isinstance(stage, TrainSelfPlay)
         assert stage.learning_seats == "both" and stage.games_per_stream == 1
         assert stage.updates == 128 and smoke.stages[0].updates == 1
-        assert scientific.observation == smoke.observation
+        assert stage.streams == 32
+        assert scientific.observation.policy_input_version == 7
+        assert scientific.observation.max_actions == 64
+        assert smoke.observation.max_actions == ObservationConfig().max_actions
+        assert scientific.observation.model_dump(exclude={"max_actions"}) == (
+            smoke.observation.model_dump(exclude={"max_actions"})
+        )
         assert scientific.id != smoke.id
     protocol = evaluation_protocol()
     assert protocol.legs == 4 and len(protocol.deal_seeds) == 32
     assert protocol.study_protocol_sha256 is not None
     assert protocol.purpose == "frozen-study-evaluation"
+
+
+def test_scientific_recipes_retain_executed_identities() -> None:
+    # TrainingRun receipts from source 92becff60, independently retained in the
+    # artifact manifest. Fresh defaults must not redefine completed experiments.
+    expected = {
+        "typed_pool": "600f73d3be9038c4d90fb2e439704d0b6dc250783eaacbc630cd85a34ff79b4e",
+        "typed_gru": "70aa7246bc3e99e77ccc378ff95d3da0e34489eacb0d7f1c18e0da857c142604",
+    }
+    for arm in state_representation_v7.ARMS:
+        assert canonical_sha256(recipe(arm).model_dump(mode="json")) == expected[arm]
+
+
+def test_declared_runs_are_visible_to_the_experiment_report() -> None:
+    path = Path(state_representation_v7.__file__)
+    runs = read_job_file(path, ["--revision", "HEAD"])
+    jobs = [TrainingJob.model_validate_json(run.job.config or "") for run in runs]
+    assert len(runs) == 8
+    assert {job.experiment for job in jobs} == {path.stem}
+    assert sorted(run.seed for run in runs) == sorted([73201, 73202, 73203, 73204] * 2)
+
+
+def test_gpu_horizon_keeps_learning_and_separates_scoring() -> None:
+    assert gpu.plateau([]).reached is False
+    assert set(gpu.evaluation_protocol().deal_seeds).isdisjoint(
+        gpu.evaluation_protocol(heldout=True).deal_seeds
+    )
+    for arm in gpu.ARMS:
+        stage = gpu.recipe(arm).stages[0]
+        assert isinstance(stage, TrainSelfPlay)
+        assert stage.execution.device == "cuda"
+        assert stage.updates * stage.streams == 65536
+        assert stage.games_per_stream == 1
+        assert stage.streams == 256
+        assert isinstance(stage.learning, DampedPolicyLearning)
+        assert stage.learning.iteration_schedule is not None
+        assert stage.learning.iteration_schedule.steps == 256
+        assert stage.learning.iteration_schedule.reference_steps == 2048
+        assert stage.learning.rates(1)[0] == stage.learning.rates(256)[0] == 1e-4
+    assert len(gpu.SEEDS) == len(set(gpu.SEEDS)) == 4
+
+
+def test_plateau_requires_small_changes_not_just_a_nonsignificant_gain() -> None:
+    flat = gpu.PlateauInterval(
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((0.0, 0.0, 0.0, 0.0))
+    )
+    improving = gpu.PlateauInterval(
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((0.1, 0.1, 0.1, 0.1))
+    )
+    uncertain = gpu.PlateauInterval(
+        "typed_pool", *gpu.POINTS[-2:], paired_interval((-0.1, 0.1, -0.1, 0.1))
+    )
+    assert flat.bounded
+    assert not improving.bounded
+    assert uncertain.estimate.lower < 0 < uncertain.estimate.upper
+    assert not uncertain.bounded
+
+
+@pytest.mark.parametrize("exit_code", (0, 7))
+def test_child_retains_its_exit(tmp_path: Path, exit_code: int) -> None:
+    command = [sys.executable, "-c", f"raise SystemExit({exit_code})"]
+    if exit_code:
+        with pytest.raises(RuntimeError, match="child failed: exit 7"):
+            gpu._run_child(command, tmp_path, tmp_path / "stop", time.time() + 10)
+    else:
+        gpu._run_child(command, tmp_path, tmp_path / "stop", time.time() + 10)
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    assert receipt["exit_codes"] == [exit_code]
+
+
+@pytest.mark.parametrize("cancelled", (False, True))
+def test_child_is_reaped_on_stop(tmp_path: Path, cancelled: bool) -> None:
+    stop = tmp_path / "stop"
+    if cancelled:
+        stop.touch()
+    deadline = time.time() + 10 if cancelled else time.time() - 1
+    command = [sys.executable, "-c", "import time; time.sleep(20)"]
+    with pytest.raises(RuntimeError, match="cancelled or allocation expired"):
+        gpu._run_child(command, tmp_path, stop, deadline)
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    (exit_code,) = receipt["exit_codes"]
+    assert exit_code is not None and exit_code != 0
+
+
+def test_child_retains_failed_start(tmp_path: Path) -> None:
+    with pytest.raises(FileNotFoundError):
+        gpu._run_child(
+            [str(tmp_path / "missing-worker")],
+            tmp_path,
+            tmp_path / "stop",
+            time.time() + 10,
+        )
+    receipt = json.loads((tmp_path / "processes.json").read_text())
+    assert receipt["exit_codes"] == []
+
+
+def _curve_run() -> TrainingRun:
+    regime = gpu.recipe("typed_pool")
+    artifact: ArtifactReference = {
+        "path": "/fixture.pt",
+        "sha256": "a" * 64,
+        "bytes": 1,
+    }
+    return TrainingRun(
+        id="synthetic-curve",
+        regime=regime,
+        regime_digest=canonical_sha256(regime.model_dump(mode="json")),
+        seed=gpu.SEEDS[0],
+        seed_streams={},
+        identities={},
+        status="completed",
+        stages=[
+            StageRecord(
+                id=regime.stages[0].id,
+                status="completed",
+                updates=gpu.UPDATES,
+                cumulative_seconds=100,
+                games=gpu.UPDATES * gpu.STREAMS,
+                artifacts={"initial_raw": artifact, "raw": artifact},
+            )
+        ],
+        monitoring_checkpoints=[
+            MonitoringCheckpoint(
+                stage_id=regime.stages[0].id,
+                ordinal=index,
+                updates=update,
+                training_seconds=update,
+                games=update * gpu.STREAMS,
+                artifact=artifact,
+            )
+            for index, update in enumerate(gpu.POINTS[1:-1])
+        ],
+    )
+
+
+@pytest.mark.parametrize("completed", (False, True))
+def test_gpu_training_requires_every_declared_export(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, completed: bool
+) -> None:
+    seed = gpu.SEEDS[0]
+    stop = tmp_path / "stop"
+    out = tmp_path / "learner"
+
+    def execute(
+        regime: TrainingRegime,
+        actual_seed: int,
+        directory: Path,
+        store: VerifyStore,
+        *,
+        experiment: str,
+        checkpoint_updates: tuple[int, ...],
+        stop_path: Path,
+        stop_reserve_seconds: int,
+    ) -> TrainingRun:
+        assert actual_seed == seed
+        assert directory == out / "training"
+        assert stop_path == stop and stop_reserve_seconds == 120
+        stage = regime.stages[0]
+        assert stage.updates == 256
+        assert regime.wall_seconds == 66000
+        assert stage.execution.wall_seconds == regime.wall_seconds
+        assert checkpoint_updates == gpu.POINTS[1:-1]
+        assert experiment == gpu.EXPERIMENT
+        run = _curve_run()
+        run.stages[0].updates = stage.updates if completed else stage.updates - 1
+        run.status = "completed" if completed else "paused"
+        return run
+
+    def set_memory_fraction(fraction: float) -> None:
+        assert fraction == 0.80
+
+    monkeypatch.setattr(gpu, "execute_regime", execute)
+    monkeypatch.setattr(gpu.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(
+        gpu.torch.cuda, "set_per_process_memory_fraction", set_memory_fraction
+    )
+    monkeypatch.setattr(gpu.torch.cuda, "get_device_name", lambda index: "fixture-gpu")
+    monkeypatch.setattr(gpu.torch.cuda, "max_memory_reserved", lambda: 1024)
+    if completed:
+        gpu.train_arm("typed_pool", seed, out, stop)
+    else:
+        with pytest.raises(ValueError, match="completed training"):
+            gpu.train_arm("typed_pool", seed, out, stop)
+    assert json.loads((out / "device.json").read_text())["device"] == "fixture-gpu"
+    with pytest.raises(ValueError, match="undeclared training seed"):
+        gpu.train_arm("typed_pool", 74200, out, stop)
+
+
+def test_gpu_curve_requires_every_export_and_keeps_exposure() -> None:
+    run = _curve_run()
+    points = gpu.checkpoints(run)
+    assert tuple(point.coordinates.updates for point in points) == gpu.POINTS
+    assert tuple(point.coordinates.games for point in points) == tuple(
+        update * gpu.STREAMS for update in gpu.POINTS
+    )
+    run.monitoring_checkpoints.pop()
+    with pytest.raises(ValueError, match="missing, duplicate or undeclared"):
+        gpu.checkpoints(run)
+
+
+@pytest.mark.parametrize("failure", ("duplicate", "export", "paused"))
+def test_gpu_curve_refuses_failed_or_duplicate_endpoints(failure: str) -> None:
+    run = _curve_run()
+    if failure == "duplicate":
+        run.monitoring_checkpoints.append(run.monitoring_checkpoints[0])
+    elif failure == "export":
+        run.monitoring_checkpoints[0].error = "export failed"
+    else:
+        run.status = "paused"
+    with pytest.raises(ValueError):
+        gpu.checkpoints(run)
+
+
+def test_gpu_heldout_requires_all_seeds() -> None:
+    with pytest.raises(ValueError, match="every declared"):
+        gpu.compare_heldout([])
+
+
+# Recovery cohort: amendment binding, unit identity and the evaluation ledger.
+
+
+def _evaluation_unit(*endpoints: gpu.Endpoint) -> gpu.EvaluationUnit:
+    return gpu.EvaluationUnit(
+        arm="typed_pool",
+        seed=74211,
+        run_sha256="a" * 64,
+        endpoints=endpoints or (gpu.Endpoint(update=0),),
+        concurrent_activity="dedicated CPU rental; one learner on a separate GPU rental",
+    )
+
+
+def _attempt(
+    root: Path, endpoint: gpu.Endpoint, *, scored: bool, status: str = "completed"
+) -> Path:
+    """A delivered attempt; receipts are what the worker writes beside monitors."""
+    directory = root / endpoint.directory("typed_pool", 74211)
+    directory.mkdir(parents=True)
+    result = _manifest()
+    if scored:
+        result.status = "completed"
+        result.score = RateInterval(mean=0.5, lower=0.4, upper=0.6)
+    (directory / "deal-000.json").write_text("{}")
+    atomic_json(directory / "monitor.json", result.model_dump(mode="json"))
+    atomic_json(
+        directory / "receipt.json",
+        gpu.EndpointReceipt(
+            recovery_sha256=canonical_sha256(gpu.RECOVERY),
+            run_id=result.run_id,
+            run_sha256="a" * 64,
+            artifact_sha256=result.artifact["sha256"],
+            status=status,
+            files=gpu._attempt_files(directory),
+        ).model_dump(mode="json"),
+    )
+    return directory
+
+
+def test_recovery_amendment_leaves_the_scoring_identity_unchanged() -> None:
+    # The hash in every retained evaluation protocol; editing SCORING breaks it.
+    assert canonical_sha256(gpu.SCORING) == (
+        "f09750f156731db819859f1f6616855edbcc7c277576eca366cd762480f67402"
+    )
+    assert gpu.RECOVERY["scoring_sha256"] == canonical_sha256(gpu.SCORING)
+    assert gpu.SCORING["failure"].endswith("no retries or selection")
+    assert (
+        gpu.evaluation_protocol().study_protocol_sha256
+        == gpu.RECOVERY["scoring_sha256"]
+    )
+    assert len(gpu.ASSIGNMENTS) == 8 == len(gpu.ENDPOINTS) - 2
+    assert set(gpu.MISSING_LEARNERS) | set(gpu.RETAINED_RUNS) == set(gpu.ASSIGNMENTS)
+    assert len(gpu.MISSING_LEARNERS) == 5
+    assert ("typed_pool", 74212) in gpu.MISSING_LEARNERS
+
+
+def test_retained_learners_cannot_be_retrained() -> None:
+    gpu.LearnerUnit(arm="typed_pool", seed=74212)
+    with pytest.raises(ValueError, match="never retrained"):
+        gpu.LearnerUnit(arm="typed_pool", seed=74211)
+
+
+def test_endpoints_cover_the_frozen_schedule() -> None:
+    assert [item.update for item in gpu.ENDPOINTS[:-1]] == list(gpu.POINTS)
+    assert gpu.ENDPOINTS[-1].heldout and gpu.ENDPOINTS[-1].update == gpu.UPDATES
+    for bad in ({"update": 33}, {"update": 32, "heldout": True}):
+        with pytest.raises(ValueError, match="undeclared"):
+            gpu.Endpoint.model_validate(bad)
+
+
+def test_unit_identity_ignores_dispatch_but_not_work() -> None:
+    first = gpu.LearnerUnit(arm="typed_gru", seed=74213)
+    assert gpu.unit_key(first) == gpu.unit_key(first.model_copy())
+    assert gpu.unit_key(first) != gpu.unit_key(first.model_copy(update={"attempt": 2}))
+    unit = _evaluation_unit()
+    moved = unit.model_copy(update={"concurrent_activity": "another dispatch"})
+    assert gpu.unit_key(unit) == gpu.unit_key(moved)
+    assert gpu.unit_key(unit) != gpu.unit_key(
+        _evaluation_unit(gpu.Endpoint(update=0, attempt=2))
+    )
+
+
+def test_unit_allocation_binds_one_identified_run(tmp_path: Path) -> None:
+    given = Input(name="run.json", key="k", sha256="a" * 64, size_bytes=1)
+    unit = _evaluation_unit(gpu.Endpoint(update=0), gpu.Endpoint(update=32))
+    document = tmp_path / "unit.json"
+    document.write_text(
+        gpu.RecoveryAllocation(
+            unit=unit, max_hours=1.5, max_usd=Decimal("0.40"), inputs=(given,)
+        ).model_dump_json()
+    )
+    (run,) = read_job_file(
+        Path(gpu.__file__), ["--revision", "HEAD", "--unit", str(document)]
+    )
+    spec = gpu.StudyJob.model_validate_json(run.job.config or "")
+    assert spec.recovery is not None and spec.recovery.unit == unit
+    assert run.id == gpu.unit_key(unit)
+    assert run.job.until == "endpoints=2"
+    assert run.job.inputs == (given,)
+    assert (run.job.max_hours, run.job.max_usd) == (1.5, Decimal("0.40"))
+    assert run.job.max_attempts == 1
+    assert run.job.experiment == gpu.EXPERIMENT
+    assert spec.source_bundle.commit
+    with pytest.raises(ValueError, match="delivered checkpoints"):
+        gpu.RecoveryAllocation(unit=unit, max_hours=1, max_usd=Decimal(1))
+    with pytest.raises(ValueError, match="delivered checkpoints"):
+        gpu.RecoveryAllocation(
+            unit=gpu.LearnerUnit(arm="typed_gru", seed=74213),
+            max_hours=1,
+            max_usd=Decimal(1),
+            inputs=(given,),
+        )
+
+
+def test_ledger_skips_scored_and_repeats_unscored_in_a_fresh_attempt(
+    tmp_path: Path,
+) -> None:
+    assert gpu.pending_endpoints(tmp_path, "typed_pool", 74211) == gpu.ENDPOINTS
+    _attempt(tmp_path, gpu.Endpoint(update=0), scored=True)
+    unscored = _attempt(
+        tmp_path, gpu.Endpoint(update=32), scored=False, status="incomplete"
+    )
+    pending = gpu.pending_endpoints(tmp_path, "typed_pool", 74211)
+    assert pending[0] == gpu.Endpoint(update=32, attempt=2)
+    assert gpu.Endpoint(update=0) not in pending
+    assert len(pending) == len(gpu.ENDPOINTS) - 1
+    # The failed attempt stays in the denominator, untouched.
+    assert gpu.endpoint_attempts(
+        tmp_path, "typed_pool", 74211, gpu.Endpoint(update=32)
+    ) == (unscored,)
+
+
+@pytest.mark.parametrize("defect", ("monitor", "trace", "receipt"))
+def test_ledger_refuses_to_repeat_a_scored_endpoint_it_cannot_verify(
+    tmp_path: Path, defect: str
+) -> None:
+    directory = _attempt(tmp_path, gpu.Endpoint(update=0), scored=True)
+    if defect == "monitor":
+        raw = json.loads((directory / "monitor.json").read_text())
+        raw["concurrent_activity"] = "edited"
+        (directory / "monitor.json").write_text(json.dumps(raw))
+    elif defect == "trace":
+        (directory / "deal-000.json").write_text('{"edited": true}')
+    else:
+        (directory / "receipt.json").unlink()
+    with pytest.raises(ValueError, match="scored attempt"):
+        gpu.pending_endpoints(tmp_path, "typed_pool", 74211)
+
+
+def test_ledger_refuses_a_second_score(tmp_path: Path) -> None:
+    _attempt(tmp_path, gpu.Endpoint(update=0), scored=True)
+    _attempt(tmp_path, gpu.Endpoint(update=0, attempt=2), scored=True)
+    with pytest.raises(ValueError, match="scored more than once"):
+        gpu.pending_endpoints(tmp_path, "typed_pool", 74211)
+
+
+def test_comparison_refuses_partial_ledgers(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="partial curves are descriptive"):
+        gpu.recovery_comparison(tmp_path)
+
+
+def _delivered(tmp_path: Path) -> tuple[TrainingRun, Path, str]:
+    """A completed run.json as delivered, its paths naming a machine now gone."""
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    run = _curve_run()
+    run.seed = 74211
+    run.regime_digest = gpu.recipe_digests()["typed_pool"]
+    run_json = inputs / "run.json"
+    run_json.write_text(run.model_dump_json())
+    (inputs / f"{'a' * 64}.pt").write_bytes(b"x")
+    return run, inputs, file_sha256(run_json)
+
+
+def test_evaluation_reads_relocated_bytes_and_states_its_concurrency(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run, inputs, digest = _delivered(tmp_path)
+    unit = _evaluation_unit(gpu.Endpoint(update=0), gpu.Endpoint(update=32)).model_copy(
+        update={"run_sha256": digest}
+    )
+    calls: list[dict[str, object]] = []
+
+    def evaluated(
+        admitted: TrainingRun,
+        artifact: dict[str, object],
+        coordinates: TrainingCoordinates,
+        directory: Path,
+        *,
+        protocol: MonitorProtocol,
+        concurrent_activity: str,
+        execution: object,
+    ) -> MonitorResult:
+        calls.append(
+            {
+                "path": artifact["path"],
+                "activity": concurrent_activity,
+                "update": coordinates.updates,
+            }
+        )
+        directory.mkdir()
+        result = _manifest()
+        result.status = "completed"
+        (directory / "monitor.json").write_text(result.model_dump_json())
+        return result
+
+    monkeypatch.setattr(gpu, "evaluate_checkpoint", evaluated)
+    gpu.evaluate_unit(unit, inputs, tmp_path / "out", time.time() + 60)
+    assert [call["update"] for call in calls] == [0, 32]
+    assert {call["path"] for call in calls} == {str(inputs / f"{'a' * 64}.pt")}
+    assert {call["activity"] for call in calls} == {unit.concurrent_activity}
+    receipt = gpu.EndpointReceipt.model_validate_json(
+        (tmp_path / "out" / unit.endpoints[0].directory("typed_pool", 74211))
+        .joinpath("receipt.json")
+        .read_bytes()
+    )
+    assert receipt.run_sha256 == digest and "monitor.json" in receipt.files
+
+
+def test_evaluation_refuses_inputs_outside_its_unit(tmp_path: Path) -> None:
+    _, inputs, _ = _delivered(tmp_path)
+    with pytest.raises(ValueError, match="outside the declared GPU cohort"):
+        gpu.evaluate_unit(
+            _evaluation_unit(), inputs, tmp_path / "out", time.time() + 60
+        )
+
+
+def test_evaluation_inputs_name_every_scheduled_checkpoint(tmp_path: Path) -> None:
+    run = _curve_run()
+    for index, saved in enumerate(run.monitoring_checkpoints):
+        saved.artifact = {"path": "/gone", "sha256": f"{index:064x}", "bytes": 9}
+    run.stages[0].artifacts["raw"] = {"path": "/g", "sha256": "b" * 64, "bytes": 9}
+    run_json = tmp_path / "run.json"
+    run_json.write_text(run.model_dump_json())
+    given = gpu.evaluation_inputs(run, run_json, "recovery/inputs")
+    assert given[0].name == "run.json" and given[0].sha256 == file_sha256(run_json)
+    assert len(given) == 1 + len(gpu.POINTS)
+    assert all(item.key.startswith("recovery/inputs/") for item in given)
+
+
+def test_run_unit_reports_endpoints_through_a_bounded_child(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    commands: list[list[str]] = []
+    monkeypatch.setattr(gpu, "_run_child", lambda command, *_: commands.append(command))
+    unit = _evaluation_unit()
+    gpu.run_unit(unit, tmp_path, tmp_path, tmp_path / "stop", time.time() + 60)
+    assert "--evaluate-unit" in commands[0]
+    assert json.loads((tmp_path / "etude-result.json").read_text()) == {
+        "clocks": {"endpoints": 1}
+    }
+    assert json.loads((tmp_path / "recovery.json").read_text())["failed_run"]
+
+
+def test_work_window_allows_setup_inside_the_attempt_clock() -> None:
+    # A ten-minute setup measured on a Vast host spent this much of a 30-minute limit.
+    gpu.require_window(deadline=1200, now=0, work_hours=0.5)
+    with pytest.raises(ValueError, match="cannot cover declared work"):
+        gpu.require_window(deadline=600, now=0, work_hours=0.5)

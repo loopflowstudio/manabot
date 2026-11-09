@@ -28,6 +28,22 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
+Etude is pinned to release 0.2.15 in `pyproject.toml` and `uv.lock` for the
+launcher, extras and remote workers. This includes the checkpoint wall-time
+API and current launcher database compatibility. To update it, change all SDK
+requirements together, regenerate the lock, then use the locked environment:
+
+```bash
+uv lock --upgrade-package etude-sdk
+uv sync --locked --python 3.12 --extra dev --extra artifacts
+```
+
+Commit both `pyproject.toml` and `uv.lock` before preparing a new experiment.
+Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
+Retained experiments keep their original source and lock, including the v7
+representation study's historical Git source pin. Never downgrade the current
+launcher to reproduce a historical experiment; use its isolated frozen source.
+
 ## Validation by change area
 
 Polish and validate only the current branch scope. **NEVER intentionally induce

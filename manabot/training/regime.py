@@ -19,6 +19,7 @@ from manabot.infra.config import (
     ObservationConfig,
 )
 from manabot.training.decks import UniformDecks
+from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
 
 BatchClosure = Literal["exact-quota", "complete-games"]
@@ -395,6 +396,9 @@ def _implied_closure(stage: Mapping[str, object]) -> BatchClosure:
 
 
 class TrainSelfPlay(Stage):
+    adaptive: AdaptiveConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     game_errors: GameErrorPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -410,6 +414,9 @@ class TrainSelfPlay(Stage):
     opponent: FrozenOpponent | None = None
     initial: str | None = None
     learning_state: LearningStateImport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    initial_weights: ArtifactReference | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     pretrained: PretrainedPolicy | None = Field(
@@ -461,6 +468,18 @@ class TrainSelfPlay(Stage):
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.adaptive is not None and (
+            self.behavior != "current-self"
+            or self.learning_seats != "both"
+            or self.execution.workers != 1
+            or self.root is not None
+            or self.matchup_curriculum != "fixed"
+            or self.initial is not None
+            or self.trainable != "policy_value"
+        ):
+            raise ValueError(
+                "adaptive sampling requires fresh both-seat current-self with one producer and no static curriculum"
+            )
         if self.game_errors is not None and (
             self.root is not None or self.initial is not None
         ):
@@ -501,6 +520,13 @@ class TrainSelfPlay(Stage):
                 raise ValueError(
                     "balanced matchups require current-self and complete stream strata"
                 )
+        if self.initial_weights is not None and any(
+            value is not None
+            for value in (self.initial, self.pretrained, self.learning_state)
+        ):
+            raise ValueError(
+                "initial weights cannot be combined with another starting state"
+            )
         if self.pretrained is not None and (
             self.initial is not None or self.learning_state is not None
         ):

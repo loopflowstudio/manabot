@@ -354,6 +354,13 @@ named objects before attention; action focus remains addressable. Sum reduction
 preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play.
 
+Shared-effect and typed-continuation routing validate one host metadata batch,
+then gather live features, project tokens and reduce all records together on the
+model device. Ordered GRU packing avoids per-record padded copies; pooling keeps
+the unnormalized sum. Input features, object joins and encoder parameters retain
+their gradients, including duplicate memberships. An unused continuation module
+keeps absent gradients so Adam does not update its momentum spuriously.
+
 For new runs requiring structured granted, copy-exception or continuation
 programs, changed colors or keyword-counter timestamps, explicitly select
 `ObservationConfig(policy_input_version=8)` before constructing the model and

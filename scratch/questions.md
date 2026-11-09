@@ -307,3 +307,14 @@ candidate installation hash are excluded; manifests remain unchanged. All
 non-scratch tracked files match `44895a104`. `git diff --check` passes;
 `lf context` is below both scratch targets. No behavior tests or benchmarks
 rerun for this notes-only diff; no background process started.
+
+## Main sync — 2026-11-09
+
+Assumption (reversible): keep MTG-268's branch-specific notes here. The
+unrelated representation study's complete notes remain at
+`4e0143b7f0b4c84ca48abf4d3d3d274fa23fd909:scratch/questions.md`;
+its experiment direction and landing approval do not select work for MTG-268.
+Main's code merges without conflicts. The measurements above predate this sync;
+the installed native runtime is unchanged, so they establish no post-sync
+performance or runtime/source parity. Rebuild and identity accounting remain
+for gate and final measurement.
