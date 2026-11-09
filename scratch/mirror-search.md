@@ -1,5 +1,39 @@
 # Mirror search continuation
 
+## Execution preparation and capacity block — 2026-11-09
+
+Latest direction supersedes the earlier schedules below: “to be clear the games
+shoudl be against raw policy” and “right, that and unerstanding performance across
+multiple shuffles (should be more more meaning ful for uniform random)”. V2 is
+now 3,000 games: oracle and uniform at beta 0.01, depth 20, worlds 4/8/16, each
+against raw sampled policy on the same 500 deals. Oracle stage first. No new games
+had started, so no evidence was relabeled. Beta 0.03/four worlds is context only.
+
+Runner changes and focused checks are in this checkout. Fifteen tests pass;
+broader CI collection retains the known six Etude/duckdb import errors. Native
+smoke has NOT run. New source has NOT been copied to the mini. V1 HTML/summary
+reproduce exactly and all seven remote game-file hashes remain unchanged.
+
+Etude 0.2.6 cannot read launcher schema 13. A compatible existing clean checkout,
+`/Users/jack/src/etude.ad319b-show-live-progress`, can read it via
+`PYTHONPATH=/Users/jack/src/etude.ad319b-show-live-progress/src uv run --project
+/Users/jack/src/etude --no-sync etude ...`; do not upgrade the w13 environment or
+move/delete the launcher DB. Current inventory retains an unresolved other-work
+allocation on mini: `curriculum-held-out-707e62cad5fe-r3`, attempt `ab69a427b4a1`,
+session `c24c6c598b42`, phase `renting`. A bounded log refresh leaves its SSH-create
+outcome unknown. Read-only capacity quote: “cannot launch on mini: no free
+machine; etude queue would wait”. No allocation was bypassed or canceled.
+
+Execution is blocked on Etude reconciliation/free capacity, not design approval
+or MTG-268. No runs were queued, no campaign/smoke processes started, no rental.
+Read the protocol's execution status and published v2 reconciliation receipts.
+Once capacity is available, admit the source-bound mini smoke before the six
+fixed cells; retain private attempt streams in the existing store. Use shared
+absolute deadline 1794852989 (2026-11-16 18:16:29 UTC), counting setup from this
+Graph step. Do not reset it between smoke, stages or retries. The report's
+factorial analysis still belongs to the next analysis step; do not feed v2 rows
+into the v1-only report CLI without extending its arm validation/comparisons.
+
 ## Active extension — 2026-11-09
 
 Current direction: “i want to try 8 and 16 shuffles, and then i want to combine

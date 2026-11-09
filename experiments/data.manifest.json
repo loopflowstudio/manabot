@@ -3578,6 +3578,22 @@
    "sha256": "8652d04014d6b89f1696da130e741f289619857092b4c8507bde052880347c3f",
    "bytes": 1275060
   },
+  "experiments/data/search-mirror-v2/reconciliation/collection.log": {
+   "sha256": "807f2acbf6fa9dd1b72a5b65a6f5d82be779ce9f0b80ac2f9dfca9bd45294139",
+   "bytes": 12939
+  },
+  "experiments/data/search-mirror-v2/reconciliation/launcher-inventory.json": {
+   "sha256": "5f0b44b866e362e12a17da7f819291d2a6badff23014dcdaea33512413f6b38b",
+   "bytes": 10434
+  },
+  "experiments/data/search-mirror-v2/reconciliation/remote-inventory.json": {
+   "sha256": "e553822ba543c69d967dac4a04cab91f0578cdfdb148fbc4c6804f5d8b6e22d7",
+   "bytes": 2289
+  },
+  "experiments/data/search-mirror-v2/reconciliation/validation.json": {
+   "sha256": "730d7d21c580b107d99ca8279e1d0c76fcafefdcd769a226a798756433c9c3ba",
+   "bytes": 1193
+  },
   "experiments/data/search-scaling-v1/hosts/0e52711de5ad/decisions-9c254ae462cd-32.jsonl.gz": {
    "sha256": "afb0d9ec66e488f0bf7fa0e8ff18e527ca41a86c87bd429ac5535d09d82d8770",
    "bytes": 246337

@@ -6,31 +6,38 @@ uniform random vs oracle”. This authorizes implementation, validation and
 execution of this continuation on the already authorized owned mini. It
 supersedes the earlier pending-follow-up status for these comparisons.
 
-Reuse `search-mirror-v1.md`, its checkpoint/world, opponents, 500 deals per
-opponent, search implementation, completed controls and report machinery.
+The subsequent clarification is “to be clear the games shoudl be against raw
+policy” and “right, that and unerstanding performance across multiple shuffles
+(should be more more meaning ful for uniform random)”. The primary comparison
+is therefore a fixed-beta factorial, with all six cells against the raw sampled
+MTG-183 policy. No v2 games or smoke had started when this schedule superseded
+the earlier 5,000- and 2,500-game proposals; no evidence is relabeled.
+
+Reuse `search-mirror-v1.md`, its checkpoint/world, 500 paired deals,
+search implementation, completed controls and report machinery.
 Keep the original 8,000 outcomes and noise evidence unchanged. No training,
 noise collection, PUCT rerun, main merge, or rental is required.
 
 ## Fixed comparisons
 
-Depth 20 and alpha 0.02 throughout. The beta choices below are implementation
-choices from the previously proposed continuation and noise study, not additional
-verbatim user specifications.
+Depth 20, alpha 0.02 and beta 0.01 throughout. The opponent samples the raw
+checkpoint policy, with no search, mirror update, greedy choice or EMA replacement.
 
 | Stage | Hand sampler | Beta | Worlds/shuffles | New games |
 | --- | --- | --- | --- | --- |
-| 1 | Oracle | 0.01 | 8 | 1,000 |
-| 1 | Oracle | 0.01 | 16 | 1,000 |
-| 2 | Uniform physical | 0.03 | 4 | 1,000 |
-| 2 | Uniform physical | 0.01 | 8 | 1,000 |
-| 2 | Uniform physical | 0.01 | 16 | 1,000 |
+| 1 | Oracle | 0.01 | 4 | 500 |
+| 1 | Oracle | 0.01 | 8 | 500 |
+| 1 | Oracle | 0.01 | 16 | 500 |
+| 2 | Uniform physical | 0.01 | 4 | 500 |
+| 2 | Uniform physical | 0.01 | 8 | 500 |
+| 2 | Uniform physical | 0.01 | 16 | 500 |
 
-Each row is 500 games against sampled policy plus 500 against heuristic, on
-the original five deals per ordered deck cell. Run the oracle stage first,
+Each row is 500 games against raw sampled policy, on
+the original five deals per ordered deck cell: 3,000 new games total. Run the oracle stage first,
 then the uniform stage without selecting settings based on stage-1 winners.
-The oracle beta-0.03/four-world control already exists in v1 and is reused.
-The direct 8-versus-16 comparison holds beta fixed; comparing either to the
-v1 four-world reference changes beta as well as worlds and must say so.
+Within each stage, visit four worlds before eight and sixteen. Reuse the
+policy-versus-policy baseline. The existing oracle beta-0.03/four-world result
+is a separate contextual reference, never a control for shuffle effects.
 
 Use `PhysicalHandSampler` for uniform physical copies from the unseen pool,
 conditioned on publicly known cards and hand size. Oracle keeps the true hand.
@@ -73,12 +80,15 @@ evidence bytes through the existing artifact store before manifest commits.
 ## Analysis and delivery
 
 Keep the v1 report accessible and extend its comparison machinery for v2.
-Report paired gains over sampled policy and uniform-minus-oracle at each
-matched setting, 8-versus-16 at beta 0.01, game coverage/failures, uncertainty,
-and actual decision/game cost. Reuse the v1 uncertainty methods and describe
+Report paired gains over sampled policy, oracle-minus-uniform at each shuffle
+count, 8-minus-4 and 16-minus-8 within each sampler, and paired
+difference-in-differences: (uniform higher minus uniform lower) minus (oracle
+higher minus oracle lower). Do not assume the interaction is positive. Retain
+game coverage/failures, uncertainty, and actual decision/game cost.
+Reuse the v1 uncertainty methods and describe
 all results as exploratory because the policy, deals and candidate selection
-are already inspected. These are against common opponents, not mirror-PUCT
-head-to-head matches. No additional controls need rerunning merely to add
+are already inspected. These are against the same raw policy opponent, never
+oracle-versus-uniform or mirror-PUCT head-to-head matches. No additional controls need rerunning merely to add
 these settings. Preserve historical evidence limits rather than demanding
 new instruments retroactively. Publish progress and the final charts.
 
@@ -86,3 +96,58 @@ There is no new design approval needed for these requested comparisons.
 Finish necessary preparation, then execute and analyze in the same Task.
 Report genuine technical failures or resource limits; do not reinterpret
 older notes saying the follow-up was unapproved as a current blocker.
+
+## Execution status — 2026-11-09 18:27 UTC
+
+**Not launched: Etude reports no available mini allocation.** The frozen SDK
+expects launcher schema 10 while the existing database is schema 13. The clean
+installed checkout `/Users/jack/src/etude.ad319b-show-live-progress` (SDK 0.2.14,
+schema 13) can read it through the existing Etude environment with `PYTHONPATH`
+selecting that source. Neither database nor frozen game environment was changed.
+
+Etude retains `curriculum-held-out-707e62cad5fe-r3` on machine `mini`, phase
+`renting` (an owned host, not a newly rented machine), attempt `ab69a427b4a1`,
+session `c24c6c598b42`. Its evidence reports an unknown SSH create reply and
+missing worker/job output. A bounded log refresh did not resolve that state.
+A read-only zero-rental capacity quote returned:
+`cannot launch on mini: no free machine; etude queue would wait`.
+That allocation belongs to other work. It was not canceled, replaced or bypassed.
+Etude must reconcile it before smoke or campaign admission; an empty process
+listing alone does not release the allocation.
+
+Read-only SSH at 18:26:41 UTC found no search workers and no `mirror-v2`
+directory. All 8,000 v1 game keys and the seven game-file hashes still match the
+published evidence. The v1 HTML and summary rebuild byte-for-byte unchanged.
+No new games, smoke, training, paid resources or queued runs were created.
+The requested comparisons remain unmeasured; there is no measured v2 ETA.
+
+Runner preparation now selects the six factorial cells explicitly, leaves v1
+defaults/keys intact, and distinguishes smoke keys. Uniform uses the existing
+physical sampler; opponents use the existing sampled checkpoint player. V2
+binds source/runtime/package/plan identities, workers and an absolute deadline,
+locks each shard, requires oracle outcomes before uniform, and rejects changed
+identities, duplicate outcomes, or unreconciled partial attempts. Failed outcomes
+remain completed keys. Private attempt streams retain pending observations,
+Commands, original errors, RNG seeds/state, configured capacities and full
+search receipts; campaign interruption is separate from a failed game.
+
+Fifteen focused runner/report/data checks pass, as does Ruff. The required
+broader CI collection found 72 tests but still has the six previously observed
+import errors (`etude.eval.match.agent` unavailable and `duckdb` absent).
+No environment upgrade was made to hide that limitation. These are fixture and
+accounting checks, not native runtime admission: the bounded mini smoke remains
+required before the campaign. No source or native binary was copied to the mini.
+
+Reconciliation evidence is under
+`experiments/data/search-mirror-v2/reconciliation/` (`launcher-inventory.json`,
+`remote-inventory.json`, and `validation.json`). Bytes are published through the
+existing content-addressed artifact store before their manifest is committed.
+There are no game blobs to publish yet. The next execution step needs a free
+Etude-owned mini allocation, the source-bound smoke, then the fixed stages.
+The following analysis step must extend the existing report machinery to the
+factorial contrasts above; the v1 report remains at its original path.
+
+For conservative inclusive accounting, the setup window began with this Graph
+step at 2026-11-09 18:16:29 UTC. Its seven-day ceiling is
+**2026-11-16 18:16:29 UTC** (`--deadline 1794852989`), shared by smoke and campaign.
+Do not reset that deadline on retry, stage transition or allocation delay.

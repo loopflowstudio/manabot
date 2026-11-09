@@ -1,5 +1,22 @@
 # Inherited notes
 
+## MTG-269 execution choices — 2026-11-09
+
+- Latest schedule: fixed beta 0.01, depth 20, oracle/uniform × 4/8/16 worlds,
+  raw sampled policy opponent only, 500 matched deals per cell (3,000 total).
+  Earlier 5,000- and 2,500-game schedules were superseded before any new games.
+- Keep the existing SDK/game environment frozen. Select the already installed
+  schema-13 Etude source only for launcher reads; no DB migration or reset.
+- An unresolved allocation for other work is not free capacity even when SSH
+  shows no game process. Preserve it and stop execution pending its owner's
+  reconciliation. Do not create a second pool/machine name or launch around it.
+- For the inclusive seven-day ceiling, use this step's 18:16:29 UTC start on
+  November 9, ending November 16 at 18:16:29 UTC (1794852989). Share this absolute
+  deadline between smoke and campaign. Delay does not replenish the allowance.
+- Store full private search/Command evidence in per-game compressed attempt
+  streams. Preserve incomplete attempts and require explicit reconciliation;
+  do not call them losses or automatically replay them. Keep v1 evidence intact.
+
 MTG-174/MTG-176 preflight, payment-repair and recovery assumptions are retained at
 `003644bda6d3ed2e1e6754186960b135ff815e76:scratch/{questions,elemental-baseline-preflight,elemental-mana-repair}.md`.
 They do not select current work or authorize paid execution.
