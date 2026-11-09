@@ -2,6 +2,19 @@
 
 ## Resumed conversation (2026-11-08)
 
+Latest status check: all six depth-4 runs succeeded at update 300. The watcher
+then exited on `matchup_conflict` before any evaluation rental. `_deep` had
+preferred the continuation's initial export at update 150 over the original
+parent. The new fixture reproduces the conflict and verifies every previously
+scheduled matchup stays identical after a continuation appears. Fixed selection
+uses the parent through 150 and the continuation afterward. All 16 focused
+tests and Ruff checks passed. No training retry or evidence rewrite is needed.
+
+Whole-rental bills for this extension: token USD2.8833 / 3.0788 / 2.7838;
+masked mean USD1.3142 / 1.3136 / 1.3128. Sum USD12.6865, retained study total
+USD47.5021 before the next eval. The old watcher is no longer running;
+do not assume it will launch evaluation after this repair.
+
 The older notes below predate completed depth-2/update-300 and
 depth-4/masked-mean/update-150 evaluations. The native Claude transcript is
 `/Users/jack/.claude/projects/-Users-jack-src-manabot-mtg-252-compare-learned-value/4265433e-e023-42b4-93b4-1d05d7c08a66.jsonl`.

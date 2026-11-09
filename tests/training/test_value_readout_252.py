@@ -80,6 +80,19 @@ def test_depth_runs_are_scored_and_meet_their_shallow_baseline(
     (versus,) = [m for m in matchups if "depth" in m.tags]
     assert versus.name == "masked_mean v depth4 s25201 u150"
 
+    # A continuation republishes its initial state at 150 under a new run key.
+    # Existing matchup names must keep their originally scored checkpoint.
+    monkeypatch.setattr(
+        value_readout_252, "DEEPER_THIRDS", {("masked_mean", 25201): "continued25201"}
+    )
+    continued = ExperimentState(
+        experiment=state.experiment,
+        runs=(*state.runs, _stored("continued25201", 150, 200, 250, 300)),
+    )
+    later = {m.name: m for m in value_readout_252.evaluation_matchups(continued)}
+    for original in matchups:
+        assert later[original.name] == original
+
 
 def test_depth_continuation_and_fresh_token_share_the_scoring_schedule(
     monkeypatch: pytest.MonkeyPatch,

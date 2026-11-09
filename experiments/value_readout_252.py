@@ -515,13 +515,15 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
 def _deep(
     state: ExperimentState, aggregation: ValueAggregation, seed: int, updates: int
 ) -> Checkpoint | None:
-    """A depth arm's checkpoint, from its continuation when it has one."""
-    for runs_at in (DEEPER_THIRDS, DEEPER):
-        if (aggregation, seed) in runs_at:
-            found = _checkpoint(state, runs_at[aggregation, seed], updates)
-            if found is not None:
-                return found
-    return None
+    """Keep scored checkpoint identities stable across learner continuations.
+
+    A continuation also exports its initial update-150 state. That new run's
+    checkpoint must not replace the parent's already-scored update-150 export.
+    """
+    key = (aggregation, seed)
+    runs_at = DEEPER_THIRDS if updates > UPDATES and key in DEEPER_THIRDS else DEEPER
+    run = runs_at.get(key)
+    return None if run is None else _checkpoint(state, run, updates)
 
 
 def _checkpoint(state: ExperimentState, run: str, updates: int) -> Checkpoint | None:

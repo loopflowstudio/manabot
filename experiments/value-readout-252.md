@@ -1,7 +1,8 @@
 # Critic readout comparison — MTG-252
 
-**Status: depth-2 arms evaluated through update 300; depth-4 masked mean
-evaluated through update 150.** The initial three-arm, three-seed study had a
+**Status: both depth-4 arms trained through update 300; extended evaluation
+pending.** Depth-2 arms were evaluated through update 300 and depth-4 masked
+mean through update 150. The initial three-arm, three-seed study had a
 USD20 cap; subsequent extensions raised the total cap to USD55 on 2026-11-08.
 No promotion or rejection threshold is set; results are reported as measured.
 
@@ -48,6 +49,15 @@ The six extension runs launched on A40s from source
 | 25201 | `f1e5c84269d0` | `1c4aef332e5b` |
 | 25202 | `072977f3704d` | `8f11bcda7841` |
 | 25203 | `f1664004d74e` | `7d5cba6b285a` |
+
+All six runs completed update 300. Their whole-rental bills total USD12.6865
+(USD3.9406 masked mean, USD8.7459 value token), bringing the retained study
+cost to USD47.5021 before the next evaluation. The automatic evaluation pass
+refused with `matchup_conflict` before renting: the selector had substituted
+the continuation's initial update-150 export for the parent's already-scored
+checkpoint. The repaired selector preserves the parent through update 150 and
+uses the continuation only afterward; existing results and checkpoints remain
+unchanged.
 
 ## Execution record
 
