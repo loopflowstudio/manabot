@@ -160,6 +160,72 @@ def test_unknown_ids_fail_instead_of_hashing(cards: SemanticCardEncoder) -> None
         cards.record_tokens(torch.tensor([3]), torch.tensor([_value("Effect::None")]))
 
 
+def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
+    cards: SemanticCardEncoder,
+) -> None:
+    """Program boundaries and source gradients survive batched vocabulary lookup."""
+    torch.set_num_threads(1)
+    env = kellan_upgrade_root()
+    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    observation = space.encode(env.observation_for_player(env.current_agent_index()))
+    headers = torch.from_numpy(observation["effects"]).repeat(3, 1, 1)
+    details = torch.from_numpy(observation["effect_details"]).repeat(3, 1, 1)
+    members = torch.from_numpy(observation["effect_members"]).repeat(3, 1, 1)
+    # An empty observation between live ones must not shift another program's rows.
+    headers[1].zero_()
+    count = int(
+        torch.cat((members[..., 0].flatten(), headers[..., 10:13:2].flatten())).max()
+    )
+    objects = torch.randn(3, count, WIDTH)
+    effects = SharedEffectEncoder(WIDTH, version=9, vocabulary="catalog")
+    parameters = [*effects.parameters(), *cards.parameters()]
+
+    def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:
+        effects.zero_grad(set_to_none=True)
+        cards.zero_grad(set_to_none=True)
+        catalog = RecordEmbeddings(cards, cards.definitions())
+        if batched:
+            result = effects(headers, details, members, objects, catalog)
+        else:
+            result = torch.cat(
+                [
+                    effects(
+                        headers[i : i + 1],
+                        details[i : i + 1],
+                        members[i : i + 1],
+                        objects[i : i + 1],
+                        catalog,
+                    )
+                    for i in range(3)
+                ]
+            )
+        result.square().sum().backward()
+        return result.detach(), [
+            p.grad.clone() if p.grad is not None else None for p in parameters
+        ]
+
+    together, joint_gradients = reading(True)
+    separate, separate_gradients = reading(False)
+    torch.testing.assert_close(together, separate)
+    for joint, individual in zip(joint_gradients, separate_gradients, strict=True):
+        if joint is None or individual is None:
+            assert joint is individual
+        else:
+            torch.testing.assert_close(joint, individual, rtol=1e-4, atol=1e-5)
+    # Admission is still enforced when the invalid id is in a later batch member.
+    headers[2, 0, :2] = torch.tensor(
+        _halves(_value("Modification::NoSuchModification"))
+    )
+    with pytest.raises(ValueError, match="outside the record vocabulary"):
+        effects(
+            headers,
+            details,
+            members,
+            objects,
+            RecordEmbeddings(cards, cards.definitions()),
+        )
+
+
 def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     tmp_path: Path,
 ) -> None:
