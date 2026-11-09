@@ -44,6 +44,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "seat_comparison",
         "tla_pilot_v10",
         "two_seat",
+        "value_readout_252",
     }
 
 

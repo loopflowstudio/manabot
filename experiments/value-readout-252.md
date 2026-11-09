@@ -1,8 +1,9 @@
 # Critic readout comparison — MTG-252
 
-**Status: both depth-4 arms trained through update 300; extended evaluation
-pending.** Depth-2 arms were evaluated through update 300 and depth-4 masked
-mean through update 150. The initial three-arm, three-seed study had a
+**Status: all five arms trained and evaluated through update 300.** Read the
+[final report with graphs](value-readout-252-results.md): no clear readout winner;
+depth 4 improves equal-update endpoints but not clearly equal-hour strength.
+The initial three-arm, three-seed study had a
 USD20 cap; subsequent extensions raised the total cap to USD55 on 2026-11-08.
 No promotion or rejection threshold is set; results are reported as measured.
 
@@ -179,7 +180,10 @@ its gradient mixes policy and value loss; it is shared, not critic-only.
 Existing rows, retained rows, actor/critic exposures, empty-filter skips and
 selection groups are unchanged.
 
-## Proposed protocol (to be frozen before scoring)
+## Original proposed protocol
+
+The dated execution record above supersedes this proposal where noted. The
+final report distinguishes completed measurements from unmeasured diagnostics.
 
 1. **Source and world.** Pin the landed commit, `managym.world_identity()`,
    observation shapes and native identities in a protocol JSON. The arms'
@@ -218,7 +222,12 @@ selection groups are unchanged.
    milliseconds per decision and peak memory measured at ordinary batch sizes
    on the evaluation host.
 
-## Open decisions
+## Original planning decisions (historical)
+
+Execution selected three depth-2 arms, three shared seeds, 300 updates after
+extensions, fifty evaluation blocks, and an eventual USD55 total cap. The
+depth-4 extension selected two arms. No promotion threshold was selected;
+these original questions are retained as planning provenance.
 
 | Decision | Options | Note |
 | --- | --- | --- |

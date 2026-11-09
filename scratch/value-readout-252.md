@@ -1,5 +1,31 @@
 # MTG-252 — critic readout comparison: implementation status (2026-11-05)
 
+## Completed scoring and report (2026-11-09)
+
+All fifteen arm/seed histories reached update 300. Four evaluations retain
+7,050 complete pairings / 28,200 valid games. The final report is
+`experiments/value-readout-252-results.md`; graphs and offline HTML are under
+`experiments/data/value-readout-252/`. The report script resamples shared deal
+blocks across seeds (crossed bootstrap), replacing earlier within-seed deal
+draws; means are unchanged. Depth-4 masked/token score .610/.6167 against the
+heuristic; their head-to-head masked score is .525, CI [.4833,.5633]. Matched
+4.298-hour interpolation largely removes the equal-update depth advantage.
+
+Final eval `value-readout-252-v1-ef63a17c6cee` worker completed 2250/2250 and
+exited zero at 19:22 UTC. Launcher/controller remained stale; after all stored
+blocks were downloaded and checked, cancellation was requested. Owner terminate
+refused because the run was still assigned. Provider deletion of this Task's
+idle pod `nnyhcwhjq71c90` returned `deleted: true` around 20:03 UTC. Scientific
+completion is distinct from launcher cancellation and pending billing. Prior
+cost USD47.5021 plus the USD3 final-eval ceiling is USD50.5021, below USD55;
+do not present the ceiling as an incurred bill.
+
+The participant asked: "can i see this in graphs in a report" and "can you also
+give hte results to mtg267 to affect its training design". Share report evidence
+and design implications in MTG-267's thread; its existing equal-hours, two-size
+design and long-run review gate remain authoritative. No new training is needed
+for this report.
+
 ## Evaluation launch recovery (2026-11-09)
 
 The checkpoint fix passed, but the subsequent launch failed at RunPod create:
