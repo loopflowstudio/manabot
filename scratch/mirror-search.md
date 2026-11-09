@@ -1,5 +1,26 @@
 # Mirror search continuation
 
+## Analysis handoff — 2026-11-09 22:32 UTC snapshot
+
+The existing report now uses 78 sealed v2 outcomes (27/26/25 oracle at 4/8/16
+worlds), retaining all 3,000 slots and 2,922 missing. The audit reconciles
+12,890 Commands and 6,170 search receipts; no failed outcome or worker warning
+is retained. Prior game, decision, attempt and log bytes remain identical prefixes. Eight
+uncommitted attempt filenames were listed but not read or counted as failures.
+
+Seven sequential workers and the original Etude attempt remain active. No
+execution or resource change occurred; batching remains local and undeployed.
+The report owns partial estimates and cost. Full-grid uncertainty, uniform-hand
+effects, replay proof, training exposure and scientific acceptance remain
+unresolved. Read the protocol's newest snapshot section and existing report;
+the older 77-row batching inventory no longer leads the scientific snapshot.
+
+Publication updated 97 manifest entries; all 224 mirror artifacts verify.
+The report/summary rebuild byte-for-byte and all v1 scientific fields remain
+unchanged. Seventeen focused tests, Ruff and the post-publication untracked-data
+check pass. Prior broader collection failures remain unresolved. No local
+server, watcher or new experiment process remains running.
+
 ## Batching handoff — 2026-11-09 22:26 UTC
 
 The requested minimal MTG-268 Python port is in this checkout, **not deployed**.

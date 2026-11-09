@@ -1,5 +1,47 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Analysis snapshot — 2026-11-09 22:32 UTC
+
+The existing report now uses **78/3,000 sealed valid outcomes**, with 2,922
+missing and zero failed outcomes: oracle 4/8/16 worlds contributes 27/26/25;
+uniform has no completed campaign outcomes in this snapshot. Collection spans
+22:32:42–22:32:55 UTC with per-shard cutoffs, not one atomic campaign cutoff.
+Seven original sequential workers remain live. Eight uncommitted filenames
+were listed but their contents were not read or classified as failures. The
+Etude read-only status still reports the original run active on mini at $0.
+No execution, source transition, restart, allocation or deadline change occurred.
+
+Every collected file matches its receipt hash and all prior local game,
+decision, attempt and log bytes remain identical prefixes. The existing audit
+reconciles 12,890 Commands
+and 6,170 search receipts, both game seeds, legal offers/revisions and admitted
+source/runtime/checkpoint/world bindings. Retained worker log prefixes contain
+no warnings or failures. Maximum |Q| is 1.11600; the scalar estimator remains
+unclipped. No deterministic replay was performed. Summed closed-game wall time
+is 39,876.27 seconds and hero search is 39,456.07 seconds, excluding ongoing work,
+setup and smoke; neither is inclusive worker time or a reliable full-grid ETA.
+
+All 15 declared comparisons and six 500-slot denominators remain in the same
+HTML/summary. Five contrasts have partial paired observations; none has full-grid
+stratified uncertainty because deck cells remain missing. Nominal estimates do
+not establish strength, shuffle effects or equivalence. Uniform-versus-oracle
+and interaction effects remain unmeasured. Training exposure, learning and
+generalization remain unsupported independently of the bounded native smoke;
+scientific acceptance remains unresolved. The 77-row batching inventory is
+historical operational evidence, now explicitly labeled separately from this
+newer closed-evidence snapshot. The candidate batching implementation remains
+undeployed, with its inconclusive speed finding unchanged.
+
+The existing reader/audit and dated receipts remain in v2 `reconciliation/`,
+including the prior three-game snapshot receipt. All original v1 scientific
+fields and baseline input bindings reproduce unchanged. Seventeen focused
+runner/report tests and Ruff pass. The previously recorded broader Etude/duckdb
+collection failures remain unresolved; no frozen environment was upgraded.
+
+Publication updated 97 manifest entries; all 224 mirror artifacts verify. The
+HTML and summary rebuild byte-for-byte. The post-publication untracked-data
+check passes. No local server, watcher or analysis process remains running.
+
 ## Batching check — 2026-11-09 22:26 UTC
 
 The authorized MTG-268 Python batching adaptation is implemented locally and

@@ -366,10 +366,10 @@ def _batching_section(extension: dict[str, Any]) -> str:
         return ""
     inventory = extension.get("latest_inventory")
     status = (
-        f'<p class="note">Later ledger-only inventory: {inventory["completed"]}/3,000 '
+        f'<p class="note">Batching-time ledger-only inventory: {inventory["completed"]}/3,000 '
         f'completed rows, {inventory["failed"]} failures at {escape(inventory["observed_utc"])}; '
         f'{len(inventory["workers"])} sequential workers. Private attempt blobs were not '
-        'collected in this inventory, so the scientific tables retain their earlier closed-evidence snapshot.</p>'
+        'collected in this inventory; scientific tables use the separately dated closed-evidence snapshot below.</p>'
         if inventory else ""
     )
     rows = ''.join(

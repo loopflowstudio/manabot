@@ -159,7 +159,7 @@ def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
     assert all(arm["search_cost"] is None for arm in diagnostics["arms"].values())
     html = _extension_section(diagnostics)
     assert "77/3,000 completed rows" in html and "0/3,000 valid games" in html
-    assert "not admitted" in html and "earlier closed-evidence snapshot" in html
+    assert "not admitted" in html and "separately dated closed-evidence snapshot" in html
     # A typo in the input path must not manufacture a no-games receipt.
     with pytest.raises(FileNotFoundError):
         _extension_report(tmp_path / "missing", {})

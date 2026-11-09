@@ -3571,12 +3571,12 @@
    "bytes": 16029
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "73574e13ad179391a8f2383cdffc73e5af9cdb4a183c8354241ab0034fc206b8",
-   "bytes": 94858
+   "sha256": "d2d18067b6dfb06c1b9b75e837742b50368212c5387a51b5226646b6711e083f",
+   "bytes": 95028
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "f1fc3a64ec8b3061b466f79e2b61811ae800550dcaa3e456be879ae01a6da419",
-   "bytes": 1687406
+   "sha256": "f5f67c23dd5e15eb4861156b5897ce0363038c178258dba79245280aa863f1a4",
+   "bytes": 1699971
   },
   "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-16-batched.json.gz": {
    "sha256": "930bf9d30fe0b91e04e3f6b0b1db819fa294efab2ba2004f0b5bf4d4f604b336",
@@ -3794,41 +3794,373 @@
    "sha256": "77a54ab5d8f77e58ebea61d05d8f9a7ebceb9762a7cda633596e7271e0969997",
    "bytes": 11157
   },
+  "experiments/data/search-mirror-v2/games/attempts/0774620ba0dd57ab2e871efccf44c080428fde312ba2f9252cbc2463a2a1065c.jsonl.gz": {
+   "sha256": "a79dd9252a87d45c5813c97d95adef1a3cb177f000ec847b289923d3ef812818",
+   "bytes": 9890839
+  },
+  "experiments/data/search-mirror-v2/games/attempts/0a1780adda7bbfb0a7626a87ce8f881f6e7b37f64ef7a7d9d092e044c2b39971.jsonl.gz": {
+   "sha256": "7c710abd9711eb2a8a3468c5ac19d2e32427542f6f47c2763ccebf991b8bf6ed",
+   "bytes": 3894459
+  },
+  "experiments/data/search-mirror-v2/games/attempts/0ab9240d2879597ee0bef824636efccfbd077891ea858f1e85a4f61bfa7b481f.jsonl.gz": {
+   "sha256": "3e9b3181b833e0c2d44338973ebb1fe9c5caf7ced6257c30843e8d8a21c1ece7",
+   "bytes": 3831915
+  },
+  "experiments/data/search-mirror-v2/games/attempts/0b2f7d8cfa8fa668dc658b6f11f22368163a424a439166291ae5f8230ebb38a5.jsonl.gz": {
+   "sha256": "b857eea949b91f24976d846e184d5e42cd2afaab4307ecc88660ceff7ef2d3ef",
+   "bytes": 3991620
+  },
+  "experiments/data/search-mirror-v2/games/attempts/10c54ad3c3d0f0eaa2786935a24e05998f5d52684aa297624da9bfe3751b1565.jsonl.gz": {
+   "sha256": "9b756ef1bdbf6f14b1460f9c0ad1fd02b5a9ddd6670d761b934dac127a84fa8e",
+   "bytes": 2031463
+  },
+  "experiments/data/search-mirror-v2/games/attempts/17ea6a1809da82fb2b08c4fe67252cac778f0bc826be5c43317098088abcfee4.jsonl.gz": {
+   "sha256": "7acbb73ff805db1023f4eb92bd2f429c67ab0dc90c164604e85ea766396c3437",
+   "bytes": 18504333
+  },
+  "experiments/data/search-mirror-v2/games/attempts/19bcd992ff6fca1067114293934e46da23ef90f0d7db7f166a698550bb90d80d.jsonl.gz": {
+   "sha256": "1c4cfbcc812923930bd9f946dc439ed85f5b200e31b712ae9d0381d880302795",
+   "bytes": 10225748
+  },
+  "experiments/data/search-mirror-v2/games/attempts/1a167c31c4988d31037f2a1a54e9ad02288d12b422e1e87f696a344a836bffb8.jsonl.gz": {
+   "sha256": "fd3b1be93233d141a16a85d615405117ec2e2bfc4812b89b55c59185cfa79a64",
+   "bytes": 3833332
+  },
   "experiments/data/search-mirror-v2/games/attempts/1ae09a06e7cbf49eed8876b47ecf6666080e1787ba5d99a35d19d256ed4fc20e.jsonl.gz": {
    "sha256": "39f9e971d616bc3daa8f392ae7a0169bce3d34427538c63fc97635d585a78bc1",
    "bytes": 6121912
+  },
+  "experiments/data/search-mirror-v2/games/attempts/1cb57158a8e2d2632b2e092a251bfcddf8d4360b2331dd91400c5df80c83f7ff.jsonl.gz": {
+   "sha256": "61649790a5eb3dc5ceadb2b3c0ccfe32f134ba6c8da55b45ec02b830614ec131",
+   "bytes": 19487362
+  },
+  "experiments/data/search-mirror-v2/games/attempts/1cf44c19227c3d0718d1c0746ba05f65a18884cc95cab3e0e4d264e59479e913.jsonl.gz": {
+   "sha256": "efcfe386de531dae8307a35bea308606baeaf5f62718291c178645e3849186ac",
+   "bytes": 8046097
+  },
+  "experiments/data/search-mirror-v2/games/attempts/23f4e96aee918adf534fdf540a363b3e1a25ba9c146f505ffb145fd75824bd46.jsonl.gz": {
+   "sha256": "fa4472f755d18dce0a9c233440921311ba47691a751d8919979e6039360ac32e",
+   "bytes": 8148055
+  },
+  "experiments/data/search-mirror-v2/games/attempts/28ee662752b8d362b14639a2ef1d35f13e617a82866287a888c1c4235a4a2d09.jsonl.gz": {
+   "sha256": "0f3039132fca811ce75d273ef23cdaf16df377d45735f916ded56f9ec3899948",
+   "bytes": 5371238
+  },
+  "experiments/data/search-mirror-v2/games/attempts/297332a31b9ac415fd0aaf79f31e3f99e7b8ccbb1df9f8b5812a01f07a371eed.jsonl.gz": {
+   "sha256": "45f6a1b7a1acb59a8eb0211e43d981f5424fe347d7fd732c4701959e394115c0",
+   "bytes": 5849859
+  },
+  "experiments/data/search-mirror-v2/games/attempts/2bbf9ca37e4e33b33b1e88aae796ee5491f6ede81f21f3c987bfad53f430465a.jsonl.gz": {
+   "sha256": "aac157bb260b12779735218f6a40844df856ec5b42d77ad15201e2798d669d3a",
+   "bytes": 6089524
+  },
+  "experiments/data/search-mirror-v2/games/attempts/33043f16f5f73b6490dec7ea37000fe94aa1fc8a2552f311b31173295d9a2c11.jsonl.gz": {
+   "sha256": "29122dd80d66f56af10e6806c2458049a4001c34a2cde122737c2df1287c86d1",
+   "bytes": 9349951
+  },
+  "experiments/data/search-mirror-v2/games/attempts/353e1c0aff8d4cabb8dd4f3054c681d3a495a1ae2815213c0f1686b3325d62a1.jsonl.gz": {
+   "sha256": "d904562e7aa721954aa09c4177582e3ca0a0e14bc507a12d5e8280b31d9d22de",
+   "bytes": 16192908
+  },
+  "experiments/data/search-mirror-v2/games/attempts/369294c2911609af6b811fff6c7c74cb38a566fd90a58af63881fa7018f5a40e.jsonl.gz": {
+   "sha256": "61080300389dc32f1576c3be63b1d3280b641571fd97dfca852abee5e0e08a5f",
+   "bytes": 3904990
+  },
+  "experiments/data/search-mirror-v2/games/attempts/3f6cc60d00466fa3ab9bc2b947770d7e24c086361ebf1040e08488a7a743db41.jsonl.gz": {
+   "sha256": "947a91b0323c632a54980849d8d1f6b7250c05646692e28066ddbb31017938bd",
+   "bytes": 11224530
+  },
+  "experiments/data/search-mirror-v2/games/attempts/4906cdbce490c0dc033eb133f5734aa85e692012202186725e9316f71a9052b0.jsonl.gz": {
+   "sha256": "8a0a1bd81c8a20ec33aa17dbe95239aab7030d3d5f4d72ceadc041d77bec16b4",
+   "bytes": 4687209
+  },
+  "experiments/data/search-mirror-v2/games/attempts/496751f83e9e8299041eb029b20162321120b58464685bd8a9366c30f723e01e.jsonl.gz": {
+   "sha256": "5357b5cc17b3fb929a092e471621ea1f52d14acc52ba43067b4522bb97eb23f4",
+   "bytes": 2638651
+  },
+  "experiments/data/search-mirror-v2/games/attempts/4b8073b049c7694befb39520e9ee5d4f30ceeb5929bbaf12e670475001c27030.jsonl.gz": {
+   "sha256": "cff434f5b83205428c6a09f0bf253a5946976d4534e3c2a3959b71a43dae8b35",
+   "bytes": 5724204
+  },
+  "experiments/data/search-mirror-v2/games/attempts/5fbd4877bd4e179aa7fa8426866305e4a43ec175c3790426e6f820f769810d87.jsonl.gz": {
+   "sha256": "905b3938dc0b6e6b7e8277d737ed7dbb84c5f8dd88b3f7467ea3b5c0bc907850",
+   "bytes": 6368383
+  },
+  "experiments/data/search-mirror-v2/games/attempts/60294c8ccf17283ae62e84dd4f941dc15d6bc9a01282577dc9e856e62359610b.jsonl.gz": {
+   "sha256": "5645fc54edcd59b53466ee2752d2641ad9a075771cd3d4b3f9c1ccc274d55905",
+   "bytes": 15485841
+  },
+  "experiments/data/search-mirror-v2/games/attempts/6135063193cd32e225515174ffb47b091c604a29fdd8bcaf7b6a052e2c5bbff3.jsonl.gz": {
+   "sha256": "3da24a0e17dc49d02b3093f0a7c22766f48d1c172dece080e4f8b61994520c7e",
+   "bytes": 18922083
+  },
+  "experiments/data/search-mirror-v2/games/attempts/64e961b19ad8bf7a8a4e1e2bc727888cac49af95e5a2db421de5966da32a79be.jsonl.gz": {
+   "sha256": "77c4b797114b9d48b2e7c658a69776f24b3f6722c3ccc696dd6d9ca88298616d",
+   "bytes": 2865378
+  },
+  "experiments/data/search-mirror-v2/games/attempts/6980b52d6c36b7aa950c19023902d5a7ed4b3edf369dcfff20feb00ad65a51f1.jsonl.gz": {
+   "sha256": "d6fed6ccfa2456c34aebded7d25b39a7dbecfcf5cf363aaec9d03c34437bd766",
+   "bytes": 7517687
+  },
+  "experiments/data/search-mirror-v2/games/attempts/7306088d4bee5696cff65909a1ae009a6e72699fcb49170cbde2da9214843e78.jsonl.gz": {
+   "sha256": "0f3ea6c8a01969fb44d5c1e10e910c1e609430f38bbdfb4d4a5165b7f5f5c14e",
+   "bytes": 1030057
+  },
+  "experiments/data/search-mirror-v2/games/attempts/796956b8bae7bce13a1f3078562de60615f1c2abe723d1a96619ec31b699c0cd.jsonl.gz": {
+   "sha256": "21ffbe3b83779613e31facae8440846c17c93be4299ca805b9b21e242591b774",
+   "bytes": 4268387
+  },
+  "experiments/data/search-mirror-v2/games/attempts/7c041a38eddceebe25c4cffc876afd2086b37e311bbd6f2a589a0b55193e8758.jsonl.gz": {
+   "sha256": "bc569c74f579bec07b763842fc24780fabcdc2aa526b0d1559d37b5cbc222877",
+   "bytes": 16267594
+  },
+  "experiments/data/search-mirror-v2/games/attempts/7d5c65b583e656f80f3600ceb7f27d89ca0bdda26bf04744ce9a5dc23257c18c.jsonl.gz": {
+   "sha256": "5f44223e973c5625a02a20bb85efe88d0a82bb9da100cc18fb19116266406250",
+   "bytes": 4182486
+  },
+  "experiments/data/search-mirror-v2/games/attempts/8253f69fcaa66a3cbc18da1d4b63a9915e395382906cd02fb0bce764e8346b80.jsonl.gz": {
+   "sha256": "53a14aab72e857cce908809fab25a1cce19f9e05b51a10ed282144f33c1b2c48",
+   "bytes": 60753502
+  },
+  "experiments/data/search-mirror-v2/games/attempts/8b90fc13b8c4abe025bc556cbb2c28490db572e1a96e46fb1f3c5f409d429f90.jsonl.gz": {
+   "sha256": "4e04e17528e34af947f5c2a846e5198d1c8431e3d806b287bdffc870afc8e204",
+   "bytes": 11507781
+  },
+  "experiments/data/search-mirror-v2/games/attempts/8c399b74658313f046280978b6606c5239868a1e6ba0e56916dc7b94f865210a.jsonl.gz": {
+   "sha256": "df47f2fe1b00e9d04d5bf29623364158de117832f502e23918eabf449607d0ae",
+   "bytes": 8505896
+  },
+  "experiments/data/search-mirror-v2/games/attempts/8c9b7ee1f2d5cff12a4d7561ff39fd39d07dfe0585ab549b2b708698e4026d5d.jsonl.gz": {
+   "sha256": "87c97d374cd5d736eb6f55bec294eeaaf01561984d8a9a45b8708a27b92d8938",
+   "bytes": 26846648
+  },
+  "experiments/data/search-mirror-v2/games/attempts/8d63a66b3600bf79375224ff0d55187d9c120a41aa83a4b09e0b1c31f300f7ad.jsonl.gz": {
+   "sha256": "4ecabff976ae65e6ac1b15f301e7482ea8a6feaef0e3a6cddb82e2f199a77358",
+   "bytes": 1667659
+  },
+  "experiments/data/search-mirror-v2/games/attempts/90b1d1c0732ed3427837a835fa530881f4bd96c713b67e6e16b0f1a512a3701e.jsonl.gz": {
+   "sha256": "e638f8ba61acbad27194e9259c533e42c2af591100da8750f3ab0f54222f92db",
+   "bytes": 5931974
+  },
+  "experiments/data/search-mirror-v2/games/attempts/910bf76ecb1a6002445d733b6d87cb50f2e61bb695a7f98c7d4194bc6da41286.jsonl.gz": {
+   "sha256": "016e70836b9f6be7fc9f44b8bec53cff13ec67d3b8f512fa9b15ae1744077d86",
+   "bytes": 22498535
+  },
+  "experiments/data/search-mirror-v2/games/attempts/956b6e96cb5694ab755c7698fb1688649beb02d30d90d01b393e5c2c8cbbec64.jsonl.gz": {
+   "sha256": "cb774ac018ddde55a7d3afbc12a5ce9ae06ac16e62bcd601c7772c3b53389256",
+   "bytes": 6111673
+  },
+  "experiments/data/search-mirror-v2/games/attempts/9bcaae471175298a587c0a123d8fc6c1d9543e3c12544f3c698a069887c25a91.jsonl.gz": {
+   "sha256": "7557742d455dac3a33212742caf371851ae0368544930fd15aad6c9e6de057dd",
+   "bytes": 2581930
+  },
+  "experiments/data/search-mirror-v2/games/attempts/9e0b385f5008f728dfed9bb52cf9eb12a07d0c4d0a700d39f0c1a54e76aab7ac.jsonl.gz": {
+   "sha256": "a9da9f6e1ef93e5d3031252637e777210dcdd25b0379476d46a90e76baabeebb",
+   "bytes": 3521707
+  },
+  "experiments/data/search-mirror-v2/games/attempts/a201cf90c0fa169d3fbeacf303d9509aa42e54140699fd60e2fb564ef08da71f.jsonl.gz": {
+   "sha256": "3a76a0f55b78255a177ff7b3e92353b66bb5fa919df1a86ce3f32d69de87a84a",
+   "bytes": 22009821
+  },
+  "experiments/data/search-mirror-v2/games/attempts/a3a285bf67d5810386e2853bfcad73d78e4aa1440e633a157a207d8d5c016143.jsonl.gz": {
+   "sha256": "30588ade0767d16448a1ef1d6729ae1a5fcc1ef88f7125b57ea9ed28b412e43a",
+   "bytes": 6048968
+  },
+  "experiments/data/search-mirror-v2/games/attempts/a45a3e29065c3d0d57c757334ad18c537c11b594be73e37cf377a69048f4ae5b.jsonl.gz": {
+   "sha256": "a30a2c65425db352f86b3f0610f75b1bc625acab1f2a7e4cbf8f4bb7c8898dad",
+   "bytes": 2314682
+  },
+  "experiments/data/search-mirror-v2/games/attempts/a7582c36d63a3c93477d8366400e3f0339268f6f366d5d2d21afad5ea2d8a158.jsonl.gz": {
+   "sha256": "11c5b241eb99f848f007e7ddf36c28e5ef638acc7bc70b04b5c610cb940efd65",
+   "bytes": 6066822
+  },
+  "experiments/data/search-mirror-v2/games/attempts/ad562bd4e3d2e65e5f764a0e6a2df71f52d5decc72983ae5f4221a42e6fe55e2.jsonl.gz": {
+   "sha256": "cff13d544fc721ff1dd2b556bba659c1817a15cd2a5047d4ea27ac6d63b299a0",
+   "bytes": 8698449
+  },
+  "experiments/data/search-mirror-v2/games/attempts/b2002d1a418acf5eee3b7caa5b5a1d34d8fa58d876c644e45a3a39af3ffa5b69.jsonl.gz": {
+   "sha256": "ab61f4d9791f1509d11e9d9664a89b8c7f4d1be204353a058e8bceb2cd55371c",
+   "bytes": 11754310
   },
   "experiments/data/search-mirror-v2/games/attempts/b3ca6667c4f2b911e045a08ea581f8f2227de5a495c443f513a1255a1ad2b34f.jsonl.gz": {
    "sha256": "c002ba79e06c33e760fe3f1308c1647a33a6447e0898181856f388466e97db95",
    "bytes": 3254932
   },
+  "experiments/data/search-mirror-v2/games/attempts/b813420abc0e3bcb960c6df57b654838d5102d1d59a702d07c0c99c4900a7330.jsonl.gz": {
+   "sha256": "c051bd11a5ac22316652d39a7b3f2b5ebd6728e1b826f005f77803e9c6588674",
+   "bytes": 9943549
+  },
+  "experiments/data/search-mirror-v2/games/attempts/bfc4a6b534f9d85a888df1827b41d1752456775b47962cec5303f6f0fc0280d8.jsonl.gz": {
+   "sha256": "5f1325ffd6857275ba13b72bda36617e699b207d6262d7b3ff8e6e39d5a80b8d",
+   "bytes": 7643054
+  },
+  "experiments/data/search-mirror-v2/games/attempts/c30a99c7d1a5dbe39ee32f349b2d021806c37015a414a889a71ceda0d6660efd.jsonl.gz": {
+   "sha256": "d0ebbe1f66b0c8079df4104855b25858f547174d7e3516bf471806d302a465a5",
+   "bytes": 11546361
+  },
+  "experiments/data/search-mirror-v2/games/attempts/c48d4116e8acbc8d6e2b21b09eec51cdd79e4140d5202b4875257674dad6bb8f.jsonl.gz": {
+   "sha256": "f9abf5bab6884fe1f52b298eb2ae3c343245f02287e32117794ddd4ee1595367",
+   "bytes": 20182462
+  },
+  "experiments/data/search-mirror-v2/games/attempts/c75c5b7ded1df47df15308c08a95cbe2e3a3b04ff559e61d254beeb5f49efbd9.jsonl.gz": {
+   "sha256": "7b4b39abbd2bbc8edd90283ea95c2965912ca0d5558aff7abbbf1ef513b23ba5",
+   "bytes": 4733683
+  },
+  "experiments/data/search-mirror-v2/games/attempts/c9344dd8f250df2b68008c305cf1d63638948aa846296c3c4cfc031ed8ce83a9.jsonl.gz": {
+   "sha256": "85ebd2d009ae6df31026d4d6a2872c073ee0a64f7c3d48e19320553492ac1442",
+   "bytes": 8699700
+  },
+  "experiments/data/search-mirror-v2/games/attempts/c97faff7b4955141b1cec9de213074f668bb628ef6c6208d8945c841a1175060.jsonl.gz": {
+   "sha256": "a8658e8d34ce523505d3007d67e9b6fb896f89020026c89e851eb02821c4faf1",
+   "bytes": 2058328
+  },
+  "experiments/data/search-mirror-v2/games/attempts/cb24dc835af6b533a114cb1a3299194db871bc4f9d9c6acfc1876a0014154a62.jsonl.gz": {
+   "sha256": "0b7e1c85bd701ded03fee182b1eb94e678b6f5b5a732e4aa96d20c6e0ba14d8d",
+   "bytes": 10865685
+  },
+  "experiments/data/search-mirror-v2/games/attempts/cbd5b2250a153671e01cc5e26fd3ffa033f0855f19dca392c4520fc66419edd4.jsonl.gz": {
+   "sha256": "abc65b188e633def2dc8593ad63c4b5be8a2c5fb0b4606afcc2b69a9618191df",
+   "bytes": 3262129
+  },
+  "experiments/data/search-mirror-v2/games/attempts/ced5d6b878a56b9a84e9a24c0d47b463be9c2263415c1b97d1b82b3c969c71f9.jsonl.gz": {
+   "sha256": "a53010c602d67c169e2e734413aba001895938839efc557a277eca671fb45874",
+   "bytes": 5069039
+  },
+  "experiments/data/search-mirror-v2/games/attempts/d51763959ab7a7a136033d30015c19ed20499656752e8a006dcca523d9e13a4f.jsonl.gz": {
+   "sha256": "0fa294620990ffb2a3ca090ff4c2b65395bb62d7efc6f074ff6aef2b835a2513",
+   "bytes": 8588455
+  },
+  "experiments/data/search-mirror-v2/games/attempts/d539db4db72d17320b751c8e9f2d469a96f2064a914c8ca6163ebcd64e4778c3.jsonl.gz": {
+   "sha256": "b82f7c84b5f0085e06385571103ab450bac306fdabef1ae85a00f73e8fb68386",
+   "bytes": 1218196
+  },
+  "experiments/data/search-mirror-v2/games/attempts/d7adb6ddb8b07e2ec9a86ff92e6902feac2f4c56d47d0d52d84281c6f79cdc11.jsonl.gz": {
+   "sha256": "e106ec1dccaa3b80f99d0fb10043780f100bbc946351dc9bf0775aede13f691f",
+   "bytes": 2004161
+  },
+  "experiments/data/search-mirror-v2/games/attempts/d87ca5dfd3b428fdb6b1e5ffb98681ff9bf6bd1de950f9f24f1d5263255f39cd.jsonl.gz": {
+   "sha256": "74f6a7c51d30f3c3698f5b02711e63a7aadc741712db369a8b696b0bbf1f2d19",
+   "bytes": 5936739
+  },
+  "experiments/data/search-mirror-v2/games/attempts/da4529a37f9bc60f98e289da0b20250c14b86c5cb9f33e3eb25bb107f33c2c10.jsonl.gz": {
+   "sha256": "ac7362b42dd3db9e63e0bc9503a617298d7f7488214771a2b4dc1400293de6a2",
+   "bytes": 5738415
+  },
+  "experiments/data/search-mirror-v2/games/attempts/dc5ae0572b7d97564ff62a777c5633de673c282f5b24dc5aad242a947cc6eee7.jsonl.gz": {
+   "sha256": "8b6d1a4ae0ce8ff090b24d97c9eaa8114b6b36d9921ce6dce078191beeb9cc09",
+   "bytes": 8680837
+  },
+  "experiments/data/search-mirror-v2/games/attempts/e1e11290e518abba039851151073a2b3da52436040ef0f650c80655010e805d5.jsonl.gz": {
+   "sha256": "10523ff151f885e421a1b639cec69fcc1b2e6588609631b2312c376aba6a8446",
+   "bytes": 3800046
+  },
+  "experiments/data/search-mirror-v2/games/attempts/e64f02b72cc67d8f10d1f129dee140d7e4d6062ca7feaadeb0f8ffec9e575ff4.jsonl.gz": {
+   "sha256": "0d2b1d03659b4e1a9ca818ed96dfa0f4ff7702a6ccd02e9497c5eee0df9c06a4",
+   "bytes": 22815695
+  },
+  "experiments/data/search-mirror-v2/games/attempts/e9fea66227360c171c1715d4bbb427a0dabe9be58faeeee0e7c920621fb9bda7.jsonl.gz": {
+   "sha256": "29a48b5b05c19e732952211873be08495f36d2dc534fedc07740385c59eaeda9",
+   "bytes": 22752047
+  },
+  "experiments/data/search-mirror-v2/games/attempts/ed6ddc55c208b6423ccf9133b1f5f058c387071362bae03f7f356e5c4de25ef6.jsonl.gz": {
+   "sha256": "059e71c1a563e18817b08fae50c2f2f0f2c4f7d9dd28fad61c49779fb9ea88bc",
+   "bytes": 14248954
+  },
+  "experiments/data/search-mirror-v2/games/attempts/ef41dd8456f761d8db52dd751260a640f0a81f6d5aaeac28b979aadf0cb9292d.jsonl.gz": {
+   "sha256": "fe506023eb9eb9f6740412883f0a8278e2653b9a668d91eac33bdaa4dc021ff2",
+   "bytes": 15020199
+  },
+  "experiments/data/search-mirror-v2/games/attempts/f1228866ee815d47d9a33cfd73ee997d131350e6d37c851113c0f7f342176850.jsonl.gz": {
+   "sha256": "22e12034d9133925cd49114d74292b543062b8fe408b2871449d312576b79993",
+   "bytes": 7394166
+  },
+  "experiments/data/search-mirror-v2/games/attempts/f454aa21c59fcd09048f72eac1189a41dc0cb32455b2b5a81b97fc26c6af65ef.jsonl.gz": {
+   "sha256": "c8ee8d737d2902cfb5c1337d182b02beafb713c780fd17d555376f10f9a1ea68",
+   "bytes": 22480875
+  },
+  "experiments/data/search-mirror-v2/games/attempts/f55d24ff467232d5476d6f57ae16129a14c685ba59794c915a05c3c303740687.jsonl.gz": {
+   "sha256": "02aced42088e336544a497d8321d3af6f55963cff657c4fe6b308826a3d42fb4",
+   "bytes": 4497767
+  },
+  "experiments/data/search-mirror-v2/games/attempts/f922ee2732a964a92d7c9f02afc073b59253d0e1223f4eaa6dfa634d9e7ba0eb.jsonl.gz": {
+   "sha256": "e68e92e5aa0e5f076d029429ef4303196b8e31c72acb1c807fc19e78b63c3b57",
+   "bytes": 10300492
+  },
+  "experiments/data/search-mirror-v2/games/attempts/fa3fa66333a809db030f28f10aabbc3f566e5d218ef73a5d029b0d070798c619.jsonl.gz": {
+   "sha256": "6ec1617e341ca98caf8700f035ca82f1273856337041380c496333c422b83a3b",
+   "bytes": 9155527
+  },
+  "experiments/data/search-mirror-v2/games/attempts/fb4152cce03f1f1ca0760b4f8bc6d50229cc03c5f3e6220cae6225ebaef1f8d2.jsonl.gz": {
+   "sha256": "14ceb0fd711225c51eb7e22b472f8b192811ebef6a7a51c2f7ae354155b6df3d",
+   "bytes": 9884401
+  },
+  "experiments/data/search-mirror-v2/games/attempts/fb70bd564820f0d799601246300a559df2abadb36572d918be53333468426a02.jsonl.gz": {
+   "sha256": "2e3904ba94eb3083e1ed5b21bb571bb3b1614be218c8609ab3e034fd7159c028",
+   "bytes": 1987031
+  },
+  "experiments/data/search-mirror-v2/games/attempts/fc43bb1c6e263dc0fa17c32cd241d8fff152aad19192c9a618a61b92663249a1.jsonl.gz": {
+   "sha256": "d28c1b522fdbe0f8018cd6370d6c7e0000544cd1c81f062f85082ce39dd7ec97",
+   "bytes": 40438069
+  },
   "experiments/data/search-mirror-v2/games/attempts/ff1e1134506ff5a777baa9d0de580fe6038c5d3a3364fd9deccf5b999db212ca.jsonl.gz": {
    "sha256": "9a14d4b0e1b9539c6515af7325926f8fea7a28f298b50b82c012f25f19f3a457",
    "bytes": 4056887
   },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-0.jsonl.gz": {
+   "sha256": "e6c50ffcbbd1e9f3cf3d56c448b1dd8111ff8f8b08d560cf538c214bd3f65347",
+   "bytes": 31000
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-1.jsonl.gz": {
+   "sha256": "a2b808b5faae44a02f5c800f7de4ebadc55272b059147bb0ae67a889abde75cc",
+   "bytes": 47757
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-2.jsonl.gz": {
+   "sha256": "dad4fa2947aea27584846d30b6038f953bf2808ef2f1b562d628e6f55c4430e3",
+   "bytes": 35855
+  },
   "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-3.jsonl.gz": {
-   "sha256": "5f6e3dfff504bd95ca02c87b0d405cb5392c90a902d7b0d308b4cf9af80e3d91",
-   "bytes": 2479
+   "sha256": "376b47d4a7b89bf747a1b1f30e02fe0cada2a880ecf67464eb29374e9ec6b6de",
+   "bytes": 40536
   },
   "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-4.jsonl.gz": {
-   "sha256": "475c7ba2267450c2125396729fd9980323e56d6da14acad680b25a1e0156844b",
-   "bytes": 2458
+   "sha256": "8cb80369e4f3ae1a44385376079d49dbe8e2c2b35bda173544c7eec55c09e723",
+   "bytes": 30944
+  },
+  "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-5.jsonl.gz": {
+   "sha256": "55d75eec34037785f0f3b2c8ea83cb1c9f8809bbf18f47d3aba10447da43a3f0",
+   "bytes": 37410
   },
   "experiments/data/search-mirror-v2/games/decisions-mini-heart.local-6.jsonl.gz": {
-   "sha256": "167cf382850d6abe4d1ba61be3c5bd53164f9bdbdf82c8ee1149cb17e755792a",
-   "bytes": 2978
+   "sha256": "ee9fcd13f65591bc1f237a24aa5b0d30927b9af14c67db8f7e98215abf0630bd",
+   "bytes": 34217
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-0.jsonl": {
+   "sha256": "3323bd339f9ca8a2e2843af0a5d4d02f1eb35e935485faf545b93c97bb8b6cd0",
+   "bytes": 2910
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-1.jsonl": {
+   "sha256": "884fb0fb15ec220456bab9604466228d0ced727746bf94edf0ac84aa6038a4a8",
+   "bytes": 7258
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-2.jsonl": {
+   "sha256": "98c1f0024e4e82b6542fbf4b40c9859b01e15221fcce0fdc9e3c654697e6dda3",
+   "bytes": 5809
   },
   "experiments/data/search-mirror-v2/games/games-mini-heart.local-3.jsonl": {
-   "sha256": "5f56ae73282b8ff503ddc1d1298c04ba9e130958a50c35ec3c5dfaf7e87ca5c5",
-   "bytes": 483
+   "sha256": "87da56798a41f037f52a89de7b8759ec9c827039c87d35736094056fbbdc0efc",
+   "bytes": 6299
   },
   "experiments/data/search-mirror-v2/games/games-mini-heart.local-4.jsonl": {
-   "sha256": "dc214b1b379899526713466a78a68c744b6e09c61806eb148672e1b0c31dc27e",
-   "bytes": 483
+   "sha256": "bbab016c9de33d1f91eb2bf222082bdc9109279a9f6d7dc6c36f4782962f0983",
+   "bytes": 4841
+  },
+  "experiments/data/search-mirror-v2/games/games-mini-heart.local-5.jsonl": {
+   "sha256": "86b67a61433426e31132c64f51e6ffd94defdab7fe8afd7785e93ffc70e53f91",
+   "bytes": 5327
   },
   "experiments/data/search-mirror-v2/games/games-mini-heart.local-6.jsonl": {
-   "sha256": "0c1902cd4b497c2cae5d33ae2caeebc146937aa6c2326d652134d6fe13251908",
-   "bytes": 484
+   "sha256": "65d61208f636c568767566e954698f3c01f3c723a417382f210ace96efe954a2",
+   "bytes": 5330
   },
   "experiments/data/search-mirror-v2/games/identity.json": {
    "sha256": "c658032f939381e72b5b906283f394ba61ba8649465f1eaae7ec447d6d886cdc",
@@ -3862,6 +4194,14 @@
    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
    "bytes": 0
   },
+  "experiments/data/search-mirror-v2/reconciliation/analysis-prior-snapshot.json": {
+   "sha256": "5826057ac775bce25d0fc1a740647643b237d6a0cfeb58260a44bfe239aa3aa0",
+   "bytes": 7077
+  },
+  "experiments/data/search-mirror-v2/reconciliation/analysis-verification.json": {
+   "sha256": "ca743b72a08d203656b37f3c0fb1752b440dbb329fd33934c92009541f8e1971",
+   "bytes": 510
+  },
   "experiments/data/search-mirror-v2/reconciliation/audit-campaign.py": {
    "sha256": "1a93ef5edfe5c6691886ae17d6a6e5f7f506c9b8371ca9373509fa54287d3d2a",
    "bytes": 5581
@@ -3879,8 +4219,8 @@
    "bytes": 2813
   },
   "experiments/data/search-mirror-v2/reconciliation/campaign-validation.json": {
-   "sha256": "94b89cf9087aff2888128162cc81c75f06fd92c1868598253129b21514f2ed36",
-   "bytes": 425
+   "sha256": "126fc958339f1bb07e6326fe09cb0f7075e29c6bd948a16fd86afaf8e688fb38",
+   "bytes": 434
   },
   "experiments/data/search-mirror-v2/reconciliation/collection.log": {
    "sha256": "807f2acbf6fa9dd1b72a5b65a6f5d82be779ce9f0b80ac2f9dfca9bd45294139",
@@ -3895,16 +4235,16 @@
    "bytes": 11062
   },
   "experiments/data/search-mirror-v2/reconciliation/launcher-inventory.json": {
-   "sha256": "fdf65d7acda67b665d943fb22dda96de02b2c684f8fea72ddf8b8b96185157da",
-   "bytes": 2305
+   "sha256": "724a95430470a43782ea694c777d3c3c915ad8ca329328e83fd5b762840223cd",
+   "bytes": 2332
   },
   "experiments/data/search-mirror-v2/reconciliation/read-snapshot.py": {
    "sha256": "3e895e0446ff51c2119e67086c13a50d430e50f8fee252836b235c65d96db61d",
    "bytes": 4665
   },
   "experiments/data/search-mirror-v2/reconciliation/remote-inventory.json": {
-   "sha256": "5826057ac775bce25d0fc1a740647643b237d6a0cfeb58260a44bfe239aa3aa0",
-   "bytes": 7077
+   "sha256": "67802c0ba4f1d6c26b646121df914ac4f6be73de47d394c8f5b11c4d19eaf48d",
+   "bytes": 28428
   },
   "experiments/data/search-mirror-v2/reconciliation/smoke-completion.json": {
    "sha256": "a4f7689ffa600799b88c863d7e8211b42c2104ad6fefe46271ca1636ff92cd60",
@@ -3923,8 +4263,8 @@
    "bytes": 901
   },
   "experiments/data/search-mirror-v2/reconciliation/validation.json": {
-   "sha256": "45f6547b0ab16741f60f3a6d4cfb98d2d87f386c51bc9430dd302ae64e32fad0",
-   "bytes": 3321
+   "sha256": "38e978804726c99d5c17d00354349eeb5e3215eadcfd4e77f7252b63c04e9318",
+   "bytes": 3436
   },
   "experiments/data/search-mirror-v2/smoke/attempts/08573d967c20e4d0b1b6a179b302ee8269e319a2b3320fc2de5deeea19cc9f7c.jsonl.gz": {
    "sha256": "d6e5c98446ba6f2b09da5b13db386fcc25b55ccc8b5acbe4c3f75869c4df9439",
