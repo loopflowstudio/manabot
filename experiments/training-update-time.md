@@ -1,17 +1,19 @@
 # Training seconds per update — b015d5
 
-2026-11-05. Why self-play updates went from 28-36 s (MTG-181) to ~53 s (MTG-252),
+Original investigation, 2026-11-05. Why self-play updates went from 28-36 s (MTG-181) to ~53 s (MTG-252),
 what was fixed, and which machines to rent. No recipe, world or observation
 version changed. No GPU was rented: GPU rows are retained receipts, and the
-"after" GPU figure below is a projection, not a measurement.
+"after" GPU figure below is a projection, not a measurement. Subsequent rented
+experiments are reported in the machine recommendation and the step-3 results below.
 
 ## Finding
 
-**The slowdown is mostly the rented host, not the world.** The same w13 recipe
+**For the original small-model comparison, the slowdown is mostly the rented host.** The same w13 recipe
 and GPU took 29.8 s on one host and 53.5 s on another. On a fast host, w13 to w17
 costs 10% per update. With one producer, which `elemental-uniform` requires, training
 occupies exactly one CPU thread, so the machine's single-thread speed sets the pace;
-extra vCPUs and a larger GPU buy nothing.
+extra vCPUs and a larger GPU bought no speed in that comparison. The later size
+ladder does not support extending that conclusion to larger models.
 
 | Suspect | Verdict |
 |---|---|
@@ -157,7 +159,7 @@ replaces this with a measurement.
 
 ## Machine recommendation
 
-- **Pack four seeds per machine, one producer each,** through Etude `--slots 4`.
+- **At w64, pack four seeds per machine, one producer each,** through Etude `--slots 4`.
   On one A4000 (16 vCPUs, $.25/hour) four seeds gave 2.3x the learner decisions of
   one, at $.023 against $.053 per million. Packed and solo runs of a seed learn
   identically on CPU (training digests equal). On CUDA they stay within run-to-run
@@ -169,7 +171,8 @@ replaces this with a measurement.
   Evidence: `experiments/data/training-throughput-b015d5-v1/report.md`.
 - **Choose single-thread speed, not vCPUs.** Do not pay for vCPUs above the current
   6-vCPU floor for one run. Lower floors were not tested.
-- **Rent L4, not A40,** for this recipe: A40 was no faster on matching hosts.
+- **At the original small size, L4 matched A40** on matching hosts. Larger-model
+  choices need the size-specific readings below.
 - **Screen hosts.** On a 256-stream, two-seat Elemental run, read the median of
   `time/collection/environment_step_and_encoding` over updates 2-11. Below 8 s is a
   fast host. Above 9 s is slow: replace it with `etude cancel <run>`, then relaunch
@@ -202,3 +205,46 @@ Next levers, not attempted: `elemental-uniform` requires one producer, so steppi
 rows per update, which rewards fewer launches. Packing is measured above.
 
 Reproduce: `uv run python scripts/bench_training_update.py --streams 256 --updates 3`.
+
+## Step 3: measured size ladder (2026-11-08)
+
+Frozen `cb722dc8c`, Elemental w17, input v6 / 512 facts, **effective hashed
+records**, 256 streams, two seats and one producer. These are short solo runs on
+one host per GPU; prices include the approximate billed rate but exclude setup.
+
+| Size / precision | A4000, EPYC 7702 | L4, EPYC 9254 | A40, Xeon Gold 6342 |
+|---|---:|---:|---:|
+| w128l4 float32 | 45.6 s/update | 35.4 | 42.6 |
+| w160l8 float32 | 94.7 | 75.0 | 63.1 |
+| w160l8 TF32 | 72.9 | 68.3 | 59.9 |
+
+A4000 is cheapest among these measured cells; L4 is fastest at w128l4 and A40
+at w160l8. CPU classes and CUDA trajectories differ, so this is not an isolated
+GPU comparison. At w160l8 float32, inference plus learning accounts for about
+58–72 seconds on A4000/L4 and 48 seconds on A40. Larger models no longer support
+the original small-model claim that a larger GPU buys no speed.
+
+Packing's crossover remains unknown: all seven packed cells lacked three
+overlapping post-warmup updates per run under the frozen four-update schedule.
+BF16 failed twice before its first decision on each GPU at the semantic-card
+dtype join ([ed2300](loopflow://manabot/task/ed2300)). The failure rule stopped
+each ladder before a384l8. No repair or replacement campaign was launched.
+
+TF32 is a speed candidate, not an established learning-equivalent default. A40's
+12-update check stayed finite, but clip fraction moved 3.45 times the float32
+repeat difference, and KL/row counts/game length moved roughly 2.5–2.7 times.
+No strength evaluation was run. At $100 / 336 hours, the short-run rates project
+about 26,100 w128l4 float32 updates or 16,300 w160l8 TF32 updates on one A4000;
+the latter is conditional on accepting that uncertainty (float32: about 12,600).
+Larger-size pack-4/halving plans and learning curves remain unmeasured.
+
+The retained overhead audit identifies learner index/observation round trips,
+action compaction, collection device-to-host transfers and host recording
+allocation as profile candidates. It preserves the existing transfer batching
+and c5fba4's ownership of shared-effect catalog lookups. None is a measured repair.
+
+Evidence: `experiments/data/training-throughput-b015d5-v1/report.md`, Step 3;
+`step-3/speed-table.json`, `reconciliation.json`, `overhead-audit.md` and
+`size-readings.png`. All 33 runs reconcile: 132 updates, 6,909,047 learner
+decisions, zero nonfinite values/rejected steps. All rentals are released;
+inclusive step-3 cost is about $1.74, pending final billing.
