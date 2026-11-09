@@ -1,5 +1,18 @@
 # Mirror search continuation
 
+## Active extension — 2026-11-09
+
+Current direction: “i want to try 8 and 16 shuffles, and then i want to combine
+magic mirror with uniform random vs oracle”. The prospective bounded plan is
+`experiments/protocols/search-mirror-v2.md`: first beta 0.01 at depth 20 with
+8/16 oracle worlds; then uniform versions of those and the beta 0.03/four-world
+reference. Five thousand new games, same deals/opponents, owned mini, no rental.
+Prior statements below that the extension is unapproved are superseded.
+Keep v1 evidence unchanged. MTG-268 is still idle with no w13 admission; use
+the existing sequential implementation rather than blocking this extension
+on batching. Implement the minimal runner changes, validate, launch and analyze
+without another design-review loop. The protocol records bounds and controls.
+
 ## Current direction — continue the retained experiment
 
 The conversation supersedes the design-review stop: “i dont think i need to
