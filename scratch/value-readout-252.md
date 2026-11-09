@@ -1,5 +1,19 @@
 # MTG-252 — critic readout comparison: implementation status (2026-11-05)
 
+## Evaluation launch recovery (2026-11-09)
+
+The checkpoint fix passed, but the subsequent launch failed at RunPod create:
+`POST pods: status 400`, `create reply unknown`. Launch `333d5f73aa2a`
+for `value-readout-252-v1-ef63a17c6cee` recorded no run and no job execution.
+The log is `/tmp/mtg252-depth4-eval-retry.log`. At 18:12 UTC RunPod listed no
+pods; `etude terminate cpu32-a96bebe16581` reconciled its displayed estimate
+from USD1.44 to USD0.00. `etude availability cpu32` reported capacity at
+USD.96/hour, 0 of 1 in use. A new eval invocation began at 18:12 UTC with
+the same USD3 job cap; output is `/tmp/mtg252-depth4-eval-20261109.log`.
+Its launch is not yet confirmed. No new strength results exist at this check.
+The last controller loop shown before retry was 03:41 UTC; do not infer a
+working watcher or active evaluation from a pending CLI alone.
+
 ## Resumed conversation (2026-11-08)
 
 Latest status check: all six depth-4 runs succeeded at update 300. The watcher
