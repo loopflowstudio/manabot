@@ -3447,60 +3447,88 @@
    "bytes": 6737
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-0.jsonl.gz": {
-   "sha256": "a6f38250721696e4518085a3e26c79548341c1d336c95c58650679002896ac71",
-   "bytes": 2490696
+   "sha256": "c8c50939c5d6610597bd503b17cbb2ea7e0ba8409d33826915d62e556540d25e",
+   "bytes": 4178491
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-1.jsonl.gz": {
-   "sha256": "3d5b97378c82a6302628b4df259c0c720e6447de8f5688378b6ec2c455be42b2",
-   "bytes": 2539618
+   "sha256": "af67dbd98e73f7e4624038ee3bc1bb0c55adc2d7a3a37ce1038af09136d3e5fa",
+   "bytes": 4117454
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-2.jsonl.gz": {
-   "sha256": "8acf38db3ce38e57f681e7a549b0e96ed24224f485cd42e06799f0c99d12f6cc",
-   "bytes": 2685171
+   "sha256": "0c029382b359028ffebc76e7c969029940ce061856cef4fbd8fdcc087274e484",
+   "bytes": 4073788
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-3.jsonl.gz": {
-   "sha256": "4ac922a3655394fa59d66b000f16d9bf133ecff0ecbc232bedc75c76bdc3f85b",
-   "bytes": 2594598
+   "sha256": "00931dba98404e802b46e85374051eff30c236121033a20deb032ceae1e7444b",
+   "bytes": 4142442
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-4.jsonl.gz": {
-   "sha256": "33b3ce8038c93751da8d935c4b67a5a9e7b86eac2814f9f0094259570ac09b59",
-   "bytes": 2519781
+   "sha256": "24a75881fa51c98b078877b2e783fe23b94e990defe5422470a5e70575aa481b",
+   "bytes": 4087044
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-5.jsonl.gz": {
-   "sha256": "8c2cace6a7784339e0615a3324a383495a3436890269c02e6f80df6ad1cb1c0d",
-   "bytes": 2567970
+   "sha256": "d9cc8a76af3afea66e852b16edf96a84fef009c9571555a026543af38cb0525c",
+   "bytes": 4176157
   },
   "experiments/data/search-mirror-v1/games/decisions-mini-heart.local-6.jsonl.gz": {
-   "sha256": "abd31a059bd6c913406cea4fdb0c75736b9d152ad69a8bd04c75a9444d0ecd7e",
-   "bytes": 2539766
+   "sha256": "69d252b7a6b92ddaf2abeaec794172d58543a18ba9913dccdc1d59256c0a7b49",
+   "bytes": 4145597
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-0.jsonl": {
-   "sha256": "244b6e86591fb3a18f7709fb760bda75ed50755c66c37656f6c3a5cc70b0482a",
-   "bytes": 250250
+   "sha256": "a6c04dd63a4a9c4fc732efd9a6c8d53208ba3e3bfadd943b0f13fb2978107994",
+   "bytes": 429158
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-1.jsonl": {
-   "sha256": "4a56ff35717f80d3642772416944d5902cd194fdcbd192a17e10f6ae6e0545b8",
-   "bytes": 259241
+   "sha256": "c2f08554112247a7d3da6711b67aed7caff5d979554ac5f9bc040739f6aa3569",
+   "bytes": 429195
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-2.jsonl": {
-   "sha256": "b23d1f99e12d6da468dd03e36f7e03b2d79b6fa54c0754d2521f3d8e445b3d1a",
-   "bytes": 288128
+   "sha256": "5d3c5092f59421d402155c49219f73f4a219f12467aad69b7f2aa392a67dd65d",
+   "bytes": 429556
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-3.jsonl": {
-   "sha256": "2ce83a724ed265cade40b2d8fb03c186b8f19f0044ba1fec8a561ffe23c40cb9",
-   "bytes": 264918
+   "sha256": "e78912204f3f12a4583bc1fb1c054a0dcfc08c3e9519dbc2ce406c12604289ed",
+   "bytes": 428483
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-4.jsonl": {
-   "sha256": "6d68203d5baccd2de47164ea8116c493e958d4d9fd32bbcc8de09f5c80149c4a",
-   "bytes": 260008
+   "sha256": "cf887b32c70747c53054afe501e7fbb1696f064b64fbc3586a8e5905f366f8db",
+   "bytes": 428439
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-5.jsonl": {
-   "sha256": "9195583353107d9ea1d1169229dc9c94b9e27440a2d615e7944392cfdfb02722",
-   "bytes": 261143
+   "sha256": "44b11a0e32db5a269261a521e0d3424438fda99f49ee7134034fb5e196dabd17",
+   "bytes": 428463
   },
   "experiments/data/search-mirror-v1/games/games-mini-heart.local-6.jsonl": {
-   "sha256": "7fd65cf7700fa27beab4269d93d480e7043b26a3c525a88ac7c227b0ed986e33",
-   "bytes": 254368
+   "sha256": "1f966d7405b7084d04974192023660328763b11e758665b63317b8ac9b194ad3",
+   "bytes": 428067
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-0.log": {
+   "sha256": "574170f8938460379f0b008ec867a6828e766ff8c149c8e47727cf8b55b3060c",
+   "bytes": 2499
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-1.log": {
+   "sha256": "8f7cbede54cd1d32d4d8207fd7e020861637a2ce3fe69858cbbaac249d0ed3f8",
+   "bytes": 1164
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-2.log": {
+   "sha256": "1b3d1315322aeb43228080e4afa973b210608a6199b729c953bf5151978f0117",
+   "bytes": 4974
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-3.log": {
+   "sha256": "41715997099afb37f7165106f6f7854b23413c7a356c9b1befc3d1d01f53960b",
+   "bytes": 702
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-4.log": {
+   "sha256": "573857c73d71211566e9459fb95ce68c8f3b6a0ca7d77c4aa5a532ce533b3f7f",
+   "bytes": 2140
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-5.log": {
+   "sha256": "ea4febfb6a5ef1e9c19ab631f9d844cadc4bc73bfd1ea462a18620eb960741e1",
+   "bytes": 1059
+  },
+  "experiments/data/search-mirror-v1/games/logs/worker-6.log": {
+   "sha256": "aacb2adfc71d6c1a57dd93c4f4198d5eed08f762dd36333ba3af62078dde8e73",
+   "bytes": 583
   },
   "experiments/data/search-mirror-v1/noise/games-mini-heart.local-0.txt": {
    "sha256": "ba71682a89290fa37acd2af5bf1795aeb7f4041f0a6c5d55618afa18a1d52320",
@@ -3513,6 +3541,34 @@
   "experiments/data/search-mirror-v1/noise/worker-0.log": {
    "sha256": "c742f12e2aec9eb62997031f09c327e9889405997d5468aa965bc54d0d1aa4da",
    "bytes": 1938
+  },
+  "experiments/data/search-mirror-v1/reconciliation/audit.py": {
+   "sha256": "b584c98ad0d3dc6881aa180b221284fadf31dc119b74fcce0fb27e5e2129a754",
+   "bytes": 11809
+  },
+  "experiments/data/search-mirror-v1/reconciliation/execution.json": {
+   "sha256": "d21979493c924f5e909ed0e2359697326661ae45fd2a297166e994104ee95246",
+   "bytes": 13784
+  },
+  "experiments/data/search-mirror-v1/reconciliation/historical-execution.json": {
+   "sha256": "8ed9f5fe0b7e88a23fa2ddbcc0ed21574e840661ec37e50e7906f4635bc96228",
+   "bytes": 6902
+  },
+  "experiments/data/search-mirror-v1/reconciliation/prior-snapshot.json": {
+   "sha256": "50b74a1cb0746c2d82beec6d72ea9a4a256812f327a597b9d1709330f8ed0dcb",
+   "bytes": 3843
+  },
+  "experiments/data/search-mirror-v1/reconciliation/remote-inventory.json": {
+   "sha256": "385088171fd73eb83f89f4b6ffe5e1b70a3b525649d28675ab6705927b51f387",
+   "bytes": 6766
+  },
+  "experiments/data/search-mirror-v1/reconciliation/source/search_mirror_noise.py": {
+   "sha256": "622d44d0191a31d39e93cd68fb97a13610435e2193fcbfd6936b7c6bea24814f",
+   "bytes": 12334
+  },
+  "experiments/data/search-mirror-v1/reconciliation/source/search_scaling.py": {
+   "sha256": "b4191941212de7c6602722f7ed86f82f6f40e72b3af8ec7ab10919c464a0973c",
+   "bytes": 16029
   },
   "experiments/data/search-mirror-v1/report.html": {
    "sha256": "3d1c29f739031eed158c9586fcb05f2720c5715343e87e4d2042cd040b3e0a00",

@@ -1,7 +1,8 @@
 # Magnetic-mirror search on MTG-183
 
-Status: continuation of the existing experiment in MTG-269, 2026-11-08.
-Finish and analyze the existing oracle campaign under its original authority;
+Status: retained execution complete and reconciled, 2026-11-09; final analysis
+is the next experiment Graph step. All 8,000 planned outcomes are retained.
+Analyze the existing oracle campaign under its original authority;
 Task adoption does not reopen its design or require another approval. Preserve
 all existing work and resume only what remains. Follow-up settings and bounds
 below remain separate proposals and do not block this campaign's completion.
@@ -64,17 +65,87 @@ deals) and 14.59 against policy (305) over sampled policy. Gains over PUCT-1024
 oracle are 4.25 and 8.52 points against those same opponents, not head-to-head.
 Selection and repeated interim inspection make these exploratory results.
 
-Live reconciliation at **2026-11-08 23:40:23 UTC** found **7,657 unique game
-rows, zero duplicates, zero invalid**, with 477–481 rows per arm. Worker 2 has
-no missing assigned keys and has exited; workers 0, 1, 3, 4, 5, 6 remain live.
-Missing assigned keys are respectively 76, 42, 0, 23, 47, 79, 76 (343 total).
-Do not restart worker 2 or create another worker set. These are live inventory
-counts, not a refreshed published strength report or a final immutable snapshot.
+Historical reconciliation at **2026-11-08 23:40:23 UTC** found **7,657 unique game
+rows, zero duplicates, zero invalid**, with 477–481 rows per arm. Worker 2 had
+finished; six workers remained live, with 343 keys outstanding. The completed
+snapshot below supersedes that execution inventory.
 
 Noise-v1 is complete: 300 positions, 21 distinct deals, all at grid index 5.
 The prior summary reports mean single-rollout SD 0.183, between-action mean-Q
 SD 0.066, and 41.5 seconds per measured position. Its 20 subsampling draws per
 position are resamples, not 20 independent positions or training seeds.
+
+## Completed execution reconciliation — 2026-11-09
+
+The mini's last game-file write was **2026-11-09 01:14:12 UTC**. Read-only SSH
+inspection from 02:35 UTC found no mirror or noise workers. All original workers
+had exited; no restart, new game, training update, rental or resource termination
+was needed. The owned mini remains available; no process was started in this step.
+
+The final snapshot contains **8,000 unique planned game keys, zero missing,
+unexpected, duplicate or invalid rows**. Every row matches the frozen arm,
+deal, deck pair and seat. Each of 16 arms has 500 valid outcomes, five in each
+of 100 ordered deck cells, with 246 seat-0 and 254 seat-1 games. All **771,862
+decision rows** match their games' declared counts and consecutive indices;
+there are no duplicate decisions, orphan decisions, partial JSON/gzip tails,
+or missing decision records. Noise has 300 unique positions from 41 completed
+opponent/deal entries on 21 distinct deals, all at index 5, with 64 rollouts
+per supported move and no failed-game lines in its retained log.
+
+Evidence lives under `experiments/data/search-mirror-v1/`: final `games/`,
+unchanged `noise/`, and `reconciliation/{execution,remote-inventory,
+prior-snapshot,historical-execution}.json`. `reconciliation/audit.py` records
+the read-only audit; `games/logs/` retains all seven worker logs. Artifact bytes
+are published through the existing content-addressed store before their manifest.
+The prior 19 manifest files were verified, and rebuilding the 4,899-game summary
+and HTML reproduced both exactly. Every prior game/decision file is an unchanged
+byte prefix of its final file; prior hashes and store location remain in
+`prior-snapshot.json` and manifest commit `a856e267c1a01777e9d26583e55fe95f13e70fd2`.
+The HTML and strength summary still describe that interim snapshot until the
+following analysis step replaces them; these execution counts are not new
+strength estimates.
+
+Retained numerical values are finite, probability vectors stay within [0, 1],
+and lengths/chosen indices align. Five-decimal probability logging yields a
+maximum normalization discrepancy of 0.00006; 882 chosen actions have base
+probability rounded to zero, so exact policy support cannot be reconstructed
+from those rounded arrays. The scalar PPO value head is explicitly unconstrained:
+141,355 decisions have at least one |Q| > 1, with maximum |Q| 1.2144. This is
+retained estimator behavior, not a nonfinite failure or a probability estimate.
+Do not clip or reinterpret it. There are 430,505 recorded terminal rollouts.
+
+**Zero invalid outcomes does not establish clean observation encoding.** Logs
+retain 104 invalid-focus warnings and seven event-list truncations (33–39 events
+reduced to capacity 32). No overflow policy or engine behavior was changed.
+Full Commands/root state were not captured, so these logs do not support a new
+replay proof or a reproduced defect diagnosis. Keep this limitation in the report.
+
+Current mini runner, local-update, lock and checkpoint hashes match the identities
+above. Remote noise analysis differs from the local report adapter, and remote
+`search_scaling.py` predates rented-host orchestration. The noise capture functions
+and mirror-imported `Condition`, `_opponent`, `_done` are AST-identical; both
+remote source files and their hashes are retained. These checks remain observations
+of disk bytes, not retrospective loaded-source admission receipts.
+
+Historical launch output records a seven-worker restart on 2026-11-07 at 13:03 UTC
+when four-shuffle arms were added: 89 completed rows were preserved and all seven
+gzip streams read successfully. Uncommitted interrupted attempts lack receipts;
+they are not ordinary failed games and cannot be counted exactly. Deleted smoke
+artifacts survive only as printed output: 12 mirror games (228.62 elapsed seconds)
+and two noise positions (94.75 seconds), with preceding preparation failures.
+The smoke's rounded-base log warning was fixed before the retained noise run.
+
+Measured mirror hero time totals **880,759.4953 seconds (244.6554 hours)**;
+retained noise searches total **12,440.327 seconds**. Neither is inclusive worker
+time: setup, opponent decisions, interrupted attempts, and other overhead are
+excluded. Exact total worker-hours, inclusive energy/storage costs, and historical
+PUCT rental accounting remain unavailable. The retained mirror campaign uses
+the owned mini with $0 rental spend; this reconciliation adds $0 rental spend.
+The retained Etude SDK rejects the local launcher database as another schema
+version, so `status`, `machines`, and mirror-filtered `runs` could not establish
+controller inventory. The database was left unchanged; no empty inventory or
+remaining rental budget is inferred. MTG-268 remains idle with its Graph stopped
+at loop-or-next, pass 6, and no PR; its batching work was not restarted.
 
 ## Retained executable protocol
 

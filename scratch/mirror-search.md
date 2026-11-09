@@ -11,6 +11,36 @@ work, block on MTG-268, or require prospective capture upgrades for historical
 results. The proposed 5,000-game extension is separate, not approved or required
 to finish the original sweep. Preserve all evidence and report its limitations.
 
+## Execution handoff — 2026-11-09
+
+The original run is complete: 8,000/8,000 unique valid planned outcomes, 500 per
+arm, with no missing/duplicate/unexpected keys. Last mini game-file write:
+01:14:12 UTC. No mirror/noise workers remained at read-only inspection; no new
+execution or rental was launched. All 771,862 decision records reconcile with
+game counts/indices, with no orphans, duplicates or malformed tails. Noise:
+300 positions, 41 completed opponent/deal entries, 21 distinct deals.
+
+Final files are published at `experiments/data/search-mirror-v1/games/`; reconciliation
+receipts and the audit script are in its sibling `reconciliation/`. Seven worker
+logs are retained in `games/logs/`. The owning protocol now records full execution
+status and accounting limits. Publication changed 28 manifest entries; all 33
+current mirror-study files verify against the manifest. The untracked-data check
+passed (1 test); pytest ran through an ephemeral `--with pytest` overlay because
+the established analysis environment does not include it. The 4,899-game report reproduced exactly before
+the copy, and all original evidence bytes remain prefixes of the final files.
+The existing HTML/summary are still the interim report: the next Graph step is
+`experiment-analysis`, using the final snapshot and required report corrections
+already listed in the protocol. No additional execution or design review is needed.
+
+Keep these observed limitations in the report: 104 invalid-focus warnings, seven
+event truncations to 32, rounded base probabilities (882 chosen actions round
+to zero), and unconstrained scalar Q (maximum |Q| 1.2144; all retained values
+finite). Historical restart preserved 89 completed games; in-flight attempts lack
+receipts. The removed smoke runs retain only printed results/timing. Hero search
+time is 244.6554 hours, not inclusive worker-hours. Etude inventory reads fail
+because the retained SDK rejects the current local launcher DB schema; leave it
+untouched and do not infer remaining budget. MTG-268 remains idle/no PR.
+
 ## Design handoff — 2026-11-08 23:40 UTC
 
 The reconstructed owning protocol is

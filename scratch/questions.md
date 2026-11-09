@@ -6,6 +6,14 @@ They do not select current work or authorize paid execution.
 
 # MTG-269 design assumptions (2026-11-08)
 
+Execution reconciliation (2026-11-09): use the established analysis environment
+at `/Users/jack/src/manabot.search` through `uv run --project ... --no-sync`,
+importing source from this frozen checkout. Publish final game-file pointers in
+the existing store and preserve prior content hashes in a reconciliation receipt.
+Leave the 4,899-game HTML/summary intact until the following analysis Graph step
+can make the necessary report corrections together. No environment upgrade,
+engine rebuild, launcher DB migration or new execution is needed.
+
 - The existing runner is the retained campaign's authority for settings and
   schedule; `experiments/protocols/search-mirror-v1.md` reconstructs it without
   retroactive preregistration. The original source copy lacks a complete launch
