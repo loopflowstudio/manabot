@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 built, not frozen)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 software implemented; freeze pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -23,8 +23,15 @@ Jack Heart approved execution (2026-11-07, comment e89d4889), and step 2 has run
 its execution record). Jack Heart accepted step 2's evidence and set step 3's objective
 (2026-11-07, comment 1f4c2872), then refocused it on large-model speed (comments
 8ac4eb82, 518e5f09 and b9215b8a). Jack Heart accepted step 3's design (2026-11-07,
-comment 17799706). Its software is built (see "Software before step 3 freezes"); it is
-not yet landed or frozen, and nothing has been rented for it.
+comment 17799706). Its software landed as `cb722dc8c` (PR #448), and step 3 is frozen at
+that commit (see its freeze receipt). Jack Heart replied "sounds fine" at execution
+review (2026-11-08, comment 9b373121), approving the frozen A4000/L4/A40 run within
+the $10 step reservation and $50 inclusive cap. Step 3 stopped at its frozen failure
+rules on all three GPUs. Its evidence is retained; all rentals are released.
+Jack Heart then said "keep going" after the recommendation to repair BF16,
+lengthen packed cells and complete missing measurements (2026-11-08, comment
+079b3f46). The prospective continuation below governs new runs; the original
+step-3 design, freeze and results remain historical evidence.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -36,9 +43,16 @@ its runs.
   evaluation, failures and machine setup, and the comment asks to spend no more
   than needed. The same comment sends design and execution review to Jack Heart
   in the Task conversation, so no launch happens before that review.
-- **Proposed spend.** Step 1 cost about $1.06 and step 2 about $.98, so about $2.04
-  of the $50 cap is spent. Step 3 proposes a $10.00 reservation (see its budget).
+- **Execution spend.** Step 1 cost about $1.06, step 2 about $.98 and step 3 about
+  $1.74, so about $3.78 of the $50 cap is spent. Step 3's $10 reservation was not exhausted.
+  Its posted bill is partial; see the report's inclusive accounting.
   Anything further needs an amendment made before the run that would spend it.
+- **Continuation authority.** Comment 079b3f46 and
+  `scratch/step-3-continuation.md` authorize the bounded repair, CUDA admission
+  and missing measurements within the original $10 inclusive step-3 envelope
+  and $50 experiment cap. Routine execution within these bounds needs no new
+  spending decision. This design launches nothing; software admission, freeze,
+  bill reconciliation and refreshed quotes still precede the campaign.
 
 ## Fixed identities
 
@@ -653,15 +667,17 @@ assumed limit of three A4000s at once; stock has often allowed one.
 | 100 | 24 | hours, machines | solo × 3 | 2,300 | $19.14 | solo × 1; none |
 | 100 | 72 | hours, machines | solo × 3 | 6,899 | $56.01 | solo × 1; halve × 3 |
 | 100 | 120 | hours, dollars, machines | solo × 3 | 11,498 | $92.87 | solo × 1; halve × 3 |
-| 100 | 336 | dollars | solo × 1 | 32,195 | $86.02 | none; halve × 1 |
+| 100 | 336 | hours; dollars allow 1 machine | solo × 1 | 32,195 | $86.02 | none; halve × 1 |
 
 What the table supports:
 - **Pack-4 throughout never wins a strength plan.** It is the cheapest shape per decision,
   but in a fixed budget a final seed's own updates count, and four seeds share them. At
   ($100, 336 h) on one A4000 it reaches 19,213 updates against 32,195 solo, 0.74
   doublings fewer, which best of 4 recovers only if σ is above about 30 Elo.
-- **The worked example, ($100, 336 h).** Dollars bind: one A4000 for 14 days is about
-  $86. Halving reaches 27,021 updates for its survivor, at $87.44 including three selection
+- **The worked example, ($100, 336 h).** Hours bind for one A4000: 14 days cost
+  about $86; dollars prevent a second full-window machine. This corrects the
+  original sketch, as recorded in the step-3 report on 2026-11-08. Halving reaches
+  27,021 updates for its survivor, at $87.44 including three selection
   passes. Solo reaches 32,195. Halving pays when σ exceeds about 13.5 Elo at slope 44, or
   about 8 at slope 20, with ρ = 1 (16 and 9 at ρ = .8). The u40 bound is 18 Elo, and no
   late spread is known. **This choice is decided by the two unknowns, not by the
@@ -888,6 +904,135 @@ commit is the first check of an `a7718f5` client placing `199335c` jobs.
   tests/training/test_rl_objectives.py tests/training/test_regimes.py tests/model` passed,
   after rebuilding the native extension that main's Rust had outdated.
 
+**Step 3 freeze receipt (2026-11-08 UTC).** Jack Heart accepted software review and directed
+this freeze at PR #448's merge commit (comment a5890a28). The launch revision is
+`cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e`, on main, for every leg. Its tree equals the
+reviewed branch head `cb184cb89`. This receipt is recorded after that commit and changes no
+executable byte.
+- Source bundle: every leg's job carries one bundle of 1,483 files, sorted-key SHA-256
+  `dc98b968…6746`: all 1,484 tracked files except the `CLAUDE.md` symlink. The method
+  reproduces step 2's `6334a27b…1ff3` at `668212567`. Key files:
+  `experiments/training_throughput_sizes.py` `fa8c181e…d603`, `experiments/elemental_variants.py`
+  `3a9dd378…1bc2`, `manabot/training/precision.py` `d152bd6f…23c1`,
+  `manabot/training/regime.py` `f0856e42…814d`, `manabot/training/execution.py`
+  `2c250340…cb94`, `manabot/training/rollout/collection.py` `24eb0b15…9253`,
+  `manabot/training/learning/learner.py` `94e51ba2…1447`. Unchanged from step 2:
+  `experiments/training_throughput_packing.py` `9d1cd47b…2f4d`, `experiments/training_throughput.py`
+  `f36641e3…cd19`, `experiments/learning_signal.py` `836230fd…9cb0`, `manabot/experiment/job.py`
+  `62aa4fd3…5aca`, `manabot/infra/host.py` `7cd0dbbd…208b`, and the frozen regime
+  `elemental-long-183-v1.json` `be9de376…64ad`. `uv.lock` is now `6e3a1426…be18`, which pins
+  jobs to Etude SDK `199335c` (see "Etude since the design").
+- Regimes, on w17. Each digest is the sorted-key SHA-256 of the job's regime with
+  `wall_seconds` removed, because `--pace` sets the watchdog at launch. With the watchdog
+  left in, the digests are recorded at launch.
+  - Speed cells, 4 updates: w64 float32 `8cea4f99…5ed2`; w128l4 float32 `851217e0…58fa`;
+    w160l8 float32 `c5dc36ea…7e74`, tf32 `1dcdd470…9e93`, bf16 `827d4053…6f13`; a384l8
+    float32 `86f74df8…b65b`, tf32 `48ac0bd7…8365`, bf16 `3f8bfbe0…940a`.
+  - Learning check, 12 updates: w160l8 float32 `68e24691…f45f` (equal in the check and its
+    repeat), tf32 `af6e178b…36cd`, bf16 `56785682…857c`.
+  - A regime's bytes are equal across GPUs and K. At the default pace (37 s), every speed
+    cell's job reads 0.75 hours and the check legs read 1.25 hours.
+- Float32 unchanged: step 2's D1 regime, discovered on this tree, still digests to
+  `0366ff8d…1c3e`.
+- Discovery: Etude `read_job_file`, client `a7718f5`, read all 42 legs at this revision
+  without executing games or training. That gives 81 runs, each leg with its own job name
+  and its declared seeds: K of 26301-26304.
+- Acceptance: the "As built" checks pass on this tree, `tests/model` included: 380 passed
+  and 1 skipped. Through the real worker on CPU at 8 streams and 1 update, the w128l4 and
+  a384l8 cells complete
+  (`test_a_size_cell_trains_through_the_real_worker_on_cpu`, 2 passed). The hand D1 training
+  digest check ran at build and is not repeated here.
+- Isolation: step 3 plays no evaluation deals and scores no checkpoint, so no held-out set
+  or anchor is touched. Seeds 26301-26304 are disjoint from every earlier step's.
+- Client: as step 2's, `ETUDE_HOME=$HOME/.etude-b015d5-step2`, Etude `a7718f5` through
+  the home's `e` wrapper. The shared controller is not used. The isolated controller is
+  stopped, and the home holds no rented machine.
+- **Third GPU: A40.** The machines rule takes the card with the most dense bf16 tensor
+  throughput per quoted dollar. Only two candidates fall under $.95/hour at RunPod's
+  secure-cloud price, the price the on-demands pay: RTX 4090 at $.89 (165 dense bf16
+  TFLOPS with FP32 accumulate, NVIDIA's Ada figure; about 186 per dollar-hour) and A40 at
+  $.59 (150, NVIDIA's datasheet; about 254). RTX 5090 at $1.19 and L40S at $1.09 are over the
+  ceiling. The rule picks the **A40**, as on-demand `b015d5-a40` in the isolated home: A40,
+  at least 8 vCPUs, 48 GB, 80 GB disk, under $.95/hour, `--slots 4`, storage `r2`. Leg names
+  keep the `fast-` prefix and its $.95 ceiling. `b015d5-fast` (RTX 4090) stays defined and
+  is not used. The A40 has 48 GB, and its memory bandwidth is below the 4090's. The rule
+  reads tensor throughput only, so the 4090 may still be faster per hour. The cheaper card
+  is the one this rule selects.
+- Quote, 2026-11-08 03:30-03:31 UTC, at this revision, leg `<gpu>-w128l4-k4-float32`,
+  nothing rented:
+  - `b015d5-l4x4`: L4, at least 6 vCPUs, $.59/hour, rentable. All four seeds share one L4
+    at 4 slots, with a first wave of $.59.
+  - `b015d5-a40`: A40, at least 8 vCPUs, $.59/hour, rentable. All four seeds share one at
+    4 slots, with a first wave of $.59.
+  - `b015d5-a4000x4`: **open.** RunPod reports no A4000 ($.25/hour, ceiling $.40), and
+    Etude refuses the quote. The machines rule's 30-minute wait covers this, as in step 2.
+  - For reference, `b015d5-fast` quoted RTX 4090 at $.89/hour, rentable.
+  - These quotes are the first placement of `199335c` jobs by the `a7718f5` client. Placement
+    is planned, and no leg has run under that pairing.
+- Budget at the quoted rates, hand rentals priced from the rate as in step 2: A4000 6 h is
+  $1.50, L4 4 h is $2.36, and A40 5 h is $2.95. The $10.00 reservation and its lines stay as
+  written. The third-GPU line is now $1.80 under its $4.75.
+- Authority: step 3 stays under comment 9f9d0956's $50 inclusive cap, with $10.00 reserved
+  beside the $2.04 spent. Freezing confers no spending authority. Nothing launches or rents
+  before execution review with Jack Heart.
+
+**Step 3 execution (2026-11-08 UTC, stopped at failure rules).** The isolated `a7718f5` client
+reported no pre-existing step-3 jobs or rentals. The source bundle was rechecked as
+1,483 files, `dc98b968…6746`, matching the frozen revision.
+- At 11:43 UTC, A4000 and L4 quotes reported no stock; their 30-minute availability
+  window began. A40 quoted $.59/hour.
+- At 11:44:26 UTC, `etude rent b015d5-a40 --hours 5 --max-usd 4.75` rented
+  `b015d5-a40-b1aa969b00bd` (provider pod `5l3dz0elsfosio`, 9 vCPUs, 50 GB).
+  Its effective rental cap is $2.95 and deadline is 16:44:26 UTC.
+- At 11:50:58 UTC, L4 stock appeared and the refreshed quote passed at $.59/hour.
+  `b015d5-l4x4-190abeae6bbc` (pod `9433nbnl6sw3t5`, 6 vCPUs, 62 GB) was rented
+  for four hours under $2.40, effective cap $2.36, deadline 15:50:58 UTC.
+- At 11:53:03 UTC, A4000 stock appeared and the refreshed quote passed at $.25/hour.
+  `b015d5-a4000x4-bb3d92eb921e` (pod `baybcye3wziawd`, 16 vCPUs, 62 GB) was rented
+  for six hours under $1.56, effective cap $1.50, deadline 17:53:03 UTC.
+  All three frozen classes were obtained inside the availability window.
+- The first cell is `fast-w64-k1-float32`, run `1b0f5001d306`, seed 26301,
+  pace 37, at the frozen revision. Evidence is retained under
+  `experiments/data/training-throughput-b015d5-v1/step-3/`, with Etude's original
+  attempts and training files in `r2://manabot/jobs`.
+- Vocabulary clarification during execution (comment 5f70beea): Jack Heart said
+  "for now probably better to test with ashed, but also use this as a lesson to look for other places we could have similar unnecessary slow downs".
+  Launched receipts specify input v6 / 512 facts; the frozen model's catalog
+  guard requires input >=8, so this ladder already uses **effective hashed
+  records**. Runs are unchanged. Report projections verify that mode per receipt.
+  c5fba4's separate fixed-input catalog/hashed diagnostic does not supply a
+  whole-update multiplier for this ladder; its shared-effect repair remains
+  with that Task. A retained overhead audit uses existing phase receipts,
+  the earlier bounded CUDA-count probe and source inspection; no new paid arm
+  or repair is part of this frozen execution.
+- Final reconciliation: 33 runs/attempts, 27 succeeded and 6 BF16 startup failures;
+  132 updates, 6,909,047 learner decisions, 33,989 completed games, one retained
+  `ObservationCapacity` resource limit and no abandoned games. All executed regimes
+  match their declared legs. Nonfinite values and rejected steps were zero.
+- BF16 failed before any game/update on every GPU, including the one permitted
+  retry, with `index_copy_(): self and source expected to have the same dtype,
+  but got (self) Float and (source) Half` in `SemanticCardEncoder.definitions`.
+  Each second failure ended that GPU's ladder. Repair is [ed2300](loopflow://manabot/task/ed2300);
+  no source repair or replacement run occurred here. All 15 a384l8 cells remain unrun.
+- Seven packed cells completed but did not meet the frozen minimum of three
+  overlapping post-warmup updates per run. No packing gain/crossover is read;
+  six K=4 cells were skipped because K=2 gain >=1.30 was unestablished. The
+  four-update schedule and unequal finish times caused this reading limitation.
+- Solo timings through w160l8 are retained. A40 float32/repeat/TF32 each completed
+  12 updates. TF32's clip-fraction difference was 3.45 times the float32 repeat's;
+  its speed is measured, but the short check does not establish learning equivalence.
+- A4000 and L4 were deleted at the provider at 12:49:18/20 UTC after Etude and its
+  guardian received RunPod 429s; the controller reconciled their deletion at
+  13:00:04/11. A40 ended through Etude at 13:18:42. Final provider inventory and
+  Etude agree that all three are deleted; no attempt, supervisor or isolated
+  controller remains running. Inclusive step-3 cost is about $1.74 ($.72 posted
+  at 13:19), about $3.78 including earlier steps, pending final billing.
+- Report, planner speed table, per-cell dispositions, export/game audit, costs
+  and figure: `experiments/data/training-throughput-b015d5-v1/report.md` (Step 3)
+  and its `step-3/` directory. Artifact bytes are published through the existing
+  store before the manifest is committed. These results do not settle a384l8,
+  the packing crossover, BF16 performance, strength or the long-run learning curve.
+
 ### Stop rules
 
 - A failed run is retried once on the same rental unless the host is plainly a dud; a
@@ -921,6 +1066,343 @@ that a precision learns as float32 does beyond a gross check, or that four updat
 long run. The planner after this step takes these speeds, the curves that c5fba4 and later
 runs measure, and a measured seed spread; the w64 table above shows the planner's choice
 at ($100, 336 h) turns on that spread and on the late curve.
+
+## Step 3 continuation C1 (prospective amendment, 2026-11-08)
+
+### Question, retained evidence and scope
+
+At the same Elemental recipe, where does packing stop buying machine throughput
+as model size grows, and what does a384l8 cost on A4000, L4 and A40? Complete the
+missing BF16 measurements after repairing its real CUDA path. The architecture
+ladder and execution precision are interventions; the ten-deck card pool and
+learning rule are controls. This is a speed experiment with a gross numeric
+health check, not a strength or generalization experiment.
+
+The original `cb722dc8c94086cb52b6b39a4ea7b50d7f1f529e` results remain under
+`step-3/`: 11 valid solo cells, seven packed cells with insufficient overlap,
+six BF16 startup failures and no a384l8 runs. They motivate this amendment but
+are never pooled into a same-host/source comparison. TF32's clip-fraction
+difference was 3.45 times the float32 repeat difference; equivalence is unproved.
+The retained `step-3/overhead-audit.md` lists hypotheses, not measured fixes.
+
+### Identities and isolation
+
+- Freeze a new integrated source commit and source-bundle digest after the
+  software below lands. Record native build/world identity, deck-definition
+  and roster digests, resolved observation/model/regime bytes, dependency lock,
+  CUDA/PyTorch/driver versions, GPU, CPU, quotas and actual precision switches.
+  The source is presently **unfrozen**; no old commit stands in for the repair.
+- Keep `elemental_recipe`, 256 streams, both learning seats, complete games,
+  at least 64 decisions per stream, one producer, damped-policy schedules,
+  capacity recovery and trivial skipping. Freeze input v6 / 512 facts and all
+  remaining capacities from the resolved control. Assert effective **hashed**
+  records; semantic card-program encoding still runs and must pass CUDA tests.
+- Original evidence is w17. Re-run current-world admission after integration.
+  If the runtime world or definitions changed, bind that actual identity in C1,
+  keep the same ten-deck roster and rerun every comparison's controls there.
+  Never relabel old receipts or load their checkpoints across a world boundary.
+  A changed roster, observation layout or learning recipe requires redesign.
+- All runs initialize fresh weights and optimizer state; no selected checkpoint
+  or resume is an input. Save output checkpoint hashes for audit, not selection.
+  Use independent training seeds **26401–26404**, K taking the first K seeds.
+  Solo/packed and precision comparisons reuse seed 26401 for pairing; distinct
+  seeds are independent replicas, whereas same-seed CUDA repeats are not.
+  Admission uses 26400; bounded diagnostic fixtures use 26410.
+- No evaluation games, opponents, anchor scores or evaluation draws are needed
+  for this claim. Do not consume `ELEMENTAL_PAIRS` or select checkpoints using
+  held-out data. Training opponents are the unchanged self-play recipe. There
+  are no new held-out cards, deck combinations or unseen-mechanic claims. This
+  is not a growing-pool campaign and changes none of its splits or tickets.
+
+### Schedule and sample sufficiency
+
+Use new experiment/cohort names containing `sizes-c1` and new regime IDs
+`elemental-throughput-c1-<size>-<precision>-u<updates>-v1`. The count is part of
+identity, including retries with a longer endpoint. Preserve original launch
+declarations and their four-update IDs. Use the isolated Etude client/home
+from step 3; no launcher upgrade or replacement GPU is required.
+
+1. **Admission first, one rental only.** Prefer the A40; if unavailable within
+   the existing 30-minute selection window, use an available L4 or A4000.
+   Run the fixed-input CUDA regression and one w160l8 BF16 job, 256 streams,
+   two updates, seed 26400, through the actual worker. Require cached inference,
+   selected-row training, backward, optimizer update and checkpoint reload to
+   succeed with finite metrics. Retain actual intermediate dtypes, precision
+   settings and logs. This is execution proof, excluded from speed readings.
+   Do not rent the other classes until it passes. Stop if it exposes another
+   deterministic software failure; fix and freeze again before new paid work.
+2. **Secure the largest missing baseline early.** On each admitted rental,
+   measure a384l8 K=1 float32 before spending the window on smaller packing
+   cells. Use it for memory/pace admission only until its matched comparisons
+   run. This prevents a later optional precision failure from leaving the
+   largest size wholly unmeasured again.
+3. **Float32 ladder on that same host:** w128l4 K=1,2, then K=4 if admitted;
+   w160l8 K=1,2, then K=4 if admitted; a384l8 K=2,4 if admitted, reusing its
+   new-source solo control. All speed runs have **8 updates**. This leaves
+   seven post-warmup candidates instead of exactly three. Prior step-2
+   eight-update cells retained at least six per run; this is evidence for
+   feasibility, not a guarantee on another host.
+4. **Precision:** w160l8 and a384l8, K=1, TF32 and BF16 on each GPU. On A40,
+   w160l8 float32, its same-seed repeat, TF32 and BF16 run **12 updates** each;
+   the first float32 run is also its ladder control. Run this four-leg block
+   together before the A40 packing cells, in that order. All other precision
+   cells use eight updates. The repaired numeric path must pass admission on
+   each GPU before that GPU's BF16 leg; reuse the fixed-input test, no extra
+   two-update training smoke on those additional GPUs.
+5. **Lower bracket if needed:** after the missing large-size and precision
+   cells, w64 K=1,2,4 on each host where w128l4 did not establish a gain >=1.10
+   or was inadmissible. Also complete the original missing A40 w64 comparison
+   if budget remains. These are new same-host controls; historical w64 evidence
+   remains context. Do not imply a measured lower bracket from another host.
+
+The original memory and crossover rules remain: K times solo peak reserved
+CUDA/RSS must fit 85% of the device/pod, K=4 requires valid K=2 gain >=1.30,
+and a valid K=2 gain <1.10 skips larger-size packing on that GPU. A skip after
+that point rests on monotonicity, not a measurement of each larger size.
+Insufficient overlap never establishes a crossover and does not skip larger
+K=2 cells. K=4 still requires its own size's admitted K=2 gain.
+
+Keep the existing reader's concurrent span and minimum of **three complete
+post-warmup updates per run**. Report exact included update indices and counts.
+Do not trim slow updates to improve a reading. If an eight-update packed cell
+fails only overlap sufficiency, allow **one twelve-update rerun of the whole
+cell**, all its seeds fresh at their original initial state, when the remaining
+window/budget admits it. Compare against solo at matching update indices; extend
+the solo to a separate fresh twelve-update control if needed. Retain both
+attempts and select the first admissible scheduled cell, never the faster one.
+If the rerun also lacks three samples per run, mark it inconclusive and move on.
+No synchronization barrier or change to the learner/collector is needed.
+
+### Readings, uncertainty and exposure
+
+Primary clocks are wall time and billed dollars per million **learner
+decisions**, with s/update and per-seed latency alongside machine throughput.
+Use the existing span reader. Match update ordinals in solo and packed runs,
+report `K * solo_seconds / packed_seconds`, and independently report decision
+throughput so differing game lengths cannot masquerade as equal work. Record
+phase trees, GPU busy share, busy CPU cores, CUDA reserved/allocated peaks,
+RSS, startup time and whole-rental cost including idle/setup/failures.
+
+Show per-seed measurements, update ranges and the seed-26401 paired difference.
+Report early/late-window sensitivity and same-seed float32 repeat differences.
+Updates are dependent and only one host per GPU is sampled: do not bootstrap
+updates into a population confidence interval or claim a hardware-only ranking.
+Mark threshold decisions provisional if window sensitivity crosses 1.10 or
+1.30. An absent bracket or invalid packing cell leaves crossover unknown; the
+hard thresholds choose execution, not statistical significance.
+
+For the A40 gross check, compare means over updates 5–12 against the first
+float32 run, alongside its float32 repeat, for losses, entropy, both KLs, clip
+fraction, learner rows, games and decisions/game. Report absolute differences
+as well as ratios; near-zero repeat differences are not stable denominators.
+Finite values prove execution only. Neither TF32 nor BF16 becomes a training
+default or a demonstrated strength-per-dollar improvement through this check.
+
+Training has no fixed game count because complete-game closure is retained.
+Its hard bounds are **1,600 aggregate updates**, **15 aggregate GPU rental
+hours**, and the tighter monetary/rental limits below, including admission,
+failed/retried work and diagnostics. These are ceilings, not targets. Capture
+actual starts/completions, environment and learner decisions, rows, deck-pair
+draws, failed games, discarded/replaced samples and replacement debt through
+existing receipts and game ledgers. Stop at update/cell boundaries when possible;
+retain partial-run/game evidence when a hard deadline terminates a run.
+Evaluation games, draws and actions are explicitly zero. No per-card training
+exposure instrument is needed for this unchanged-pool throughput claim.
+
+### Software and admission before final freeze
+
+C1 software is implemented in this checkout, reconciled after merge `fec7fdd28`
+with main `e0832f67f` on 2026-11-08. It is not yet delivered or frozen. Comment
+8cb4c5af reviewed the design against Jack Heart's "keep going" authority; no new
+scope or budget is inferred. The ed2300 status read at implementation found no
+competing PR, Session or Graph. Its repair belongs in this Task's next software
+PR, with [ed2300](loopflow://manabot/task/ed2300) linked to that delivery and its
+validation. Software verification does not complete the parent experiment.
+
+Implemented:
+
+1. `SemanticCardEncoder.definitions` normalizes recurrent outputs to the
+   destination dtype without detaching gradients. Float32 output/gradient parity
+   and injected Half/BF16 joins are covered. The CPU coverage claim was corrected;
+   a CUDA-required regression covers full/cached/selected/empty paths, backward,
+   optimizer and reload, and emits actual GRU dtypes. Real CUDA remains pending;
+   unchanged float32 outputs/gradients and default checkpoint bytes remain
+   acceptance constraints, and a CUDA skip cannot admit the campaign.
+2. The existing launch owner adds distinct C1 IDs, endpoints, seeds and two-update
+   worker admission while retaining legacy discovery/identities. `read_job_file`
+   tests compare recipe bytes outside declared size/precision/endpoint/identity
+   fields and inspect limits. Cost admission reserves watchdog plus cleanup;
+   external execution checks still own rental and campaign admission.
+3. The maintained C1 reader isolates source/recipe/host identities, matches update
+   ordinals, keeps the three-sample minimum and first valid scheduled attempt,
+   and requires all cell dispositions. Games and decisions/game derive from
+   exposure-counter differences; numeric-health contrasts retain absolute and
+   repeat-relative differences, with null ratios at zero repeat difference.
+   Injected fixtures cover overlap, matched endpoints, exposure and cost limits.
+4. Two optional fixed-input diagnostics retain a 256-row fixture and separate
+   allocation/page faults, recording and device/host transfers. Each has one
+   reaped child and a 120-second deadline on the admission rental. They do not
+   reproduce a whole-update stall or establish its cause. No speculative runtime
+   optimization, extra host or induced load was added. A future included repair
+   still requires measured before/after and output/gradient/sample/RNG parity;
+   c5fba4 retains its separate catalog-repair owner.
+
+Main's merged 5da5f4 v7 batching/report is related engineering context, not a
+matched control or a strength result for this hashed-v6 ladder. New integrated
+source/world/recipe admission and same-source/host controls remain necessary.
+Local affected-suite checks and core CI collection are recorded in
+`scratch/step-3-continuation.md`; software delivery, final freeze, prior-bill
+reconciliation and refreshed quotes remain before campaign execution. CUDA
+admission is paid execution on the first bounded rental, after source freeze;
+it is not a claim established by local software checks.
+
+Run the affected precision, semantic-card, size-launch and active-training
+tests, plus the validation-by-change-area suites for any collector/observation
+edits actually made. Local CPU tests prove wiring, not CUDA admission. Perform
+the required CUDA proof on one bounded rental after source freeze, before the
+rest of the campaign; a failed proof requires new repair/source admission.
+Delete no historical data, four-update declarations or failure receipts.
+No general planner, new precision default, changed minibatch, CUDA graph,
+engine optimization or launcher rewrite is required.
+
+### C1 software interface
+
+`experiments/training_throughput_sizes.py` retains the original `LEGS` and
+adds `C1_LEGS`. Example keys are `c1-fast-a384l8-k1-float32-u8`,
+`c1-l4-w160l8-k2-float32-u8` and its conditional
+`c1-l4-w160l8-k2-float32-u12-overlap`. The A40 numeric block uses
+`c1-fast-w160l8-k1-{float32,tf32,bf16}-u12` and
+`c1-fast-w160l8-k1-float32-repeat-u12`. The `fast` label still means A40.
+The experiment name is `training-throughput-sizes-c1`; four-update jobs keep
+their old name/identity. Limits still derive from `--pace`.
+
+On the first rental, queue `c1-fast-w160l8-k1-bf16-u2-admission` (substitute
+`l4` or `a4000` only under the existing availability rule). That job runs:
+
+```sh
+MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -k cuda_semantic_policy_admission -q -s
+```
+
+before its actual two-update worker, then
+`uv run --locked python scripts/check_throughput_admission.py`. The test fails
+without CUDA, prints actual recurrent/table dtypes and precision settings,
+and covers full, selected, empty and cached definition paths, backward, Adam
+and weight reload. The post-worker check loads its hash-verified raw checkpoint
+with ordinary world/input admission and writes `cuda-admission.json`.
+Its CPU regression uses a synthetic receipt and real checkpoint to verify the
+artifact mapping, reload and corrupt-byte rejection; it is not CUDA admission.
+On subsequent GPUs, run the same CUDA test before BF16, without another
+training smoke. CPU passes or ordinary pytest skips do not admit execution.
+
+C1 uses the maintained `experiments/training_throughput_readings.py` span
+reader. Historical `step-3/readings.py` stays immutable evidence. Copy the
+original per-run `run.json`, `updates.json` and `gpu-samples.csv` projections
+into `step-3-c1/runs/<id>/`, preserving attempts, logs and game ledgers alongside
+them. The collection script retained in `step-3/` describes these projections;
+C1 collection must use experiment `training-throughput-sizes-c1`.
+
+- `cells.json` maps every `C1_LEGS` key to `status`, `reason`, `runs`, `failed_runs`, `host`
+  and allocated `billed_usd`. Status is `completed`, `conditional_skip`,
+  `unavailable`, `budget_skip`, `failed` or `not_needed`. Runs are distinct
+  per cell; `failed_runs` retains unsuccessful attempts with distinct run IDs
+  without adding them to the speed sample. Skipped alternatives need an explicit reason. `host` names the
+  exact rental. Completed packed cells require every seed; failed attempt IDs
+  and partial evidence remain under their failed disposition.
+- `rentals.json` maps each exact host to `gpu` (`a4000/l4/fast`),
+  `usd_per_hour`, `billed_usd`, `outstanding_usd`, `hours`, `bill_reference`
+  and `deletion_reference`. Whole-rental bills include setup, idle, failures
+  and cleanup. Allocated cell costs never replace this accounting.
+- Run `uv run python -m experiments.training_throughput_readings
+  PATH/step-3-c1 --source FROZEN_COMMIT`. The reader rejects old identities,
+  undeclared recipes and missing dispositions, emits exact ordinals, phase
+  times, per-seed latency, window sensitivity, resource/exposure clocks,
+  separately matched decision/latency gains and the numeric health contrast.
+  Numeric-health means include games and environment decisions per game from
+  adjacent cumulative exposure counters. Repeat-relative magnitudes are null
+  at zero repeat difference and unstable near zero. Whole-run resource summaries
+  include warmup and are labelled accordingly.
+  Failure/admission exposure still comes from their retained receipts/ledgers;
+  completed speed-cell clocks are explicitly labelled, not a campaign total.
+- Before a cell, `admit_cost(Budget(...), limits(leg, pace), ...)` checks the
+  reconciled prior spend, already committed liability, GPU-hour/update caps,
+  remaining line/window and watchdog plus cleanup. `prepaid_usd` is only for
+  liability already reserved in `committed`. It does not rent, shorten limits
+  or override the operator's memory/crossover/failure rules.
+
+Two optional diagnostics use one retained 256-stream `.npz` observation
+fixture with the frozen v6 shapes (seed 26410). On the admitted rental:
+
+```sh
+uv run python scripts/diagnose_training_transfers.py recording --fixture batch.npz --out recording.json
+uv run python scripts/diagnose_training_transfers.py transfers --fixture batch.npz --out transfers.json
+```
+
+If absent, the first diagnostic retains one initial configured-match native batch
+at the control's shapes, seed 26410, without playing games or training. Both
+diagnostics then read those exact bytes; an existing fixture is never overwritten.
+Each child is killed and reaped after 120 seconds. Recording separates virtual
+allocation, first-touch copying, resident copying and action packing, reporting
+page faults. Transfer diagnostics report device selection/host index copies,
+host gather, packed H2D plus an explicit wait, and one profiler table. They
+verify copied values, retain fixture digest/shapes, and draw no RNG or change
+training samples. This is a small fixed-input cost probe, not reproduction of
+the original whole-update recording stall. No production speed repair follows
+without the protocol's before/after and output/gradient/sample/RNG evidence.
+
+### Inclusive budget, deadlines and recovery
+
+Reconcile final provider billing for the first pass and earlier steps before
+allocating new rentals. The first-pass estimate is $1.741 and experiment total
+$3.781; these are not final invoices. Let `S` be reconciled prior step-3 spend
+and `T` prior experiment spend, including any unposted upper bounds. New
+committed liability must fit `min(10 - S, 50 - T, 8.00)` dollars. If final bills
+are still unavailable, reserve a defensible upper bound for their remaining
+liability; if none can be established, stop before renting. Never count a
+partial posted bill as the whole cost.
+
+| Proposed C1 line | Aggregate window ceiling | Dollar ceiling |
+|---|---:|---:|
+| A40, including first CUDA admission and diagnostics if used | 5 h | $3.30 |
+| A4000, including admission if used | 6 h | $1.60 |
+| L4, including admission if used | 4 h | $2.40 |
+| Failure/cleanup contingency within those windows | no extra hours | $.70 |
+| **New maximum reservation** | **15 GPU h** | **$8.00** |
+
+These are prospective allocations under existing authority, not new spending
+authority or guaranteed complete-grid costs. At the current estimate they leave
+$.259 of the $10 envelope unallocated. A higher reconciled bill reduces these
+lines before launch. Do not borrow from the rest of the $50 cap to exceed $10.
+Re-quote A4000/L4/A40; keep their original rate ceilings and provider/host
+requirements. Set each rental's deadline to the lesser of its window and its
+line divided by the all-in hourly liability, reserving cleanup/rounding. Do not
+substitute a fourth GPU or grow the step. A class unavailable after 30 minutes
+is unmeasured. Prefer A40 admission/large-model evidence, then A4000 cost evidence,
+then L4 fallback; stop at the first binding cap even with missing cells.
+
+Before every cell reserve its declared watchdog liability plus teardown time,
+not its optimistic expected duration. Use prior same-size measurements to set
+pace (otherwise the previous size); retain the original watchdog and stall
+formulas, clipped by rental/campaign remaining limits. Decline a cell that
+cannot fit a useful run in that interval. Retry a failed cell at most once on
+the same rental, except a known deterministic admission defect which stops
+immediately. A second failure ends that GPU ladder. An admitted OOM is evidence
+and skips larger K at that size; do not repeatedly reproduce it. Stop on
+nonfinite/rejected learning steps and retain diagnostics. Insufficient overlap
+uses only the one longer rerun specified above, never an unbounded retry loop.
+
+End each rental after its last admitted cell. Verify provider deletion as well
+as Etude termination; the first pass's 429s show why both matter. Retain cleanup
+receipts and charge time until deletion. Stop and reap controllers, samplers and
+watchers owned by execution. Do not launch a new host while an old host's
+unresolved liability could breach the cap.
+
+Publish C1 evidence under
+`experiments/data/training-throughput-b015d5-v1/step-3-c1/`, with source/freeze
+receipt, original run outputs, per-cell disposition, exposure reconciliation,
+bills and a speed table keyed by source/world/input/host/seed/precision/K.
+Publish bytes through the artifact store and commit its manifest. Extend the
+report with a separately labelled C1 result; preserve the first pass. Return
+remaining unknowns and the measured packing recommendation for evidence review.
 
 ## Stop waiting for the slowest game (deferred candidate)
 

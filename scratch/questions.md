@@ -1,5 +1,17 @@
 # MTG-268 — batched local-update rollouts
 
+## Main sync — 2026-11-09
+
+Assumption (reversible): retain MTG-268's branch-specific design, measurements
+and open acceptance questions as this checkout's active scratch context.
+Main's unrelated b015d5 continuation notes remain recoverable verbatim at
+`51d10f8828b2018610d1bd76398d905712ef1a93:scratch/questions.md`;
+its experiment authority and budgets do not apply to MTG-268.
+Only this notes conflict required manual resolution. Incoming source changes
+include semantic-card recurrent-output dtype normalization; final measurement
+must reconcile the merged Python source with the retained baseline. Native
+source and the installed extension are unchanged by this sync.
+
 ## Second optimize step 6 — compress (2026-11-09)
 
 Notes-only reduction. Reviewed the branch diff, retained design, writer/decoder,
