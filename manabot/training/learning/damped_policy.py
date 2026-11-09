@@ -275,6 +275,13 @@ def update_damped_iteration(
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
+        if batch.assignments is not None:
+            batch.target_residuals = (
+                (expected_targets - torch.as_tensor(batch.values, device=device))
+                .detach()
+                .cpu()
+                .numpy()
+            )
         chosen_types = torch.as_tensor(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
             device=device,

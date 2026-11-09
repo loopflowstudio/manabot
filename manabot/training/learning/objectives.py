@@ -88,6 +88,8 @@ def update_iteration(
             _, returns = transition_gae(
                 rewards, values, ends, next_value, learning.gamma, learning.value_lambda
             )
+        if batch.assignments is not None:
+            batch.target_residuals = (returns - values).detach().cpu().numpy()
         advantages, returns = advantages.flatten(), returns.flatten()
         actions = torch.as_tensor(batch.actions, device=dev).flatten()
         old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
