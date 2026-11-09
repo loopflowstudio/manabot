@@ -174,3 +174,22 @@ noise position weighting unchanged, resampling source deals jointly across
 opponents and retaining all their positions/draws. PUCT comparison families use
 their own common-complete subsets across all eight mirror settings so missing
 PUCT evidence does not discard complete sampled-policy comparisons.
+
+## Mirror mini execution — 2026-11-09
+
+Direction: “ok so lets use it” and “clear the curriculum stuff”. The canceled
+`curriculum-held-out-707e62cad5fe-r3` had no remote boot claim, receipt, or worker.
+Etude's SSH bootstrap returned no end receipt for that absent startup, while
+its scheduler waited indefinitely for a creation receipt. A process-local
+transport correction lets the existing DirectoryJournal close a session without
+both receipt and boot claim; sessions with a boot claim retain uncertainty.
+Under Etude's mini lock, its `_end_session` recorded shutdown and cancellation.
+No database rows were deleted, environment upgraded, or other pool operated.
+The exact repair and retained diagnostics are in the v2 reconciliation receipts.
+
+Reversible operational choices: stage committed source `0063d781` in mini
+`~/src/manabot.w13-mirror-v2`, preserve the original source directory, reuse its
+frozen environment and exact native bytes. Smoke means six separate smoke-key
+games (one per factorial cell), three one-thread workers, oracle then uniform,
+at most two hours inside the unchanged absolute campaign deadline. No strength
+claim follows from that tiny admission. Campaign stays seven workers/3,000 games.

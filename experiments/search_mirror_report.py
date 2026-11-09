@@ -308,6 +308,7 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
     records = _outcomes([directory / "games"], mirror=True, arms=V2_ARMS)
     reconcile_extension(directory / "games")
     remote = receipts["remote-inventory"]
+    validation = receipts["validation"]
     # A prelaunch receipt cannot certify later outcomes or their provenance.
     if records and not remote["v2_directory_exists"]:
         raise ValueError("Extension outcomes require refreshed execution reconciliation")
@@ -331,19 +332,22 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "planned_games": len(V2_ARMS) * len(games), "valid_games": valid,
         "missing_games": sum(a["coverage"]["missing"] for a in arms.values()),
         "invalid_games": sum(a["coverage"]["invalid"] for a in arms.values()),
-        "execution": "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness",
-        "observed_utc": remote["observed_utc"], "capacity_reason": receipts["launcher-inventory"]["quote_error"],
+        "execution": remote.get("execution", "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness"),
+        "observed_utc": remote["observed_utc"],
+        "capacity_reason": receipts["launcher-inventory"].get("status_note") or receipts["launcher-inventory"].get("quote_error") or "no capacity error",
         "arms": arms, "control": _coverage(baselines.get("policy/policy", {}), games),
         "contrasts": [_linear_contrast(c, scores, games) for c in _factorial_contrasts()],
         "context_only_arm": "policy/mirror-d20-b0.03-w4",
         "uncertainty": "exploratory; 10000 whole-deal resamples within fixed cells, seed 26901; complete vectors per contrast",
-        "health": "unassessed: no native smoke or games" if not records else "requires execution evidence review",
-        "native_support": "unresolved; accounting and sampler fixtures do not admit the mini runtime",
-        "replay_identity": "absent: no game attempts" if not records else "retained attempts are not replay proof",
+        "health": validation.get("health", "unassessed: no native smoke or games" if not records else "requires execution evidence review"),
+        "native_support": validation.get("native_support", "unresolved; accounting and sampler fixtures do not admit the mini runtime"),
+        "replay_identity": validation.get("replay_identity", "absent: no game attempts" if not records else "retained attempts are not replay proof"),
         "learning": "inference-only; no new training, exports or callbacks expected",
         "training_card_exposure": None, "generalization": "untested; reused decks, deals and one training seed",
         "acceptance": "unresolved; missing outcomes establish neither gains nor equivalence",
-        "measured_eta_seconds": None, "inclusive_worker_hours": None,
+        "measured_eta_seconds": validation.get("measured_eta_seconds"),
+        "timing_note": validation.get("timing_note", "No extension timing retained."),
+        "inclusive_worker_hours": validation.get("inclusive_worker_hours"),
         "rental_spend_usd": receipts["launcher-inventory"]["new_rental_spend_usd"],
         "deadline_unix": receipts["validation"]["deadline_unix"],
         "evidence_sha256": {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -386,11 +390,15 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'Bootstrap resamples those complete vectors within fixed deck cells, 10,000 times with seed 26901; '
         'an empty cell makes that interval unavailable. Full-denominator sensitivity lets every missing score '
         'range from 0 to 1; these bounds are not confidence intervals. No direction of interaction is assumed.</p>'
-        '<p class="note">The requested extension is authorized but unmeasured at this snapshot. No native smoke, '
-        'replay identity, decision/game cost or measured ETA is available. Policy-only timing stays in its '
-        'separate historical table. No new rental spend is recorded; inclusive setup/worker time is absent. '
+        f'<p class="note">Health: {escape(extension["health"])}. '
+        f'Native support: {escape(extension["native_support"])}. '
+        f'Replay identity: {escape(extension["replay_identity"])}. '
+        'Smoke outcomes are separate from the 3,000 planned games and establish no strength result. '
+        'Policy-only timing stays in its separate historical table. No new rental spend is recorded. '
+        f'{escape(extension["timing_note"])} '
+        'Inclusive setup/worker time and a reliable full-grid ETA require execution accounting. '
         'The shared execution deadline remains November 16, 2026, 18:16:29 UTC. Missing games are neither '
-        'failed games nor evidence of no benefit. Health and native support remain unresolved. Training card '
+        'failed games nor evidence of no benefit. Training card '
         'exposure remains absent independently of evaluation coverage; no new learning or generalization is '
         'established. Evidence review must retain these limits. This analysis starts no execution.</p>'
     )

@@ -134,6 +134,17 @@ def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
     html = _extension_section(extension)
     assert "0/3,000 valid games" in html and "unavailable" in html
     assert "remain proposals" not in html
+    # Admission can progress while every scientific outcome is still missing.
+    receipts["remote-inventory"]["execution"] = "native smoke complete; campaign starting"
+    receipts["validation"]["health"] = "six smoke outcomes retained"
+    receipts["validation"]["native_support"] = "bounded mini smoke passed"
+    for name, receipt in receipts.items():
+        (receipt_dir / f"{name}.json").write_text(json.dumps(receipt))
+    admitted = _extension_report(tmp_path, {})
+    assert admitted["valid_games"] == 0 and admitted["missing_games"] == 3000
+    html = _extension_section(admitted)
+    assert "bounded mini smoke passed" in html and "six smoke outcomes retained" in html
+    assert "No native smoke" not in html
     # A typo in the input path must not manufacture a no-games receipt.
     with pytest.raises(FileNotFoundError):
         _extension_report(tmp_path / "missing", {})

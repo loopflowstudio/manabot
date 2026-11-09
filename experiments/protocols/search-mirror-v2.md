@@ -1,5 +1,63 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Execution status — 2026-11-09: campaign running
+
+Etude run `mtg269-mirror-v2`, attempt `3a2b62144b9a`, session
+`04058802ff84`, started on the owned mini at `2026-11-09T20:40:21.931237Z`.
+The launch snapshot at `2026-11-09T20:41:21.920412+00:00` verifies seven one-thread oracle
+workers, seven in-flight attempts, and **0/3,000 completed campaign outcomes**.
+This is a launch receipt, not a completion or strength claim. The Etude-owned
+job advances to uniform only after all 1,500 oracle outcomes reconcile. Its
+maximum attempt count is one; it never retries failed games. Both stages keep
+`--deadline 1794852989` (November 16, 18:16:29 UTC), counting setup from the
+original November 9, 18:16:29 UTC start. No rental, training, new export or
+callback is expected; observed rental spend is $0. Training exposure is still
+unmeasured. Campaign evidence remains on the mini under
+`~/search-scaling/mirror-v2`; do not launch a duplicate while this job runs.
+
+The separate Etude smoke `mtg269-mirror-v2-smoke` succeeded and released its
+allocation: six valid outcomes on one original deal, one per cell, no failures
+or worker warnings. Its 1,784 Commands match retained legal offers/revisions;
+771 search receipts retain complete configured policy-support allocation,
+finite values and matching update algebra. Uniform receipts validate through
+the existing physical-sampler reader. Oracle is the explicit custom point-mass
+sampler. Maximum retained |Q| was 1.04313; this scalar estimator is not clipped.
+This proves only the observed smoke positions, not full-grid validity or replay
+equivalence. No deterministic replay was performed.
+
+Smoke wall time per game at 4/8/16 worlds: oracle 273/430/812 seconds;
+uniform 223/525/1,375 seconds. Summed game wall time is 1.011 hours. Extrapolating
+those six games to 500 per cell and seven workers gives about **72.2 hours**,
+excluding setup and differences in seven-worker contention. One reused deal
+per cell is not a reliable full-grid ETA. Different game lengths confound raw
+wall-time scaling. Inclusive CPU/worker hours remain unavailable; the shared
+elapsed ceiling has not been reset or expanded.
+
+Source is committed `0063d781710928df996402957a0b30123d332875`, staged separately
+at mini `~/src/manabot.w13-mirror-v2`. The original w13 checkout and v1 evidence
+were preserved. Archive SHA-256:
+`fb50c92e66f2ceffb2f57fef915cf1af919d836984d0eddebfbdff3f20851240`.
+All 349 source bindings match that archive; smoke and campaign agree on source,
+checkpoint, native build, packages and deadline. They use the existing frozen
+mini environment and native build. The execution copy of this protocol is the
+prelaunch committed text; this status amendment changes no scientific setting.
+
+The explicitly canceled curriculum allocation is now `cancelled` in Etude.
+Its absent SSH startup exposed the existing EXP-13 defect: the scheduler waited
+for a creation receipt, while SSH cleanup returned no end receipt even without
+a boot claim. A process-local transport correction allowed Etude's existing
+DirectoryJournal and scheduler to retain shutdown and cancellation under the
+mini lock. No database rows or prior evidence were deleted. Reproduction and
+the immutable recovery receipt were attached to EXP-13; no new Etude graph was
+started. The frozen game environment was not upgraded.
+
+Sealed smoke match blobs, identity, decision rows, worker logs, audit source and
+receipts are published under `experiments/data/search-mirror-v2/smoke/` and
+`reconciliation/`. In-flight campaign traces stay private on the mini until
+closed; the launch snapshot publishes its identity, counts and worker inventory.
+The existing v1 HTML/summary own scientific reporting and retain all six full
+500-slot denominators. A successful smoke does not fill any study slot.
+
 Prospective continuation of MTG-269, 2026-11-09. The conversation directs:
 “i want to try 8 and 16 shuffles, and then i want to combine magic mirror with
 uniform random vs oracle”. This authorizes implementation, validation and

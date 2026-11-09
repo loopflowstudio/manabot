@@ -1,5 +1,36 @@
 # Mirror search continuation
 
+## Live campaign handoff — 2026-11-09
+
+Etude `mtg269-mirror-v2` is running on mini: attempt `3a2b62144b9a`, session
+`04058802ff84`. At 2026-11-09T20:41:21.920412+00:00: seven oracle workers, seven
+in-flight attempts, zero completed study outcomes. The single Etude-owned job
+runs both stages, with the oracle completion barrier, seven workers and unchanged
+absolute deadline 1794852989. **Do not duplicate, restart or relaunch it.** Read
+current Etude status and remote `~/search-scaling/mirror-v2` before effects.
+
+Six separate smoke-key games passed: 1,784 Commands and 771 search receipts
+reconcile; all 349 source bindings match the committed archive. Private sealed
+smoke blobs are published in the existing store. Smoke timings give a limited
+one-deal extrapolation of 72.2 hours at seven workers; no full-grid ETA or strength
+result is established. The owning v2 protocol holds complete operational details.
+Remote source is `~/src/manabot.w13-mirror-v2`, using the existing w13 environment
+and exact native binary; keep it immutable. Local report edits do not change
+that source. Keep private in-flight attempts out of completed evidence snapshots.
+
+The stale curriculum run was canceled through Etude after a narrow process-local
+SSH end repair for a startup with neither receipt nor boot claim. Its evidence
+is retained and the reproduction is attached to existing EXP-13. No other pool
+was operated, no new agent/Task was launched, and no paid resource was acquired.
+Continue using the schema-13-compatible Etude reader without upgrading the frozen
+training environment. Analysis must keep the live run incomplete and preserve
+all v1 results; the same report now renders dated execution/native-smoke facts.
+
+Updated HTML/summary and execution receipts are published at the existing paths.
+All 65 mirror artifacts verify against the manifest; every original v1 scientific
+summary field is unchanged. Seven report tests, Ruff and the post-publication
+untracked-data check pass. No local server or watcher remains.
+
 ## Extension analysis handoff — 2026-11-09
 
 The same report builder now takes `--extension experiments/data/search-mirror-v2`
