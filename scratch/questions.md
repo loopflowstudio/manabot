@@ -79,3 +79,10 @@ The repair is delivered here for unstarted ed2300, with no second checkout.
   $.256/hour; 336h costs about $86, so hours bind. The retained report corrects it.
 - Frozen Elemental recipe omitted input version but resolved to v6; investigate
   legacy loading separately if needed. C1 pins resolved v6 explicitly by admission.
+
+## Main sync — 2026-11-08
+
+Assumption (reversible): keep this Task's b015d5 continuation notes as the
+active scratch context. Main's separate 5da5f4 study decisions remain at
+`e0832f67fc66a1f2033bafefdb4598e394fd5ca1:scratch/questions.md`; its study
+landing authority and budget do not replace this experiment's boundaries.

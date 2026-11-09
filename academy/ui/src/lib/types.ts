@@ -210,6 +210,7 @@ export interface DecisionTargetView {
 }
 
 export interface DecisionContextView {
+  pending?: string[];
   recent_facts: string[];
   actor: number;
   stage: string;

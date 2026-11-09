@@ -1,5 +1,6 @@
 """Direct SDK worker proof: actual learner, admitted bytes and failure admission."""
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
@@ -26,7 +27,9 @@ from manabot.experiment.job import (
 from manabot.experiment.numerics import _suite_environment
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
+import manabot.training.execution as execution
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -34,6 +37,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -213,6 +217,39 @@ def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     assert run.error is not None and "cancelled by launcher" in run.error
     assert run.selected_artifact is None
     assert (tmp_path / "run/run.json").exists()
+
+
+def test_nonrecoverable_collection_cancellation_retains_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stop = tmp_path / "stop"
+
+    def collecting(
+        self: SeatRoutedCollector,
+        agent: ActorCritic,
+        num_steps: int,
+        *,
+        deadline_monotonic: float | None = None,
+        check: Callable[[], None] | None = None,
+    ) -> RolloutBatch:
+        # Inject cancellation after collection starts, without playing or load.
+        stop.touch()
+        clock = execution.time.perf_counter() + 2
+        with monkeypatch.context() as patch:
+            patch.setattr(execution.time, "perf_counter", lambda: clock)
+            if check is not None:
+                check()
+        raise AssertionError("collection continued after cancellation")
+
+    monkeypatch.setattr(SeatRoutedCollector, "collect", collecting)
+    regime = specification().regime
+    assert not regime.recoverable
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        with pytest.raises(RuntimeError, match="cancelled by launcher"):
+            execute_regime(regime, 12250, tmp_path / "run", store, stop_path=stop)
+    run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_bytes())
+    assert run.status == "failed" and run.stages[0].updates == 0
+    assert run.selected_artifact is None
 
 
 def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> None:

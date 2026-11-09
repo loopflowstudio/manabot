@@ -35,7 +35,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.state.admission import copy_verified_artifact
+from manabot.training.state.admission import _admit_setups, copy_verified_artifact
 
 
 @dataclass(frozen=True)
@@ -252,9 +252,13 @@ def admit_learning_state(
             continue
         with torch.random.fork_rng(devices=[]):
             agent, space = load_checkpoint(copied["path"])
-        # The parent export is bound to the match it trained on; the segment's
-        # own exports are bound to the regime's match when they are written.
-        validate_agent_setup(agent, Match(source_match).to_rust())
+        # The parent export is bound to what it trained on: a transferred setup's
+        # match, else the regime's match or every deck its deck source lists. The
+        # segment's own exports are bound to the regime when they are written.
+        if spec.source_match is not None:
+            validate_agent_setup(agent, Match(source_match).to_rust())
+        else:
+            _admit_setups(agent, regime)
         if agent.config != regime.agent or space.encoder.config != regime.observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
         payload = torch.load(copied["path"], map_location="cpu", weights_only=False)

@@ -1,5 +1,6 @@
 """Shared payload routing retains addressable objects and shared learning gradients."""
 
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.records import RecordReduction
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler
@@ -167,3 +169,102 @@ def test_shared_memberships_are_object_joins_under_permutation() -> None:
     selected = BatchedSampler(model, deterministic=True).select(buffers, np.array([0]))
     assert buffers["actions_valid"][0, selected[0]] == 1
     assert np.isfinite(ValueScorer(model).score(buffers, np.array([0]))).all()
+
+
+@pytest.mark.parametrize("reduction", ("typed_pool", "typed_gru"))
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_batched_effect_routing_matches_independent_gradients(
+    reduction: RecordReduction,
+    device: str,
+) -> None:
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA is unavailable")
+    torch.set_num_threads(1)
+    torch.manual_seed(42)
+    env = shared_effect_root(7)
+    values = _batch(
+        ObservationSpace(ObservationConfig(policy_input_version=7)).encode(
+            env.observation_for_player(env.current_agent_index())
+        )
+    )
+    headers, details, members = (
+        values[key].repeat(3, 1, 1).to(device)
+        for key in ("effects", "effect_details", "effect_members")
+    )
+    headers[1] = 0
+    details[1] = members[1] = float("nan")
+    # Absence must not turn into a reference to the preceding batch's objects.
+    headers[2, 0, 12] = 0
+    headers[2, 0, 10] = 2
+    # Two memberships of the same payload to one object still add twice.
+    members[2, 1, 0] = members[2, 0, 0]
+    objects = torch.randn(3, 202, 8, device=device, requires_grad=True)
+    independent_objects = objects.detach().clone().requires_grad_()
+    headers.requires_grad_()
+    independent_headers = headers.detach().clone().requires_grad_()
+    encoder = SharedEffectEncoder(8, reduction).to(device)
+    independent = deepcopy(encoder)
+    actual = encoder(headers, details, members, objects)
+    expected = torch.cat(
+        [
+            independent(
+                independent_headers[i : i + 1],
+                details[i : i + 1],
+                members[i : i + 1],
+                independent_objects[i : i + 1],
+            )
+            for i in range(3)
+        ]
+    )
+    torch.testing.assert_close(actual, expected)
+    actual.square().sum().backward()
+    expected.square().sum().backward()
+    torch.testing.assert_close(objects.grad, independent_objects.grad)
+    torch.testing.assert_close(headers.grad, independent_headers.grad)
+    for parameter, reference in zip(
+        encoder.parameters(), independent.parameters(), strict=True
+    ):
+        # Batched GEMM and separate float32 gradient sums accumulate in different
+        # orders on CUDA. Bound that error against double precision below too,
+        # so agreement between two float32 paths cannot mask a routing defect.
+        torch.testing.assert_close(
+            parameter.grad, reference.grad, rtol=2e-5, atol=2e-5
+        )
+
+    oracle = deepcopy(encoder).cpu().double()
+    oracle.zero_grad(set_to_none=True)
+    oracle_objects = objects.detach().cpu().double().requires_grad_()
+    oracle_headers = headers.detach().cpu().double().requires_grad_()
+    oracle_details, oracle_members = details.cpu().double(), members.cpu().double()
+    precise = torch.cat(
+        [
+            oracle(
+                oracle_headers[i : i + 1],
+                oracle_details[i : i + 1],
+                oracle_members[i : i + 1],
+                oracle_objects[i : i + 1],
+            )
+            for i in range(3)
+        ]
+    )
+    precise.square().sum().backward()
+
+    def compare_precise(value: torch.Tensor, reference: torch.Tensor) -> None:
+        torch.testing.assert_close(
+            value.detach().cpu().double(), reference, rtol=2e-5, atol=2e-5
+        )
+
+    for output, source_objects, source_headers, model in (
+        (actual, objects, headers, encoder),
+        (expected, independent_objects, independent_headers, independent),
+    ):
+        compare_precise(output, precise)
+        assert source_objects.grad is not None and oracle_objects.grad is not None
+        assert source_headers.grad is not None and oracle_headers.grad is not None
+        compare_precise(source_objects.grad, oracle_objects.grad)
+        compare_precise(source_headers.grad, oracle_headers.grad)
+        for parameter, reference in zip(
+            model.parameters(), oracle.parameters(), strict=True
+        ):
+            assert parameter.grad is not None and reference.grad is not None
+            compare_precise(parameter.grad, reference.grad)

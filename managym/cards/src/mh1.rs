@@ -4,6 +4,7 @@ use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -52,14 +53,14 @@ fn prismatic_vista() -> CardDefinition {
             life_cost: 1,
             tap_source: true,
             sacrifice_source: true,
-            effects: vec![Effect::SearchBasicLand {
-                subtype: None,
-                count: EffectValue::Fixed(1),
-                tapped: false,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: false,
-            }],
+            effects: vec![Effect::search_library(
+                CardPredicate::basic_land(),
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    false,
+                )],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),

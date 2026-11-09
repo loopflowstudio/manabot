@@ -853,6 +853,59 @@ preserves accepted decisions, dated proof limits and source history.
   and browser geometry. The historical concept-review illustration predates
   implementation and is not a browser capture.
 
+## Retained execution lessons (2026-11-04; MTG-241, pending review)
+
+- A completion boundary includes consequent zone work. Sacrificing a mana
+  source can return a linked exiled card whose entry asks a replacement
+  question. Retaining the paid output and original payment until that entry
+  finishes prevents repeated costs, premature mana and early priority. A
+  constructed real-Command witness at `301877ea1`, retained through
+  `7b381909e`, covers this chain and the source's already-earned tap trigger;
+  it does not establish every payment resource or reconnect path.
+- A simultaneous batch retains transformed proposals, applied replacement
+  identities, pre-departure sources/LKI and original result ordinals across
+  choices. Recheck applicability after each transformation and bind root
+  results only after consequent children finish. Focused debug witnesses cover
+  newly applicable replacements, once-only application, affected-player 3/4
+  counter ordering and deferred combat/SBA commits. Constructed drivers are
+  not complete Doubling Season/Caradora card evidence. Surveil's partition
+  moves together before kept-card ordering; its keyword event follows the
+  completed operation, before the caller's suffix.
+- Exact continuation ownership is necessary but insufficient for learning
+  and possible worlds. Obligation codes and current offers omit consequential
+  retained results and pending batches. Refreshing only the active offer after
+  hidden membership resampling cannot repair saved callers or selected subsets.
+  MTG-241's hand/library migration now preserves active selections and saved
+  caller aliases in both samplers, including conditional foretold weights;
+  frozen count-only learned samplers reject these unsupported domains before
+  inference. That support is limited to the retained frame/decision chain.
+- Private capture provenance must survive the selecting frame. MTG-241's
+  constructed completed-selection witness at `c8ea23d33` captures a Hand
+  object into a delayed trigger, completes resolution, then finds both samplers
+  leave the exact live capture in Library without a game move. Bare remembered
+  references lose selection provenance, while frame-only discovery and refresh
+  miss waiting triggers. This disproves complete hidden-world support, not the
+  registered public delayed-capture tests. The planned repair carries owned
+  bindings through waiting, queued, placing, stack and resolving lifetimes and
+  conditions one joint assignment across aliases; it remains unimplemented at
+  `f1ce0ce13`. Current/LKI/incarnation rules still apply after later movement.
+- Complete retained-payload projection also remains unfinished. MTG-244's
+  published v8 layer layout includes captured continuation programs, but this
+  alone does not represent pending batches, scoped results or completion work.
+  Integration must reconcile those meanings and reject unsupported older inputs
+  before inference. Jack Heart's 2026-11-04 directive requires bounded performance
+  attribution, mitigation/remeasurement and policy distinguishability before review, without
+  truncating choices or launching training. Frozen inputs remain frozen; the
+  successor schema must reconcile with MTG-244. No speed or learning-efficacy
+  claim follows from the focused execution tests.
+- Compare the whole change with main/reference as well as measuring individual
+  mitigations. Already-modified before/after cuts do not establish net cost.
+  MTG-244's first published CI reported matching counts/digests alongside a
+  large step/search regression; passing semantic comparisons and local focused
+  checks therefore do not establish runtime acceptance. Preserve that contrary
+  evidence through integration, attribute inherited versus incremental cost,
+  and keep the 10% budget; a refreshed reference is not a mitigation.
+
 ## Open tensions
 
 - Migrate current Academy match/revision/replay bookkeeping into managym without
