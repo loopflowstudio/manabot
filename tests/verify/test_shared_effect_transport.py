@@ -11,7 +11,11 @@ from manabot.env.failures import GameInputs
 from manabot.env.observation import ObservationEncoder
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import capture_text_decision
-from manabot.verify.representation import source_effect_root
+from manabot.verify.representation import (
+    advance_to_next_turn,
+    aged_grant_root,
+    source_effect_root,
+)
 import managym
 from tests.retained_decision import assert_retained_frame
 
@@ -134,6 +138,46 @@ def test_source_dependent_shared_transport_has_exact_public_join() -> None:
         row = actual["effects"][actual["effects"][:, -1] == 1][0]
         assert row[8] == 3 and row[12] > 0
         assert row[12] == encoder.object_to_index[record.source.object_id] + 1
+
+
+def _history(env: managym.Env, viewer: int) -> np.ndarray:
+    capacity = ObservationEncoder(ObservationConfig()).cards_per_player
+    return np.array(
+        env.observation_for_player(viewer).encode_policy_history(32, capacity)
+    )
+
+
+def _effect_durations(env: managym.Env, viewer: int) -> set[float]:
+    headers = env.encode_observation(env.observation_for_player(viewer), 7)["effects"]
+    return set(headers[headers[:, -1] == 1, 8].tolist())
+
+
+def test_effect_older_than_history_window_survives_only_in_current_state() -> None:
+    """History cannot say which grant cleanup will end; v7 headers can.
+
+    The roots differ in payload and target as well as duration, so this shows
+    only that the window cannot separate them. Equal effective state with
+    differing futures is the rules anchor
+    `cr_514_2_an_end_of_turn_record_ends_at_cleanup`.
+    """
+    end_of_turn = aged_grant_root("EndOfTurn", fill=False)
+    indefinite = aged_grant_root("Indefinite", fill=False)
+    assert not np.array_equal(_history(end_of_turn, 0), _history(indefinite, 0))
+
+    end_of_turn = aged_grant_root("EndOfTurn")
+    indefinite = aged_grant_root("Indefinite")
+    for viewer in (0, 1):
+        window = _history(end_of_turn, viewer)
+        assert window.shape[0] == 32
+        np.testing.assert_array_equal(window, _history(indefinite, viewer))
+        assert _effect_durations(end_of_turn, viewer) == {1.0}
+        assert _effect_durations(indefinite, viewer) == {2.0}
+
+    advance_to_next_turn(end_of_turn)
+    advance_to_next_turn(indefinite)
+    for viewer in (0, 1):
+        assert _effect_durations(end_of_turn, viewer) == set()
+        assert _effect_durations(indefinite, viewer) == {2.0}
 
 
 def test_historical_projection_cannot_invent_shared_provenance() -> None:

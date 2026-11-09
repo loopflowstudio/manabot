@@ -1,4 +1,4 @@
-# experiments wave memory
+# Experiments Wave memory
 
 The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
 The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
@@ -43,28 +43,300 @@ admission but failed collection before learning at a separate card-object
 capacity boundary. MTG-213 v5 later completed three v7 GPU learner updates
 before a separate action-capacity failure. The later v10 pilot below exported
 and evaluated a trained checkpoint; neither it nor those earlier runs establishes
-a replicated representation comparison. Active-byte reduction does not imply
-padded-memory savings: default v7
+a replicated representation comparison. The separate representation study later
+completed eight CPU replicates; those CPU receipts establish no GPU update or
+MTG-213 result. Later representation-only GPU admissions and a cancelled cohort
+did execute learner updates, as recorded below; they establish no complete
+comparison. Active-byte reduction does not imply padded-memory savings: default v7
 effects plus local facts occupy 37,888 bytes versus v6/256's 12,288.
 
 Native source-A/B positions equal under v6 differ under v7 and diverge after
 one source leaves. Final characteristics alone therefore cannot replace active
 provenance. A separate observed keyword grant/removal timestamp defect remains
-in 5da5f4's questions: fixed-layer keyword subtraction can ignore grant order.
+as MTG-240: fixed-layer keyword subtraction can ignore grant order.
 It predates transport and does not justify semantic coalescing. Such merging
 requires identical future behavior across expiry, sources, intervening effects,
 affected sets and multiplicity, as Jack Heart explicitly required.
 
-The separate $25 representation allowance covers all attempts and ancillary
-costs; retained paid calibration estimates $0.07083924 with the rental deleted,
-not a settled invoice. Engineering runs do not satisfy replicated learning.
-A revised v7 study needs a prospective common-input protocol. Persistent memory
-and relation-table redesign remain proposals; native current effects/knowledge
+Jack Heart's separate $25 representation allowance covered the completed
+prospective study at `92becff6091912a3ec83ae8fdd4e1c2347ff1d45`. Four paired seeds
+each completed 128 updates and 4,096 games in both v7 arms; all 1,024 held-out
+evaluation games completed and replayed. GRU minus pooling was −0.98 percentage
+points (95% paired-seed interval [−10.13, +8.18]), with elapsed training ratio
+1.06. The declared advantage criterion failed: this is inconclusive, not
+equivalence, superiority of pooling, or permission to promote a default.
+Both effect and continuation reducers changed together; neither arm has temporal
+memory. Extra GRU parameters, four seeds, one authored matchup and the fixed
+short horizon limit attribution and generalization. With no initialization or
+no-update control, the endpoint comparison establishes no improvement over
+initialization. Two balanced concurrent CPU batches also limit isolated speed
+claims. Hardware refusals and excluded calibrations remain in the attempt ledger.
+
+The deleted L4 calibration's provider bill is $0.07258259388618171, superseding
+the $0.07083924 estimate. The CPU continuation acquired no rental; the $6 ancillary
+reserve remains pending invoices. These are retained accounting/teardown receipts,
+not a fresh provider inventory. Scientific evidence is published under
+`experiments/data/state-representation-v7-5da5f4/`, with its report and frozen
+protocol in `experiments/`. The maintained runner's rename to
+`state_representation_v7.py` does not change its archived scientific source.
+Subsequent main catalog, rules and relation changes are not evidence about that
+frozen runtime. Results require demo/review; the repair's ship approval does not
+authorize automatic study promotion. Jack Heart subsequently authorized longer
+GPU training and a viable restart within the ORIGINAL cumulative $25, including
+a necessary Etude SDK release and Vast use (2026-11-04). That direction supersedes
+the earlier no-further-training boundary, not the cap or results-review boundary.
+Earlier GPU attempts used the 0.2.14 launcher with a locked 0.2.12 worker;
+those identities remain historical. Jack Heart subsequently selected public
+Etude Git main for source checkouts (2026-11-04). `uv.lock` pins one exact commit
+for the launcher and worker; updates are explicit before preparing a new run,
+never branch resolution during training. Published package metadata retains an
+index requirement. The retained source-install proof covers launcher and clean
+archive-style dependency installation. The later 4090 admission also completed
+locked Linux installation, native build and CUDA numerics; this establishes
+runtime execution, not scientific completion. No study merge, default/model promotion
+or MTG-213 spending is authorized.
+
+The first GPU admission completed four GRU updates, but the eight-learner
+scientific cohort `9c7c8e6841a4` was cancelled before scoring. Its first updates
+took 169–239 seconds versus the allocation's required 32.23 seconds/update;
+the isolated admission's 19.30 seconds/update did not predict aggregate pace.
+Memory headroom does not establish concurrent compute capacity. The first three restart
+admissions then failed: startup loss; a pooled learner paused at 7/8 updates;
+and a 256-stream learner lost without a final output inventory. The last loss
+establishes neither zero exposure nor OOM. Those attempts supplied no complete
+two-arm throughput admission. A later admission completed both arms as recorded
+below; the subsequently launched replacement cohort has no qualified plateau
+result in the retained evidence.
+
+The 2026-11-04 19:55–19:57 UTC reconciliation found all five Vast instances
+absent and all five runs terminal. Full-day provider charge rows total $0.398;
+including the settled L4 bill gives $0.4705825939 in reported charges, superseding
+the earlier $0.4487194142 lifetime estimate. This is not final settlement.
+Released Etude 0.2.14 filtered from intra-day creation while provider rows use UTC
+midnight; an offline reproduction also showed its coverage guard rejecting a row.
+An absent SDK bill therefore does not establish zero charges, and a daily charge
+date does not establish coverage through teardown. Both 5090 charges already
+exceed the corresponding lifetime estimates. Correct daily query semantics do
+not establish final settlement or require waiting for an unavailable watermark.
+
+Etude PR82 repaired daily-charge retrieval and removed the invalid conversion
+to settled billing coverage. The branch pins its merged source
+`64e9eaabf016f567cb9567280bcf8730f6f5d524`; no SDK release is claimed.
+The repaired 20:10 UTC read returned the same $0.398 and confirmed all five
+instances absent, with settlement still unknown. Inclusive charge dates,
+observation time, repeated totals and deletion are not finalization watermarks.
+Provider-confirmed final GPU, disk and bandwidth totals through each retained
+teardown remain missing; another unchanged charge query cannot supply them.
+
+Jack Heart's 2026-11-04 “keep going” superseded the operator-created
+final-settlement-only gate. Cancelled quote caps are commitments, not charges;
+holding them indefinitely was not a user requirement. The operational revision
+reserved $2 for all preceding compute and $6 ancillary within the original $25.
+Unknown live commitments still retain their full reservation. Reconciliation
+uses reported charges, whole rental lifetimes and quoted disk/transfer terms,
+without double-counting reservations or asserting final invoices.
+
+The subsequent 4090 admission `886233843d34` completed three pooled updates:
+768 games, 143,076 learner decisions and 560 optimizer updates in 348.8849
+collection/learning seconds. It paused at predictive finalization under the
+600-second bound, so no GRU learner started. This fourth restart failure is a
+wall-budget failure, not OOM; all 23 outputs matched the worker inventory and
+the controller retained `failed`. Provider absence was confirmed at 21:00:59
+UTC. Reported-plus-settled compute was $0.6225825939, not final settlement.
+At that point the additional $0.50 admission reserve left $16.50 uncommitted.
+Even the pooled half projects $20.22 before allowances, or $31.39 with the
+declared allowance and setup/evaluation reserve. That partial-arm projection
+does not qualify two-arm throughput or predict every future game length;
+it demonstrates why this measured arrangement cannot fund the whole cohort.
+
+Jack Heart authorized the cheaper 3090 attempt under another $0.50 cap, then
+required implementation diagnosis before blaming the host (22:38 UTC). Run
+`803bcc26e7de`, source `22c10ca55197ab225546e5880cc53709db985901`, completed
+four excluded admission updates and 1,024 games in each arm. All 46 outputs
+matched the worker inventory. Instance `59168556` was deleted and confirmed
+absent at 22:58:28 UTC. Reported charge $0.205 exceeded its $0.20159 lifetime
+estimate; combined reported-plus-settled compute was $0.85458, not a final
+invoice. Reserving $2 earlier compute, $0.50 for each later admission and $6
+ancillary leaves $16 within the original $25. These are dated accounting
+observations, not live inventory or permission to discard unknown commitments.
+
+The completed admission separates recurring work from fixed overhead: pooled
+collection/learning took 843.07/440.84 seconds and GRU 969.56/448.04; exports
+took about 0.6 seconds per arm. Multiplying all child elapsed by the update ratio
+overstates fixed costs. The corrected projection scales only recurring work,
+charges setup/close once per learner, bounds periodic exports separately and
+includes outer orchestration and rental/evaluation reserves. It still projects
+$71.82 at the executed quote; recurring training alone without allowances costs
+$47.58, above $16. Four updates cannot establish later game length. This is an
+unaffordable measured arrangement, not proof that every GPU arrangement fails.
+
+Most collection time was inference/action selection. CUDA placement and one
+thread were confirmed; a single 23% GPU-utilization sample, one CPU core and
+two zero-pressure samples do not establish sustained host contention. The earlier
+4090 used different training/native sources and cannot isolate hardware
+performance. Jack Heart explicitly authorized bounded ordinary-learner diagnosis
+and measured repairs on 2026-11-04 at 23:15 UTC within the same cumulative $25;
+the pre-repair projection does not establish that every implementation is
+unaffordable or close the remaining work.
+
+The subsequent CPU diagnosis supported batching effect/continuation neural
+projections and record reduction (`59ec1bd24`, simplified in `678419e00`).
+Matched pooled work completed 256 games, 51,095 decisions and 200 minibatches
+before and after: collection plus learning fell from 202.86s to 121.71s;
+encoder call time fell from 30.36s to 2.71s. Both used cProfile and the final
+run also captured operator traces, so these are bounded instrumented CPU
+measurements, not a CUDA speedup or scientific admission. Native multi-position
+oracles and focused tests preserve outputs, parameter/object/definition gradients,
+duplicate memberships, canonical order and absent gradients for unused Adam
+parameters. A zero gradient is not equivalent to None when optimizer momentum
+exists. Checkpoint parameters and fixed input contracts remain unchanged.
+
+Host metadata copies and routing loops survive the batching repair. Their CUDA
+cost was unresolved at this CPU-only stage; later retained traces are summarized
+below. The initial learning trace covered only grad-enabled
+forward. `6c0e33d4b` extended it through backward, clipping, Adam and numerical
+health, with partial traces on failure. Focused tests verify actual operators
+and unchanged weights/gradients across two ordinary updates. Aggregate phase
+clocks still cannot replace retained causal CUDA evidence. The final GRU CPU
+diagnosis completed too, but has no matched full-batch baseline. Neither CPU
+receipt establishes a post-repair GPU cohort price, plateau or preferred
+representation.
+
+A subsequent $0.19 diagnostic quote under the $0.50 cap failed at source
+publication during GitHub/Doppler connectivity timeouts, before any run or rental
+was created. No allocation expense or live commitment resulted; the conservative
+$16 remainder persisted. This is a dated failed attempt, not current provider
+availability or connectivity. The four CPU profiles and pre-batching oracles
+were subsequently manifest-published under the study's `cpu-operator-profiles/`
+and `encoder-reference/` directories, preserving their original identities.
+
+After connectivity recovered, CUDA run `a46e80b31212` at source `66ec957fe`
+passed the four reference comparisons and six directed routing gates by control
+flow evidence: both subsequent profile children completed an update. Their
+detailed reports and traces were not delivered. One separate uninstrumented
+pooled update then completed before the rental disappeared at 2026-11-05
+01:12:47 UTC (`lost / machine_lost`). Retained logs establish partial execution,
+not complete matched admission, operator attribution or a scientific endpoint.
+No evidence establishes OOM or code failure; the recovery note below identifies
+who deleted the rental (`59185580`). The attempt record and
+contiguous carried logs are manifest-backed under `complete-operator-profile/`.
+The 01:16:18 UTC accounting confirms all eight Task Vast rentals absent, reported
+new charge $0.038 versus $0.03984744 lifetime estimate, and reported-plus-settled
+compute $0.89258259. Conservative compute/ancillary reserves of $3.50/$6 leave
+$15.50 within the original $25; these are dated observations, not final bills.
+
+This loss exposed a delivery boundary: the locked Etude runtime uploads ordinary
+outputs at attempt completion. Combining completed diagnosis with later throughput
+can therefore lose the diagnostic artifacts if that later work loses its machine.
+The maintained diagnostic now ends after its two one-update profiles and emits
+bounded parity/operator summaries into carried logs. It has a 30-minute work
+bound and retains the $0.50 attempt ceiling; setup and other rental costs also
+need a fresh quote. Later run `911423cce90b` verified complete trace delivery,
+and separate uninstrumented admission qualified the scientific launch below. Neither
+the split nor a successful progress log replaces a verified output inventory.
+Jack Heart's bounded diagnosis authorization remains in force; the loss does
+not replenish the allowance, shorten the cohort or select a representation.
+
+Prospective admission now freezes startup, no-completed-update and phase-cost
+stop policies, retaining progress/reasons before requesting graceful shutdown
+and reaping children within the rental bound. The ordinary collector consumes
+the executor stop callback. Injected fixtures establish these controls; the
+frozen completed rental does not prove their live enforcement. Capacity stops
+must remain independent of model scores and retain every failed attempt.
+
+The subsequent diagnostic `b153cc2e5a77` passed frozen CUDA references but failed
+one float32 parameter-gradient tolerance before any learning. An independent
+float64 reference in `af601877e` bounded both float32 paths without changing
+learner semantics. Diagnostic `911423cce90b` then passed all four reference
+comparisons and six routing tests, completing both ordinary profiled updates.
+All 59 outputs, including complete inference/backward/clipping/Adam traces,
+matched the inventory; its rental was confirmed absent. First-minibatch encoder
+host scopes measured 13.09/15.45ms for pool/GRU, with only 0.099/0.093ms of CUDA
+stream waits inside those scopes. Host routing remains measurable, but these
+captures do not support device synchronization as the dominant cost. First-step
+loading and profiling overhead preclude recurring-throughput extrapolation or
+another runtime repair from those traces alone.
+
+Separate admission `37c1523a98ed` used the same source and RTX3090 hardware,
+completing four updates/1,024 games per arm in 516.7714s overall. All 49 outputs
+verified and the rental was confirmed absent. The complete phase projection,
+including the declared allowances, exports, setup/evaluation/teardown, was
+55.66970 hours / $13.77310. Four updates qualify this prospective allocation;
+they do not establish later game lengths, a plateau or architecture quality.
+
+Before admission completed, accounting released unused ended-attempt ceilings
+under Jack Heart's no-double-counting direction. The surviving rule reserves
+max($3.50, twice fresh per-rental reported/lifetime maxima including settled L4),
+$6 ancillary and unknown/live commitments in full. At 2026-11-05 02:25:26 UTC,
+all eleven prior rentals were absent and the maxima totaled $1.04590824,
+leaving $15.50 within the original $25. This supersedes accumulated ended-attempt
+cap reservations above, without asserting final settlement or adding funds.
+
+Scientific Run `e51f61b92931` launched at `af601877e` with that full $15.50
+allocation reserved. At the retained 03:01:54 UTC read, instance `59194544` was
+the sole Task rental. The 03:01:53 learner receipt records its first pooling
+seed 74211 at 45/256 updates, 11,520 games and 1,333,548 learner transitions,
+with no recorded error. Initialization and update-32 checkpoint bytes match
+their recorded sizes and hashes. Finish-after-work
+was acknowledged, with deadline 2026-11-07 10:09:07 UTC as backstop. A valid
+partial receipt or checkpoint backup cannot establish cohort completion or a
+plateau. Default discovery remains admission-only.
+
+That run ended `lost / machine_lost` at 2026-11-05 13:09:07 UTC with no final
+inventory: three completed learners (pool/GRU 74211, GRU 74212), a fourth at 83
+updates, no evaluated endpoint and no qualified result. All 36 checkpoint backups
+verify. Reported cost was $2.603; $12.86053336 of the original $25 remained.
+
+**Check the provider's audit log before attributing a rental loss.** Vast's log
+shows our own launcher key deleted `59194544`, `59185580` and `59152469`: Etude
+treated one non-running or failed status read as dead and ended the rental,
+destroying its disk. The triggering status was not retained, so a host fault is
+neither shown nor excluded. Rentals were on-demand; preemption was not the
+mechanism. Etude draft PR #84 tolerates a 15-minute outage; it is not merged.
+Reusable durable training recovery is Etude Task `ff3d48`.
+
+**Delivery lesson.** The locked Etude runtime uploads outputs at attempt
+completion, so a long multi-learner rental risks all of its evidence at once;
+this cost the entire `e51f61b92931` inventory. Prefer a job per durable unit.
+Backups kept raw/EMA/Adam only for completed learners: an interrupted learner's
+periodic raw checkpoints cannot continue exactly, because Adam, EMA and RNG were
+not saved.
+
+Jack Heart, 2026-11-05 ("can we schedule soem evals in paralell with the
+additional training") selected a prospectively amended recovery cohort: keep the
+three learners, restart pool/74212 from initialization on its seed, train the
+other four and evaluate alongside training. Interim scores select nothing; no
+merge is approved. `SCORING` must stay byte-identical because the evaluator's
+protocol identity hashes it, so the amendment is a separate record. The plan owns
+remaining acceptance. Evidence is manifest-backed under
+`experiments/data/state-representation-gpu-5da5f4/`, especially `cuda-traces/`,
+`batched-admission/` and `batched-plateau/`; failed receipts remain immutable.
+These are dated reads, not a fresh provider balance.
+
+Wider complete-game batches change gradient estimates and optimizer exposure;
+they require a prospective identity and fresh paired seeds, even at a matched
+65,536-game horizon. Schedule progress can follow game exposure without implying
+equivalent optimization. Admission must measure both arms' phases and total
+elapsed, charging fixed startup/exports separately from recurring training.
+Preserve failed attempts,
+initialization, complete periodic evaluation, separate final scoring and explicit
+uncertainty; a noisy flat curve or poor flat play is not evidence of competence.
+
+Pin executed recipe capacities independently of fresh defaults. The main sync
+raised default `max_actions` from 64 to 512 and silently changed this study's
+recipe hashes, causing its historical comparison to reject all retained results.
+Explicit original axes restored both digests and the read-only eight-endpoint
+analysis. Successful discovery/scheduling tests alone did not detect that drift;
+retained recipe hashes now guard the experiment declaration.
+
+Persistent memory and relation-table redesign remain proposals; native current
+effects/knowledge
 cannot depend on a bounded history window. Any later recurrent design needs
 viewer/seat ownership, reset, replay/fork and exact restoration contracts.
-Evidence is published under `experiments/data/state-representation-5da5f4/`;
-the Task plan owns remaining acceptance and delivery. Filesystem inspection
-found no immediate Training child memory directories on 2026-11-04.
+Earlier engineering evidence remains under
+`experiments/data/state-representation-5da5f4/`; the Task plan owns remaining
+acceptance and delivery. Filesystem inspection
+found no immediate Experiments child directories or child memories on 2026-11-04.
 
 ## Fixed-corpus TLA pilot (MTG-213, reconciled 2026-11-05 UTC)
 
