@@ -1289,6 +1289,8 @@ without CUDA, prints actual recurrent/table dtypes and precision settings,
 and covers full, selected, empty and cached definition paths, backward, Adam
 and weight reload. The post-worker check loads its hash-verified raw checkpoint
 with ordinary world/input admission and writes `cuda-admission.json`.
+Its CPU regression uses a synthetic receipt and real checkpoint to verify the
+artifact mapping, reload and corrupt-byte rejection; it is not CUDA admission.
 On subsequent GPUs, run the same CUDA test before BF16, without another
 training smoke. CPU passes or ordinary pytest skips do not admit execution.
 

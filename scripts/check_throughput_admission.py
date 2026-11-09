@@ -4,18 +4,21 @@ import json
 import os
 from pathlib import Path
 
+from pydantic import TypeAdapter
 import torch
 
 from manabot.infra.artifacts import verify_file
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.records import TrainingRun
-from manabot.training.regime import TrainSelfPlay
+from manabot.training.regime import ArtifactReference, TrainSelfPlay
 
 
 def check(output: Path) -> dict[str, object]:
     receipt = TrainingRun.model_validate_json(
         (output / "training/run.json").read_bytes()
     )
+    if len(receipt.stages) != 1 or len(receipt.regime.stages) != 1:
+        raise ValueError("C1 admission requires one completed training stage")
     stage = receipt.stages[0]
     recipe = receipt.regime.stages[0]
     if not (
@@ -26,15 +29,16 @@ def check(output: Path) -> dict[str, object]:
         and recipe.execution.precision == "bf16"
         and stage.updates == 2
         and stage.actual_device == "cuda"
+        and stage.optimizer_updates is not None
         and stage.optimizer_updates > 0
         and stage.numerical_failure is None
     ):
         raise ValueError(
             "C1 admission worker did not complete two healthy CUDA BF16 updates"
         )
-    reference = stage.artifacts["raw"]
-    path = output / "training" / Path(reference.path).name
-    verify_file(path, reference.sha256, reference.bytes)
+    reference = TypeAdapter(ArtifactReference).validate_python(stage.artifacts["raw"])
+    path = output / "training" / Path(reference["path"]).name
+    verify_file(path, reference["sha256"], reference["bytes"])
     agent, space = load_checkpoint(str(path))
     if space.encoder.config.policy_input_version != 6 or agent.config.catalog_records(
         6
@@ -44,7 +48,7 @@ def check(output: Path) -> dict[str, object]:
         raise ValueError("C1 admission endpoint contains nonfinite weights")
     return {
         "status": "passed",
-        "checkpoint_sha256": reference.sha256,
+        "checkpoint_sha256": reference["sha256"],
         "updates": stage.updates,
         "optimizer_updates": stage.optimizer_updates,
         "effective_records": "hashed",

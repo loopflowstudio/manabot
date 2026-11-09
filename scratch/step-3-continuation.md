@@ -169,3 +169,44 @@ its two local skips do not admit BF16 execution. No rental or paid run occurred.
 
 The ed2300 status read still reports unstarted with no PR. Its repair is delivered
 only here; publication will link the PR and these validation limits there.
+
+## Gate — 2026-11-09
+
+Comparison: PR #451 against `main`, including uncommitted gate fixes. GitHub
+integration (core/evaluation/long) and Linux/macOS package/install checks passed
+at `f88a2aef6`; those unchanged results remain evidence. The repository's
+`.github/ci/select-tests.sh` selects integration only for this diff; it has no
+local content-cache runner. No Rust, frontend, world or observation shape changed.
+
+Review found a deterministic post-worker admission failure: `StageRecord.artifacts`
+contains dictionaries, while the new script used attribute access. Admission now
+validates the existing `ArtifactReference` type and uses its mapping fields.
+Missing optimizer counts and missing stages reject clearly. A synthetic receipt
+with a real small checkpoint covers reload and corrupt-byte rejection on CPU;
+it does not certify CUDA training.
+
+Focused validation plan (before running):
+- `manabot/model/semantic_cards.py` and changed model tests: semantic-card,
+  semantic precision, inference and value-aggregation tests cover dtype joins,
+  gradients, cached callers and the float32 tolerance.
+- Size launch, admission, readings and diagnostic scripts: size-launch tests
+  (including two CPU worker smokes), C1 reading fixtures and precision tests cover
+  discovery, real receipt/checkpoint loading, overlap, accounting and context wiring.
+- Active-training and regime tests cover the required model-cost/discovery checks;
+  CI-selection/release and untracked-artifact tests cover the workflow and manifest.
+- Ruff on changed Python files and `git diff --check`; CUDA-only tests remain
+  deferred to the protocol's required frozen-source rental admission. Existing
+  CI owns the broader integration matrix. No paid measurement or artificial load.
+
+Results:
+- `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/model/test_semantic_cards.py tests/model/test_semantic_card_precision.py tests/model/test_inference.py tests/model/test_value_aggregation.py tests/training/test_precision.py tests/training/test_training_throughput_sizes.py tests/training/test_throughput_c1_readings.py tests/training/test_active_training.py tests/training/test_regimes.py tests/infra/test_ci_selection.py tests/infra/test_release.py tests/infra/test_experiment_data_untracked.py -q` — 154 passed, 2 CUDA skips, one new-fixture failure in 187.96s; both CPU worker smokes passed.
+- `uv run --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py::test_admission_reloads_receipt_artifact_and_rejects_unhealthy_or_changed_bytes -q` — 1 passed in 2.29s after correcting the fixture's explicit match binding and required identities field. These were fixture-construction errors, not relaxed admission. Other suites' inputs stayed unchanged; their results were retained.
+- `git diff --name-only origin/main...HEAD -- '*.py' | xargs uv run --extra dev ruff check --fix` — passed, no fixes; `git diff --check` — passed.
+
+Final focused coverage: 155 passed, two CUDA-only cases deferred. No check timed
+out, no performance improvement is claimed, and no rental was started. The reader
+usage example now includes required `--source`. Delivery must publish these gate
+fixes and obtain CI for the new revision; the earlier green PR checks cover
+`f88a2aef6`, not the uncommitted gate changes. Continue the software Graph only;
+do not complete the parent experiment. CUDA admission, freeze and billing remain
+the existing execution checks after software review.

@@ -1,7 +1,7 @@
 """C1 throughput evidence, extending the retained step-3 span reader.
 
 Historical readers/results remain frozen artifacts. This is the maintained reader:
-`uv run python -m experiments.training_throughput_readings PATH/step-3-c1` reads
+`uv run python -m experiments.training_throughput_readings PATH/step-3-c1 --source COMMIT` reads
 cells.json and runs/<id>/{run.json,updates.json,gpu-samples.csv}. cells.json maps
 *every* C1 leg to a Disposition (runs, status, reason, host, billed_usd). Skips and
 failures remain visible; retries are separate cells, never pooled or speed-picked.
