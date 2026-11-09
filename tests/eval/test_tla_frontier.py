@@ -591,7 +591,8 @@ def test_protocol_commands_name_their_rentals() -> None:
     """A copied command rents a named on-demand, never a placeholder."""
     blocks = _protocol_blocks()
     # One prefix owns the control client.
-    assert sum("etude-sdk" in block for block in blocks) == 1
+    assert sum("control=(" in block for block in blocks) == 1
+    assert all("--with etude-sdk" not in block for block in blocks)
     commands = [
         command.split()
         for block in blocks
@@ -932,7 +933,9 @@ def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
     state = observe(source, EXPERIMENT)
     with statsdb(EXPERIMENT, source) as db:
         report = analyze(state, db, {})
-    schedule = comparison_schedule(state, frozen()[1], _fixture_hours(state))
+    schedule = comparison_schedule(
+        state, frozen()[1], tla_frontier.checkpoint_hours(state)
+    )
     held = {m.key for m in delivered}, {m.key for m in rest}
     spanning = [
         comparison
@@ -944,16 +947,16 @@ def test_a_relaunched_pass_plays_only_what_no_pass_attempted(
     for comparison in spanning:
         assert comparison.result is not None
         assert comparison.counts.attempted_matches == 16
-    played = sum(c.counts.expected for c in report.comparisons)
+    played = 4 * len(matches)
     slots = [
         (planned.tag, match.key)
         for planned in schedule
         if planned.matchup is not None
         for match in planned.matchup.matches()
     ]
-    # A match in two slots counts in both, as its failed legs do.
-    unscored = 4 * sum(key == died.key for _, key in slots)
-    assert report.issues == [f"{unscored} of {played} played games have no score."]
+    # Shared chart slots retain their reading, but cohort evidence counts once.
+    assert report.counts.expected == played
+    assert report.issues == [f"4 of {played} played games have no score."]
 
     # `report()`'s tag curves read either tournament whole, whichever pass played.
     page = build(source, ROOT / "experiments/tla_frontier.py")
@@ -2019,6 +2022,8 @@ def test_report_and_analysis_read_a_store_of_played_matches(tmp_path: Path) -> N
         report = analyze(state, db, read_pods(tmp_path))
     played = sum(len(ms) for ms in matchups.values()) * 4
     assert report.issues == [f"4 of {played} played games have no score."]
+    assert report.counts.expected == played
+    assert report.policy_actions.games == (played // 4 - 2) * 3
     assert report.scale is not None and report.scale.score is None
     assert report.scale.worst.mean == 0.75 - 0.75 / 16
     assert report.scale.best.mean == 0.75 + 0.25 / 16

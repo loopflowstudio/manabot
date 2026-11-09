@@ -62,6 +62,21 @@ The existing equal-size-budget, equal-update, initialization and heuristic
 comparisons remain secondary. The Elemental 10×10 specialist study follows
 separately and does not delay this launch.
 
+## Related evidence at freeze
+
+[MTG-252's final readout study](https://github.com/loopflowstudio/manabot/blob/1631c4c403a62280615df3eab74976aa1125ea46/experiments/value-readout-252-results.md)
+found no clear critic-readout winner across three seeds per arm. Depth-4 token
+minus masked mean was +0.7 percentage points [−5.5, +6.5], and the apparent
+depth advantage at equal updates was not established at equal training hours.
+Both frontier sizes retain masked mean; no readout axis is added. Deeper
+capacity remains a hypothesis, including eight layers versus four.
+
+The outcome report will retain collected transitions and optimizer exposures
+beside updates and elapsed hours. MTG-252's work-hour interpolation excludes
+setup, exports and idle time; it is not the frontier's checkpoint elapsed clock.
+Its Elemental/v6 evidence does not establish transfer to TLA/catalog/v9. This
+frontier's one seed per size supports a case study, not replicated superiority.
+
 ## Question
 
 How far can self-play on the frozen 17Lands TLA trophy population push play
@@ -290,8 +305,9 @@ reading fails this gate.
    per-update cost risk that calibration's seconds per update and the
    rehearsal's slowest game read; it is not a vocabulary failure.
 4. Calibration, then the evaluation rehearsal.
-5. The fact-embedding check (item 5 under [Before freeze](#before-freeze)), from
-   the same merged revision, once calibration has read w64's cost.
+5. Retain the completed old-world fact-embedding verdict (item 5 under
+   [Before freeze](#before-freeze)); the prospective world amendment does not
+   relabel that evidence or require another vocabulary training cohort.
 6. Both gates, and each size's horizon written into the JSON protocol and regime.
    Freeze at the merged revision that carries them and item 3.
 7. Execution approved on November 9; verify the frozen artifacts and caps.
@@ -625,10 +641,12 @@ runner code fixed at the freeze.
 
 ## Budget
 
-The original ceiling was USD100; the authorized vocabulary extension raises the inclusive ceiling to USD110. Including setup, failures, retries and evaluation:
-2 × USD38 training + USD14 evaluation = USD90, leaving USD10 for calibration
-and the rehearsal (USD1.51 spent), the fact-embedding check (USD6 for its two arms
-and a USD2 pass ceiling, about USD5.50 expected), setup and failure costs. Those
-leave USD0.49 of the reserve at every ceiling. Evaluation is about 18% of training's ceiling. Any retry needs
-a recorded decision that keeps the total within USD100. Evaluation never runs on
-a laptop.
+The original ceiling was USD100; the authorized vocabulary extension raises
+it to USD110, including setup, failures, retries and evaluation. Training reserves
+2 × USD38 and frontier evaluation USD14, leaving USD20 for all preflight work.
+Retain the conservative historical preflight estimate of USD8.95 until billing
+is reconciled; lower job-allocation estimates do not create budget credit.
+The new three-pod calibration reserves USD2, record coverage USD0.50, and its
+rehearsal at most USD2. Timing diagnostics and any repeat checks also count in
+this reserve. Any retry needs a recorded decision keeping total spending and
+outstanding commitments within USD110. Evaluation never runs on a laptop.

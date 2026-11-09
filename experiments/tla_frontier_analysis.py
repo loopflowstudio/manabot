@@ -410,12 +410,18 @@ def analyze(
         issues.append("Evaluation source is missing or differs across the cohort.")
     if any(c.result is None and not c.unreached for c in comparisons):
         issues.append("The frozen comparison schedule is incomplete.")
-    receipted = [
-        pair.counts
-        for c in comparisons
-        for pair in c.pairs
-        if pair.counts.attempted_matches
-    ]
+    # Several curves can name the same checkpoint matchup. The runner plays
+    # those matches once; cohort totals must count their evidence once too.
+    matches: set[str] = set()
+    unique_pairs: list[PairResult] = []
+    for comparison in comparisons:
+        for pair in comparison.pairs:
+            if pair.match is not None:
+                if pair.match in matches:
+                    continue
+                matches.add(pair.match)
+            unique_pairs.append(pair)
+    receipted = [p.counts for p in unique_pairs if p.counts.attempted_matches]
     unscored = sum(counts.expected - counts.valid for counts in receipted)
     if unscored:
         played = sum(counts.expected for counts in receipted)
@@ -424,9 +430,16 @@ def analyze(
     return FrontierAnalysis(
         protocol_sha256=file_sha256(PROTOCOL),
         bootstrap_seed=protocol.bootstrap_seed,
-        counts=field_totals(Counts, [c.counts for c in comparisons]),
+        counts=field_totals(Counts, [p.counts for p in unique_pairs]),
         policy_actions=field_totals(
-            PolicyActions, [c.policy_actions for c in comparisons]
+            PolicyActions,
+            [
+                actions
+                for key, actions in _policy_actions_by_match(
+                    db, environment(protocol).identity
+                ).items()
+                if key in matches
+            ],
         ),
         comparisons=comparisons,
         sizes=sizes,
