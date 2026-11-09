@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 frozen; CUDA execution admission pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 stopped at admission; CUDA device-name check rejects receipt)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -44,8 +44,9 @@ its runs.
   than needed. The same comment sends design and execution review to Jack Heart
   in the Task conversation, so no launch happens before that review.
 - **Execution spend.** Step 1 cost about $1.06, step 2 about $.98 and step 3 about
-  $1.74, so about $3.78 of the $50 cap is spent. Step 3's $10 reservation was not exhausted.
-  Its posted bill is partial; see the report's inclusive accounting.
+  $1.74 in their original estimates. Refreshed posted prior bills total $3.803594;
+  after C1 admission, conservative inclusive bounds are $2.050474 for step 3
+  and $4.145347 overall. Provider invoices remain incomplete; see C1 accounting.
   Anything further needs an amendment made before the run that would spend it.
 - **Continuation authority.** Comment 079b3f46 and
   the continuation design retained at
@@ -1432,6 +1433,49 @@ refreshed in this offline freeze. No new approval is needed for the unchanged
 bounded continuation; a material departure remains unresolved at execution
 review. A failed identity or CUDA check requires repair and a prospective
 revision before further paid work. The parent experiment remains open.
+
+### C1 execution receipt — 2026-11-09 UTC
+
+**Stopped at the required first-rental admission; no expansion.** Under the
+existing continuation authority and execution review f14eb177, source
+`58eb3c7299f6078a56d5027ac738bc7af76d8fdc` ran on one A40. Setup-only Etude run
+`442a11544648` verified all frozen source/world/content/roster/input hashes on
+Linux before training. Admission run `3a1380d94b69` (seed 26400) passed both real
+CUDA regression cases and completed two BF16 updates: 420 optimizer updates,
+514 completed games, 107,129 environment decisions and learner transitions,
+zero discarded ledger samples, no nonfinite/rejected learning steps.
+
+The frozen post-worker validator then raised
+`ValueError: C1 admission worker did not complete two healthy CUDA BF16 updates`.
+Its literal `actual_device == "cuda"` rejects the worker's `"cuda:0"`; all other
+predicates pass. The unmodified receipt reproduces this rejection offline.
+The worker completed, but the Etude job failed, and raw checkpoint reload was
+not reached. This is an admission-check defect, not a failed or interrupted game.
+No bypass, retry, speed cell, diagnostic or other GPU rental followed. All 87
+cells have dispositions; the C1 reader reports no valid speed measurement.
+
+The defect belongs to manabot's C1 admission owner
+`scripts/check_throughput_admission.py`, with regression coverage in
+`tests/training/test_training_throughput_sizes.py`. A software repair and new
+prospective freeze must precede any new paid admission; preserve this failed
+attempt and its raw/EMA/Adam exports. Existing bounded authority is unchanged,
+and the parent experiment remains open.
+
+Etude terminated `b015d5-a40-0e2b61730e5f` / pod `iaimonawexhw5a` at
+22:46:44 UTC, after stopping the controller to release its lease. Provider
+absence and zero active attempts were independently verified. C1 held about
+0.206 GPU-hours, used two training updates and no evaluation games/draws.
+No execution process remains running. Refreshed prior bills plus conservative
+unposted bounds were $1.916973 step 3 / $4.011845 overall. C1 adds at most
+$0.133502 pending provider billing, giving inclusive bounds $2.050474 / $4.145347,
+well within the original $10/$50 caps. No unused rental remains committed.
+
+Full accounting, original errors, hashes, host facts, game/export audit, all
+cell dispositions and evidence locations are retained in
+`experiments/data/training-throughput-b015d5-v1/report.md` (C1) and
+`step-3-c1/`. Private game-ledger bytes remain in the original Etude store.
+This bounded admission establishes only its recorded execution observations;
+C1 has not measured a384l8, packing crossover or learning equivalence.
 
 ### C1 software interface
 
