@@ -5,10 +5,9 @@ sweep's games (`experiments.search_scaling`, for the sampled policy, greedy poli
 and PUCT baselines on the same deals) and `experiments.search_mirror_noise`
 positions. Writes a self-contained `report.html` (inline SVG) and `summary.json`.
 
-Every gain is paired by deal: two conditions differ only in the hero's search,
-so a difference over the deals both finished cancels deal luck. Intervals are
-95% normal intervals on paired game-score differences, with no correction for
-comparing many settings.
+Gains pair whole-game scores by starting deal, deck cell and seat. Nominal normal
+intervals and cell-stratified joint bootstrap intervals are exploratory: repeated
+inspection and selection across settings prevent confirmatory interpretation.
 
     uv run python -m experiments.search_mirror_report --mirror DIR \
         --baseline DIR [DIR ...] --noise DIR --out OUT
@@ -17,28 +16,39 @@ comparing many settings.
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections import Counter, defaultdict
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
+import gzip
+import hashlib
 from html import escape
 import json
 import math
 from pathlib import Path
 import statistics
+from typing import Any
 
-from experiments.search_mirror import ARMS, Arm
+import numpy as np
+
+from experiments.elemental_grid import Game, schedule
+from experiments.search_mirror import (
+    ARMS,
+    DEALS_PER_CELL,
+    Arm,
+    MirrorDecision,
+    MirrorRow,
+)
 from experiments.search_mirror_noise import BETAS, SUBSAMPLES, NoiseRow, analyze
-from experiments.search_scaling import BUDGETS
+from experiments.search_scaling import BUDGETS, GameRow
 from experiments.search_scaling_report import (
     CSS,
     OPPONENT_TITLE,
     OPPONENTS,
     PAD,
-    W,
     Axis,
     Estimate,
+    W,
     _frame,
-    _gz_jsonl,
     _jsonl,
     _pct,
     _series,
@@ -57,6 +67,7 @@ EXTRA_CSS = """
   border-radius: 8px; padding: 10px 14px; margin: 14px 0; color: var(--text-secondary); max-width: 860px; }
 td.best { font-weight: 600; }
 .row.single { grid-template-columns: minmax(0, 560px); }
+details { overflow-x: auto; }
 """
 NOISE_BETAS = (0.01, 0.03, 0.1)
 
@@ -74,19 +85,37 @@ def short_label(arm: Arm) -> str:
 # Loading and statistics
 
 
-def _scores(directories: Sequence[Path]) -> dict[str, dict[int, float]]:
-    """condition -> deal -> score, first row per game key, valid games only."""
-    seen: set[str] = set()
-    out: dict[str, dict[int, float]] = defaultdict(dict)
+def _outcomes(directories: Sequence[Path], *, mirror: bool) -> dict[str, dict[int, MirrorRow | GameRow]]:
+    """Read retained records strictly; conflicting copies and identity drift fail closed."""
+    expected = {g.deal: g for g in schedule()}
+    out: dict[str, dict[int, MirrorRow | GameRow]] = defaultdict(dict)
     for directory in directories:
         for path in sorted(directory.rglob("games-*.jsonl")):
-            for row in _jsonl(path):
-                if row["key"] in seen:
-                    continue
-                seen.add(row["key"])
-                if row["score"] is not None:
-                    out[row["condition"]][row["deal"]] = float(row["score"])
+            for raw in _jsonl(path):
+                row = MirrorRow(**raw) if mirror else GameRow(**raw)
+                game = expected[row.deal]
+                if (row.key, row.model_deck, row.opponent_deck, row.model_seat) != (
+                    f"{row.condition}/{game.deal}", game.model_deck, game.heuristic_deck, game.model_seat
+                ):
+                    raise ValueError(f"Schedule identity mismatch: {row.key}")
+                if row.score not in (None, 0, 0.5, 1):
+                    raise ValueError(f"Invalid score: {row.key}")
+                previous = out[row.condition].get(row.deal)
+                if previous is not None and (mirror or previous != row):
+                    raise ValueError(f"Duplicate/conflicting outcome: {row.key}")
+                if mirror:
+                    arm = next(a for a in ARMS if a.key == row.condition)
+                    if game.index >= DEALS_PER_CELL or (row.opponent, row.depth, row.beta) != (
+                        arm.opponent, arm.depth, arm.beta
+                    ):
+                        raise ValueError(f"Arm identity mismatch: {row.key}")
+                out[row.condition][row.deal] = row
     return out
+
+
+def _scores(records: dict[str, dict[int, MirrorRow | GameRow]]) -> dict[str, dict[int, float]]:
+    return {key: {d: float(r.score) for d, r in rows.items()
+                  if r.failure is None and r.score is not None} for key, rows in records.items()}
 
 
 @dataclass(frozen=True)
@@ -95,22 +124,71 @@ class Cost:
     seconds: float
     moves: float
     terminal: float
+    seconds_median: float
+    seconds_p95: float
 
-    def calls(self, arm: Arm) -> float:
-        """Network calls per decision if every rollout runs to full depth."""
+    def work_proxy(self, arm: Arm) -> float:
+        """Supported moves × depth × worlds; neither actual commands nor full-depth work units."""
         return self.moves * arm.depth * arm.worlds
 
 
 def _costs(directory: Path) -> dict[str, Cost]:
     sums: dict[str, list[float]] = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
+    times: dict[str, list[float]] = defaultdict(list)
     for path in sorted(directory.rglob("decisions-*.jsonl.gz")):
-        for row in _gz_jsonl(path):
-            s = sums[row["key"].rsplit("/", 1)[0]]
-            s[0] += 1
-            s[1] += row["seconds"]
-            s[2] += sum(1 for p in row["base"] if p > 0)
-            s[3] += row["terminal_rollouts"]
-    return {k: Cost(int(s[0]), s[1] / s[0], s[2] / s[0], s[3] / s[0]) for k, s in sums.items()}
+        # Unlike the live-snapshot reader, final analysis must reject truncated tails.
+        with gzip.open(path, "rt") as stream:
+            for line in stream:
+                row = MirrorDecision(**json.loads(line))
+                key = row.key.rsplit("/", 1)[0]
+                s = sums[key]
+                s[0] += 1
+                s[1] += row.seconds
+                # Q presence records a rollout even when rounded base probability is zero.
+                s[2] += sum(q is not None for q in row.q)
+                s[3] += row.terminal_rollouts
+                times[key].append(row.seconds)
+    return {k: Cost(int(s[0]), s[1] / s[0], s[2] / s[0], s[3] / s[0],
+                    float(np.median(times[k])), float(np.quantile(times[k], 0.95)))
+            for k, s in sums.items()}
+
+
+def _sensitivity(a: dict[int, float], b: dict[int, float], planned: set[int]) -> list[float]:
+    """Full scheduled denominator; unresolved outcomes independently range over [0, 1]."""
+    return [sum(a.get(d, 0.0) - b.get(d, 1.0) for d in planned) / len(planned),
+            sum(a.get(d, 1.0) - b.get(d, 0.0) for d in planned) / len(planned)]
+
+
+def _bootstrap(
+    scores: dict[str, dict[int, float]], games: list[Game], comparisons: list[tuple[str, str]],
+) -> tuple[dict[tuple[str, str], Estimate], set[int]]:
+    """Resample shared deal vectors jointly within each fixed deck cell.
+
+    The common-complete subset is explicit; a cell with no complete vector makes
+    the full-grid bootstrap unavailable. Missing outcomes still enter sensitivity.
+    """
+    common = {g.deal for g in games}.intersection(*(set(v) for v in scores.values()))
+    cells: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for game in games:
+        cells[game.model_deck, game.heuristic_deck].append(game.deal)
+    rng = np.random.default_rng(26901)
+    draws = np.zeros((10000, len(comparisons)))
+    for cell in cells.values():
+        deals = sorted(set(cell) & common)
+        if not deals:
+            return {}, common
+        differences = np.asarray([[scores[a][d] - scores[b][d] for a, b in comparisons] for d in deals])
+        indices = rng.integers(0, len(deals), (10000, len(deals)))
+        draws += differences[indices].mean(1) / len(cells)
+    result = {}
+    for i, pair in enumerate(comparisons):
+        # Fixed cells get equal weight, including when coverage is incomplete.
+        a, b = pair
+        mean = statistics.fmean(statistics.fmean(scores[a][d] - scores[b][d]
+                                 for d in cell if d in common) for cell in cells.values())
+        low, high = np.quantile(draws[:, i], [0.025, 0.975])
+        result[pair] = Estimate(len(common), mean, float(low), float(high))
+    return result, common
 
 
 def paired(a: dict[int, float], b: dict[int, float], deals: set[int] | None = None) -> Estimate | None:
@@ -118,6 +196,37 @@ def paired(a: dict[int, float], b: dict[int, float], deals: set[int] | None = No
     if deals is not None:
         shared &= deals
     return estimate([a[d] - b[d] for d in sorted(shared)])
+
+
+def _coverage(rows: dict[int, MirrorRow | GameRow], games: list[Game]) -> dict[str, Any]:
+    """JSON-facing coverage includes absent slots, never just successfully read rows."""
+    planned = {g.deal for g in games}
+    valid = {d: r for d, r in rows.items() if d in planned and r.score is not None and r.failure is None}
+    cells: dict[str, dict[str, int]] = {}
+    for game in games:
+        cell = cells.setdefault(f"{game.model_deck}/{game.heuristic_deck}", {"planned": 0, "valid": 0})
+        cell["planned"] += 1
+        cell["valid"] += int(game.deal in valid)
+    return {"planned": len(planned), "valid": len(valid), "missing": len(planned - rows.keys()),
+            "invalid": len(planned & rows.keys()) - len(valid),
+            "wins": sum(r.score == 1 for r in valid.values()),
+            "draws": sum(r.score == 0.5 for r in valid.values()),
+            "losses": sum(r.score == 0 for r in valid.values()),
+            "seats": dict(Counter(str(r.model_seat) for r in valid.values())), "cells": cells,
+            "missing_deals": sorted(planned - rows.keys()),
+            "failures": [asdict(r) for d, r in rows.items() if d in planned and d not in valid]}
+
+
+def _reconciliation(mirror_dir: Path) -> dict[str, Any]:
+    """Bind the prior full decision audit to the exact bytes read by this report."""
+    root = mirror_dir.parent
+    inventory = json.loads((root / "reconciliation/remote-inventory.json").read_text())
+    for remote, expected in inventory["files"].items():
+        prefix, relative = remote.split("/", 2)[1:]
+        path = root / ("games" if prefix == "mirror-v1" else "noise") / relative
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected["sha256"]:
+            raise ValueError(f"Evidence changed since reconciliation: {path}")
+    return json.loads((root / "reconciliation/execution.json").read_text())
 
 
 # ---------------------------------------------------------------------------
@@ -185,17 +294,18 @@ def cost_chart(puct: list[tuple[float, Estimate, str]], mirror: list[tuple[float
 def noise_chart(rows: list[NoiseRow]) -> str:
     """Expected per-decision gain over the policy by rollouts per move, one line per beta."""
     x = Axis(SUBSAMPLES[0] / 1.5, SUBSAMPLES[-1] * 1.5, log=True)
-    top_value = max(r.gain_over_policy for r in rows if r.beta in NOISE_BETAS)
-    y = Axis(0.0, math.ceil((top_value + 0.002) / 0.005) * 0.005)
-    body = _frame([(float(n), str(n)) for n in SUBSAMPLES], _ticks(0, y.high, 0.005), x, y,
+    top_value = max(r.gain_high for r in rows if r.beta in NOISE_BETAS)
+    low_value = min(0.0, min(r.gain_low for r in rows if r.beta in NOISE_BETAS))
+    y = Axis(math.floor(low_value / 0.005) * 0.005, math.ceil((top_value + 0.002) / 0.005) * 0.005)
+    body = _frame([(float(n), str(n)) for n in SUBSAMPLES], _ticks(y.low, y.high, 0.005), x, y,
                   "rollouts per move (log scale)", lambda v: f"{v:.3f}")
     left, right, top, bottom = PAD["l"], W - PAD["r"], PAD["t"], H - PAD["b"]
     for index, beta in enumerate(NOISE_BETAS):
         pts = []
         for r in sorted((r for r in rows if r.beta == beta), key=lambda r: r.rollouts):
-            e = Estimate(r.positions, r.gain_over_policy, r.gain_over_policy, r.gain_over_policy)
+            e = Estimate(r.positions, r.gain_over_policy, r.gain_low, r.gain_high)
             pts.append((float(r.rollouts), e, f"β {beta:g}, {r.rollouts} rollouts per move: expected gain "
-                        f"{r.gain_over_policy:.4f} (near-exact Q gives {r.gain_with_reference_q:.4f}); "
+                        f"{r.gain_over_policy:.4f} (finite-reference optimized Q gives {r.gain_with_reference_q:.4f}); "
                         f"best move matches {_pct(r.argmax_agreement, 0)}"))
         body += _series(pts, x, y, f"--series-{index + 1}")
         last = pts[-1]
@@ -214,21 +324,133 @@ def _cell(e: Estimate | None) -> str:
     return "–" if e is None else f"{e.mean * 100:+.1f} <span style='color:var(--text-muted)'>±{(e.high - e.mean) * 100:.1f}</span>"
 
 
+def _interval(value: dict[str, float] | None) -> str:
+    if value is None:
+        return "unavailable"
+    return f'{100 * value["mean"]:+.1f} [{100 * value["low"]:+.1f}, {100 * value["high"]:+.1f}]'
+
+
+def _evidence_sections(summary: dict[str, Any]) -> str:
+    """Render coverage and limits from the same structured report, not a second store."""
+    rows = []
+    costs = []
+    for key, arm in summary["arms"].items():
+        coverage = arm["coverage"]
+        for control, comparison in arm["comparisons"].items():
+            valid = comparison["valid_only"]
+            sensitivity = comparison["failure_sensitivity"]
+            rows.append(f'<tr><td>{escape(key)}</td><td>{control}</td>'
+                        f'<td>{valid["n"] if valid else 0}/{comparison["planned"]}</td>'
+                        f'<td>{_interval(valid)}</td><td>{_interval(comparison["cell_stratified_bootstrap"])}</td>'
+                        f'<td>[{100*sensitivity[0]:+.1f}, {100*sensitivity[1]:+.1f}]</td></tr>')
+        c, g = arm["cost"], arm["game_hero_seconds"]
+        costs.append(f'<tr><td>{escape(key)}</td><td>{coverage["wins"]}/{coverage["draws"]}/{coverage["losses"]}</td>'
+                     f'<td>{c["seconds"]:.3f} / {c["seconds_median"]:.3f} / {c["seconds_p95"]:.3f}</td>'
+                     f'<td>{g["mean"]:.1f} / {g["median"]:.1f} / {g["p95"]:.1f}</td>'
+                     f'<td>{c["moves"]:.2f}</td><td>{c["terminal"] * c["decisions"]:.0f}</td></tr>')
+    controls = []
+    for key, c in summary["controls"].items():
+        controls.append(f'<tr><td>{escape(key)}</td><td>{c["valid"]}/{c["planned"]}</td>'
+                        f'<td>{c["missing"]}</td><td>{c["invalid"]}</td>'
+                        f'<td>{c["wins"]}/{c["draws"]}/{c["losses"]}</td></tr>')
+    contrasts = []
+    for opponent, items in summary["setting_contrasts"].items():
+        for row in items:
+            contrasts.append(f'<tr><td>{escape(row["a"])} minus {escape(row["b"])}</td>'
+                             f'<td>{_interval(row["normal"])}</td><td>{_interval(row["bootstrap"])}</td></tr>')
+    policy_costs = ''.join(
+        f'<tr><td>{key}</td><td>{c["seconds_per_decision"]:.6f}</td>'
+        f'<td>{c["seconds_per_game"]:.3f} / {c["game_seconds_median"]:.3f} / {c["game_seconds_p95"]:.3f}</td>'
+        f'<td>{c["hero_seconds"]:.3f}</td></tr>' for key, c in summary["policy_only_cost"].items()
+    )
+    health = summary["reconciliation"]
+    d = health["decisions"]
+    warnings = health["worker_log_messages"]
+    return (
+        '<h2>Coverage and uncertainty</h2><p class="note">All 16 mirror arms retain 500/500 valid outcomes, '
+        'five per ordered deck cell across 100 cells, with 246 seat-0 and 254 seat-1 games per arm. '
+        'There are no missing, invalid, duplicate or unexpected mirror outcomes. Sampled and greedy controls '
+        'cover all 500 deals. PUCT controls have unresolved slots shown below. Full cell and seat coverage, '
+        'missing deal IDs and retained failure records are in summary.json. Scores are wins + half draws; '
+        'the controls below are restricted to the same first five deals per cell.</p>'
+        '<details><summary>Control coverage</summary><table><tr><th>Control</th><th>Valid/planned</th>'
+        '<th>Missing</th><th>Invalid</th><th>W/D/L</th></tr>' + ''.join(controls) + '</table></details>'
+        '<p class="note">Intervals are exploratory. Nominal = mean ± 1.96 sample SD / √n. Bootstrap = '
+        '10,000 joint whole-deal resamples within each fixed cell, seed 26901, equal cell weight. '
+        'Each comparison family uses the common-complete subset across all eight mirror settings and its control; '
+        'the PUCT-1024 policy families use 479 deals, the other displayed families 500. Pairing fixes starting '
+        'deals, decks and seats, not subsequent draws. Sensitivity assigns each unresolved score 0 or 1 on the '
+        'full 500-deal denominator; it is a missing-evidence range, not a confidence interval. Repeated interim '
+        'inspection and winner selection are not corrected by either interval.</p>'
+        '<details><summary>Every paired comparison, including greedy and uniform PUCT separately</summary>'
+        '<table><tr><th>Arm</th><th>Control</th><th>Paired/planned</th><th>Nominal 95%, points</th>'
+        '<th>Stratified 95%, points</th><th>Failure sensitivity, points</th></tr>' + ''.join(rows) + '</table></details>'
+        '<details><summary>Direct depth, shuffle and beta contrasts</summary><table><tr><th>Contrast</th>'
+        '<th>Nominal 95%, points</th><th>Stratified 95%, points</th></tr>' + ''.join(contrasts) + '</table></details>'
+        '<h2>Measured cost</h2><p class="note">Hero search time only: decision and game means, medians and p95s. '
+        'Policy-only controls perform no mirror search; their retained hero-action time is tabulated separately below. '
+        'Supported actions count non-null Q entries, since rounded base probabilities lose support. '
+        'Actual rollout commands, network batch calls and evaluated network rows were not captured. '
+        'Moves × depth × worlds is an approximate unbatched work proxy, not a network-call count.</p>'
+        '<details><summary>All arms: outcome and timing distributions</summary><table><tr><th>Arm</th><th>W/D/L</th>'
+        '<th>Decision seconds: mean / median / p95</th><th>Game seconds: mean / median / p95</th>'
+        '<th>Supported actions, mean</th><th>Terminal rollouts</th></tr>' + ''.join(costs) + '</table></details>'
+        '<details><summary>Policy-only timing (historical host/load, no controlled speed ratio)</summary>'
+        '<table><tr><th>Control</th><th>Seconds/decision, mean</th><th>Game seconds: mean / median / p95</th>'
+        '<th>Total hero seconds</th></tr>' + policy_costs + '</table></details>'
+        f'<p class="note">Retained mirror hero searches total {d["hero_seconds"]/3600:.4f} hours; noise searches '
+        f'total {health["noise"]["seconds"]:.3f} seconds. These exclude setup, opponent decisions, interrupted '
+        'attempts and overhead. Inclusive worker-hours, energy/storage costs and historical PUCT rental costs '
+        'remain unavailable. The mirror campaign used the owned mini with $0 rental spend. No execution was '
+        'added by analysis. Etude inventory could not be read because the retained SDK rejects the local DB '
+        'schema; it was left untouched and no remaining rental budget is inferred.</p>'
+        '<h2>Health, learning and acceptance limits</h2>'
+        f'<p class="note">Execution: {d["rows"]:,} decision records reconcile with all game counts and consecutive '
+        'indices, with no orphans, duplicate decisions, malformed tails or nonfinite values. '
+        f'Health remains qualified: worker logs retain {warnings["invalid_focus_object"]} invalid-focus warnings '
+        f'and {warnings["event_list_truncated"]} event truncations to capacity 32. '
+        f'{d["rounded_zero_chosen"]["base"]} chosen base probabilities round to zero. The unconstrained scalar '
+        f'value head has maximum |Q| {d["max_abs_q"]:.4f}; {d["decisions_with_q_outside_unit_interval"]:,} '
+        'decisions contain |Q| &gt; 1. These values are retained, not clipped or treated as probabilities.</p>'
+        '<p class="note">Historical recovery preserved 89 completed games during a seven-worker restart. '
+        'Interrupted attempts lack receipts and cannot be counted exactly. Deleted smoke evidence survives '
+        'only as printed results/timing (12 mirror games, 228.62 seconds; two noise positions, 94.75 seconds), '
+        'with preparation failures. Full Commands, root/RNG state and replay identities were not captured: '
+        'schedule/decision reconciliation is not a replay proof. Observed disk hashes are not retrospective '
+        'loaded-source admission. Native support and clean observation encoding remain unresolved.</p>'
+        '<p class="note">Learning: one frozen raw MTG-183 checkpoint at update 5,950, training seed 18301; '
+        'zero new training or weight updates, so no new training exports or callbacks are expected. This measures inference-time search, not learned improvement. '
+        'Training card exposure is absent and remains unresolved independently of evaluation draws/actions, '
+        'deck membership and schedule completeness. Fixed deck cells and rules permit paired intervention '
+        'comparisons; absolute scores also reflect deck matchups. No deck-strength or rules change is credited '
+        'as learned skill. Generalization to held-out cards, combinations, mechanics or independent training '
+        'seeds is untested. Oracle gains do not establish playable uniform-hand strength or a mathematical '
+        'upper bound. No confirmatory winner, controlled speedup or equal-wall-budget claim is supported.</p>'
+        '<p class="note">Evidence review must retain these unresolved claims. The beta-0.01 / 8–16-shuffle '
+        'and uniform-hand extensions remain proposals; this analysis authorizes no new games or parameter changes.</p>'
+    )
+
+
 # ---------------------------------------------------------------------------
 # Page
 
 
 def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Path,
-          baseline_summary: Path) -> dict:
-    mirror = _scores([mirror_dir])
-    base = _scores(baselines)
+          baseline_summary: Path) -> dict[str, Any]:
+    reconciliation = _reconciliation(mirror_dir)
+    mirror_records = _outcomes([mirror_dir], mirror=True)
+    baseline_records = _outcomes(baselines, mirror=False)
+    mirror = _scores(mirror_records)
+    base = _scores(baseline_records)
+    games = [g for g in schedule() if g.index < DEALS_PER_CELL]
+    planned_deals = {g.deal for g in games}
     costs = _costs(mirror_dir)
     puct_seconds = {k: v["diagnostics"]["seconds"]
                     for k, v in json.loads(baseline_summary.read_text())["conditions"].items()
                     if v.get("diagnostics")}
     noise_summary, noise_rows = analyze(noise_dir)
 
-    summary: dict = {"arms": {}, "noise": {"summary": noise_summary, "rows": [asdict(r) for r in noise_rows]}}
+    summary: dict[str, Any] = {"arms": {}, "noise": {"summary": noise_summary, "rows": [asdict(r) for r in noise_rows]}}
     gains: dict[tuple[str, str], Estimate | None] = {}
     for arm in ARMS:
         scores = mirror.get(arm.key, {})
@@ -244,9 +466,97 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
             "gain_over_greedy": (g.to_json() if (g := gains[arm.key, "greedy"]) else None),
             "gain_over_puct_1024_oracle": (g.to_json() if (g := gains[arm.key, "puct"]) else None),
             "seconds_per_decision": cost.seconds if cost else None,
-            "network_calls_per_decision": cost.calls(arm) if cost else None,
+            "full_depth_work_proxy": cost.work_proxy(arm) if cost else None,
+            "actual_rollout_commands": None,
+            "network_batch_calls": None,
+            "evaluated_network_rows": None,
+            "depth": arm.depth, "worlds": arm.worlds,
+            "cost": asdict(cost) if cost else None,
+            "game_hero_seconds": {
+                "mean": statistics.fmean(r.hero_seconds for r in mirror_records[arm.key].values()),
+                "median": float(np.median([r.hero_seconds for r in mirror_records[arm.key].values()])),
+                "p95": float(np.quantile([r.hero_seconds for r in mirror_records[arm.key].values()], 0.95)),
+                "total": sum(r.hero_seconds for r in mirror_records[arm.key].values()),
+            },
+            "coverage": _coverage(mirror_records[arm.key], games),
             "moves_per_decision": cost.moves if cost else None,
         }
+
+    summary["reconciliation"] = reconciliation
+    summary["controls"] = {k: _coverage(v, games) for k, v in baseline_records.items()}
+    summary["policy_only_cost"] = {}
+    for key, records in baseline_records.items():
+        if key.rsplit("/", 1)[-1] not in ("policy", "greedy"):
+            continue
+        rows = [r for d, r in records.items() if d in planned_deals]
+        seconds = sum(r.hero_seconds for r in rows)
+        decisions = sum(r.hero_decisions for r in rows)
+        summary["policy_only_cost"][key] = {
+            "hero_seconds": seconds, "hero_decisions": decisions,
+            "seconds_per_decision": seconds / decisions,
+            "seconds_per_game": seconds / len(rows),
+            "game_seconds_median": float(np.median([r.hero_seconds for r in rows])),
+            "game_seconds_p95": float(np.quantile([r.hero_seconds for r in rows], 0.95)),
+            "hosts": sorted({r.host for r in rows}),
+            "controlled_comparison": False,
+        }
+    # Bind the external baseline snapshot and analysis source without changing evidence.
+    summary["analysis_inputs"] = {
+        "baseline_games": {f"{i}/{p.relative_to(directory)}": hashlib.sha256(p.read_bytes()).hexdigest()
+                           for i, directory in enumerate(baselines)
+                           for p in sorted(directory.rglob("games-*.jsonl"))},
+        "baseline_summary_sha256": hashlib.sha256(baseline_summary.read_bytes()).hexdigest(),
+        "source": {name: hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in (
+            "experiments/search_mirror_report.py", "experiments/search_mirror_noise.py")},
+    }
+    summary["planned_games"] = len(ARMS) * len(games)
+    summary["uncertainty"] = {
+        "normal": "nominal 95% descriptive, paired whole-deal score differences",
+        "bootstrap": "exploratory 95% percentile; jointly resample deals within each fixed cell",
+        "resamples": 10000, "seed": 26901, "selection_adjusted": False,
+        "common_complete_by_opponent_control": {},
+    }
+    summary["training"] = {
+        "seed": 18301, "raw_checkpoint_update": 5950,
+        "checkpoint_sha256": "4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4",
+        "new_training_updates": 0, "card_exposure": None,
+        "new_training_exports_expected": 0, "training_callbacks": "not applicable: inference-only campaign",
+        "exposure_status": "not captured; evaluation actions, noise draws and deck membership are not training exposure",
+    }
+    for opponent in OPPONENTS:
+        arms = [a for a in ARMS if a.opponent == opponent]
+        for label, control in (("sampled", "policy"), ("greedy", "greedy"),
+                               ("puct_1024_oracle", "puct-1024-oracle"),
+                               ("puct_1024_uniform", "puct-1024-uniform")):
+            key = f"{opponent}/{control}"
+            cohort = {a.key: mirror.get(a.key, {}) for a in arms} | {key: base.get(key, {})}
+            intervals, common = _bootstrap(cohort, games, [(a.key, key) for a in arms])
+            summary["uncertainty"]["common_complete_by_opponent_control"][key] = len(common)
+            for arm in arms:
+                estimate_common = paired(mirror.get(arm.key, {}), base.get(key, {}), common)
+                boot = intervals.get((arm.key, key))
+                summary["arms"][arm.key].setdefault("comparisons", {})[label] = {
+                    "planned": len(games),
+                    "valid_only": (g.to_json() if (g := paired(mirror.get(arm.key, {}), base.get(key, {}), planned_deals)) else None),
+                    "common_complete": estimate_common.to_json() if estimate_common else None,
+                    "cell_stratified_bootstrap": boot.to_json() if boot else None,
+                    "failure_sensitivity": _sensitivity(mirror.get(arm.key, {}), base.get(key, {}), planned_deals),
+                    "paired_coverage": _coverage({d: r for d, r in mirror_records[arm.key].items()
+                        if d in base.get(key, {}) and d in mirror.get(arm.key, {})}, games),
+                }
+    # Within-sweep contrasts answer depth and shuffle questions directly.
+    summary["setting_contrasts"] = {}
+    for opponent in OPPONENTS:
+        cohort = {a.key: mirror.get(a.key, {}) for a in ARMS if a.opponent == opponent}
+        pairs = [(f"{opponent}/mirror-{a}", f"{opponent}/mirror-{b}") for a, b in (
+            ("d40-b0.1", "d20-b0.1"), ("d20-b0.1", "d10-b0.1"),
+            ("d20-b0.1-w4", "d20-b0.1"), ("d20-b0.03-w4", "d20-b0.03"),
+            ("d20-b0.03-w4", "d20-b0.1-w4"))]
+        intervals, _ = _bootstrap(cohort, games, pairs)
+        summary["setting_contrasts"][opponent] = [{
+            "a": a, "b": b, "normal": paired(cohort[a], cohort[b]).to_json(),
+            "bootstrap": intervals[a, b].to_json() if (a, b) in intervals else None,
+        } for a, b in pairs]
 
     settings = sorted({(a.depth, a.beta, a.worlds) for a in ARMS}, key=lambda s: (s[2], -s[1], s[0]))
     by_setting = {s: {a.opponent: a for a in ARMS if (a.depth, a.beta, a.worlds) == s} for s in settings}
@@ -257,12 +567,23 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
 
     best = max(settings, key=mean_gain)
     best_arms = by_setting[best]
+    summary["interpretation"] = {
+        "execution": "complete retained mirror schedule; PUCT policy controls lack 21/500 outcomes",
+        "health": "finite numerical evidence; invalid-focus warnings and event truncation retained",
+        "learning": "inference-time intervention on one frozen trained policy; no new learning",
+        "training_exposure": "absent, unresolved",
+        "generalization": "untested; familiar decks, one training seed, oracle hands",
+        "native_support": "loaded-source admission and replay proof unavailable",
+        "selection": "exploratory selected maximum mean gain over sampled policy across both opponents",
+        "negative_findings": "depth 40 vs 20 and four vs one shuffle at beta 0.1 span zero for both opponents",
+        "method_sensitive": "selected arm vs heuristic PUCT-1024, and four vs one shuffle at beta 0.03 against policy: nominal spans zero, bootstrap does not",
+    }
     played = sum(len(v) for k, v in mirror.items())
     planned = len(ARMS) * 500
     deals = {o: set().union(*(mirror.get(a.key, {}).keys() for a in ARMS if a.opponent == o)) for o in OPPONENTS}
 
     tiles = [f'<div class="tile"><div class="k">Games played</div><div class="v">{played:,}</div>'
-             f'<div class="s">of {planned:,} planned · 0 invalid · run still going</div></div>']
+             f'<div class="s">of {planned:,} planned · reconciled retained execution</div></div>']
     for o in OPPONENTS:
         g, p = gains[best_arms[o].key, "sampled"], gains[best_arms[o].key, "puct"]
         tiles.append(f'<div class="tile"><div class="k">Best setting {OPPONENT_TITLE[o]}</div>'
@@ -272,22 +593,41 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
     best_cost = costs[best_arms["policy"].key]
     tiles.append(f'<div class="tile"><div class="k">Best setting cost</div>'
                  f'<div class="v">{best_cost.seconds:.1f} s</div>'
-                 f'<div class="s">per decision · about {best_cost.calls(best_arms["policy"]):.0f} network calls '
-                 f'(PUCT-1024: 1,024)</div></div>')
+                 f'<div class="s">per decision · about {best_cost.work_proxy(best_arms["policy"]):.0f} full-depth work units '
+                 f'(moves × depth × worlds)</div></div>')
 
     sections: list[str] = []
+    sections.append(
+        '<h2>What the completed sweep supports</h2><p class="note">'
+        f'The selected setting is {escape(setting_label(best_arms["policy"]))}, chosen by mean sampled-policy '
+        'gain across both opponents. It wins 438/500 games against heuristic and 328/500 against policy. '
+        'Sampled-policy gains are +9.4 points (nominal 95% [5.8, 13.0], stratified [6.2, 12.8]) and '
+        '+14.7 points ([9.8, 19.6], stratified [10.4, 19.1]), respectively. These are exploratory oracle-hand '
+        'results on one trained policy, not confirmation or playable strength.</p>'
+        '<p class="note">Depth 40 versus 20 adds −1.4 points against heuristic and −3.2 against policy; '
+        'both interval methods span zero, despite higher cost. Four versus one shuffle at β 0.1 also spans '
+        'zero against both opponents. At β 0.03 the four-shuffle gain is +6.8 against heuristic and +4.0 '
+        'against policy; the latter spans zero nominally but not under the stratified bootstrap. '
+        'These method-sensitive comparisons remain inconclusive under the protocol.</p>'
+        '<p class="note">Against common opponents, the selected setting exceeds oracle PUCT-1024 by '
+        '+3.2 points against heuristic (500 deals; nominal interval includes zero, stratified does not) '
+        'and +7.93 against policy (479/500 paired deals; full-denominator missing-outcome range +6.4 to +10.6). '
+        'This is not head-to-head evidence. The 300-position noise screen favors averaging over a single '
+        'rollout, but β 0.01 at one or two rollouts has a whole-deal interval spanning zero; only 21 source '
+        'deals limit precision. No game-strength claim for β 0.01, 8 or 16 shuffles follows from that screen.</p>'
+    )
     gain_cards = []
     for o in OPPONENTS:
         rows = [(setting_label(by_setting[s][o]), gains[by_setting[s][o].key, "sampled"]) for s in settings]
         gain_cards.append(f'<div class="card"><h3>Mirror over the sampled policy, {OPPONENT_TITLE[o]}</h3>'
-                          f'<div class="sub">Paired by deal, percentage points, 95% intervals</div>'
+                          f'<div class="sub">Paired by deal, percentage points, nominal 95% intervals</div>'
                           f'{gain_chart(rows, "gain")}</div>')
     sections.append(
         "<h2>What mirror search adds</h2>"
         '<p class="note">Mirror search samples its move from the updated policy, so the matching baseline is '
         "the policy's own sampled play. β is the pull back toward the policy: large β barely moves it, "
-        "small β trusts the rollout values. Shuffles are independent rollouts per move. β 1 stays within about 0.005 "
-        "total variation of the policy, so its bars are a check that pairing is fair: they should straddle zero.</p>"
+        "small β trusts the rollout values. Worlds share their root shuffle across actions. A large β is a "
+        "near-policy reference, not a guarantee of identical trajectories or a test that pairing is fair.</p>"
         '<div class="row pairs">' + "".join(gain_cards) + "</div>")
 
     depth_gains = {o: [(a.depth, g) for a in sorted(ARMS, key=lambda a: a.depth)
@@ -295,8 +635,8 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
                        and (g := gains[a.key, "sampled"]) is not None] for o in OPPONENTS}
     sections.append(
         "<h2>How deep to roll out</h2>"
-        '<p class="note">At β 0.1 with one shuffle. About ten decisions make a turn, so depth 20 looks about '
-        "two turns ahead. Depth 2 adds little; 10 and 20 are close; depth 40 is no better than 20 and costs twice as much.</p>"
+        '<p class="note">At β 0.1 with one shuffle. Depth counts canonical decisions including the root, '
+        "not a fixed number of turns. Direct paired depth contrasts below distinguish observed differences from uncertainty.</p>"
         + _legend([("--series-1", "Against the bare policy"), ("--series-2", "Against the heuristic")])
         + f'<div class="row single"><div class="card"><h3>Gain over the sampled policy by depth</h3>'
           f'<div class="sub">Paired by deal, points</div>{depth_chart(depth_gains)}</div></div>')
@@ -322,7 +662,7 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
                 best_index = len(points)
             points.append((c.seconds, g, f"Mirror {setting_label(arm)}: {g.mean * 100:+.1f} points "
                            f"[{g.low * 100:+.1f}, {g.high * 100:+.1f}], {g.n} paired deals; {c.seconds:.2f} s per "
-                           f"decision, about {c.calls(arm):.0f} network calls", short_label(arm)))
+                           f"decision, about {c.work_proxy(arm):.0f} full-depth work units", short_label(arm)))
         cost_cards.append(f'<div class="card"><h3>{OPPONENT_TITLE[o].capitalize()}</h3>'
                           f'<div class="sub">Gain over the sampled policy against time per decision</div>'
                           f"{cost_chart(puct, points, best_index)}</div>")
@@ -336,7 +676,7 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
         "<h2>Mirror against PUCT</h2>"
         '<p class="note">PUCT points are the determinized tree search from the test-time compute sweep with oracle '
         "hands, paired against the sampled policy on the same deals mirror played. Its timings came partly from "
-        "rented hosts under different load, so compare costs only roughly. Neither searcher played the other; each "
+        "rented hosts under different load; these timings cannot establish a speedup or equal-compute strength. Neither searcher played the other; each "
         "difference is two searchers against the same opponent.</p>"
         + _legend([("--series-1", "Mirror settings (hover each point)"), ("--series-2", "PUCT, 16 to 1,024 sims")])
         + '<div class="row pairs">' + "".join(cost_cards) + "</div>"
@@ -349,24 +689,26 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
         "64 oracle-hand rollouts per move. Each point uses n of them as the estimate and the remaining 64 − n as "
         "the reference Q, and reports the reference-Q gain of the resulting move distribution over the policy at "
         "one decision (signed value units). A single rollout's value varies by "
-        f'±{ns["single_rollout_sd"]:.2f} while the real gaps between moves are about ±{ns["between_move_sd_of_q"]:.2f}, '
-        "so one rollout is mostly noise. Small β gains most, but only once Q averages enough rollouts.</p>"
+        f'±{ns["single_rollout_sd"]:.2f} while between-action estimated mean-Q SD is about ±{ns["between_move_sd_of_q"]:.2f}, '
+        "The finite remainder is a noisy reference, not ground truth; optimizing on that reference is optimistic. "
+        "Intervals resample 21 whole source deals (both opponents together), not 6,000 independent draws. "
+        "These one-decision values are not game-win percentages or evidence of training exposure.</p>"
         + _legend([("--series-1", "β 0.01"), ("--series-2", "β 0.03"), ("--series-3", "β 0.1")])
         + f'<div class="row single"><div class="card"><h3>Expected gain at one decision</h3>'
-          f'<div class="sub">Over the policy, by rollouts per move</div>{noise_chart(noise_rows)}</div></div>'
+          f'<div class="sub">Over policy; whole-deal bootstrap 95% intervals</div>{noise_chart(noise_rows)}</div></div>'
         + "<details><summary>Every step size</summary><table><tr><th>β</th>"
-        + "".join(f"<th>{n} rollouts</th>" for n in SUBSAMPLES) + "<th>near-exact Q</th></tr>"
+        + "".join(f"<th>{n} rollouts</th>" for n in SUBSAMPLES) + "</tr>"
         + "".join(
             f"<tr><td>{beta:g}</td>"
-            + "".join(f"<td>{r.gain_over_policy:.4f}</td>" for r in sorted(
+            + "".join(f"<td>{r.gain_over_policy:.4f} [{r.gain_low:.4f}, {r.gain_high:.4f}]</td>" for r in sorted(
                 (r for r in noise_rows if r.beta == beta), key=lambda r: r.rollouts))
-            + f"<td>{max(r.gain_with_reference_q for r in noise_rows if r.beta == beta):.4f}</td></tr>"
+            + "</tr>"
             for beta in BETAS)
         + "</table></details>")
 
     header = ("<tr><th>Setting</th>"
               + "".join(f"<th>vs sampled ({o})</th><th>vs PUCT-1024 ({o})</th>" for o in OPPONENTS)
-              + "<th>s / decision</th><th>network calls</th><th>deals</th></tr>")
+              + "<th>s / decision</th><th>full-depth work units</th><th>deals</th></tr>")
     body_rows = []
     for s in settings:
         arms = by_setting[s]
@@ -376,10 +718,10 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
             f"<tr><td{cls}>{escape(setting_label(arms['policy']))}</td>"
             + "".join(f"<td>{_cell(gains[arms[o].key, 'sampled'])}</td><td>{_cell(gains[arms[o].key, 'puct'])}</td>"
                       for o in OPPONENTS)
-            + (f"<td>{c.seconds:.2f}</td><td>{c.calls(arms['policy']):.0f}</td>" if c else "<td>–</td><td>–</td>")
+            + (f"<td>{c.seconds:.2f}</td><td>{c.work_proxy(arms['policy']):.0f}</td>" if c else "<td>–</td><td>–</td>")
             + f"<td>{min(len(mirror.get(a.key, {})) for a in arms.values())}</td></tr>")
     sections.append("<h2>Every setting</h2>"
-                    '<p class="note">Paired gains in points with 95% half-widths. Network calls assume every '
+                    '<p class="note">Paired gains in points with 95% half-widths. Work units approximate every '
                     "rollout runs its full depth; rollouts that end the game stop early.</p>"
                     f'<div class="card" style="overflow-x:auto"><table>{header}{"".join(body_rows)}</table></div>')
 
@@ -392,14 +734,16 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
         "p ∝ exp((Q + α log uniform + β log policy) / (α + β)), α 0.02. Opponents: the same checkpoint sampling "
         "its policy, and the scripted heuristic. Deals: the first five per ordered deck cell of the test-time "
         "compute sweep (500 per setting when complete), shared with its sampled, greedy and PUCT-1024 arms. "
-        "Games ran on one Mac mini, seven workers on one thread each. Oracle hands make every result here an upper "
-        "bound on what this search does without seeing the opponent's hand.</p>")
+        "Games ran on one Mac mini, seven workers on one thread each. Oracle hands supply an information "
+        "advantage benchmark, not a proven mathematical upper bound on this approximate search with hidden hands.</p>")
 
-    lede = ("Interim: can the magnetic-mirror local update, given the opponent's true hand, add strength on top of "
-            f"MTG-183's policy, and what does it cost next to PUCT? {played:,} of {planned:,} games so far "
+    sections.append(_evidence_sections(summary))
+
+    lede = ("Can the magnetic-mirror local update, given the opponent's true hand, add strength on top of "
+            f"MTG-183's policy, and what does it cost next to PUCT? {played:,} of {planned:,} retained games "
             f"(about {min(len(v) for v in mirror.values())} deals per setting).")
-    banner = ('<div class="banner">Interim results from a run still in progress. With sixteen settings and no '
-              "multiple-comparison correction, a single setting clearing its interval is a lead, not a finding.</div>")
+    banner = ('<div class="banner">Retained execution is complete. Eight settings against two opponents were inspected repeatedly. With no '
+              "multiple-comparison correction, a selected setting clearing its interval remains exploratory; playable strength is unresolved.</div>")
     html = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>Mirror search study</title><style>{CSS}{EXTRA_CSS}</style></head><body><main>"

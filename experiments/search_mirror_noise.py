@@ -19,6 +19,7 @@ estimate costs nothing extra in games: each position is one 64-world search.
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 from dataclasses import asdict, dataclass
 import gzip
 import json
@@ -224,6 +225,8 @@ class NoiseRow:
     total_variation: float
     gain_over_policy: float
     gain_with_reference_q: float
+    gain_low: float
+    gain_high: float
 
 
 def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow]]:
@@ -233,8 +236,10 @@ def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow
     estimate and averages the other 64 - n as the reference Q. Reported per
     (n, beta): how often the estimate's best move matches the reference's,
     total variation between their targets, and the reference-Q gain of the
-    estimated target over the policy (signed value units, so 0.1 is about five
-    points of win rate) next to the gain an exact Q would give.
+    estimated target over the policy in signed value units, not game-win points.
+    The finite remainder is noisy and optimizing against itself is optimistic.
+    Percentile intervals resample whole source deals (both opponents together),
+    retaining all their positions and draws; these are not independent learners.
     """
     positions: list[Position] = []
     for path in sorted(out.glob("positions-*.jsonl.gz")):
@@ -242,6 +247,7 @@ def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow
             positions += [Position(**json.loads(line)) for line in file]
     rng = np.random.default_rng(0)
     sums: dict[tuple[int, float], list[float]] = {}
+    clusters: dict[tuple[int, float], dict[int, list[float]]] = defaultdict(dict)
     for position in positions:
         support = [i for i, v in enumerate(position.values) if v]
         base = np.asarray([position.base[i] for i in support])
@@ -267,6 +273,18 @@ def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow
                     row[2] += 0.5 * float(np.abs(est - ref).sum())
                     row[3] += float((est - base) @ reference)
                     row[4] += float((ref - base) @ reference)
+                    cluster = clusters[n, beta].setdefault(position.deal, [0.0, 0.0])
+                    cluster[0] += 1
+                    cluster[1] += float((est - base) @ reference)
+    deals = sorted({p.deal for p in positions})
+    # One common resampling matrix preserves covariance across all settings.
+    picks = np.random.default_rng(26901).integers(0, len(deals), (10000, len(deals)))
+    intervals: dict[tuple[int, float], tuple[float, float]] = {}
+    for key, grouped in clusters.items():
+        counts, totals = np.asarray([grouped[d] for d in deals]).T
+        samples = totals[picks].sum(1) / counts[picks].sum(1)
+        low, high = np.quantile(samples, [0.025, 0.975])
+        intervals[key] = float(low), float(high)
     rows = [
         NoiseRow(
             n,
@@ -276,6 +294,7 @@ def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow
             round(s[2] / s[0], 4),
             round(s[3] / s[0], 4),
             round(s[4] / s[0], 4),
+            *intervals[n, beta],
         )
         for (n, beta), s in sorted(sums.items())
     ]
@@ -283,6 +302,9 @@ def analyze(out: Path, draws: int = 20) -> tuple[dict[str, float], list[NoiseRow
     single = [float(np.std(v)) for p in positions for v in p.values if v]
     summary = {
         "positions": len(positions),
+        "source_deals": len(deals),
+        "bootstrap_resamples": 10000,
+        "bootstrap_seed": 26901,
         "moves_per_position": round(
             float(np.mean([sum(1 for v in p.values if v) for p in positions])),
             2,

@@ -11,6 +11,30 @@ work, block on MTG-268, or require prospective capture upgrades for historical
 results. The proposed 5,000-game extension is separate, not approved or required
 to finish the original sweep. Preserve all evidence and report its limitations.
 
+## Analysis handoff — 2026-11-09
+
+Final analysis now updates the existing `report.html` / `summary.json` through
+`experiments/search_mirror_report.py`; consult those for results, not the older
+interim numbers below. All 8,000 mirror outcomes are used. PUCT-1024 policy
+controls have 479/500 valid outcomes; the report retains the missing denominator,
+common-complete subsets and failure sensitivity. Whole-deal stratified and noise
+bootstrap intervals use 10,000 resamples. Training exposure and native/replay
+admission remain absent; no new games, training, resources or follow-up launched.
+
+Final HTML and summary were published to their existing artifact paths (two
+manifest entries changed); all 33 mirror-study artifacts verify. A second rebuild
+reproduced both files byte-for-byte, and every prior noise point estimate remained
+unchanged. Browser checks found no page overflow at desktop or mobile widths.
+
+Focused accounting/noise tests and the untracked-data check passed (5 tests).
+Full integration collection found 62 tests but stopped on six import errors
+(`etude.eval.match.agent` unavailable and `duckdb` absent). Do not upgrade the
+frozen environment to repair that unrelated collection. Run pytest through
+`uv run --project /Users/jack/src/manabot.search --no-sync --with pytest python -m pytest`
+so the current checkout, rather than the external environment's experiment
+package, is imported. Next Graph step is evidence review, retaining the report's
+unresolved acceptance and keeping the proposed extension separate.
+
 ## Execution handoff — 2026-11-09
 
 The original run is complete: 8,000/8,000 unique valid planned outcomes, 500 per

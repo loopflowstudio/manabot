@@ -138,3 +138,12 @@ they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evide
   applies), though MTG-181's evaluation shares the mini's 8 cores; games have a
   600 s bound and take seconds.
 - The eval job's `max_attempts=1`, `max_hours=190` (to `--until`).
+
+# MTG-269 analysis assumptions (2026-11-09)
+
+Use seed 26901 for whole-source-deal noise bootstrap as well as the protocol’s
+stratified game bootstrap; only the game bootstrap seed was prescribed. Keep
+noise position weighting unchanged, resampling source deals jointly across
+opponents and retaining all their positions/draws. PUCT comparison families use
+their own common-complete subsets across all eight mirror settings so missing
+PUCT evidence does not discard complete sampled-policy comparisons.

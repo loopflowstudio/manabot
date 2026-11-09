@@ -1,7 +1,7 @@
 # Magnetic-mirror search on MTG-183
 
-Status: retained execution complete and reconciled, 2026-11-09; final analysis
-is the next experiment Graph step. All 8,000 planned outcomes are retained.
+Status: retained execution and final analysis complete, 2026-11-09; ready for
+experiment evidence review. All 8,000 planned outcomes are retained.
 Analyze the existing oracle campaign under its original authority;
 Task adoption does not reopen its design or require another approval. Preserve
 all existing work and resume only what remains. Follow-up settings and bounds
@@ -59,7 +59,7 @@ MTG-183 Darwin build has a different hash, so it is not this mini build's receip
 Published evidence remains at `experiments/data/search-mirror-v1/{games,noise,
 report.html,summary.json}` and `experiments/data/search-scaling-v1/`; baseline
 game rows are retained under `/Users/jack/.manabot/search-scaling/hosts`.
-The published mirror snapshot has 4,899 games. Its selected leader, depth 20 /
+The historical published interim snapshot had 4,899 games. Its selected leader, depth 20 /
 beta 0.03 / four shuffles, gains 10.13 points against heuristic (306 paired
 deals) and 14.59 against policy (305) over sampled policy. Gains over PUCT-1024
 oracle are 4.25 and 8.52 points against those same opponents, not head-to-head.
@@ -101,9 +101,9 @@ The prior 19 manifest files were verified, and rebuilding the 4,899-game summary
 and HTML reproduced both exactly. Every prior game/decision file is an unchanged
 byte prefix of its final file; prior hashes and store location remain in
 `prior-snapshot.json` and manifest commit `a856e267c1a01777e9d26583e55fe95f13e70fd2`.
-The HTML and strength summary still describe that interim snapshot until the
-following analysis step replaces them; these execution counts are not new
-strength estimates.
+The final analysis replaces the interim HTML and strength summary at their
+existing paths. Prior artifact digests remain recoverable from the manifest
+history; no original game or decision bytes were changed by analysis.
 
 Retained numerical values are finite, probability vectors stay within [0, 1],
 and lengths/chosen indices align. Five-decimal probability logging yields a
@@ -146,6 +146,34 @@ version, so `status`, `machines`, and mirror-filtered `runs` could not establish
 controller inventory. The database was left unchanged; no empty inventory or
 remaining rental budget is inferred. MTG-268 remains idle with its Graph stopped
 at loop-or-next, pass 6, and no PR; its batching work was not restarted.
+
+## Final analysis handoff — 2026-11-09
+
+The owning `experiments/search_mirror_report.py` now rebuilds the existing
+`experiments/data/search-mirror-v1/report.html` and `summary.json` from the final
+snapshot, with source/input digests. The report owns final estimates, coverage,
+paired normal and cell-stratified intervals, whole-deal noise uncertainty,
+failure sensitivity, separate policy/search cost, and scientific conclusions.
+All 103 baseline game inputs match already-published artifact digests. The
+PUCT-1024 controls against policy lack 21 of the 500 relevant outcomes; their
+479-deal valid-only estimates do not reduce the planned denominator. Sampled
+and greedy comparisons retain all 500 deals. Training exposure, loaded-source
+admission, full replay proof and playable strength remain unresolved for review.
+No execution, capture retrofit, engine update or follow-up was performed.
+
+Final HTML and summary were published to their existing artifact paths (two
+manifest entries changed); all 33 mirror-study artifacts verify. A second rebuild
+reproduced both files byte-for-byte, and every prior noise point estimate remained
+unchanged. Browser checks found no page overflow at desktop or mobile widths.
+
+Validation: four focused analysis tests plus the untracked-data check passed;
+F/I lint and diff whitespace checks passed. Browser renders were inspected in
+light and dark, including noise intervals; all eight SVG charts and seven tables
+rendered. Full integration-test collection was attempted (62 collected) but
+blocked by six pre-existing environment import errors: the established Etude
+SDK lacks `etude.eval.match.agent`, and `duckdb` is absent. No claim of a passing
+full integration suite or repository-wide type check is made. The frozen
+analysis environment was left unchanged; pytest/ruff used ephemeral uv overlays.
 
 ## Retained executable protocol
 

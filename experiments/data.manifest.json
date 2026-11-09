@@ -3571,12 +3571,12 @@
    "bytes": 16029
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "3d1c29f739031eed158c9586fcb05f2720c5715343e87e4d2042cd040b3e0a00",
-   "bytes": 59598
+   "sha256": "51e0ec61c0c6d8f079940fab3e8824ad3ef603e4ab3b3ce6a9fa70af7956332d",
+   "bytes": 83356
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "5adef4e02f9d2fabeac362cc123238f744fe1af90829ea614068f5baf6516414",
-   "bytes": 21204
+   "sha256": "8652d04014d6b89f1696da130e741f289619857092b4c8507bde052880347c3f",
+   "bytes": 1275060
   },
   "experiments/data/search-scaling-v1/hosts/0e52711de5ad/decisions-9c254ae462cd-32.jsonl.gz": {
    "sha256": "afb0d9ec66e488f0bf7fa0e8ff18e527ca41a86c87bd429ac5535d09d82d8770",
