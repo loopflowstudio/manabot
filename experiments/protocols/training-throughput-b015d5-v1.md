@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (step 3 continuation designed)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 software implemented; freeze pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -667,15 +667,17 @@ assumed limit of three A4000s at once; stock has often allowed one.
 | 100 | 24 | hours, machines | solo × 3 | 2,300 | $19.14 | solo × 1; none |
 | 100 | 72 | hours, machines | solo × 3 | 6,899 | $56.01 | solo × 1; halve × 3 |
 | 100 | 120 | hours, dollars, machines | solo × 3 | 11,498 | $92.87 | solo × 1; halve × 3 |
-| 100 | 336 | dollars | solo × 1 | 32,195 | $86.02 | none; halve × 1 |
+| 100 | 336 | hours; dollars allow 1 machine | solo × 1 | 32,195 | $86.02 | none; halve × 1 |
 
 What the table supports:
 - **Pack-4 throughout never wins a strength plan.** It is the cheapest shape per decision,
   but in a fixed budget a final seed's own updates count, and four seeds share them. At
   ($100, 336 h) on one A4000 it reaches 19,213 updates against 32,195 solo, 0.74
   doublings fewer, which best of 4 recovers only if σ is above about 30 Elo.
-- **The worked example, ($100, 336 h).** Dollars bind: one A4000 for 14 days is about
-  $86. Halving reaches 27,021 updates for its survivor, at $87.44 including three selection
+- **The worked example, ($100, 336 h).** Hours bind for one A4000: 14 days cost
+  about $86; dollars prevent a second full-window machine. This corrects the
+  original sketch, as recorded in the step-3 report on 2026-11-08. Halving reaches
+  27,021 updates for its survivor, at $87.44 including three selection
   passes. Solo reaches 32,195. Halving pays when σ exceeds about 13.5 Elo at slope 44, or
   about 8 at slope 20, with ρ = 1 (16 and 9 at ρ = .8). The u40 bound is 18 Elo, and no
   late spread is known. **This choice is decided by the two unknowns, not by the
@@ -1209,41 +1211,49 @@ exposure instrument is needed for this unchanged-pool throughput claim.
 
 ### Software and admission before final freeze
 
-The software route is necessary. Deliver the **ed2300** BF16 repair in this
-Task's next software PR, linking [ed2300](loopflow://manabot/task/ed2300) in the
-delivery and recording its validation there. Its status on 2026-11-08 was
-unstarted, with no Graph or PR. Recheck before implementation; keep one repair
-owner and do not start a competing ed2300 checkout. Software verification does
-not complete this parent experiment. Required work:
+C1 software is implemented in this checkout, reconciled after merge `fec7fdd28`
+with main `e0832f67f` on 2026-11-08. It is not yet delivered or frozen. Comment
+8cb4c5af reviewed the design against Jack Heart's "keep going" authority; no new
+scope or budget is inferred. The ed2300 status read at implementation found no
+competing PR, Session or Graph. Its repair belongs in this Task's next software
+PR, with [ed2300](loopflow://manabot/task/ed2300) linked to that delivery and its
+validation. Software verification does not complete the parent experiment.
 
-1. Repair `SemanticCardEncoder.definitions` and any demonstrated adjoining
-   dtype boundary. The observed Float/Half error occurred under requested BF16;
-   inspect the actual CUDA GRU/autocast output instead of assuming its dtype.
-   Preserve float32 outputs/gradients and unchanged default checkpoint bytes.
-   Test full/cached and selected/empty definition rows with real CUDA forward
-   and backward, including the semantic catalog on effective hashed input v6.
-   Delete the CPU test's claim that it catches every CUDA dtype failure; keep
-   that useful CPU coverage and add a CUDA-required admission test that cannot
-   report a skipped CUDA test as successful campaign admission.
-2. Add the C1 schedule to the existing launch owner, with distinct IDs, the
-   eight/twelve-update endpoints, independent seeds, two-update admission and
-   explicit per-cell limits. Preserve legacy discovery and job identities.
-   Discover each leg with `read_job_file`; test recipe equality outside declared
-   size/precision/endpoint/identity fields and frozen scheduling limits.
-3. Extend the analysis owner to read C1 in its own directory, retain legacy
-   results, match solo update indices and reconcile every declared cell to a
-   run, conditional skip, unavailable/budget skip or failure. Test uneven
-   starts/finishes, insufficient samples, ordinal matching and cost admission
-   with injected fixtures. Do not weaken the three-update check.
-4. Retain a bounded diagnostic for the audit's first-update recording anomaly
-   and device/host minibatch transfers: fixed retained-shape inputs, at most
-   one instrumented update or 120 seconds per diagnostic, at most two on the
-   admission rental after CUDA proof. Separate cold allocation/page faults
-   from copying and device synchronization. Exclude instrumented timings from
-   speed cells. No extra host or induced load. Optional production optimization
-   is not a freeze dependency: only include one if measured fixed-input
-   before/after evidence and output/gradient/sample/RNG parity justify it before
-   freeze. Otherwise retain the finding. c5fba4 keeps its catalog-repair owner.
+Implemented:
+
+1. `SemanticCardEncoder.definitions` normalizes recurrent outputs to the
+   destination dtype without detaching gradients. Float32 output/gradient parity
+   and injected Half/BF16 joins are covered. The CPU coverage claim was corrected;
+   a CUDA-required regression covers full/cached/selected/empty paths, backward,
+   optimizer and reload, and emits actual GRU dtypes. Real CUDA remains pending;
+   unchanged float32 outputs/gradients and default checkpoint bytes remain
+   acceptance constraints, and a CUDA skip cannot admit the campaign.
+2. The existing launch owner adds distinct C1 IDs, endpoints, seeds and two-update
+   worker admission while retaining legacy discovery/identities. `read_job_file`
+   tests compare recipe bytes outside declared size/precision/endpoint/identity
+   fields and inspect limits. Cost admission reserves watchdog plus cleanup;
+   external execution checks still own rental and campaign admission.
+3. The maintained C1 reader isolates source/recipe/host identities, matches update
+   ordinals, keeps the three-sample minimum and first valid scheduled attempt,
+   and requires all cell dispositions. Games and decisions/game derive from
+   exposure-counter differences; numeric-health contrasts retain absolute and
+   repeat-relative differences, with null ratios at zero repeat difference.
+   Injected fixtures cover overlap, matched endpoints, exposure and cost limits.
+4. Two optional fixed-input diagnostics retain a 256-row fixture and separate
+   allocation/page faults, recording and device/host transfers. Each has one
+   reaped child and a 120-second deadline on the admission rental. They do not
+   reproduce a whole-update stall or establish its cause. No speculative runtime
+   optimization, extra host or induced load was added. A future included repair
+   still requires measured before/after and output/gradient/sample/RNG parity;
+   c5fba4 retains its separate catalog-repair owner.
+
+Main's merged 5da5f4 v7 batching/report is related engineering context, not a
+matched control or a strength result for this hashed-v6 ladder. New integrated
+source/world/recipe admission and same-source/host controls remain necessary.
+Gate's affected suites/CI collection, software delivery, final freeze, prior-bill
+reconciliation and refreshed quotes remain before campaign execution. CUDA
+admission is paid execution on the first bounded rental, after source freeze;
+it is not a claim established by local software checks.
 
 Run the affected precision, semantic-card, size-launch and active-training
 tests, plus the validation-by-change-area suites for any collector/observation
@@ -1304,7 +1314,10 @@ C1 collection must use experiment `training-throughput-sizes-c1`.
   undeclared recipes and missing dispositions, emits exact ordinals, phase
   times, per-seed latency, window sensitivity, resource/exposure clocks,
   separately matched decision/latency gains and the numeric health contrast.
-  Whole-run resource summaries include warmup and are labelled accordingly.
+  Numeric-health means include games and environment decisions per game from
+  adjacent cumulative exposure counters. Repeat-relative magnitudes are null
+  at zero repeat difference and unstable near zero. Whole-run resource summaries
+  include warmup and are labelled accordingly.
   Failure/admission exposure still comes from their retained receipts/ledgers;
   completed speed-cell clocks are explicitly labelled, not a campaign total.
 - Before a cell, `admit_cost(Budget(...), limits(leg, pace), ...)` checks the

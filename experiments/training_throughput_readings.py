@@ -355,7 +355,20 @@ def load_run(root: Path, run_id: str, leg: Leg, host: str, source: str) -> Run:
         )
         if end <= start or decisions <= 0:
             raise ValueError("invalid update clocks")
-        updates.append(Update(number, start, end, decisions, row))
+        games = row["coordinates/games"] - previous["coordinates/games"]
+        environment_decisions = (
+            row["coordinates/environment_decisions"]
+            - previous["coordinates/environment_decisions"]
+        )
+        if games <= 0 or environment_decisions <= 0:
+            raise ValueError("invalid complete-game exposure clocks")
+        # Cumulative exposure must be differenced before comparing game lengths;
+        # environment decisions count the game, learner rows count training work.
+        values = row | {
+            "games": games,
+            "decisions_per_game": environment_decisions / games,
+        }
+        updates.append(Update(number, start, end, decisions, values))
     gpu_samples = [line.split(",") for line in samples]
     resources = {
         "gpu_busy_percent_whole_run": st.mean(float(row[1]) for row in gpu_samples),
@@ -415,6 +428,8 @@ def precision_check(loaded: dict[str, list[Run]]) -> dict[str, object]:
         "reference_kl",
         "numerical/clip_fraction",
         "rows",
+        "games",
+        "decisions_per_game",
     )
     means = {}
     for label, run in runs.items():
@@ -424,18 +439,30 @@ def precision_check(loaded: dict[str, list[Run]]) -> dict[str, object]:
         means[label] = {
             metric: st.mean(u.values[metric] for u in rows) for metric in metrics
         }
+    differences = {
+        label: {metric: values[metric] - means["float32"][metric] for metric in metrics}
+        for label, values in means.items()
+        if label != "float32"
+    }
     return {
         "status": "read",
         "ordinals": list(range(5, 13)),
         "means": means,
-        "differences_from_float32": {
+        "differences_from_float32": differences,
+        "absolute_difference_over_repeat": {
             label: {
-                metric: values[metric] - means["float32"][metric] for metric in metrics
+                metric: abs(values[metric] / differences["repeat"][metric])
+                if differences["repeat"][metric] != 0
+                else None
+                for metric in metrics
             }
-            for label, values in means.items()
-            if label != "float32"
+            for label, values in differences.items()
+            if label != "repeat"
         },
-        "interpretation": "gross numeric health only; equivalence unestablished",
+        "interpretation": (
+            "gross numeric health only; equivalence unestablished; ratios are "
+            "unstable near zero repeat differences and null at zero"
+        ),
     }
 
 

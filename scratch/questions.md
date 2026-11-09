@@ -24,7 +24,8 @@ The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
 six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
 `index_copy_(): self and source expected to have the same dtype, but got (self)
 Float and (source) Half`. CPU autocast had not covered CUDA's recurrent behavior.
-The repair is delivered here for unstarted ed2300, with no second checkout.
+The repair is implemented here for ed2300, with no second checkout; linking its
+software PR and recording validation remain delivery work.
 
 ## Execution still open
 
@@ -72,11 +73,12 @@ The repair is delivered here for unstarted ed2300, with no second checkout.
   repaired in step 2. Etude 429 cleanup, placement lease failures and absent
   `etude-result.json` blobs remain historical launcher findings; callback results
   were recovered from attempt records, so no missing callback is inferred.
-- Proposed infrastructure memory, not written to read-only `.lf/wave/`: compare
-  host CPU class/native time before attributing GPU speed; earlier same-label
-  host variation was 1.6–1.8x. Packed ~50k-row device recursions were launch-bound.
+- Infrastructure memory now retains the host-confound, CUDA-admission and
+  overlap lessons. The ~50k-row launch-cost diagnosis remains specific to its
+  measured model/input; it is not a conclusion for all sizes.
 - The earlier $100/336h planner sketch incorrectly said dollars bind at
-  $.256/hour; 336h costs about $86, so hours bind. The retained report corrects it.
+  $.256/hour; 336h costs about $86, so hours bind for one machine. The protocol
+  sketch now agrees with the retained report; dollars limit the machine count.
 - Frozen Elemental recipe omitted input version but resolved to v6; investigate
   legacy loading separately if needed. C1 pins resolved v6 explicitly by admission.
 

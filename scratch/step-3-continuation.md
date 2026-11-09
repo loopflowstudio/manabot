@@ -1,141 +1,148 @@
-# Step 3 continuation — 2026-11-08
+# Step 3 continuation — reconciled 2026-11-08
 
-Jack Heart replied "keep going" after this evidence-review recommendation:
+Jack Heart replied "keep going" after the evidence-review recommendation:
 "I recommend repairing BF16, lengthening the packed cells, and completing the missing measurements."
+Comment 079b3f46 covers this bounded continuation; comment 8cb4c5af reviews C1
+against that authority, not a new approval. The prospective design is in
+`experiments/protocols/training-throughput-b015d5-v1.md`, **Step 3 continuation C1**.
+It owns the schedule, identities, admission, readings and spending limits.
 
-Continue that outcome: repair and validate BF16, make packed cells long enough
-for the unchanged three-overlapping-post-warmup-updates minimum, and measure
-the missing packing crossover and a384l8. Carry forward the direction to use
-effective hashed records and investigate similar unnecessary overhead.
+## Outcome and retained limits
 
-The first pass remains retained evidence, not a completed answer: 11 valid solo
-cells, no admissible packed cells, BF16 failed before training and all a384l8
-cells remained unrun. Step 3 inclusive estimated spend is $1.741, total experiment
-$3.781; final billing needs reconciliation before allocating the remainder.
-Keep the original $10 step-3 envelope inclusive of that first pass and the $50
-experiment hard cap. This continuation does not increase either ceiling.
+Measure the missing packing crossover and a384l8, and repair/validate BF16 on
+real CUDA. These are speed and gross numeric-health results, not strength or
+learning-equivalence claims. The longer-term planner remains outside C1 software.
+Jack Heart's direction to use effective hashed records remains in force; exact
+quotes and the separate c5fba4 diagnostic are in `scratch/vocabulary-performance.md`.
 
-Make a prospective protocol amendment before execution; retain old source,
-regime and result identities. Specify enough concurrent samples, a bounded
-duration, required controls after any source change, and uncertainty. Prefer
-missing cells and necessary controls over repeating the full grid. Verify the
-BF16 CUDA path before renting the full campaign. Successful CPU checks were
-insufficient admission last time. Recheck world/input admission after integration;
-never relabel old evidence to match a new world.
+The original w17 / cb722dc8c evidence stays unchanged: 11 valid solo cells,
+seven insufficient-overlap packed cells, six BF16 startup failures and no a384l8
+measurements. TF32 clip fraction moved 3.45 times the float32 repeat difference.
+Step-3 spend $1.741 and experiment spend $3.781 are estimates, not final invoices.
+Original reports, failures, run identities and cleanup receipts remain published
+under `experiments/data/training-throughput-b015d5-v1/step-3/` and its parent report.
 
-ed2300 tracks the BF16 startup defect. Fresh status: unstarted, no checkout
-Sessions or Graphs, no PR. Do not create another defect or competing repair.
-The continuation's software plan must explicitly name where its repair is
-delivered and keep ed2300 linked to that delivery. c5fba4 owns its separate
-shared-effect catalog repair.
-
-Profile specific avoidable costs from step-3/overhead-audit.md where useful to
-the missing measurements. Preserve selected samples, RNG order, observations,
-legal actions and output/gradient parity in correctness-preserving repairs.
-Do not silently change minibatches, learning semantics or precision defaults.
-TF32 learning equivalence remains unestablished.
-
-The completed Graph b9289ddb stopped at evidence review; no Graph remains live.
-Continue from experiment-design for the amendment, then the necessary software,
-admission, freeze and execution steps under the authority above. Return the
-resulting evidence here; routine details within these bounds need no repeated
-approval. Material scope or budget changes remain separate decisions.
-
-## C1 design, 2026-11-08
-
-The owning design is the prospective **Step 3 continuation C1** section of
-`experiments/protocols/training-throughput-b015d5-v1.md`. This scratch document
-keeps the direction and implementation handoff; the protocol owns the schedule
-and bounds. No run, rental or provider quote was made in this design step.
-
-Question: locate the packing crossover and measure a384l8 and repaired BF16 on
-the same Elemental recipe. These are speed/health results, not strength or
-generalization claims. Keep the original w17/cb722dc8c evidence intact and put
-new results in `step-3-c1/` with new source, cohort and regime identities.
+C1 retains the Elemental learning recipe, 256 streams, both seats, complete-game
+closure, one producer, input v6 / 512 facts, effective hashed records, all other
+capacities and precision defaults. New source/world controls are mandatory;
+original receipts cannot serve as matched controls after integration.
 
 - Fresh seeds 26401–26404; 26400 for CUDA admission, 26410 for diagnostics.
-  Effective hashed input v6 / 512 facts, 256 streams, both seats, one producer,
-  unchanged deck roster, capacities, complete-game closure and learning rule.
-  Freeze actual current-world/source identities after software integration;
-  new-source/new-host controls are mandatory, old results remain context.
-- Eight updates per speed run; keep the three-overlapping-post-warmup-update
-  minimum. One fresh twelve-update whole-cell rerun is allowed for insufficient
-  overlap, with a matching solo endpoint when necessary. Never pool retries.
-- Start with one rental and real CUDA regression plus a two-update w160l8 BF16
-  worker run before opening the other rentals. Measure a384l8 solo early, then
-  w128l4/w160l8/a384l8 packing with the retained 85% memory, 1.10 crossover and
-  1.30 K=4 rules. The A40 w160l8 precision block remains four twelve-update
-  legs (float32, repeat, TF32, BF16). Revisit w64 only for the missing lower
-  bracket/original A40 packing cell after the higher-priority measurements.
-- All comparisons name exact included update ordinals, per-seed latency,
-  machine decisions/hour and billed cost. Show seed/window sensitivity, not
-  false confidence intervals from dependent updates. No evaluation games,
-  evaluation draws or checkpoint selection. Capture training draws, games,
-  decisions, failures and replacement debt separately.
-- New liability is at most `min(10 - prior_step3, 50 - prior_total, 8.00)`.
-  Proposed lines: A40 $3.30/5h, A4000 $1.60/6h, L4 $2.40/4h, $.70 cleanup and
-  failure reserve within those windows. Reconcile bills and reserve unresolved
-  liability first; $1.741 is still an estimate. All work, including retries,
-  fits 15 aggregate GPU hours and 1,600 aggregate updates. Decline a cell whose
-  watchdog/cleanup liability cannot fit; completeness never overrides a cap.
+- Eight-update speed cells; at least three complete overlapping post-warmup
+  updates per seed. One separate twelve-update whole-cell overlap retry, with
+  a matching solo endpoint where necessary. First valid scheduled attempt wins;
+  attempts are never pooled or selected by speed.
+- One rental first: real CUDA regression and a two-update w160l8 BF16 worker
+  plus normal checkpoint reload. Each additional GPU needs the CUDA regression
+  before BF16. A384l8 solo runs early. Memory admission stays at 85%; K=2
+  crossover at 1.10 and K=4 admission at 1.30 remain conditional execution rules.
+- A40's w160l8 float32/repeat/TF32/BF16 block remains four twelve-update legs.
+  W64 supplies a missing lower bracket only after higher-priority cells.
+- Caps include setup/failures/diagnostics: $10 step 3, $50 experiment; new
+  liability at most min($10 minus prior step 3, $50 minus prior total, $8),
+  15 GPU hours and 1,600 updates. Proposed lines: A40 $3.30/5h, A4000 $1.60/6h,
+  L4 $2.40/4h, $.70 contingency within those windows. No fourth GPU.
+- Zero evaluation games, draws or checkpoint selection. Training exposure,
+  failed attempts/replacement debt and whole-rental bills remain separate from
+  completed speed-cell clocks. All rentals require confirmed provider deletion.
 
-### Software handoff
+## Implemented, awaiting delivery and CUDA admission
 
-Route: **software**. Final source freeze remains open, not the design choices.
-`lf task status ed2300 --json` on 2026-11-08 returned `unstarted`, no PR, no Graph
-processes and no Sessions. Deliver that repair in b015d5's next software PR,
-link ed2300 to it and record its validation there; do not launch a duplicate
-repair checkout. Recheck ownership at implementation time.
+The ed2300 repair is in this checkout: semantic definitions cast recurrent
+outputs to the embedding table's dtype, including the empty-row contract,
+without detaching gradients. Float32 output/gradient parity and injected Half/
+BF16 joins have CPU tests. A mandatory CUDA test covers full, selected, empty,
+cached, backward, optimizer and reload paths and prints the actual GRU dtype.
+The CPU test no longer claims to certify CUDA kernels. Actual CUDA dtype and
+end-to-end BF16 success remain unmeasured for C1.
 
-1. Fix the demonstrated semantic-card dtype join with float32 output/gradient
-   parity and CUDA full/cached/selected/empty-row forward/backward coverage.
-   Inspect the actual GRU dtype: the observed error said Half under BF16.
-   Remove the CPU test's overclaim that its coverage guarantees CUDA behavior.
-2. Add separately identified C1 legs, endpoints, seeds and admission to the
-   existing launch owner, retaining legacy four-update discovery and IDs.
-3. Extend the analysis owner with C1 isolation, ordinal matching, overlap and
-   cost fixtures, and complete cell dispositions; keep the validity minimum.
-4. Add at most two bounded, fixed-input diagnostics for first-update recording
-   and minibatch device/host transfers. Each is at most one instrumented update
-   or 120 seconds; no extra rental. No speculative speed repair gates freeze.
-   Any included repair needs fixed-input timing plus sample/RNG/output/gradient
-   parity before freeze. c5fba4 retains ownership of its catalog optimization.
+The launch owner preserves legacy four-update jobs and adds C1 identities,
+eight/twelve-update endpoints, fresh seeds and a two-update admission job.
+The admission job runs the CUDA test, ordinary worker and hash-verified raw
+checkpoint loader. Discovery rents nothing. Cost admission is arithmetic;
+execution still owns quote, memory, crossover, deadline and cleanup decisions.
 
-The protocol names focused tests and real CUDA admission. CPU-only success
-cannot admit the repaired numeric path. Software delivery does not complete the
-experiment; freeze, bounded execution, analysis and evidence review remain.
+The maintained `experiments/training_throughput_readings.py` reads only the C1
+cohort, enforces recipe/source/host identity and complete ordinals, matches solo
+and packed ordinals, selects the first valid scheduled attempt, and requires a
+disposition for every cell. It reports per-seed/window sensitivity and whole-rental
+accounting separately. Reconciliation repaired the missing numeric-health games
+and decisions/game: both derive from cumulative exposure differences, not learner
+rows. Precision differences include repeat-relative magnitudes, null at a zero
+repeat difference; near-zero denominators still do not support equivalence.
 
-### Delete — do not maintain
+The two optional diagnostics operate on one retained 256-row observation fixture,
+one reaped child and 120 seconds each. Recording separates allocation/first touch/
+resident copying; transfers separate selection, host gather and H2D wait. They
+preserve copied values and do not reproduce a full update or explain the original
+recording stall. No speculative production speed repair was added.
 
-- Removed the CPU BF16 test's assertion that CPU covers CUDA kernel dtypes;
-  preserve its context-wiring checks. Real CUDA admission is separate and mandatory.
-- Replaced the unsafe `definitions` index-copy join with one dtype-normalized
-  join, keeping gradients and the table's float32/empty-row contract.
-- No production path, schema or historical evidence is deleted. The original
-  artifact `step-3/readings.py` remains a frozen result producer; the maintained
-  C1 reader is `experiments/training_throughput_readings.py`, not another script
-  copied into an evidence directory. Original four-update launch identities stay.
+Removed: the unsafe mixed-dtype definition join and CPU-to-CUDA coverage claim.
+No production path, schema, historical reader or evidence was deleted. No deletion
+targets remain.
 
-No deletion targets remain. The C1 reader obtains expected recipe identity from
-`leg_recipe`; one complete-ordinal check replaces incremental previous-ordinal
-tracking. Interval selection and seed summaries stay together, while packing
-attempt/control selection is separate from report assembly. Admission commands
-are assembled once around the ordinary worker command. These reductions preserve
-the scheduled-first selection rule, source controls and all launch identities.
+## Integration and remaining work
 
-### Implementation handoff
+Main e0832f67f was merged as fec7fdd28, bringing 5da5f4's v7 shared-effect batching
+and GPU report. Its one-matchup pool/GRU study establishes neither an architecture
+advantage nor equivalence, and is not an Elemental hashed-v6 speed control.
+Its retained traces caution against assuming synchronization dominates host routing.
+The separate c5fba4 catalog repair retains its owner; this integration is not proof
+of that repair or its CUDA speed. C1's source comparison must use fresh controls.
 
-ed2300 was rechecked on 2026-11-08: unstarted, no Graph processes, Sessions or PR.
-Its repair is in this b015d5 diff; delivery must link that Task to the software PR.
-No competing repair was started. Semantic definitions cast the actual recurrent
-output to their destination dtype, with an exact float32 output/gradient check.
-The mandatory CUDA test emits the actual GRU dtype; it remains unknown on this
-CPU-only implementation host. Admission also checks the real worker's two-update
-raw checkpoint through the normal loader. No numerical default changes.
+The implementation-time ed2300 read on 2026-11-08 found it unstarted with no PR,
+Sessions or Graph processes; no competing repair was launched. Linking ed2300 to
+the next b015d5 software PR and recording validation there remains delivery work.
 
-C1 launch keys, reader schemas and diagnostic commands are documented in the
-protocol's C1 software interface. No rental, quote, bill refresh or scientific
-run occurred during implementation. Gate owns the remaining affected suites;
-freeze and bounded real CUDA admission still precede campaign execution.
+Remaining acceptance:
+1. Gate's affected precision/model/active-training suites and CI collection,
+   followed by software delivery. No C1 software PR or final freeze is recorded.
+2. Freeze the integrated source, native world/definitions, roster, resolved recipe
+   bytes and capacities, dependency lock and bundle digest. A roster, layout or
+   learning-recipe change requires redesign; no old identity substitutes for it.
+3. Reconcile prior invoices or reserve defensible outstanding liability, refresh
+   quotes under the existing isolated client/home, then perform CUDA admission
+   on one bounded rental. Admission failure requires repair and a new freeze.
+4. Execute admitted missing cells within all caps, retaining skips, failures,
+   exact ordinals, exposure, cleanup and bills; publish C1 evidence separately and
+   return its measured recommendation and unresolved questions for evidence review.
 
-Check: `uv run --extra dev pytest tests/training/test_throughput_c1_readings.py tests/training/test_training_throughput_sizes.py -m 'not training' -q` — 22 passed, 2 training cases deselected; Ruff and diff whitespace checks pass. Earlier implementation checks: 7 reader tests and focused precision/semantic/discovery checks passed, two CUDA cases skipped locally, standalone fixed-fixture recording CLI passed. Gate retains affected suites/CI collection; CUDA admission retains the real-device checks.
+No new design decision is identified. Material scope/budget departures remain
+separate decisions; existing "keep going" authority covers routine C1 work.
+No rental, quote, bill refresh or scientific run occurred during reconciliation.
+
+Check: `uv run --extra dev pytest tests/training/test_throughput_c1_readings.py tests/training/test_training_throughput_sizes.py::test_c1_discovery_preserves_controls_and_declares_endpoints tests/model/test_semantic_card_precision.py -k 'not cuda_semantic_policy_admission' -q` — 13 passed, 2 CUDA cases deselected; real CUDA remains execution admission.
+
+## Concept review — 2026-11-08
+
+No design change or unresolved product choice. Jack Heart's "keep going"
+continues the bounded measurement outcome above; it does not select a precision
+default or turn throughput into a strength recommendation. The existing C1
+software-interface instructions already describe the intended operator experience.
+
+The consequential distinction is **job completion versus usable measurement**:
+the first pass completed seven packed cells without sufficient overlap. Preserve
+three concepts: a declared cell with its attempts, a derived reading, and the
+rental carrying all liability. `Leg`/`runs` describe execution;
+`Disposition` retains its outcome; `read_cell`/`compare` derive evidence from
+receipts; `Rental` and `admit_cost` account for shared machine time. Combining
+these into one success flag would lose required behavior. No additional planner
+or campaign lifecycle is needed for C1.
+
+Concrete walkthrough: after freeze and CUDA admission, run the declared solo
+and K=2 cells on one host, retain their receipts, and compare matched ordinals.
+If K=2 completes without three overlapping updates per seed, retain completion
+and `insufficient_overlap` together. Admit only the declared whole-cell u12
+retry, with a matching fresh solo endpoint if needed; keep both attempts and
+use the first valid scheduled one. A second insufficient reading leaves the
+crossover unknown. This counterexample forbids pooling attempts or picking the
+fastest result. A CUDA admission failure instead stops expansion and requires
+repair/new freeze; an unconfirmed deletion keeps rental liability outstanding.
+
+Ownership stays with manabot for training and readings, Etude for launching,
+and the execution operator for conditional scheduling, bills and confirmed
+cleanup. Original evidence and failed-attempt exposure survive every recovery.
+The next proof remains the existing software gate followed by frozen-source
+CUDA admission, not another product decision. This review launched no tests or
+rentals and changed no implementation. `scratch/concept-review.html` presents
+the same contract for inspection.

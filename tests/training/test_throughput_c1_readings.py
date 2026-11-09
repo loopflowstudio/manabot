@@ -17,6 +17,7 @@ from experiments.training_throughput_readings import (
     admit_cost,
     analyze,
     compare,
+    load_run,
     precision_check,
     read_cell,
 )
@@ -174,6 +175,8 @@ def test_c1_reader_reconciles_cells_and_rejects_legacy_or_changed_recipe(
         n: {
             "coordinates/training_seconds": n * 10,
             "coordinates/learner_transitions": n * 100,
+            "coordinates/games": n * n,
+            "coordinates/environment_decisions": n * n * 30,
             **{key: 1.0 for key in PHASES.values()},
         }
         for n in range(1, 9)
@@ -217,6 +220,9 @@ def test_c1_reader_reconciles_cells_and_rejects_legacy_or_changed_recipe(
     )  # Includes setup/idle, not the allocated cell cost.
     assert result["outstanding_usd"] == 0.1
     assert result["readings"][leg_name]["ordinals"] == {"test-run": list(range(2, 9))}
+    loaded = load_run(root, "test-run", C1_LEGS[leg_name], "rental", "frozen")
+    assert [u.values["games"] for u in loaded.updates] == [3, 5, 7, 9, 11, 13, 15]
+    assert all(u.values["decisions_per_game"] == 30 for u in loaded.updates)
     # Reject gaps and truncated endpoints before calculating adjacent intervals.
     for missing in (1, 4, 8):
         updates_path.write_text(
@@ -224,6 +230,11 @@ def test_c1_reader_reconciles_cells_and_rejects_legacy_or_changed_recipe(
         )
         with pytest.raises(ValueError, match="declared endpoint"):
             analyze(root, "frozen")
+    updates_path.write_text(json.dumps(rows))
+    invalid = {n: row | {"coordinates/games": 1} for n, row in rows.items()}
+    updates_path.write_text(json.dumps(invalid))
+    with pytest.raises(ValueError, match="complete-game exposure"):
+        analyze(root, "frozen")
     updates_path.write_text(json.dumps(rows))
     with pytest.raises(ValueError, match="frozen C1 source"):
         analyze(root, "legacy")
@@ -252,6 +263,8 @@ def test_precision_health_uses_complete_matched_late_updates() -> None:
         "reference_kl",
         "numerical/clip_fraction",
         "rows",
+        "games",
+        "decisions_per_game",
     )
     loaded: dict[str, list[Run]] = {}
     for suffix, value in (
@@ -264,7 +277,7 @@ def test_precision_health_uses_complete_matched_late_updates() -> None:
         run = replace(
             run,
             updates=tuple(
-                replace(update, values={m: value for m in metrics})
+                replace(update, values={m: value for m in metrics} | {"rows": 100})
                 for update in run.updates
             ),
         )
@@ -272,6 +285,10 @@ def test_precision_health_uses_complete_matched_late_updates() -> None:
     result = precision_check(loaded)
     assert result["ordinals"] == list(range(5, 13))
     assert result["differences_from_float32"]["tf32"]["entropy"] == 3
+    assert result["differences_from_float32"]["bf16"]["games"] == 2
+    assert result["differences_from_float32"]["tf32"]["decisions_per_game"] == 3
+    assert result["absolute_difference_over_repeat"]["tf32"]["entropy"] == 3
+    assert result["absolute_difference_over_repeat"]["bf16"]["rows"] is None
     key = "c1-fast-w160l8-k1-bf16-u12"
     loaded[key][0] = replace(loaded[key][0], host="other")
     with pytest.raises(ValueError, match="identities"):

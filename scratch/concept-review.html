@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>b015d5 · C1 concept review</title>
+<style>
+  :root { color-scheme: light dark; --ink:#272722; --paper:#faf9f5; --muted:#65645c; --line:#cfcec4; --accent:#27594b; }
+  @media (prefers-color-scheme:dark) { :root { --ink:#eeede5; --paper:#1e211f; --muted:#b8b9ad; --line:#53594f; --accent:#a1d7bc; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); color:var(--ink); font:18px/1.6 system-ui,sans-serif; }
+  main { max-width:820px; margin:auto; padding:48px 24px 72px; }
+  header { color:var(--muted); font-size:14px; }
+  h1 { font:600 clamp(29px,5vw,42px)/1.16 Georgia,serif; margin:24px 0; }
+  h2 { font-size:23px; line-height:1.3; margin-top:36px; }
+  p { margin:16px 0; }
+  .decision { border-left:3px solid var(--accent); padding-left:20px; }
+  code { font-size:.83em; overflow-wrap:anywhere; }
+  .flow { padding:16px 0; border-top:1px solid var(--line); }
+  .flow p { margin:6px 0; }
+  .flow small { color:var(--muted); }
+  ol { padding-left:24px; }
+  li { margin:14px 0; }
+  details { font-size:13px; overflow-wrap:anywhere; }
+  summary { cursor:pointer; }
+</style>
+<main>
+  <header>
+    Task b015d5 · concept-review · 2026-11-08
+    <details><summary>Files reviewed</summary>
+      <p>scratch/step-3-continuation.md<br>
+      experiments/protocols/training-throughput-b015d5-v1.md (C1)<br>
+      experiments/training_throughput_sizes.py<br>
+      experiments/training_throughput_readings.py<br>
+      manabot/model/semantic_cards.py<br>
+      scripts/check_throughput_admission.py<br>
+      scripts/diagnose_training_transfers.py<br>
+      tests/model/test_semantic_card_precision.py<br>
+      tests/training/test_throughput_c1_readings.py</p>
+    </details>
+  </header>
+  <h1>No new product decision is needed.</h1>
+  <p class="decision">Keep C1's existing contract: measure packing and large-model
+    speed within the approved bounds. Software is implemented; delivery, freeze
+    and real CUDA admission remain pending. This review changes no design.</p>
+
+  <h2>A completed job can leave the question unanswered.</h2>
+  <p><strong>Before — retained first pass.</strong> Seven packed cells had
+    insufficient overlap. Their completion did not establish a packing gain or
+    crossover. Six BF16 startup failures also showed that CPU checks could not
+    certify the CUDA path.</p>
+  <p><strong>After — accepted C1 design, implemented but not CUDA-proven.</strong>
+    Keep the cell, its derived reading and the rental separate. A completed cell
+    may read <code>insufficient_overlap</code>; its bill still counts.</p>
+
+  <div class="flow">
+    <p><strong>Admit one machine and prove BF16</strong> → admission evidence</p>
+    <p><code>admit_cost(...)</code> → Etude launch → CUDA-required regression →
+      two-update worker → <code>check_throughput_admission.check(...)</code></p>
+    <small>The operator checks freeze, quotes and liability. A failed CUDA proof
+      stops expansion; repair and freeze again.</small>
+  </div>
+  <div class="flow">
+    <p><strong>Measure solo, then two seeds on the same host</strong> → declared cell and attempts</p>
+    <p><code>Leg</code> → <code>runs(...)</code> → receipts → <code>Disposition</code></p>
+    <small>Use eight-update speed cells and fresh declared seeds; source, world,
+      effective hashed v6 and the learning recipe remain controlled.</small>
+  </div>
+  <div class="flow">
+    <p><strong>Read the packing comparison</strong> → derived evidence</p>
+    <p><code>read_cell(...)</code> → <code>compare(...)</code> → exact ordinals,
+      per-seed latency and machine decision throughput</p>
+    <small>At least three complete concurrent post-warmup updates per seed.
+      Match solo ordinals; no pooling or selection by speed.</small>
+  </div>
+  <div class="flow">
+    <p><strong>End the rental and reconcile cost</strong> → one rental record</p>
+    <p>Etude termination + provider deletion confirmation → <code>Rental</code></p>
+    <small>Setup, idle time, failures and cleanup stay in the bill. Unconfirmed
+      deletion leaves liability outstanding.</small>
+  </div>
+
+  <h2>Recovery preserves the failed measurement.</h2>
+  <p>If the eight-update K=2 cell completes with too little overlap, retain both
+    facts. When bounds allow, run its separately named twelve-update whole-cell
+    retry from fresh initial states, and a fresh matching solo endpoint if needed.
+    Use the first valid scheduled attempt. If the retry is also insufficient,
+    report crossover unknown and move on.</p>
+  <p>No new scheduler, precision default or strength planner is proposed.
+    Manabot owns training and readings; Etude owns launching; the operator owns
+    conditional scheduling and confirmed cleanup. Original receipts, failed
+    exposure and bills survive recovery.</p>
+
+  <h2>Review questions, resolved by the existing contract</h2>
+  <ol>
+    <li><strong>Does job completion establish a measurement?</strong> No. Derive
+      validity from overlap and matched controls.</li>
+    <li><strong>Does a healthy precision run establish learning equivalence?</strong>
+      No. Report gross numeric health only; defaults stay unchanged.</li>
+    <li><strong>Is another product choice required?</strong> None identified.
+      The next proof is the software gate, then frozen-source CUDA admission.
+      No tests, rentals or implementation changes occurred in this review.</li>
+  </ol>
+</main>
+</html>
