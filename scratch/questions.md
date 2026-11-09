@@ -1,5 +1,15 @@
 # Inherited notes
 
+## MTG-269 analysis choices — 2026-11-09
+
+- Keep the owning v1 report/summary paths and add a distinct extension section.
+  V2 snapshot layout uses `games/` for runner output and `reconciliation/` for
+  dated receipts. Missing paths without receipts are errors, not zero games.
+- Use each contrast's complete whole-deal vectors for its nominal and stratified
+  interval, retaining all planned slots in missing-evidence sensitivity. This
+  applies the existing uncertainty method to four-cell interactions; it does
+  not change the schedule, decision rule or launch authority.
+
 ## MTG-269 execution choices — 2026-11-09
 
 - Latest schedule: fixed beta 0.01, depth 20, oracle/uniform × 4/8/16 worlds,

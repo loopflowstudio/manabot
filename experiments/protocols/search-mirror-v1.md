@@ -1,5 +1,10 @@
 # Magnetic-mirror search on MTG-183
 
+Continuation note (2026-11-09): `search-mirror-v2.md` now owns the authorized
+fixed-beta oracle/uniform × 4/8/16 extension against raw sampled policy.
+Historical proposal/approval language below describes v1's earlier handoff;
+it does not override v2. Both analyses use the existing report and summary paths.
+
 Status: retained execution and final analysis complete, 2026-11-09; ready for
 experiment evidence review. All 8,000 planned outcomes are retained.
 Analyze the existing oracle campaign under its original authority;

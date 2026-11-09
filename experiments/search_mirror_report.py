@@ -34,9 +34,11 @@ from experiments.elemental_grid import Game, schedule
 from experiments.search_mirror import (
     ARMS,
     DEALS_PER_CELL,
+    V2_ARMS,
     Arm,
     MirrorDecision,
     MirrorRow,
+    reconcile_extension,
 )
 from experiments.search_mirror_noise import BETAS, SUBSAMPLES, NoiseRow, analyze
 from experiments.search_scaling import BUDGETS, GameRow
@@ -67,7 +69,7 @@ EXTRA_CSS = """
   border-radius: 8px; padding: 10px 14px; margin: 14px 0; color: var(--text-secondary); max-width: 860px; }
 td.best { font-weight: 600; }
 .row.single { grid-template-columns: minmax(0, 560px); }
-details { overflow-x: auto; }
+details, .table-scroll { overflow-x: auto; }
 """
 NOISE_BETAS = (0.01, 0.03, 0.1)
 
@@ -85,7 +87,9 @@ def short_label(arm: Arm) -> str:
 # Loading and statistics
 
 
-def _outcomes(directories: Sequence[Path], *, mirror: bool) -> dict[str, dict[int, MirrorRow | GameRow]]:
+def _outcomes(
+    directories: Sequence[Path], *, mirror: bool, arms: tuple[Arm, ...] = ARMS,
+) -> dict[str, dict[int, MirrorRow | GameRow]]:
     """Read retained records strictly; conflicting copies and identity drift fail closed."""
     expected = {g.deal: g for g in schedule()}
     out: dict[str, dict[int, MirrorRow | GameRow]] = defaultdict(dict)
@@ -104,11 +108,18 @@ def _outcomes(directories: Sequence[Path], *, mirror: bool) -> dict[str, dict[in
                 if previous is not None and (mirror or previous != row):
                     raise ValueError(f"Duplicate/conflicting outcome: {row.key}")
                 if mirror:
-                    arm = next(a for a in ARMS if a.key == row.condition)
+                    arm = next((a for a in arms if a.key == row.condition), None)
+                    if arm is None:
+                        raise ValueError(f"Unexpected mirror arm: {row.key}")
                     if game.index >= DEALS_PER_CELL or (row.opponent, row.depth, row.beta) != (
                         arm.opponent, arm.depth, arm.beta
                     ):
                         raise ValueError(f"Arm identity mismatch: {row.key}")
+                    if isinstance(row, MirrorRow) and (
+                        (row.study, row.sampler) != (arm.study, arm.sampler)
+                        or row.worlds not in ((None, arm.worlds) if arm.study == "v1" else (arm.worlds,))
+                    ):
+                        raise ValueError(f"Sampler/world identity mismatch: {row.key}")
                 out[row.condition][row.deal] = row
     return out
 
@@ -227,6 +238,162 @@ def _reconciliation(mirror_dir: Path) -> dict[str, Any]:
         if hashlib.sha256(path.read_bytes()).hexdigest() != expected["sha256"]:
             raise ValueError(f"Evidence changed since reconciliation: {path}")
     return json.loads((root / "reconciliation/execution.json").read_text())
+
+
+@dataclass(frozen=True)
+class Contrast:
+    """A paired linear contrast of game scores, including four-cell interactions."""
+
+    label: str
+    terms: dict[str, int]
+
+
+def _factorial_contrasts() -> list[Contrast]:
+    keys = {(a.sampler, a.worlds): a.key for a in V2_ARMS}
+    contrasts = [Contrast(f"{a.sampler} {a.worlds} minus sampled policy", {a.key: 1, "policy/policy": -1})
+                 for a in V2_ARMS]
+    contrasts.extend(Contrast(f"oracle minus uniform, {w} shuffles",
+                             {keys["oracle", w]: 1, keys["uniform", w]: -1}) for w in (4, 8, 16))
+    for low, high in ((4, 8), (8, 16)):
+        contrasts.extend(Contrast(f"{sampler}, {high} minus {low} shuffles",
+                                 {keys[sampler, high]: 1, keys[sampler, low]: -1})
+                         for sampler in ("oracle", "uniform"))
+        contrasts.append(Contrast(f"uniform minus oracle shuffle gain, {high} minus {low}", {
+            keys["uniform", high]: 1, keys["uniform", low]: -1,
+            keys["oracle", high]: -1, keys["oracle", low]: 1,
+        }))
+    return contrasts
+
+
+def _linear_contrast(
+    contrast: Contrast, scores: dict[str, dict[int, float]], games: list[Game],
+) -> dict[str, Any]:
+    """Pair all contributing arms before resampling; missing slots keep full bounds.
+
+    Each contrast uses its own complete deal vectors. Interactions resample the
+    four-arm difference, never independent arm means or independent intervals.
+    """
+    planned = {g.deal for g in games}
+    common = planned.intersection(*(scores.get(k, {}).keys() for k in contrast.terms))
+    values = {d: sum(weight * scores[key][d] for key, weight in contrast.terms.items())
+              for d in sorted(common)}
+    nominal = estimate(list(values.values()))
+    boot, _ = _bootstrap({"contrast": values, "zero": {d: 0.0 for d in common}},
+                         games, [("contrast", "zero")])
+    interval = boot.get(("contrast", "zero"))
+    bounds = [0.0, 0.0]
+    for deal in planned:
+        for key, weight in contrast.terms.items():
+            value = scores.get(key, {}).get(deal)
+            bounds[0] += weight * value if value is not None else min(0, weight)
+            bounds[1] += weight * value if value is not None else max(0, weight)
+    return {
+        "label": contrast.label, "terms": contrast.terms, "planned": len(planned),
+        "paired": len(common), "missing_deals": sorted(planned - common),
+        "normal": nominal.to_json() if nominal else None,
+        "cell_stratified_bootstrap": interval.to_json() if interval else None,
+        "failure_sensitivity": [v / len(planned) for v in bounds],
+    }
+
+
+def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow | GameRow]]) -> dict[str, Any]:
+    """Read the extension snapshot without treating an absent directory as no games.
+
+    Dated execution receipts must accompany it. Resume reconciliation is shared
+    with the runner; this does not certify native admission or replay equivalence.
+    """
+    receipt_dir = directory / "reconciliation"
+    receipts = {name: json.loads((receipt_dir / f"{name}.json").read_text())
+                for name in ("remote-inventory", "launcher-inventory", "validation")}
+    records = _outcomes([directory / "games"], mirror=True, arms=V2_ARMS)
+    reconcile_extension(directory / "games")
+    remote = receipts["remote-inventory"]
+    # A prelaunch receipt cannot certify later outcomes or their provenance.
+    if records and not remote["v2_directory_exists"]:
+        raise ValueError("Extension outcomes require refreshed execution reconciliation")
+    games = [g for g in schedule() if g.index < DEALS_PER_CELL]
+    scores = _scores(records) | {"policy/policy": _scores(baselines).get("policy/policy", {})}
+    costs = _costs(directory / "games")
+    arms = {}
+    for arm in V2_ARMS:
+        rows = records.get(arm.key, {})
+        cost = costs.get(arm.key)
+        arms[arm.key] = {
+            "setting": asdict(arm), "coverage": _coverage(rows, games),
+            "score": (e.to_json() if (e := estimate(list(scores.get(arm.key, {}).values()))) else None),
+            "search_cost": asdict(cost) if cost else None,
+            "hero_seconds": sum(r.hero_seconds for r in rows.values()) if rows else None,
+            "game_wall_seconds": [r.game_seconds for r in rows.values() if isinstance(r, MirrorRow)] or None,
+        }
+    valid = sum(a["coverage"]["valid"] for a in arms.values())
+    return {
+        "protocol": "experiments/protocols/search-mirror-v2.md", "alpha": 0.02,
+        "planned_games": len(V2_ARMS) * len(games), "valid_games": valid,
+        "missing_games": sum(a["coverage"]["missing"] for a in arms.values()),
+        "invalid_games": sum(a["coverage"]["invalid"] for a in arms.values()),
+        "execution": "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness",
+        "observed_utc": remote["observed_utc"], "capacity_reason": receipts["launcher-inventory"]["quote_error"],
+        "arms": arms, "control": _coverage(baselines.get("policy/policy", {}), games),
+        "contrasts": [_linear_contrast(c, scores, games) for c in _factorial_contrasts()],
+        "context_only_arm": "policy/mirror-d20-b0.03-w4",
+        "uncertainty": "exploratory; 10000 whole-deal resamples within fixed cells, seed 26901; complete vectors per contrast",
+        "health": "unassessed: no native smoke or games" if not records else "requires execution evidence review",
+        "native_support": "unresolved; accounting and sampler fixtures do not admit the mini runtime",
+        "replay_identity": "absent: no game attempts" if not records else "retained attempts are not replay proof",
+        "learning": "inference-only; no new training, exports or callbacks expected",
+        "training_card_exposure": None, "generalization": "untested; reused decks, deals and one training seed",
+        "acceptance": "unresolved; missing outcomes establish neither gains nor equivalence",
+        "measured_eta_seconds": None, "inclusive_worker_hours": None,
+        "rental_spend_usd": receipts["launcher-inventory"]["new_rental_spend_usd"],
+        "deadline_unix": receipts["validation"]["deadline_unix"],
+        "evidence_sha256": {str(p.relative_to(directory)): hashlib.sha256(p.read_bytes()).hexdigest()
+                            for p in sorted(directory.rglob("*")) if p.is_file()},
+    }
+
+
+def _extension_section(extension: dict[str, Any]) -> str:
+    rows = []
+    for arm in extension["arms"].values():
+        setting, coverage = arm["setting"], arm["coverage"]
+        rows.append(f'<tr><td>{setting["sampler"]}</td><td>{setting["worlds"]}</td>'
+                    f'<td>{coverage["valid"]}/{coverage["planned"]}</td>'
+                    f'<td>{coverage["missing"]}</td><td>{coverage["invalid"]}</td>'
+                    f'<td>{_interval(arm["score"])}</td></tr>')
+    contrasts = []
+    for c in extension["contrasts"]:
+        lo, hi = c["failure_sensitivity"]
+        contrasts.append(f'<tr><td>{escape(c["label"])}</td><td>{c["paired"]}/{c["planned"]}</td>'
+                         f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
+                         f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
+    return (
+        '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
+        f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
+        f'{escape(extension["execution"])}.</strong> Snapshot: {escape(extension["observed_utc"])}. '
+        f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'
+        '<p class="note">All six cells fix depth 20, α 0.02 and β 0.01 against the raw sampled MTG-183 '
+        'checkpoint policy. The opponent has no search, mirror update, greedy or EMA substitution. '
+        'Uniform samples physical unseen copies subject to public information; oracle retains the true hand. '
+        'These are comparisons against a common opponent, not oracle-versus-uniform head-to-head games. '
+        'The historical β 0.03/four-shuffle result is context only.</p>'
+        '<div class="table-scroll" role="region" aria-label="Extension coverage" tabindex="0">'
+        '<table><tr><th>Hands</th><th>Shuffles</th><th>Valid/planned</th><th>Missing</th><th>Invalid</th>'
+        '<th>Score %, nominal 95%</th></tr>' + ''.join(rows) + '</table></div>'
+        '<details><summary>All planned paired contrasts and missing-evidence bounds</summary>'
+        '<table><tr><th>Contrast</th><th>Paired/planned</th><th>Nominal 95%, points</th>'
+        '<th>Stratified 95%, points</th><th>Sensitivity, points</th></tr>' + ''.join(contrasts) + '</table></details>'
+        '<p class="note">Unavailable is not zero. Each contrast pairs all contributing scores on the same deal; '
+        'the interaction is (uniform higher − uniform lower) − (oracle higher − oracle lower). '
+        'Bootstrap resamples those complete vectors within fixed deck cells, 10,000 times with seed 26901; '
+        'an empty cell makes that interval unavailable. Full-denominator sensitivity lets every missing score '
+        'range from 0 to 1; these bounds are not confidence intervals. No direction of interaction is assumed.</p>'
+        '<p class="note">The requested extension is authorized but unmeasured at this snapshot. No native smoke, '
+        'replay identity, decision/game cost or measured ETA is available. Policy-only timing stays in its '
+        'separate historical table. No new rental spend is recorded; inclusive setup/worker time is absent. '
+        'The shared execution deadline remains November 16, 2026, 18:16:29 UTC. Missing games are neither '
+        'failed games nor evidence of no benefit. Health and native support remain unresolved. Training card '
+        'exposure remains absent independently of evaluation coverage; no new learning or generalization is '
+        'established. Evidence review must retain these limits. This analysis starts no execution.</p>'
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -402,8 +569,8 @@ def _evidence_sections(summary: dict[str, Any]) -> str:
         f'total {health["noise"]["seconds"]:.3f} seconds. These exclude setup, opponent decisions, interrupted '
         'attempts and overhead. Inclusive worker-hours, energy/storage costs and historical PUCT rental costs '
         'remain unavailable. The mirror campaign used the owned mini with $0 rental spend. No execution was '
-        'added by analysis. Etude inventory could not be read because the retained SDK rejects the local DB '
-        'schema; it was left untouched and no remaining rental budget is inferred.</p>'
+        'added by analysis. The retained SDK rejects the current launcher schema. Later extension reconciliation '
+        'used a separate compatible reader without changing the frozen environment; no remaining rental budget is inferred.</p>'
         '<h2>Health, learning and acceptance limits</h2>'
         f'<p class="note">Execution: {d["rows"]:,} decision records reconcile with all game counts and consecutive '
         'indices, with no orphans, duplicate decisions, malformed tails or nonfinite values. '
@@ -426,8 +593,9 @@ def _evidence_sections(summary: dict[str, Any]) -> str:
         'as learned skill. Generalization to held-out cards, combinations, mechanics or independent training '
         'seeds is untested. Oracle gains do not establish playable uniform-hand strength or a mathematical '
         'upper bound. No confirmatory winner, controlled speedup or equal-wall-budget claim is supported.</p>'
-        '<p class="note">Evidence review must retain these unresolved claims. The beta-0.01 / 8–16-shuffle '
-        'and uniform-hand extensions remain proposals; this analysis authorizes no new games or parameter changes.</p>'
+        '<p class="note">Evidence review must retain these unresolved claims. The authorized beta-0.01 '
+        'oracle/uniform extension has a separate frozen protocol and denominator; this analysis starts no '
+        'new games or parameter changes.</p>'
     )
 
 
@@ -436,7 +604,7 @@ def _evidence_sections(summary: dict[str, Any]) -> str:
 
 
 def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Path,
-          baseline_summary: Path) -> dict[str, Any]:
+          baseline_summary: Path, extension: Path | None = None) -> dict[str, Any]:
     reconciliation = _reconciliation(mirror_dir)
     mirror_records = _outcomes([mirror_dir], mirror=True)
     baseline_records = _outcomes(baselines, mirror=False)
@@ -738,17 +906,21 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
         "advantage benchmark, not a proven mathematical upper bound on this approximate search with hidden hands.</p>")
 
     sections.append(_evidence_sections(summary))
+    extension_html = ""
+    if extension is not None:
+        summary["extension"] = _extension_report(extension, baseline_records)
+        extension_html = _extension_section(summary["extension"])
 
     lede = ("Can the magnetic-mirror local update, given the opponent's true hand, add strength on top of "
             f"MTG-183's policy, and what does it cost next to PUCT? {played:,} of {planned:,} retained games "
             f"(about {min(len(v) for v in mirror.values())} deals per setting).")
-    banner = ('<div class="banner">Retained execution is complete. Eight settings against two opponents were inspected repeatedly. With no '
+    banner = ('<div class="banner">Original 8,000-game execution is complete. Eight settings against two opponents were inspected repeatedly. With no '
               "multiple-comparison correction, a selected setting clearing its interval remains exploratory; playable strength is unresolved.</div>")
     html = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>Mirror search study</title><style>{CSS}{EXTRA_CSS}</style></head><body><main>"
             f"<h1>Mirror search on MTG-183</h1><p class=\"lede\">{escape(lede)}</p>{banner}"
-            f'<div class="tiles">{"".join(tiles)}</div>' + "".join(sections) + "</main></body></html>")
+            f'<div class="tiles">{"".join(tiles)}</div>' + extension_html + "".join(sections) + "</main></body></html>")
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.html").write_text(html)
     summary["games"] = played
@@ -764,8 +936,9 @@ def main() -> None:
     parser.add_argument("--baseline-summary", type=Path, required=True)
     parser.add_argument("--noise", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--extension", type=Path, help="V2 snapshot root, containing games/ and reconciliation/")
     args = parser.parse_args()
-    summary = build(args.mirror, args.baseline, args.noise, args.out, args.baseline_summary)
+    summary = build(args.mirror, args.baseline, args.noise, args.out, args.baseline_summary, args.extension)
     print(json.dumps({"games": summary["games"], "best": summary["best_setting"]}))
 
 

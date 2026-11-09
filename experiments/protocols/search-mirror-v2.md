@@ -151,3 +151,36 @@ For conservative inclusive accounting, the setup window began with this Graph
 step at 2026-11-09 18:16:29 UTC. Its seven-day ceiling is
 **2026-11-16 18:16:29 UTC** (`--deadline 1794852989`), shared by smoke and campaign.
 Do not reset that deadline on retry, stage transition or allocation delay.
+
+## Analysis handoff — 2026-11-09
+
+The existing `search_mirror_report.py` now accepts `--extension
+experiments/data/search-mirror-v2` alongside its v1 inputs and updates the same
+`experiments/data/search-mirror-v1/report.html` and `summary.json`. The v1
+results remain separate and unchanged; no second result store is introduced.
+Extension snapshots put runner outputs in `games/` and dated receipts in
+`reconciliation/`. No game evidence exists in the retained prelaunch snapshot.
+
+The report preserves all six 500-slot cells, the sampled-policy control, and
+all 15 declared comparisons: six gains over sampled policy, three hand-sampler
+contrasts, four adjacent shuffle contrasts, and two four-cell interactions.
+Each estimate pairs complete whole-deal vectors for its contributing arms.
+Bootstrap uncertainty uses 10,000 within-cell resamples, seed 26901, equal cell
+weights; a wholly missing cell prevents a full-grid interval. Sensitivity keeps
+all 500 slots and ranges missing scores over [0, 1]. Interactions therefore have
+possible missing-evidence bounds as wide as [-2, 2], not [-1, 1]. These are
+exploratory procedures, not a new acceptance threshold.
+
+At the retained 18:26 UTC execution snapshot all 3,000 new slots are missing,
+with zero attempted-game failures; estimates, intervals and measured cost remain
+unavailable. This cannot answer whether uniform benefits more from shuffles.
+Health, native admission, replay proof and training exposure remain unresolved
+for evidence review. Capacity reconciliation and the bounded native smoke belong
+to execution; analysis launched nothing and did not refresh or reset the deadline.
+
+Validation: 18 focused runner/report/data checks pass, as does Ruff. The broader
+CI invocation collects 75 tests but retains the six known import errors involving
+`etude.eval.match.agent` and absent `duckdb`; the frozen environment was not
+changed. Every pre-existing v1 summary field except the analysis source digest
+reproduces exactly. The report carries these results and the dated execution
+receipts; this handoff is not a second scientific summary.

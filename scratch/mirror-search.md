@@ -1,5 +1,25 @@
 # Mirror search continuation
 
+## Extension analysis handoff — 2026-11-09
+
+The same report builder now takes `--extension experiments/data/search-mirror-v2`
+and updates the existing v1 `report.html` / `summary.json`; no v2 summary store.
+All v1 numerical results reproduce unchanged. Six extension cells and all 15
+planned contrasts retain their denominators and unavailable estimates. The
+dated execution receipts still show no launch; analysis started no games or
+smoke and did not alter the allocation or deadline. Scientific acceptance remains
+unresolved. Use the existing report for results and the v2 protocol for execution.
+
+18 focused tests and Ruff pass. Broader CI collection finds 75 tests but keeps
+the same six Etude/duckdb import errors; no dependency/environment changes.
+Updated HTML and summary were published at their existing artifact paths through
+Doppler (two manifest entries changed). Desktop/mobile light/dark browser checks
+pass with expanded tables and no page overflow; the temporary browser is closed.
+All 37 v1/v2 artifacts verify against the manifest; a second rebuild reproduces
+both published files byte-for-byte. The post-publication untracked-data check passes.
+Capacity reconciliation and native smoke are still execution prerequisites,
+not a request for another design review. The absolute deadline is unchanged.
+
 ## Execution preparation and capacity block — 2026-11-09
 
 Latest direction supersedes the earlier schedules below: “to be clear the games
@@ -199,7 +219,7 @@ Report rebuild (analysis only; no games on the laptop):
 
 ```sh
 cd /Users/jack/src/manabot.w13-search
-uv run --project /Users/jack/src/manabot.search --no-sync python -m experiments.search_mirror_report --mirror experiments/data/search-mirror-v1/games --baseline /Users/jack/.manabot/search-scaling/hosts --baseline-summary experiments/data/search-scaling-v1/summary.json --noise experiments/data/search-mirror-v1/noise --out experiments/data/search-mirror-v1
+uv run --project /Users/jack/src/manabot.search --no-sync python -m experiments.search_mirror_report --mirror experiments/data/search-mirror-v1/games --baseline /Users/jack/.manabot/search-scaling/hosts --baseline-summary experiments/data/search-scaling-v1/summary.json --noise experiments/data/search-mirror-v1/noise --extension experiments/data/search-mirror-v2 --out experiments/data/search-mirror-v1
 ```
 
 Results belong in the artifact store; publish changed evidence before committing
