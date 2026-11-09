@@ -1,35 +1,32 @@
-"""Constructed Command roots and bounded representation proofs.
+"""Native effect fixtures shared by observation and model checks.
 
-Shared roots serve policy tests and cost measurements; the v5 proof below is
-not a learning or speed ranking.
-
-One forward/backward per arm per native fixture, CPU and one thread. Retains
-both viewers' v5 tensors and hashes so a result cannot silently substitute a
-new input. The source-dependent effect gap and frozen capacities are unchanged;
-this command does not certify the proposed replacement native transport.
+These roots resolve effects through viewer-bound Commands, retaining the native
+source, duration and activation order needed by transport and model assertions.
 """
 
-import argparse
-from dataclasses import asdict, dataclass
-from pathlib import Path
-import time
+from collections.abc import Callable
+from typing import Literal
 
 from managym.decision_capture import DecisionInput
-import numpy as np
-import torch
 
-from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig, StateEncoder
-from manabot.infra.files import atomic_json
-from manabot.infra.identity import file_sha256
-from manabot.infra.source import source_commit, source_dirty
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.architecture import architecture_receipt
 from manabot.semantic.text_observation import capture_text_decision, submit_response
-from manabot.verify.text_observation import native_fixtures, priority_root
+from manabot.verify.text_observation import priority_root
 import managym
 
-ARMS: tuple[StateEncoder, ...] = ("rows", "typed_pool", "typed_gru")
+
+def _submit_offer(env: managym.Env, wanted: Callable[[str, str], bool]) -> None:
+    """Submit the first offer whose verb and description satisfy ``wanted``."""
+    decision = capture_text_decision(env)
+    source = DecisionInput.model_validate_json(decision.capture_json)
+    assert source.observation.decision is not None
+    action = next(
+        action
+        for offer, action in zip(
+            source.observation.decision.offers, decision.actions, strict=True
+        )
+        if wanted(offer["verb"], action.description)
+    )
+    submit_response(env, decision, action.reference)
 
 
 def source_effect_root() -> managym.Env:
@@ -41,27 +38,15 @@ def source_effect_root() -> managym.Env:
         obs = env.observation_for_player(env.current_agent_index())
         if any(p.effects for p in (*obs.agent_permanents, *obs.opponent_permanents)):
             return env
-        decision = capture_text_decision(env)
-        source = DecisionInput.model_validate_json(decision.capture_json)
-        assert source.observation.decision is not None
-        action = next(
-            action
-            for offer, action in zip(
-                source.observation.decision.offers, decision.actions, strict=True
-            )
-            if (step == 0 and offer["verb"] == "cast")
-            or (
-                step > 0
-                and (
-                    offer["verb"] in ("pay_cost", "pass_priority")
-                    or (
-                        offer["verb"] == "choose_target"
-                        and "Gray Ogre" in action.description
-                    )
-                )
-            )
+        _submit_offer(
+            env,
+            lambda verb, description: (
+                verb == "cast"
+                if step == 0
+                else verb in ("pay_cost", "pass_priority")
+                or (verb == "choose_target" and "Gray Ogre" in description)
+            ),
         )
-        submit_response(env, decision, action.reference)
     raise AssertionError("Ty Lee did not resolve within the declared prefix")
 
 
@@ -81,18 +66,12 @@ def shared_effect_root(activations: int) -> managym.Env:
         opponent=("Gray Ogre",) * 10,
     )
     for activation in range(activations):
-        decision = capture_text_decision(env)
-        source = DecisionInput.model_validate_json(decision.capture_json)
-        assert source.observation.decision is not None
-        action = next(
-            action
-            for offer, action in zip(
-                source.observation.decision.offers, decision.actions, strict=True
-            )
-            if offer["verb"] == "activate_ability"
-            and "The Fire Nation Drill" in action.description
+        _submit_offer(
+            env,
+            lambda verb, description: (
+                verb == "activate_ability" and "The Fire Nation Drill" in description
+            ),
         )
-        submit_response(env, decision, action.reference)
         for _ in range(8):
             obs = env.observation_for_player(env.current_agent_index())
             records = sum(
@@ -101,20 +80,84 @@ def shared_effect_root(activations: int) -> managym.Env:
             )
             if records == 10 * (activation + 1):
                 break
-            decision = capture_text_decision(env)
-            source = DecisionInput.model_validate_json(decision.capture_json)
-            assert source.observation.decision is not None
-            action = next(
-                action
-                for offer, action in zip(
-                    source.observation.decision.offers, decision.actions, strict=True
-                )
-                if offer["verb"] in ("pay_cost", "pass_priority")
-            )
-            submit_response(env, decision, action.reference)
+            _submit_offer(env, lambda verb, _: verb in ("pay_cost", "pass_priority"))
         else:
             raise AssertionError("Drill did not resolve within the declared prefix")
     return env
+
+
+def _resolve_stack(
+    env: managym.Env, target: Callable[[str], bool] = lambda _: False
+) -> None:
+    """Answer Commands until the announced object has left the stack."""
+    for _ in range(12):
+        if not env.observation_for_player(env.current_agent_index()).continuation:
+            return
+        _submit_offer(
+            env,
+            lambda verb, description: (
+                verb in ("pay_cost", "pass_priority")
+                or (verb == "choose_target" and target(description))
+            ),
+        )
+    raise AssertionError("the stack did not empty within the declared prefix")
+
+
+def aged_grant_root(
+    duration: Literal["EndOfTurn", "Indefinite"], *, fill: bool = True
+) -> managym.Env:
+    """Age one grant past the public history window using only real Commands.
+
+    An end-of-turn root casts Yip Yip! on Gray Ogre. An indefinite root activates
+    Invasion Submersible, whose payload v7 can represent, and casts Lightning
+    Bolt, which leaves the same hand because an activation records no history
+    row. Eight Raging Goblins then add four rows each (stack arrival, cast,
+    battlefield arrival, resolved) within the turn, so the end-of-turn record is
+    still active when the 32-row window holds only their rows. ``fill=False``
+    stops before them.
+    """
+    spell = "Yip Yip!" if duration == "EndOfTurn" else "Lightning Bolt"
+    env = priority_root(
+        (spell,) + ("Raging Goblin",) * 8,
+        ("Invasion Submersible", "Gray Ogre", "Plains") + ("Mountain",) * 12,
+    )
+    if duration == "Indefinite":
+        _submit_offer(
+            env,
+            lambda verb, description: (
+                verb == "activate_ability" and "Invasion Submersible" in description
+            ),
+        )
+        _resolve_stack(env)
+    _submit_offer(env, lambda verb, text: verb == "cast" and spell in text)
+    # Yip Yip! names the Ogre; the Bolt must leave both creatures in place.
+    _resolve_stack(
+        env,
+        lambda text: (
+            "Gray Ogre" in text
+            if duration == "EndOfTurn"
+            else "Ogre" not in text and "Submersible" not in text
+        ),
+    )
+    for _ in range(8 if fill else 0):
+        _submit_offer(env, lambda verb, text: verb == "cast" and "Goblin" in text)
+        _resolve_stack(env)
+    return env
+
+
+def advance_to_next_turn(env: managym.Env) -> None:
+    """Pass through cleanup without attacking, with no other choice made."""
+    start = env.observation_for_player(0).turn.turn_number
+    for _ in range(40):
+        if env.observation_for_player(0).turn.turn_number != start:
+            return
+        _submit_offer(
+            env,
+            lambda verb, description: (
+                verb == "pass_priority" or description.startswith("Do not attack")
+            ),
+        )
+    raise AssertionError("the next turn did not begin within the declared prefix")
 
 
 def kellan_upgrade_root(hand: tuple[str, ...] = ()) -> managym.Env:
@@ -157,141 +200,3 @@ def kellan_trigger_root(hand: tuple[str, ...] = ()) -> managym.Env:
         )
         submit_response(env, decision, action.reference)
     raise AssertionError("Kellan's combat trigger did not reach the stack")
-
-
-@dataclass
-class Measurement:
-    fixture: str
-    arm: StateEncoder
-    parameters: int
-    architecture: str
-    forward_seconds: float
-    backward_seconds: float
-    valid_facts: int
-    shared_fact_payloads: int
-    relation_rows: int
-    frame_headers: int
-    input_bytes: int
-    input_sha256: str
-    error: str | None = None
-
-
-def prove(out: Path) -> int:
-    """Retain all attempts in a fresh directory; any failed fixture fails the proof."""
-    out.mkdir(parents=True, exist_ok=False)
-    torch.set_num_threads(1)
-    space = ObservationSpace(ObservationConfig(policy_input_version=5))
-    measurements: list[Measurement] = []
-    root = Path(__file__).resolve().parents[2]
-    # Bind current Python and Rust sources, including untracked prototype files.
-    # Committed source is the retrievable archive; dirty runs stay exploratory.
-    sources = [
-        *root.joinpath("manabot").rglob("*.py"),
-        root / "experiments/state_representation.py",
-    ]
-    for directory in ("managym/src", "managym/state/src", "managym/cards/src"):
-        sources.extend(root.joinpath(directory).rglob("*.rs"))
-    sources.extend(
-        root / name for name in ("pyproject.toml", "uv.lock", "managym/Cargo.lock")
-    )
-    atomic_json(
-        out / "identity.json",
-        {
-            "schema": "state-representation-proof-1",
-            "seed": 73200,
-            "world": managym.WORLD_VERSION,
-            "source_commit": source_commit(),
-            "source_dirty": source_dirty(),
-            "sources": {
-                str(path.relative_to(root)): file_sha256(path)
-                for path in sorted(sources)
-            },
-            "native_sha256": file_sha256(managym._managym.__file__),
-            "observation": space.encoder.config.model_dump(mode="json"),
-            "scope": "same-v5-input engineering proof; no learning or capacity claim",
-        },
-    )
-    fixtures = native_fixtures()
-    del fixtures["priority"]
-    del fixtures["optional_payment"]
-    fixtures["shared_effects"] = shared_effect_root(6)
-    fixtures["source_effect"] = source_effect_root()
-    for name, env in fixtures.items():
-        actor = env.current_agent_index()
-        assert actor is not None
-        encoded: dict[str, np.ndarray] | None = None
-        for viewer in (actor, 1 - actor):
-            obs = env.observation_for_player(viewer)
-            native = env.encode_observation(obs, 5)
-            reference = space.encode(obs)
-            for key in native:
-                np.testing.assert_array_equal(
-                    native[key], reference[key], err_msg=f"{name}: {key}"
-                )
-            np.savez(out / f"{name}-viewer-{viewer}.npz", **native)
-            if viewer == actor:
-                encoded = native
-        assert encoded is not None
-        facts = encoded["facts"][encoded["facts"][:, 11] == 1]
-        rows = encoded["relations"][encoded["relations"][:, 31] == 1]
-        inputs = {key: torch.from_numpy(value)[None] for key, value in encoded.items()}
-        for arm in ARMS:
-            torch.manual_seed(73200)
-            agent = ActorCritic(
-                space,
-                ModelConfig(
-                    hidden_dim=64,
-                    attention_layers=2,
-                    state_encoder=arm,
-                    policy_film=True,
-                ),
-            )
-            architecture = architecture_receipt(agent)
-            measurement = Measurement(
-                fixture=name,
-                arm=arm,
-                parameters=architecture.parameters.total,
-                architecture=architecture.identity,
-                forward_seconds=0,
-                backward_seconds=0,
-                valid_facts=len(facts),
-                shared_fact_payloads=len(np.unique(facts[:, 1:11], axis=0)),
-                relation_rows=len(rows),
-                frame_headers=int((rows[:, 0] == 1).sum()),
-                input_bytes=sum(value.nbytes for value in encoded.values()),
-                input_sha256=file_sha256(out / f"{name}-viewer-{actor}.npz"),
-            )
-            try:
-                start = time.perf_counter()
-                logits, value = agent(inputs)
-                measurement.forward_seconds = time.perf_counter() - start
-                legal = logits[inputs["actions_valid"].bool()]
-                if not torch.isfinite(legal).all() or not torch.isfinite(value).all():
-                    raise ValueError("nonfinite model output")
-                start = time.perf_counter()
-                (legal.square().mean() + value.square().mean()).backward()
-                measurement.backward_seconds = time.perf_counter() - start
-                if any(
-                    p.grad is not None and not torch.isfinite(p.grad).all()
-                    for p in agent.parameters()
-                ):
-                    raise ValueError("nonfinite model gradient")
-            except Exception as exc:
-                measurement.error = f"{type(exc).__name__}: {exc}"
-            measurements.append(measurement)
-            atomic_json(
-                out / "measurements.json", [asdict(item) for item in measurements]
-            )
-    failures = sum(item.error is not None for item in measurements)
-    print(f"{len(measurements)} fixture/arm attempts; {failures} failures; {out}")
-    return int(failures > 0)
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out", type=Path, required=True)
-    return prove(parser.parse_args().out)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
