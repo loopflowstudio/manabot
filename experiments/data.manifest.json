@@ -81995,8 +81995,8 @@
    "bytes": 217742
   },
   "experiments/data/training-throughput-b015d5-v1/report.md": {
-   "sha256": "d4bb073e59e43dd568949ce7733c2af2773e752886bdb93e8ad97edef38c2d5a",
-   "bytes": 45082
+   "sha256": "afacde08cf7e59c83d918e4d7fd2fbc79ff4a68f8b259e4a4e69c3db4b7ca3e8",
+   "bytes": 49184
   },
   "experiments/data/training-throughput-b015d5-v1/step-1/04c78c2631c6/cuda-counts/phase.json": {
    "sha256": "69c4edacf2d989ddadb9219374b62302b7ce49bff605ce776de9119592049446",
