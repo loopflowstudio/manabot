@@ -50,12 +50,17 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
         agent.observation_space, _match(), Reward(RewardConfig()), num_envs=1, seed=111
     )
     batch = collector.collect(agent, 16)
-    nonempty = np.flatnonzero(batch.obs["events_valid"].sum(axis=(-1, -2)) >= 2)
+    nonempty = np.flatnonzero(
+        batch.ordered_obs()["events_valid"].sum(axis=(-1, -2)) >= 2
+    )
     assert len(nonempty) > 2, (
         "ordinary semantic collection must retain past public events"
     )
     step = int(nonempty[-1])
-    return {key: torch.from_numpy(value[step]) for key, value in batch.obs.items()}
+    return {
+        key: torch.from_numpy(value)
+        for key, value in batch.observations(np.array([step])).observation.items()
+    }
 
 
 @pytest.mark.parametrize("attention", [False, True])

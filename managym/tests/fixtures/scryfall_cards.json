@@ -3084,7 +3084,7 @@
   "Secret of Bloodbending": {
     "name": "Secret of Bloodbending",
     "mana_cost": "{U}{U}{U}{U}",
-    "type_line": "Sorcery \u2014 Lesson",
+    "type_line": "Sorcery — Lesson",
     "power": null,
     "toughness": null,
     "keywords": [
@@ -4568,6 +4568,57 @@
     "oracle_text": "When Koh enters, exile up to one other target creature.\nWhenever another nontoken creature dies, you may exile it.\nPay 1 life: Choose a creature card exiled with Koh.\nKoh has all activated and triggered abilities of the last chosen card.",
     "colors": [
       "B"
+    ]
+  },
+  "Kellan, Planar Trailblazer": {
+    "name": "Kellan, Planar Trailblazer",
+    "mana_cost": "{R}",
+    "type_line": "Legendary Creature — Human Faerie Scout",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{1}{R}: If Kellan is a Scout, it becomes a Human Faerie Detective and gains \"Whenever Kellan deals combat damage to a player, exile the top card of your library. You may play that card this turn.\"\n{2}{R}: If Kellan is a Detective, it becomes a 3/2 Human Faerie Rogue and gains double strike.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Beorn the Fierce": {
+    "name": "Beorn the Fierce",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Creature — Bear Shapeshifter Warrior",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nOther Bears you control get +2/+2.\nAt the beginning of combat on your turn, put a trample counter on up to one target creature you control. It becomes a Bear in addition to its other types. Then if you control three or more Bears, draw two cards.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Caradora, Heart of Alacria": {
+    "name": "Caradora, Heart of Alacria",
+    "mana_cost": "{2}{G}{W}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When Caradora enters, you may search your library for a Mount or Vehicle card, reveal it, put it into your hand, then shuffle.\nIf one or more +1/+1 counters would be put on a creature or Vehicle you control, that many plus one +1/+1 counters are put on it instead.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Doubling Season": {
+    "name": "Doubling Season",
+    "mana_cost": "{4}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "If an effect would create one or more tokens under your control, it creates twice that many of those tokens instead.\nIf an effect would put one or more counters on a permanent you control, it puts twice that many of those counters on that permanent instead.",
+    "colors": [
+      "G"
     ]
   }
 }

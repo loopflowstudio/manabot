@@ -12,8 +12,9 @@ from typing import Literal
 
 from pydantic import JsonValue, model_validator
 
+from manabot.env.card_capture import CardSnapshot, Seat
 from manabot.infra.identity import StrictModel
-from manabot.sim.card_evidence import CardSnapshot, GameEvidence, Seat
+from manabot.sim.card_evidence import GameEvidence
 
 EXPORT_VERSION = "arena-card-log-v1"
 

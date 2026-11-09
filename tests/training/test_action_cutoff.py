@@ -113,11 +113,12 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             batch = collector.collect(agent, 2)
         finally:
             collector.close()
-    valid = batch.obs["actions_valid"].astype(bool)
-    assert batch.probabilities.shape == valid.shape
-    assert np.all(batch.probabilities[~valid] == 0)
-    assert np.all(batch.probabilities[valid] > 0)
-    np.testing.assert_allclose(batch.probabilities.sum(-1), 1, atol=1e-6)
+    rows = batch.observations()
+    valid = rows.observation["actions_valid"].astype(bool)
+    assert rows.probabilities.shape == valid.shape
+    assert np.all(rows.probabilities[~valid] == 0)
+    assert np.all(rows.probabilities[valid] > 0)
+    np.testing.assert_allclose(rows.probabilities.sum(-1), 1, atol=1e-6)
     assert np.all(np.take_along_axis(valid, batch.actions[..., None], -1))
     reports = [
         json.loads(path.read_bytes()) for path in tmp_path.glob("action-cutoff-*.json")

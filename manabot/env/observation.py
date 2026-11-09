@@ -15,7 +15,9 @@ Additional updates in this version:
   is_valid flag.
 """
 
-from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
+from collections import Counter
+from collections.abc import Sequence
+from typing import Any, Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
 
@@ -32,7 +34,7 @@ from managym.enums import (  # noqa: F401
 import numpy as np
 
 # Local imports
-from manabot.env.shared_effects import SHARED_EFFECT_SHAPES, encode_shared_effects
+from manabot.env.shared_effects import encode_shared_effects, shared_effect_shapes
 from manabot.infra.config import ObservationConfig
 from manabot.infra.log import getLogger
 import managym
@@ -44,6 +46,9 @@ ACTION_MODE_INDEX = ACTION_DECLARED_INDEX + 1
 ACTION_ABILITY_INDEX = ACTION_MODE_INDEX + 1
 ACTION_CONTINUATION_INDEX = ACTION_ABILITY_INDEX + 1
 MAX_ACTION_SELECTOR = (1 << 24) - 1
+# V9 name candidate columns: name row + 1, definition + 1, then the first and
+# last name rows (+ 1) of a naming group choice.
+NAME_DIM_V9 = 4
 PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
 LEGACY_RELATION_DIM = 32
@@ -125,6 +130,12 @@ FACT_COPY_EXCEPTION = 8
 FACT_TRANSFORMS = 9
 FACT_COMBAT_RESTRICTION = 10
 FACT_KINDS = 10
+# V8 extends the vocabulary without resizing retained v5–v7 embeddings.
+FACT_EFFECT_PROGRAM = 11
+FACT_EFFECTIVE_COLOR = 12
+FACT_KEYWORD_COUNTER_TIMESTAMP = 13
+FACT_CONTINUATION_PROGRAM = 14
+FACT_KINDS_V8 = 14
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # v5 decklist rows: definition id + 1, then main, unseen, sideboard and
@@ -180,7 +191,23 @@ def _timestamp_ranks(
             *(perm.effects for perm in permanents),
         ):
             stamps.update(effect.timestamp for effect in effects)
+    stamps.update(
+        timestamp
+        for perm in permanents
+        for timestamp in perm.keyword_counter_timestamps.values()
+    )
     return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
+
+
+def _card_rows(cards: Sequence[Any], sideboard: int) -> str:
+    """Where a seat's card rows sit, for a capacity failure's retained text."""
+    zones = Counter(str(card.zone).rsplit(".", 1)[-1].lower() for card in cards)
+    tokens = Counter(card.name for card in cards if card.is_token)
+    parts = [f"{zone} {count}" for zone, count in sorted(zones.items())]
+    parts.append(f"sideboard {sideboard}")
+    parts.append(f"tokens {sum(tokens.values())}")
+    parts.extend(f"{name} {count}" for name, count in tokens.most_common(3))
+    return ", ".join(parts)
 
 
 class ObservationEncoder:
@@ -201,7 +228,10 @@ class ObservationEncoder:
             self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
+        # V9 names through bounded group prompts, so action capacity is
+        # independent of vocabulary size. Earlier inputs carry no name identity.
         self.max_actions = config.max_actions
+        self.name_dim = NAME_DIM_V9 if config.policy_input_version >= 9 else 0
         self.max_focus_objects = config.max_focus_objects
         self.max_events = config.max_events
 
@@ -261,7 +291,11 @@ class ObservationEncoder:
                 if self.shows_everything
                 else {}
             ),
-            **(SHARED_EFFECT_SHAPES if self.config.policy_input_version >= 7 else {}),
+            **(
+                shared_effect_shapes(self.config.policy_input_version)
+                if self.config.policy_input_version >= 7
+                else {}
+            ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             **(
@@ -276,6 +310,11 @@ class ObservationEncoder:
             "opponent_cards": (self.cards_per_player, self.card_dim),
             "agent_permanents": (self.perms_per_player, self.permanent_dim),
             "opponent_permanents": (self.perms_per_player, self.permanent_dim),
+            **(
+                {"name_candidates": (self.max_actions, self.name_dim)}
+                if self.config.policy_input_version >= 9
+                else {}
+            ),
             "actions": (self.max_actions, self.action_dim),
             "events": (self.max_events, self.event_dim),
             "action_focus": (self.max_actions, self.max_focus_objects),
@@ -304,6 +343,7 @@ class ObservationEncoder:
         }
 
     def encode(self, obs: managym.Observation) -> Dict[str, np.ndarray]:
+        managym.validate_policy_input(obs, self.config.policy_input_version)
         # Native selection owns the optional policy prefix; authority stays complete.
         retained = managym.policy_action_count(
             len(obs.action_space.actions), self.max_actions, self.config.action_overflow
@@ -395,7 +435,9 @@ class ObservationEncoder:
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:
             raise ValueError(
-                "observation capacity exceeded: agent_cards plus sideboard"
+                "observation capacity exceeded: agent_cards plus sideboard "
+                f"{start + len(outside)} > {self.cards_per_player} "
+                f"({_card_rows(obs.agent_cards, len(outside))})"
             )
         for offset, card in enumerate(outside):
             out["semantic_cards"][0, start + offset] = card.registry_key + 1
@@ -428,7 +470,14 @@ class ObservationEncoder:
                     out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
             out["facts"] = self._encode_facts(obs, ranks)
             if self.config.policy_input_version >= 7:
-                out.update(encode_shared_effects(obs, self.object_to_index, ranks))
+                out.update(
+                    encode_shared_effects(
+                        obs,
+                        self.object_to_index,
+                        ranks,
+                        self.config.policy_input_version,
+                    )
+                )
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -442,8 +491,7 @@ class ObservationEncoder:
             out[f"{key}_valid"] = out[key][..., -1].astype(np.float32)
 
         # Actionspace
-        out["actions"], out["action_focus"] = self._encode_actions(actions)
-        out["actions_valid"] = out["actions"][..., -1].astype(np.float32)
+        out.update(self._encode_actions(actions))
         if self.config.policy_history_version == 1:
             rows = obs.encode_policy_history(self.max_events, self.cards_per_player)
             out["events"] = np.zeros(
@@ -513,6 +561,14 @@ class ObservationEncoder:
                     token(f"CounterKind::{kind}"),
                     (count / 10.0, 0.0),
                 )
+            if perm.colors is not None:
+                for color in perm.colors or ["Colorless"]:
+                    push(
+                        perm.id,
+                        FACT_EFFECTIVE_COLOR,
+                        token(f"Color::{color}"),
+                        (1.0, 0.0),
+                    )
             for subtype in perm.temp_subtypes:
                 push(perm.id, FACT_ADDED_SUBTYPE, token(subtype), (1.0, 0.0))
             if perm.name is not None:
@@ -540,6 +596,20 @@ class ObservationEncoder:
                 )
 
         for index, frame in enumerate(obs.continuation):
+            programs = [frame.program]
+            if self.config.policy_input_version >= 8:
+                programs.append(frame.effect_execution)
+            for program in programs:
+                for ordinal, (kind, value) in enumerate(program):
+                    push(
+                        obs.agent.id
+                        if frame.controller == obs.agent.player_index
+                        else obs.opponent.id,
+                        FACT_CONTINUATION_PROGRAM,
+                        index + 1,
+                        (float(kind), float(ordinal)),
+                        detail=value,
+                    )
             if frame.attackers is not None:
                 push(
                     obs.agent.id
@@ -576,6 +646,15 @@ class ObservationEncoder:
                 case _:
                     duration = 2.0
             provenance = (duration, effect.timestamp, effect.source_registry_key)
+            for ordinal, (token_kind, token_value) in enumerate(effect.program):
+                push(
+                    obj,
+                    FACT_EFFECT_PROGRAM,
+                    ident,
+                    (float(token_kind), float(ordinal)),
+                    token_value,
+                    provenance,
+                )
             for detail in details:
                 push(obj, kind, ident, values, detail, provenance)
 
@@ -591,6 +670,15 @@ class ObservationEncoder:
             )
             for exception in perm.copy.exceptions:
                 push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
+        for perm in permanents:
+            for kind, timestamp in sorted(perm.keyword_counter_timestamps.items()):
+                push(
+                    perm.id,
+                    FACT_KEYWORD_COUNTER_TIMESTAMP,
+                    token(f"CounterKind::{kind}"),
+                    (0.0, 0.0),
+                    provenance=(0.0, timestamp, None),
+                )
         if self.config.policy_input_version < 7:
             holders = [
                 (obs.agent.id, obs.agent.effects),
@@ -648,7 +736,18 @@ class ObservationEncoder:
                 row[12:19] = frame.cost
             row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
             row[30] = frame.resolutions_this_turn
-            row[28] = frame.decision
+            if (
+                self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+            ):
+                row[7] = 0.0
+                row[21] = 0.0
+            row[28] = (
+                frame.legacy_decision
+                if self.config.policy_input_version < 8
+                and frame.legacy_decision is not None
+                else frame.decision
+            )
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
@@ -675,6 +774,12 @@ class ObservationEncoder:
                     context_row[0], context_row[22], context_row[29] = kind, 1, 1
                     _reference(context_row, reference)
                     rows.append(context_row)
+            if self.config.policy_input_version >= 8:
+                for ordinal, reference in enumerate(frame.effect_execution_references, 1):
+                    retained = row.copy()
+                    retained[0], retained[22], retained[29] = 10, 1, ordinal
+                    _reference(retained, reference)
+                    rows.append(retained)
             if self.shows_everything and frame.inherited_from is not None:
                 inherited = row.copy()
                 inherited[0], inherited[22], inherited[29] = 7, 1, 1
@@ -949,13 +1054,16 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
     # -------------------------------------------------------------------------
-    def _encode_actions(
-        self, actions: list[managym.Action]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    def _encode_actions(self, actions: list[managym.Action]) -> dict[str, np.ndarray]:
         log = getLogger(__name__).getChild("encode_actions")
         arr = np.zeros((self.max_actions, self.action_dim), dtype=np.float32)
         action_focus = np.full(
             (self.max_actions, self.max_focus_objects), -1, dtype=np.int32
+        )
+        candidates = (
+            np.zeros((self.max_actions, self.name_dim), dtype=np.float32)
+            if self.name_dim
+            else None
         )
         for idx, action in enumerate(actions):
             arr[idx, -1] = 1.0
@@ -976,6 +1084,31 @@ class ObservationEncoder:
                         )
                     arr[idx, column] = selector + 1
 
+            if candidates is not None:
+                if action.name_definition is not None and (
+                    action.name_index is None
+                    or not 0 <= action.name_definition <= MAX_ACTION_SELECTOR
+                ):
+                    raise ValueError("invalid name candidate definition")
+                if action.name_index is not None:
+                    if not 0 <= action.name_index <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name selector")
+                    candidates[idx, :2] = (
+                        action.name_index + 1,
+                        (action.name_definition + 1)
+                        if action.name_definition is not None
+                        else 0,
+                    )
+                    # Names use categorical identity rather than a numeric mode.
+                    arr[idx, ACTION_MODE_INDEX] = 0
+                if action.name_group is not None:
+                    first, last = action.name_group
+                    if not 0 <= first <= last <= MAX_ACTION_SELECTOR:
+                        raise ValueError("observation capacity exceeded: name group")
+                    # A group is its public span of sorted names, not a mode.
+                    candidates[idx, 2:] = (first + 1, last + 1)
+                    arr[idx, ACTION_MODE_INDEX] = 0
+
             if len(action.focus) > self.max_focus_objects:
                 raise ValueError("observation capacity exceeded: action focus")
             for focus_index, fid in enumerate(action.focus):
@@ -986,7 +1119,14 @@ class ObservationEncoder:
                     )
                 action_focus[idx, focus_index] = index
 
-        return arr, action_focus
+        encoded = {
+            "actions": arr,
+            "action_focus": action_focus,
+            "actions_valid": arr[..., -1].astype(np.float32),
+        }
+        if candidates is not None:
+            encoded["name_candidates"] = candidates
+        return encoded
 
     def _encode_events(
         self, events: List[managym.EventData]

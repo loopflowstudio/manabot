@@ -79,7 +79,6 @@ interpretation and serialized identity.
 | Operation | Purpose |
 | --- | --- |
 | `train_self_play` | Ordinary self-play learner (PPO-style `Learning` or `DampedPolicyLearning`). |
-| `train_compound` | Ragged compound-decision policy; see [compound decisions](#compound-decisions). |
 | `import_policy` | Admit a frozen TrainingRun export's raw or EMA checkpoint without training. |
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
 | `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
@@ -89,9 +88,14 @@ count, wall and memory limits (`Execution`). `execution.workers` accepts 1
 (default), 2 or 4 CPU observation producers for self-play only: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
 before the single policy owner reads, and stream identities and seeds are
-unchanged across partitions. `execution.threads` controls Torch threads
-independently. More workers are not a recommended default; the matched GPU
-comparison is in
+unchanged across partitions. Sampled rosters (a deck source or
+`elemental-uniform`) draw each game's decks from that game's native seed, so
+draws, exposure and batches agree for 1, 2 and 4 producers.
+`execution.threads` controls Torch threads independently. The field default
+stays 1, so saved regimes keep their meaning; new sampled-roster recipes built by
+`manabot.recipes.builders.sampled_self_play` default to four producers, a
+damping horizon fitted to the run's expected updates and `recover_capacity`.
+The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
 
@@ -141,8 +145,10 @@ finished streams idle until the slowest game ends, recorded as
 `idle_stream_steps`. `"exact-quota"` pauses each stream at exactly `transitions`
 learner rows and bootstraps the mid-game tail from `V(next_obs)`. Exact quota
 needs one learning seat, because at a pause only the acting seat has a next
-observation, and rejects `games_per_stream` and `game_errors`, which settle whole
-games.
+observation, and rejects `games_per_stream`. It accepts `game_errors` only with
+`recover_capacity`: a failed game discards the rows no update has learned from, its
+stream refills to the quota, and the rows earlier updates learned from stay, counted
+as `learned_samples`.
 
 A saved stage never declared its closure, so `TrainingRegime` resolves omission
 the way those runs behaved: one seat with neither `games_per_stream` nor
@@ -165,49 +171,22 @@ published artifacts. Reproducibility means resolved settings and artifact
 provenance, not byte-identical stochastic training. A fresh execution owns
 fresh costs; no pre-existing corpus is free.
 
-### Compound decisions
+### Compound decisions (removed)
 
-`ModelConfig.compound_decisions=true` selects the learned ragged policy;
-`train_compound` collects complete self-play games before each update. The
-recipes are `experiments/compound_decisions.py` variants
-`{sequential,grouped}_{bootstrap,outcome}`.
-
-managym's `compound_offers` supplies the legal surface: complete attacker
-declarations and simple single-target casts; complete remaining blocker
-declarations when each blocker's legal targets are independent (menace stays
-sequential); and waterbend payments with fixed tap/mana economics. Kicker,
-ward, mana abilities and triggers remain sequential decisions. A native
-`compound_commands_json` call lowers a sampled submission on an exact fork into
-ordinary revision-bound Commands; the live root is untouched, and interruption
-rejects a stale suffix. No Python code reconstructs these rules.
-
-A small GRU conditions include/exclude logits on the selected prefix over the
-shared viewer encoder. Candidates are visited once in native order with
-cardinality masks, so each subset has one encoding; joint log probability is
-the sum of normalized conditional log probabilities, and forced tokens have
-log probability zero. Conditional entropy and KL terms are sampled-prefix
-regularizers, not exact joint quantities. `grouping=grouped` uses one joint
-ratio and root value per submission; `sequential` uses per-factor ratios and
-prefix values. `estimator=outcome` uses terminal Monte Carlo returns;
-`bootstrapped` uses transition-end GAE. Recipes fix gamma=1. Raw weights only;
-EMA is unsupported. Native `skip_trivial` stays on; report complete-game wall
-cost, since fewer exposed prompts alone are not a speedup.
-
-```bash
-OMP_NUM_THREADS=1 uv run --extra notebook python -m experiments.compound_decisions --profile smoke --out .runs/compound-smoke
-uv run --extra notebook python -m experiments.compound_decisions --report-only .runs/compound-smoke
-```
-
-The smoke is one seed; a scientific comparison needs independent training
-seeds, fresh deals, equal wall budgets and measured inference cost.
+The learned compound-decision policy (`compound_decisions` models and
+`train_compound` stages) has been removed. Saved configurations, checkpoints
+and regimes that select it fail validation rather than loading as flat
+policies; reproduce them from source commit
+`ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`. Retained receipts and reports
+that record compound fields remain readable.
 
 ### Selection diagnostics
 
 `collect_selection` freezes a prior self-play stage's raw or EMA checkpoint
 (optionally from another run in the same store via `source_run`) and collects
 a declared population with unique seeds and whole-game development/held-out
-splits. Scalar and categorical values are supported; compound and belief-input
-sources are not. The protocol is in
+splits. Scalar and categorical values are supported; belief-input sources
+are not. The protocol is in
 [ataraxos-omitted-controls](../experiments/ataraxos-omitted-controls.md#frozen-complete-game-selection-diagnostic);
 results are frozen-policy associations, not causal filter benefits.
 
@@ -296,6 +275,10 @@ checkpoint at every milestone so Etude evaluation can follow. Setup installs
 Rust 1.98.1 with rustup and runs the locked `uv sync`, which builds the native
 engine. `validate_numerics=True` runs the CUDA numerics gate
 (`manabot.experiment.numerics`) first and refuses to train if it fails.
+The committed dependency requirements and `uv.lock` select the same Etude SDK
+release for both the launcher and this setup.
+Refresh it only through the [explicit dependency update workflow](development.md#environment-and-commands)
+before freezing a new run; never upgrade dependencies inside a training attempt.
 
 `TrainingJob.continuation` (`LearnerContinuation`) continues another run's
 learner from its published `run.json` and raw/EMA/Adam exports, bound as a
@@ -331,11 +314,22 @@ uv run etude report experiments/elemental.py --source .runs/example --open
 
 Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
-`time/learning/minibatches/forward_and_loss`), `selection_groups/<action
-type>/<terminal distance>/rows` and `self_play_outcomes/<deck>/<opponent
-deck>/<play|draw>/wins`. Offline readers use
-`manabot.training.update_metrics.read_updates`. Compound, selection and belief
+`time/learning/minibatches/forward_and_loss`), CUDA high-water marks
+(`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
+`selection_groups/<action type>/<terminal distance>/rows` and
+`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline readers use
+`manabot.training.update_metrics.read_updates`. Selection and belief
 summaries stay in their stage's `diagnostics`.
+
+The Perf panel's "Update time" series shows where an update goes:
+`environment_step_and_encoding`, which compares a run to retained ones, divides by
+the engine's own clock into `native_stepping` and `observation_encoding`, beside
+preparation, inference, `stream_bookkeeping`, assembly and learning.
+`TrainingRun.host` names the machine the attempt got. With one producer
+(`execution.workers` 1) training occupies one CPU thread, so host single-thread
+speed sets its pace, not vCPU count or GPU size; see
+[training update time](../experiments/training-update-time.md) before choosing a
+machine. `scripts/bench_training_update.py` prints the same split for one machine.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
 PPO value loss is half the squared lambda-target residual; categorical move
@@ -353,7 +347,7 @@ milestone. `ExperimentSchedule` and `PlannedRun` default to 1,000 updates, an
 authoring default rather than an hourly estimate. Portable continuation keeps
 the absolute grid (resuming at 26,000 with interval 1,000 first exports at
 27,000). Step cadence requires one step-target self-play stage; multi-stage
-and compound recipes keep explicit legacy cadence. `--checkpoint-seconds`
+recipes keep explicit legacy cadence. `--checkpoint-seconds`
 preserves historical elapsed-time cadence for frozen recipes.
 
 ### Checkpoint evaluation
@@ -657,7 +651,7 @@ under the TrainingRun's `failures/` directory or `.runs/game-failures/`
 elsewhere. Files are create-only, mode 0600 and fsynced; a storage failure is
 attached to the original exception. Coverage includes strict self-play,
 `sim.rollout` and vector environments, search players (flat-MC and rollout
-pool roots), compound/selection journals, and arena evaluation, which journals
+pool roots), selection journals, and arena evaluation, which journals
 each pending Command under `failures/` before execution (pass
 `keep_game_logs=True` to keep journals of successful games).
 

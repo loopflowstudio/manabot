@@ -30,12 +30,23 @@ impl Game {
             )));
         }
 
+        let exposure = self.exposure_choice(&action_space, action);
         let selected_action = action_space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
 
+        if let Some(choice) = exposure {
+            self.card_capture
+                .as_mut()
+                .unwrap()
+                .exposure
+                .as_mut()
+                .unwrap()
+                .choices
+                .push(choice);
+        }
         Ok(self.finish_action_step())
     }
 
@@ -80,7 +91,7 @@ impl Game {
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
-        std::mem::take(self.state.events_mut())
+        self.state.events_mut().take()
     }
 
     pub(crate) fn tick(&mut self) -> bool {
@@ -125,6 +136,9 @@ impl Game {
                 return Some(space);
             }
             self.state.set_turn_based_actions_complete(true);
+            if let Some(space) = self.suspended_decision_action_space() {
+                return Some(space);
+            }
         }
 
         if step == StepKind::Cleanup {
@@ -242,19 +256,29 @@ impl Game {
                 None
             }
             StepKind::Main => {
-                // CR 714.3b — As the precombat main phase begins, the active
+                // CR 714.3c — As the precombat main phase begins, the active
                 // player puts a lore counter on each Saga they control.
                 let active = self.active_player();
-                for saga in self.battlefield_permanents(active) {
-                    let card = self.state.permanents[saga]
-                        .as_ref()
-                        .expect("battlefield")
-                        .card;
-                    if self.state.cards[card].is_saga() {
-                        self.put_counters(saga, CounterKind::Lore, 1, active);
-                    }
-                }
-                self.process_game_events();
+                let events = self
+                    .battlefield_permanents(active)
+                    .into_iter()
+                    .filter(|&id| self.characteristics(id).final_chapter().is_some())
+                    .map(
+                        |id| crate::flow::proposed_event::ProposedEvent::CounterChange {
+                            provenance: crate::flow::proposed_event::CounterProvenance::new(
+                                crate::flow::proposed_event::EventCause::TurnAction,
+                            ),
+                            target: self.permanent_object_ref(id).expect("battlefield"),
+                            kind: CounterKind::Lore,
+                            delta: 1,
+                            by: Some(active),
+                        },
+                    )
+                    .collect();
+                let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
+                frame.batch = Some(self.event_batch(events));
+                frame.completion = crate::flow::decision::FrameCompletion::Continue;
+                self.run_frame(frame);
                 None
             }
             StepKind::Draw => {
@@ -379,9 +403,9 @@ impl Game {
                 let player = self.active_player();
                 let unlimited = self.has_no_maximum_hand_size_effect(player)
                     || self.battlefield_permanents(player).iter().any(|id| {
-                        let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
-                        self.state.cards[permanent.card]
-                            .has_static(&StaticAbility::NoMaximumHandSize)
+                        self.characteristics(*id)
+                            .static_abilities
+                            .contains(&StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited
                     && self
@@ -393,7 +417,6 @@ impl Game {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
                         player,
                         remaining: 1,
-                        then: None,
                     });
                     return self.suspended_decision_action_space();
                 }

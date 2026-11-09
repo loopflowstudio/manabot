@@ -91,7 +91,7 @@ def test_value_interface_and_collection_likelihoods(
     batch = collector.collect(agent, 4)
     obs = {
         key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
-        for key, value in batch.obs.items()
+        for key, value in batch.observations().observation.items()
     }
     policy, raw_value = agent.forward_distribution(obs)
     ordinary_policy, value = agent(obs)
@@ -197,7 +197,10 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
     agent = _agent("categorical_wdl")
     collector = _collector(agent)
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
     _, logits = agent.forward_distribution(obs)
     F.cross_entropy(logits, torch.tensor([0, 2])).backward()
     assert any(

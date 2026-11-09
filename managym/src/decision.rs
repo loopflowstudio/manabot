@@ -21,7 +21,7 @@ use crate::{
     },
     flow::game::Game,
     state::{
-        game_object::{ObjectLookupError, PlayerId},
+        game_object::{CardId, ObjectLookupError, PlayerId},
         zone::ZoneType,
     },
 };
@@ -29,7 +29,7 @@ use crate::{
 /// Canonical serialization and digest contract for the semantic decision
 /// slice. Increment when DecisionFrame/Observation field inclusion, ordering,
 /// or digest algorithm changes.
-pub const SEMANTIC_DECISION_VERSION: u16 = 7;
+pub const SEMANTIC_DECISION_VERSION: u16 = 8;
 
 /// Stable digest of one complete legal offer set at a revision. Any change to
 /// the legal actions, their order, or their binding revision changes it.
@@ -306,10 +306,14 @@ impl Game {
             return Err(SemanticError::ViewerOutOfBounds(viewer.0));
         }
         let agent_obs = AgentObservation::for_player(self, viewer);
+        let public_entries = self.pending_public_entries();
         if !agent_obs.opponent_cards.iter().all(|card| {
             card.zone != ZoneType::Hand
                 || self.shares_information(viewer, PlayerId(1 - viewer.0))
                 || self.searches_private_zones(viewer, PlayerId(1 - viewer.0))
+                || public_entries.iter().any(|object| {
+                    self.state.cards[CardId::from(object.entity)].id.0 as i32 == card.id
+                })
         }) {
             return Err(SemanticError::ViewerSafetyViolation);
         }

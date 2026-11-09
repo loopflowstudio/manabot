@@ -1,12 +1,15 @@
-"""Private native failure evidence, independent of training error tolerance.
+"""Private native game evidence, independent of training error tolerance.
 
 ScalarCapture retains the current game's explicit inputs; CapturedVector retains
 one prefix per native stream, including masked calls and native reset strides.
 Strict calls always re-raise the original exception after fsync. Semantic calls
 also journal pending Commands before execution. CaptureScope adds the owning
-run's live coordinates without adding fields to frozen training recipes.
+run's live coordinates without adding fields to frozen training recipes. Optional
+training exposure retains completed games and interrupted prefixes through the
+same collector; TrainingExposureReceipt preserves replay inputs and card facts.
 """
 
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -23,8 +26,9 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from manabot.env.card_capture import CapturedCards
 from manabot.infra.log import getLogger
 import managym
 
@@ -34,7 +38,9 @@ class PlayerSetup(BaseModel):
     decklist: dict[str, int]
     sideboard: dict[str, int]
     # Earlier evidence names the selector `content_pack`.
-    world: str | None = Field(validation_alias=AliasChoices("world", "content_pack"))
+    world: str | None = Field(
+        default=None, validation_alias=AliasChoices("world", "content_pack")
+    )
     disclosure: Literal["open", "closed"] = Field(
         default="open", exclude_if=lambda value: value == "open"
     )
@@ -119,11 +125,112 @@ class FailureEvidence(BaseModel):
     ] = "execution_outcome_unknown"
 
 
+class NativeTrainingTrace(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    player_configs: list[PlayerSetup]
+    actions: list[int]
+
+
+class NativeTrainingGame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seed: int
+    terminal: bool
+    trace: NativeTrainingTrace
+    cards: CapturedCards
+
+    @model_validator(mode="after")
+    def bound(self) -> "NativeTrainingGame":
+        if len(self.trace.player_configs) != 2:
+            raise ValueError("training capture seed or seating differs")
+        if self.cards.capture.exposure is None:
+            raise ValueError("training capture has no exposure instrument")
+        for seat, player in enumerate(self.trace.player_configs):
+            for origin, expected in (
+                ("deck", player.decklist),
+                ("outside", player.sideboard),
+            ):
+                observed = Counter(
+                    card.name
+                    for card in self.cards.capture.initial
+                    if card.owner == seat and card.origin == origin
+                )
+                if dict(observed) != expected:
+                    raise ValueError("training capture cards differ from replay decks")
+        choices = self.cards.capture.exposure.choices
+        if len(choices) > len(self.trace.actions) or any(
+            later.revision <= earlier.revision
+            for earlier, later in zip(choices, choices[1:])
+        ):
+            raise ValueError("training choices do not match a committed replay prefix")
+        return self
+
+
+class TrainingExposureReceipt(BaseModel):
+    """Private observed game, not a claim that its transitions reached an update.
+
+    Native replay inputs own sampled decks, seed and committed positional actions.
+    Context binds the learner/run and update coordinates at retention. Terminal
+    and interrupted prefixes remain separate; replay has not been executed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["training-exposure-v1"] = Field(
+        default="training-exposure-v1", alias="schema"
+    )
+    phase: Literal["training"] = "training"
+    stream: int
+    game: NativeTrainingGame
+    skip_trivial: bool
+    identities: dict[str, object]
+    context: dict[str, object]
+    seconds: float
+
+    @model_validator(mode="after")
+    def committed_choices(self) -> "TrainingExposureReceipt":
+        exposure = self.game.cards.capture.exposure
+        assert exposure is not None
+        if (
+            not self.skip_trivial
+            or [choice.selected for choice in exposure.choices]
+            != self.game.trace.actions
+        ):
+            raise ValueError(
+                "training exposure must retain every surfaced replay choice"
+            )
+        return self
+
+    @property
+    def sha256(self) -> str:
+        """Digest of the exact durable JSONL bytes written by the capture owner."""
+        body = _jsonl(self.model_dump(mode="json", by_alias=True))
+        return hashlib.sha256(body.encode()).hexdigest()
+
+    def replay_inputs(self) -> FailureEvidence:
+        return FailureEvidence(
+            mode="scalar",
+            operation="step",
+            skip_trivial=self.skip_trivial,
+            games=[
+                GameInputs(
+                    stream=self.stream,
+                    seed=self.game.seed,
+                    players=self.game.trace.player_configs,
+                    actions=self.game.trace.actions,
+                )
+            ],
+            identities=self.identities,
+            context=self.context,
+            seconds=self.seconds,
+            execution_outcome="last_command_succeeded",
+        )
+
+
 @dataclass
 class CaptureScope:
     directory: Path
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
+    training_exposure: bool = False
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -160,10 +267,15 @@ def runtime_identities() -> dict[str, object]:
     }
 
 
+def _jsonl(row: dict[str, object]) -> str:
+    """One serialization for receipt identities and durable journal writes."""
+    return json.dumps(row, sort_keys=True, allow_nan=False) + "\n"
+
+
 def _append(path: Path, row: dict[str, object], *, create: bool = False) -> None:
     flags = os.O_WRONLY | (os.O_CREAT | os.O_EXCL if create else os.O_APPEND)
     with os.fdopen(os.open(path, flags, 0o600), "w") as output:
-        output.write(json.dumps(row, sort_keys=True, allow_nan=False) + "\n")
+        output.write(_jsonl(row))
         output.flush()
         os.fsync(output.fileno())
     if create:
@@ -178,6 +290,7 @@ class _Capture:
     def __init__(self) -> None:
         self.scope = _scope.get()
         self.started = time.perf_counter()
+        self._failed = False
         self.identities = runtime_identities().copy()
         self.context: dict[str, object] = {}
         self._policy_counts: dict[str, ActionCutoffCounts] = {}
@@ -304,6 +417,7 @@ class _Capture:
     def _failure(
         self, error: BaseException, evidence: Callable[[], FailureEvidence]
     ) -> None:
+        self._failed = True
         # Capture failures must never disguise the original native failure.
         try:
             self.flush_policy_actions()
@@ -433,6 +547,14 @@ class CapturedVector(_Capture):
             opponent_policy=opponent_policy,
             seed_stride=self.stride,
         )
+        self._exposure = bool(self.scope and self.scope.training_exposure)
+        self._closed = False
+        if self._exposure:
+            if opponent_policy != "none" or not skip_trivial:
+                raise ValueError(
+                    "training exposure requires surfaced seats and trivial skipping"
+                )
+            self.native.enable_exposure_capture()
         self.games = [
             GameInputs(
                 stream=stream_offset + i, seed=min(seed + i, 2**64 - 1), players=[]
@@ -464,7 +586,42 @@ class CapturedVector(_Capture):
             self.identities["action_overflow"] = action_overflow
 
     def close(self) -> None:
-        self.flush_policy_actions()
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._retain_exposure(current=not self._failed)
+        finally:
+            self.flush_policy_actions()
+
+    def _retain_exposure(self, *, current: bool = False) -> None:
+        if not self._exposure or not any(game.players for game in self.games):
+            return
+        assert self.scope is not None
+        retained = self.native.take_exposure()
+        if current:
+            for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
+                rows.append(raw)
+        directory = self.scope.directory.parent / "exposure"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        for inputs, rows in zip(self.games, retained, strict=True):
+            for raw in rows:
+                game = NativeTrainingGame.model_validate_json(raw)
+                # Auto-reset prepares a fresh unused root; it is not an attempted game.
+                if not game.trace.actions and not game.terminal:
+                    continue
+                receipt = TrainingExposureReceipt(
+                    stream=inputs.stream,
+                    game=game,
+                    skip_trivial=self.skip_trivial,
+                    identities=self.identities,
+                    **self._coordinates(),
+                )
+                body = receipt.model_dump(mode="json", by_alias=True)
+                path = directory / f"{receipt.sha256}.jsonl"
+                if not path.exists():
+                    _append(path, body, create=True)
+                    self.scope.paths.append(path)
 
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
@@ -517,6 +674,22 @@ class CapturedVector(_Capture):
             self.native.reset_each_into_buffers(players)
         self._synchronize(reset=True)
 
+    def reassign_roots_into_buffers(
+        self, players: list[list[managym.PlayerConfig] | None]
+    ) -> None:
+        """Retain new setups only after native atomic fresh-root validation."""
+        proposed = [game.model_copy(deep=True) for game in self.games]
+        for game, setup, seed in zip(
+            proposed, players, self.native.current_game_seeds(), strict=True
+        ):
+            if setup is not None:
+                game.players = [PlayerSetup.retain(p) for p in setup]
+                game.restart(seed)
+        with self._guard(lambda: self._evidence_for(proposed, "reset")):
+            self.native.reassign_roots_into_buffers(players)
+        self.games = proposed
+        self._synchronize()
+
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
         self.next_seeds = list(seeds)
         for game, seed in zip(self.games, seeds, strict=True):
@@ -526,15 +699,20 @@ class CapturedVector(_Capture):
         self._synchronize(reset=True)
 
     def _synchronize(self, *, reset: bool = False) -> None:
+        self._retain_exposure()
         seeds = self.native.current_game_seeds()
-        if self._sampled_roots and (
-            reset or any(game.seed != seed for game, seed in zip(self.games, seeds))
-        ):
+        restarted = [
+            index
+            for index, (game, seed) in enumerate(zip(self.games, seeds, strict=True))
+            if reset or game.seed != seed
+        ]
+        if self._sampled_roots and restarted:
             # Sampled roots record the native setup actually created.
-            for game, players in zip(
-                self.games, self.native.current_player_configs(), strict=True
-            ):
-                game.players = [PlayerSetup.retain(player) for player in players]
+            players = self.native.current_player_configs()
+            for index in restarted:
+                self.games[index].players = [
+                    PlayerSetup.retain(player) for player in players[index]
+                ]
         for game, seed in zip(self.games, seeds, strict=True):
             if game.seed != seed:
                 game.restart(seed)

@@ -5,7 +5,10 @@
 use super::card::{Card, CardType, Keyword};
 
 /// A structural predicate over cards. Every populated field must match.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+/// Deserialization reads a definition's serialized predicate back, so
+/// observation vocabularies can enumerate what the encoders describe.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct CardPredicate {
     /// Shares the asking source permanent's layered name. Requires a source
     /// (currently ControlsAtLeast); card-only matching cannot answer it.
@@ -75,6 +78,14 @@ impl CardPredicate {
         }
     }
 
+    pub fn basic_land() -> Self {
+        Self {
+            card_type: Some(CardType::Land),
+            supertype: Some("basic".into()),
+            ..Self::default()
+        }
+    }
+
     pub fn subtype(subtype: &str) -> Self {
         Self {
             subtype: Some(subtype.to_string()),
@@ -92,14 +103,6 @@ impl CardPredicate {
         self.min_power.is_some()
             || self.max_power.is_some()
             || self.any_of.iter().any(CardPredicate::reads_power)
-    }
-
-    /// Whether matching compares card types, here or in an alternative.
-    pub fn reads_types(&self) -> bool {
-        self.card_type.is_some()
-            || !self.card_types_any.is_empty()
-            || !self.not_card_types.is_empty()
-            || self.any_of.iter().any(CardPredicate::reads_types)
     }
 
     /// Match against a card's printed characteristics.

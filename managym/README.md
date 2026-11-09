@@ -68,6 +68,19 @@ Native scalar/vector and Python encoders mirror bounded arrays of 128 × 18,
 frozen per-holder fact projection, while v7 local facts exclude active effects.
 Projection never mutates or semantically coalesces the engine’s records.
 
+Catalog naming uses `Decision::NameCard` over a shared immutable `NameVocabulary`.
+The catalog builds sorted real names once, including back faces and excluding
+tokens and rules fixtures. Decisions/forks share that allocation; canonical state
+records its digest. A decision holds a `NameScope`; a scope over
+`NAME_BRANCHING` (64) names offers a deterministic balanced partition into
+contiguous groups, and choosing one only narrows the scope. Selecting a name
+constructs one `ExileNamed` effect, then enters the existing private search
+continuation. Public names and optional learning definition references are not
+in-game card objects or deck admission. Explicit policy input v9 carries name
+joins and group spans in `name_candidates[A,4]` at ordinary action capacity,
+beside v8's layer layout; v1–v8 layouts and fresh v6 defaults are frozen.
+See [policy inputs](../docs/observation-and-model.md#catalog-naming-input).
+
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving
@@ -75,6 +88,10 @@ frame retains its active clause and each chosen slot's resolution-start eligibil
 across suspended decisions (CR 608.2b). Effects use those retained results; live
 presence checks separately prevent following departed objects (CR 400.7).
 Illegal slots remain positional, and zero optional targets still resolve.
+`ObjectSelector::Targets` applies one verb to all eligible slots of that clause
+in one event batch. `ForEachTarget` instead runs a separate child program per
+slot, retaining its position across choices. Leaves from the Vine's simultaneous
+counter placement uses the former.
 Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Mutate permanents at their event authority;
@@ -121,7 +138,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
+[semantic-kernel-w17-v2](../conformance/semantic-kernel-w17-v2/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -198,6 +215,16 @@ legend rule reads its `is_legendary`, and every `CardData` field that states a
 characteristic reads it there (`tests/cards/observability.rs` classifies each
 field as layered or printed by definition).
 
+The cached raw layer board tracks discovered reads of mana pools and tapped
+state, including nested predicates and granted statics. Independent pool/tap
+writes retain the board and fixed activations; dynamic activation outputs and
+costs refresh separately. Trigger kinds follow raw layer dependencies. Immutable
+scans use `layer_views` (or `characteristics_many` when activation finalization
+is needed), preserving caller order and validating the shared board once in
+debug. Singular reads retain their cache checks. Opt-in `benchmark`
+instrumentation attributes board, clone and dependency work without adding
+counters to ordinary wheels.
+
 A resolving spell remains on the stack until the zone-move authority commits
 its departure. That authority applies flashback exile replacement and captures
 cast provenance before removing the stack object. Do not remove spells early in
@@ -232,12 +259,12 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
 `DECISION_CAPTURE_VERSION` owns this aggregate's inclusion/order/digest contract;
-`SEMANTIC_DECISION_VERSION` owns embedded schema 7. Historical captures retain
+`SEMANTIC_DECISION_VERSION` owns embedded schema 8. Historical captures retain
 their original schema; w14 deliberately changes the current action contract.
 
 The opaque native capture binds an Env and reset generation. Use
@@ -254,7 +281,7 @@ mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/observation-and-model.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
-portable schema-7 viewer JSON is validated by the native observation types.
+portable schema-8 viewer JSON is validated by the native observation types.
 
 `Game::card_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
@@ -262,5 +289,71 @@ controller or card's owner elsewhere (including outside the game). Zone
 filters use `card_matches_predicate`; printed-only matching belongs to
 structural definition checks and private layer stages. `LookAndSelect` names
 whether the remainder is random; chosen order suspends on native
-`OrderLibraryBottom`, placing cards nearest the top first through ordinary
-SelectCard Commands. Only the chooser sees the remaining inspected cards.
+`OrderLibrary`, placing cards first-to-draw first through ordinary SelectCard
+Commands. Bottom ordering exposes the remaining inspected cards; Surveil uses
+the same owner to order kept cards on top, retaining the chosen prefix privately
+until ordering finishes. Top ordering has obligation code 27 (mode is the
+committed prefix length); code 23 retains its bottom-order meaning.
+
+`EffectFrame::completion` owns the return destination: the interrupted scope,
+a retained caller decision, a completed-operation event, root spell cleanup,
+or root priority. Completion events fire before the caller's suffix; Scry and
+Surveil wait for every partition and ordering choice. `continue_resolution` runs
+any pending batch before exposing the next decision. An `EventBatch` on the active
+frame retains every proposal, applied replacement identity, pre-departure facts
+and result until replacement choices and consequent linked returns finish. The
+affected player chooses each replacement; applicability is recomputed after every
+transformation. No member
+commits until the complete batch is ready. Native obligation code 29 names this
+choice, with source-specific labels and focus.
+
+Mana activation sacrifice effects retain their output and parent payment there
+after upfront mana, tap and life costs commit. Returning from a linked-entry
+replacement restores the saved decision without paying costs again or opening
+priority. Combat, SBA departures, spell finalization, activated costs, token
+entry and Surveil movement use this owner. SBA progress distinguishes stable,
+changed and pending; a pending turn action cannot enter priority stabilization.
+Immediate fixture/arithmetic helpers require completion without a question and
+fail explicitly if used for a choice-bearing event. Sacrifice facts match their
+pre-move subjects after replacement choices and before any batch member leaves;
+trigger placement still waits for resolution. Explicit input v8 projects the
+retained program, results, completion and proposals through fact-kind 14 as bare
+name/value facts, with viewer-safe reference slots in relation kind 10; a frame
+that retains nothing emits no occurrence. Academy's pending-resolution summary
+and LLM text are rendered by the same walk only through `describe_effect_execution`
+(decision context and capture), never by a policy observation. Earlier inputs reject
+novel retained state before buffer writes; migrated searches retain their frozen
+obligation codes and implied completion events.
+
+`SelectCards` snapshots eligible exact objects from its selector, retains min/max
+cardinality across choices, and runs the chosen effects in a child scope with
+`ObjectSelector::Selected`. `CardsThisWay` names the scope's latest mill/discard
+result independently of a later `Move`; the caller keeps those results while
+selection effects run. Mill, optional discard/draw and basic/tutor searches use
+ordinary `MillCards`, `If`, `SelectCards`, `Move` and `ShuffleLibrary` composition.
+`ObjectSelector::Zone` records source-zone/predicate provenance; both hidden-world
+materializers refresh unknown selected subsets throughout saved callers and child
+scopes, preserving cardinality and exact viewer-known choices. Restricted partial
+selections exclude incompatible count worlds. Foretold assignments use the same
+subset constraints: exact weights count only compatible ordered fills, and the
+materializer samples that conditional measure. Commitments are captured before
+zone reassignment, so a sampled face-down slot cannot erase an earlier selection.
+Frozen count-only belief samplers reject these additional constraints before
+inference. `ObjectBinding` carries exact incarnation, captured zone/predicate and
+per-seat exact knowledge through waiting, queued, placing, stack and resolving
+trigger lifetimes. Both samplers use one assignment across those captures and
+active selections; known exact captures remain fixed, and departed incarnations
+never follow a later object. Capturing `Moved` uses its new zone. This binding
+provenance is canonical state, independent of viewer-safe reference projection. Library inspection exposes membership in stable definition/object order,
+never draw order. Prospective battlefield entrants are public during replacement
+choices and remain pinned in both samplers.
+
+`Effect::Move.library_end` states top/bottom placement without a shuffle; its
+placement commits before linked returns can pause. `put_in_library` authors that
+operation, and `ShuffleLibrary` can follow after all child work. Ordinary `move_to`
+retains shuffle-into-library behavior. Shared selection has obligation code 28;
+retired codes 5, 6 and 7 keep their historical meanings.
+
+`SuspendedResolution::continuation` walks retained frames and decisions root first;
+observation projection and hidden-world sampling share that chain for caller
+ancestry and inspection permissions.

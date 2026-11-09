@@ -657,9 +657,10 @@ def test_burn_holds_for_a_kill_or_lethal() -> None:
     assert act(ActionSpaceEnum.CHOOSE_TARGET, targets, **lethal) == 1
 
 
-def test_cracks_fetch_lands_when_offered() -> None:
+@pytest.mark.parametrize("name", ["Fabled Passage", "Prismatic Vista"])
+def test_cracks_fetch_lands_when_offered(name: str) -> None:
     passage, card = creature(60, OWN, 0, 0)
-    card.name = "Fabled Passage"
+    card.name = name
     card.card_types = SimpleNamespace(is_creature=False, is_land=True)
     actions = [
         offer(ActionEnum.PRIORITY_PASS_PRIORITY),

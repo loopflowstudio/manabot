@@ -17,6 +17,7 @@ from manabot.infra.config import (
     ObservationConfig,
     ValueAggregation,
 )
+from manabot.training.decks import UniformDecks
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -26,10 +27,14 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.state.game_errors import GameErrorPolicy
 
 # Semantic pack of the selected Allies/Lessons matchup that current recipes train on.
 PACK = "ur-lessons-vs-gw-allies"
 GIB = 1024**3
+
+# The damped rule's curves are written for this many updates (`IterationSchedule`).
+REFERENCE_UPDATES = 10_000
 
 ValueOutput = Literal["scalar", "categorical_wdl"]
 
@@ -42,6 +47,18 @@ ValueOutput = Literal["scalar", "categorical_wdl"]
 def move_learning(schedule: IterationSchedule | None = None) -> DampedPolicyLearning:
     """Ataraxos move learning; a schedule pins its curves to a reference horizon."""
     return DampedPolicyLearning(gradient="damped_policy", iteration_schedule=schedule)
+
+
+def fitted_horizon(wall_seconds: float, seconds_per_update: float) -> int:
+    """Updates a wall-bounded run is expected to reach, capped at the reference.
+
+    `seconds_per_update` is a measured (calibration) cost; no slowdown allowance
+    is applied, because the end of the damped curve is flat and a run reaching
+    only part of its horizon still ends at a low rate.
+    """
+    if wall_seconds <= 0 or seconds_per_update <= 0:
+        raise ValueError("wall and per-update seconds must be positive")
+    return max(1, min(REFERENCE_UPDATES, int(wall_seconds // seconds_per_update)))
 
 
 def move_stage(
@@ -175,6 +192,70 @@ def ataraxos_baseline(
     return TrainingRegime.model_validate(regime.model_dump())
 
 
+def sampled_self_play(
+    *,
+    id: str,
+    world: str,
+    agent: ModelConfig,
+    observation: ObservationConfig,
+    wall_seconds: float,
+    seconds_per_update: float,
+    deck_source: UniformDecks | None = None,
+    match: MatchConfig | None = None,
+    elemental_uniform: bool = False,
+    workers: Literal[1, 2, 4] = 4,
+) -> TrainingRegime:
+    """One wall-bounded, two-seat damped self-play stage over a sampled roster.
+
+    The default recipe for new frontier runs on a deck source (or the authored
+    Elemental roster with `elemental_uniform`). Its damping horizon spans the
+    updates the wall reaches at the measured `seconds_per_update`
+    (`fitted_horizon`), so a run far shorter than the reference still walks the
+    whole rate and τ curve. Producers default to four, since one native producer
+    is the critical path of an update. An engine error or capacity overflow
+    aborts one labelled game (`recover_capacity`); the rolling game-error stop
+    still ends the run. These are recipe choices: the Pydantic field defaults,
+    which saved regimes rely on, are unchanged. The update cap is the reference,
+    so the wall binds.
+    """
+    stage = TrainSelfPlay(
+        id="self-play",
+        operation="train_self_play",
+        behavior="current-self",
+        learning_seats="both",
+        updates=REFERENCE_UPDATES,
+        streams=256,
+        transitions=64,
+        matchup_curriculum="elemental-uniform" if elemental_uniform else "fixed",
+        learning=move_learning(
+            IterationSchedule(
+                steps=fitted_horizon(wall_seconds, seconds_per_update),
+                reference_steps=REFERENCE_UPDATES,
+            )
+        ),
+        game_errors=GameErrorPolicy(threshold=0.25, recover_capacity=True),
+        execution=Execution(
+            device="cuda",
+            threads=1,
+            workers=workers,
+            wall_seconds=wall_seconds,
+            memory_bytes=40 * GIB,
+        ),
+    )
+    regime = TrainingRegime(
+        id=id,
+        world=world,
+        deck_source=deck_source,
+        match=match,
+        observation=observation,
+        agent=agent,
+        stages=[stage],
+        wall_seconds=wall_seconds,
+        schedule_clock="iteration_fraction",
+    )
+    return TrainingRegime.model_validate(regime.model_dump())
+
+
 def with_agent(
     regime: TrainingRegime, *, id: str, agent: ModelConfig
 ) -> TrainingRegime:
@@ -230,7 +311,7 @@ def with_capacity(
     """Select delivered width/depth/head fields without changing information inputs.
 
     Omission preserves the baseline expansion; None restores heads × width.
-    Invalid head divisibility and compound combinations fail ordinary ModelConfig validation.
+    Invalid head divisibility fails ordinary ModelConfig validation.
     """
     expansion = (
         {}

@@ -50,3 +50,22 @@ pub fn players() -> Vec<PlayerConfig> {
         PlayerConfig::new("allies", allies),
     ]
 }
+
+/// A bounded layer-rich position using the reference world's existing cards.
+/// The old curated workload stays intact; these roots add overlapping Ally
+/// anthems and type-dependent power to ordinary steps and complete search scores.
+pub fn add_layer_board(env: &mut managym::agent::env::Env) {
+    for name in [
+        "White Lotus Reinforcements",
+        "White Lotus Reinforcements",
+        "Earth King's Lieutenant",
+        "Kyoshi Warriors",
+        "Suki, Kyoshi Warrior",
+    ] {
+        env.scenario_force_battlefield(1, name, true).unwrap();
+    }
+    for name in ["Tiger-Seal", "Otter-Penguin", "Fire Nation Cadets"] {
+        env.scenario_force_battlefield(0, name, true).unwrap();
+    }
+    env.scenario_refresh().unwrap();
+}

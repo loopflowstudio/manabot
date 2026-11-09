@@ -134,7 +134,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
     let Permanent {
         transforms: _,
         id: _,
@@ -153,6 +153,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
+        keyword_counter_timestamps: _,
     } = permanent;
     [
         ("id", Seen::Identity),
@@ -172,6 +173,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
         ),
         ("timestamp", Seen::Permanent(PERMANENT_TIMESTAMP_INDEX)),
         ("counters", Seen::Fact(FactKind::Counter)),
+        (
+            "keyword_counter_timestamps",
+            Seen::Fact(FactKind::KeywordCounterTimestamp),
+        ),
         ("attacking", Seen::Permanent(27)),
         (
             "was_cast",
@@ -235,6 +240,36 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
 /// here and given a witness in [`modification_witnesses`].
 fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) {
     match modification {
+        Modification::SetCreatureTypes(_) => (
+            "Modification::SetCreatureTypes",
+            Seen::Fact(FactKind::AddedSubtype),
+        ),
+        Modification::AddTypes(_) => ("Modification::AddTypes", Seen::Card(8)),
+        Modification::SetTypes { .. } => ("Modification::SetTypes", Seen::Card(8)),
+        Modification::SetColors(_) => (
+            "Modification::SetColors",
+            Seen::Fact(FactKind::EffectiveColor),
+        ),
+        Modification::AddColors(_) => (
+            "Modification::AddColors",
+            Seen::Fact(FactKind::EffectiveColor),
+        ),
+        Modification::GrantActivated(_) => (
+            "Modification::GrantActivated",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::GrantTriggered(_) => (
+            "Modification::GrantTriggered",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::GrantStatic(_) => (
+            "Modification::GrantStatic",
+            Seen::Fact(FactKind::EffectProgram),
+        ),
+        Modification::LoseNonManaAbilities => {
+            ("Modification::LoseNonManaAbilities", Seen::Permanent(34))
+        }
+        Modification::SwitchPt => ("Modification::SwitchPt", Seen::Permanent(6)),
         Modification::AddSubtypes(_) => (
             "Modification::AddSubtypes",
             Seen::Fact(FactKind::AddedSubtype),
@@ -308,6 +343,27 @@ fn resolved(modification: &Modification<EffectValue>) -> Modification {
 fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     let permanent = |modification| (false, modification);
     vec![
+        permanent(Modification::SetCreatureTypes(vec!["Bear".into()])),
+        permanent(Modification::AddTypes(vec![CardType::Artifact])),
+        permanent(Modification::SetTypes {
+            types: vec![CardType::Land],
+            subtypes: vec![],
+        }),
+        permanent(Modification::SetColors([Color::Red].into_iter().collect())),
+        permanent(Modification::AddColors([Color::Blue].into_iter().collect())),
+        permanent(Modification::GrantActivated(Box::default())),
+        permanent(Modification::GrantTriggered(Box::new(Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourUpkeep,
+            intervening_if: None,
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
+        }))),
+        permanent(Modification::GrantStatic(Box::new(
+            StaticAbility::NoMaximumHandSize,
+        ))),
+        permanent(Modification::SwitchPt),
+        permanent(Modification::LoseNonManaAbilities),
         permanent(Modification::AddSubtypes(vec!["Ally".into()])),
         permanent(Modification::BecomeCreature),
         permanent(Modification::AddKeywords(Keywords::of(&[Keyword::Flying]))),
@@ -333,7 +389,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 18;
+const MODIFICATION_VARIANTS: usize = 28;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -349,28 +405,36 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
     match selector {
         ObjectSelector::This => "ObjectSelector::This",
         ObjectSelector::Target(_) => "ObjectSelector::Target",
+        ObjectSelector::Targets(_) => "ObjectSelector::Targets",
         ObjectSelector::Triggering => "ObjectSelector::Triggering",
         ObjectSelector::Attached => "ObjectSelector::Attached",
         ObjectSelector::CreatedThisWay => "ObjectSelector::CreatedThisWay",
         ObjectSelector::Remembered => "ObjectSelector::Remembered",
         ObjectSelector::Grantor => "ObjectSelector::Grantor",
         ObjectSelector::Moved => "ObjectSelector::Moved",
+        ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
+        ObjectSelector::Selected => "ObjectSelector::Selected",
+        ObjectSelector::Zone(_) => "ObjectSelector::Zone",
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 11] {
+fn selector_witnesses() -> [ObjectSelector; 15] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
+        ObjectSelector::Targets(TargetSpec::Creature),
         ObjectSelector::Triggering,
         ObjectSelector::Attached,
         ObjectSelector::CreatedThisWay,
         ObjectSelector::Remembered,
         ObjectSelector::Grantor,
         ObjectSelector::Moved,
+        ObjectSelector::CardsThisWay,
+        ObjectSelector::Selected,
+        ObjectSelector::Zone(ZoneType::Hand),
         ObjectSelector::You,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {
@@ -547,11 +611,9 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
         Effect::MillCards { .. } => "Effect::MillCards",
-        Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
+        Effect::SelectCards { .. } => "Effect::SelectCards",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
-        Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
-        Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
         Effect::Destroy { .. } => "Effect::Destroy",
         Effect::Discard { .. } => "Effect::Discard",
         Effect::If { .. } => "Effect::If",
@@ -587,6 +649,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
         Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
@@ -604,8 +667,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::ReturnMilledThisWay { .. } => "Effect::ReturnMilledThisWay",
-        Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
@@ -613,13 +674,12 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::FightLastTarget => "Effect::FightLastTarget",
-        Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
         Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
     }
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 78;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -670,11 +730,13 @@ fn effect_witnesses() -> Vec<Effect> {
             count: EffectValue::Fixed(2),
             target: None,
         },
-        Effect::MillAndSelect {
-            count: 2,
+        Effect::SelectCards {
+            from: ObjectSelector::CardsThisWay,
             predicate: creature(),
+            min: 0,
+            max: EffectValue::Fixed(2),
+            effects: draw(),
             if_declined: draw(),
-            if_milled: None,
         },
         Effect::DrainLife { amount: value() },
         Effect::TargetClause {
@@ -682,15 +744,6 @@ fn effect_witnesses() -> Vec<Effect> {
             effects: draw(),
         },
         Effect::SelectTargetRequirement { index: 0 },
-        Effect::SearchBasicLand {
-            subtype: None,
-            count: EffectValue::Fixed(1),
-            tapped: true,
-            untap_if_lands: None,
-            bottom_source: false,
-            to_hand: false,
-        },
-        Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
         Effect::destroy(ObjectSelector::Target(target())),
         Effect::Discard {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -786,6 +839,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 ..Default::default()
             },
         },
+        Effect::ShuffleLibrary,
         Effect::ShuffleGraveyardIntoLibrary,
         Effect::OwnerPutsIntoLibrary {
             target: TargetSpec::Permanent {
@@ -818,7 +872,7 @@ fn effect_witnesses() -> Vec<Effect> {
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
         Effect::AttachSourceTo {
-            target: TargetSpec::CreatureYouControl,
+            what: ObjectSelector::Target(TargetSpec::CreatureYouControl),
         },
         Effect::DistributeCountersToTappedOpponentCreatures {
             kind: CounterKind::Stun,
@@ -837,12 +891,6 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::ReturnMilledThisWay {
-            predicate: CardPredicate::creature(),
-        },
-        Effect::MayDiscard {
-            then: vec![Effect::discard()],
-        },
         Effect::TransformSource,
         Effect::ControlPlayer {
             what: ObjectSelector::Target(TargetSpec::Opponent),
@@ -889,12 +937,6 @@ fn effect_witnesses() -> Vec<Effect> {
             amount: EffectValue::GreatestSharedCreatureType,
         },
         Effect::FightLastTarget,
-        Effect::SearchLibraryToHand {
-            predicate: CardPredicate {
-                subtypes_any: vec!["Lesson".into(), "Noble".into()],
-                ..Default::default()
-            },
-        },
     ]
 }
 
@@ -933,6 +975,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YouPutCountersOnCreature"
         }
         TriggerCondition::YouScry => "TriggerCondition::YouScry",
+        TriggerCondition::YouScryOrSurveil => "TriggerCondition::YouScryOrSurveil",
         TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
@@ -986,6 +1029,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             kind: CounterKind::PlusOnePlusOne,
         },
         TriggerCondition::YouScry,
+        TriggerCondition::YouScryOrSurveil,
         TriggerCondition::LeavesTheBattlefield {
             subject: TriggerSubject::This,
         },
@@ -1056,10 +1100,11 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
+        Condition::SourceMatches(_) => "Condition::SourceMatches",
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
-        Condition::DiscardedThisWay(_) => "Condition::DiscardedThisWay",
+        Condition::CardsThisWayMatch(_) => "Condition::CardsThisWayMatch",
         Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
         Condition::Moved => "Condition::Moved",
         Condition::TargetControlledByYou => "Condition::TargetControlledByYou",
@@ -1094,9 +1139,10 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 4,
         },
         Condition::SourceTapped,
+        Condition::SourceMatches(CardPredicate::subtype("Scout")),
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
-        Condition::DiscardedThisWay(CardPredicate::creature()),
+        Condition::CardsThisWayMatch(CardPredicate::creature()),
         Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
         Condition::Moved,
         Condition::TargetControlledByYou,
@@ -1133,6 +1179,13 @@ const fn witnessed(
 /// No wildcard: a new `StaticAbility` must be named here.
 fn static_seen(ability: &StaticAbility) -> Witnessed {
     match ability {
+        StaticAbility::Continuous(_) => witnessed(
+            "StaticAbility::Continuous",
+            Seen::Permanent(6),
+            "Beorn the Fierce",
+            "hob",
+            "beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types",
+        ),
         StaticAbility::GraveyardSpellsHaveFlashback => witnessed(
             "StaticAbility::GraveyardSpellsHaveFlashback",
             Seen::Actions("graveyard spells are offered as casts"),
@@ -1407,6 +1460,15 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
 fn static_witnesses() -> Vec<StaticAbility> {
     let creature = CardPredicate::creature;
     vec![
+        StaticAbility::Continuous(managym::state::card::StaticContinuous {
+            scope: StaticScope::This,
+            condition: None,
+            characteristic_defining: false,
+            modifications: vec![Modification::ModifyPt {
+                power: managym::state::card::LayerValue::Fixed(2),
+                toughness: managym::state::card::LayerValue::Fixed(2),
+            }],
+        }),
         StaticAbility::GraveyardSpellsHaveFlashback,
         StaticAbility::GrantsAnyColorManaAbility(creature()),
         StaticAbility::CantBeBlockedIf(Condition::YourTurn),
@@ -1771,6 +1833,7 @@ fn every_object_and_player_selector_reaches_the_learning_tokens() {
     for player in player_selector_witnesses() {
         let name = player_selector_token(&player);
         let effect = Effect::Move {
+            library_end: None,
             what: ObjectSelector::Moved,
             to: ZoneType::Battlefield,
             tapped: false,
@@ -2205,7 +2268,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         assert!(moved, "{} did not move its column", row.token);
         checked += 1;
     }
-    assert_eq!(checked, 6);
+    assert_eq!(checked, 7);
 }
 
 /// With no maximum hand size, the hand-count column keeps its size through
@@ -2363,6 +2426,9 @@ enum Encoded {
     Rows(&'static str),
     /// Fact rows of this kind, joined to the field's object.
     Fact(FactKind),
+    /// A further ordered occurrence of a fact kind another field owns,
+    /// separated by an ordinal reset.
+    FactOccurrence(FactKind),
     /// Not a decision input, for the stated reason.
     Excluded(&'static str),
 }
@@ -2370,6 +2436,10 @@ enum Encoded {
 /// The field each fact kind states; no wildcard, so a new kind must name it.
 fn fact_field(kind: FactKind) -> &'static str {
     match kind {
+        FactKind::ContinuationProgram => "ContinuationFrame.program",
+        FactKind::EffectProgram => "ContinuousEffectData.program",
+        FactKind::EffectiveColor => "PermanentData.colors",
+        FactKind::KeywordCounterTimestamp => "PermanentData.keyword_counter_timestamps",
         FactKind::Counter => "PermanentData.counters",
         FactKind::AddedSubtype => "PermanentData.temp_subtypes",
         FactKind::SetName => "PermanentData.name",
@@ -2541,6 +2611,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         text_box => [Definition],
     }));
     fields.extend(encoding!(PermanentData {
+        colors => [Fact(FactKind::EffectiveColor)],
+        keyword_counter_timestamps => [Fact(FactKind::KeywordCounterTimestamp)],
         transforms => [Fact(FactKind::Transforms)],
         id => [Identity],
         registry_key => [Join(Permanent, 24)],
@@ -2588,6 +2660,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         exceptions => [Fact(FactKind::CopyException)],
     }));
     fields.extend(encoding!(ContinuousEffectData {
+        program => [Fact(FactKind::EffectProgram)],
+        description => [Definition],
         modification => [Fact(FactKind::Effect), Columns(Facts, FACT_ID_INDEX, 2)],
         power => [column(Facts, FACT_VALUE_INDEX)],
         toughness => [column(Facts, FACT_VALUE_INDEX + 1)],
@@ -2621,6 +2695,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_id => [Join(Relation, 24)],
     }));
     fields.extend(encoding!(ContinuationFrame {
+        effect_execution => [FactOccurrence(FactKind::ContinuationProgram)],
+        effect_execution_references => [Rows("v8 effect execution reference slots, relation kind 10")],
+        effect_execution_description => [Definition],
+        effect_execution_summary => [Definition],
+        effect_execution_requires_v8 => [Rows("shared version admission before encoding")],
+        legacy_decision => [Rows("v1-v7 obligation class in relation column 28; v8 uses shared selection")],
+        program => [Fact(FactKind::ContinuationProgram)],
+        program_description => [Definition],
         remembered => [Rows("v5 captured object reference relations, kind 8")],
         inherited_from => [Rows("v5 inherited-ability definition relation, kind 7")],
         attackers => [Fact(FactKind::CombatRestriction)],
@@ -2675,6 +2757,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         focus => [Rows("action_focus")],
         declared => [column(Action, 17)],
         mode_index => [column(Action, 18)],
+        name_definition => [Rows("name_candidates columns 0-1 (v9)")],
+        name_index => [Rows("name_candidates columns 0-1 (v9)")],
+        name_group => [Rows("name_candidates columns 2-3 (v9)")],
         ability_index => [column(Action, 19)],
         continuation_index => [column(Action, 20)],
     }));
@@ -2710,6 +2795,10 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
                 Encoded::Fact(kind) => {
                     assert_eq!(fact_field(kind), field, "{kind:?} states another field");
                     fact_kinds.insert(kind as u8);
+                    continue;
+                }
+                Encoded::FactOccurrence(kind) => {
+                    assert_ne!(fact_field(kind), field, "{kind:?} is this field's own");
                     continue;
                 }
                 Encoded::Columns(buffer, start, len) => (buffer, start, len),
@@ -3154,10 +3243,10 @@ fn each_counter_kind_reaches_a_fact_row() {
     for kind in CounterKind::ALL {
         let (mut baseline, ogre) = ogre_state();
         let (mut changed, _) = ogre_state();
-        if kind == CounterKind::DoubleStrike {
+        if let Some(keyword) = kind.keyword() {
             // CR 122.1b: the counter grants double strike, which v4 sees; a
             // granted keyword is the state v4 cannot tell apart.
-            let grant = Modification::AddKeywords(Keywords::of(&[Keyword::DoubleStrike]));
+            let grant = Modification::AddKeywords(Keywords::of(&[keyword]));
             for s in [&mut baseline, &mut changed] {
                 let affected = on_permanent(s, ogre);
                 apply(s, affected, grant.clone());
@@ -3246,35 +3335,51 @@ fn stack_x_one_and_three_differ_only_in_v5() {
     assert_eq!((opponent_x(&one), opponent_x(&three)), (1.0, 3.0));
 }
 
-fn toph_and_tile(toph_has_abilities: bool) -> (Scenario, PermanentId) {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TophState {
+    Absent,
+    Present,
+    Abilityless,
+}
+
+fn tile_beside(toph: TophState) -> (Scenario, PermanentId) {
     let mut s = five_color_unfunded_setup(&["Toph, the First Metalbender", "White Lotus Tile"]);
-    let toph = s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
     let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
-    if !toph_has_abilities {
-        let affected = on_permanent(&s, toph);
-        apply(&mut s, affected, Modification::LoseAllAbilities);
+    if toph != TophState::Absent {
+        let permanent = s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
+        if toph == TophState::Abilityless {
+            let affected = on_permanent(&s, permanent);
+            apply(&mut s, affected, Modification::LoseAllAbilities);
+        }
     }
     (s, tile)
 }
 
 /// A granted land type reaches the card row's land column (layer 4 types)
 /// in every version; v5 also marks the permanent as granted rather than
-/// printed.
+/// printed. Removing Toph's abilities in layer 6 cannot undo the type effect
+/// that already applied in layer 4 (CR 613.6).
 #[test]
 fn a_toph_granted_land_shows_in_its_card_row_and_the_v5_granted_column() {
-    let (granted, tile) = toph_and_tile(true);
-    let (plain, _) = toph_and_tile(false);
+    let (plain, tile) = tile_beside(TophState::Absent);
+    let (granted, _) = tile_beside(TophState::Present);
+    let (abilityless, _) = tile_beside(TophState::Abilityless);
     let land = |s: &Scenario| {
         let observation = Observation::for_player(s.game(), PlayerId(0));
         card_row(s.game(), &observation, &encoded(s, 0, 5), tile)[11]
     };
-    assert_eq!((land(&plain), land(&granted)), (0.0, 1.0));
+    let granted_land = |s: &Scenario| permanent_value(s, 0, tile, PERMANENT_GRANTED_LAND_INDEX);
+    assert_eq!(
+        (land(&plain), land(&granted), land(&abilityless)),
+        (0.0, 1.0, 1.0)
+    );
     assert_eq!(
         (
-            permanent_value(&plain, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
-            permanent_value(&granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
+            granted_land(&plain),
+            granted_land(&granted),
+            granted_land(&abilityless),
         ),
-        (0.0, 1.0)
+        (0.0, 1.0, 1.0)
     );
 }
 
@@ -3975,6 +4080,16 @@ fn each_modification_reaches_an_effect_fact_row_with_its_duration_and_order() {
             EffectDuration::Indefinite,
         );
         let (name, _) = modification_seen(&modification);
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        if managym::agent::observation_encoder::validate_policy_input(&observation, 5).is_err() {
+            let encoded = encode(&observation, &config(8)).unwrap();
+            let token = ((encoded.effects[0] as u32) << 16) | encoded.effects[1] as u32;
+            assert_eq!(token, name_value(name) as u32);
+            assert_eq!(encoded.effects[8], 2.0);
+            assert!(encoded.effects[9] > 0.0);
+            assert_eq!(encoded.effects[17], 1.0);
+            continue;
+        }
         let row = fact_row(
             &facts_about(&s, 0, index),
             FactKind::Effect,
@@ -4235,8 +4350,14 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
                 ..Default::default()
             };
             let mut rows = vec![0.0; 64 * RELATION_DIM_V5];
-            managym::agent::continuation::encode_into(&[frame], 0, &Default::default(), &mut rows)
-                .unwrap();
+            managym::agent::continuation::encode_into(
+                &[frame],
+                0,
+                8,
+                &Default::default(),
+                &mut rows,
+            )
+            .unwrap();
             assert_eq!(rows[28], 6.0, "event code stays on header");
             assert_eq!(rows[RELATION_DIM_V5], 9.0);
             assert_eq!(rows[RELATION_DIM_V5 + 28], f32::from(code));
@@ -4246,4 +4367,31 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
             );
         }
     }
+}
+
+/// Replacement definitions reach the same catalog as spell programs; these
+/// two cards differ in both causal applicability and transformation, not text.
+#[test]
+fn counter_and_creation_replacements_reach_learning_tokens() {
+    let doubling = tokens_of(&card_definition("Doubling Season"));
+    let caradora = tokens_of(&card_definition("Caradora, Heart of Alacria"));
+    for variant in [
+        "ReplacementEffect::ModifyCounters",
+        "ReplacementEffect::MultiplyTokens",
+    ] {
+        assert!(doubling.contains(&(TokenKind::Variant, name_value(variant))));
+    }
+    assert!(caradora.contains(&(
+        TokenKind::Variant,
+        name_value("ReplacementEffect::ModifyCounters")
+    )));
+    assert!(caradora.contains(&(TokenKind::Text, name_value("Vehicle"))));
+    let mut definition = card_definition("Doubling Season");
+    let managym::state::card::ReplacementEffect::ModifyCounters { effects_only, .. } =
+        &mut definition.replacement_effects[1]
+    else {
+        panic!("counter rule")
+    };
+    *effects_only = false;
+    assert_ne!(doubling, tokens_of(&definition));
 }

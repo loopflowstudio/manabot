@@ -1,5 +1,6 @@
 """Builders compose cumulative stages, preserve controls and reject unsupported targets."""
 
+import json
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -8,15 +9,26 @@ import pytest
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import (
+    REFERENCE_UPDATES,
     ataraxos_baseline,
+    fitted_horizon,
     move_checkpoints,
     ppo_checkpoints,
+    sampled_self_play,
     value_outputs,
     with_agent,
     with_capacity,
     with_value_aggregation,
 )
-from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    DampedPolicyLearning,
+    Execution,
+    IterationSchedule,
+    Learning,
+    TrainingRegime,
+    TrainSelfPlay,
+)
+from manabot.training.state.game_errors import GameErrorPolicy
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -87,10 +99,10 @@ def test_invalid_value_cross_fails_without_mutating_baseline() -> None:
 def test_variations_revalidate_mutated_input_objects() -> None:
     base = _baseline()
     agent = ModelConfig()
-    agent.compound_decisions = True
-    with pytest.raises(ValidationError, match="compound"):
+    agent.hidden_dim = 65
+    with pytest.raises(ValidationError, match="divisible"):
         with_agent(base, id="invalid", agent=agent)
-    assert not base.agent.compound_decisions
+    assert base.agent.hidden_dim != 65
     assert base.id == "ataraxos-move-scalar"
 
 
@@ -122,3 +134,63 @@ def test_checkpoint_builders_chain_stages_with_independent_settings() -> None:
         move_checkpoints(0, updates=1, seconds=1)
     with pytest.raises(ValueError, match="checkpoint"):
         ppo_checkpoints(0, learning)
+
+
+@pytest.mark.parametrize(
+    "name", ["tla-trophy-213-v10.json", "tla-frontier-c5fba4-w64.json"]
+)
+def test_current_regime_files_round_trip_to_their_bytes(name: str) -> None:
+    """Producer and horizon defaults live in builders, so saved regimes keep meaning.
+
+    Older files predate later schema fields and are read by their own modules.
+    """
+    raw = (ROOT / "experiments/regimes" / name).read_text()
+    regime = TrainingRegime.model_validate_json(raw)
+    assert json.loads(regime.model_dump_json()) == json.loads(raw)
+
+
+def test_sampled_self_play_fits_its_horizon_and_recovers_capacity() -> None:
+    frozen = TrainingRegime.model_validate_json(
+        (ROOT / "experiments/regimes/tla-trophy-213-v10.json").read_bytes()
+    )
+    assert fitted_horizon(194_400, 150) == 1_296
+    assert fitted_horizon(194_400, 10) == REFERENCE_UPDATES
+    regime = sampled_self_play(
+        id="fresh-frontier",
+        world=frozen.world,
+        agent=frozen.agent,
+        observation=frozen.observation,
+        wall_seconds=194_400,
+        seconds_per_update=150,
+        deck_source=frozen.deck_source,
+    )
+    stage = regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    assert isinstance(stage.learning, DampedPolicyLearning)
+    assert stage.learning.iteration_schedule == IterationSchedule(
+        steps=1_296, reference_steps=REFERENCE_UPDATES
+    )
+    # The horizon spans the run: its last expected update sits at the reference end.
+    assert stage.learning.rates(1_296) == stage.learning.model_copy(
+        update={"iteration_schedule": None}
+    ).rates(REFERENCE_UPDATES)
+    assert stage.updates == REFERENCE_UPDATES
+    dumped = regime.model_dump(mode="json")["stages"][0]
+    assert dumped["execution"]["workers"] == 4
+    assert dumped["game_errors"]["recover_capacity"] is True
+    assert dumped["learning"]["iteration_schedule"]["steps"] == 1_296
+    # Field defaults are untouched: an omitted value still means one producer,
+    # no horizon and no capacity recovery.
+    assert Execution().workers == 1
+    assert DampedPolicyLearning(gradient="damped_policy").iteration_schedule is None
+    assert not GameErrorPolicy().recover_capacity
+    with pytest.raises(ValueError, match="must be positive"):
+        sampled_self_play(
+            id="bad",
+            world=frozen.world,
+            agent=frozen.agent,
+            observation=frozen.observation,
+            wall_seconds=60,
+            seconds_per_update=0,
+            deck_source=frozen.deck_source,
+        )

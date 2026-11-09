@@ -24,6 +24,8 @@ A segment ends before its wall budget rather than at it: the stage stops at an
 update boundary once another update plus `stop_reserve_seconds` no longer fits,
 exports raw/EMA/Adam and ends `paused`. That paused segment is a successful
 attempt reporting the update it reached, and its successor continues normally.
+A launcher's SIGTERM ends the attempt `interrupted`, recording the run as failed
+at its last export.
 
 A job's runs track under its `experiment`, the experiment file's stem
 (`experiments/elemental.py` is `elemental`), so `etude eval` and `etude report`
@@ -36,7 +38,9 @@ import json
 import math
 import os
 from pathlib import Path
+import signal
 import time
+from types import FrameType
 
 from etude.launch.records import Input, Job
 from etude.run.storage import SAFE_NAME
@@ -64,7 +68,7 @@ _PARENT_FILES = {
 
 
 class StagedExport(Strict):
-    """One parent file held in the machine's Etude storage under `key`."""
+    """One immutable input held in the machine's Etude storage under `key`."""
 
     key: str = Field(min_length=1)
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -137,15 +141,23 @@ TOOLCHAIN_ENV = (
 def machine_setup(extras: str) -> str:
     """Setup script installing the pinned Rust toolchain and locked venv.
 
-    `extras` is appended verbatim to `uv sync` (e.g. `" --extra dev"`).
+    `extras` is appended verbatim to `uv sync` (e.g. `" --extra dev"`). Etude runs
+    setup once per attempt, and attempts sharing a machine share `$HOME/.cargo`, so
+    a `flock` serializes the toolchain install. `uv sync` stays outside it: each
+    attempt has its own source directory, and uv and cargo lock their own caches.
+    Linux machines supply `flock`; macOS has none, so a local attempt installs
+    unserialized.
     """
     return (
         "set -eu\n"
+        "{\n"
+        "if command -v flock >/dev/null; then flock 9; fi\n"
         'test -x "$HOME/.cargo/bin/rustup" || curl --proto =https --tlsv1.2 -sSf '
         "https://sh.rustup.rs | sh -s -- -y --profile minimal "
         f"--default-toolchain {RUST_TOOLCHAIN}\n"
         f"{TOOLCHAIN_ENV}\n"
         f"rustup toolchain install {RUST_TOOLCHAIN} --profile minimal\n"
+        '} 9>"$HOME/.manabot-rust-setup.lock"\n'
         f"uv sync --locked --python 3.12{extras}\n"
     )
 
@@ -170,9 +182,13 @@ class TrainingJob(Strict):
     )
     # Run the CUDA numerics gate (manabot.experiment.numerics) before learning.
     validate_numerics: bool = Field(default=False, exclude_if=lambda value: not value)
+    training_exposure: bool = Field(default=False, exclude_if=lambda value: not value)
     # Frozen by `job` from the exact revision; absent only for local workers,
     # which read source identity from their git checkout.
     source_bundle: SourceBundle | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    initial_checkpoint: StagedExport | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     continuation: LearnerContinuation | None = Field(
@@ -190,6 +206,7 @@ class TrainingJob(Strict):
                 stage.initial,
                 stage.learning_state,
                 stage.pretrained,
+                stage.initial_weights,
                 stage.active_seconds,
             )
         ):
@@ -197,6 +214,8 @@ class TrainingJob(Strict):
                 "Etude training jobs require step-target self-play;"
                 " a learner continuation is bound from its inputs"
             )
+        if self.initial_checkpoint is not None and self.continuation is not None:
+            raise ValueError("choose fresh initialization or learner continuation")
         start = 0 if self.continuation is None else self.continuation.from_update
         if start >= stage.updates:
             raise ValueError("continuation must start before the update target")
@@ -214,6 +233,14 @@ class TrainingJob(Strict):
 
     def bound_regime(self, inputs: Path) -> TrainingRegime:
         """The regime with the continuation's staged files bound as its import."""
+        if self.initial_checkpoint is not None:
+            serialized = self.regime.model_dump(mode="json")
+            serialized["stages"][0]["initial_weights"] = {
+                "path": str(inputs / "initial-weights.pt"),
+                "sha256": self.initial_checkpoint.sha256,
+                "bytes": self.initial_checkpoint.bytes,
+            }
+            return TrainingRegime.model_validate(serialized)
         if self.continuation is None:
             return self.regime
         serialized = self.regime.model_dump(mode="json")
@@ -289,7 +316,18 @@ class TrainingJob(Strict):
             max_hours=max_hours,
             max_usd=max_usd,
             max_attempts=1,
-            inputs=() if spec.continuation is None else spec.continuation.inputs(),
+            inputs=(
+                Input(
+                    name="initial-weights.pt",
+                    key=spec.initial_checkpoint.key,
+                    sha256=spec.initial_checkpoint.sha256,
+                    size_bytes=spec.initial_checkpoint.bytes,
+                ),
+            )
+            if spec.initial_checkpoint is not None
+            else ()
+            if spec.continuation is None
+            else spec.continuation.inputs(),
         )
 
 
@@ -321,22 +359,25 @@ def run_worker() -> TrainingRun:
     if remaining < spec.regime.wall_seconds + spec.finalization_seconds:
         raise ValueError("remaining allocation cannot cover the frozen regime")
     regime = spec.regime
-    if spec.continuation is not None:
+    if spec.continuation is not None or spec.initial_checkpoint is not None:
         directory = environment.get("ETUDE_INPUTS_DIR")
         inputs = Path(directory or "")
         if not directory or not inputs.is_dir():
-            raise ValueError("a learner continuation needs its staged inputs")
-        parent = TrainingRun.model_validate_json(
-            (inputs / _PARENT_FILES["source_run"]).read_bytes()
-        )
-        # A monitoring continuation's parent trained past its export;
-        # admission matches the export's receipt at from_update instead.
-        if not spec.continuation.from_monitoring and (
-            parent.updates_through() != spec.continuation.from_update
-        ):
-            raise ValueError("staged parent ends at a different update")
-        if parent.seed != int(environment["ETUDE_SEED"]):
-            raise ValueError("a learner continuation keeps its parent's seed")
+            raise ValueError(
+                "training initialization/continuation needs its staged inputs"
+            )
+        if spec.continuation is not None:
+            parent = TrainingRun.model_validate_json(
+                (inputs / _PARENT_FILES["source_run"]).read_bytes()
+            )
+            # A monitoring continuation's parent trained past its export;
+            # admission matches the export's receipt at from_update instead.
+            if not spec.continuation.from_monitoring and (
+                parent.updates_through() != spec.continuation.from_update
+            ):
+                raise ValueError("staged parent ends at a different update")
+            if parent.seed != int(environment["ETUDE_SEED"]):
+                raise ValueError("a learner continuation keeps its parent's seed")
         regime = spec.bound_regime(inputs)
     # Native world admission precedes any collector or optimizer work. Never
     # shrink the recipe to fit a late start or silently substitute a device.
@@ -364,6 +405,7 @@ def run_worker() -> TrainingRun:
             checkpoint_updates=spec.milestones,
             stop_path=stop,
             stop_reserve_seconds=spec.stop_reserve,
+            training_exposure=spec.training_exposure,
         )
     finished = run.status == "completed" and run.updates_through() == spec.updates
     # A wall-bounded stop exported the complete learner state short of target.
@@ -394,5 +436,14 @@ def run_worker() -> TrainingRun:
     return run
 
 
+def _interrupt(signum: int, frame: FrameType | None) -> None:
+    raise KeyboardInterrupt(f"signal {signum}")
+
+
 if __name__ == "__main__":
+    # Etude ends an attempt with SIGTERM, within 0.1 s of a cancellation and well
+    # before training polls its stop file. Unhandled, it kills the process with
+    # no end state, so the run reads as running for good. KeyboardInterrupt
+    # because game-error isolation catches Exception.
+    signal.signal(signal.SIGTERM, _interrupt)
     run_worker()

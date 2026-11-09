@@ -1,5 +1,5 @@
-//! Atomic, representation-neutral input for one acting decision. Capture v4
-//! combines schema-7 observations with native continuation, content and public-history
+//! Atomic, representation-neutral input for one acting decision. Capture v5
+//! combines schema-8 observations with native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -18,8 +18,8 @@ use crate::{
 };
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
-/// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 4;
+/// new version. Embedded Observation follows SEMANTIC_DECISION_VERSION.
+pub const DECISION_CAPTURE_VERSION: u16 = 5;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {
@@ -55,10 +55,13 @@ impl Game {
                 "public history v1 requires 0..32 rows".into(),
             ));
         }
-        let (observation, agent) = self.semantic_observation_with_input(viewer)?;
+        let (observation, mut agent) = self.semantic_observation_with_input(viewer)?;
         if observation.decision.is_none() {
             return Err(SemanticError::NoActiveDecision);
         }
+        // Captured frames carry the effect execution text the LLM view and
+        // pending summaries read; the policy observation itself never does.
+        self.describe_effect_execution(viewer, &mut agent.continuation);
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
@@ -166,6 +169,23 @@ impl Game {
             }
             ids.extend(frame.context.and_then(|r| r.definition));
             ids.extend(frame.remembered.iter().filter_map(|r| r.definition));
+            ids.extend(
+                frame
+                    .effect_execution_references
+                    .iter()
+                    .filter_map(|r| r.definition),
+            );
+            ids.extend(frame.inherited_from.and_then(|r| r.definition));
+            ids.extend(
+                frame
+                    .program
+                    .iter()
+                    .chain(&frame.effect_execution)
+                    .filter_map(|&(kind, value)| {
+                        (kind == crate::cards::tokens::TokenKind::DefinitionRef as u16)
+                            .then_some(value as u32)
+                    }),
+            );
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
         let mut definitions = BTreeMap::new();

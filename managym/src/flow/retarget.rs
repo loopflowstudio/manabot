@@ -39,9 +39,9 @@ impl Game {
                     .get(*spell.target_req_indices.get(slot)?)
                     .cloned()
             }
-            StackObject::ActivatedAbility(ability) => self
-                .stacked_activated_ability(ability)?
-                .target_requirement(),
+            StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
+                .first()
+                .cloned(),
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
                     Some(effects) => effects.as_slice(),

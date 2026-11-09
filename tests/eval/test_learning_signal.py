@@ -104,7 +104,7 @@ def test_scored_deals_are_outside_the_monitoring_namespace() -> None:
 
 
 @pytest.mark.parametrize(
-    "name", ["batch_closure", "lambda_sweep"]
+    "name", ["batch_closure", "lambda_sweep", "elemental_closure", "elemental_lambda"]
 )
 def test_discovered_studies_keep_the_evaluation_callback_importable(
     name: str, monkeypatch: pytest.MonkeyPatch

@@ -17,7 +17,6 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     NumericalError,
-    check_behavior,
     check_logs,
     check_probabilities,
     clipped_surrogate,
@@ -29,7 +28,7 @@ from manabot.model.policy_distribution import (
 from manabot.training.learning.health import OptimizerHealth, batch_health
 from manabot.training.learning.learner import Learner, observation_tensors
 from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.returns import transition_gae
+from manabot.training.learning.returns import reverse_waves, transition_gae
 from manabot.training.learning.selection import (
     UpdateDiagnostics,
     selected_mean,
@@ -137,17 +136,22 @@ def categorical_lambda_returns(
     ends = ends.bool()
     if (rewards[~ends] != 0).any():
         raise ValueError("nonterminal outcome reward must be zero")
-    targets = torch.empty_like(probabilities)
-    tail = bootstrap
-    for step in reversed(range(len(rewards))):
-        next_prediction = (
-            bootstrap if step == len(rewards) - 1 else probabilities[step + 1]
+    # Trajectories run in parallel on the host (`reverse_waves`), row order intact.
+    host_probabilities = probabilities.cpu()
+    host_ends = ends.cpu()
+    last_row = bootstrap.cpu()[None]
+    following = torch.cat([host_probabilities[1:], last_row])
+    terminal = F.one_hot((rewards.cpu() + 1).long(), 3).to(host_probabilities.dtype)
+    # The extra row is the trace past each column's last row.
+    targets = torch.cat([torch.empty_like(host_probabilities), last_row])
+    for steps, columns in reverse_waves(host_ends):
+        continuation = (1 - trace_lambda) * following[
+            steps, columns
+        ] + trace_lambda * targets[steps + 1, columns]
+        targets[steps, columns] = torch.where(
+            host_ends[steps, columns, None], terminal[steps, columns], continuation
         )
-        continuation = (1 - trace_lambda) * next_prediction + trace_lambda * tail
-        terminal = F.one_hot((rewards[step] + 1).long(), 3).to(probabilities.dtype)
-        tail = torch.where(ends[step, :, None], terminal, continuation)
-        targets[step] = tail
-    return targets
+    return targets[:-1].to(probabilities.device)
 
 
 @dataclass(frozen=True)
@@ -171,7 +175,9 @@ def _targets(
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
     next_obs = observation_tensors(batch.next_obs, device)
-    _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    with learner.forward_precision():
+        _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
+    next_raw = next_raw.float()
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
     if learner.agent.config.value_kind == "categorical_wdl":
         if batch.outcome_probabilities is None:
@@ -232,13 +238,8 @@ def update_damped_iteration(
     device = learner.device
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
-        observations = observation_tensors(batch.obs, device)
+        batch.action_data.check(batch.actions, batch.logprobs)
         actions = torch.as_tensor(batch.actions, device=device)
-        behavior = torch.as_tensor(batch.probabilities, device=device)
-        old_logs = torch.as_tensor(batch.logprobs, device=device)
-        behavior_logs = torch.as_tensor(batch.log_probabilities, device=device)
-        valid = legal_mask(observations["actions_valid"])
-        check_behavior(behavior_logs, behavior, actions, old_logs, valid)
     with track("Targets"):
         targets = _targets(learner, batch, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
@@ -261,9 +262,7 @@ def update_damped_iteration(
     }
     with track("Selection and health diagnostics"):
         health = batch_health(
-            behavior_logs,
-            behavior,
-            valid,
+            batch.action_data,
             targets.advantages,
             targets.selected,
             actor_only=learning.filter_scope == "actor",
@@ -277,16 +276,16 @@ def update_damped_iteration(
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
-        chosen_types = (
-            observations["actions"]
-            .gather(
-                2,
-                actions[..., None, None].expand(
-                    *actions.shape, 1, observations["actions"].shape[-1]
-                ),
+        if batch.assignments is not None:
+            batch.target_residuals = (
+                (expected_targets - torch.as_tensor(batch.values, device=device))
+                .detach()
+                .cpu()
+                .numpy()
             )
-            .squeeze(2)[..., :ACTION_TYPE_DIM]
-            .argmax(-1)
+        chosen_types = torch.as_tensor(
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
+            device=device,
         )
         predictions = torch.as_tensor(batch.values, device=device)
         diagnostics["selection_groups"] = selection_diagnostics(
@@ -313,10 +312,7 @@ def update_damped_iteration(
     # rollouts are packed into one column; use the same native stream count
     # rather than accidentally taking one optimizer step per recorded decision.
     width = learner.minibatch_rows
-    observations = {key: value.flatten(0, 1) for key, value in observations.items()}
     actions = actions.flatten(0, 1)
-    behavior_logs = behavior_logs.flatten(0, 1)
-    valid = valid.flatten(0, 1)
     targets = DampedTargets(
         targets.advantages.flatten(0, 1),
         targets.values.flatten(0, 1),
@@ -341,16 +337,21 @@ def update_damped_iteration(
                 indexes = torch.arange(start, start + len(selected), device=device)[
                     selected
                 ]
-                obs = {key: value[indexes] for key, value in observations.items()}
-                logits, value_logits = learner.agent.forward_distribution(obs)
+                rows = batch.observations(indexes.cpu().numpy())
+                obs = observation_tensors(rows.observation, device)
+                valid = legal_mask(obs["actions_valid"])
+                behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
+                with learner.forward_precision():
+                    logits, value_logits = learner.agent.forward_distribution(obs)
+                logits, value_logits = logits.float(), value_logits.float()
                 reference = reference_distribution(obs, learning.reference)
                 policy_loss = damped_policy_loss(
                     logits,
                     actions[indexes],
                     targets.advantages[indexes],
-                    behavior_logs[indexes],
+                    behavior_logs,
                     reference,
-                    valid[indexes],
+                    valid,
                     clip=learning.clip,
                     collection_kl=learning.collection_kl,
                     tau=tau,
@@ -376,9 +377,9 @@ def update_damped_iteration(
                     return {
                         "logits": logits.detach(),
                         "value_logits": value_logits.detach(),
-                        "valid": valid[indexes],
+                        "valid": valid,
                         "actions": actions[indexes],
-                        "behavior_logs": behavior_logs[indexes],
+                        "behavior_logs": behavior_logs,
                         "reference": reference,
                         "advantages": targets.advantages[indexes],
                         "value_targets": targets.values[indexes],
@@ -405,25 +406,23 @@ def update_damped_iteration(
                 diagnostics["actor_exposures"] += int(actor_mask.sum())
                 diagnostics["critic_exposures"] += int(selected.sum())
                 with torch.no_grad():
-                    logs = policy_logs(logits, valid[indexes])
+                    logs = policy_logs(logits, valid)
                     probabilities = logs.exp()
                     diagnostics["entropy"] = float(
-                        -(probabilities * logs.masked_fill(~valid[indexes], 0))
-                        .sum(-1)
-                        .mean()
+                        -(probabilities * logs.masked_fill(~valid, 0)).sum(-1).mean()
                     )
                     diagnostics["collection_kl"] = float(
-                        reverse_kl(logs, behavior_logs[indexes], valid[indexes]).mean()
+                        reverse_kl(logs, behavior_logs, valid).mean()
                     )
                     diagnostics["reference_kl"] = float(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid[indexes], 1).log(),
-                            valid[indexes],
+                            reference.masked_fill(~valid, 1).log(),
+                            valid,
                         ).mean()
                     )
                     ratio_logs = (
-                        (logs - behavior_logs[indexes])
+                        (logs - behavior_logs)
                         .gather(-1, actions[indexes, None])
                         .squeeze(-1)
                     )

@@ -54,6 +54,11 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
         == resolved.hidden_dim * resolved.num_attention_heads
     ):
         payload.pop("attention_feedforward_dim", None)
+    # Hashed record ids are the historical layout and hash as omitted; the
+    # selector names the catalog layout only where it changes the model.
+    payload.pop("record_vocabulary", None)
+    if resolved.catalog_records(space.encoder.config.policy_input_version):
+        payload["record_vocabulary"] = "catalog"
     return canonical_sha256(
         {
             "layout_version": 2,

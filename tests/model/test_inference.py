@@ -18,8 +18,18 @@ from tests.training.test_recovery import recipe
 
 
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
-    result: dict[str, torch.Tensor] = {}
+    rows = batch.observations()
+    result = {
+        "probabilities": torch.from_numpy(rows.probabilities),
+        "log_probabilities": torch.from_numpy(rows.log_probabilities),
+        **{
+            f"obs/{key}": torch.from_numpy(value)
+            for key, value in rows.observation.items()
+        },
+    }
     for field in fields(batch):
+        if field.name in {"recorded", "action_data"}:
+            continue  # Compared above through the complete materialized evidence.
         value = getattr(batch, field.name)
         if isinstance(value, np.ndarray):
             result[field.name] = torch.from_numpy(value)
@@ -99,7 +109,7 @@ def test_training_encodes_only_referenced_definitions_without_changing_learning(
             key: torch.from_numpy(value[-8:, 0]).float()
             if key == "action_focus"
             else torch.from_numpy(value[-8:, 0])
-            for key, value in batch.obs.items()
+            for key, value in batch.observations().observation.items()
         }
     semantic = case.agent.semantic_cards
     assert semantic is not None

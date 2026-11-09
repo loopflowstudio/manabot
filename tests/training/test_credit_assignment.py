@@ -21,6 +21,7 @@ from manabot.training.learning.damped_policy import _targets
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import BatchClosure, DampedPolicyLearning
+from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 
 Kind = Literal["scalar", "categorical_wdl"]
@@ -183,7 +184,7 @@ def collector_for(
 
 
 def markers(batch: RolloutBatch) -> list[int]:
-    return batch.obs["agent_player"][..., 0, 0].astype(int).ravel().tolist()
+    return batch.ordered_obs()["agent_player"][..., 0, 0].astype(int).ravel().tolist()
 
 
 def learning(**changes: object) -> DampedPolicyLearning:
@@ -235,7 +236,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
         atol=1e-7,
     )
     selected_logs = np.take_along_axis(
-        batch.log_probabilities, batch.actions[..., None], -1
+        batch.observations().log_probabilities, batch.actions[..., None], -1
     )
     np.testing.assert_array_equal(batch.logprobs, selected_logs[..., 0])
 
@@ -314,7 +315,9 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     second = collector.collect(agent, 1)
     assert markers(second)[0] == 3
     assert second.values[0, 0] == pytest.approx(-0.5)
-    np.testing.assert_allclose(second.probabilities[0, 0, :2], [0.8, 0.2])
+    np.testing.assert_allclose(
+        second.observations().probabilities[0, 0, :2], [0.8, 0.2]
+    )
 
 
 @pytest.mark.parametrize("seats", ["one", "both"])
@@ -428,3 +431,30 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
     assert opponent.offers.grad is None
     torch.testing.assert_close(opponent.offers, before)
     assert collector.stats.opponent_decisions == 3
+
+
+def test_damped_learning_materializes_only_selected_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = TableAgent("categorical_wdl")
+    collector = collector_for(agent, "one", games=None)
+    batch = collector.collect(agent, 2)
+    original = RolloutBatch.observations
+    seen: list[int] = []
+
+    def materialize(
+        self: RolloutBatch, indexes: np.ndarray | None = None
+    ) -> ActionRows:
+        assert indexes is not None and len(indexes) <= 2
+        seen.append(len(indexes))
+        return original(self, indexes)
+
+    monkeypatch.setattr(RolloutBatch, "observations", materialize)
+    update_iteration(
+        Learner(agent, "cpu", minibatch_rows=2),
+        batch,
+        learning(),
+        0.5,
+        np.random.default_rng(243),
+    )
+    assert seen and sum(seen) <= batch.actions.size

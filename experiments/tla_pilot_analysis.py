@@ -111,16 +111,43 @@ class _Receipt(StrictModel):
     error: str | None
 
 
-def _total(counts: list[Counts]) -> Counts:
-    return Counts(
+def field_totals[T: StrictModel](model: type[T], rows: list[T]) -> T:
+    """Each field's sum over `rows`; `model` names the type of an empty list."""
+    return model(
         **{
-            field: sum(getattr(count, field) for count in counts)
-            for field in Counts.model_fields
+            field: sum(getattr(row, field) for row in rows)
+            for field in model.model_fields
         }
     )
 
 
-def _pair_result(
+def stored_game_columns(db: duckdb.DuckDBPyConnection) -> set[str]:
+    """The `games` table's columns; Etude omits a column that is all null."""
+    return {
+        row[0]
+        for row in db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
+        ).fetchall()
+    }
+
+
+def game_columns(db: duckdb.DuckDBPyConnection) -> tuple[str, ...]:
+    """One validated `games` projection for every pair; empty without results.
+
+    Required columns stay in the query so malformed tables fail; only absent
+    nullable fields get defaults.
+    """
+    available = stored_game_columns(db)
+    if not available:
+        return ()
+    return tuple(
+        name
+        for name, field in _Game.model_fields.items()
+        if field.is_required() or name in available
+    )
+
+
+def pair_result(
     db: duckdb.DuckDBPyConnection,
     pair: Pair,
     key: str | None,
@@ -223,23 +250,7 @@ def analyze(
     if state.experiment != EXPERIMENT:
         raise ValueError("analysis requires the TLA pilot experiment")
     environment_id = environment(protocol).identity
-    available_columns = {
-        row[0]
-        for row in db.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'games'"
-        ).fetchall()
-    }
-    # One validated projection serves every pair. Keep required columns in the
-    # query so malformed tables fail; only absent nullable fields get defaults.
-    game_columns = (
-        tuple(
-            name
-            for name, field in _Game.model_fields.items()
-            if field.is_required() or name in available_columns
-        )
-        if available_columns
-        else ()
-    )
+    columns = game_columns(db)
     indices = np.random.default_rng(protocol.bootstrap_seed).integers(
         0, len(protocol.pairs), (BOOTSTRAP_RESAMPLES, len(protocol.pairs))
     )
@@ -256,7 +267,7 @@ def analyze(
                 else [None] * len(protocol.pairs)
             )
             pairs = [
-                _pair_result(db, pair, key, environment_id, game_columns)
+                pair_result(db, pair, key, environment_id, columns)
                 for pair, key in zip(protocol.pairs, keys, strict=True)
             ]
             comparisons.append(
@@ -266,7 +277,7 @@ def analyze(
                     endpoint=planned.endpoint,
                     checkpoint=str(checkpoint.key) if checkpoint else None,
                     clocks=checkpoint.clocks if checkpoint else {},
-                    counts=_total([pair.counts for pair in pairs]),
+                    counts=field_totals(Counts, [pair.counts for pair in pairs]),
                     pairs=pairs,
                 )
             )
@@ -302,7 +313,9 @@ def analyze(
                 state=run.state,
                 protocol_sha256=file_sha256(PROTOCOL),
                 bootstrap_seed=protocol.bootstrap_seed,
-                counts=_total([comparison.counts for comparison in comparisons]),
+                counts=field_totals(
+                    Counts, [comparison.counts for comparison in comparisons]
+                ),
                 comparisons=comparisons,
                 complete=complete,
                 success=success,

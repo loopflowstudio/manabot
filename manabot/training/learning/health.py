@@ -9,11 +9,13 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import TypedDict
 
+import numpy as np
 import torch
 from torch import Tensor, nn
 
 from manabot.infra.profiler import Profiler
 from manabot.model.policy_distribution import NumericalError, require
+from manabot.training.rollout.actions import PackedActions
 
 HEALTH_INTERVAL = 25
 # ActorCritic parameter prefixes that only the critic output reads, in every
@@ -66,23 +68,21 @@ class NumericalHealth(TypedDict, total=False):
 
 @torch.no_grad()
 def batch_health(
-    logs: Tensor,
-    probabilities: Tensor,
-    valid: Tensor,
+    action_data: PackedActions,
     advantages: Tensor,
     selected: Tensor,
     *,
     actor_only: bool,
 ) -> NumericalHealth:
-    gaps = logs.masked_fill(~valid, -torch.inf).amax(-1) - logs.masked_fill(
-        ~valid, torch.inf
-    ).amin(-1)
+    logs, probabilities = action_data.log_probabilities, action_data.probabilities
+    starts = action_data.offsets[:-1]
+    gaps = np.maximum.reduceat(logs, starts) - np.minimum.reduceat(logs, starts)
     return NumericalHealth(
         legal_logit_gap_max=float(gaps.max()),
-        legal_probability_min=float(probabilities.masked_fill(~valid, torch.inf).min()),
-        legal_underflow_count=int(((probabilities == 0) & valid).sum()),
-        nonfinite_count=int((~torch.isfinite(logs) & valid).sum()),
-        forced_rows=int((valid.sum(-1) == 1).sum()),
+        legal_probability_min=float(probabilities.min()),
+        legal_underflow_count=int((probabilities == 0).sum()),
+        nonfinite_count=int((~np.isfinite(logs)).sum()),
+        forced_rows=int((np.diff(action_data.offsets) == 1).sum()),
         zero_advantage_rows=int((advantages == 0).sum()),
         actor_rows=int(selected.sum()),
         critic_rows=selected.numel() if actor_only else int(selected.sum()),
@@ -207,8 +207,10 @@ class OptimizerHealth:
     def _optimize(self, parameters: list[nn.Parameter], measured: bool) -> None:
         before = [p.detach().clone() for p in parameters] if measured else []
         self.optimizer.step()
-        finite = torch.stack([torch.isfinite(p).all() for p in parameters]).all()
-        if not finite:
+        # One flat read: per-tensor checks cost two launches per parameter tensor.
+        if not torch.isfinite(
+            torch.cat([p.detach().flatten() for p in parameters])
+        ).all():
             raise NumericalError(
                 "nonfinite_parameters_after_step",
                 {f"parameter/{name}": p for name, p in self.model.named_parameters()},

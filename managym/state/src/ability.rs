@@ -19,6 +19,17 @@ pub enum Ability {
 }
 
 impl Ability {
+    /// The triggered rule represented by printed or granted ward (CR 702.21).
+    pub fn ward(cost: PaymentCost) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::BecomesTargeted {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::CounterUnlessPays { cost }],
+        }
+    }
+
     pub fn effects(&self) -> &[Effect] {
         match self {
             Ability::Triggered { effects, .. } => effects,
@@ -159,8 +170,10 @@ pub enum TriggerCondition {
         kind: CounterKind,
     },
     /// "Whenever you scry" (CR 701.22): once per scry instruction with a
-    /// count above zero. (No current effect surveils.)
+    /// count above zero.
     YouScry,
+    /// "Whenever you scry or surveil": after that keyword operation completes.
+    YouScryOrSurveil,
     /// "Whenever an opponent draws their Nth card each turn."
     OpponentDrawsNthCardThisTurn {
         n: u32,
@@ -245,13 +258,15 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// The exact ability source has these current characteristics.
+    SourceMatches(CardPredicate),
     /// Triggering question: the permanent whose event fired the trigger has
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
-    /// Resolution only: a card the resolution's latest discard moved matches
+    /// Resolution only: a card the scope's latest mill or discard moved matches
     /// [predicate] ("When you discard a nonland card this way").
-    DiscardedThisWay(CardPredicate),
+    CardsThisWayMatch(CardPredicate),
     /// Resolution only: the spell whose casting triggered the ability
     /// matches [predicate] ("If that spell is a Lesson").
     TriggeringSpellMatches(CardPredicate),
@@ -276,6 +291,7 @@ impl Condition {
         match self {
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
             Condition::ControlsAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
@@ -301,13 +317,14 @@ impl Condition {
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
-            | Condition::DiscardedThisWay(_)
+            | Condition::CardsThisWayMatch(_)
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
             | Condition::TargetControlledByYou => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::YourTurn
             | Condition::Always
@@ -395,7 +412,7 @@ pub enum EffectValue {
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
     /// The source permanent's current power ("where X is this creature's
-    /// power"); 0 once it has left the battlefield or outside a resolution.
+    /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
     /// Attacking creatures `controller` controls matching `predicate`, as
     /// the effect resolves ("search for up to that many").
@@ -417,6 +434,8 @@ pub enum EffectValue {
     GreatestPowerYouControl,
     /// Cards in `controller`'s hand.
     CardsInHand,
+    /// Number of objects still named by a resolution result or selector.
+    Objects(Box<ObjectSelector>),
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -436,6 +455,13 @@ impl PaymentCost {
     }
 }
 
+/// Which end of a library receives a moved or ordered card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LibraryEnd {
+    Top,
+    Bottom,
+}
+
 /// Which objects a verb acts on, read as the instruction resolves
 /// (`Game::select`). A verb acts only on the objects it can: counters, taps
 /// and sacrifices need battlefield permanents, a move any card object, a
@@ -450,6 +476,10 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
+    /// All eligible targets of the active clause, acted on by one instruction
+    /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
+    /// run a separate instruction sequence or commit a separate event per slot.
+    Targets(TargetSpec),
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
@@ -466,6 +496,14 @@ pub enum ObjectSelector {
     /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
     /// they now exist ("then return it to the battlefield").
     Moved,
+    /// Cards moved by the latest mill or discard in this scope. Later Move
+    /// instructions do not replace this distinct instruction result.
+    CardsThisWay,
+    /// Exact objects chosen by the enclosing SelectCards operation.
+    Selected,
+    /// Cards the resolving player owns in a zone. Hidden selection retains
+    /// the zone provenance across sampled worlds.
+    Zone(ZoneType),
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -560,7 +598,7 @@ impl ObjectSelector {
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
-            Self::Target(spec) => Some(spec),
+            Self::Target(spec) | Self::Targets(spec) => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..
@@ -572,6 +610,9 @@ impl ObjectSelector {
             | Self::Remembered
             | Self::Grantor
             | Self::Moved
+            | Self::CardsThisWay
+            | Self::Selected
+            | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
             | Self::Each { .. } => None,
@@ -667,6 +708,9 @@ pub enum Effect {
     /// objects become [`ObjectSelector::Moved`] and answer
     /// [`Condition::Moved`].
     Move {
+        /// A stated end replaces the usual shuffle-into-library movement.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        library_end: Option<LibraryEnd>,
         what: ObjectSelector,
         to: ZoneType,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -709,21 +753,21 @@ pub enum Effect {
     },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife { amount: EffectValue },
-    /// "Return up to one [predicate] card milled this way to the
-    /// battlefield under your control": a choice among the cards the
-    /// resolution's latest mill moved, still in the graveyard.
-    ReturnMilledThisWay { predicate: CardPredicate },
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
         target: Option<TargetSpec>,
     },
-    MillAndSelect {
-        count: usize,
+    /// Choose a subset of exact objects from `from`, then run `effects` in
+    /// a child scope where `Selected` names them. An empty selection runs
+    /// `if_declined`; the caller retains its earlier results and suffix.
+    SelectCards {
+        from: ObjectSelector,
         predicate: CardPredicate,
+        min: usize,
+        max: EffectValue,
+        effects: Vec<Effect>,
         if_declined: Vec<Effect>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        if_milled: Option<MilledBonus>,
     },
     /// A distinct targeting clause. Effects within it refer to the same
     /// chosen objects; different clauses may choose the same object.
@@ -733,29 +777,6 @@ pub enum Effect {
     },
     /// Internal cursor emitted when clauses are lowered into a frame queue.
     SelectTargetRequirement { index: usize },
-    /// Search is a private choice that always shuffles, including failure to find.
-    SearchBasicLand {
-        subtype: Option<String>,
-        /// Up to this many cards, read at resolution.
-        #[serde(skip_serializing_if = "is_fixed_one")]
-        count: EffectValue,
-        #[serde(skip_serializing_if = "is_true")]
-        tapped: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        untap_if_lands: Option<usize>,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        bottom_source: bool,
-        /// Landcycling: any card of `subtype` (not only a basic land) is
-        /// revealed and put into hand instead of onto the battlefield.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        to_hand: bool,
-    },
-    /// Discard up to `up_to` cards, then draw `count` for each discarded.
-    OptionalDiscardDraw {
-        count: usize,
-        #[serde(skip_serializing_if = "is_one")]
-        up_to: usize,
-    },
     /// The player `what` names discards `count` cards, chosen by them.
     Discard {
         what: ObjectSelector,
@@ -914,13 +935,10 @@ pub enum Effect {
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
-        /// "then attach this Equipment to it" (one token).
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        attach_source: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
-    AttachSourceTo { target: TargetSpec },
+    AttachSourceTo { what: ObjectSelector },
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
@@ -962,9 +980,7 @@ pub enum Effect {
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry { count: usize },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
-    /// number of them into the graveyard. Kept cards stay on top in their
-    /// existing order, which is the whole choice for surveil 1, the only
-    /// amount the pool prints.
+    /// number of them into the graveyard, then order the kept cards on top.
     Surveil { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
@@ -986,8 +1002,6 @@ pub enum Effect {
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
     PutTopCardsInHand { count: usize },
-    /// "You may discard a card. If you do, [then]."
-    MayDiscard { then: Vec<Effect> },
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
@@ -1055,9 +1069,8 @@ pub enum Effect {
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
     FightLastTarget,
-    /// Search your library for a card matching `predicate`, reveal it, put
-    /// it into your hand, then shuffle (CR 701.23).
-    SearchLibraryToHand { predicate: CardPredicate },
+    /// Shuffle the resolving player's library (CR 701.20).
+    ShuffleLibrary,
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
     /// controller picks a present kind or stops; with it set, one counter of
     /// that kind is removed and the choice repeats for `up_to - 1`.
@@ -1068,7 +1081,7 @@ pub enum Effect {
     },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
-    /// creatures; they each get +2/+2"). Inner effects must not suspend.
+    /// creatures; they each get +2/+2"). Children may suspend.
     ForEachTarget { effects: Vec<Effect> },
 }
 
@@ -1109,13 +1122,6 @@ pub enum DelayedExpiry {
     ThisTurn,
     /// No stated expiry; exact-object watchers still retire when that object leaves.
     Never,
-}
-
-/// Effects that run when any card milled by the same instruction matches.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct MilledBonus {
-    pub predicate: CardPredicate,
-    pub effects: Vec<Effect>,
 }
 
 impl Modification<EffectValue> {
@@ -1272,9 +1278,6 @@ fn is_one(value: &usize) -> bool {
 fn is_fixed_one(value: &EffectValue) -> bool {
     *value == EffectValue::Fixed(1)
 }
-fn is_true(value: &bool) -> bool {
-    *value
-}
 
 impl Default for Effect {
     fn default() -> Self {
@@ -1312,6 +1315,7 @@ impl Effect {
     pub fn selectors(&self) -> Vec<&ObjectSelector> {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
+            Effect::SelectCards { from, .. } => vec![from],
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
             Effect::ApplyContinuous { affected: what, .. }
@@ -1326,6 +1330,7 @@ impl Effect {
             | Effect::DealDamage { what, .. }
             | Effect::CounterSpell { what }
             | Effect::CounterAbility { what }
+            | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
             | Effect::Discard { what, .. } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
@@ -1424,7 +1429,6 @@ impl Effect {
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
-            | Effect::AttachSourceTo { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
@@ -1439,9 +1443,15 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::MayDiscard { then }
-            | Effect::ForPlayer { effects: then, .. }
-            | Effect::MayOnceEachTurn { effects: then } => {
+            Effect::SelectCards {
+                effects,
+                if_declined,
+                ..
+            } => effects
+                .iter()
+                .chain(if_declined)
+                .find_map(Effect::target_spec),
+            Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateTokenCopy { of, .. } => of.as_ref(),
@@ -1463,10 +1473,8 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
-            | Effect::MillAndSelect { .. }
             | Effect::ApplyContinuous { .. }
-            | Effect::SearchBasicLand { .. }
-            | Effect::OptionalDiscardDraw { .. }
+            | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
@@ -1492,14 +1500,12 @@ impl Effect {
             | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
-            | Effect::ReturnMilledThisWay { .. }
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
-            | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
@@ -1510,7 +1516,8 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
-            | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
+            | Effect::TargetCreaturesDealPowerDamageToLastTarget
+            | Effect::AttachSourceTo { .. } => None,
         }
     }
 
@@ -1577,6 +1584,52 @@ impl Effect {
         }
     }
 
+    /// Search a library subset, run its selected branch, then shuffle even
+    /// on failure to find. The runtime announces completion after that scope.
+    pub fn search_library(
+        predicate: CardPredicate,
+        max: EffectValue,
+        mut effects: Vec<Effect>,
+    ) -> Self {
+        effects.push(Effect::ShuffleLibrary);
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate,
+            min: 0,
+            max,
+            effects,
+            if_declined: vec![Effect::ShuffleLibrary],
+        }
+    }
+
+    /// Select private hand cards as one subset, then discard them together.
+    /// The selected child retains its bindings through any subsequent question.
+    pub fn may_discard(up_to: usize, then: Vec<Effect>) -> Self {
+        let mut effects = vec![Self::move_to(ObjectSelector::Selected, ZoneType::Graveyard)];
+        effects.push(Self::if_you_do(then));
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 0,
+            max: EffectValue::Fixed(up_to as i32),
+            effects,
+            if_declined: Vec::new(),
+        }
+    }
+
+    /// "Discard up to N cards, then draw for each card discarded this way."
+    pub fn discard_draw(up_to: usize, per_card: usize) -> Self {
+        Self::may_discard(
+            up_to,
+            vec![
+                Effect::DrawCards {
+                    count: EffectValue::Objects(Box::new(ObjectSelector::Moved)),
+                };
+                per_card
+            ],
+        )
+    }
+
     /// "Discard a card."
     pub fn discard() -> Self {
         Effect::Discard {
@@ -1591,7 +1644,6 @@ impl Effect {
             token_name: token_name.into(),
             count: count.into(),
             tapped_and_attacking: false,
-            attach_source: false,
         }
     }
 
@@ -1607,8 +1659,24 @@ impl Effect {
     /// "Put [what] into [zone]" with no further terms.
     pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to,
+            tapped: false,
+            transformed: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }
+    }
+
+    /// Put an object on the stated end without shuffling. Placement commits
+    /// with the move, before linked returns can ask a subsequent question.
+    pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
+        Effect::Move {
+            library_end: Some(end),
+            what,
+            to: ZoneType::Library,
             tapped: false,
             transformed: false,
             under: None,
@@ -1631,6 +1699,7 @@ impl Effect {
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Battlefield,
             tapped,
@@ -1644,6 +1713,7 @@ impl Effect {
     /// "Exile [what] with this" or "until this leaves the battlefield".
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Exile,
             tapped: false,
@@ -1729,4 +1799,12 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
         }
     }
     bound
+}
+
+/// Effective triggered ability with the provenance needed after its source leaves.
+/// Catalog grants have retained input joins; a continuous-effect program does not.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct EffectiveTrigger {
+    pub ability: Ability,
+    pub program: bool,
 }

@@ -1,106 +1,90 @@
-# MTG-213 — current decisions and assumptions (2026-11-05 UTC)
+# b015d5 — remaining decisions and evidence
 
-Execution and delivery status: `scratch/tla-pilot-postmerge-verify.md`.
-The report `experiments/tla-trophy-pilot.md` owns results, costs and evidence links.
-V10 has a trained endpoint and all 64 endpoint games; the 100-update target and
-full scientific schedule remain incomplete. No new rental is selected. Preserve
-all executed protocols and artifacts; report delivery remains with the caller.
+Historical step-1/2/3 design, implementation, reviews and execution notes are at
+`c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
+run projections, bills and cleanup receipts remain published in
+`experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
+run IDs and dated direction; no historical result is being rewritten.
 
-## Accepted direction and ownership
+## Current authority and boundaries
 
-Jack Heart's comment 1540e0ad selects preliminary fixed-corpus TLA self-play
-and evaluation now, superseding the deferred Task brief. Comment 6434b4dd
-authorizes GPUs under a hard USD10 cumulative cap and shipping enabling fixes
-after checks. Comment d2108241 requires reporting actual GPU learner updates
-with job/GPU/progress/rate/deadline evidence. V5 reached that milestone but
-stopped before exporting a trained checkpoint; quotes and CPU proofs do not
-satisfy it. On 2026-11-04 at about 22:00 UTC, Jack Heart accepted the newly
-available Vast RTX5090 offer at about USD0.963/hour and roughly USD1.19 for
-setup plus the planned run ("that seems fine"). This supersedes the USD1
-per-allocation stop for this attempt; the operator uses USD1.25 as the rounded
-whole-rental ceiling and USD0.97/hour as its offer ceiling. The cumulative USD10
-cap remains unchanged, including failures, setup and teardown. This placement-only
-amendment governed the executed v9 Run, preserving its source, recipe and schedule. The subsequently accepted resource-limit repair
-was delivered in PR #426 and executed as v10; unchanged v9 retries are superseded.
+Jack Heart replied "keep going" to the recommendation "I recommend repairing
+BF16, lengthening the packed cells, and completing the missing measurements."
+Comment 079b3f46 authorizes the bounded continuation. Comment 8cb4c5af records
+C1 review against that authority, not a new approval. The owning protocol is
+`experiments/protocols/training-throughput-b015d5-v1.md`, C1; the implementation
+handoff and deletion list are in `scratch/step-3-continuation.md`.
 
-Comment 42a12145 approved shared-effect fixed tensors, encoding each effect
-once and routing it to affected object embeddings before attention. Task 5da5f4
-delivered PR #419 and owns redundant-activation investigation and its separate
-budget. T6/T7 keep their rules ownership. The primary conversation released
-Etude 0.2.14; no competing representation repair or release is selected.
+Keep effective hashed v6 / 512 facts and the Elemental learning recipe. c5fba4
+owns its shared-effect catalog repair; do not infer TLA catalog speed from the
+hashed ladder. Exact quotes and external diagnostic findings remain in
+`scratch/vocabulary-performance.md`.
 
-Comments f61beeb7 and 3b0f8826 require native legality/payability first, then an
-explicit deterministic first-64 legal-action cutoff with replay-linked diagnostics.
-Comment ffd29028 records Jack Heart's concept-review answer **1b**: apply the
-same prefix to heuristic, learned candidate and initialization anchor. V9 and
-merged PR #423 implement it, superseding v8's full-support heuristic interpretation
-and v6/v7's 512-action plans. Experiments Wave memory records this matched-support
-decision (the Training Wave was renamed in `9f42e4e58`). Prepared v6/v7/v8 Runs must not launch.
+The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
+six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
+`index_copy_(): self and source expected to have the same dtype, but got (self)
+Float and (source) Half`. CPU autocast had not covered CUDA's recurrent behavior.
+The repair is implemented here for ed2300, with no second checkout; linking its
+software PR and recording validation remain delivery work.
 
-The engine and Academy retain all legal choices. Retained row i executes original
-native Command i; heuristic restriction precedes scoring/fallback. Padding is
-masked, with no pagination. Later legal actions have zero probability on overflow;
-ordering neutrality and strategic redundancy are not established. Diagnostics
-count consumed decisions across all participating policies, not learner-only or
-actor-specific rates. Samples cannot reconstruct exact actor totals. Normal close
-flushes totals; abrupt termination can lose counts since the last flush. A cutoff
-is not a failed game; a rules error remains a rules error.
+## Execution still open
 
-## Scientific contract and evidence limits
+- Source/world/input freeze after software integration. Original source was
+  cb722dc8c / w17; C1 never relabels those results. Current runtime admission
+  remains a freeze check. Real CUDA regression and a two-update w160l8 BF16
+  worker/reload on one rental must pass before opening other rentals.
+- Reconcile bills before allocating new liability. Step 3 $1.741 and total
+  $3.781 remain estimates, not invoices. Original caps stay $10 step 3 / $50
+  total; C1 adds at most min($10-prior step3, $50-prior total, $8), 15 GPU hours,
+  1,600 updates inclusive of failures/setup/diagnostics. No paid work in this step.
+- Same isolated client/home as the protocol. Original provider DELETE/GET 429s
+  required explicit provider deletion confirmation; all three original pods
+  were absent at 13:19 UTC on 2026-11-08. No controller was left running.
+- Original TF32 clip-fraction shift was 3.45x the float32 repeat difference;
+  finite metrics alone did not establish equivalence. Packing crossover remains
+  unknown. Step 2's accepted recipe is four seeds/one producer on A4000;
+  L4 recommendation remains an inference until these measurements.
 
-- Population: CC BY 4.0 public TLA PremierDraft dump; the trophy API restricts
-  reuse to 17Lands.com. First 1,000 events with seven observed wins in source
-  order, retaining seventh-win main/sideboards and event/build/results. Missing
-  losses remain unknown. Whole-list admission yielded 134 eligible and 866
-  rejected without resampling or substitutions. Each seat draws independently,
-  including mirrors. Live fetching and held-out-deck generalization are deferred.
-  A later 306-list admission audit does not expand the frozen 134.
-- Recipe: MTG-181/183's 64x2/four-head damped policy, with explicit new-world,
-  full-vocabulary and trophy-population deviations; no checkpoint or budget
-  inheritance. The 100-update target, 2,700-second watchdog and eight-pair/four-leg
-  evaluation are frozen engineering choices. V9 retains input-v7 shared effects,
-  128 cards per seat and the original recipe, seeds and schedule.
-- Compatibility: executed protocols/configurations/evidence are immutable.
-  Source/world/shape changes need prospective identities and fresh initialization
-  and evaluation; a common w17 label does not establish compatibility. The report
-  retains the 140/270-fact, 61-card and illegal-X failures and repair decisions;
-  these repairs do not guarantee universal reachable-state capacity. Frozen input
-  v5 stays at 128 facts; fresh v6 defaults to 512, with rank / 128 timestamp scaling.
-  Synthetic world fixtures never authorize real execution.
-- Analysis: retain milestones after early endpoints and both comparison slots
-  for unknown endpoints. Failed callbacks count as failed matches; unknown games
-  remain missing and attempted games are a lower bound. The companion analysis
-  CLI owns the joint criterion; Etude curves are descriptive. New games cannot
-  fill historical missing slots or reconstruct lost optimizer state from counters.
-  GPU execution alone supplies no learning-gain or Elemental-relative pace claim.
+## Reversible implementation choices, 2026-11-08
 
-## Operational choices
+- Keep the definition table in embedding-weight dtype, including empty rows;
+  cast recurrent outputs at the join. This is a float32 no-op with gradients.
+- C1 uses the existing launch owner and distinct `c1-...-u8/u12` keys. An
+  `-overlap` key is a conditional whole-cell retry, not automatic permission to
+  rerun or select the fastest cell. Source freeze and cost admission are external
+  execution checks; discovery never rents. Preserve legacy four-update jobs.
+- The maintained C1 reader lives under `experiments/`; historical artifact
+  readers stay immutable. Explicit per-cell dispositions and rental bills are
+  required; steady-state cost never stands in for the whole rental bill.
+- Diagnostics take one retained 256-row observation fixture. They instrument
+  fixed host recording and learner-style device/host selection/transfer only,
+  one child with a 120-second deadline each. They do not reproduce a complete
+  update or prove the cause of the original recording stall. No speculative
+  performance repair or policy/collector/learning behavior change is included.
 
-Nested Doppler `manabot/prd` then `etude/prd` supplies artifacts and provider
-credentials without copying secrets. Use the published isolated Etude 0.2.14
-control client; frozen workers retain 0.2.12. Freeze source once through
-`source.freeze`, retain the typed Run, and quote/submit through
-`client.launch_cohort`. Etude 0.2.12 could not append cohort runs, so the historical
-`mtg213-pilot-v1-correction1` used a separate USD1 ceiling without creating a new
-scientific sample. Neither that workaround nor another Task replenishes USD10.
+## Older unresolved findings
 
-Configured GPU alternatives are authorized within the existing caps; record
-hardware/allocation deviations before scoring and retain CUDA numerical admission.
-Quotes reserve nothing. Reconcile fresh inventory, bills and whole-rental quotes
-before allocation; per-run cost can omit setup/idle cleanup. Never change or charge
-another Task's rental. VAST_API_KEY remains in `etude/prd`; the SSH public key was
-registered. Prior Vast placement used >=6 vCPUs, >=48GB RAM, 80GB disk,
-<=USD0.81/hour and 840 seconds setup plus the unchanged one-hour job.
+- The schema-7 retained replay fixture in
+  `test_resource_limit_receipt_replays_its_retained_encoding_boundary` differs
+  from runtime schema 8 (`binding_mismatch`); no fixture rewrite is authorized.
+- Original step-1 recording stall and step-2 M2 seed-26214 hang remain unexplained.
+  Step-1 RSS near 61.05 GB was consistent with the later measured 62 GB pod
+  allowance, not proof of memory-pressure cause. Cgroup memory admission was
+  repaired in step 2. Etude 429 cleanup, placement lease failures and absent
+  `etude-result.json` blobs remain historical launcher findings; callback results
+  were recovered from attempt records, so no missing callback is inferred.
+- Infrastructure memory now retains the host-confound, CUDA-admission and
+  overlap lessons. The ~50k-row launch-cost diagnosis remains specific to its
+  measured model/input; it is not a conclusion for all sizes.
+- The earlier $100/336h planner sketch incorrectly said dollars bind at
+  $.256/hour; 336h costs about $86, so hours bind for one machine. The protocol
+  sketch now agrees with the retained report; dollars limit the machine count.
+- Frozen Elemental recipe omitted input version but resolved to v6; investigate
+  legacy loading separately if needed. C1 pins resolved v6 explicitly by admission.
 
-V10 retained permanent64 and game-local capacity recovery at .25 with the
-existing 100/100 window/warmup. Comment ca1660e8 authorizes dropping only the
-failed game's uncommitted samples from both seats. Strictly above .25 stops;
-other streams and completed updates survive. Evaluation keeps failed slots.
-Comments 52d6354e/173f02a6/c98cb420 leave 256/512 capacities, grouping,
-variable-length inputs and GPU transfer changes exploratory. Do not broaden the
-recipe to address rare growth without a separate selection. Retain overflow
-frequency, affected decks and positions for that decision.
+## Main sync — 2026-11-08
 
+## Historical notes retained from MTG-252's branch
 ## Concept review — 2026-11-05 UTC
 
 Outcome: **no design change and no open product choice for delivery of the
@@ -311,3 +295,8 @@ The fc6ffb section above is inherited from main and does not direct MTG-252.
   full-TLA learning-rule review is an open decision in the study doc.
 - The pooling × floor follow-up (w4, 2026-10-06) is prior evidence the Task
   brief omitted; the study doc cites it.
+## Upstream continuation context (not MTG-252 direction)
+Assumption (reversible): keep this Task's b015d5 continuation notes as the
+active scratch context. Main's separate 5da5f4 study decisions remain at
+`e0832f67fc66a1f2033bafefdb4598e394fd5ca1:scratch/questions.md`; its study
+landing authority and budget do not replace this experiment's boundaries.

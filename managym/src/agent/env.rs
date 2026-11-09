@@ -9,7 +9,10 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cards::content_pack::{default_content_pack, ContentPackManifest},
+    cards::{
+        content_pack::{default_content_pack, ContentPackManifest},
+        names::NameVocabulary,
+    },
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -21,7 +24,10 @@ use crate::{
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
@@ -87,10 +93,13 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
-/// Private scalar replay input retained only for diagnostics at vector failures.
+/// Private scalar replay input for failure diagnostics and training exposure.
 #[derive(Clone, Debug, serde::Serialize)]
 struct NativeActionTrace {
-    player_configs: Vec<PlayerConfig>,
+    #[serde(skip)]
+    seed: u64,
+    /// Fixed at reset; forks share it rather than copying the decklists.
+    player_configs: Arc<[PlayerConfig]>,
     actions: Vec<usize>,
 }
 
@@ -99,6 +108,8 @@ pub struct Env {
     game: Option<Game>,
     action_trace: Option<NativeActionTrace>,
     capture_cards: bool,
+    capture_exposure: bool,
+    retained_exposure: Vec<String>,
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
@@ -184,6 +195,8 @@ impl Env {
             game: None,
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -210,6 +223,8 @@ impl Env {
             game: Some(game),
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -234,8 +249,12 @@ impl Env {
         crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
+        if self.capture_exposure && self.game.is_some() {
+            self.retained_exposure.push(self.exposure_json()?);
+        }
         self.action_trace = Some(NativeActionTrace {
-            player_configs: player_configs.clone(),
+            seed: self.seed,
+            player_configs: Arc::from(player_configs.clone()),
             actions: Vec::new(),
         });
         let mut game = if self.capture_cards {
@@ -243,6 +262,12 @@ impl Env {
         } else {
             Game::new(player_configs, self.seed, self.skip_trivial)
         };
+        if self.capture_exposure {
+            game.card_capture
+                .as_mut()
+                .expect("card capture enabled")
+                .exposure = Some(crate::flow::card_capture::ExposureCapture::default());
+        }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation += 1;
@@ -261,7 +286,36 @@ impl Env {
         Ok(())
     }
 
+    /// Training uses the same card capture, adding consumed choices and completed frames.
+    pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
+        self.enable_card_capture()?;
+        self.capture_exposure = true;
+        Ok(())
+    }
+
+    pub fn exposure_json(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("capture before reset".into()))?;
+        serde_json::to_string(&serde_json::json!({
+            "seed": self.action_trace.as_ref().map(|trace| trace.seed),
+            "terminal": game.is_game_over(),
+            "trace": self.action_trace,
+            "cards": self.card_capture_value()?,
+        }))
+        .map_err(|e| AgentError(e.to_string()))
+    }
+
+    pub fn take_exposure(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.retained_exposure)
+    }
+
     pub fn card_capture_json(&self) -> Result<String, AgentError> {
+        serde_json::to_string(&self.card_capture_value()?).map_err(|e| AgentError(e.to_string()))
+    }
+
+    fn card_capture_value(&self) -> Result<serde_json::Value, AgentError> {
         let game = self
             .game
             .as_ref()
@@ -270,12 +324,11 @@ impl Env {
             .card_capture
             .as_ref()
             .ok_or_else(|| AgentError("card capture unavailable".into()))?;
-        serde_json::to_string(&serde_json::json!({
+        Ok(serde_json::json!({
             "capture": capture,
             "final_cards": crate::flow::card_capture::snapshots(game),
             "turn": game.state.turn.turn_number,
         }))
-        .map_err(|e| AgentError(e.to_string()))
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -291,7 +344,7 @@ impl Env {
     pub fn player_configs(&self) -> &[PlayerConfig] {
         self.action_trace
             .as_ref()
-            .map_or(&[], |trace| trace.player_configs.as_slice())
+            .map_or(&[], |trace| &trace.player_configs[..])
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
@@ -899,6 +952,8 @@ impl Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -920,6 +975,8 @@ impl Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -944,7 +1001,7 @@ impl Env {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1038,7 +1095,8 @@ impl Env {
     //
     // FOR TEST AND MEASUREMENT HARNESSES ONLY: bypasses the rules engine.
     // Typical use: reset, inject at the first priority decision, then call
-    // scenario_refresh to recompute the action space and observation.
+    // scenario_refresh to recompute the action space and observation. The
+    // naming fixture requires and republishes an existing naming decision.
     // ------------------------------------------------------------------
 
     fn scenario_game_mut(&mut self, method: &str) -> Result<&mut Game, AgentError> {
@@ -1050,6 +1108,13 @@ impl Env {
             .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
     }
 
+    /// Fixture access for opt-in native measurement, absent from Python/wheels.
+    /// The harness must refresh priority after changing its constructed board.
+    #[cfg(feature = "benchmark")]
+    pub fn benchmark_game_mut(&mut self) -> &mut Game {
+        self.scenario_game_mut("benchmark_game_mut").unwrap()
+    }
+
     fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
         if player > 1 {
             return Err(AgentError(format!(
@@ -1057,6 +1122,11 @@ impl Env {
             )));
         }
         Ok(PlayerId(player))
+    }
+
+    pub fn scenario_naming_vocabulary(&mut self) -> Result<Arc<NameVocabulary>, AgentError> {
+        self.scenario_game_mut("scenario_naming_vocabulary")?
+            .scenario_naming_vocabulary()
     }
 
     pub fn scenario_set_life(&mut self, player: usize, life: i32) -> Result<(), AgentError> {
@@ -1116,7 +1186,7 @@ impl Env {
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
         game.require_open_decklist(PlayerId(perspective))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1157,7 +1227,7 @@ impl Env {
             |game, hero, world_index| {
                 let world_seed = mix_seed(seed, world_index as u64);
                 let mut world = game.clone();
-                world.determinize(hero, world_seed);
+                world.determinize(hero, world_seed)?;
                 Ok((world, world_seed))
             },
         )

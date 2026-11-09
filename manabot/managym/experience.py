@@ -179,6 +179,7 @@ class DecisionTargetView(ProtocolModel):
 
 
 class DecisionContextView(ProtocolModel):
+    pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
     recent_facts: list[str]
     actor: UInt8
     stage: str
@@ -584,7 +585,8 @@ class LegacyHeroObservation(ProtocolModel):
             self.decision_context is not None
             and self.decision_context.actor != self.agent.player_index
             and (
-                self.decision_context.source is not None
+                self.decision_context.pending
+                or self.decision_context.source is not None
                 or self.decision_context.targets
                 or self.decision_context.reserved_sacrifice is not None
                 or self.decision_context.mana_cost is not None

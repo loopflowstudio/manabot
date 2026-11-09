@@ -55,9 +55,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
             "audit",
             base,
             overrides=(
-                ModelOverride(
-                    ModelConfig(hidden_dim=64, world=None, compound_decisions=False)
-                ),
+                ModelOverride(ModelConfig(hidden_dim=64, world=None)),
                 Resources(execution=Execution(threads=2), wall_seconds=200),
                 LearningRule(
                     DampedPolicyLearning(gradient="damped_policy", policy_lambda=0.3)
@@ -76,13 +74,11 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
     )
     settings = {p.path: p for p in resolved.provenance}
     effective = resolved.regime.model_dump(mode="json")
-    effective["agent"]["compound_decisions"] = False
     assert set(settings) == _flatten(effective)
     assert len(settings) == len(resolved.provenance)
     assert settings[("agent", "hidden_dim")].origin == "override"
     assert settings[("agent", "hidden_dim")].value == 64
     assert settings[("agent", "world")].value is None
-    assert settings[("agent", "compound_decisions")].origin == "override"
     assert settings[("agent", "value_kind")].origin == "baseline"
     assert (
         settings[("stages", "0", "learning", "policy_lambda")].component == "learning"
@@ -275,12 +271,6 @@ def test_compatibility_is_checked_after_independent_components_compose() -> None
         Experiment(
             "invalid", wdl_baseline(), overrides=(LearningRule(Learning()),)
         ).resolve()
-    with pytest.raises(ValidationError, match="compound"):
-        Experiment(
-            "invalid",
-            _baseline(),
-            overrides=(ModelOverride(ModelConfig(compound_decisions=True)),),
-        ).resolve()
     valid = Experiment(
         "ppo",
         wdl_baseline(),
@@ -340,16 +330,14 @@ def test_explicit_false_default_remains_in_provenance() -> None:
         Experiment(
             "flat",
             base,
-            overrides=(ModelOverride(ModelConfig(compound_decisions=False)),),
+            overrides=(ModelOverride(ModelConfig(recent_events=False)),),
         )
         .resolve()
         .cases[0]
     )
-    field = next(
-        p for p in cell.provenance if p.path == ("agent", "compound_decisions")
-    )
+    field = next(p for p in cell.provenance if p.path == ("agent", "recent_events"))
     assert field.origin == "override" and field.value is False
-    assert not cell.regime.agent.compound_decisions
+    assert not cell.regime.agent.recent_events
 
 
 def test_resolution_allocates_no_model_training_or_store(

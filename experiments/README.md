@@ -18,8 +18,10 @@ instruments.
 | [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
 | [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+
+The compound-decision study (`compound_decisions.py`) is no longer runnable;
+reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 
 ## Etude experiment files
 
@@ -97,6 +99,25 @@ history.
 
 ## Index
 
+[V7 state reduction, GPU horizon](state-representation-gpu.md): **completed
+2026-11-05** — four paired seeds, 256 updates (524,288 training games), 11,264
+replayed evaluation games. No qualified plateau (one of six final-window
+intervals within ±5). Held-out GRU minus pooling: −1.95 points [−5.88, +1.98],
+neither advantage nor equivalence; no promotion. GRU and pooling are two
+within-decision reducers, not agent memory.
+
+[V7 state reduction, CPU](state-representation-v7.md): **preliminary,
+2026-11-04** — four seeds at 128 updates, 32,768 training games and 1,024
+replayed evaluation games. GRU minus pooling: −0.98 points [−10.13, +8.18], at
+1.06× training time. Too short a horizon to choose an architecture; the GPU
+study above is the answer.
+
+[Growing card pools, MTG-245](protocols/growing-pool-245-v1.md): **prospective,
+unexecuted** — authored reference league, frozen mixtures and separate retention,
+expansion and generalization panels. Includes a frozen proxy and bounded Task 04
+handoff; its older engine source requires a prospective freeze before execution.
+No training or strength results.
+
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
 62.0% (300 held-out games), and from 10.8% to 34.3% across all ten decks, with
@@ -172,3 +193,18 @@ studies. Proposed budgets are separate from ETU-91 and grant no execution author
 Distributed-RL research and the unexecuted bounded workload plan live in
 [the ETU-108 report](../docs/training.md#distributed-training); its benchmark supervisor was
 removed unexecuted and remains in git history.
+
+The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu.md)
+retains four paired CUDA seeds, initialization and periodic evaluation, a
+sustained-plateau criterion, and separate held-out scoring. Its first cohort
+was cancelled before scoring when measured concurrent GPU throughput invalidated
+the allocation budget. `state_representation_gpu.py` declares one recovery unit
+per frozen allocation file; the throughput admission and CUDA operator profiler
+that qualified it ended with the cohort and remain at source `d57c5c9e7`,
+reachable through PR 421's head ref (`refs/pull/421/head`). Wider
+batches change optimization; the prospective recipe retains the original
+complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
+on 2026-11-05 after three of eight learners completed, with no curve or held-out
+endpoint; that record is unchanged. The recovery amendment completed the cohort
+the same day: [the GPU report](state-representation-gpu.md) holds its result.
+The preliminary CPU study remains frozen.

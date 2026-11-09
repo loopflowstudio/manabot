@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::slice;
+use std::{cell::Cell, slice, time::Instant};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -18,7 +18,7 @@ use crate::{
         action::AgentError,
         observation::Observation,
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
+            encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -43,6 +43,7 @@ struct ObservationBuffers {
     effects: Option<Py<PyAny>>,
     effect_details: Option<Py<PyAny>>,
     effect_members: Option<Py<PyAny>>,
+    name_candidates: Option<Py<PyAny>>,
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
@@ -77,6 +78,23 @@ pub struct PyVectorEnv {
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
     last_info: Vec<InfoDict>,
+    timings: BufferedCallTimings,
+}
+
+/// Cumulative wall time inside buffered calls: every step or reset, split into
+/// stepping (all work in the call except encoding) and observation encoding.
+#[cfg(feature = "python")]
+#[derive(Default)]
+struct BufferedCallTimings {
+    stepping_nanos: u64,
+    encoding_nanos: u64,
+}
+
+// A buffered call stays on its calling thread while the GIL is released, and each
+// stream's row is encoded inside it, so a thread-local counter needs no locks.
+#[cfg(feature = "python")]
+thread_local! {
+    static ENCODING_NANOS: Cell<u64> = const { Cell::new(0) };
 }
 
 #[cfg(feature = "python")]
@@ -122,6 +140,7 @@ impl PyVectorEnv {
             num_envs,
             buffers: None,
             last_info: Vec::new(),
+            timings: BufferedCallTimings::default(),
         })
     }
 
@@ -172,6 +191,18 @@ impl PyVectorEnv {
         Ok(())
     }
 
+    /// Scenario harness only; does not change deck admission or future resets.
+    fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.scenario_naming_vocabulary_into(|index, obs| {
+                write_buffers
+                    .write_encoded_row(index, obs, 0.0, false, false, &config)
+                    .map_err(AgentError::from)
+            })?;
+            Ok(vec![InfoDict::new(); inner.len()])
+        })
+    }
+
     fn reset_all_into_buffers(
         &mut self,
         py: Python<'_>,
@@ -203,6 +234,32 @@ impl PyVectorEnv {
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
                     .map_err(AgentError::from)
             })
+        })
+    }
+
+    fn reassign_roots_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        player_configs: Vec<Option<Vec<PyPlayerConfig>>>,
+    ) -> PyResult<()> {
+        let configs = player_configs
+            .into_iter()
+            .map(|row| row.map(|players| players.into_iter().map(PlayerConfig::from).collect()))
+            .collect();
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            inner.reassign_roots_into(
+                configs,
+                |_, obs| {
+                    encode(obs, &config)
+                        .map(|_| ())
+                        .map_err(|error| AgentError(error.to_string()))
+                },
+                |index, obs, reward, terminated, truncated| {
+                    buffers
+                        .write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
+                },
+            )
         })
     }
 
@@ -340,11 +397,31 @@ impl PyVectorEnv {
         })
     }
 
+    fn enable_exposure_capture(&mut self) -> PyResult<()> {
+        self.inner.enable_exposure_capture().map_err(map_agent_err)
+    }
+
+    fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.inner.take_exposure()
+    }
+
+    fn current_exposure(&self) -> PyResult<Vec<String>> {
+        self.inner.current_exposure().map_err(map_agent_err)
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
+    }
+
+    /// Cumulative `(stepping_seconds, encoding_seconds)` of buffered calls.
+    fn buffered_call_timings(&self) -> (f64, f64) {
+        (
+            self.timings.stepping_nanos as f64 / 1e9,
+            self.timings.encoding_nanos as f64 / 1e9,
+        )
     }
 }
 
@@ -392,6 +469,7 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
+    let naming = buffers.contains("name_candidates")?;
     let mut shared_count = 0;
     for name in ["effects", "effect_details", "effect_members"] {
         shared_count += usize::from(buffers.contains(name)?);
@@ -402,7 +480,7 @@ pub(super) fn input_buffer_config(
         ));
     }
     if !buffers.contains("relations")? {
-        if shared_count != 0 {
+        if shared_count != 0 || naming {
             return Err(PyValueError::new_err("v7 requires relations"));
         }
         config.policy_input_version = 1;
@@ -418,7 +496,17 @@ pub(super) fn input_buffer_config(
             }
             config.max_facts = rows;
             if shared_count == 3 {
-                7
+                let details = buffers
+                    .get_item("effect_details")?
+                    .expect("shared buffers present");
+                let detail_shape: Vec<usize> = details.getattr("shape")?.extract()?;
+                if detail_shape.get(detail_shape.len().saturating_sub(2))
+                    == Some(&crate::agent::shared_effects::V8_DETAIL_ROWS)
+                {
+                    8
+                } else {
+                    7
+                }
             } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
                 5
             } else {
@@ -431,8 +519,20 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
-    if shared_count != 0 && config.policy_input_version != 7 {
+    if shared_count != 0 && config.policy_input_version < 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
+    }
+    if naming {
+        // Naming composes the v8 layer layout with name and group-span rows.
+        if config.policy_input_version != 8 {
+            return Err(PyValueError::new_err(
+                "v9 requires the v8 shared-effect layout",
+            ));
+        }
+        if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
+            return Err(PyValueError::new_err("invalid name candidate width"));
+        }
+        config.policy_input_version = 9;
     }
     Ok(config)
 }
@@ -452,6 +552,19 @@ fn read_observation_buffers(
         ))
     };
     Ok(ObservationBuffers {
+        name_candidates: if c.policy_input_version >= 9 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "name_candidates",
+                    &[n, c.max_actions, c.name_dim()],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         relations: if c.policy_input_version >= 2 {
             Some(
                 require_numpy_array(
@@ -476,7 +589,7 @@ fn read_observation_buffers(
         )?,
         effect_details: shared_buffer(
             "effect_details",
-            crate::agent::shared_effects::DETAIL_ROWS,
+            crate::agent::shared_effects::detail_rows(c.policy_input_version),
             crate::agent::shared_effects::DETAIL_DIM,
         )?,
         effect_members: shared_buffer(
@@ -667,10 +780,16 @@ impl PyVectorEnv {
         let config = self.config;
         let inner = &mut self.inner;
 
+        let started = Instant::now();
+        ENCODING_NANOS.set(0);
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
             py.allow_threads(|| run(inner, write_buffers, config))
                 .map_err(map_agent_err)
         });
+        let encoding = ENCODING_NANOS.get();
+        self.timings.encoding_nanos += encoding;
+        self.timings.stepping_nanos +=
+            (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
         self.last_info = result?;
         Ok(())
@@ -934,6 +1053,7 @@ struct SendObservationFieldSlices {
     effects: Option<SendSlice<f32>>,
     effect_details: Option<SendSlice<f32>>,
     effect_members: Option<SendSlice<f32>>,
+    name_candidates: Option<SendSlice<f32>>,
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
@@ -1032,6 +1152,17 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.effect_details_len())?,
                         config.effect_details_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            name_candidates: if let Some(buffer) = self.name_candidates {
+                // SAFETY: registered buffers partition environments into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.name_candidates_len())?,
+                        config.name_candidates_len(),
                     )
                 }
             } else {
@@ -1190,7 +1321,10 @@ impl SendWriteBuffers {
         truncated: bool,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
-        self.encode_observation(env_index, observation, config)?;
+        let started = Instant::now();
+        let encoded = self.encode_observation(env_index, observation, config);
+        ENCODING_NANOS.set(ENCODING_NANOS.get() + started.elapsed().as_nanos() as u64);
+        encoded?;
         self.write_step_state(env_index, reward, terminated, truncated)
             .map_err(ObservationWriteError::from)
     }
@@ -1216,6 +1350,11 @@ fn with_send_write_buffers<R>(
         .effect_details
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
+        .transpose()?;
+    let name_candidates_buffer = buffers
+        .name_candidates
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "name_candidates"))
         .transpose()?;
     let effect_members_buffer = buffers
         .effect_members
@@ -1285,6 +1424,10 @@ fn with_send_write_buffers<R>(
         effect_details: effect_details_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
+            .transpose()?,
+        name_candidates: name_candidates_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "name_candidates"))
             .transpose()?,
         effect_members: effect_members_buffer
             .as_ref()

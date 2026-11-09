@@ -56,6 +56,11 @@ def card_definitions_json() -> str:
 def learning_token_value(name: str) -> int:
     """The learning catalog's stable token value for a Rust or printed name."""
 
+def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]:
+    """Every name fact/shared-effect encoders hash, as `(namespace, name,
+    value, token_kind, token_value)`; the token is card text's for the same
+    concept. Namespaces: `token`, `name`, `restriction`."""
+
 class PreparedPossibleWorldMaterializer:
     @property
     def viewer(self) -> int: ...
@@ -168,6 +173,9 @@ class Env:
     # (manabot/verify/competency.py). Bypass the rules engine: no events,
     # no triggers, no costs. Inject at a priority decision, then call
     # scenario_refresh() once.
+    def scenario_naming_vocabulary(self) -> list[NameCandidate]:
+        """Republish a pending name decision with the checked-in test vocabulary."""
+        ...
     def scenario_set_life(self, player: int, life: int) -> None: ...
     def scenario_clear_hand(self, player: int) -> None: ...
     def scenario_force_card_in_hand(self, player: int, name: str) -> None: ...
@@ -243,9 +251,13 @@ class VectorEnv:
     def set_buffers(
         self, buffers: Dict[str, np.ndarray], action_overflow: str = "error"
     ) -> None: ...
+    def scenario_naming_vocabulary_into_buffers(self) -> None: ...
     def reset_all_into_buffers(self, player_configs: List[PlayerConfig]) -> None: ...
     def reset_each_into_buffers(
         self, player_configs: list[list[PlayerConfig]]
+    ) -> None: ...
+    def reassign_roots_into_buffers(
+        self, player_configs: list[list[PlayerConfig] | None]
     ) -> None: ...
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
@@ -254,6 +266,8 @@ class VectorEnv:
         self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None: ...
     def replace_failed_into_buffers(self, failed: list[bool]) -> None: ...
+    def buffered_call_timings(self) -> tuple[float, float]:
+        """Cumulative (stepping_seconds, encoding_seconds) of buffered calls."""
     def semantic_decision_frames_json(
         self, active: list[bool] | None = None
     ) -> list[str | None]: ...
@@ -628,6 +642,9 @@ class SideboardCard:
 class ContinuousEffect:
     """One continuous-effect record on a player or permanent (CR 611, 613)."""
 
+    program: list[tuple[int, int]]
+    description: str | None
+
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
     # BecomeCreature, Nonlegendary, LoseAllAbilities, Firebending,
     # CantBeBlocked, CantBlock, ExileIfWouldDie, KeepUnspentMana or
@@ -670,6 +687,8 @@ class CopyEffect:
     exceptions: list[ContinuousEffect]
 
 class Permanent:
+    colors: list[str] | None
+    keyword_counter_timestamps: dict[str, int]
     transforms: int
     id: int
     registry_key: int
@@ -724,6 +743,10 @@ class Action:
     declared: bool | None
     description: str | None
     mode_index: int | None
+    name_definition: int | None
+    name_index: int | None
+    # First and last vocabulary rows of a naming group choice.
+    name_group: tuple[int, int] | None
     ability_index: int | None
     continuation_index: int | None
 
@@ -792,6 +815,8 @@ class AgentError(RuntimeError): ...
 WORLD_VERSION: str
 MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
+# Most options one naming prompt offers; larger scopes publish groups first.
+NAME_BRANCHING: int
 
 class VisibleReference:
     object: int | None
@@ -804,12 +829,20 @@ class ClauseTarget:
     clause: int
 
 class ContinuationFrame:
+    effect_execution: list[tuple[int, int]]
+    effect_execution_references: list[VisibleReference]
+    effect_execution_description: str | None
+    effect_execution_summary: list[str]
+    effect_execution_requires_v8: bool
+    program: list[tuple[int, int]]
+    program_description: str | None
     remembered: list[VisibleReference]
     inherited_from: VisibleReference | None
     attackers: str | None
     source_transforms: int
     kind: int
     decision: int
+    legacy_decision: int | None
     parent: int | None
     controller: int
     source: VisibleReference
@@ -832,7 +865,7 @@ class ContinuationFrame:
     delayed_frequency: int | None
     this_turn: bool
 
-def validate_observation_json(text: str) -> None: ...
+def validate_observation_json(text: str, *, schema_version: int = 8) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...
 
 class ManaOutput:
@@ -840,6 +873,15 @@ class ManaOutput:
     mana: list[int]
     lesson: list[int]
 
+class NameCandidate:
+    def __init__(self, name: str, definition: int | None = None) -> None: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def definition(self) -> int | None: ...
+
+def naming_catalog() -> list[NameCandidate]: ...
+def validate_policy_input(obs: Observation, version: int) -> None: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...

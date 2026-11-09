@@ -2,12 +2,13 @@
 //! References link only to exact, visible incarnations. Tensor rows and portable
 //! text evidence consume these same facts; no strings or JSON enter encoding.
 
+use crate::state::ability::LibraryEnd;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
-        decision::{Decision, SuspendedResolution},
+        decision::{Decision, EffectFrame, ResolutionRef, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
@@ -71,6 +72,28 @@ pub struct ManaOutput {
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
 #[serde(deny_unknown_fields)]
 pub struct ContinuationFrame {
+    /// Complete originating program when no catalog join can identify it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub program: Vec<(u16, i32)>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program_description: Option<String>,
+    /// Effect execution tokens, a separate ordered occurrence from the source program.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_execution: Vec<(u16, i32)>,
+    /// v8 kind-10 relation rows link the one-based slots in effect execution tokens.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_execution_references: Vec<VisibleReference>,
+    /// Every retained fact as `name: value` text. Filled only by
+    /// `Game::describe_effect_execution` (decision context and capture); a policy
+    /// observation leaves it absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_execution_description: Option<String>,
+    /// Plain-language pending work for the same viewer-safe Academy decision,
+    /// filled with `effect_execution_description`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effect_execution_summary: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub effect_execution_requires_v8: bool,
     /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<VisibleReference>,
@@ -97,6 +120,10 @@ pub struct ContinuationFrame {
     /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
     /// group plus one. Kind 10: delayed event code. Zero otherwise.
     pub decision: u8,
+    /// Frozen v1–v7 code for a selection migrated to the shared executor.
+    /// Absent for new selection domains, which require the successor input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub legacy_decision: Option<u8>,
     pub parent: Option<usize>,
     pub controller: usize,
     pub source: VisibleReference,
@@ -160,6 +187,17 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
 }
 
 impl ContinuationFrame {
+    fn program(&mut self, effects: &[crate::state::ability::Effect]) {
+        if effects.is_empty() {
+            return;
+        }
+        self.program = crate::cards::tokens::rules_tokens(
+            &effects,
+            crate::cards::content_pack::default_content_pack(),
+        )
+        .expect("rules program tokens");
+        self.program_description = Some(super::ability_description::effects_description(effects));
+    }
     fn cost(&mut self, cost: &ManaCost) {
         self.cost = Some(cost.cost);
         self.hybrid = cost
@@ -172,6 +210,33 @@ impl ContinuationFrame {
 }
 
 impl Game {
+    /// Whether retained inputs can recover an activation from catalog joins.
+    /// Execution always consumes the captured effects, regardless of this answer.
+    pub(crate) fn activation_catalog_program(
+        &self,
+        card: CardId,
+        face: crate::state::card::CardDefId,
+        inherited: Option<crate::state::card::CardDefId>,
+        index: usize,
+        grant: Option<crate::state::card::AbilityGrant>,
+        effects: &[crate::state::ability::Effect],
+    ) -> bool {
+        let definition = if let Some(grant) = grant {
+            self.state.cards[CardId::from(grant.grantor.entity)]
+                .attached_grants()
+                .nth(grant.index)
+        } else {
+            self.source_face(card, face).and_then(|source| {
+                source.activated_abilities.get(index).or_else(|| {
+                    crate::cards::content_pack::default_content_pack()
+                        .definition(inherited?)?
+                        .activated_abilities
+                        .get(index.checked_sub(source.activated_abilities.len())?)
+                })
+            })
+        };
+        definition.is_some_and(|definition| definition.effects == effects)
+    }
     pub(crate) fn visible_reference(
         &self,
         object: ObjectRef,
@@ -186,6 +251,8 @@ impl Game {
         }
         let card = &self.state.cards[card_id];
         let zone = self.state.zones.zone_of(card_id);
+        // Ordinary visibility needs no walk of retained event batches. Only
+        // otherwise hidden objects need the prospective-entry permission.
         let visible = matches!(
             zone,
             Some(
@@ -198,7 +265,9 @@ impl Game {
         ) || (zone == Some(ZoneType::Hand)
             && self.shares_information(viewer, card.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
-                && self.searches_private_zones(viewer, card.owner));
+                && (self.searches_private_zones(viewer, card.owner)
+                    || self.decision_reveals(card_id, viewer)))
+            || self.pending_public_entries().contains(&object);
         if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
             return VisibleReference::default();
         }
@@ -214,7 +283,24 @@ impl Game {
         }
     }
 
-    fn card_reference(&self, card: CardId, viewer: PlayerId) -> VisibleReference {
+    /// A hidden-zone card a suspended decision shows its chooser: the exact
+    /// cards it looks at, orders or has revealed, or the whole zone a card
+    /// selection reads. The observation lists these same cards for that viewer,
+    /// so their reference slots join its rows instead of reading as unrevealed.
+    fn decision_reveals(&self, card: CardId, viewer: PlayerId) -> bool {
+        let Some(suspended) = &self.state.suspended_decision else {
+            return false;
+        };
+        let (owner, zone) = (self.state.cards[card].owner, self.state.zones.zone_of(card));
+        suspended.decisions().any(|decision| {
+            self.shares_information(viewer, decision.player())
+                && (decision.revealed_cards().contains(&card)
+                    || matches!(decision, Decision::SelectCards { from: Some(source), .. }
+                        if source.owner == owner && Some(source.zone) == zone))
+        })
+    }
+
+    pub(crate) fn card_reference(&self, card: CardId, viewer: PlayerId) -> VisibleReference {
         self.current_object_ref(card)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
@@ -407,12 +493,12 @@ impl Game {
 
     fn remembered_references(
         &self,
-        objects: &[ObjectRef],
+        objects: &[crate::state::binding::ObjectBinding],
         viewer: PlayerId,
     ) -> Vec<VisibleReference> {
         objects
             .iter()
-            .map(|object| self.visible_reference(*object, viewer))
+            .map(|binding| self.visible_reference(binding.object, viewer))
             .collect()
     }
 
@@ -446,7 +532,7 @@ impl Game {
                     self.state.cards[trigger.source_card].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
-                frames.push(ContinuationFrame {
+                let mut frame = ContinuationFrame {
                     kind: if placement
                         .placing
                         .as_ref()
@@ -475,7 +561,11 @@ impl Game {
                     remembered: self.remembered_references(&trigger.remembered, viewer),
                     context: trigger.context.map(|t| self.target_reference(t, viewer)),
                     ..ContinuationFrame::default()
-                });
+                };
+                if trigger.program {
+                    frame.program(trigger.inline_effects.as_deref().unwrap_or_default());
+                }
+                frames.push(frame);
             }
         }
     }
@@ -522,6 +612,9 @@ impl Game {
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
+                if ability.program {
+                    frame.program(&ability.effects);
+                }
                 frame.source = self.visible_reference(ability.source_ref, viewer);
                 frame.x = ability.x;
                 frame.inherited_from = ability.inherited_from.map(|id| VisibleReference {
@@ -533,6 +626,9 @@ impl Game {
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
+                if ability.program {
+                    frame.program(ability.inline_effects.as_deref().unwrap_or_default());
+                }
                 frame.inherited_from = ability
                     .source_lki
                     .as_ref()
@@ -668,15 +764,23 @@ impl Game {
         viewer: PlayerId,
         frames: &mut Vec<ContinuationFrame>,
     ) {
-        let effect = &suspended.frame;
-        let parent = if self.pending_choice.is_some() {
-            Some(frames.len() - 1)
-        } else {
-            None
-        };
-        let frame = ContinuationFrame {
+        let mut parent = self.pending_choice.as_ref().map(|_| frames.len() - 1);
+        for part in suspended.continuation() {
+            let mut frame = match part {
+                ResolutionRef::Frame(effect) => self.effect_frame(effect, viewer),
+                ResolutionRef::Decision(decision) => {
+                    self.resolution_decision_frame(decision, viewer)
+                }
+            };
+            frame.parent = parent;
+            frames.push(frame);
+            parent = Some(frames.len() - 1);
+        }
+    }
+
+    fn effect_frame(&self, effect: &EffectFrame, viewer: PlayerId) -> ContinuationFrame {
+        let mut frame = ContinuationFrame {
             kind: 5,
-            parent,
             controller: effect.controller.0,
             source: effect
                 .source_ref
@@ -711,82 +815,121 @@ impl Game {
                 .map(|t| self.target_reference(t, viewer)),
             ..ContinuationFrame::default()
         };
-        // The native chain starts at the active choice and follows resume
-        // obligations. Reverse its projection so each interrupted obligation
-        // precedes its child and the current decision is the deepest frame.
-        frames.push(frame);
-        let first_decision = frames.len();
-        let mut decision = &suspended.decision;
-        loop {
-            let mut frame = ContinuationFrame {
-                kind: 6,
-                controller: decision.player().0,
-                ..ContinuationFrame::default()
-            };
-            frame.decision = decision_code(decision);
-            let resume = match decision {
-                Decision::ChoosePaymentX { .. } => {
-                    frame.can_decline = true;
-                    None
-                }
-                Decision::SearchNamed {
-                    owner, remaining, ..
-                } => {
-                    frame.can_decline = true;
-                    frame.mode = Some(*remaining);
-                    frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
-                    None
-                }
-                Decision::Payment(progress) => {
-                    frame.cost(&progress.remaining.mana_cost());
-                    frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
-                    frame.can_decline = progress.can_decline();
-                    None
-                }
-                Decision::ManaUpfront {
-                    permanent,
-                    ability_index,
-                    resume,
-                    ..
-                } => {
-                    frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
-                    frame.ability = Some(*ability_index);
-                    frame.cost(
-                        &self.characteristics(*permanent).activated_abilities[*ability_index]
-                            .mana_cost,
-                    );
-                    resume.as_deref()
-                }
-                Decision::ManaChoice {
-                    choices, resume, ..
-                } => {
-                    frame.mana_outputs = choices
-                        .iter()
-                        .enumerate()
-                        .map(|(mode, output)| ManaOutput {
-                            mode,
-                            mana: output.mana,
-                            lesson: output.restricted_colors(),
-                        })
-                        .collect();
-                    resume.as_deref()
-                }
-                Decision::ChooseObject { optional, .. } => {
-                    frame.can_decline = *optional;
-                    None
-                }
-                _ => None,
-            };
-            frames.push(frame);
-            let Some(next) = resume else {
-                break;
-            };
-            decision = next;
+        frame.program(&effect.program);
+        super::effect_execution::project_frame(self, effect, viewer, &mut frame, false);
+        frame
+    }
+
+    /// Render the viewer's own suspended frames' effect execution as text:
+    /// the complete `name: value` description and plain-language summaries.
+    /// This is a presentation product of decision context and capture; the
+    /// policy observation leaves both fields empty and never builds strings.
+    pub(crate) fn describe_effect_execution(
+        &self,
+        viewer: PlayerId,
+        frames: &mut [ContinuationFrame],
+    ) {
+        if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
+            || self.is_game_over()
+        {
+            return;
         }
-        frames[first_decision..].reverse();
-        for (index, frame) in frames.iter_mut().enumerate().skip(first_decision) {
-            frame.parent = Some(index - 1);
+        let Some(suspended) = &self.state.suspended_decision else {
+            return;
+        };
+        // Kinds 5 and 6 come only from `append_suspended_frames`, in this order.
+        let mut parts = suspended.continuation().into_iter();
+        for frame in frames.iter_mut().filter(|f| matches!(f.kind, 5 | 6)) {
+            match parts.next() {
+                Some(ResolutionRef::Frame(effect)) => {
+                    debug_assert_eq!(frame.kind, 5);
+                    super::effect_execution::project_frame(self, effect, viewer, frame, true);
+                }
+                Some(ResolutionRef::Decision(decision)) => {
+                    debug_assert_eq!(frame.kind, 6);
+                    super::effect_execution::project_decision(self, decision, viewer, frame, true);
+                }
+                None => unreachable!("suspended frames outnumber the retained caller chain"),
+            }
         }
+    }
+
+    fn resolution_decision_frame(
+        &self,
+        decision: &Decision,
+        viewer: PlayerId,
+    ) -> ContinuationFrame {
+        let mut frame = ContinuationFrame {
+            kind: 6,
+            controller: decision.player().0,
+            ..ContinuationFrame::default()
+        };
+        frame.decision = decision_code(decision);
+        match decision {
+            Decision::ChoosePaymentX { .. } => {
+                frame.can_decline = true;
+            }
+            Decision::SearchNamed {
+                owner, remaining, ..
+            } => {
+                frame.can_decline = true;
+                frame.mode = Some(*remaining);
+                frame.context = Some(self.target_reference(Target::Player(*owner), viewer));
+            }
+            Decision::Payment(progress) => {
+                frame.cost(&progress.remaining.mana_cost());
+                frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
+                frame.can_decline = progress.can_decline();
+            }
+            Decision::ManaUpfront {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.ability = Some(*ability_index);
+                frame.cost(
+                    &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
+                );
+            }
+            Decision::ManaChoice { choices, .. } => {
+                frame.mana_outputs = choices
+                    .iter()
+                    .enumerate()
+                    .map(|(mode, output)| ManaOutput {
+                        mode,
+                        mana: output.mana,
+                        lesson: output.restricted_colors(),
+                    })
+                    .collect();
+            }
+            Decision::OrderLibrary {
+                next,
+                end: LibraryEnd::Top,
+                ..
+            } => {
+                // The visible library segment is top-first. Its first
+                // `next` cards have already been ordered by the player.
+                frame.mode = Some(*next);
+            }
+            Decision::SelectCards {
+                origin,
+                selected,
+                min,
+                max,
+                ..
+            } => {
+                frame.legacy_decision = origin.legacy_code();
+                frame.can_decline = selected.len() >= *min;
+                frame.mode = Some(max.saturating_sub(selected.len()));
+            }
+            Decision::ChooseObject { optional, .. } => {
+                frame.can_decline = *optional;
+            }
+            _ => {}
+        };
+        super::effect_execution::project_decision(self, decision, viewer, &mut frame, false);
+        frame
     }
 
     fn payment_frame(&self, payment: &Payment, viewer: PlayerId, frame: &mut ContinuationFrame) {
@@ -822,25 +965,24 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 26;
+pub const MAX_DECISION_CODE: u8 = 29;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
 /// new ones, never renumber.
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
+        Decision::OrderReplacement { .. } => 29,
         Decision::ChoosePaymentX { .. } => 24,
         Decision::SearchNamed { .. } => 25,
         Decision::Payment(_) => 1,
         Decision::ManaUpfront { .. } => 2,
         Decision::ManaChoice { .. } => 3,
         Decision::ChooseObject { .. } => 4,
-        Decision::SelectMilled { .. } => 5,
-        Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
-        Decision::OptionalDiscardDraw { .. } => 7,
+        Decision::SelectCards { .. } => 28,
         Decision::Scry { .. } => 8,
         Decision::LookAndSelect { .. } => 9,
-        Decision::Modal { .. } => 10,
+        Decision::Modal { .. } | Decision::NameCard { .. } => 10,
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,
@@ -853,7 +995,14 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::KeepCreatures { .. } => 20,
         Decision::Retarget { .. } => 21,
         Decision::Surveil { .. } => 22,
-        Decision::OrderLibraryBottom { .. } => 23,
+        Decision::OrderLibrary {
+            end: LibraryEnd::Bottom,
+            ..
+        } => 23,
+        Decision::OrderLibrary {
+            end: LibraryEnd::Top,
+            ..
+        } => 27,
         Decision::ChooseToExile { .. } => 26,
     }
 }
@@ -863,6 +1012,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
 pub fn encode_into(
     frames: &[ContinuationFrame],
     viewer: usize,
+    version: u8,
     objects: &std::collections::HashMap<i32, i32>,
     out: &mut [f32],
 ) -> Result<(), super::observation_encoder::ObservationEncodeError> {
@@ -891,7 +1041,11 @@ pub fn encode_into(
     let count: usize = frames
         .iter()
         .map(|f| {
-            1 + f.targets.len()
+            1 + if version >= 8 {
+                f.effect_execution_references.len()
+            } else {
+                0
+            } + f.targets.len()
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
                 + if dim == RELATION_DIM_V5 {
@@ -944,7 +1098,17 @@ pub fn encode_into(
         header[19] = f32::from(frame.lesson);
         header[20] = f32::from(frame.waterbend);
         header[21] = f32::from(frame.can_decline);
-        header[28] = frame.decision as f32;
+        if version < 8 && frame.legacy_decision.is_some() {
+            // Retired obligations left these fields unset. Their successor's
+            // count/decline metadata must not reinterpret saved scalar inputs.
+            header[7] = 0.0;
+            header[21] = 0.0;
+        }
+        header[28] = if version < 8 {
+            frame.legacy_decision.unwrap_or(frame.decision)
+        } else {
+            frame.decision
+        } as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
         header[RELATION_X_INDEX] = f32::from(frame.x);
@@ -989,6 +1153,11 @@ pub fn encode_into(
         }
         if let Some(target) = frame.sacrifice {
             reference_row(4.0, target, 0, 0, None);
+        }
+        if version >= 8 {
+            for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
+                reference_row(10.0, *reference, 0, ordinal, None);
+            }
         }
         if dim == RELATION_DIM_V5 {
             if let Some(definition) = frame.inherited_from {
@@ -1114,6 +1283,10 @@ mod tests {
         // One value per variant. `decision_code`'s exhaustive match makes a
         // new variant fail to compile until it has a code; add it here too.
         let decisions = [
+            Decision::OrderReplacement {
+                player: PlayerId(0),
+                candidates: Vec::new(),
+            },
             Decision::ChoosePaymentX {
                 player,
                 if_paid: Vec::new(),
@@ -1155,31 +1328,16 @@ mod tests {
                 kind: CounterKind::PlusOnePlusOne,
                 remaining: 1,
             },
-            Decision::SelectMilled {
+            Decision::SelectCards {
+                origin: crate::flow::decision::SelectionOrigin::Other,
                 player,
-                cards: vec![],
-                if_declined: vec![],
-                to_battlefield: false,
-            },
-            Decision::SearchBasicLand {
-                player,
-                subtype: None,
-                remaining: 1,
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: false,
+                from: None,
+                candidates: vec![],
                 selected: vec![],
-            },
-            Decision::SearchLibraryToHand {
-                player,
-                predicate: predicate.clone(),
-            },
-            Decision::OptionalDiscardDraw {
-                player,
-                count: 1,
-                remaining: 1,
-                discarded: 0,
+                min: 0,
+                max: 1,
+                effects: vec![],
+                if_declined: vec![],
             },
             Decision::Scry {
                 player,
@@ -1191,10 +1349,19 @@ mod tests {
             Decision::Surveil {
                 player,
                 looked: vec![],
+                graveyard: vec![],
             },
-            Decision::OrderLibraryBottom {
+            Decision::OrderLibrary {
                 player,
-                remaining: vec![],
+                cards: vec![],
+                next: 0,
+                end: LibraryEnd::Bottom,
+            },
+            Decision::OrderLibrary {
+                player,
+                cards: vec![],
+                next: 0,
+                end: LibraryEnd::Top,
             },
             Decision::LookAndSelect {
                 to_battlefield: false,
@@ -1250,7 +1417,6 @@ mod tests {
             Decision::Discard {
                 player,
                 remaining: 1,
-                then: None,
             },
             Decision::KeepCreatures {
                 player,
@@ -1283,11 +1449,44 @@ mod tests {
     }
 
     #[test]
+    fn migrated_selection_preserves_each_frozen_obligation_code_and_header() {
+        for legacy in [5, 6, 7] {
+            let frame = ContinuationFrame {
+                kind: 6,
+                decision: 28,
+                legacy_decision: Some(legacy),
+                mode: Some(2),
+                can_decline: true,
+                ..Default::default()
+            };
+            for version in 2..=8 {
+                let width = match version {
+                    2 | 3 => LEGACY_RELATION_DIM,
+                    4 => RELATION_DIM,
+                    _ => RELATION_DIM_V5,
+                };
+                let mut out = vec![0.0; RELATION_ROWS * width];
+                encode_into(
+                    std::slice::from_ref(&frame),
+                    0,
+                    version,
+                    &HashMap::new(),
+                    &mut out,
+                )
+                .unwrap();
+                assert_eq!(out[28], if version < 8 { legacy as f32 } else { 28.0 });
+                assert_eq!(out[7], if version < 8 { 0.0 } else { 3.0 });
+                assert_eq!(out[21], if version < 8 { 0.0 } else { 1.0 });
+            }
+        }
+    }
+
+    #[test]
     fn relation_capacity_rejects_instead_of_truncating() {
         let frames = vec![ContinuationFrame::default(); RELATION_ROWS + 1];
         let mut out = vec![0.0; RELATION_ROWS * RELATION_DIM];
         assert!(matches!(
-            encode_into(&frames, 0, &HashMap::new(), &mut out),
+            encode_into(&frames, 0, 8, &HashMap::new(), &mut out),
             Err(super::super::observation_encoder::ObservationEncodeError::Capacity { .. })
         ));
     }
@@ -1320,10 +1519,10 @@ mod tests {
             ..ContinuationFrame::default()
         }];
         let mut left = vec![0.0; RELATION_ROWS * RELATION_DIM];
-        encode_into(&frames, 0, &HashMap::new(), &mut left).unwrap();
+        encode_into(&frames, 0, 8, &HashMap::new(), &mut left).unwrap();
         frames[0].targets.reverse();
         let mut right = left.clone();
-        encode_into(&frames, 0, &HashMap::new(), &mut right).unwrap();
+        encode_into(&frames, 0, 8, &HashMap::new(), &mut right).unwrap();
         assert_ne!(left, right);
         assert_eq!(&left[12..19], &[0., 1., 0., 0., 0., 0., 3.]);
         assert_eq!(left[19], 1.);
@@ -1331,7 +1530,7 @@ mod tests {
             &left[3 * RELATION_DIM + 26..3 * RELATION_DIM + 28],
             &[1., 3.]
         );
-        encode_into(&[], 0, &HashMap::new(), &mut right).unwrap();
+        encode_into(&[], 0, 8, &HashMap::new(), &mut right).unwrap();
         assert!(right.iter().all(|value| *value == 0.));
     }
 }

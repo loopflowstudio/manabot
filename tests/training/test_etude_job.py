@@ -1,12 +1,17 @@
 """Direct SDK worker proof: actual learner, admitted bytes and failure admission."""
 
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
+import time
 
+from etude.experiment import observe
 from etude.train.read import read_all
 import pytest
 
@@ -22,7 +27,9 @@ from manabot.experiment.job import (
 from manabot.experiment.numerics import _suite_environment
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
+import manabot.training.execution as execution
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -30,6 +37,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -112,14 +120,32 @@ def test_worker_runs_real_learner_and_reports_admitted_policy(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     worker_environment(tmp_path, monkeypatch)
-    subprocess.run(
-        ["uv", "run", "--locked", "python", "-m", "manabot.experiment.job"],
+    with subprocess.Popen(
+        # Keep the parent's admitted environment, including an isolated one.
+        # Resyncing the checkout here escapes dependency isolation and can wait
+        # on another test's environment lock.
+        [
+            "uv",
+            "run",
+            "--no-sync",
+            "--active",
+            "python",
+            "-m",
+            "manabot.experiment.job",
+        ],
         cwd=ROOT,
-        check=True,
-        timeout=30,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-    )
+        start_new_session=True,
+    ) as worker:
+        try:
+            stdout, stderr = worker.communicate(timeout=120)
+            assert worker.returncode == 0, (stdout, stderr)
+        finally:
+            if worker.poll() is None:
+                os.killpg(worker.pid, signal.SIGKILL)
+                worker.communicate()
     run = TrainingRun.model_validate_json(
         (tmp_path / "output/training/run.json").read_text()
     )
@@ -158,6 +184,44 @@ def test_worker_rejects_before_learning(
     assert not (tmp_path / "output").exists()
 
 
+def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Etude stops an attempt with SIGTERM, well before training polls its stop file."""
+    spec = specification()
+    stage = spec.regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = 100_000
+    worker_environment(
+        tmp_path, monkeypatch, spec.model_copy(update={"milestones": ()})
+    )
+    worker = subprocess.Popen(
+        [sys.executable, "-m", "manabot.experiment.job"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    tracking = tmp_path / "tracking"
+    try:
+        deadline = time.monotonic() + 120
+        while not any(tracking.rglob("*.pt")) and worker.poll() is None:
+            assert time.monotonic() < deadline, "the worker exported nothing"
+            time.sleep(0.2)
+        assert worker.poll() is None, worker.stderr and worker.stderr.read()
+        worker.send_signal(signal.SIGTERM)
+        assert worker.wait(timeout=60) != 0
+    finally:
+        worker.kill()
+        worker.communicate()
+    (run,) = observe(tracking, "fixture").runs
+    assert run.state == "failed"
+    assert run.checkpoints.last is not None
+    receipt = TrainingRun.model_validate_json(
+        (tmp_path / "output/training/run.json").read_text()
+    )
+    assert receipt.status == "interrupted"
+
+
 def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     stop = tmp_path / "stop"
     stop.touch()
@@ -171,6 +235,39 @@ def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
     assert run.error is not None and "cancelled by launcher" in run.error
     assert run.selected_artifact is None
     assert (tmp_path / "run/run.json").exists()
+
+
+def test_nonrecoverable_collection_cancellation_retains_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stop = tmp_path / "stop"
+
+    def collecting(
+        self: SeatRoutedCollector,
+        agent: ActorCritic,
+        num_steps: int,
+        *,
+        deadline_monotonic: float | None = None,
+        check: Callable[[], None] | None = None,
+    ) -> RolloutBatch:
+        # Inject cancellation after collection starts, without playing or load.
+        stop.touch()
+        clock = execution.time.perf_counter() + 2
+        with monkeypatch.context() as patch:
+            patch.setattr(execution.time, "perf_counter", lambda: clock)
+            if check is not None:
+                check()
+        raise AssertionError("collection continued after cancellation")
+
+    monkeypatch.setattr(SeatRoutedCollector, "collect", collecting)
+    regime = specification().regime
+    assert not regime.recoverable
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        with pytest.raises(RuntimeError, match="cancelled by launcher"):
+            execute_regime(regime, 12250, tmp_path / "run", store, stop_path=stop)
+    run = TrainingRun.model_validate_json((tmp_path / "run/run.json").read_bytes())
+    assert run.status == "failed" and run.stages[0].updates == 0
+    assert run.selected_artifact is None
 
 
 def test_experiment_plans_become_etude_runs_with_their_seeds(tmp_path: Path) -> None:
@@ -351,13 +448,56 @@ def test_continuation_milestones_follow_the_parent(tmp_path: Path) -> None:
         TrainingJob(regime=without_ema, experiment="fixture", continuation=continuation)
 
 
+def test_worker_imports_exact_initial_weights_and_keeps_optimizer_fresh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import torch
+
+    from manabot.env.match import Match
+    from manabot.env.observation import ObservationSpace
+    from manabot.model.actor_critic import ActorCritic
+    from manabot.model.checkpoint import save_checkpoint
+
+    spec = specification()
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    path = inputs / "initial-weights.pt"
+    space = ObservationSpace(spec.regime.observation)
+    torch.manual_seed(4567)
+    producer = ActorCritic(space, spec.regime.agent)
+    save_checkpoint(
+        producer,
+        space,
+        path,
+        player_configs=Match(spec.regime.match).to_rust(),
+        extra={"weights": "initial_raw"},
+    )
+    spec.initial_checkpoint = StagedExport(
+        key="existing/initial.pt", sha256=file_sha256(path), bytes=path.stat().st_size
+    )
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
+    assert len(job.inputs) == 1
+    assert job.inputs[0].sha256 == file_sha256(path)
+    worker_environment(tmp_path, monkeypatch, spec)
+    monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
+    run = run_worker()
+    assert run.status == "completed"
+    copied, _ = load_checkpoint(run.stages[0].artifacts["initial_raw"]["path"])
+    for key, value in producer.state_dict().items():
+        torch.testing.assert_close(copied.state_dict()[key], value, rtol=0, atol=0)
+    assert run.stages[0].learning_state_origin is None
+    assert run.stages[0].inputs["initial_weights"]["sha256"] == file_sha256(path)
+
+
 def test_segment_out_of_wall_budget_succeeds_paused_with_learner_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     regime = ema_regime(5)
     watchdog = min(regime.wall_seconds, regime.stages[0].execution.wall_seconds)
     # A reserve just inside the watchdog: the stage stops after one update.
-    spec = TrainingJob(regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3)
+    spec = TrainingJob(
+        regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3
+    )
     worker_environment(tmp_path, monkeypatch, spec)
     run = run_worker()
     assert run.status == "paused" and run.updates_through() == 1

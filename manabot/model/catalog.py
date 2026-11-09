@@ -199,6 +199,10 @@ _BINDING_FIELDS = (
     ),
     ("content_manifest", _content_mismatch),
     (
+        "naming_vocabulary",
+        lambda trained, engine: "naming vocabulary differs from this engine",
+    ),
+    (
         "world_digest",
         lambda trained, engine: (
             f"world cards differ: trained on {str(trained)[:12]}, "

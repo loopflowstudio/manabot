@@ -35,7 +35,6 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.action.compound import CompoundPolicy
 from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
@@ -153,15 +152,6 @@ class AgentMatchupPlayer:
         self.allow_deck_repetition = allow_deck_repetition
         self.deterministic = deterministic
         agent.eval()
-        self.compound = (
-            CompoundPolicy(agent, deterministic=deterministic)
-            if agent.config.compound_decisions
-            else None
-        )
-
-    def start_game(self, env: Env, seat: int) -> None:
-        if self.compound is not None:
-            self.compound.reset()
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         from manabot.model.world import validate_agent_setup
@@ -171,8 +161,6 @@ class AgentMatchupPlayer:
             env.match.to_rust(),
             allow_deck_repetition=self.allow_deck_repetition,
         )
-        if self.compound is not None:
-            return self.compound.act(env._engine, env.last_raw_obs)
         return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
 
 

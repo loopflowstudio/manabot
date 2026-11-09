@@ -21,7 +21,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 15;
+pub const MATCH_STATE_HASH_VERSION: u32 = 16;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -160,7 +160,7 @@ struct CanonicalMatchState<'a> {
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,
     mana_cache: &'a [Option<crate::state::mana::Mana>; 2],
-    events: &'a [crate::flow::event::GameEvent],
+    events: &'a crate::flow::event::EventLedger,
     pending_events: &'a [crate::flow::event::GameEvent],
     observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],
