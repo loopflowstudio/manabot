@@ -24,14 +24,17 @@ The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
 six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
 `index_copy_(): self and source expected to have the same dtype, but got (self)
 Float and (source) Half`. CPU autocast had not covered CUDA's recurrent behavior.
-The repair is implemented here for ed2300, with no second checkout; linking its
-software PR and recording validation remain delivery work.
+The repair was delivered here for ed2300 in PR #451, with no second checkout.
+Integrated software review is recorded in comment e98993af.
 
 ## Execution still open
 
-- Source/world/input freeze after software integration. Original source was
-  cb722dc8c / w17; C1 never relabels those results. Current runtime admission
-  remains a freeze check. Real CUDA regression and a two-update w160l8 BF16
+- Source/world/input freeze is recorded in the owning protocol's C1 receipt
+  (2026-11-09), at integrated PR #451 commit 58eb3c729. All 87 declarations
+  passed isolated-client discovery and current-world admission; 20 targeted
+  checks passed. The catalog digest changed while the roster and recipe stayed
+  unchanged. Original source cb722dc8c results remain separate, with fresh C1
+  controls required. Real CUDA regression and a two-update w160l8 BF16
   worker/reload on one rental must pass before opening other rentals.
 - Reconcile bills before allocating new liability. Step 3 $1.741 and total
   $3.781 remain estimates, not invoices. Original caps stay $10 step 3 / $50

@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 software implemented; freeze pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 frozen; CUDA execution admission pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -48,7 +48,8 @@ its runs.
   Its posted bill is partial; see the report's inclusive accounting.
   Anything further needs an amendment made before the run that would spend it.
 - **Continuation authority.** Comment 079b3f46 and
-  `scratch/step-3-continuation.md` authorize the bounded repair, CUDA admission
+  the continuation design retained at
+  `c2c813a47:scratch/step-3-continuation.md` authorize the bounded repair, CUDA admission
   and missing measurements within the original $10 inclusive step-3 envelope
   and $50 experiment cap. Routine execution within these bounds needs no new
   spending decision. This design launches nothing; software admission, freeze,
@@ -1091,7 +1092,8 @@ The retained `step-3/overhead-audit.md` lists hypotheses, not measured fixes.
   software below lands. Record native build/world identity, deck-definition
   and roster digests, resolved observation/model/regime bytes, dependency lock,
   CUDA/PyTorch/driver versions, GPU, CPU, quotas and actual precision switches.
-  The source is presently **unfrozen**; no old commit stands in for the repair.
+  C1 is frozen at `58eb3c7299f6078a56d5027ac738bc7af76d8fdc`; the receipt
+  below binds the integrated repair and the current catalog separately from step 3.
 - Keep `elemental_recipe`, 256 streams, both learning seats, complete games,
   at least 64 decisions per stream, one producer, damped-policy schedules,
   capacity recovery and trivial skipping. Freeze input v6 / 512 facts and all
@@ -1211,13 +1213,12 @@ exposure instrument is needed for this unchanged-pool throughput claim.
 
 ### Software and admission before final freeze
 
-C1 software is implemented in this checkout, reconciled after merge `fec7fdd28`
-with main `e0832f67f` on 2026-11-08. It is not yet delivered or frozen. Comment
-8cb4c5af reviewed the design against Jack Heart's "keep going" authority; no new
-scope or budget is inferred. The ed2300 status read at implementation found no
-competing PR, Session or Graph. Its repair belongs in this Task's next software
-PR, with [ed2300](loopflow://manabot/task/ed2300) linked to that delivery and its
-validation. Software verification does not complete the parent experiment.
+C1 software landed in PR #451 at `58eb3c7299f6078a56d5027ac738bc7af76d8fdc`
+on 2026-11-09. Comment e98993af records integrated software review under the
+existing continuation authority; comment 8cb4c5af records design review against
+Jack Heart's "keep going" direction. No new scope or budget is inferred. The
+BF16 repair tracked by [ed2300](loopflow://manabot/task/ed2300) was delivered
+here with one owner. Software verification does not complete the parent experiment.
 
 Implemented:
 
@@ -1250,10 +1251,11 @@ Implemented:
 Main's merged 5da5f4 v7 batching/report is related engineering context, not a
 matched control or a strength result for this hashed-v6 ladder. New integrated
 source/world/recipe admission and same-source/host controls remain necessary.
-Local affected-suite checks and core CI collection are recorded in
-`scratch/step-3-continuation.md`; software delivery, final freeze, prior-bill
-reconciliation and refreshed quotes remain before campaign execution. CUDA
-admission is paid execution on the first bounded rental, after source freeze;
+Historical affected-suite checks and core CI collection are retained at
+`dab8005cd:scratch/step-3-continuation.md`; integrated checks and final freeze
+are recorded below. Prior-bill reconciliation and refreshed quotes remain
+before campaign execution. CUDA admission is paid execution on the first
+bounded rental, after source freeze;
 it is not a claim established by local software checks.
 
 Run the affected precision, semantic-card, size-launch and active-training
@@ -1264,6 +1266,172 @@ rest of the campaign; a failed proof requires new repair/source admission.
 Delete no historical data, four-update declarations or failure receipts.
 No general planner, new precision default, changed minibatch, CUDA graph,
 engine optimization or launcher rewrite is required.
+
+### C1 freeze receipt — 2026-11-09 UTC
+
+**Admission result: source, discovery and local world/input admission pass.**
+Real CUDA admission has not run. No games, training, rentals or paid work were
+executed for this freeze; checkpoint-binding inspection initialized one native
+match without playing it. PR #451 is merged on main at
+`58eb3c7299f6078a56d5027ac738bc7af76d8fdc` (GitHub merge time
+2026-11-09T18:56:28Z). The reviewed checkout `adf308f2e` has the identical tree.
+Every C1 launch and its offline analysis must use that full merge commit,
+never a moving `HEAD`. This receipt changes documentation only.
+
+**Source and protocol.** `bundle_at` binds all 1,520 archived regular files,
+including the protocol, authored setups, launch owner, shared training runtime,
+reader, admission checks and dependency lock. Canonical hashes here use
+`manabot.infra.identity.canonical_sha256` (sorted keys, compact JSON); file
+hashes use SHA-256 of bytes. The source-bundle object includes both `commit`
+and `files`. Its digest is:
+`f685122ace99209eedeecc00e1a4946752ff03a85075fce262b7e3750e603d95`.
+The owning protocol's bytes at the executable revision have SHA-256
+`940ea4ebb9c7a8d4908eeadcd94a7ef1717f50adac8899f749758ede879a7c9c`; this post-freeze receipt is outside those frozen bytes.
+
+| Frozen file | SHA-256 |
+|---|---|
+| `experiments/training_throughput_sizes.py` | `e0180404dc8bca09acee3a7c30f950b3ba8ed9501bb13d6c04f4eff4a8080774` |
+| `experiments/training_throughput_readings.py` | `1171df4ad7b793417af7ca52c3940e9d617d6cf7d35cfb0e78427b443e42d2f8` |
+| `experiments/elemental_variants.py` | `3a9dd3788379594f523fdaf771ecd94c8b498b4edcb70b6248aec63a97991bc2` |
+| `experiments/learning_signal.py` | `836230fd012b730ef847c853dad8b172f82029e1636921bb7030af3144729cb0` |
+| `manabot/experiment/job.py` | `c88ecbff76672d6a93cd2c6cfe961e8d7edbac82b704af6eb078c706ed638c25` |
+| `manabot/model/semantic_cards.py` | `343a2410aefd9d6e8094641ed7701b0ec02cf1e5f86f6f3c7197e4067234f251` |
+| `scripts/check_throughput_admission.py` | `524d0244f06007e6bd90f8ba7701378b56139cba239432ec58bd00211a8c82de` |
+| `scripts/diagnose_training_transfers.py` | `6f852169fb560d013870c9859299d04bf4e8c5274830f6f4fe619c1ba340fd32` |
+| `uv.lock` | `c656038cced268500ac8e59019bc4515bdb2bbce1f7c9cf2f0d3392cd0284816` |
+| `experiments/regimes/elemental-long-183-v1.json` | `be9de37631cfece1e56eeae49af2a9e027cb5d62000ed7fbdeb49bc4139d64ad` |
+| `content/semantic/current/setups.json` | `6c71234ce67664b14c3efdac17e9b5208089c29e2c1e312e9f0a043a37afd05b` |
+
+**World, roster and input.** `validate_regime` admitted every C1 declaration
+against native **w17**, including the exact ten-deck Elemental roster and
+representative pair. `content/semantic/current/setups.json`, its native loader,
+`elemental_recipe` and the frozen base recipe are byte-identical to the original
+step-3 source. The retained w64 run `4aafd5f898b2` also matches the resolved w64
+control outside ID, endpoint and watchdog. The catalog has changed despite the
+unchanged world-version label: original content digest
+`6a818cbcc0c48e0d9b6abb42fee4cbea288312a271e0e9514b5683f0ea3d1cd9`
+is historical; C1 binds the current identities below. All comparisons require
+fresh same-source, same-host controls. No historical checkpoint is an input.
+
+| Identity | Canonical SHA-256 |
+|---|---|
+| Current native card/content digest | `0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f` |
+| Complete content manifest | `a6df2e46ea733e3998c8b3303412c943bee4575c020bbb4383a11a41f9c98770` |
+| Checkpoint binding (manifest, roster, input and rules) | `44f5228f96ed1874cae7fc2502b41fb0cde1bf0cb2dd129ea772b2949b03d7a8` |
+| Ten-deck `checkpoint_world(...)["setups"]` | `68d04d4bd40b52b103a9efea613c52c280e1e143975efbf1ea1f5bad5af578bd` |
+| Resolved observation configuration | `d2452a5262468a83ac6e3f9a0548caa456cddbed22dc439f870b68fec4d03c8f` |
+| Checkpoint `input_schema` (shapes and actual dtypes) | `d8b744ee345230295ffd4728308f07804eae22be22bf3197bfb8cea4356991ab` |
+| Learning schema, as returned by the checkpoint binding | `1ae4b9e56e5b50172ec88b5c78a38c11705252287eb5fa73df3a2b085057d920` |
+
+The ten keys are `elemental_gr/gw/ur/ub/uw/ug/wr/wb/rb/bg`. Input is v6,
+512 facts, 60 cards and 40 permanents per player, 64 actions, 2 focus objects,
+32 events; relations remain 64 × 49. Effective records are **hashed** even
+though the model's fresh config default says catalog. Semantic card encoding
+remains active. Models are w64 (64 × 2, 4 heads), w128l4 (128 × 4, 4 heads),
+w160l8 (160 × 8, 8 heads), a384l8 (384 × 8, 8 heads, feedforward 1536).
+Other feedforward widths retain the declared heads × width default.
+
+Local native extension SHA-256 is
+`02fb2b6f678da7db3a17b215d084422c4202ada887e1910e116c25bca9ce77a3` (Darwin CPython 3.12).
+This identifies the inspected binary, not a Linux binary prediction. Remote
+setup builds the frozen Rust source with toolchain 1.98.1 and the locked worker
+environment (Etude SDK 0.2.15, Torch 2.10.0). Before training, retain the Linux
+extension hash and verify the world/card, manifest, roster and input identities
+above. Capture actual CUDA, driver, Torch, CPU/GPU, cgroup limits and precision
+switches on that rental. A mismatch stops admission; it cannot be relabelled.
+
+**Discovery and recipe binding.** The accepted isolated client at
+`a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11` (reports SDK 0.2.14), with
+`ETUDE_HOME=$HOME/.etude-b015d5-step2`, ran `read_job_file` on
+`experiments/training_throughput_sizes.py` for all **87 C1 legs** at the exact
+revision. Inventory: 45 eight-update, 39 twelve-update and 3 alternative
+admission declarations; 183 seed jobs if every declaration were selected.
+This inventory includes conditional retries and mutually exclusive admissions;
+it is not authority to execute them all or exceed 1,600 updates.
+
+Every job validates as `TrainingJob`, carries the same frozen source bundle,
+tracks under **`training-throughput-sizes-c1`**, dispatches the canonical
+`manabot.experiment.job.run_worker` via `uv run --locked --extra dev python -m manabot.experiment.job`, and
+has no staged checkpoint inputs or learner continuation. No evaluation callback
+is declared. This is an ordinary fixed-roster throughput launch, not a
+growing-pool `ProtocolBinding` experiment. Original `LEGS` retain their identities.
+The reader's expected controls matched every discovered job after removing
+endpoint, ID and watchdog; it rejects historical IDs, mismatched source and
+changed recipes. Run the reader from the frozen source with
+`--source 58eb3c7299f6078a56d5027ac738bc7af76d8fdc`.
+
+The following regime digests cover the complete discovered regime JSON with
+only the top-level and stage execution `wall_seconds` removed. IDs below omit
+the common `elemental-throughput-c1-` prefix and `-v1` suffix. GPU, K and repeat
+legs share these bytes. At execution retain the full job/config digest including
+the actual pace-derived watchdog; only the existing `limits(leg, pace)` formula
+may choose it. The canonical map from full regime IDs to these hashes is
+`5fdd3ee6558663f1068ccbe5fd4dc3f0becd668853139b0d79e5e3c9cb5499d4`.
+
+| Regime | SHA-256 |
+|---|---|
+| `a384l8-bf16-u8` | `eeac4447d6cc934dc8d7df7a7c5494fda3fe2fbdc1d6938a95cb4a82f016c751` |
+| `a384l8-float32-u12` | `262dcc18db0684a3c07b3bc24e6c8be1ab5953369950876a24f467ec89aca6b4` |
+| `a384l8-float32-u8` | `4dace0ac1c62304cb4d409f7e7434df070b1dc5660babbe2f1172749876236c1` |
+| `a384l8-tf32-u8` | `24e83a1238da49d9efb2ac2da7f18b5ad9a82f14e1c5e2be0e1e434b39b80fcb` |
+| `w128l4-float32-u12` | `81829586515cf6700debc9e7f5dbff773b3158d6058723c20fc0d83dd8c06833` |
+| `w128l4-float32-u8` | `3a20e2835591f39aaa03a11cdeb5faddcaa2fbdc6e17179cbfeed5d26c4b6606` |
+| `w160l8-bf16-u12` | `af3d4b794f55c66cb42fc87f8aeb5f5935d202fd1157f69f38ae85263c3eb30f` |
+| `w160l8-bf16-u2` | `1fbed202796d5eec15503f37042a17b82ba7b49f0d2f5282ecd58128266cad29` |
+| `w160l8-bf16-u8` | `f4c337171e0fea98c1e36a73162c84fcc11bcf1eb32eb0756223f8a4fc611726` |
+| `w160l8-float32-u12` | `6816ed2126aab5f759e50a1ef24e8961c3845b345ce3e3e493fe7b992c6d492c` |
+| `w160l8-float32-u8` | `5752a1c4830a330e30530adba7114e3ba1e8b06bdda9b6ff5a08bb349844af3c` |
+| `w160l8-tf32-u12` | `e09e9b332895bb6fe783ffdf95b3a338027d69e7ddeb52212cc27747cebc1741` |
+| `w160l8-tf32-u8` | `0e090d82b36f07edac62415ec576c95d3875b57c16d9d532a751aa03d4151aab` |
+| `w64-float32-u12` | `528bb38ba108f53d0fe4e452526ec62673c71e8cc548fb4ce807ec20c09c7a61` |
+| `w64-float32-u8` | `ced7da423327f73cba4ccb877fade2a22a7b8e79ed8085ccde38f398ddf5953d` |
+
+**Isolation and analysis.** All weights and Adam state start fresh. Admission
+seed is 26400; measurements use the first K of 26401–26404, and the optional
+fixed-input diagnostic uses 26410. These differ from prior steps' 260xx–263xx
+training seeds. Final raw/EMA/optimizer exports are audit outputs; the raw
+checkpoint reload proves admission, not model selection. Evaluation games,
+actions and draws are zero; `ELEMENTAL_PAIRS`, held-out splits, stable evaluation
+anchors and MTG-245 evidence remain untouched.
+
+The schedule and analysis in C1 above are frozen: one-rental CUDA test plus
+two-update BF16 worker/reload first; a384l8 solo early; same-host size/packing
+comparisons with eight updates; the A40 w160l8 numeric block at twelve; at most
+one twelve-update whole-cell overlap retry with matched solo ordinals. Require
+three complete concurrent post-warmup updates per seed. Preserve memory/crossover
+stops, all failed/short attempts, exact ordinals and all cell dispositions.
+Primary metrics remain wall time and billed dollars per million learner
+decisions, phase times and machine throughput; report seed latency, resource
+peaks, exposure, early/late sensitivity and gross learning-metric differences.
+Neither precision equivalence nor strength improvement follows from finite values.
+
+**Validation.** All 87 discovery/source/control admissions passed under the
+isolated client. The locked integrated environment also passed 20 targeted
+size/limit/reader/cost/checkpoint tests (5 deselected: training smoke, full
+legacy/C1 discovery and diagnostic execution). Those checks include real
+checkpoint reload/corrupt-byte rejection on CPU and injected source/recipe,
+overlap and accounting rejection; they do not admit CUDA.
+
+**Existing authority, separately from readiness.** Jack Heart said "keep going"
+(comment 079b3f46) after the BF16/overlap/missing-measurements recommendation.
+Comments 8cb4c5af and e98993af record continuation and integrated software review
+under that authority, not new human approval. Bounded execution is already
+authorized; this freeze grants no new scope. New liability is at most
+`min($10 - reconciled prior step-3 spend, $50 - reconciled prior total, $8)`;
+retain the 15 aggregate GPU-hour and 1,600-update ceilings, inclusive of setup,
+failures, retries, diagnostics and teardown. Line ceilings remain A40 5 h/$3.30,
+A4000 6 h/$1.60, L4 4 h/$2.40, plus $.70 contingency within those windows.
+Rate ceilings remain $.95/$.40/$.60 per hour respectively. End a rental at the
+first binding deadline/cap and verify provider deletion.
+
+Execution readiness still requires prior-bill reconciliation (or a defensible
+upper bound), fresh A4000/L4/A40 quotes, watchdog/cleanup liability admission,
+and the first-rental CUDA BF16 proof before expansion. The $1.741 step-3 and
+$3.781 total figures remain estimates, not invoices. No quote or bill was
+refreshed in this offline freeze. No new approval is needed for the unchanged
+bounded continuation; a material departure remains unresolved at execution
+review. A failed identity or CUDA check requires repair and a prospective
+revision before further paid work. The parent experiment remains open.
 
 ### C1 software interface
 
