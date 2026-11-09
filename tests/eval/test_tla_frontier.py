@@ -340,7 +340,7 @@ def test_sizes_differ_only_in_compute_network_and_horizon() -> None:
     assert (small.agent.hidden_dim, small.agent.attention_layers) == (64, 2)
     assert (large.agent.hidden_dim, large.agent.attention_layers) == (160, 8)
     assert large.agent.num_attention_heads == 8
-    assert horizon(small) == 1296 and horizon(large) == protocol.large.expected_updates
+    assert horizon(small) == 2474 and horizon(large) == protocol.large.expected_updates
     for regime in (small, large):
         assert regime.stages[0].execution.workers == 4
         assert regime.observation.max_permanents_per_player == 96
@@ -1620,7 +1620,7 @@ def test_training_runs_admit_milestones_and_wall_budget() -> None:
     ]
     assert {run.job.until for run in launched} == {"updates=10000"}
     configs = [TrainingJob.model_validate_json(run.job.config) for run in launched]
-    assert [horizon(job.regime) for job in configs] == [1296, 129]
+    assert [horizon(job.regime) for job in configs] == [2474, 999]
     assert {run.job.max_attempts for run in launched} == {1}
 
 
