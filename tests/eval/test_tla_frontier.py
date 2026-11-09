@@ -36,7 +36,7 @@ from etude.run.records import ArtifactRef
 import pytest
 from torch import nn
 
-from experiments import tla_frontier, tla_frontier_analysis
+from experiments import tla_frontier
 from experiments.tla_frontier import (
     EXPERIMENT,
     HEURISTIC,
@@ -131,7 +131,7 @@ MS_PER_UPDATE: dict[SizeLabel, int] = {SMALL: 144_000, LARGE: 432_000}
 def _fixture_hours(state: ExperimentState) -> CheckpointHours:
     """Each tagged checkpoint's hours at its size's fixture rate.
 
-    Stands in for Etude's `Checkpoint.wall_ms`, which `checkpoint_hours` waits on.
+    Independently calculated from the fixture's declared timing rates.
     """
     return {
         run.name: {
@@ -143,13 +143,6 @@ def _fixture_hours(state: ExperimentState) -> CheckpointHours:
         for run in state.runs
         if (label := size_label(run)) is not None
     }
-
-
-@pytest.fixture(autouse=True)
-def hours(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both readers of `checkpoint_hours` see the fixture's hours."""
-    monkeypatch.setattr(tla_frontier, "checkpoint_hours", _fixture_hours)
-    monkeypatch.setattr(tla_frontier_analysis, "checkpoint_hours", _fixture_hours)
 
 
 @pytest.fixture(autouse=True)
@@ -172,6 +165,8 @@ def _checkpoint(label: SizeLabel, update: int) -> Checkpoint:
             size_bytes=1,
         ),
         clocks={"updates": update},
+        wall_ms=(1_800_000_000_000 if label == SMALL else 1_900_000_000_000)
+        + update * MS_PER_UPDATE[label],
         line=run,
         tags=(regime_tag(f"tla-frontier-c5fba4-{label}"),),
     )
@@ -212,6 +207,55 @@ def _failed(state: ExperimentState, label: SizeLabel) -> ExperimentState:
             for run in state.runs
         ),
     )
+
+
+def test_checkpoint_hours_rebases_each_run_and_keeps_missing_times_unknown() -> None:
+    state = _state({SMALL: 100, LARGE: 50})
+    assert tla_frontier.checkpoint_hours(state) == _fixture_hours(state)
+    small, large = state.runs
+    missing = replace(
+        small,
+        checkpoints=Checkpoints(
+            c.model_copy(update={"wall_ms": None}) if c.clocks["updates"] == 0 else c
+            for c in small.checkpoints
+        ),
+    )
+    assert tla_frontier.checkpoint_hours(replace(state, runs=(missing, large))) == {
+        large.name: _fixture_hours(state)[large.name]
+    }
+
+
+def test_half_training_uses_elapsed_time_and_never_initialization() -> None:
+    state = _state({SMALL: 150, LARGE: 100})
+    hours = dict(_fixture_hours(state))
+    # Learning slows down: u150 has used 16 hours, u100 seven, u75 six.
+    # Half updates would select u75; half time correctly selects u100.
+    hours[RUN_NAMES[SMALL]] = {0: 0, 25: 1, 50: 3, 75: 6, 100: 7, 150: 16}
+    schedule = comparison_schedule(state, frozen()[1], hours)
+    slots = {c.update: c for c in schedule if c.tag == f"half-training-{SMALL}"}
+    assert slots[25].unreached and slots[25].matchup is None
+    assert slots[150].hours == (16, 7)
+    assert slots[150].matchup is not None
+    assert slots[150].matchup.name == "w64 u150 vs w64 u100 at half training"
+    assert schedule[0].tag.startswith("half-training-")
+
+
+def test_checkpoint_hours_rejects_backwards_wall_time() -> None:
+    state = _state({SMALL: 50})
+    run = state.runs[0]
+    initial = run.checkpoints.at("updates", 0).last
+    assert initial is not None and initial.wall_ms is not None
+    bad = replace(
+        run,
+        checkpoints=Checkpoints(
+            c.model_copy(update={"wall_ms": initial.wall_ms - 1})
+            if c.clocks["updates"] == 50
+            else c
+            for c in run.checkpoints
+        ),
+    )
+    with pytest.raises(ValueError, match="wall time went backwards"):
+        tla_frontier.checkpoint_hours(replace(state, runs=(bad,)))
 
 
 def _tracked(
@@ -315,7 +359,7 @@ def test_frozen_bytes_declare_the_protocol() -> None:
     assert source.sampling == "uniform-independent-v1"
     assert len(protocol.pairs) == 16
     assert all(max(p.first, p.second) < len(source.decks) for p in protocol.pairs)
-    assert protocol.max_paid_usd == Decimal("100")
+    assert protocol.max_paid_usd == Decimal("110")
     assert 2 * protocol.training_usd + protocol.evaluation_usd <= protocol.max_paid_usd
 
 
@@ -1656,6 +1700,10 @@ def test_analysis_reads_learning_and_scale_past_unreached_milestones(
     for reading in report.sizes:
         assert reading.learned is True
         assert reading.against_heuristic is not None
+        assert reading.progressing is True
+        assert reading.against_half_training is not None
+        assert reading.against_half_training.score is not None
+        assert reading.against_half_training.score.mean == 0.75
     small, large = report.sizes
     assert (small.endpoint, large.endpoint) == (1300, 450)
     assert large.training[-1].update == 450 and large.training[-1].hours == 54
@@ -1663,6 +1711,16 @@ def test_analysis_reads_learning_and_scale_past_unreached_milestones(
     assert ("head-to-head", 600) in unreached
     assert ("heuristic-w64", 2400) in unreached
     assert report.counts.expected == report.counts.valid == 64 * len(keys)
+
+
+def test_half_training_tie_remains_inconclusive(
+    frontier_db: duckdb.DuckDBPyConnection,
+) -> None:
+    state = _state({SMALL: 100, LARGE: 100})
+    _outcomes(frontier_db, state, wins=2)
+    report = analyze(state, frontier_db, {})
+    assert all(reading.progressing is None for reading in report.sizes)
+    assert all(reading.against_half_training is not None for reading in report.sizes)
 
 
 def test_failed_size_keeps_its_reach_but_no_equal_compute_scale(
@@ -1730,8 +1788,13 @@ def test_analysis_of_running_sizes_claims_nothing(
     assert report.scale is None
     assert all(reading.endpoint is None for reading in report.sizes)
     assert all(reading.learned is None for reading in report.sizes)
-    # While a run may still go on, later milestones are pending, never unreached.
-    assert not any(c.unreached for c in report.comparisons)
+    # Future milestones remain pending. Only the first half-training comparison
+    # lacks a trained predecessor permanently; initialization is not substituted.
+    assert all(
+        c.tag.startswith("half-training-") and c.update == 25
+        for c in report.comparisons
+        if c.unreached
+    )
 
 
 def _fail_leg(db: duckdb.DuckDBPyConnection, key: str, leg: int) -> None:

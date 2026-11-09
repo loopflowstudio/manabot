@@ -27,6 +27,41 @@ rejects a change to the regime's hash, the runtime world or the derived tensor
 shapes. After the freeze, a changed world needs a new protocol version, even
 before launch; the November 8 amendment above precedes that freeze.
 
+## November 9 launch direction
+
+Catalog is selected. The narrower catalog batching diagnostic passed CUDA output
+and gradient agreement and reduced model-only inference time 39–42% and
+forward/backward time 31% on one A4000. Main subsequently delivered broader
+shared-effect batching in #421; retain that implementation. Its separate probe
+passed CUDA agreement and reduced original-catalog inference by 5.08–7.53× and
+forward/backward by 2.33–2.43×. Against equally optimized hashed shared effects,
+catalog still costs 6–14% more inference and 20–26% more forward/backward in
+that fixed-input probe. These are not full-training throughput forecasts.
+Current-world calibration sets the horizons before the long runs.
+
+Jack Heart: "lets get it going im eager to see how good the agents are".
+This authorizes the two catalog runs after calibration and the required freeze;
+no second launch approval is pending. The earlier USD10 extension authorization
+raises the inclusive Task ceiling to USD110; training remains USD76 and
+frontier evaluation USD14. All preflight, failures and diagnostics count against
+the remaining reserve. The separate Elemental specialist comparison (MTG-270)
+has no allocation from this budget.
+
+Jack Heart: "and then otherwise interested to do evals agaisnt the
+trianed-half-as-much as the main measure of progress" and "for that we can look
+first at against random decks from teh 17lands set".
+The primary progress reading is each checkpoint against the same learner's
+latest trained checkpoint at or before half its elapsed training hours. This
+uses the existing 16 seeded random 17Lands deck pairs, swapping decks and seats
+on their four paired legs (64 games). Report both actual checkpoint hours;
+export cadence can make the earlier checkpoint younger than exactly half.
+Initialization is never substituted when no trained predecessor exists. Such an
+early slot is unavailable; missing timestamps stay missing. Half-training slots
+are scheduled before secondary comparisons within the unchanged evaluation cap.
+The existing equal-size-budget, equal-update, initialization and heuristic
+comparisons remain secondary. The Elemental 10×10 specialist study follows
+separately and does not delay this launch.
+
 ## Question
 
 How far can self-play on the frozen 17Lands TLA trophy population push play
@@ -127,16 +162,13 @@ Both sizes use MTG-213 v10's recipe unchanged except where listed:
   last complete raw learner when it stops. The sizes therefore receive equal
   wall-clock compute, not equal updates. Training seed 21501 for both. No
   automatic retry. Every command in this protocol runs through one control
-  prefix. The nested Doppler projects supply provider and artifact access. Until
-  the freeze the control client is Etude 0.2.14, because the locked 0.2.12 cannot
-  read the launcher's Vast provider rows; the freeze moves it and the job project
-  to Etude main ([Before freeze](#before-freeze) item 3). The prefix is an array,
+  prefix. The nested Doppler projects supply provider and artifact access. The control client and job use the locked Etude 0.2.15 release, which exposes checkpoint wall times. The prefix is an array,
   not a function, so `caffeinate` can run it:
 
   ```bash
   control=(doppler run -p etude -c prd -- doppler run -p manabot -c prd
       --preserve-env=RUNPOD_API_KEY -- uv run --extra artifacts --extra evaluation
-      --with "etude-sdk[s3,eval]==0.2.14")
+      )
   ```
 
   Both sizes train at once, so comparisons appear as they go. A cohort's
@@ -262,7 +294,7 @@ reading fails this gate.
    the same merged revision, once calibration has read w64's cost.
 6. Both gates, and each size's horizon written into the JSON protocol and regime.
    Freeze at the merged revision that carries them and item 3.
-7. Execution review.
+7. Execution approved on November 9; verify the frozen artifacts and caps.
 8. The training launch, then the evaluation driver.
 
 ## Evaluation schedule
@@ -273,7 +305,11 @@ heuristic is the matched first-64 heuristic. Shared update milestones are 25,
 50, 75, 100, 150, 200, 300, 400, 600, 800, 1200, 1600, 2400, 3200, 4800 and
 6400.
 
-- At update 0 and every reached milestone: each size vs the heuristic.
+- **Primary progress:** at each reached milestone and each endpoint, that
+  checkpoint versus its own latest trained checkpoint at or before half its
+  training hours. Update 0 is excluded. Missing wall times never fall back to
+  update counts. The earliest milestone may have no eligible predecessor.
+- At update 0 and every reached milestone: each size vs the heuristic (secondary).
 - **Equal hours.** At every w160l8 milestone and at its endpoint: w160l8 vs w64's
   last checkpoint at or before the same hours. A pair that is also an
   equal-update or endpoint pair is played once, under that comparison's name, and
@@ -506,15 +542,12 @@ check:
    configurations keep their meaning. Check: every existing experiment module's
    regime ids and dumps are unchanged, and a fresh recipe's dump carries the
    four producers, the fitted horizon and `recover_capacity`.
-3. **Checkpoint wall time in `ExperimentState`** (Etude PR #86, no patch release:
-   `Checkpoint.wall_ms`, from `training_checkpoints`). `eval` and the analysis
-   take equal-hours pairs from `tla_frontier.checkpoint_hours`, which reads no
-   hours until this lands, so those slots stay unplayable and the analysis
-   reports them missing. No manabot clock stands in. The freeze change moves the
-   job project and the control client to `etude-sdk` from main together, because
-   `Record` forbids extra fields: a pass sent with `wall_ms` fails on a job
-   pinned to 0.2.12. Check: the Etude test reads `wall_ms` on a stored checkpoint,
-   match keys are unchanged, and `checkpoint_hours` rebases it per run.
+3. **Checkpoint wall time in `ExperimentState`** is available in the locked
+   Etude 0.2.15 release on both controller and worker. `checkpoint_hours` reads
+   `Checkpoint.wall_ms`, rebases each run at update zero, rejects backwards
+   clocks and leaves missing historical times unavailable. Equal-hours and
+   half-training scheduling use this one source. Tests exercise real checkpoint
+   timestamps rather than replacing the reader with a fixture function.
 4. **Frontier runner** (`experiments/tla_frontier*.py`, protocol JSON, regime,
    tests). Producers and horizons per size from the protocol, update cap 10,000,
    the milestones above, the equal-hours schedule and its analysis, evaluation
@@ -592,7 +625,7 @@ runner code fixed at the freeze.
 
 ## Budget
 
-The Task's ceiling is USD100 including setup, failures, retries and evaluation:
+The original ceiling was USD100; the authorized vocabulary extension raises the inclusive ceiling to USD110. Including setup, failures, retries and evaluation:
 2 × USD38 training + USD14 evaluation = USD90, leaving USD10 for calibration
 and the rehearsal (USD1.51 spent), the fact-embedding check (USD6 for its two arms
 and a USD2 pass ceiling, about USD5.50 expected), setup and failure costs. Those
