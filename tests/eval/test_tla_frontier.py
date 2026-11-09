@@ -6,6 +6,7 @@ from dataclasses import replace
 from decimal import Decimal
 import json
 from pathlib import Path
+import time
 from typing import Literal
 from uuid import uuid4
 
@@ -265,15 +266,23 @@ def _tracked(
     checkpoints: tuple[int, ...] = (),
     *,
     end: Literal["finished", "failed"] | None = "finished",
+    ms_per_update: int | None = None,
 ) -> str:
     """Write a launched run through the worker's path and return its stored name.
 
     A real `RunContext` under the launcher's environment owns the run's name and
-    checkpoint tags, so no fixture states what a worker writes.
+    checkpoint tags. Only the wall clock is injected, so scheduling does not
+    depend on how quickly this host writes the synthetic checkpoints.
     """
     job = TrainingJob.model_validate_json(launched.job.config)
+    label = SMALL if job.regime.agent.hidden_dim == 64 else LARGE
+    if ms_per_update is None:
+        ms_per_update = MS_PER_UPDATE[label]
+    origin_ms = 1_800_000_000_000 if label == SMALL else 1_900_000_000_000
+    wall_ms = origin_ms
     name = uuid4().hex[:12]
     with pytest.MonkeyPatch.context() as environment:
+        environment.setattr(time, "time_ns", lambda: wall_ms * 1_000_000)
         environment.setenv("ETUDE_RUN", name)
         environment.setenv("ETUDE_TRACK_DIR", str(source))
         environment.setenv("ETUDE_JOB_NAME", job.regime.id)
@@ -283,6 +292,7 @@ def _tracked(
             regime=job.regime.id,
         )
         for update in sorted({*rows, *checkpoints}):
+            wall_ms = origin_ms + update * ms_per_update
             context.log_update(
                 rows.get(update, {}), updates=update, transitions=update * 100
             )
@@ -537,11 +547,16 @@ def test_etude_eval_observes_the_runs_training_records(tmp_path: Path) -> None:
     } <= names
 
 
-def test_a_real_run_context_names_its_size_under_a_launcher_id(tmp_path: Path) -> None:
+@pytest.mark.parametrize("small_ms_per_update", [144_000, 864_000])
+def test_a_real_run_context_names_its_size_under_a_launcher_id(
+    tmp_path: Path, small_ms_per_update: int
+) -> None:
     """Stored names are random ids, so the size reads back from checkpoint tags."""
     small, large = runs("HEAD")
     names = {
-        SMALL: _tracked(small, tmp_path, {}, (0, 25), end=None),
+        SMALL: _tracked(
+            small, tmp_path, {}, (0, 25), end=None, ms_per_update=small_ms_per_update
+        ),
         LARGE: _tracked(large, tmp_path, {}, (0, 25), end=None),
     }
     state = observe(tmp_path, EXPERIMENT)
@@ -550,7 +565,23 @@ def test_a_real_run_context_names_its_size_under_a_launcher_id(tmp_path: Path) -
         found = size_run(state, label)
         assert found is not None and found.name == name
         assert not found.ended
-    assert len(evaluation_spec(eval(state)[0]).tournament.matchups) == 5
+    assert tla_frontier.checkpoint_hours(state) == {
+        names[SMALL]: {0: 0, 25: 25 * small_ms_per_update / 3_600_000},
+        names[LARGE]: {0: 0, 25: 3},
+    }
+    expected = {
+        "w64 u0 vs heuristic",
+        "w160l8 u0 vs heuristic",
+        "w64 u25 vs heuristic",
+        "w160l8 u25 vs heuristic",
+        "w160l8 u25 vs w64 u25",
+    }
+    if small_ms_per_update > MS_PER_UPDATE[LARGE]:
+        # The faster large run has a settled equal-hours partner at small u0.
+        expected.add("w160l8 u25 vs w64 u0 at equal hours")
+    assert {
+        m.name for m in evaluation_spec(eval(state)[0]).tournament.matchups
+    } == expected
 
 
 def test_regime_tags_stay_out_of_match_keys() -> None:

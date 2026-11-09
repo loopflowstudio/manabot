@@ -129,6 +129,10 @@ focused tests too. Synthetic scheduling/analysis fixtures must pin both identity
 and schema; test real runtime rejection separately, and keep those fixtures off
 replay, encoding and training paths. Never rewrite frozen protocols to fit the
 current runtime.
+Checkpoint-time scheduling changes also require
+`uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_frontier.py -q`.
+Store synthetic checkpoints with an injected wall clock, and cover both relative
+run speeds; filesystem timing must not decide the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
