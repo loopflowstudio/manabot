@@ -11,6 +11,8 @@ V8 adds ordered program tokens; v7 retains its original reducer and embeddings.
 token rows and its row for the source definition, as fact rows do.
 """
 
+from dataclasses import dataclass
+
 import torch
 from torch import nn
 
@@ -32,6 +34,17 @@ from manabot.model.records import (
     record_indexes,
 )
 from manabot.model.semantic_cards import RecordEmbeddings, RecordNamespace
+
+
+@dataclass
+class _CatalogRecord:
+    """One admitted program, before batch-wide vocabulary lookup."""
+
+    header: torch.Tensor
+    modification: torch.Tensor
+    source: torch.Tensor
+    kinds: torch.Tensor
+    words: torch.Tensor
 
 
 class SharedEffectEncoder(nn.Module):
@@ -59,6 +72,57 @@ class SharedEffectEncoder(nn.Module):
             self.source = nn.Embedding(4096, width)
         self.header = nn.Linear(8 + 2 * width, width)
         self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
+
+    def _details(
+        self,
+        kinds: torch.Tensor,
+        words: torch.Tensor,
+        embedded: torch.Tensor,
+        dtype: torch.dtype,
+    ) -> torch.Tensor:
+        """Retain signed integer/boolean values alongside ordered token identities."""
+        encoded = embedded + self.detail_kind(kinds)
+        if self.version >= 8:
+            signed = torch.where(words >= 2**31, words - 2**32, words)
+            numeric = ((kinds == 14) | (kinds == 15)).unsqueeze(-1)
+            encoded = encoded + self.detail_number(
+                program_number(signed.to(dtype)).unsqueeze(-1)
+            ).masked_fill(~numeric, 0)
+        return encoded
+
+    def _catalog_records(
+        self,
+        records: list[_CatalogRecord],
+        catalog: RecordEmbeddings,
+        dtype: torch.dtype,
+    ) -> list[torch.Tensor]:
+        """Resolve ids together, retaining each program's order and gradients.
+
+        Vocabulary admission synchronizes CUDA with the host. Batching these
+        lookups pays that cost once per family instead of once per effect.
+        Invalid ids still fail through the same catalog admission functions.
+        """
+        modifications = catalog.names(
+            RecordNamespace.TOKEN, torch.stack([r.modification for r in records])
+        )
+        sources = catalog.sources(torch.stack([r.source for r in records]))
+        kinds = torch.cat([r.kinds for r in records])
+        words = torch.cat([r.words for r in records])
+        program = kinds > 10
+        details = modifications.new_zeros((len(kinds), modifications.shape[-1]))
+        details[~program] = catalog.names(RecordNamespace.TOKEN, words[~program])
+        details[program] = catalog.tokens(kinds[program] - 10, words[program])
+        encoded = self._details(kinds, words, details, dtype)
+        parts = encoded.split([len(r.kinds) for r in records])
+        return [
+            torch.cat(
+                (
+                    torch.stack((modifications[i], sources[i], torch.tanh(r.header))),
+                    part,
+                )
+            )
+            for i, (r, part) in enumerate(zip(records, parts, strict=True))
+        ]
 
     def _route(
         self,
@@ -108,6 +172,7 @@ class SharedEffectEncoder(nn.Module):
         results = list(objects.unbind(0))
         all_records: list[torch.Tensor] = []
         all_routes: list[torch.Tensor] = []
+        catalog_records: list[_CatalogRecord] = []
         for b in headers[..., 17].bool().any(-1).nonzero().flatten().tolist():
             live = headers[b, headers[b, :, 17].bool()]
             halves = record_indexes(live[:, :2], 65535, "effect vocabulary half")
@@ -133,9 +198,6 @@ class SharedEffectEncoder(nn.Module):
             if catalog is None:
                 mod = self.modification(modification % 4096)
                 sources = self.source(source % 4096)
-            else:
-                mod = catalog.names(RecordNamespace.TOKEN, modification)
-                sources = catalog.sources(source)
             offsets = record_indexes(
                 live[:, 13:17],
                 max(MEMBER_ROWS, self.detail_rows),
@@ -165,34 +227,22 @@ class SharedEffectEncoder(nn.Module):
                 unsigned = (ids[:, 0] << 16) | ids[:, 1]
                 if catalog is None:
                     detail = self.detail(unsigned % 4096)
-                else:
-                    # Kinds 1-3 name a keyword, subtype or color; 11-19 carry
-                    # a learning token of kind 1-9.
-                    program = kinds > 10
-                    detail = mod.new_zeros((len(kinds), mod.shape[-1]))
-                    detail[~program] = catalog.names(
-                        RecordNamespace.TOKEN, unsigned[~program]
-                    )
-                    detail[program] = catalog.tokens(
-                        kinds[program] - 10, unsigned[program]
-                    )
-                encoded_details = detail + self.detail_kind(kinds)
-                if self.version >= 8:
-                    # Integer/boolean tokens retain signed numeric meaning;
-                    # the GRU retains the ordered shared program structure.
-                    signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
-                    numeric = ((kinds == 14) | (kinds == 15)).unsqueeze(-1)
-                    encoded_details = encoded_details + self.detail_number(
-                        program_number(signed.to(objects.dtype)).unsqueeze(-1)
-                    ).masked_fill(~numeric, 0)
-                records.append(
-                    torch.cat(
-                        (
-                            torch.stack((mod[i], sources[i], torch.tanh(header[i]))),
-                            encoded_details,
+                    records.append(
+                        torch.cat(
+                            (
+                                torch.stack(
+                                    (mod[i], sources[i], torch.tanh(header[i]))
+                                ),
+                                self._details(kinds, unsigned, detail, objects.dtype),
+                            )
                         )
                     )
-                )
+                else:
+                    catalog_records.append(
+                        _CatalogRecord(
+                            header[i], modification[i], source[i], kinds, unsigned
+                        )
+                    )
                 memberships = members[b, m:m_end]
                 targets_index = record_indexes(
                     memberships[:, 0], objects.shape[1], "effect member"
@@ -216,6 +266,9 @@ class SharedEffectEncoder(nn.Module):
                 all_routes.extend(route + b * objects.shape[1] for route in routes)
                 continue
             results[b] = self._route(records, routes, objects[b])
+        if catalog_records:
+            assert catalog is not None
+            all_records = self._catalog_records(catalog_records, catalog, objects.dtype)
         if self.version >= 8 and all_records:
             return self._route(
                 all_records, all_routes, objects.flatten(0, 1)
