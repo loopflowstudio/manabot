@@ -110,6 +110,16 @@ Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 
+**Local-update search.** Run `tests/sim/test_local_update.py`,
+`tests/sim/test_local_update_sampling.py` and
+`tests/sim/test_search_command_evidence.py` together. The core integration job
+includes all three: collection alone cannot check receipt replay, terminal
+frontiers, deadlines or atomic Command rejection. When games are restricted to
+a remote host, defer the game-based cases to that job explicitly.
+Inspect collector fixtures before selecting laptop-safe model tests:
+`SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
+`collect(model, 1)` can play a complete game.
+
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`

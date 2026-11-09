@@ -1,3 +1,5 @@
+#[cfg(feature = "python")]
+use crate::search_state::{identity, SearchStateIdentity};
 use crate::{
     agent::{
         action::{Action, AgentError},
@@ -41,6 +43,8 @@ fn finish_game_step(
     agent: PlayerId,
     done: bool,
 ) -> (Observation, f64, bool, bool, InfoDict) {
+    #[cfg(feature = "benchmark")]
+    let _timer = crate::benchmark_search::Timer::new("returned_observation_build");
     let events = game.take_observation_events();
     let observation = Observation::new(game, &events);
 
@@ -603,6 +607,15 @@ impl Env {
             .map_err(|error| AgentError(error.to_string()))
     }
 
+    /// The exact semantic observation identity, without its composite envelope.
+    pub fn semantic_viewer_state_hash(&self, viewer: usize) -> Result<String, AgentError> {
+        self.game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.semantic_viewer_state_hash called before reset".into()))?
+            .semantic_viewer_state_hash(PlayerId(viewer))
+            .map_err(|error| AgentError(error.to_string()))
+    }
+
     /// Project hidden-hand constraints without enumerating compatible hands.
     pub fn hidden_hand_constraints(
         &self,
@@ -1011,6 +1024,16 @@ impl Env {
         })?;
         game.reseed(seed);
         Ok(())
+    }
+
+    /// Recompute pre-Command identity from the current authority, without views.
+    #[cfg(feature = "python")]
+    pub(crate) fn selected_identity(&self) -> Result<SearchStateIdentity, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.selected_identity called before reset".to_string()))?;
+        Ok(identity(game))
     }
 
     pub fn selected_witness(&self) -> Result<SearchStateWitness, AgentError> {
