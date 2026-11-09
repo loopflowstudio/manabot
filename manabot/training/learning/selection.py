@@ -13,6 +13,7 @@ from torch import Tensor
 
 from manabot.training.learning.health import NumericalHealth
 from manabot.training.learning.returns import terminal_distances
+from manabot.training.rollout.adaptive import AdaptiveDiagnostics
 from manabot.training.rollout.self_play import SelfPlayOutcome
 
 
@@ -127,6 +128,8 @@ def selection_diagnostics(
 
 class UpdateDiagnostics(TypedDict, total=False):
     """Per-iteration measurements, logged once as the update's Etude metrics."""
+
+    adaptive: AdaptiveDiagnostics
 
     self_play_outcomes: list[SelfPlayOutcome]
     numerical: NumericalHealth

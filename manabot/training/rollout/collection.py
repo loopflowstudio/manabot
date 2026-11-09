@@ -35,6 +35,7 @@ import torch
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
+from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
@@ -53,6 +54,17 @@ from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.precision import forward_precision
 from manabot.training.regime import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
+from manabot.training.rollout.adaptive import (
+    AdaptiveConfig,
+    AdaptiveDiagnostics,
+    AdaptiveSampler,
+    AllocationRow,
+    Assignment,
+    ErrorChunk,
+    ExposureRow,
+    GameResult,
+    SamplerState,
+)
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -140,6 +152,7 @@ class _Pending:
     value: float
     action_data: PackedActions
     outcome_probabilities: np.ndarray | None = None
+    assignment: tuple[int, int, int, int] | None = None
 
 
 @dataclass
@@ -197,6 +210,8 @@ class RolloutBatch:
     action_data: PackedActions
     # Collection-time loss/draw/win probabilities [T,E,3], absent for scalar.
     outcome_probabilities: np.ndarray | None = None
+    assignments: np.ndarray | None = None
+    target_residuals: np.ndarray | None = None
 
     def observations(self, indexes: np.ndarray | None = None) -> ActionRows:
         """Materialize only requested flat rollout rows on CPU.
@@ -294,6 +309,15 @@ class CurrentGames:
 
 
 @dataclass
+class AdaptiveSnapshot:
+    config: AdaptiveConfig
+    sampler: SamplerState
+    assignments: list[Assignment]
+    ordinals: list[int]
+    allocations: list[AllocationRow]
+
+
+@dataclass
 class CollectorSnapshot:
     """Private training state. Replay is native execution, not policy inference.
 
@@ -307,6 +331,7 @@ class CollectorSnapshot:
     sampling_rng: torch.Tensor
     stats: CollectorStats
     current_games: CurrentGames | None = None
+    adaptive: AdaptiveSnapshot | None = None
     decks_digest: str | None = None
 
 
@@ -346,7 +371,48 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
         precision: Precision = "float32",
+        adaptive: AdaptiveConfig | None = None,
     ) -> None:
+        if adaptive is not None and (
+            opponent_mode != "self"
+            or learning_seats == "one"
+            or workers != 1
+            or root is not None
+            or matchup_curriculum != "fixed"
+            or recovery_max_microsteps is not None
+        ):
+            raise ValueError(
+                "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
+            )
+        self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
+        self._assignments = (
+            [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
+        )
+        self._ordinals = [0] * num_envs
+        self._results: list[GameResult] = []
+        self._allocations: list[AllocationRow] = []
+        self._uncommitted_batch: RolloutBatch | None = None
+        self._needs_assignment: set[int] = set()
+        self._reverse_cells: list[int] = []
+        if adaptive is not None:
+
+            def identity(config: MatchConfig) -> tuple[object, ...]:
+                return (
+                    config.world,
+                    tuple(sorted(config.hero_deck.items())),
+                    tuple(sorted(config.hero_sideboard.items())),
+                    tuple(sorted(config.villain_deck.items())),
+                    tuple(sorted(config.villain_sideboard.items())),
+                )
+
+            indexes = {identity(cell): i for i, cell in enumerate(adaptive.cells)}
+            for cell in adaptive.cells:
+                reversed_cell = Match(cell).swapped().config
+                if identity(reversed_cell) not in indexes:
+                    raise ValueError(
+                        "both-seat catalogue must include every reverse cell"
+                    )
+                self._reverse_cells.append(indexes[identity(reversed_cell)])
         # The source's identity is fixed for the collector; every snapshot and
         # game attempt records it, so hash it once.
         self._decks_digest = deck_source.digest if deck_source is not None else None
@@ -470,7 +536,14 @@ class SeatRoutedCollector:
                 )
             elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
-            if matchup_curriculum in ("fixed", "elemental-uniform"):
+            if self._sampler is not None:
+                self.stream_matches = [
+                    self._assigned_match(a) for a in self._assignments
+                ]
+                self._env.reset_each_into_buffers(
+                    [m.to_rust() for m in self.stream_matches]
+                )
+            elif matchup_curriculum in ("fixed", "elemental-uniform"):
                 self._env.reset_all_into_buffers(match.to_rust())
             else:
                 self._env.reset_each_into_buffers(
@@ -478,6 +551,9 @@ class SeatRoutedCollector:
                 )
 
             self._refresh_roots(np.arange(num_envs))
+            if self._sampler is not None:
+                for row in range(num_envs):
+                    self._record_assignment(row)
 
             #: Learner seat per stream: stream s seats the learner at s % 2, so
             #: half the streams have the learner on the play — seat-balanced.
@@ -523,6 +599,8 @@ class SeatRoutedCollector:
             raise ValueError("collector recovery is disabled")
         if any(self._streams) or any(p is not None for p in self._pending):
             raise ValueError("collector snapshot requires an update boundary")
+        if self._needs_assignment or self._results:
+            raise ValueError("collector snapshot requires committed adaptive scores")
         return CollectorSnapshot(
             deepcopy(self._journal),
             {key: value.copy() for key, value in self._buffers.items()},
@@ -530,6 +608,15 @@ class SeatRoutedCollector:
             deepcopy(self.stats),
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
+            else None,
+            AdaptiveSnapshot(
+                self._sampler.config,
+                self._sampler.snapshot(),
+                deepcopy(self._assignments),
+                list(self._ordinals),
+                deepcopy(self._allocations),
+            )
+            if self._sampler is not None
             else None,
             self._decks_digest,
         )
@@ -540,6 +627,23 @@ class SeatRoutedCollector:
             raise ValueError("collector deck source identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
+        adaptive = getattr(state, "adaptive", None)
+        if (adaptive is None) != (self._sampler is None):
+            raise ValueError("collector adaptive configuration differs")
+        if adaptive is not None:
+            assert self._sampler is not None
+            if adaptive.config != self._sampler.config:
+                raise ValueError("collector adaptive catalogue differs")
+            if state.current_games is None:
+                raise ValueError("adaptive recovery requires current-game snapshots")
+            self._sampler.restore(adaptive.sampler)
+            self._assignments = deepcopy(adaptive.assignments)
+            self._ordinals = list(adaptive.ordinals)
+            self._allocations = deepcopy(adaptive.allocations)
+            self._refresh_roots(np.arange(self.num_envs))
+            self._env.reset_each_into_buffers(
+                [m.to_rust() for m in self.stream_matches]
+            )
         if state.current_games is not None:
             games = state.current_games
             if (
@@ -602,6 +706,9 @@ class SeatRoutedCollector:
 
         Only `rows` hold new games: a stream's setup is fixed until it resets.
         """
+        if self._sampler is not None:
+            for row in rows:
+                self.stream_matches[row] = self._assigned_match(self._assignments[row])
         if self._uniform_roster:
             # Actual native setups, not indices: they remain exact for any deck
             # the run submitted, even one outside the supply it began with.
@@ -616,7 +723,7 @@ class SeatRoutedCollector:
             )
 
     def _expose(self, row: int, kind: ExposureKind, count: int = 1) -> None:
-        if not self._uniform_roster:
+        if not self._uniform_roster and self._sampler is None:
             return
         a, b = self._self_play_decks[row]
         seat = (
@@ -772,6 +879,8 @@ class SeatRoutedCollector:
         opponent_inference: PolicyInference | None = None,
     ) -> RolloutBatch | tuple[RolloutBatch, RolloutBatch]:
 
+        if self._needs_assignment or self._results:
+            raise ValueError("commit adaptive targets before the next collection")
         start = time.perf_counter()
         env = self._env
         num_envs = self.num_envs
@@ -939,7 +1048,140 @@ class SeatRoutedCollector:
                 batch = self._build_batch(num_steps)
         self.stats.seconds += time.perf_counter() - start
         self._game_start_rows = [0] * len(self._streams)
+        if self._sampler is not None:
+            assert isinstance(batch, RolloutBatch)
+            self._uncommitted_batch = batch
         return batch
+
+    def _record_assignment(self, row: int) -> None:
+        assignment = self._assignments[row]
+        first, second = self._self_play_decks[row]
+        self._allocations.append(
+            AllocationRow(
+                stream=row,
+                game=self._ordinals[row],
+                cell=assignment.cell,
+                seat=assignment.seat,
+                generation=assignment.generation,
+                component=assignment.component,
+                probability=assignment.probability,
+                learner_deck=first if assignment.seat == 0 else second,
+                opponent_deck=second if assignment.seat == 0 else first,
+            )
+        )
+
+    def _assigned_match(self, assignment: Assignment) -> Match:
+        assert self._sampler is not None
+        match = Match(self._sampler.config.cells[assignment.cell])
+        return match if assignment.seat == 0 else match.swapped()
+
+    def _role_cell(self, row: int, seat: int) -> int:
+        assignment = self._assignments[row]
+        return (
+            assignment.cell
+            if assignment.seat == seat
+            else self._reverse_cells[assignment.cell]
+        )
+
+    def _reassign(self, rows: set[int]) -> None:
+        if not rows:
+            return
+        assert self._sampler is not None
+        chosen = {row: self._sampler.draw() for row in sorted(rows)}
+        self._env.reassign_roots_into_buffers(
+            [
+                self._assigned_match(chosen[row]).to_rust() if row in chosen else None
+                for row in range(self.num_envs)
+            ]
+        )
+        for row, assignment in chosen.items():
+            self._assignments[row] = assignment
+        self._needs_assignment -= rows
+        self._refresh_roots(np.array(sorted(rows), dtype=np.int64))
+        for row in sorted(rows):
+            self._record_assignment(row)
+            self._expose(row, "game_roots")
+
+    def commit_adaptive(self, batch: RolloutBatch) -> AdaptiveDiagnostics | None:
+        """Commit pre-filter target errors only after a successful learner update."""
+        if self._sampler is None:
+            return None
+        if batch is not self._uncommitted_batch:
+            raise ValueError("adaptive targets must belong to the uncommitted batch")
+        if batch.assignments is None or batch.target_residuals is None:
+            raise ValueError(
+                "adaptive update requires row identities and actual target residuals"
+            )
+        residuals = np.abs(batch.target_residuals).reshape(-1)
+        labels = batch.assignments.reshape(-1, 4)
+        if len(residuals) != len(labels) or not np.isfinite(residuals).all():
+            raise ValueError("invalid adaptive target residuals")
+        chunks = []
+        for cell in sorted(set(labels[:, 0].tolist())):
+            selected = labels[:, 0] == cell
+            chunks.append(
+                ErrorChunk(
+                    int(cell),
+                    float(residuals[selected].sum()),
+                    int(selected.sum()),
+                    frozenset((int(row[2]), int(row[3])) for row in labels[selected]),
+                )
+            )
+        results = list(self._results)
+        self._sampler.commit(results, chunks)
+        self._results.clear()
+        self._reassign(set(self._needs_assignment))
+        self._uncommitted_batch = None
+        exposures: list[ExposureRow] = []
+        legal_counts = np.diff(batch.action_data.offsets)
+        surprise = -batch.logprobs.reshape(-1)
+        for cell, seat in sorted({(int(row[0]), int(row[1])) for row in labels}):
+            mask = (labels[:, 0] == cell) & (labels[:, 1] == seat)
+            exposures.append(
+                ExposureRow(
+                    cell=cell,
+                    seat=seat,
+                    transitions=int(mask.sum()),
+                    residual_total=float(residuals[mask].sum()),
+                    action_surprise_total=float(surprise[mask].sum()),
+                    legal_offer_total=int(legal_counts[mask].sum()),
+                    forced_actions=int((legal_counts[mask] == 1).sum()),
+                )
+            )
+        allocations, self._allocations = self._allocations, []
+        return {
+            "allocations": allocations,
+            "completed": [
+                dict(
+                    stream=r.game[0],
+                    game=r.game[1],
+                    cell=r.cell,
+                    seat=r.seat,
+                    outcome=r.outcome,
+                )
+                for r in results
+            ],
+            "errors": [
+                dict(
+                    cell=c.cell,
+                    total=c.total,
+                    count=c.count,
+                    games=[list(game) for game in sorted(c.games)],
+                )
+                for c in chunks
+            ],
+            "exposures": exposures,
+            "signal": self._sampler.config.signal,
+            "generation": self._sampler.state.generation,
+            "starts": self._sampler.state.starts,
+            "completed_games": len({result.game for result in results}),
+            "completed_roles": len(results),
+            "matchup_scores": list(self._sampler.state.matchup_scores),
+            "error_scores": list(self._sampler.state.error_scores),
+            "priority_probabilities": list(self._sampler.state.probabilities),
+            "residual_count": len(residuals),
+            "residual_total": float(residuals.sum()),
+        }
 
     def _settle_step(
         self,
@@ -1006,6 +1248,16 @@ class SeatRoutedCollector:
         for row in np.flatnonzero(done):
             winner = infos[row].get("winner_index")
             winner = int(winner) if winner is not None else None
+            if self._sampler is not None:
+                for seat in (0, 1):
+                    self._results.append(
+                        GameResult(
+                            self._role_cell(int(row), seat),
+                            seat,
+                            (int(row), self._ordinals[row]),
+                            0.5 if winner is None else float(winner == seat),
+                        )
+                    )
             self.stats.games += 1
             self.stats.games_by_stream[int(row)] = (
                 self.stats.games_by_stream.get(int(row), 0) + 1
@@ -1060,10 +1312,20 @@ class SeatRoutedCollector:
         if replace.any():
             env.replace_failed_into_buffers(replace.tolist())
         ended = np.flatnonzero(done | failed)
+        if self._sampler is not None:
+            # Adaptive roots: a finished stream waits for its next assignment,
+            # drawn now or after the scores of this update commit.
+            for row in ended:
+                self._ordinals[row] += 1
+                self._needs_assignment.add(int(row))
+            self._reassign(
+                {row for row in self._needs_assignment if not completed[row]}
+            )
         if ended.size:
             self._refresh_roots(ended)
-            for row in ended:
-                self._expose(int(row), "game_roots")
+            if self._sampler is None:
+                for row in ended:
+                    self._expose(int(row), "game_roots")
 
     @contextmanager
     def _native_step_split(self) -> Iterator[None]:
@@ -1199,6 +1461,14 @@ class SeatRoutedCollector:
                     else int(row)
                 )
                 self._pending[slot] = _Pending(
+                    assignment=(
+                        self._role_cell(int(row), int(acting[row])),
+                        int(acting[row]),
+                        int(row),
+                        self._ordinals[row],
+                    )
+                    if self._sampler is not None
+                    else None,
                     obs_row=first + j,
                     action=int(acts[j]),
                     logprob=float(logprobs[j]),
@@ -1260,6 +1530,11 @@ class SeatRoutedCollector:
             else None
         )
 
+        assignments = (
+            np.empty((num_steps, num_envs, 4), dtype=np.int64)
+            if self._sampler is not None
+            else None
+        )
         for env_index in range(num_envs):
             transitions = streams[env_index][:num_steps]
             pending = [transition.pending for transition in transitions]
@@ -1267,6 +1542,9 @@ class SeatRoutedCollector:
                 outcome_probabilities[:, env_index] = [
                     row.outcome_probabilities for row in pending
                 ]
+            if assignments is not None:
+                assert all(row.assignment is not None for row in pending)
+                assignments[:, env_index] = [row.assignment for row in pending]
             obs_rows[:, env_index] = [row.obs_row for row in pending]
             actions[:, env_index] = [row.action for row in pending]
             logprobs[:, env_index] = [row.logprob for row in pending]
@@ -1292,4 +1570,5 @@ class SeatRoutedCollector:
             next_done=next_done,
             action_data=action_data,
             outcome_probabilities=outcome_probabilities,
+            assignments=assignments,
         )
