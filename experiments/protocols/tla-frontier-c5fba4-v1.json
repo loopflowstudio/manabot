@@ -12,7 +12,7 @@
     "num_attention_heads": 8
   },
   "max_commands": 10000,
-  "max_paid_usd": "100",
+  "max_paid_usd": "110",
   "milestones": [
     25,
     50,
