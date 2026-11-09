@@ -7,7 +7,7 @@
   "game_seconds": 600.0,
   "large": {
     "attention_layers": 8,
-    "expected_updates": 129,
+    "expected_updates": 999,
     "hidden_dim": 160,
     "num_attention_heads": 8
   },
@@ -213,7 +213,7 @@
       "second": 53
     }
   ],
-  "regime_sha256": "aea2613052bf8b77851b1fc0db4064b2c6cd113248f713d02ae04acba8a848f7",
+  "regime_sha256": "4fb74dda37a729e5c5ee5ee4065f1bcb604888a755889510233b938a1e90f526",
   "runtime_world": {
     "card_digest": "0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f",
     "world_version": "w17"
