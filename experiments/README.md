@@ -99,6 +99,14 @@ history.
 
 ## Index
 
+[Critic readouts and attention depth, MTG-252](value-readout-252-results.md):
+**completed 2026-11-09** — five arms, three seeds each, 300 updates and 28,200
+valid evaluation games. Depth-4 masked mean/token score 61.0%/61.7% against the
+heuristic, with no clear readout winner. The equal-update depth advantage largely
+disappears at matched measured training hours; no default promotion. Graphs,
+uncertainty, cost limits and the offline HTML report are retained in the data
+manifest under `experiments/data/value-readout-252/`.
+
 [V7 state reduction, GPU horizon](state-representation-gpu.md): **completed
 2026-11-05** — four paired seeds, 256 updates (524,288 training games), 11,264
 replayed evaluation games. No qualified plateau (one of six final-window

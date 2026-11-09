@@ -1,5 +1,16 @@
 # MTG-268 — batched local-update rollouts
 
+## Main sync resolution — 2026-11-09
+
+Assumption (reversible): retain MTG-268's design, measurements and open
+questions as this checkout's scratch context. Main's unrelated MTG-252 and
+continuation notes remain verbatim at
+`add3acbe44790acf891ba96b1541b49eb9133124:scratch/questions.md`.
+Combine the CPU attention compaction regression with main's readout coverage;
+include `attention_readout` in dense/inference parity at both attention depths.
+Validate only that bounded tensor regression after continuing the owned sync;
+full games, training and broader checks remain with gate and CI.
+
 ## Gate result — 2026-11-09
 
 Ready for delivery's required CI, not a claim that all checks have passed.
