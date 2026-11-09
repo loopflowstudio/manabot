@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 
 from duckdb import DuckDBPyConnection
+from etude.eval.convert import convert
 from etude.eval.match import Tables
 from etude.eval.query import statsdb
 from etude.eval.records import (
@@ -318,6 +319,8 @@ def test_curriculum_reader_preserves_retained_025_players_and_native_seats(
     shutil.copytree(fixture, store)
     retained = {path: path.read_bytes() for path in store.rglob("*") if path.is_file()}
     root = store / "mtg183-eval"
+    # Blocks are written beside the retained per-file records, never over them.
+    convert("mtg183-eval", store)
     match = next(
         record.match
         for path in (root / "matches").glob("*.json")

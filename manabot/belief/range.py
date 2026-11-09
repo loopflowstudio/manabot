@@ -220,82 +220,6 @@ class BeliefState:
         updated -= _logsumexp(updated)
         return BeliefState(self.space, model_id or self.model_id, updated)
 
-    def draw_unknown(self, next_space: PossibleWorldSpace) -> "BeliefState":
-        """Convolve one hidden draw and join into the next canonical space."""
-
-        if self.space.pool != next_space.pool:
-            raise BeliefError("hidden draw changed the canonical unseen pool")
-        if next_space.hand_size != self.space.hand_size + 1:
-            raise BeliefError("hidden draw must increase public hand size by one")
-        library_size = self.space.library_size
-        if library_size <= 0:
-            raise BeliefError("cannot draw from an empty hidden library")
-        rows: dict[tuple[tuple[str, int], ...], float] = {}
-        pool = dict(self.space.pool)
-        for world in self.space.worlds:
-            source_mass = float(self.log_probabilities[world.index])
-            if not math.isfinite(source_mass):
-                continue
-            hand = dict(world.hand)
-            for name, available_total in pool.items():
-                available = available_total - hand.get(name, 0)
-                if available <= 0:
-                    continue
-                drawn = dict(hand)
-                drawn[name] = drawn.get(name, 0) + 1
-                key = _row_key(sorted(drawn.items()))
-                contribution = source_mass + math.log(available / library_size)
-                rows[key] = float(np.logaddexp(rows.get(key, -math.inf), contribution))
-        return self._join_rows(next_space, rows)
-
-    def remove_known(self, card: str, next_space: PossibleWorldSpace) -> "BeliefState":
-        """Condition on one named card leaving the opponent's hidden hand."""
-
-        expected_pool = dict(self.space.pool)
-        if expected_pool.get(card, 0) <= 0:
-            raise BeliefError(f"known hand exit for absent card {card!r}")
-        expected_pool[card] -= 1
-        if expected_pool[card] == 0:
-            del expected_pool[card]
-        if tuple(sorted(expected_pool.items())) != next_space.pool:
-            raise BeliefError("known exit does not match the next canonical pool")
-        if next_space.hand_size != self.space.hand_size - 1:
-            raise BeliefError("known exit must reduce public hand size by one")
-        rows: dict[tuple[tuple[str, int], ...], float] = {}
-        for world in self.space.worlds:
-            count = world.count(card)
-            if count <= 0:
-                continue
-            hand = dict(world.hand)
-            if count == 1:
-                del hand[card]
-            else:
-                hand[card] = count - 1
-            key = _row_key(sorted(hand.items()))
-            rows[key] = float(
-                np.logaddexp(
-                    rows.get(key, -math.inf), self.log_probabilities[world.index]
-                )
-            )
-        return self._join_rows(next_space, rows)
-
-    def add_known(self, card: str, next_space: PossibleWorldSpace) -> "BeliefState":
-        """Move one publicly identified card into the opponent's hidden hand."""
-
-        expected_pool = dict(self.space.pool)
-        expected_pool[card] = expected_pool.get(card, 0) + 1
-        if tuple(sorted(expected_pool.items())) != next_space.pool:
-            raise BeliefError("known return does not match the next canonical pool")
-        if next_space.hand_size != self.space.hand_size + 1:
-            raise BeliefError("known return must increase public hand size by one")
-        rows: dict[tuple[tuple[str, int], ...], float] = {}
-        for world in self.space.worlds:
-            hand = dict(world.hand)
-            hand[card] = hand.get(card, 0) + 1
-            key = _row_key(sorted(hand.items()))
-            rows[key] = float(self.log_probabilities[world.index])
-        return self._join_rows(next_space, rows)
-
     def transport(
         self,
         next_space: PossibleWorldSpace,
@@ -303,13 +227,25 @@ class BeliefState:
         known_exits: Iterable[str] = (),
         known_returns: Iterable[str] = (),
         hidden_draws: int = 0,
+        foretold_exits: Iterable[str] = (),
+        hidden_foretells: int = 0,
     ) -> "BeliefState":
-        """Apply canonical public-zone/chance facts, then join the next space."""
+        """Apply canonical public-zone/chance facts, then join the next space.
 
-        if hidden_draws < 0:
-            raise BeliefError("hidden draw count cannot be negative")
+        The foretold slot is hidden but public as a count. ``foretold_exits``
+        are revealed cards leaving the slot (a cast from exile): they leave the
+        pool, not the hand. ``hidden_foretells`` move one unrevealed hand card
+        each into the slot; the card stays in the pool. Which card was
+        foretold is not modelled yet (MTG-215): each hand row loses one card
+        uniformly by count, rows the next space excludes are conditioned
+        away, and later hidden draws treat slot cards like library cards.
+        """
+
+        if hidden_draws < 0 or hidden_foretells < 0:
+            raise BeliefError("hidden draw and foretell counts cannot be negative")
         pool = dict(self.space.pool)
         hand_size = self.space.hand_size
+        foretold = self.space.foretold
         rows = {
             world.hand: float(self.log_probabilities[world.index])
             for world in self.space.worlds
@@ -352,6 +288,42 @@ class BeliefState:
             pool[card] = pool.get(card, 0) + 1
             hand_size += 1
 
+        for card in foretold_exits:
+            if pool.get(card, 0) <= 0 or foretold <= 0:
+                raise BeliefError(f"foretold exit for absent card {card!r}")
+            pool[card] -= 1
+            if pool[card] == 0:
+                del pool[card]
+            foretold -= 1
+            # The revealed copy was never in hand, so hands holding every
+            # remaining copy are no longer possible.
+            remaining = pool.get(card, 0)
+            rows = {
+                key: mass
+                for key, mass in rows.items()
+                if dict(key).get(card, 0) <= remaining
+            }
+
+        for _ in range(hidden_foretells):
+            if hand_size <= 0:
+                raise BeliefError("cannot foretell from an empty hidden hand")
+            next_rows = {}
+            for key, mass in rows.items():
+                for card, count in key:
+                    hand = dict(key)
+                    if count == 1:
+                        del hand[card]
+                    else:
+                        hand[card] = count - 1
+                    target = _row_key(sorted(hand.items()))
+                    contribution = mass + math.log(count / hand_size)
+                    next_rows[target] = float(
+                        np.logaddexp(next_rows.get(target, -math.inf), contribution)
+                    )
+            rows = next_rows
+            hand_size -= 1
+            foretold += 1
+
         for _ in range(hidden_draws):
             library_size = sum(pool.values()) - hand_size
             if library_size <= 0:
@@ -377,12 +349,18 @@ class BeliefState:
             raise BeliefError("transport facts do not match the next canonical pool")
         if hand_size != next_space.hand_size:
             raise BeliefError("transport facts do not match the next public hand size")
-        return self._join_rows(next_space, rows)
+        if foretold != next_space.foretold:
+            raise BeliefError("transport facts do not match the next foretold count")
+        return self._join_rows(
+            next_space, rows, condition_on_support=hidden_foretells > 0
+        )
 
     def _join_rows(
         self,
         next_space: PossibleWorldSpace,
         rows: Mapping[tuple[tuple[str, int], ...], float],
+        *,
+        condition_on_support: bool = False,
     ) -> "BeliefState":
         if (
             next_space.viewer != self.space.viewer
@@ -395,7 +373,7 @@ class BeliefState:
             if world.hand in rows:
                 target[world.index] = rows[world.hand]
                 unmatched.discard(world.hand)
-        if unmatched:
+        if unmatched and not condition_on_support:
             raise BeliefError("probability transport left canonical support")
         target -= _logsumexp(target)
         return BeliefState(next_space, self.model_id, target)

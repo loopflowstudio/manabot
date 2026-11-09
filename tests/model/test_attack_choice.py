@@ -5,14 +5,17 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
-from manabot.env.observation import ACTION_DECLARED_INDEX, ACTION_TYPE_DIM
+from manabot.env.match import Match
+from manabot.env.observation import (
+    ACTION_DECLARED_INDEX,
+    ACTION_TYPE_DIM,
+    ObservationSpace,
+)
 from manabot.experiment.config import Experiment
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import WORLD, checkpoint_world
-from manabot.recipes.ataraxos import ataraxos
 from manabot.training.execution import execute_regime
 from manabot.training.learning.references import reference_distribution
 from manabot.verify.action_cases import (
@@ -22,6 +25,7 @@ from manabot.verify.action_cases import (
     reorder_offers,
 )
 from manabot.verify.store import VerifyStore
+from tests.training.wdl_baseline import wdl_baseline
 
 
 @pytest.fixture
@@ -103,7 +107,7 @@ def test_old_checkpoint_is_rejected_before_loading_weights(
 
 
 def test_historical_recipe_resolves_but_cannot_execute(tmp_path: Path) -> None:
-    baseline = ataraxos()
+    baseline = wdl_baseline()
     recipe = Experiment("historical", baseline).resolve().cases[0].regime
     assert recipe.world == baseline.regime().world == WORLD
     recipe.world = "w4"

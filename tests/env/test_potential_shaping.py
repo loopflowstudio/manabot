@@ -16,9 +16,9 @@ from types import SimpleNamespace
 
 import torch
 
-from manabot.env import Reward, VectorEnv
-from manabot.env.match import Match
+from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
 import managym
 

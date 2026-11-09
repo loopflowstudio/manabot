@@ -9,7 +9,7 @@ import pytest
 
 from academy import server, trace as trace_store
 from academy.server import GameSession
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_index, root
@@ -136,7 +136,7 @@ def test_survival_orders_cross_consumers(
     assert session.env.state_digest() == initial_digest == replay.state_digest()
     evidence = json.loads(
         (
-            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w14.json"
+            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w17.json"
         ).read_text()
     )
     capture = json.loads(env.capture_decision(0).to_json())
@@ -235,19 +235,21 @@ def test_survival_orders_cross_consumers(
         for entry in env.observation_for_player(0).stack_objects
         if entry.description is not None
     }
-    assert stack_descriptions == {
+    # Native skipping may already have resolved what no player could answer.
+    assert stack_descriptions <= {
         label.removeprefix("Put on stack next — ").split(" — event:")[0]
         for label in labels
     }
-    stack_text = capture_text_decision(env)
-    assert stack_text is not None
-    assert all(description in stack_text.text for description in stack_descriptions)
+    if not env.is_game_over():
+        stack_text = capture_text_decision(env)
+        assert stack_text is not None
+        assert all(description in stack_text.text for description in stack_descriptions)
     digest = session.env.state_digest()
     assert session.hero_command(human)["status"] == "duplicate"
     assert session.env.state_digest() == digest
     assert branch.state_digest() == pending_digest
     assert branch.semantic_decision_frame_json() == pending_frame
-    with pytest.raises(Exception, match="stale"):
+    with pytest.raises(Exception, match="stale|match is over"):
         env.execute_semantic_command_json(command)
 
     # Only pass priority until the two trigger resolutions establish the outcome.

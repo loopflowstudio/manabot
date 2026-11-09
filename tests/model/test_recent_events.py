@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.experiment.config import Case, Environment, Experiment, ModelOverride
 from manabot.infra.config import (
     MatchConfig,
@@ -18,10 +20,10 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.recipes.ataraxos import ataraxos
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -38,7 +40,7 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
     torch.set_num_threads(1)
     torch.manual_seed(111)
     settings = ModelConfig.model_validate(
-        {"hidden_dim": 16, "semantic_pack": PACK, "recent_events": True, **kwargs}
+        {"hidden_dim": 16, "world": PACK, "recent_events": True, **kwargs}
     )
     return ActorCritic(space, settings)
 
@@ -48,12 +50,17 @@ def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
         agent.observation_space, _match(), Reward(RewardConfig()), num_envs=1, seed=111
     )
     batch = collector.collect(agent, 16)
-    nonempty = np.flatnonzero(batch.obs["events_valid"].sum(axis=(-1, -2)) >= 2)
+    nonempty = np.flatnonzero(
+        batch.ordered_obs()["events_valid"].sum(axis=(-1, -2)) >= 2
+    )
     assert len(nonempty) > 2, (
         "ordinary semantic collection must retain past public events"
     )
     step = int(nonempty[-1])
-    return {key: torch.from_numpy(value[step]) for key, value in batch.obs.items()}
+    return {
+        key: torch.from_numpy(value)
+        for key, value in batch.observations(np.array([step])).observation.items()
+    }
 
 
 @pytest.mark.parametrize("attention", [False, True])
@@ -141,9 +148,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
-    baseline = ActorCritic(
-        ObservationSpace(), ModelConfig(hidden_dim=16, semantic_pack=PACK)
-    )
+    baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16, world=PACK))
     baseline.load_state_dict(
         {
             key: value
@@ -237,7 +242,7 @@ def test_history_off_and_declarative_identity() -> None:
     tensors.pop("events_valid")
     for left, right in zip(expected, explicit(tensors), strict=True):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
-    base = ataraxos()
+    base = wdl_baseline()
     comparison = Experiment(
         "history-unexecuted",
         base,
@@ -275,7 +280,7 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     with pytest.raises(ValueError, match="history input is selected by ModelOverride"):
         Experiment(
             "bad",
-            ataraxos(),
+            wdl_baseline(),
             overrides=(
                 Environment(observation=ObservationConfig(policy_history_version=1)),
             ),

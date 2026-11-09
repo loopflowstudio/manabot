@@ -14,6 +14,21 @@ offered them. Recovery envelopes make sessions reloadable — including fully
 offline. Schemas and three-language conformance fixtures live in
 [protocol/](../protocol/README.md).
 
+Before choosing an action, read the scheduled turns and extra combats beside
+the turn heading. These are already committed events in execution order;
+later effects can change them. Turns and combats are separate lists. A current
+or pending restricted combat states which creatures may attack; ordinary attack
+offers remain authoritative. After reconnecting, the schedule comes from the
+recovered game state. Older recordings without schedule data say “Schedule not
+recorded,” rather than claiming nothing is scheduled.
+
+When you control another player, the board stays in your perspective. The
+decision context names who chooses for whom and whose resources apply. **Search
+cards** introduces the native search instructions without assuming whose zones
+are searched. Private inspection labels retain each card's owner and zone;
+inspection does not make an opponent's cards yours. Reconnect resumes the
+pending choice with the same legal offers and permitted information.
+
 ## Modules
 
 - **`server.py`**: FastAPI WebSocket server (`/ws/play`) — sessions,
@@ -64,7 +79,7 @@ The Learn demo opens `/?demo=learn`: choose **Take a Lesson**, **Discard and
 draw**, or **Decline Learn**. The first two modes show card previews and a
 Back control; only choosing its explicit offer commits the choice. **New Game** repeats
 the same prefix. The demo fixes UR Lessons in seat 0 against Random GW Allies;
-its [evidence and remaining integration work](../docs/rules/learn-lesson.md)
+its [evidence and remaining integration work](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md)
 are separate from complete-game replay certification.
 
 The table reads **Who decides / What is happening / Your choices**. Inspect any
@@ -78,15 +93,15 @@ types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging. Focusing a legal offer reveals
 its objects' pages without submitting a choice. Public mana
-pools, Lesson restrictions and chooser-only inspected cards come from native
+pools, spending restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.
 
-Academy constructs the native environment with `skip_trivial=False`. With
-automation enabled, sole legal actions for either seat advance through recorded
-authority Commands and appear as **Auto** in the decision log. Disable
-**Advance forced steps and use priority stops** to inspect each forced prompt.
-Priority stop/F6 automation also retains its Commands and automation labels.
-This uses the existing native execution setting; training defaults,
+Academy uses native trivial-decision skipping, like every game runner: the
+engine resolves sole legal actions for either seat, so no forced prompt reaches
+a person or a policy. Disable **Use priority stops** to surface every priority
+window that offers a real choice. Priority stop/F6 automation retains its
+Commands and appears as **Auto** in the decision log; traces from before native
+skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,
@@ -114,7 +129,7 @@ its original address/frame/Command; **Return to live** is a separate destination
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
 Long action lists have an optional **Find an action** filter. See the
-[retained choice positions and local walkthrough](../docs/choice-navigation.md)
+[retained choice positions and local walkthrough](../docs/academy.md#choice-navigation)
 for target, discard, Learn, combat and optional-cost coverage.
 
 Development server without the launcher:
@@ -123,7 +138,7 @@ Development server without the launcher:
 uv run uvicorn academy.server:app --port 8000
 ```
 
-The [local challenger workflow](../docs/local-trained-challenger.md)
+The [local challenger workflow](../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
 Any trained checkpoint is selectable from the Opponent menu. The table
@@ -149,8 +164,8 @@ letting process interrupts escape. Do not broaden gameplay error suppression.
 Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../academy/ui/e2e/) and documented in
-[docs/clean-machine-play.md](../docs/clean-machine-play.md) and
-[docs/experience-proof.md](../docs/experience-proof.md).
+[docs/development.md#clean-machine-play-proof](../docs/development.md#clean-machine-play-proof) and
+[experience proof gate](../docs/academy.md#experience-proof-gate).
 
 ## Watch and recorded bot decisions
 
@@ -170,9 +185,9 @@ marked unavailable. Local-update receipts expose only policy/search vectors
 and an acting-view belief summary, never private sampled hands or branch audits.
 
 `TraceEvent.bot_decision` records the actual policy/value/search outputs at
-choice time. Compound checkpoints record their conditional root-sequence
-factors and values; these are labeled separately from native microchoice
-marginals. Anchors without critics have no value estimate. Watch's acting-view
+choice time. Traces from the removed compound-decision policies may retain
+conditional root-sequence factors and values; these remain labeled separately
+from native microchoice marginals. Anchors without critics have no value estimate. Watch's acting-view
 inspection endpoint never returns the full mixed canonical replay. The separate
 private analysis observation supplies **Show both hands**, available explicitly
 for bot spectators, including during active watches. Active inspection requires
@@ -196,7 +211,7 @@ in the additive `elemental-world-v2` pack, including mirrors. Browse the main
 lists and Lesson pools, click cached card artwork for a printed preview, then
 use the assignment buttons to choose each seat. During play, **Choose decks**
 prepares the next matchup; only **New Game** replaces the current attempt.
-The [local MTG-183 launcher](../docs/local-trained-challenger.md#ten-deck-elemental-play-against-mtg-183)
+The [local MTG-183 launcher](../docs/academy.md#playing-a-trained-challenger)
 pins the latest published checkpoint for CPU play and populates the art cache.
 The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at
@@ -211,10 +226,10 @@ setups, and loaded policies retain that roster for cross-pair and mirror
 admission. Temporary Avatar grants reach both player projections, the shared
 protocol and the card's visible/accessibility label. These changes add no
 human-only choice or extra information. See the
-[Elemental world contract](../docs/rules/elemental/world.md) for evidence limits.
+[Elemental world contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md) for evidence limits.
 
 Optional resolving costs share typed payment progress and effect continuations.
-See [optional payments](../docs/rules/optional-payments.md) for authoring,
+See [optional payments](../docs/engine.md#resolution-contracts) for authoring,
 commitment and frozen-content boundaries.
 
 ## Isolated browser validation
@@ -249,3 +264,6 @@ earlier ones and resolve first if the stack proceeds without responses. The last
 remaining position is forced. Reload restores the actual pending order or target
 decision, or the current stack if placement has finished. A lost response does not
 undo a submitted choice.
+
+For editable file input and development construction rules, see
+[decklist import](../docs/engine.md#decks).

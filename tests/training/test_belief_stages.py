@@ -17,7 +17,6 @@ from manabot.training.regime import (
     Execution,
     Learning,
     TrainBelief,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -89,12 +88,11 @@ def test_belief_dependencies_reject_forward_and_wrong_artifacts() -> None:
         ("ppo", "raw"),
         ("damped_policy", "raw"),
         ("damped_policy", "ema"),
-        ("compound", "raw"),
     ],
 )
 def test_frozen_belief_stages_run_and_reload(
     tmp_path: Path,
-    gradient: Literal["ppo", "damped_policy", "compound"],
+    gradient: Literal["ppo", "damped_policy"],
     weights: Literal["raw", "ema"],
 ) -> None:
     recipe = belief_recipe()
@@ -108,15 +106,6 @@ def test_frozen_belief_stages_run_and_reload(
             gradient="damped_policy", min_advantage=0, advantage_quantile=0
         )
     collection_stage.weights = weights
-    if gradient == "compound":
-        recipe.agent.compound_decisions = True
-        recipe.stages[0] = TrainCompound(
-            id="policy",
-            operation="train_compound",
-            games_per_update=1,
-            learning=Learning(epochs=1, minibatches=1),
-        )
-        recipe = TrainingRegime.model_validate(recipe.model_dump())
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(recipe, 421, tmp_path / "run", store)
         assert run.status == "completed"
@@ -126,7 +115,6 @@ def test_frozen_belief_stages_run_and_reload(
         assert collection.inputs[f"policy/{weights}"] == policy.artifacts[weights]
         loaded, _ = load_checkpoint(policy.artifacts[weights]["path"])
         assert loaded.config.value_kind == recipe.agent.value_kind
-        assert loaded.config.compound_decisions == recipe.agent.compound_decisions
         assert fit.inputs["histories/dataset"] == collection.artifacts["dataset"]
         dataset = read_dataset(Path(collection.artifacts["dataset"]["path"]))
         assert {game.split for game in dataset.games} == {"train", "validation", "test"}
@@ -149,21 +137,26 @@ def test_frozen_belief_stages_run_and_reload(
         assert store.training_run(run.id).stages[-1].artifacts == fit.artifacts
 
 
-def test_compound_belief_recipe_rejects_missing_ema_and_flat_training() -> None:
-    recipe = belief_recipe()
-    recipe.agent.compound_decisions = True
-    with pytest.raises(ValueError, match="compound stages"):
-        TrainingRegime.model_validate(recipe.model_dump())
-    recipe.stages[0] = TrainCompound(id="policy", operation="train_compound")
-    collection = recipe.stages[1]
-    assert isinstance(collection, CollectBelief)
-    collection.weights = "ema"
-    with pytest.raises(ValueError, match="EMA policy artifact"):
-        TrainingRegime.model_validate(recipe.model_dump())
-    collection.weights = "raw"
-    recipe.stages.append(TrainSelfPlay(id="flat", operation="train_self_play"))
-    with pytest.raises(ValueError, match="compound policy stages"):
-        TrainingRegime.model_validate(recipe.model_dump())
+def test_removed_compound_policies_fail_validation_clearly() -> None:
+    """Saved compound regimes never load as flat policies or unknown stages."""
+    ordinary = belief_recipe().model_dump(mode="json")
+    assert "compound_decisions" not in ordinary["agent"]
+    explicit_off = json.loads(json.dumps(ordinary))
+    explicit_off["agent"]["compound_decisions"] = False
+    assert TrainingRegime.model_validate(explicit_off) == TrainingRegime.model_validate(
+        ordinary
+    )
+    compound_agent = json.loads(json.dumps(ordinary))
+    compound_agent["agent"]["compound_decisions"] = True
+    with pytest.raises(ValueError, match="no longer executable.*ba3cd58de"):
+        TrainingRegime.model_validate(compound_agent)
+    compound_stage = json.loads(json.dumps(ordinary))
+    compound_stage["stages"][0] = {"id": "policy", "operation": "train_compound"}
+    with pytest.raises(ValueError, match="no longer executable.*ba3cd58de"):
+        TrainingRegime.model_validate(compound_stage)
+    with pytest.raises(ValueError, match="no longer executable"):
+        ModelConfig.model_validate({"compound_decisions": True})
+    assert ModelConfig.model_validate({"compound_decisions": False}) == ModelConfig()
 
 
 def test_failed_belief_collection_keeps_frozen_policy(tmp_path: Path) -> None:

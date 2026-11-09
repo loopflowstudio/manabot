@@ -67,6 +67,11 @@ checkpoints or experiment evidence.
   `managym/README.md`). Avoid transient comments that denote changes; pay
   attention to file headers and README content; propose small, iterative
   changes.
+- Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
+  Compose builtin graphs; use narrowly named forks for domain review placement.
+  Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
+  A nested software verification step must not complete a parent experiment
+  before its scientific outcome; see [work boundaries](docs/workflows.md).
 
 ### Python structure and documentation
 
@@ -86,6 +91,12 @@ checkpoints or experiment evidence.
 - Put imports at the top; use explicit imports and underscore-prefixed private
   helpers. Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
+- Import names from their defining modules (`manabot.env.observation`, not
+  `manabot.env`); package `__init__` files re-export nothing, so evaluation
+  game and replay children stay Torch-free
+  (`tests/test_package_boundaries.py` enforces the child modules). Launch
+  evaluation children with `manabot.sim.child.ChildProcess`, not
+  `multiprocessing` spawn, which re-imports the parent's `__main__`.
 
 ### Python typing
 
@@ -107,6 +118,84 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Native scalar/vector observation buffers bind continuation input semantics by
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
+  remains column 31. Waiting delayed triggers are v5 relation frames (kind
+  10, after stack/decision frames); scheduled turns and combats follow as kinds
+  11/12. V2–v4 encode none of these v5 frames. V5 widens player rows to 73, card rows to 56 and
+  permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
+  `facts` block (128 × 12, one row per `FactKind` fact about a player or
+  permanent). Open-ended vocabularies (counter kinds, added subtypes, set
+  names, used abilities, continuous-effect records, copy effects and their
+  exceptions) are fact kinds, never columns. Preserve the frozen widths and
+  derive buffers from `ObservationSpace`. V6 retains those columns and serializes
+  `max_facts` (fresh default 512); v5 stays fixed at 128. Scalar/vector native
+  buffers read capacity from the fact axis; a 128-row v6 buffer encodes exactly
+  like v5. Model timestamp normalization remains rank / 128 in both versions,
+  independent of capacity. Legacy configurations omit `max_facts`.
+  Native buffer binding derives card, permanent, action, focus and event capacities
+  from the supplied `ObservationSpace` arrays on both scalar and vector paths.
+  Companion shapes must agree before writes. Event width selects legacy events
+  or public history; only public history has the 32-row bound. Relation and
+  shared-effect axes stay version-fixed. Never replace a supplied capacity with
+  a native default. Overflow rejects by default. Jack Heart's 2026-11-04 TLA
+  pilot exception explicitly selects `action_overflow=first-legal` with 64
+  policy slots and aggregate replay-linked diagnostics; native legality and
+  Academy retain all choices. Preserve prefix indices/Commands and frozen
+  configurations; an omitted overflow policy still means error.
+- New observation state reaches the policy input (native and Python encoders
+  in parity), the LLM text observation and the learning tokens in the change
+  that adds it; a frozen policy-input version never silently falls behind.
+  `managym/cards/tests/cards/observability.rs` names each `Observation` field's
+  tensor columns or fact kind and fails to compile when a field is unlisted.
+- Decklist disclosure (open by default, or closed) lives on native
+  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
+  `GameConfig.decklists`. Observations, search and possible worlds read it
+  through `Game::decklist_known`/`require_open_decklist`; never filter decklist
+  information in an encoder or the browser. V5 encodes the lists in the
+  `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
+  Academy's server keeps a closed opponent's deck name, the matchup's asset pack
+  and unseen definition names out of its frames and viewer trace exports.
+- Explicit input v7 retains the v5 object/relation widths but moves active
+  effects out of local facts: `effects` is 128 × 18, `effect_details` 512 × 3,
+  `effect_members` 2048 × 2. Headers own bounded offset/count slices; members
+  retain one-based public object joins and original record ordinals. Native
+  projection owns complete payloads, controller and exact source incarnation;
+  the model routes shared vectors before attention, preserving duplicate edges.
+  V1–v6 remain frozen and fresh defaults remain v6. Allocate and collect every
+  key from the selected `ObservationSpace`, never a global default key list.
+- Explicit input v8 preserves v7 object/relation/shared header/member widths,
+  with 4096 × 3 effect details. Detail kinds 11–19 carry learning-token kinds
+  1–9 and exact signed i32 values in two 16-bit halves. Local fact kinds 11–14
+  carry copy-exception programs, changed colors, keyword-counter timestamps,
+  and captured continuation programs (frame index + 1, token kind/value/ordinal).
+  V8 defaults to 512 local facts; v7 retains 128 and fresh input remains v6.
+  Shared admission rejects new unrepresentable layer payloads on v1–v7 before
+  either encoder writes buffers. A stacked activation owns its chosen effects;
+  catalog joins are observation provenance, never resolution lookup authority. V8
+  also carries effect execution as a separate fact-kind-14 occurrence (ordinal
+  reset), with one-based visible reference slots in relation kind 10. The native
+  frame/batch owners project rules payloads; raw storage identities never enter
+  these tokens. Frozen selection obligations retain codes 5/6/7 on v1–v7, while
+  v8 uses 28. Earlier instructions' results (selected, moved, created) stay out
+  of v1–v7, which remain admissible; open event batches, iterations and new
+  completions are novel and reject earlier inputs before buffer writes;
+  fact/relation overflow is a typed Capacity error, never truncation.
+- Naming is ordinary native decisions: `Decision::NameCard` holds a
+  `NameScope`; scopes over `NAME_BRANCHING` (64) names offer balanced groups of
+  sorted names, and only a name choice commits. Explicit input v9 retains v8
+  layouts and adds `name_candidates[A,4]` at ordinary action capacity: name row,
+  optional definition reference, then a group's first and last name rows, all
+  one-based. V1–v8 carry no name identity and see naming prompts as anonymous
+  modal choices. Names are not game objects; do not use card slots or invent
+  definitions for them. Native scalar/vector paths select v9 from this buffer's
+  presence. V1–v8 and fresh v6 defaults remain unchanged.
+- Fact and shared-effect ids on v8/v9 read the card encoder's token rows
+  (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
+  regimes); native `agent/record_vocabulary.rs` lists every name the encoders
+  hash, so a new hashed name must appear there or the policy rejects it.
+  Checkpoints keep hashed ids: load through `ModelConfig.from_checkpoint` and
+  save `checkpoint_payload()`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -121,15 +210,35 @@ checkpoints or experiment evidence.
   Never emit an un-uv'ed Python command in docs, scripts, or instructions.
 - Python is pinned to 3.12 (PyO3 caps at 3.13; the venv is 3.12). Fresh venvs:
   `uv venv --python 3.12`.
-- After changing Rust under `managym/src`, rebuild from the repository root so
+- After changing Rust under `managym/` (the engine, `state/` or `cards/`), rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
-  `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
+  `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
   `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
+
+## Decision ownership
+
+`TurnState.active_player` / `Game::active_player()` identifies whose turn it is.
+Native `Decision.player()` and `Action.player()` identify whose rules decision,
+actions and resources apply. Published `ActionSpace.player` identifies the
+chooser: `publish_action_space` resolves control once from the legal actions.
+Env dispatch, observations and Command/offer actors read that chooser directly;
+never remap it again. Player control grants in-game inspection through native
+`shares_information`, never private sideboard access or outside-game selection.
+
+## Forced decisions
+
+Every game runner, benchmark and Academy session uses native trivial-decision
+skipping (`skip_trivial`, on by default); a decision with one legal action is
+never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+Turning it off is for explicit debugging only. Outside tests, the only code
+that does is the constructed-position fixtures listed in
+`tests/env/test_skip_forced_decisions.py`; they play no game for a person,
+model or policy.
 
 ## Testing
 
@@ -138,13 +247,21 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-Read [validation by change area](docs/development/validation.md) for the
+Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
+
+Use distinct Python test filenames across test directories: the configured
+pytest import mode shares their module namespace, so duplicate basenames fail
+collection even when the tests pass individually.
 
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
   exposes `PyAgentError` / `PanicException`. Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
+- Frozen experiment scheduling/analysis tests use an explicit compatible-world
+  fixture for synthetic outcomes, with separate real-runtime rejection tests.
+  Pin declared input capacities rather than inheriting fresh defaults; never
+  rebind frozen protocols or run games/training under the fixture identity.
 - Experiment results under `experiments/data/` live in the artifact store. Before
   committing new results or merging a branch that tracked them, publish their
   bytes with `uv run --extra artifacts python -m manabot.data publish <path>`,
@@ -157,7 +274,20 @@ checks required by the affected package and workflow.
   Validate dependency changes in an isolated environment so locally installed
   extras cannot hide missing CI dependencies:
   `uv run --isolated --extra dev --extra artifacts pytest tests/training/test_artifact_storage.py tests/training/test_etude_sdk.py tests/training/test_etude_source.py tests/training/test_etude_job.py -q`.
-- **CI runs `cargo test` in debug, so validate in debug before landing.**
+- Engine speed is budgeted in CI: `Engine Budget` runs `bench_search` and
+  `bench_steps` in release for the change and for the reference commit of
+  `managym/perf/baseline.json` on one runner, and fails a PR more than 10%
+  slower than the reference or with a changed search/decision digest. A moved
+  digest (a rules change reaching the curated decks, or a change to the
+  benchmarks or curated lists), an accepted cost or a kept speedup moves the
+  reference by adopting the PR's own run (`gh run download`, then
+  `scripts/engine_budget.py record --reason`); a reference that no longer
+  builds with the change's benchmarks is recorded the same way
+  ([engine performance budget](docs/development.md#engine-performance-budget));
+  wall time is never compared across runners.
+- **CI runs the Rust suite in debug, so validate in debug before landing.**
+  The dev profile is opt-level 1 with debug assertions on; CI runs it with
+  `cargo nextest run --profile ci`, which terminates any test after 5 minutes.
   `cargo test --release` alone is not enough: the engine guards its invariants
   with `debug_assert!`, which compiles out of release entirely, so a test can
   pass green in release and still fail CI. `create_token` is the live example —
@@ -169,7 +299,157 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
+### Card definitions
+
+Each card is one function in the set file of its first printing under
+`managym/cards/src/` (the `managym-cards` crate; keys `<set>.<card>`; basics
+are `lea.*`), returning the engine's own `CardDefinition` written in its rules
+types (`Effect`, `Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`,
+`TriggerCondition`, …), which live in the `managym-state` crate
+(`managym/state/`) and are re-exported as `managym::state`. The engine reaches
+the sets only through `managym_cards::catalog()`. Keywords are `Keyword`
+variants held in a `Keywords` set (`Keywords::of(&[Keyword::Flying])`);
+counters are `CounterKind` entries stored sparsely on the permanent.
+That value is the only card representation: there is no authoring language,
+compiler, IR or card JSON. `CardDefinition` holds identity, characteristics and
+ability/cost lists; a static ability or additional cost is a variant of
+`StaticAbility` or `AdditionalCost`, never a new field. Every token is a
+`CardDefinition` with `is_token: true` in `managym/cards/src/tokens.rs` (keys `token.*`,
+Scryfall id of its first token printing). Add the function to its set file's `cards()`. New behavior is a new
+rules-type variant (with a directed test in `managym/cards/tests/cards/<set>.rs`), never
+card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
+id of the printing in its set file (`tests/cards/scryfall.rs` in the cards crate
+checks shape and uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
+online, never in CI). Rebuild the extension after card changes.
+
+Subtypes stay printed names; `managym/state/src/subtype.rs` is the one CR 205.3
+table of their categories. Add a new subtype there (the cards crate's
+`every_authored_subtype_has_a_category` fails otherwise), and read creature
+types through `is_creature_type`, never by excluding other subtypes.
+
+Declare a parameterless keyword once in the rules enum's `keywords!` declaration
+and use `Keywords::of`. Storage grows with the vocabulary; append variants to
+preserve present-keyword serialization order and values. When changing storage,
+test membership, union, removal and copy independence across word boundaries
+without inventing mechanics, widening frozen observations or regenerating
+evidence to hide a regression. A new mechanic still needs behavior, learning
+tokens and every shared observation path; non-evergreen kinds use fact rows.
+
+Learning tokens derive from the same definitions (`cards/tokens.rs`,
+`managym.learning_catalog`), so a new variant reaches the policy without a
+vocabulary edit. Every mechanic must be observable in both the observation
+tensor and the tokens: extend the exhaustive guards in
+`managym/cards/tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
+`TriggerCondition`, `Ability`, `StaticAbility`, `AdditionalCost`) and give the
+mechanic a directed test there. Static and cost rows name a real card and its
+behavior test in `tests/cards/<set>.rs`, which the guard checks.
+
+Support is definition: the world pool is every defined card from every set.
+Defined non-token cards are supported for deck entry; tokens, rules fixtures
+and unknown cards are rejected. Restrict to a set with `world::set_cards` /
+`managym.set_cards`, never with per-pack membership lists. Tests never qualify
+or gate a card. Jack Heart clarified on 2026-11-03 that known rules bugs must
+not block previously playable cards from play; track those defects as bug
+Tasks. Playable does not mean bug-free. A test about one card goes in
+`managym/cards/tests/cards/<set>.rs`, the set file of that card; engine rules
+stay in `managym/tests/rules/`, and shared scenario helpers live in
+`managym/tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+a local `text_box` binding so rustfmt can format the definition.
+The default pack registers every definition in name order (`cards/content_pack.rs`).
+Card tests mirror the set files: `managym/cards/tests/cards/<set>.rs`, one module
+per set under the single `tests/cards.rs` target of the cards crate (the engine is
+its dev-dependency). Both test targets mount the engine's `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
+primitive defined once. `five_color_setup` decks hold four copies of each listed
+name; a fifth `force_permanent_on_battlefield` of that name returns an existing
+copy, so list another card when a test needs more. `inspect::keywords` reads
+printed and until-end-of-turn keywords only; assert static grants through the
+observation. `force_permanent_on_battlefield` places a permanent without an
+entry event (no triggers or turn history); `enter_and_settle` and
+`play_and_settle` enter through the zone move.
+
+A permanent's characteristics after continuous effects (name, types, colors,
+keywords, static/triggered/activated abilities, power/toughness) are one view,
+`Game::characteristics(id)`, which applies static abilities and effect records
+in layer, dependency and timestamp order; callers read its fields, and rules
+questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
+Its `activated_abilities` follow layer/timestamp order; activation, payment and
+offer code indexes only that list, never `card.activated_abilities`. Resolution
+consumes the effects captured at activation. `flow/layers.rs::Context` evaluates
+the board without calling the public view; `flow/statics.rs` caches that board
+and finalizes activation costs and dynamic mana outputs. Each immutable view is
+shared as an `Arc<Characteristics>`. Whole-board readers use `characteristics_many`
+(or internal `layer_views` when activation finalization is unnecessary), preserving
+their input order and validating the shared board once per immutable scan.
+`Game::state` is a `TrackedState` with
+`Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
+advances every counter, and its typed accessors (`tap`, `mark_damage`,
+`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+their field feeds. Tap/untap advances `tapped`; layers retain their board only
+when no discovered scope, condition or value predicate reads tap state. Removing
+a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
+layer, static condition or trigger source reads the field; debug builds
+recompute every cached view and index on read and assert they match, so a
+misclassified accessor fails `cargo test` in debug. A `BoardScan` narrows this
+for the raw layer board only: it validates the board when it begins, and its
+shared borrow excludes writes, so reads inside it skip the repeat. Hold one
+across `&self` code that reads the board per source or per ability. Continuous-effect records
+live in `EffectRecords` (indexed by affected object and player); trigger
+sources are looked up per event kind through `TriggerIndex`
+(`flow/triggers.rs`), invalidated by trigger and layer dependencies; departed-object
+facts are an `ObjectLkiLog`. A cloned `Game` carries these caches.
+Layer rebuilds reuse immutable copiable source objects and static plans, bound to
+exact definition identity, incarnation and timestamp; copy/transform definition
+changes invalidate that source. Intermediate layer objects detach on writes.
+Conservative characteristic read/write summaries skip impossible dependency
+probes; plausible pairs still compare instructions and generating-ability
+existence. Debug rebuilds source plans independently and checks skipped pairs.
+Static abilities of one source share a timestamp and apply in definition order,
+so a definition lists an ability loss before the grant it keeps (Honest Work).
+A change that lasts until end of turn, or for any other duration, is an
+`Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
+`flow/effects.rs`), never a new `Permanent` or `Player` field.
+
+An `Effect` is a verb over an `ObjectSelector` (`This`, `Target(spec)`,
+`Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `You`,
+`Chosen { predicate, except }`, `Each { of: Scope, predicate, except,
+max_mana_value }`), never a `<Verb><Object>` or `<Verb>All` variant:
+`PutCounters { on }`, `Sacrifice { what }`, `Move { what, to }`, `Tap { what }`,
+`Destroy { what }`, `DealDamage { amount, what }`, `ApplyContinuous { affected }`.
+"Each creature" is the verb over `Each`; "all other" is `except: Target`;
+"another" is `except: This`. One resolver, `Game::select`, names the objects
+(last known information for `This` after the source leaves); `Chosen` suspends
+the instruction on `Decision::ChooseObject` for any verb ("tap a creature you
+control"); a verb that depends on which object it hit is an `If` composition,
+and "if you do" is `Condition::Moved` over the frame's latest `Move` or
+`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Amounts are
+`EffectValue` (`Fixed(n)` or read at resolution); a verb never has a
+`<Verb>Value` twin. Use the constructors (`Effect::exile`, `return_to_hand`,
+`put_counters`, `destroy`, `deal_damage`, `gain_life`, `discard`,
+`create_tokens`, `add_mana`, `sacrifice_this`, `may_sacrifice`, `if_you_do`,
+`ObjectSelector::each_you_control`, `chosen`) in card code and write the full
+`Effect::Move { .. }` literal only for `under`, `with_counter` or `linked`.
+A stack ability is no card object, so `CounterAbility` reads the clause's
+`Target` directly; `Destroy` over several objects is one simultaneous event
+with pre-batch trigger sources.
+
+Activated abilities that function from hand or graveyard set
+`ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
+`Action::ActivateCardAbility`. An ability's index is its position in
+`activated_abilities`.
+
+Fixed mana abilities on a card are additive: multiple fixed productions
+produce all listed colors together. A land that produces one chosen color uses
+one activated modal mana ability, not multiple fixed mana abilities. Verify each
+choice by paying a real cost and checking the remaining mana.
+
 ### Etude card evaluation
+
+Etude discovers experiment files with `runpy`; pass evaluation callbacks from
+their canonical importable module, not the discovery file's `<run_path>`
+namespace. Exercise discovery with `read_experiment` in runner tests, or
+`etude.launch.job_file.read_job_file` for a launch file with no `eval`. Local
+evaluation must supply `ETUDE_OUTPUT_DIR` when its callback writes replay evidence;
+only launched jobs receive that directory automatically.
 
 Etude hashes tracked source paths (`git add -N` admits new files for local
 implementation checks). Eval runs are sealed blocks: each game's card evidence
@@ -186,6 +466,10 @@ Etude evaluation tables use `seat` for the participant's index in
 Join results to `seats` on `(run, match, seat)` and to `players` on `player`;
 group native play/draw reports by `game_seat`. Etude's conversion owns the
 historical `player`/`seat` column rename; never rewrite retained tables for it.
+Every Etude result row names a participant `seat` or a declared `group`; use
+`group: all` for a receipt covering the whole match. `card_plays.game` is the
+native trace's game ID, not its leg index; join evaluator rows to retained card
+blobs by `trace_sha256` within the match, then validate the blob's deal and leg.
 
 ### Offline inference reports
 

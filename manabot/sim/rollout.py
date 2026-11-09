@@ -1,6 +1,6 @@
 """Batched policy inference for rollouts: evaluation and search.
 
-Exp-07 (wave/intelligence C7, goal 1). The historical net-in-loop path ran one
+Exp-07 (goal 1). The historical net-in-loop path ran one
 forward pass per decision at tiny batch (2.0k SPS at 16 envs, 97% of step
 time in torch — experiments/sps-closeout.md). This module makes batching the
 default for every policy-in-the-loop consumer:
@@ -25,8 +25,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.env import Env, Match, ObservationSpace
+from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
@@ -35,9 +37,6 @@ from manabot.sim.search.flat_mc import (
     GameRecord,
     SearchStats,
 )
-
-OBS_KEYS: tuple[str, ...] = tuple(ObservationSpace().shapes.keys())
-
 
 # -----------------------------------------------------------------------------
 # Batched action selection
@@ -161,7 +160,7 @@ def run_vector_games(
     env steps (decisions surfaced).
     """
 
-    from manabot.verify.util import INTERACTIVE_DECK
+    from manabot.verify.games import INTERACTIVE_DECK
 
     deck = dict(deck or INTERACTIVE_DECK)
     obs_space = ObservationSpace()

@@ -10,20 +10,15 @@ import numpy as np
 from pydantic import JsonValue
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.match import play_cell
 from manabot.infra.config import MatchConfig
-from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.execution import EvalAllocation, EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import (
-    DecisionRequest,
-    PolicyAdmission,
-    PolicyKey,
-    PolicyStore,
-    _infer,
-)
+from manabot.sim.serving import PolicyStore, _infer
+from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 if TYPE_CHECKING:
     from experiments.inference_baseline import Cell, PolicyWorkload, Protocol
@@ -49,9 +44,9 @@ def execute(
     if len(request.deal_seeds) > 4 or not set(workload.legs) <= set(request.legs):
         raise ValueError("invalid bounded deal/leg selection")
     compute = (
-        EvalCompute.model_validate_json(cell.execution.read_bytes())
+        EvalAllocation.model_validate_json(cell.execution.read_bytes())
         if cell.execution
-        else EvalCompute(
+        else EvalAllocation(
             max_active_games=1,
             max_batch_rows=1,
             max_delay_seconds=0,
@@ -98,7 +93,7 @@ def execute(
         max_commands=request.max_commands,
         matchup_mode=request.matchup_mode,
         authored_matchup=request.authored_matchup,
-        execution=execution if cell.execution else None,
+        execution=execution,
         legs=workload.legs,
         keep_game_logs=True,
     )
@@ -199,11 +194,7 @@ def _retained(
                 requests = [
                     DecisionRequest(
                         str(i),
-                        str(roots[i][0]["match_id"]),
-                        0,
-                        int(roots[i][1]["revision"]),
                         PolicyKey.from_registration(player, execution),
-                        i,
                         seeds[i],
                         observations[i],
                         execution.deadline_unix,

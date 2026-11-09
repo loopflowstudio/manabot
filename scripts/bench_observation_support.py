@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.env import VectorEnv
+from manabot.env.vector_env import VectorEnv
 import manabot.managym._managym as native
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
@@ -69,7 +69,7 @@ def identity() -> dict[str, object]:
 
 
 def _root(large: bool) -> managym.Env:
-    env = managym.Env(seed=23, skip_trivial=False)
+    env = managym.Env(seed=23)
     deck = {"Swamp": 20, "Deadly Precision": 40, "Gray Ogre": 4}
     obs, _ = env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])
     for _ in range(20):

@@ -109,6 +109,15 @@ class EvalPerformance:
                     )
                 )
 
+    def measure(self, name: str, seconds: float) -> None:
+        """Accumulate a high-frequency, non-partitioning interval without a span."""
+        if not self.enabled:
+            return
+        with self._lock:
+            self.measurements.setdefault(
+                name, Measurement(partitions_elapsed=False)
+            ).observe(seconds)
+
     @contextmanager
     def span(
         self, name: str, *, request: str | None = None, batch: str | None = None

@@ -12,12 +12,12 @@ import torch
 
 from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_indexes
 from manabot.belief.range import BeliefState
-from manabot.sim.search.teacher1_evidence import _fresh_env
 import managym
+from tests.belief.fresh_env import fresh_env
 
 
 def test_prepared_python_handle_preserves_scalar_parity_and_live_root() -> None:
-    engine = _fresh_env(79)._engine
+    engine = fresh_env(79)._engine
     space = PossibleWorldSpace.from_engine(engine, 0)
     scalar = [space.materialize(index, seed=100 + index) for index in (0, 1, 2)]
     with pytest.raises(Exception, match="space identity mismatch"):
@@ -272,7 +272,7 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
 
@@ -329,7 +329,7 @@ def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
 
 
 def test_handle_keeps_its_root_alive_after_python_owner_is_released() -> None:
-    engine = _fresh_env(79)._engine
+    engine = fresh_env(79)._engine
     space = PossibleWorldSpace.from_engine(engine, 0)
     expected = space.materialize(0, seed=100).state_digest()
     prepared = engine.prepare_possible_world_materializer(0, space.identity, 1)

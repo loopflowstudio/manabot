@@ -1,6 +1,6 @@
 # MTG-175: curriculum selection on the MTG-183 training recipe
 
-Direction updated by Jack Heart, 2026-10-26: build on MTG-183. The intended
+Updated 2026-10-26: the study builds on MTG-183. The intended
 outcome remains an actual report comparing uniform U, moderate-matchup M,
 value-error E, and their equal-rank mixture ME, at **$10 inclusive per arm,
 $40 total**. The October 27 amendment below defines reuse and reservations.
@@ -97,8 +97,8 @@ do not restore superseded training, provider or evaluation modules wholesale.
 
 ## Superseding allocation and reuse amendment — 2026-10-26/27
 
-Jack Heart raised the cap to **$10 inclusive per arm, $40 total**, and directed
-reuse of MTG-183 as an arm where possible. This amendment supersedes the $5/$20
+The cap is **$10 inclusive per arm, $40 total**, with
+MTG-183 reused as an arm where possible. This amendment supersedes the $5/$20
 allocation and the earlier fresh-U requirement. No paid curriculum arm had started.
 
 **U is the first MTG-183 window**, `mtg183-elemental-long-w1`, training seed
@@ -135,9 +135,12 @@ All three use seed 18301, the exact saved U initialization (SHA-256
 `1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688`), and the
 frozen v1 observation input. A fresh current model is not assumed to reproduce
 historical weights: the actual immutable checkpoint is a digest-checked job
-input. Adam, EMA and schedules start fresh at update zero. Current saved-recipe
-round trips must preserve the omitted v1 version through
-`ObservationConfig.from_checkpoint`; the current fresh v2 default is not used.
+input. Adam, EMA and schedules start fresh at update zero. The campaign ran
+from the frozen runtime named below, where saved-recipe round trips preserved
+the omitted v1 version. Current Manabot reads an omitted version in a saved
+recipe as the current input, so `experiments/curriculum_adapters.py` on main
+is a record of the study; reproduce it from that runtime, not by relaunching
+it from main.
 
 The proposed jobs target **1,400 updates**, export every 50, and have 15-hour
 maximum allocations with the recipe's setup/finalization reserves. Etude SDK
@@ -287,8 +290,8 @@ operational history. The timed-out U-initial point remains withheld from replay.
 
 ## Additional batched GPU evaluation allowance (2026-10-27)
 
-Jack authorized an additional **$10 total evaluation budget**, separate from
-the existing arm allocations, for rented GPU evaluations using the shared
+An additional **$10 total evaluation budget**, separate from
+the existing arm allocations, covers rented GPU evaluations using the shared
 batched evaluator. Reserve $0.50 for ancillary costs; admit at most $9.50 of
 rental ceilings across these jobs, including setup and delivery. Failed actual
 attempts consume this allowance; no automatic replay of failed games.

@@ -5,18 +5,20 @@ Source identities bind relative paths as well as bytes; relocating source change
 identity and never grants automatic admission to an older execution.
 """
 
+from collections.abc import Iterable, Mapping
 import hashlib
 import json
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ActionEnum
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -127,6 +129,20 @@ def runtime_fingerprints(
         "matchup_sha256": canonical_sha256(matchup.model_dump()),
         "matchup": matchup.model_dump(),
     }
+
+
+def authored_matchup_sha256(identities: Mapping[str, Any], consumer: str) -> str:
+    """The authored setup a run trained on, for consumers registered against one.
+
+    A deck run draws from a source (`deck_source_sha256`) and has no single
+    matchup; such consumers reject it rather than read a representative pair.
+    """
+    if "deck_source_sha256" in identities:
+        raise ValueError(
+            f"{consumer} requires an authored matchup; this run drew decks from "
+            f"source {identities['deck_source_sha256']}"
+        )
+    return identities["matchup_sha256"]
 
 
 def validate_runtime_fingerprints(

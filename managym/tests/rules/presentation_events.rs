@@ -3,11 +3,15 @@ use managym::flow::{
     turn::StepKind,
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 #[test]
 fn combat_death_and_next_turn_are_one_ordered_committed_tape() {
-    let mut scenario = Scenario::new(forest_elves_deck(), forest_elves_deck(), 203);
+    let mut scenario = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        203,
+    );
     scenario.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
     scenario.advance_to_active_step(1, StepKind::Main);
     scenario.play_land_and_cast_creature(1, "Forest", "Llanowar Elves");

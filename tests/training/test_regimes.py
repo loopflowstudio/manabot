@@ -13,11 +13,18 @@ import typer
 
 from experiments.direct_self_play import direct_self_play
 from manabot.cli import named_regime, regime_names
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ModelConfig
+from manabot.model.actor_critic import ActorCritic
 from manabot.training.execution import execute_regime, validate_regime
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.selection import selected_rows
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
+from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
@@ -30,7 +37,7 @@ ROOT = Path(__file__).resolve().parents[2]
 def recipe() -> TrainingRegime:
     value = direct_self_play()
     value.world = WORLD_VERSION
-    value.agent.semantic_pack = "ur-lessons-vs-gw-allies"
+    value.agent.world = "ur-lessons-vs-gw-allies"
     return value
 
 
@@ -112,14 +119,7 @@ def test_deadline_retains_failed_attempt(tmp_path):
         assert result["seconds"] > 0
 
 
-def test_named_treatments_execute_real_optimizer_batches():
-
-    from manabot.env import ObservationSpace
-    from manabot.infra.config import ModelConfig
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.training.learning.objectives import update_iteration
-    from manabot.training.rollout.collection import RolloutBatch
-
+def test_named_treatments_execute_real_optimizer_batches() -> None:
     torch.set_num_threads(1)
     space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
@@ -133,7 +133,9 @@ def test_named_treatments_execute_real_optimizer_batches():
         logits, values = agent({k: torch.as_tensor(v) for k, v in obs.items()})
         probs = logits.softmax(-1).numpy()
     batch = RolloutBatch(
-        obs={k: v[:, None] for k, v in obs.items()},
+        recorded=RecordedObservations(
+            {k: v for k, v in obs.items() if k not in ACTION_FIELDS}, np.arange(2)
+        ),
         actions=np.zeros((2, 1), dtype=np.int64),
         logprobs=np.log(probs[:, 0, None]),
         rewards=np.array([[0.0], [1.0]], dtype=np.float32),
@@ -141,14 +143,14 @@ def test_named_treatments_execute_real_optimizer_batches():
         values=values.numpy().reshape(2, 1),
         next_obs={k: v[:1] for k, v in obs.items()},
         next_done=np.ones(1, dtype=bool),
-        probabilities=probs[:, None],
-        log_probabilities=logits.masked_fill(
-            torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf
-        )
-        .log_softmax(-1)
-        .numpy()[:, None],
+        action_data=PackedActions.pack(
+            obs,
+            probs,
+            logits.masked_fill(torch.as_tensor(obs["actions_valid"]) == 0, -torch.inf)
+            .log_softmax(-1)
+            .numpy(),
+        ),
     )
-    from manabot.training.learning.learner import Learner
 
     trainer = Learner(agent, "cpu", minibatch_rows=1)
 
@@ -418,3 +420,14 @@ def test_legacy_learning_discriminator_is_rejected() -> None:
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
     rule = DampedPolicyLearning(gradient="damped_policy")
     assert rule.model_dump()["gradient"] == "damped_policy"
+
+
+def test_frozen_regimes_read_their_pack_selectors_as_world() -> None:
+    value = json.loads(
+        (ROOT / "experiments/regimes/elemental-long-183-v1.json").read_text()
+    )
+    assert value["match"]["content_pack"] == "elemental-world-v2"
+    regime = TrainingRegime.model_validate(value)
+    assert regime.match is not None
+    assert regime.match.world == regime.agent.world == "elemental-world-v2"
+    assert regime.match.model_dump(mode="json")["world"] == "elemental-world-v2"

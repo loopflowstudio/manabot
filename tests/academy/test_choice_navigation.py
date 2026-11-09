@@ -2,13 +2,13 @@
 
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from managym.experience import ExperienceFrame
 from pydantic import BaseModel
 import pytest
 
-from academy import server
+from academy import server, trace as trace_store
 from academy.server import GameSession
-import managym
 
 
 class PrefixStep(BaseModel):
@@ -27,24 +27,14 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w14.json"
+FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w17.json"
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 
 @pytest.mark.parametrize("family", list(POSITIONS))
-def test_retained_choice_position(
-    tmp_path: Path, family: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_retained_choice_position(tmp_path: Path, family: str) -> None:
     # JSON is checked against the live producer, including full offers and projection.
     position = POSITIONS[family]
-    # Reproduce this w14 fixture with its explicitly recorded collapse mode.
-    # The companion fixtures cover Academy's explicit-decision mode.
-    native_env = managym.Env
-
-    def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
-        return native_env(seed=seed, skip_trivial=True)
-
-    monkeypatch.setattr(server.managym, "Env", historical_env)
     session = GameSession(tmp_path)
     frame = session.new_game(position.config)["frame"]
     for ordinal, step in enumerate(position.prefix):
@@ -91,34 +81,74 @@ def test_retained_choice_position(
 
 
 @pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
-def test_current_explicit_choice_position(tmp_path: Path, family: str) -> None:
-    current = NavigationFixture.model_validate_json(
-        FIXTURE.with_name("choice-navigation-explicit-w14.json").read_text()
-    ).positions[family]
-    session = GameSession(tmp_path)
-    try:
-        frame = session.new_game(current.config)["frame"]
-        for ordinal, step in enumerate(current.prefix):
-            offer = next(
-                offer for offer in frame["offers"] if offer["id"] == step.offer_id
+def test_filtered_positions_show_the_filter(family: str) -> None:
+    # choice-navigation.spec.ts filters these; ActionPanel shows the filter at 8 offers.
+    assert len(POSITIONS[family].frame.offers) >= 8
+
+
+def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    position = POSITIONS["LEARN"]
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as socket:
+            socket.send_json({"type": "new_game", "config": position.config})
+            initial = socket.receive_json()
+            frame = initial["frame"]
+            for ordinal, step in enumerate(position.prefix):
+                if step.label.endswith(" next on the bottom"):
+                    break
+                socket.send_json(
+                    {
+                        "type": "command",
+                        "command": {
+                            "command_id": f"bottom-prefix.{ordinal}",
+                            "match_id": frame["match_id"],
+                            "expected_revision": frame["revision"],
+                            "prompt_id": frame["prompt"]["id"],
+                            "offer_id": step.offer_id,
+                            "answers": [],
+                        },
+                    }
+                )
+                result = socket.receive_json()
+                assert result["status"] == "accepted"
+                frame = result["update"]["frame"]
+            assert len(frame["offers"]) == 2
+            assert all(
+                offer["label"].endswith(" next on the bottom")
+                for offer in frame["offers"]
             )
-            assert offer["label"] == step.label
-            result = session.hero_command(
+            game = server.SESSION_REGISTRY[initial["session_id"]].game
+            assert game.env is not None
+            pending = frame["projection"]["decision_context"]["pending"]
+            assert pending
+            pending_digest = game.env.state_digest()
+            command = {
+                "command_id": "bottom-order",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": frame["offers"][-1]["id"],
+                "answers": [],
+            }
+        with client.websocket_connect("/ws/play") as socket:
+            socket.send_json(
                 {
-                    "command_id": f"current-navigation.{ordinal}",
-                    "match_id": frame["match_id"],
-                    "expected_revision": frame["revision"],
-                    "prompt_id": frame["prompt"]["id"],
-                    "offer_id": step.offer_id,
-                    "answers": [],
+                    "type": "resume",
+                    "session_id": initial["session_id"],
+                    "resume_token": initial["resume_token"],
                 }
             )
-            assert result["status"] == "accepted"
-            frame = result["update"]["frame"]
-        assert session.env.state_digest() == current.digest
-        actual = ExperienceFrame.model_validate(frame)
-        assert actual.action_space == family
-        assert actual.offers == current.frame.offers
-        assert actual.projection == current.frame.projection
-    finally:
-        session.close("test")
+            recovered = socket.receive_json()["recovery"]["frame"]
+            assert recovered["offers"] == frame["offers"]
+            assert recovered["projection"]["decision_context"]["pending"] == pending
+            assert game.env.state_digest() == pending_digest
+            socket.send_json({"type": "command", "command": command})
+            assert socket.receive_json()["status"] == "accepted"
+            committed_digest = game.env.state_digest()
+            assert committed_digest != pending_digest
+            socket.send_json({"type": "command", "command": command})
+            assert socket.receive_json()["status"] == "duplicate"
+            assert game.env.state_digest() == committed_digest

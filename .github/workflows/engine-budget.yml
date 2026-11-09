@@ -1,0 +1,154 @@
+name: Engine Budget
+
+# Release-build engine benchmarks on a runner of their own: Search-64 replies
+# (bench_search) and headless steps per second (bench_steps). GitHub-hosted
+# runners land on different CPU generations, so wall time is never compared
+# across runs: the job rebuilds the reference commit named in
+# managym/perf/baseline.json with this ref's benchmarks, runs both on this
+# machine and holds the candidate to the reference within the tolerance and
+# both to the committed digests. Every run is a recording of its candidate:
+# the `engine-budget` artifact holds both outputs and a measurement.json a PR
+# adopts with `scripts/engine_budget.py record --reason`. `measure` records a
+# commit that has no PR with this ref's benchmarks, without comparing
+# (docs/development.md, Engine performance budget).
+
+on:
+  workflow_call:
+    inputs:
+      measure:
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      measure:
+        description: Commit or branch to measure with this ref's benchmarks (empty compares this ref against its reference)
+        default: ''
+
+jobs:
+  budget:
+    name: Engine Budget
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        # Explicit Bash enables pipefail, so tee cannot hide a failed benchmark
+        # or budget comparison from the PR check.
+        shell: bash
+    env:
+      MEASURE: ${{ inputs.measure || '' }}
+    steps:
+      # The PR head on pull_request (the default checkout is the merge commit,
+      # which a later run cannot fetch), the pushed or dispatched SHA otherwise.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      # One other commit is built with this ref's benchmarks: the measured
+      # commit, which is then the candidate with no reference, or the
+      # reference commit this ref is compared with.
+      - name: Choose the candidate and the other commit
+        run: |
+          if [ -n "$MEASURE" ]; then
+            echo "OTHER=$MEASURE"
+            echo "CANDIDATE=other/managym"
+          else
+            echo "OTHER=$(jq -r .reference.commit managym/perf/baseline.json)"
+            echo "CANDIDATE=managym"
+          fi >> "$GITHUB_ENV"
+
+      - name: Check out the other commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.OTHER }}
+          path: other
+
+      - name: Carry this ref's benchmarks into the other tree
+        run: |
+          rm -rf other/managym/examples/curated
+          cp -R managym/examples/curated other/managym/examples/curated
+          cp managym/examples/bench_search.rs managym/examples/bench_steps.rs other/managym/examples/
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          # The target a mode leaves unbuilt is skipped at save.
+          workspaces: |
+            managym -> target
+            other/managym -> target
+          key: engine-budget
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          enable-cache: false
+
+      # Build both before timing. A broken reference still leaves a candidate
+      # recording, but fails this check after the recording is retained.
+      - name: Build the candidate benchmarks
+        run: cargo build --release --locked --manifest-path "$CANDIDATE/Cargo.toml" --example bench_search --example bench_steps
+
+      - name: Build the reference benchmarks
+        id: reference-build
+        if: env.MEASURE == ''
+        continue-on-error: true
+        run: cargo build --release --locked --manifest-path other/managym/Cargo.toml --example bench_search --example bench_steps
+
+      - name: Run the paired benchmarks
+        env:
+          REFERENCE_BUILD: ${{ steps.reference-build.outcome }}
+        run: |
+          reference=()
+          if [ -z "$MEASURE" ] && [ "$REFERENCE_BUILD" = success ]; then
+            reference=(--reference other/managym/target/release/examples)
+          fi
+          uv run --no-project --python 3.12 python scripts/engine_budget.py sample \
+            --candidate "$CANDIDATE/target/release/examples" "${reference[@]}"
+
+      # measurement.json names what `record` adopts: the candidate commit,
+      # the day, this run and the machine the figures came from.
+      - name: Record the measurement
+        if: always()
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ ! -f .cache/engine-budget/bench_search.jsonl ]; then
+            echo 'No complete candidate measurement to record.'
+            exit 0
+          fi
+          COMMIT="$(git -C "$CANDIDATE" rev-parse HEAD)"
+          RUNNER="GitHub-hosted ubuntu-24.04, $(lscpu | sed -n 's/^Model name: *//p' | head -1) ($(nproc) vCPU), release"
+          jq -n --arg commit "$COMMIT" --arg date "$(date -u +%F)" --arg run "$RUN_URL" --arg runner "$RUNNER" \
+            '{commit: $commit, date: $date, run: $run, runner: $runner}' | tee .cache/engine-budget/measurement.json
+          {
+            echo "## Engine budget measurement"
+            echo
+            echo "Runner \`${RUNNER_OS}\` \`$(uname -m)\`, $RUNNER"
+            echo
+            echo "Candidate \`$COMMIT\`:"
+            echo '```'
+            cat .cache/engine-budget/bench_steps.jsonl .cache/engine-budget/bench_search.jsonl
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Require the reference build
+        if: env.MEASURE == '' && steps.reference-build.outcome != 'success'
+        run: |
+          echo 'Reference build failed; candidate recording retained.' >&2
+          exit 1
+
+      # The script's defaults are the two run directories written above.
+      - name: Compare the candidate with the reference
+        if: env.MEASURE == ''
+        run: uv run --no-project --python 3.12 python scripts/engine_budget.py compare | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the measurement
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: engine-budget
+          path: .cache/engine-budget
+          if-no-files-found: warn

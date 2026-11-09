@@ -17,7 +17,7 @@
 //   lines dropped. Newlines between ability paragraphs are preserved.
 //
 // Sanctioned shell deviations (documented in
-// wave/rules/01-two-deck-slice.md) are allowlisted explicitly below.
+// experiments/milestone-1-two-deck-slice.md) are allowlisted explicitly below.
 //
 // Cards that are NOT real Magic cards are either registered with
 // `is_token: true` (token definitions) or listed in NOT_REAL_CARDS and
@@ -26,14 +26,12 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use managym::cardsets::alpha::CardRegistry;
-use managym::semantic::SemanticPack;
-use managym::state::card::{CardDefinition, CardType};
+use managym::cards::content_pack::default_content_pack;
+use managym::state::card::{AdditionalCost, CardDefinition, CardType, Keyword};
 use managym::state::mana::{Color, ManaCost};
 
-/// Registered names that are deliberately not real Magic cards (marked
-/// `// not a real card` at the registration). Tokens are excluded via
-/// `is_token` instead.
+/// Registered rules fixtures that are not real Magic cards
+/// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
 const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall
@@ -66,7 +64,7 @@ fn fixture() -> HashMap<String, FixtureCard> {
 }
 
 fn render_mana_cost(cost: &ManaCost) -> String {
-    let mut out = String::new();
+    let mut out = "{X}".repeat(usize::from(cost.x));
     let generic = cost.cost[Color::Generic as usize];
     if generic > 0 {
         out.push_str(&format!("{{{generic}}}"));
@@ -115,24 +113,22 @@ fn render_type_line(def: &CardDefinition) -> String {
             }
         })
         .collect();
-    // BTreeSet order is the enum order; every registered card is
-    // single-typed today, so ordering nuances don't arise.
-    for card_type in &def.types.types {
-        words.push(
-            match card_type {
-                CardType::Creature => "Creature",
-                CardType::Instant => "Instant",
-                CardType::Sorcery => "Sorcery",
-                CardType::Planeswalker => "Planeswalker",
-                CardType::Land => "Land",
-                CardType::Enchantment => "Enchantment",
-                CardType::Artifact => "Artifact",
-                CardType::Kindred => "Kindred",
-                CardType::Battle => "Battle",
-            }
-            .to_string(),
-        );
-    }
+    // Printed type order (Kindred, Enchantment, Artifact, Land, then the
+    // permanent and spell types), as in "Legendary Artifact Creature".
+    let printed = |card_type: &CardType| match card_type {
+        CardType::Kindred => (0, "Kindred"),
+        CardType::Enchantment => (1, "Enchantment"),
+        CardType::Artifact => (2, "Artifact"),
+        CardType::Land => (3, "Land"),
+        CardType::Creature => (4, "Creature"),
+        CardType::Planeswalker => (5, "Planeswalker"),
+        CardType::Battle => (6, "Battle"),
+        CardType::Instant => (7, "Instant"),
+        CardType::Sorcery => (8, "Sorcery"),
+    };
+    let mut types: Vec<_> = def.types.types.iter().map(printed).collect();
+    types.sort_unstable();
+    words.extend(types.into_iter().map(|(_, word)| word.to_string()));
     let mut line = words.join(" ");
     if !def.subtypes.is_empty() {
         line.push_str(" \u{2014} ");
@@ -189,22 +185,13 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 
 #[test]
 fn every_registered_real_card_matches_scryfall() {
-    let registry = CardRegistry::default();
-    let research = SemanticPack::complexity()
-        .and_then(|pack| pack.compile_content_pack())
-        .expect("complexity catalog compiles");
+    let registry = default_content_pack();
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();
     let mut seen: BTreeSet<&str> = BTreeSet::new();
 
-    // The research-only cards use the same real-card checks without entering
-    // the default registry or changing its versioned content digest.
-    for def in registry.definitions().chain(
-        research
-            .definitions()
-            .filter(|def| registry.definition_id(&def.name).is_none()),
-    ) {
+    for def in registry.definitions() {
         let name = def.name.as_str();
         if def.is_token {
             continue;
@@ -270,7 +257,7 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Printed power/toughness ("*" = CDA).
-        let power = engine_pt(def.power, def.power_cda.is_some());
+        let power = engine_pt(def.power, def.power_cda().is_some());
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
@@ -288,21 +275,26 @@ fn every_registered_real_card_matches_scryfall() {
         // Engine-supported keyword flags.
         let kw = |k: &str| fx.keywords.iter().any(|f| f == k);
         let checks = [
-            ("Flying", def.keywords.flying),
-            ("Reach", def.keywords.reach),
-            ("Haste", def.keywords.haste),
-            ("Flash", def.keywords.flash),
-            ("Vigilance", def.keywords.vigilance),
-            ("Trample", def.keywords.trample),
-            ("First strike", def.keywords.first_strike),
-            ("Double strike", def.keywords.double_strike),
-            ("Deathtouch", def.keywords.deathtouch),
-            ("Lifelink", def.keywords.lifelink),
-            ("Defender", def.keywords.defender),
-            ("Menace", def.keywords.menace),
-            ("Hexproof", def.keywords.hexproof),
-            ("Ward", def.ward.is_some()),
-            ("Kicker", def.kicker.is_some()),
+            ("Flying", def.keywords.has(Keyword::Flying)),
+            ("Reach", def.keywords.has(Keyword::Reach)),
+            ("Haste", def.keywords.has(Keyword::Haste)),
+            ("Flash", def.keywords.has(Keyword::Flash)),
+            ("Vigilance", def.keywords.has(Keyword::Vigilance)),
+            ("Trample", def.keywords.has(Keyword::Trample)),
+            ("First strike", def.keywords.has(Keyword::FirstStrike)),
+            ("Double strike", def.keywords.has(Keyword::DoubleStrike)),
+            ("Deathtouch", def.keywords.has(Keyword::Deathtouch)),
+            ("Lifelink", def.keywords.has(Keyword::Lifelink)),
+            ("Defender", def.keywords.has(Keyword::Defender)),
+            ("Menace", def.keywords.has(Keyword::Menace)),
+            ("Hexproof", def.keywords.has(Keyword::Hexproof)),
+            ("Ward", def.ward().is_some()),
+            (
+                "Kicker",
+                def.additional_costs
+                    .iter()
+                    .any(|cost| matches!(cost, AdditionalCost::Kicker(_))),
+            ),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {
@@ -344,7 +336,7 @@ fn every_registered_real_card_matches_scryfall() {
 /// NOT_REAL_CARDS must track actual registrations, so the list can't rot.
 #[test]
 fn not_real_cards_are_registered() {
-    let registry = CardRegistry::default();
+    let registry = default_content_pack();
     let names: BTreeSet<String> = registry.definitions().map(|d| d.name.clone()).collect();
     for name in NOT_REAL_CARDS {
         assert!(

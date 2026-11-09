@@ -179,6 +179,7 @@ class DecisionTargetView(ProtocolModel):
 
 
 class DecisionContextView(ProtocolModel):
+    pending: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
     recent_facts: list[str]
     actor: UInt8
     stage: str
@@ -286,6 +287,40 @@ class LegacyCardTypesView(ProtocolModel):
     is_battle: bool
 
 
+class LegacyCastPermissionView(ProtocolModel):
+    player_id: UInt32
+    cost: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    through_next_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    own_turn_only: bool = Field(default=False, exclude_if=lambda value: not value)
+    after_turn: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source_permanent_id: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    flash: bool = Field(default=False, exclude_if=lambda value: not value)
+    any_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    waterbend: bool = Field(default=False, exclude_if=lambda value: not value)
+    foretold: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class LegacyRestrictedManaView(ProtocolModel):
+    spells: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
+    abilities: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
+
+
+class PlayerTurnHistoryView(ProtocolModel):
+    attacked: bool = Field(default=False, exclude_if=lambda value: not value)
+    permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
+    cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+
+
 class LegacyCardView(ProtocolModel):
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
@@ -297,6 +332,41 @@ class LegacyCardView(ProtocolModel):
     toughness: Int32
     mana_value: Int32
     types: LegacyCardTypesView
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    cast_permission: LegacyCastPermissionView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ContinuousEffectView(ProtocolModel):
+    """One continuous-effect record on a permanent or player (CR 611, 613)."""
+
+    modification: str
+    power: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    toughness: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    amount: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    subtypes: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    color: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    duration: str
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    timestamp: UInt32
+
+
+class CopyView(ProtocolModel):
+    """A copy effect: the printed card it copies and its exceptions (CR 707.9b)."""
+
+    name: str
+    exceptions: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class LegacyPermanentView(ProtocolModel):
@@ -310,6 +380,10 @@ class LegacyPermanentView(ProtocolModel):
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    transforms: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     name: str | None
@@ -322,6 +396,33 @@ class LegacyPermanentView(ProtocolModel):
     base_power: Int32 | None
     base_toughness: Int32 | None
     plus1_counters: UInt32
+    counters: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    attached_to: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    creature_types: list[str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    blocking: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    used_abilities: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    dealt_damage_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    copy_of: CopyView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class SideboardCardView(ProtocolModel):
@@ -339,6 +440,15 @@ class LegacyPlayerView(ProtocolModel):
     lesson_mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    restricted_mana: list[LegacyRestrictedManaView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    hand_only_until: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
     combat_mana: Int32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -355,11 +465,19 @@ class LegacyPlayerView(ProtocolModel):
     known_hand: dict[str, UInt32] = Field(
         default_factory=dict, exclude_if=lambda value: not value
     )
-    sideboard_counts: dict[str, UInt32] = Field(
-        default_factory=dict, exclude_if=lambda value: not value
+    # Decklist counts, present only when the frame's viewer knows this
+    # player's decklist. Absent means hidden; {} means known and empty.
+    main_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
-    remaining_sideboard_counts: dict[str, UInt32] = Field(
-        default_factory=dict, exclude_if=lambda value: not value
+    unseen_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    sideboard_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    remaining_sideboard_counts: dict[str, UInt32] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
     sideboard: list[SideboardCardView] = Field(
         default_factory=list, exclude_if=lambda value: not value
@@ -367,6 +485,19 @@ class LegacyPlayerView(ProtocolModel):
     hand_hidden_count: UInt32 | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
+    )
+    keeps_red_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    turn_history: PlayerTurnHistoryView = Field(
+        default_factory=PlayerTurnHistoryView,
+        exclude_if=lambda value: value == PlayerTurnHistoryView(),
+    )
+    extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    additional_combats: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
@@ -397,9 +528,42 @@ class StackEntryView(ProtocolModel):
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class PlayerControlView(ProtocolModel):
+    player: UInt8
+    controller: UInt8
+    whole_turn: bool
+    active: bool
+    effective: bool
+
+
+class CombatView(ProtocolModel):
+    player_index: UInt32
+    attackers: str | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class ScheduleView(ProtocolModel):
+    """Committed native scheduling, in execution order within each domain."""
+
+    extra_turns: list[UInt32]
+    resume_with: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    current_combat: CombatView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    additional_combats: list[CombatView]
 
 
 class LegacyHeroObservation(ProtocolModel):
+    schedule: ScheduleView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    player_controls: list[PlayerControlView] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     stack_objects: list[StackEntryView] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -421,7 +585,8 @@ class LegacyHeroObservation(ProtocolModel):
             self.decision_context is not None
             and self.decision_context.actor != self.agent.player_index
             and (
-                self.decision_context.source is not None
+                self.decision_context.pending
+                or self.decision_context.source is not None
                 or self.decision_context.targets
                 or self.decision_context.reserved_sacrifice is not None
                 or self.decision_context.mana_cost is not None

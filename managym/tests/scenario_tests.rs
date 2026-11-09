@@ -60,6 +60,7 @@ fn observation_preserves_committed_card_move_zones() {
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Graveyard,
             controller: PlayerId(1),
+            face_down: false,
         }],
     );
 

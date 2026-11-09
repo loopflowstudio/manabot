@@ -21,6 +21,29 @@
       <p class="type-caption text-ink-2">Details not recorded.</p>
     {/if}
   </div>
+  {#if context?.pending?.length}
+    <details><summary class="type-rubric">Pending resolution</summary>
+      <ol class="type-caption list-decimal pl-5">{#each context.pending as fact}<li>{fact}</li>{/each}</ol>
+    </details>
+  {/if}
+  {#if observation.player_controls?.length}
+    <div aria-label="Player control" class="type-caption">
+      <h3 class="font-medium">Player control</h3>
+      <ol>
+        {#each observation.player_controls as control}
+          <li>
+            Seat {control.controller + 1} controls Seat {control.player + 1}
+            {#if control.active}
+              for this {control.whole_turn ? 'turn' : 'combat phase'}
+              {control.effective ? '(active)' : '(overridden by a later effect)'}.
+            {:else}
+              during their next {control.whole_turn ? 'turn' : 'combat phase'}.
+            {/if}
+          </li>
+        {/each}
+      </ol>
+    </div>
+  {/if}
   {#if context?.recent_facts.length}
     <details><summary class="type-rubric">What happened · recent actions</summary>
       <ol class="type-caption list-decimal pl-5">{#each context.recent_facts as fact}<li>{fact}</li>{/each}</ol>

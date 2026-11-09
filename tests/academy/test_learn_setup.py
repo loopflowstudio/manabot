@@ -1,17 +1,20 @@
 """Full authored setup survives real session startup, seat reversal and storage."""
 
 from dataclasses import asdict
+import json
 from pathlib import Path
 
 from managym.experience import ExperienceFrame
 import pytest
 
-from academy import server
+from academy import server, trace as trace_store
 from academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
 from academy.play_demo import load_play_demo
 from academy.server import viewer_view
 from academy.trace import GameConfig, load_trace
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
 
@@ -70,8 +73,8 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     )
     config = session.trace.config
     assert (
-        session.env.content_pack_manifest()["compiled_semantics"]["pack_key"]
-        == CURATED_PACK.semantic_pack_key
+        session.env.content_pack_manifest()["content_digest"]
+        == managym.world_identity()["card_digest"]
     )
     assert sum(config.hero_deck.values()) == (40 if reverse else 41)
     assert sum(config.villain_deck.values()) == (41 if reverse else 40)
@@ -97,14 +100,11 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     payload = load_trace(session.match_id, tmp_path)
     restored = GameConfig(**payload["config"])
     assert asdict(restored) == asdict(config)
-    # Compare each consumer at its own native decision boundary. Academy
-    # surfaces sole choices; training collapses them using the same setup.
-    rebuilt = managym.Env(seed=restored.seed, skip_trivial=False)
+    # Academy and training share one native decision boundary.
+    assert witness == training_witness
+    rebuilt = managym.Env(seed=restored.seed)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == witness
-    training_root = managym.Env(seed=restored.seed, skip_trivial=True)
-    training_root.reset(restored.to_rust())
-    assert training_root.search_witness_json() == training_witness
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -126,8 +126,8 @@ def test_jeong_uses_its_explicit_empty_setup(tmp_path, reverse):
     assert session.trace.config.villain_sideboard == {}
     assert session.asset_pack == JEONG_INCREMENT_PACK.reference
     assert (
-        session.env.content_pack_manifest()["compiled_semantics"]["pack_key"]
-        == JEONG_INCREMENT_PACK.semantic_pack_key
+        session.env.content_pack_manifest()["content_digest"]
+        == managym.world_identity()["card_digest"]
     )
 
 
@@ -137,6 +137,80 @@ def test_named_setup_cannot_silently_drop_sideboard():
     custom = server._parse_game_config({"hero_deck": {"Island": 20}})
     assert custom.hero_sideboard == {}
     assert custom.asset_pack is None
+
+
+def test_closed_decklists_are_recorded_replayed_and_hidden_from_the_viewer(
+    tmp_path: Path,
+) -> None:
+    assert server._parse_game_config({"villain_type": "random"}).decklists == "open"
+    with pytest.raises(ValueError, match="decklists must be"):
+        server._parse_game_config({"decklists": "partial"})
+    with pytest.raises(ValueError, match="search opponent"):
+        server._parse_game_config({"decklists": "closed", "villain_type": "search"})
+    session = server.GameSession(trace_dir=tmp_path)
+    frame = session.new_game(
+        {"seed": 0, "villain_type": "random", "decklists": "closed"}
+    )["frame"]
+    assert session.trace.config.decklists == "closed"
+    assert "main_counts" in frame["projection"]["agent"]
+    assert "main_counts" not in frame["projection"]["opponent"]
+    assert "sideboard_counts" not in frame["projection"]["opponent"]
+    configs = GameConfig(**asdict(session.trace.config)).to_rust()
+    assert [config.disclosure for config in configs] == ["closed", "closed"]
+    legacy = asdict(session.trace.config)
+    del legacy["decklists"]
+    assert GameConfig(**legacy).decklists == "open"
+
+
+def test_closed_frames_name_only_what_the_viewer_knows(tmp_path: Path) -> None:
+    session = server.GameSession(trace_dir=tmp_path)
+    payload = session.new_game(
+        {"seed": 0, "villain_type": "random", "decklists": "closed"}
+    )
+    config = session.trace.config
+    hidden = (set(config.villain_deck) | set(config.villain_sideboard)) - (
+        set(config.hero_deck) | set(config.hero_sideboard)
+    )
+    assert hidden
+    message = json.dumps(payload)
+    assert not [name for name in hidden if name in message]
+    assert config.villain_deck_name not in message
+    assert payload["deck_names"] == {"hero": "UR Lessons", "villain": "Closed decklist"}
+    assert "asset_pack" not in payload["frame"]
+    assert payload["frame"]["asset_manifest_hash"] == server.ASSET_MANIFEST_HASH
+    names = payload["frame"]["projection"]["definition_names"]
+    assert set(config.hero_deck) <= set(names.values())
+
+    opened = server.GameSession(trace_dir=tmp_path).new_game(
+        {"seed": 0, "villain_type": "random"}
+    )
+    assert hidden <= set(opened["frame"]["projection"]["definition_names"].values())
+    assert opened["deck_names"] == {"hero": "UR Lessons", "villain": "GW Allies"}
+
+
+def test_closed_trace_export_hides_the_opponents_setup(tmp_path: Path) -> None:
+    session = server.GameSession(trace_dir=tmp_path)
+    session.new_game({"seed": 0, "villain_type": "random", "decklists": "closed"})
+    config = asdict(session.trace.config)
+    assert config["villain_deck"]
+    payload = {"config": config, "events": [], "final_observation": {}}
+
+    exported = trace_store.prepare_trace_payload(payload)["config"]
+    assert exported["villain_deck"] == {}
+    assert exported["villain_sideboard"] == {}
+    assert exported["villain_deck_name"] == "closed"
+    assert "asset_pack" not in exported
+    assert exported["hero_deck"] == config["hero_deck"]
+    assert payload["config"]["villain_deck"], "the stored trace keeps its setup"
+
+    finished = {
+        "config": config,
+        "events": [],
+        "end_reason": "game_over",
+        "final_observation": {"game_over": True},
+    }
+    revealed = trace_store.prepare_trace_payload(finished, reveal_hidden=True)
+    assert revealed["config"]["villain_deck"] == config["villain_deck"]
 
 
 def test_recorded_named_root_rejects_missing_sideboards_and_old_asset_identity():

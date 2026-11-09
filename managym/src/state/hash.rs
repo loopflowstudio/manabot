@@ -6,6 +6,7 @@ use rand::RngCore;
 use serde::Serialize;
 
 use crate::{
+    cards::content_pack::{default_content_pack, ContentPack},
     flow::{combat::CombatState, game::GameState, turn::TurnState},
     state::{
         card::CardDefId,
@@ -20,7 +21,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 9;
+pub const MATCH_STATE_HASH_VERSION: u32 = 16;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -53,6 +54,8 @@ impl fmt::Display for MatchStateHash {
 struct CanonicalCard {
     /// Copied tokens can differ from their registered source definition.
     copied_characteristics: Option<super::card::CardDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    copy: Option<super::effect::CopyEffect>,
     object_id: ObjectId,
     definition_id: CardDefId,
     owner: PlayerId,
@@ -60,14 +63,24 @@ struct CanonicalCard {
 
 #[derive(Serialize)]
 struct CanonicalTurn {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    player_controls: Vec<crate::flow::turn::PlayerControl>,
     active_player: PlayerId,
     turn_number: u32,
     lands_played: u32,
     spells_cast: [Vec<crate::state::game_object::CardId>; 2],
-    cards_drawn_this_turn: [u32; 2],
+    history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    extra_turns: Vec<PlayerId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    resume_with: Option<PlayerId>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    additional_combats: Vec<crate::flow::turn::AdditionalCombat>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    combat_attackers: Option<crate::state::predicate::CardPredicate>,
     current_phase: usize,
     current_step: usize,
     step_initialized: bool,
@@ -78,11 +91,12 @@ struct CanonicalTurn {
 impl From<&TurnState> for CanonicalTurn {
     fn from(turn: &TurnState) -> Self {
         Self {
+            player_controls: turn.player_controls.clone(),
             active_player: turn.active_player,
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
-            cards_drawn_this_turn: turn.cards_drawn_this_turn,
+            history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()
@@ -93,6 +107,10 @@ impl From<&TurnState> for CanonicalTurn {
                 .iter()
                 .map(|(&(card, ability), &count)| (card, ability, count))
                 .collect(),
+            extra_turns: turn.extra_turns.clone(),
+            resume_with: turn.resume_with,
+            additional_combats: turn.additional_combats.clone(),
+            combat_attackers: turn.combat_attackers.clone(),
             current_phase: turn.current_phase,
             current_step: turn.current_step,
             step_initialized: turn.step_initialized,
@@ -142,21 +160,29 @@ struct CanonicalMatchState<'a> {
     stack_objects: &'a [crate::state::stack_object::StackObject],
     combat: Option<CanonicalCombat>,
     mana_cache: &'a [Option<crate::state::mana::Mana>; 2],
-    events: &'a crate::flow::event_log::EventLog,
-    pending_events: &'a crate::flow::event_log::EventLog,
-    observation_events: &'a crate::flow::event_log::EventLog,
+    events: &'a crate::flow::event::EventLedger,
+    pending_events: &'a [crate::flow::event::GameEvent],
+    observation_events: &'a [crate::flow::event::GameEvent],
     pending_triggers: &'a [crate::flow::trigger::PendingTrigger],
     trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    effects: &'a [crate::state::effect::ContinuousEffect],
+    /// Omitted when empty, keeping hashes of states without grants unchanged.
+    #[serde(skip_serializing_if = "no_cast_permissions")]
+    cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
 }
 
-impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
-    fn from(state: &'a GameState) -> Self {
+fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -> bool {
+    value.is_empty()
+}
+
+impl<'a> CanonicalMatchState<'a> {
+    fn new(state: &'a GameState, content: &ContentPack) -> Self {
         // Keep this exhaustive: adding a mutable GameState field must break the
         // build until its canonical representation is deliberately chosen.
         let GameState {
@@ -179,17 +205,19 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
             rng,
             id_gen,
-            content,
         } = state;
 
         let cards = cards
             .iter()
             .map(|card| CanonicalCard {
                 copied_characteristics: card.is_token.then(|| (**card).clone()),
+                copy: card.copy.clone(),
                 object_id: card.id,
                 definition_id: card.definition_id,
                 owner: card.owner,
@@ -197,7 +225,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             .collect();
         let object_lki = object_lki
             .iter()
-            .map(|(&object_ref, &lki)| (object_ref, lki))
+            .map(|(&object_ref, lki)| (object_ref, lki.clone()))
             .collect();
         let mut rng = rng.clone();
         let mut rng_probe = [0_u64; 8];
@@ -228,6 +256,8 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects: effects.as_slice(),
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter: *trigger_enqueue_counter,
             rng_probe,
@@ -240,7 +270,7 @@ impl GameState {
     /// Canonical logical JSON used by higher-level state contracts that add
     /// authority outside `GameState` (for example, the current legal offer).
     pub(crate) fn deterministic_hash_value(&self) -> serde_json::Value {
-        serde_json::to_value(CanonicalMatchState::from(self))
+        serde_json::to_value(CanonicalMatchState::new(self, default_content_pack()))
             .expect("canonical match state contains only serializable values")
     }
 
@@ -250,7 +280,13 @@ impl GameState {
     /// and sorted entries from ordered maps. It never observes allocations,
     /// copied card definitions, compatibility card names, or formatting output.
     pub fn deterministic_hash(&self) -> MatchStateHash {
-        let canonical = CanonicalMatchState::from(self);
+        self.deterministic_hash_over(default_content_pack())
+    }
+
+    /// The hash this state would have in a world with `content`: the proof that
+    /// the hash binds the catalog's schema and digest, not its allocation.
+    pub fn deterministic_hash_over(&self, content: &ContentPack) -> MatchStateHash {
+        let canonical = CanonicalMatchState::new(self, content);
         let bytes = serde_json::to_vec(&canonical)
             .expect("canonical match state contains only serializable values");
         MatchStateHash {

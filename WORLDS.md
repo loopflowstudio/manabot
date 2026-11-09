@@ -1,18 +1,18 @@
 # Worlds
 
-A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
-shards, and reports are only comparable within a world; cross-world numbers
-never share a table untagged. New worlds are frozen deliberately (batch the
-shape changes), and on each freeze the headline baselines are re-run before
-new claims are made. (Cost of ignoring this, measured: every exp-07 artifact
-was dead on arrival in exp-10.)
+A world number names a frozen world. Main carries at most one open world, and
+merged rules or shape changes extend it in place, updating its receipts.
+Freezing is deliberate: re-run the headline baselines, record the receipts, mark
+the row frozen, and open the next number. Checkpoints are protected by their
+world binding, which rejects any content or shape difference, not by the
+number. A run on an open world makes no comparability claim.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|
 | **w0** | pre-2026-07-09 (first-light era) | 26 / 29 / 5 / 7 | none (all superseded) | exp-04 terminal-only 60–75% |
 | **w1** | rules stage 1–2 (`2d124c9`..`50e0a1f`) | 27 / 37 / 7 / 14 | none (exp-07 artifacts dead per exp-10) | exp-07 student_r0 87%, ladder ≈N=7 |
 | **w2** | rules stage 3–4 + conformance (`cb80331`..`a9f1f91`, max_actions 32 @ `55a0b4b`) | 28 / 38 / 24 / 14 | exp-10 V + BC student; exp-11 arms (incl. ported student_r0, validated 86.5%) | exp-06 PPO 60–77%; exp-10/11 (pending merge) |
-| **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](docs/rules/learn-lesson.md) | no completed new baseline certification |
+| **w3** | corrected Learn evidence, 2026-09-24–29 (certification unfinished) | 28 / 39 / 24 / 16 | frozen Learn/checkpoint evidence; see [Learn record](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/learn-lesson.md) | no completed new baseline certification |
 | **w4** | ETU-88, 2026-09-29 | 28 / 39 / 25 / 16; 13 decision kinds | Gran-Gran, Proft's Eidetic Memory, Combustion Technique and required base rules | no strength baseline yet |
 | **w5** | attack declaration encoding, 2026-10-15 | 28 / 39 / 25 / 16; action width 18 including declaration and validity | no promoted checkpoints | no strength baseline yet |
 | **w6** | action identity audit, 2026-10-15 | 28 / 39 / 26 / 16; action width 20 | no promoted checkpoints | no strength baseline yet |
@@ -23,18 +23,361 @@ was dead on arrival in exp-10.)
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
-
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
+| **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
+| **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40, a7234f, MTG-225, MTG-226, MTG-243), 2026-10-29 | 73 / 56 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history; token copies with copy exceptions, surveil; T6 Sagas, double-faced cards, extra turns and combats, bending history; shared naming vocabulary as bounded group-then-name decisions, explicit v9 name/group joins | `world` (the default pack): every defined card (340 supported); `semantic-kernel-w17-v2`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Current development world: w14.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w13) are **not comparable** to w14; do not reuse their
+**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
+from earlier worlds are **not comparable** to w17; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
 Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
-Update this table in the same PR as any rules-meaning or shape change.
+Update the open world's row, section and receipts in the same PR as any
+rules-meaning or shape change.
+
+MTG-241 extends the open world with retained simultaneous proposals and causal
+counter replacements, logical token creation before allocation, and complete
+Caradora/Doubling Season definitions. V8 retains its published widths and represents
+pending instructions, results, iteration and completion as continuation-token
+occurrences, with viewer-safe reference joins. V1–v7 preserve selection codes 5/6/7;
+new unrepresentable execution requires explicit v8. Fresh inputs remain v6.
+Current Academy fixtures are refreshed after these rule changes; historical
+captures and trained world bindings are not rewritten.
+
+## Running an older world
+
+The engine implements exactly one world. To run an older world, check out the
+revision that recorded it and build that engine; current code carries no rules
+compatibility shims and no card content of earlier worlds. The sources, IR,
+learning schemas and Python compiler of w1–w11 (`content/semantic/v1`, `w7`–`w11`,
+`manabot/semantic/compiler.py`), the Academy fixtures of w7–w15 and the
+conformance corpora of w12–w15 exist only at revisions before Task afbd6a (the
+corpora are also archived under `experiments/data/archive/conformance/`), so
+paths to them below name those revisions. Frozen receipts and checkpoints are
+never rewritten.
+
+## w17: one card representation and TLA casting (open)
+
+MTG-243 makes naming ordinary group-then-name decisions of at most 64 options
+and adds explicit policy input v9: public name/definition joins and group spans
+at ordinary action capacity, with separate trainable name identities. The
+default naming universe is unchanged. Naming state now holds one immutable
+vocabulary, a scope and a count instead of an owned effect branch per name;
+state hash contract **16** includes its digest. Semantic Observation **8** and
+capture **5** carry the new action joins. These contract changes invalidate
+current identity receipts even for ordinary traces whose choices did not change;
+no strength or historical checkpoint comparability is inferred. Fresh inputs
+remain v6, and frozen v1–v7 tensor layouts remain unchanged.
+
+Each card is a function returning the engine's own `CardDefinition`, written in
+its rules types, in the set file of its first printing; the authoring language
+(`cards/authoring.rs`), the in-process compiler (`semantic/compile.rs`) and IR
+parsing and interpretation for current content are deleted. All 161 definitions
+were generated once from w16's lowering and proven JSON-identical to it. Each
+definition carries its key and the Scryfall id of that printing; neither enters
+content digests. Five cards
+moved to their actual first printing (`roe.prophetic_prism`,
+`mh2.tireless_provisioner`, `ptk.corrupt_court_official`, `eld.epic_downfall`,
+`ths.lightning_strike`); every set-file card is supported unless marked
+incomplete.
+
+Task afbd6a (2026-10-30, same world) reshaped w17's definitions without changing
+behavior: one-off fields became `StaticAbility` and `AdditionalCost` variants
+(`statics`, `additional_costs`), every token moved to `cardsets/tokens.rs`, and
+the default pack registers definitions in name order (the legacy `CardDefId`
+prefix is gone). Content digests, state digests and learning tokens changed, so
+w17 conformance, authored-match, parity and Academy fixtures were re-recorded
+with the same Commands and decision revisions; the learning schema stays 9.
+
+MTG-225 (2026-11-02, same world) made the catalog the only content: authored
+setups are decklists over it rather than packs of their own cards, so every
+match runs on the catalog's `CardDefId`s and digest (unchanged). Matches of an
+authored setup therefore change state digests and manifests: their conformance
+cases, receipts and Academy fixtures need re-recording, and checkpoints bound
+to an authored pack's manifest no longer load.
+
+Task MTG-238 (2026-11-02, same world) gave the engine catalog-scale types
+without changing rules: counters are stored sparsely by kind (`Counters`
+serializes exactly as before), keywords are `Keyword` variants in a `Keywords`
+bitset serialized as the list of keywords present (so a definition's tokens
+carry only its keywords and a new keyword changes no other card's encoding),
+and card sets live in the `managym-cards` crate on the `managym-state` rules
+types, reached by the engine only through `catalog()`. Earthbend's animation
+is no longer a `Permanent` field: it is three continuous-effect records of one
+timestamp (`BecomeCreature`, `SetBasePt 0/0`, `AddKeywords(haste)`) that end
+when the object leaves, read by the same `is_animated` column and effect fact
+rows; crew's "becomes an artifact creature" is the same `BecomeCreature`
+record on a printed artifact. Counts written into card-shaped types became
+conditions: War Balloon is a `TypeGrant` on itself "as long as" it has three
+fire counters (`StaticTypeGrant.condition`), Zhao's land-type overwrite holds
+"as long as" he has a conqueror counter, and Phoenix Fleet Airship uses
+`Condition::ControlsAtLeast { count: 8, predicate: namesake }` on its own
+Creature grant. Namesakes compare the source and candidate names after layers
+1–3 without recursing through the static index. Removing the permanent
+field changed the canonical encoding, so the match-state hash contract is
+**12**; the conditions and keyword lists moved the content digest and the
+learning tokens (schema still 10: tokens derive from the definitions), so
+`semantic-kernel-w17-v1`, the authored-match receipt, both parity receipts,
+the Academy fixtures and the belief v3 receipt pins were re-recorded for the
+batch and its integration with T5, retaining Commands and decision revisions.
+Earthbend's effect records allocate object ids, so the combined authored tape
+retains its game outcome while ids differ from main's pre-integration receipt.
+
+Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
+definition with a `serde` serializer: initially learning schema **9**, now
+**10** with delayed-trigger object roles. Token values are
+stable hashes of Rust and printed names, and IR opcodes, roles and enums are
+gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
+carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);
+`content_pool` rows add `scryfall_id` and name the card key `key`. The world
+pool is `world` (formerly `tla-pool-v1`): it describes the default pack, so it
+shares that pack's `CardDefId`s and digest; rules fixtures are unsupported rows
+without a key. Card catalog modules (`setups`, `pool`, `tokens`) live under
+`cards/`. Permanent observations add an
+`attacking` column (width 28 → 29) and LLM text, so the state is no longer
+visible only through the event window. `tests/cards/observability.rs` guards
+that every keyword, permanent and player status and `Effect`/`TriggerCondition`
+/`Ability` variant names its tensor column or token.
+
+Task 87e012 extends w17 with the 51 cards of TLA batch T2, defined in
+`cardsets/tla.rs` and supported (166 supported in `world`). Rules meaning grows with them: casting from
+exile under exact-object grants (airbend, impulse exile, linked exile, foretell
+face down), a hand-only lock that overrides those grants until its controller's
+next untap, printed and granted flashback, announced X and kicker as one cast
+announcement, free casts during resolution, restricted mana keyed by spending
+class (Lesson, Shrine, Ally spells and ability sources), affinity and
+activation cost reduction, exhaust and once-each-turn activation limits,
+hand- and graveyard-zone activated abilities (landcycling), private library
+searches and choices, and control (a permanent spell enters under its
+controller).
+
+Task 6875f0 extends w17 with the 49 cards of TLA batch T3: characteristics,
+counters, replacements and attachments. A permanent's characteristics are what
+`Game` derives from its card and permanent state, never those inputs read
+alone: `Game::characteristics` applies static type, keyword and P/T grants and
+effect records in layer order once and is the single reader of name, types,
+keywords, ability loss, activated abilities and power/toughness; rules
+questions such as `permanent_can_tap` read that view.
+Continuous effects from resolved spells and abilities are records on
+`GameState::effects` (`state::effect`: a `Modification` grouped by layer, whom
+it affects, how long), applied with static abilities by layer and then
+timestamp (CR 613.7); permanents carry their own timestamps, so a later grant
+survives an earlier loss of all abilities. Records end at cleanup (`EndOfTurn`)
+or when their object changes zones. Counters are one `CounterKind` → count map,
++1/+1 included. Equipment and Auras attach to an exact object and grant
+abilities or set characteristics; Vehicles crew by tapping creatures.
+Activated abilities may announce X and choose several targets that share a
+creature type; a permanent may let its controller cast the top card of their
+library. Observations add, omitted at their defaults: kept red mana, a
+permanent's counters by kind, attachment, set name and creature types, granted
+land type, `blocking`, `abilities_lost`, `used_abilities`, a renewed timestamp
+and the continuous-effect records on each player and permanent (`effects`); a
+stack object's X and a spell's granted keywords.
+
+Task 488a40 extends w17 with TLA batch T4's triggers, history and stack
+behavior. Ward answers an opponent's activated or triggered ability as well as
+a spell (CR 702.21a): an ability on the stack is a `Target::StackAbility`, and
+countering it removes it (CR 701.6b). Life loss is distinct from damage;
+firebending may add a resolution-time amount; "another permanent" sacrifice
+triggers exclude their own source. Triggers may watch any player's casts (with
+the caster as the trigger's player, "they") and a creature attacking alongside
+another. Draws take a resolution-time count, and life loss and player damage
+name their players (you, each opponent, the trigger's player or a target); a
+continuous effect may affect the permanents a target player controls. Each
+player's turn history (`PlayerTurnHistory`: declared attackers, permanents
+sacrificed, a land entering under their control, cards drawn) resets as a turn
+begins and feeds raid and similar conditions; a creature put onto the
+battlefield attacking was never declared and does not count. A permanent
+records that it was dealt damage this turn (`dealt_damage_this_turn`, cleared
+at cleanup and kept in last known information) apart from its marked damage.
+An entering counter replacement may be conditional. Observations add each
+player's `turn_history` and a permanent's `dealt_damage_this_turn`.
+
+Task MTG-235 (2026-11-02, same world) gives `Effect` verbs one object
+vocabulary: `ObjectSelector` (`This`, `Target`, `Triggering`, `Attached`,
+`CreatedThisWay`, `Grantor`, `Moved`, `You`, `Chosen`, `Each { of: Scope }`)
+names what every object verb acts on (`PutCounters`, `PutCountersFrom`,
+`Sacrifice`, `Move`, `Tap`, `Untap`, `RemoveCounters`, `RemoveAllCounters`,
+`Destroy`, `Airbend`, `GainControl`, `DealDamage`, `CounterSpell`,
+`CounterAbility`, `Earthbend`, `ApplyContinuous`), resolved by one
+`Game::select` with last known information for a departed source; `Chosen`
+is a resolution-time choice (`Decision::ChooseObject`, decision stage
+`resolution_choice`) for any verb. `AffectedSpec` folded into the selector;
+the "all of them" verbs (`MassDamage`, `DamageOpponentCreatures`,
+`AirbendAll`, `DestroyCreaturesLosingAbilities`) are the base verb over
+`Each`, Day of Black Sun composing ability loss and a simultaneous `Destroy`;
+the value twins (`DealDamageValue`, `GainLifeValue`, `CreateTokensValue`,
+`AddManaValue`) merged on `EffectValue`; `DiscardTargetPlayer` is `Discard {
+what }`. With the 33 object-fused variants (`PutCountersOnSource`,
+`SacrificeTriggeringPermanent`, `ReturnGraveyardTarget`, `ExileAttached`,
+`TapTarget`, …) gone, this amendment reduced `Effect` from 107 to 70 variants
+(71 after the T5 Surveil integration below). "If you do" is
+`Condition::Moved` over what the latest move or sacrifice moved; "if you
+controlled it" is `Condition::TargetControlledByYou`; `PlayerSelector::Owner`
+names the owner a move returns a card to. Behavior is unchanged except that a
+flashback spell returned to hand is exiled instead (CR 702.34a), which no
+card reaches, and a `Destroy` of one object now processes its events with
+the pre-destruction trigger sources (the simultaneous-batch rule), which no
+test distinguishes. Learning tokens and the content digest change, so w17
+evidence is re-recorded in place; no world or policy-input version changes.
+
+Task a7234f (TLA batch T5) extends w17 with token copies: a token that's a
+copy of a permanent takes its copiable values (its definition, including any
+copy effect already applied, CR 707.2), never its status, counters or non-copy
+effects, and a departed source is copied as it last existed. A copy carries
+its copy effect (`CopyEffect`: the printed definition at the chain's root and
+its exceptions, CR 707.9b), whose exceptions are `Modification` values such as
+`Nonlegendary`, the same vocabulary as continuous-effect records. It adds
+surveil (CR 701.25) as a select-into-graveyard choice, an end-step self-copy
+trigger conditioned on T4's sacrifice history, and a Vehicle that is an artifact
+creature while you control enough permanents with its name. Joo Dee, One of Many, Ran and Shaw
+and Phoenix Fleet Airship are supported (314 in `world`). Observations add a
+permanent's `copy`; the policy input adds `Copy` and `CopyException` fact
+rows. A battlefield card's row (name, power/toughness, card types, legendary,
+Ally and Lesson, ward, keywords) states the layered characteristics the rules
+read, not the printed card; off the battlefield it states the printed card.
+Legendary is a layered supertype: the legend rule and the card row both read
+it, so a `Nonlegendary` record exempts its permanent (CR 704.5j).
+
+Task MTG-225 (TLA batch T6) extends w17 with Sagas and transforming
+double-faced cards. A back face is its own definition row, registered right
+after its front; a permanent shows it while transformed (CR 712.8), keeps its
+object identity when it transforms (CR 701.27a), turns front face up as it
+leaves the battlefield, and has its front face's mana value (CR 712.8e). A
+copy of a double-faced permanent has both faces and is transformed if the
+original is (CR 707.8a). Sagas enter with a lore counter, gain one as their
+controller's precombat main phase begins, trigger each chapter a lore counter
+crosses and are sacrificed once their final chapter has left the stack (CR
+714). Extra turns (CR 500.7) and additional combat phases that may limit
+their attackers (CR 500.8) are scheduled on the turn state. Bending events
+(waterbend payments, earthbend, firebending mana, airbend) join the turn
+history, a spell on the stack can be airbent, spell costs can be reduced by
+colored mana that also reduces generic (CR 118.7c), and a permanent can have
+another card's activated and triggered abilities through an effect record.
+All 16 T6 cards are supported (336 supported definitions in `world`). The
+policy input adds player columns for the four bending kinds, extra turns and
+additional combats (67 → 73) and a card column for "until the end of your next
+turn" play permissions (55 → 56); decision code 26 is the each-player
+exile choice. Resolution decisions 24 and 25 choose optional payment X and
+privately search named cards. Sozin pays before a separate reflexive trigger
+chooses graveyard targets within that X; search allows zero through four
+individually selected cards. Transform histories (including round trips),
+inherited ability definitions, ordered extra turns and combat restrictions
+reach v5 facts/continuations, Python and text without widening frozen rows.
+Fresh action tables hold 512 alternatives for unrestricted catalog names;
+checkpoint readers retain an omitted historical action capacity of 64.
+Match-state hash contract 15 includes pending scheduling, retained ability
+meaning, exact delayed-trigger subjects, and explicit firing frequency/expiry. Delayed timing is independent of
+selector capture; remembered incarnations remain distinct from event context
+through placement, stack and resolution. V5 carries them in reference rows of
+kind 8; a kind-9 relation row carries frequency (1 once, 2 each match), while
+column 48 keeps cleanup expiry. V5/v6 retain their 49-column width; v1–v4 exclude
+these delayed facts. Retargeting and resolution both read the ability's captured face,
+including when its source has transformed. Only mutable current-w17 evidence
+is refreshed; earlier worlds stay fixed.
+
+Policy input **v6** is the default, with configurable fact capacity (512 by
+default). V5 stays at 128 rows; v1–v4 keep their widths. V6 changes no column
+meanings or timestamp normalization (rank / 128). A checkpoint binds the
+version and selected capacity independently of this open rules-world label. In every widened
+row the new terms start at the old validity column and validity stays last.
+Player rows add restricted mana by spending subtype × color (18), the
+hand-only lock, no maximum hand size, turn number, seat, kept red mana and
+turn history (attacked, permanents sacrificed, land entered, cards drawn)
+(40 → 67). Card rows add 12 cast-permission terms and a stack spell's
+announced X (41 → 55); a face-down card is foretold, so the foretold term marks
+it. Permanent rows add used exhaust and once-each-turn counts, granted
+firebending, an attachment join, granted land, a blocking join, lost abilities,
+a timestamp rank and dealt damage this turn (29 → 38). Open-ended vocabularies are a `facts` block of
+128 rows × 12 (object join, `FactKind`, vocabulary id and effect detail as
+learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
+source definition, validity): counter kinds, effect-added subtypes, a set name
+and creature types, spent abilities, continuous-effect records, and a copy effect with its
+exceptions. Relation
+rows add a frame's X, a spell's granted keywords and a waiting delayed
+trigger's "this turn" (33 → 49), so the relation width alone tells v5. Waiting
+delayed triggers (CR 603.7) are public v5 relation frames of kind 10 after
+every other frame: source, controller, event (`decision`), watched object or
+remembered context, and "this turn"; v2–v4 encode none. Native buffers bind v5
+by player width. Learning schema 10 adds the `delayed_trigger` object role (the
+trigger's source definition programs); tokens derive from the definitions, so
+new `Effect` variants and card fields appear in them without a schema change. Viewers see an opponent's
+foretold card only as an exile count, in JSON, text and tensor alike.
+`managym/cards/tests/cards/observability.rs` names each field's columns and tokens.
+Action shapes are unchanged.
+
+`conformance/semantic-kernel-w17-v1` trace evidence, the authored-match receipt and
+its live/headless parity (`authored-match-w17-v1`, `authored-match-parity-w17-v1`:
+the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
+world, re-recorded in place as it grows. Academy `*-w17.json` demo,
+choice-navigation and trigger-order fixtures reach the same decision revisions
+as their w15 predecessors. Belief encoding receipts use possible-world space v3.
+
+Task MTG-216 (2026-10-30, same world) makes decklist disclosure a match option:
+open (default; each player knows the other's main deck and sideboard) or
+closed (neither). Observations carry main, unseen, sideboard and
+remaining-sideboard counts by definition for every known decklist; v5 adds a
+`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent. Search and
+possible worlds refuse a closed opponent.
+The Academy navigation fixture and the authored-match and parity receipts
+were re-recorded with the same Commands; state digests are unchanged.
+
+Task MTG-239 (2026-11-03, same open world) completes five defined cards:
+Accumulate Wisdom exposes the owner's bottom-order choice; Cat-Gator and
+Lightning Strike use `AnyTarget` (creature, player, planeswalker or battle),
+with the same specification on other printed any-target cards. Damage removes
+loyalty/defense counters and marks creature damage for every applicable type.
+Suki's CDA power applies in all zones, and Water Tribe Rallier's library filter
+reads that value. `LookAndSelect.random_order` distinguishes random placement
+from chosen placement in definition tokens. The bottom-order obligation appends
+continuation code 23; action types and frozen tensor widths are unchanged.
+Loyalty and defense use existing counter fact rows. The five former incomplete
+entries are now admitted through the ordinary whole-deck authority. No frozen
+world, checkpoint or MTG-213 corpus is changed. The current authored tape now
+has 135 Commands and 66 public commitments: at decision 90 Rallier correctly
+excludes Suki with power above three, changing the subsequent game. The former
+142-Command tape remains at `22e4aab71:conformance/authored-match-w17-v1/`.
+Admission is availability, not a claim that a playable card is bug-free.
+
+Task MTG-226 (TLA batch T7, same open world) adds Secret of Bloodbending and
+scheduled next-combat/next-turn player control. The chooser is published in
+`ActionSpace.player`; native Decision and Action player fields retain the rules
+subject. Control shares permitted in-game information, including face-down
+foretold cards, but never private sideboards or outside-game selections.
+Ordered control schedules and delegated decisions use v5/v6 relation kinds 13/14;
+widths and v1–v4 exclusions are unchanged. Definition-derived learning tokens,
+native/Python encoders, text and Academy expose the same authority. State hash
+contract 15 includes control schedules alongside T6's delayed lifetimes. The optional Academy `player_controls`
+projection distinguishes historical absence from a live empty list; protocol
+version 1 is unchanged. No frozen historical evidence is rewritten.
+The [full-file reconciliation](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/tla/acceptance.md) accounts for all
+286 identities / 294 faces and records concrete interaction coverage limits.
+T6 schedule/selector capture, delayed lifetimes and main's v6 capacity are
+integrated from published T6 `7c790f78e`. Mutable w17 receipts are rebound to
+the combined content/hash identity; their 135-Command authored tape and 66
+public commitments remain unchanged. CI and review acceptance remain separate.
+
+## w16: one card authority (superseded by w17)
+
+Cards are typed Rust functions in the file of the set that first printed them
+under `managym/src/cardsets/` (`tla.rs`, `stx.rs`, `lea.rs`, …), each defined
+once. `semantic::compile` lowers them in process into the IR the runtime, pool
+descriptor and learning projection read; no card catalog or IR is generated on
+disk. Definition keys name that set (`lea.forest`, `stx.pop_quiz`, `token.clue`);
+compiled IR was proven identical to w15's content apart from those renames. The
+few cards the typed language cannot express are native `CardDefinition`s in their
+set files; with the rules fixtures they keep the default pack's legacy
+`CardDefId` prefix and content digest.
+
+`managym::world` owns `WORLD_VERSION` and the card/deck support check
+(`managym.unsupported_cards`). The world pool is every defined card from every
+set. A card is supported when its set file defines it with a typed program and
+does not mark it incomplete; tests never gate support. `managym.set_cards`
+narrows the pool to chosen sets, such as `["tla", "lea"]`.
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 
@@ -65,7 +408,7 @@ validation and world freeze remain with gate; no new training or strength
 comparison is certified by these checks.
 
 Gate's current limits are recorded in
-[Elemental contracts](docs/rules/elemental-combat.md#gate-evidence-and-remaining-limits--2026-10-20).
+[Elemental contracts](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-combat.md).
 The w7 authored-match authority and replay parity have separate versioned
 receipts; historical public-commitment/RUL-9 checks and pinned Linux visual
 validation remain unresolved. w7 is not frozen.
@@ -122,7 +465,7 @@ w3 and w4 results retain their original input contracts and evidence limits.
 
 ## w4: complete UR additions
 
-Jack Heart accepted a new world on 2026-09-29 for ETU-88. This world adds
+w4 was opened on 2026-09-29 for ETU-88. This world adds
 mandatory discard and legend-rule decisions, seven-card cleanup and Proft's
 hand-limit exemption, conditional spell-cost reduction, combat/draw-count
 abilities, and temporary death-to-exile replacement. The permanent tensor
@@ -132,7 +475,7 @@ using the existing SelectCard action. Match-state hashes use v3 and semantic
 decisions/observations use v6. Visible card records now carry registered rules
 text, including owned outside candidates.
 
-The authored UR and GW decklists are unchanged. Jack's revised 40-card UR list
+The authored UR and GW decklists are unchanged. A revised 40-card UR list
 is a custom setup for ETU-87 to measure, not an adopted authored deck. The
 new definitions use the ordinary declarative card registry and effect
 interpreter; they are not added to the frozen compiled two-deck semantic IR.
@@ -143,7 +486,7 @@ rules and legal decisions.
 Frozen receipts, checkpoints, and prior win-rate measurements keep their
 original identities. The earlier 38% Search-64 result is context, not a w4
 baseline. Re-run both authored and candidate lists under matched w4 consumers
-before comparing strength. See [ETU-88 evidence](docs/rules/ur-lessons-increment.md).
+before comparing strength. See [ETU-88 evidence](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/ur-lessons-increment.md).
 
 ## Semantic input compatibility
 
@@ -166,9 +509,6 @@ top of tensor dimensions:
   zero silent truncation. Token-count and overflow receipts travel with
   experiment results.
 
-The full rationale and required controls are in
-[`docs/research/metta-observation-robustness.md`](docs/research/metta-observation-robustness.md).
-
 ## w8: Sacrifice and landfall (not yet frozen)
 
 MTG-162 adds selected sacrifice costs, payment alternatives, immediate chosen-color
@@ -188,7 +528,7 @@ World freeze and release certification remain separate from implementation.
 
 ## w9: Temur mana and graveyard casting (not yet frozen)
 
-[The Temur rules contract](docs/rules/elemental-temur.md) covers six added real
+[The Temur rules contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental-temur.md) covers six added real
 cards, granted mana abilities, Lesson-restricted mana, Iroh flashback, and Ran
 and Shaw's nonlegendary token. Player features grow from 28 to 40 to retain both
 ordinary and Lesson-restricted W/U/B/R/G/C pool counts. Card features grow from
@@ -206,7 +546,7 @@ integration changes, without a strength claim or a promoted checkpoint.
 ## w10: one ten-deck Elemental world
 
 `elemental-world-v1` adds the exact ten accepted 40-card decks and outside-game
-Lesson pools in [the Elemental contract](docs/rules/elemental/world.md). Its closure
+Lesson pools in [the Elemental contract](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/elemental/world.md). Its closure
 contains 89 selected nonbasic cards, five basics and six token definitions.
 Earlier authored packs and receipts retain their bytes and setup meanings.
 
@@ -236,7 +576,7 @@ Match-state hash 8 identifies the changed serialized state; learning schema 7
 and opcode 65 identify authored payment branches. Tensor dimensions stay fixed.
 Frozen opcode 61 lowers to the shared runtime. Earlier sources, schemas and
 receipts remain unchanged; w10 checkpoints are rejected. See
-[optional payments](docs/rules/optional-payments.md) for ownership and authoring.
+[optional payments](docs/engine.md#resolution-contracts) for ownership and authoring.
 
 The shared-payment repair uses executable witnesses for offers and nested mana
 costs within development w11. Its source-bound corpus is
@@ -255,7 +595,7 @@ A response that grants hexproof can invalidate a selected target under CR 608.2b
 a departed permanent slot cannot follow a new incarnation of the same card.
 
 Tensor shapes, compiled authored content and learning schema 7 are unchanged.
-The new [w12 corpus](conformance/semantic-kernel-w12-v1/) records fresh runtime
+The new [w12 corpus](experiments/data/archive/conformance/semantic-kernel-w12-v1/) records fresh runtime
 receipts; w11 and earlier corpora, checkpoints and `erd1` evidence stay frozen.
 This bounded repair does not supply trigger-order choices, general protection,
 or stack-spell incarnation guarantees. No strength baseline is claimed.
@@ -269,7 +609,7 @@ differs from the earlier w12 targeting-only corpus. Neither historical receipt
 describes the combined source. w13 identifies this combined runtime; it adds no
 new tensor shape, learning schema, authored cards or payment implementation.
 
-[Fresh conformance evidence](conformance/semantic-kernel-w13-v1/) uses the same
+[Fresh conformance evidence](experiments/data/archive/conformance/semantic-kernel-w13-v1/) uses the same
 bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
 ordinary Command path. All earlier corpora and demo files retain their bytes.
 Current-world admission and monitoring must validate this combined runtime;
@@ -295,9 +635,49 @@ Native offers say “Put on stack next” and describe the exact triggered abili
 or delayed payload. Public stack inspection and text capture reuse that derived
 description; full card text remains available in source inspection.
 
-The new conformance root is `conformance/semantic-kernel-w14-v1`. Existing w13 and
+The new conformance root is `experiments/data/archive/conformance/semantic-kernel-w14-v1`. Existing w13 and
 earlier corpora, play roots, decks and checkpoint evidence are retained unchanged.
 The existing-card trigger witness uses the explicit scenario recipe in
 `manabot.verify.trigger_order` before ordinary human Commands and agent actions;
 `academy/fixtures/trigger-order-w14.json` retains its root and content identities.
 This is a constructed root, not a seed-only authored-match prefix.
+
+
+## w15: resolution-start target eligibility
+
+CR 608.2b eligibility is evaluated once at resolution entry for each chosen
+clause/target slot, across spells, activated abilities and triggers. Instructions
+and suspended choices retain that result; live presence checks separately reject
+departed objects. Illegal slots remain positional, all-invalid targeted objects
+perform no instructions, and zero optional targets still resolve. Controller-selected
+trigger placement from w14 remains intact.
+
+Canonical mutable-state hash 10 includes the retained eligibility slots. Policy
+input v4 extends the 64 relation rows from 32 to 33 columns, adding unknown/legal/
+illegal eligibility at column 32. Validity stays at column 31; v2/v3 layouts and
+checkpoint omissions remain unchanged. Capture/text v4 carries the same native
+fact, with unchanged embedded decision schema 7. Earlier checkpoints are rejected
+for current-world play, and historical captures retain their recorded semantics.
+
+Fresh `experiments/data/archive/conformance/semantic-kernel-w15-v1` receipts and Academy w15 prefixes bind
+the integrated source. Earlier corpora, demos, authored packs and experiment
+artifacts remain unchanged. These bounded fixtures do not establish exhaustive
+rules correctness, scientific baselines or final release certification.
+
+### Open w17 — composable characteristic layers
+
+Layer evaluation uses dependency and timestamp order across types, colors,
+abilities and P/T, including keyword-counter timestamps and surviving grants.
+Beorn the Fierce and Kellan, Planar Trailblazer are defined cards. Prior checkpoints retain their identities; their exact world bindings reject
+changed rules, content and input contracts. No world freeze is inferred.
+
+Explicit policy input v8 retains v7 object, relation, header and membership
+widths, with 4096 × 3 ordered effect-detail tokens. Detail kinds 11–19 carry
+the catalog's token kinds 1–9; signed i32 values use exact 16-bit halves.
+Kinds 12/13 of local facts state changed effective colors and keyword-counter
+timestamp ranks; copy-exception programs use kind 11. Kind 14 joins captured
+activation/trigger programs to continuation frame indices, retaining them after
+source departure and suspension. Local facts default to 512 rows and remain
+configurable. V8 program reducers preserve token order and signed numeric inputs. V1–v7 parameter shapes and meanings remain
+frozen; fresh configuration still selects v6. Both encoders reject unsupported
+layer payloads before inference, naming the selected version and required v8.

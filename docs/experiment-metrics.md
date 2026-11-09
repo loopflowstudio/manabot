@@ -47,7 +47,8 @@ to include archived training records. A snapshot covers its configured sources,
 not an assumed complete training history.
 
 The accepted cross-project scope is recorded in
-[Training time reports from selected Etude runs](plans/training-time-cohorts.md).
+Training time reports from selected Etude runs (the plan was retired; the
+cohort report in [training time](../experiments/training-time.md) is the record).
 
 ## Experiment notebooks
 
@@ -253,8 +254,8 @@ actions: larger skewed distributions or averages of different supports can have
 the same entropy. Normalizing by log(number of legal actions) requires the actual
 sampled support sizes, which these historical diagnostics did not retain. Entropy
 measures dispersion, not competence; a confident wrong policy can have low entropy.
-See the [saved history investigation](evidence/history-report-learning-2026-10-06.md)
-for measured counts and the remaining explanatory limit.
+The saved history investigation that measured these counts was retired with the
+September world; `git log` keeps it.
 
 ## Scientific studies and software demonstrations
 

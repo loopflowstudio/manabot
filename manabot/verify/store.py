@@ -6,81 +6,11 @@ import json
 import os
 from pathlib import Path
 import sqlite3
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from manabot.experiment.execution import ExperimentRun
     from manabot.training.records import TrainingRun
-
-RUN_CONFIG_FIELDS = (
-    "experiment",
-    "train",
-    "reward",
-    "agent",
-    "match",
-    "observation",
-)
-
-EVALUATION_METRIC_FIELDS = (
-    "win_rate",
-    "win_ci_lower",
-    "mean_steps",
-    "attack_rate",
-    "attacked_when_able",
-    "landed_when_able",
-    "cast_when_able",
-    "passed_when_able",
-    "could_attack",
-    "could_land",
-    "could_spell",
-    "could_pass",
-    "land_plays",
-    "spell_casts",
-    "pass_count",
-    "single_valid_decisions",
-    "multi_valid_decisions",
-    "pass_land_decisions",
-    "pass_land_pass_rate",
-    "pass_land_land_rate",
-    "pass_land_spell_rate",
-    "mean_pass_prob",
-    "mean_land_prob",
-    "mean_spell_prob",
-    "mean_attack_prob",
-    "mean_pass_prob_when_land_available",
-    "mean_land_prob_when_land_available",
-    "mean_pass_prob_when_pass_land",
-    "mean_land_prob_when_pass_land",
-    "action_space_truncations",
-    "card_space_truncations",
-    "permanent_space_truncations",
-)
-
-EVALUATION_ACTION_FIELDS = (
-    "game_index",
-    "step",
-    "player",
-    "action_type",
-    "choice_set",
-    "is_trivial",
-    "num_valid_actions",
-    "attack_available",
-    "land_available",
-    "spell_available",
-    "pass_available",
-    "pass_prob",
-    "land_prob",
-    "spell_prob",
-    "attack_prob",
-)
-
-BOOLEAN_ACTION_FIELDS = {
-    "is_trivial",
-    "attack_available",
-    "land_available",
-    "spell_available",
-    "pass_available",
-}
 
 
 def _default_db_path() -> Path:
@@ -102,19 +32,6 @@ def training_stage_payloads(con: sqlite3.Connection, run_id: str) -> list[dict]:
             (run_id,),
         )
     ]
-
-
-def _clean_json(value: Any) -> Any:
-    if isinstance(value, dict):
-        return {key: _clean_json(val) for key, val in value.items()}
-    if isinstance(value, list):
-        return [_clean_json(item) for item in value]
-    if isinstance(value, float):
-        if value != value or value in (float("inf"), float("-inf")):
-            return None
-    if isinstance(value, Path):
-        return str(value)
-    return value
 
 
 class VerifyStore:

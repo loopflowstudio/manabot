@@ -10,9 +10,9 @@ from manabot.eval.results import EvaluationRow
 from manabot.experiment import evaluation_queue as queue
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.recipes.ataraxos import ataraxos
 from manabot.training.records import MonitoringCheckpoint, StageRecord, TrainingRun
 from tests.training.test_monitor_evaluation import _manifest, _rows
+from tests.training.wdl_baseline import wdl_baseline
 
 
 class Clock:
@@ -51,7 +51,7 @@ def fake_process(monkeypatch: pytest.MonkeyPatch) -> list[Process]:
 
 
 def run_fixture(path: Path) -> TrainingRun:
-    regime = ataraxos().regime()
+    regime = wdl_baseline().regime()
     run = TrainingRun(
         id="fixture",
         regime=regime,

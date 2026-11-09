@@ -71,12 +71,6 @@ def _offer(frame: dict, *, action_type: str, label: str | None = None) -> dict:
 
 
 def test_protocol_v1_bolt_and_pass_offers_round_trip(monkeypatch, tmp_path):
-    native_env = server.managym.Env
-
-    def historical_env(*, seed: int, skip_trivial: bool) -> server.managym.Env:
-        return native_env(seed=seed, skip_trivial=True)
-
-    monkeypatch.setattr(server.managym, "Env", historical_env)
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
     config = {

@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-2"
+REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -91,18 +91,33 @@ _STAGES = frozenset(
         "declare_blockers",
         "mana_payment",
         "mana_color",
-        "resolution_sacrifice",
+        "resolution_choice",
         "private_search",
         "learn",
         "private_inspection",
         "scry",
         "resolution_payment",
         "resolution_mode",
+        "name_card",
         "discard",
         "select_milled",
+        "select_cards",
+        "order_replacement",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "trigger_mode",
+        "revealed_hand",
+        "split_revealed",
+        "free_cast",
+        "linked_exile",
+        "distribute_counters",
+        "keep_creatures",
+        "retarget",
+        "resolution_cast",
+        "surveil",
+        "order_library_bottom",
+        "order_library_top",
     )
 )
 
@@ -156,6 +171,73 @@ def _enum(values: tuple[str, ...], index: int) -> str:
     return values[index]
 
 
+# `ContinuationFrame.decision` by frame kind: an obligation's
+# `continuation::decision_code` (kind 6), a waiting or placing trigger's
+# ordering class (kinds 7 and 8), or the placement cursor's group (kind 9).
+_OBLIGATIONS = (
+    "none",
+    "resolving payment",
+    "mana activation cost",
+    "mana output",
+    "sacrifice",
+    "select milled",
+    "search",
+    "optional discard and draw",
+    "scry",
+    "inspect and select",
+    "mode",
+    "Learn",
+    "discard",
+    "legend rule",
+    "search lands with different names",
+    "split revealed cards",
+    "discard from revealed hand",
+    "cast during resolution",
+    "exile linked card",
+    "distribute counters",
+    "keep creatures",
+    "retarget",
+    "surveil",
+    "order library bottom",
+    "choose optional payment X",
+    "search named cards",
+    "choose a permanent to exile",
+    "order library top",
+    "select cards",
+    "order replacements",
+)
+_TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
+_PLACEMENT_GROUPS = (
+    "none",
+    "placing active player's ordinary triggers",
+    "placing nonactive player's ordinary triggers",
+    "placing active player's ability-triggered triggers",
+    "placing nonactive player's ability-triggered triggers",
+)
+_DELAYED_EVENTS = (
+    "none",
+    "the watched object to die",
+    "the watched object to die or be exiled",
+    "a creature to die",
+    "the end step",
+    "its controller's matching spell",
+    "the upkeep",
+    "its controller's end step",
+)
+
+
+def _frame_decision(kind: int, decision: int) -> str:
+    if kind == 6:
+        return _enum(_OBLIGATIONS, decision)
+    if kind in (7, 8):
+        return _enum(_TRIGGER_CLASSES, decision)
+    if kind == 9:
+        return _enum(_PLACEMENT_GROUPS, decision)
+    if kind == 10:
+        return "waits for " + _enum(_DELAYED_EVENTS, decision)
+    raise TextEncodingError(f"frame kind {kind} carries no decision")
+
+
 def _keywords(value: Keywords | managym.Keywords) -> str:
     return ", ".join(
         key.replace("_", " ") for key in Keywords.model_fields if getattr(value, key)
@@ -172,6 +254,36 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
         for label, value in (("mode", mode), ("ability", ability))
         if value is not None
     ]
+
+
+def _turn_history(history: managym.PlayerTurnHistory) -> str:
+    """What a player has done this turn, or empty when nothing yet."""
+    parts = []
+    if history.attacked:
+        parts.append("attacked")
+    if count := history.permanents_sacrificed:
+        parts.append(f"sacrificed {count} permanent{'' if count == 1 else 's'}")
+    if history.land_entered:
+        parts.append("had a land enter under their control")
+    if count := history.cards_drawn:
+        parts.append(f"drew {count} card{'' if count == 1 else 's'}")
+    if history.bent:
+        kinds = ("water", "earth", "fire", "air")
+        bent = ", ".join(
+            kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
+        )
+        parts.append(f"bent {bent}")
+    return "; ".join(parts)
+
+
+def _spending(restricted: managym.RestrictedMana) -> str:
+    """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    parts = []
+    if restricted.spells:
+        parts.append(" or ".join(restricted.spells) + " spells")
+    if restricted.abilities:
+        parts.append("abilities of " + " or ".join(restricted.abilities) + " sources")
+    return " or ".join(parts)
 
 
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
@@ -212,8 +324,56 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
             + "}"
         )
     return (symbols or "{0}") + (
-        " (Lesson spending context)" if getattr(cost, "spend_on_lesson", False) else ""
+        " (restricted spending)" if getattr(cost, "spend_on_lesson", False) else ""
     )
+
+
+def effect_phrase(effect: managym.ContinuousEffect) -> str:
+    """What one continuous-effect record does, in the words Academy shows."""
+    if effect.description:
+        return effect.description
+    modification = effect.modification
+    if modification == "ModifyPt":
+        return f"{effect.power:+d}/{effect.toughness:+d}"
+    if modification == "SetBasePt":
+        power = "unchanged" if effect.power is None else effect.power
+        toughness = "unchanged" if effect.toughness is None else effect.toughness
+        return f"base power/toughness {power}/{toughness}"
+    if modification == "AddKeywords":
+        return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "LoseKeywords":
+        return "loses " + ", ".join(
+            keyword.replace("_", " ") for keyword in effect.keywords
+        )
+    if modification == "LoseNonManaAbilities":
+        return "loses all abilities except mana abilities"
+    if modification == "SetCreatureTypes":
+        return f"creature types become {', '.join(effect.subtypes)}"
+    if modification == "SwitchPt":
+        return "power and toughness switched"
+    if modification == "AddSubtypes":
+        return "is also " + ", ".join(effect.subtypes)
+    phrases = {
+        "BecomeCreature": "is also a creature",
+        "Nonlegendary": "isn't legendary",
+        "LoseAllAbilities": "loses all abilities",
+        "Firebending": f"firebending {effect.amount}",
+        "CantBeBlocked": "can't be blocked",
+        "CantBlock": "can't block",
+        "DoesntUntap": "doesn't untap during its controller's untap step",
+        "ExileIfWouldDie": "exiled instead if it would die",
+        "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
+        "NoMaximumHandSize": "no maximum hand size",
+        "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
+        "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
+        "HasAbilitiesOfSource": (
+            f"has the activated and triggered abilities of {effect.source_name}"
+        ),
+    }
+    try:
+        return phrases[modification]
+    except KeyError as error:
+        raise TextEncodingError(f"unknown modification {modification}") from error
 
 
 class _Renderer:
@@ -222,6 +382,14 @@ class _Renderer:
         self.state = managym.Observation.from_json(
             json.dumps(capture.observation.viewer_state)
         )
+        timestamps = {
+            p.id if p.timestamp is None else p.timestamp
+            for p in self.state.agent_permanents + self.state.opponent_permanents
+        }
+        timestamps.update(r.effect.timestamp for r in self.state.shared_effects or [])
+        self.timestamp_ranks = {
+            stamp: index + 1 for index, stamp in enumerate(sorted(timestamps))
+        }
         self.names: dict[int, str] = {}
         self.seats: dict[int, str] = {}
         self.objects: dict[tuple[int, int], str] = {}
@@ -374,39 +542,61 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger', 'scheduled turn', 'additional combat', 'player control', 'delegated decision'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        details += _selectors(relation.mode, relation.ability)
+        if relation.kind == 6 and relation.decision == 25:
+            details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 6 and relation.decision == 27:
+            details.append(f"{relation.mode or 0} kept cards already ordered on top")
+        elif relation.kind == 6 and relation.decision == 28:
+            details.append(f"may select up to {relation.mode or 0} more cards")
+        elif relation.kind == 6 and relation.decision == 29:
+            details.append("choose the next event replacement")
+        elif relation.kind == 11:
+            details.append(f"scheduled turn {(relation.mode or 0) + 1}")
+        elif relation.kind in (13, 14):
+            player = (
+                self.fact_reference(relation.context)
+                if relation.context is not None
+                else "unavailable player"
+            )
+            if relation.kind == 13:
+                duration = "combat phase" if relation.decision == 1 else "turn"
+                interval = "this" if relation.mode == 1 else "their next"
+                details.append(f"controls {player} during {interval} {duration}")
+            else:
+                details.append(f"chooses for {player} using that player's resources")
+        elif relation.kind == 12:
+            details.append(
+                "current combat"
+                if relation.mode == 0
+                else f"queued combat {relation.mode}"
+            )
+        else:
+            details += _selectors(relation.mode, relation.ability)
+        if relation.x:
+            details.append(f"X = {relation.x}")
         if relation.kicked:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision:
-            details.append(
-                _enum(
-                    (
-                        "none",
-                        "resolving payment",
-                        "mana activation cost",
-                        "mana output",
-                        "sacrifice",
-                        "select milled",
-                        "search",
-                        "optional discard and draw",
-                        "scry",
-                        "inspect and select",
-                        "mode",
-                        "Learn",
-                        "discard",
-                        "legend rule",
-                        "order triggers",
-                    ),
-                    relation.decision,
+        if relation.decision and relation.kind != 13:
+            details.append(_frame_decision(relation.kind, relation.decision))
+        if relation.kind == 10:
+            if relation.delayed_frequency is not None:
+                details.append(
+                    "fires once; consumed on matching event"
+                    if relation.delayed_frequency == 1
+                    else "fires on each matching event"
                 )
+            details.append(
+                "waiting ends at this turn's cleanup"
+                if relation.this_turn
+                else "no stated expiry"
             )
         if relation.cost is not None:
             details.append(
@@ -423,15 +613,37 @@ class _Renderer:
             details.append(
                 f"waterbend {_yes(relation.waterbend)}; may decline {_yes(relation.can_decline)}"
             )
-        for target in relation.targets:
+        for ordinal, target in enumerate(relation.targets, 1):
+            legal = target.legal_at_resolution_start
+            eligibility = "unknown" if legal is None else _yes(legal)
             details.append(
-                f"target clause {target.clause + 1}: {self.fact_reference(target.reference)}"
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
-            details.append("trigger context " + self.fact_reference(relation.context))
+            label = "watching" if relation.kind == 10 else "trigger context"
+            details.append(f"{label} {self.fact_reference(relation.context)}")
+        for reference in relation.remembered:
+            details.append(f"remembered {self.fact_reference(reference)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)
+            )
+        if relation.inherited_from is not None:
+            details.append(
+                f"source inherits abilities from {self.fact_reference(relation.inherited_from)}"
+            )
+        if relation.program_description is not None:
+            details.append(f"captured program: {relation.program_description}")
+        if relation.effect_execution_description is not None:
+            details.append(f"effect execution: {relation.effect_execution_description}")
+        for slot, reference in enumerate(relation.effect_execution_references, 1):
+            details.append(f"E{slot}: {self.fact_reference(reference)}")
+        if relation.attackers is not None:
+            details.append(f"only {relation.attackers} may attack")
+        if relation.source_transforms:
+            details.append(
+                f"source transform count at activation/trigger {relation.source_transforms}"
             )
         if relation.resolutions_this_turn:
             details.append(
@@ -473,7 +685,7 @@ class _Renderer:
                     for symbol, count in zip("WUBRGC", player.mana, strict=True)
                 )
                 + ".",
-                "Lesson-only mana: "
+                "Restricted mana: "
                 + ", ".join(
                     f"{symbol} {count}"
                     for symbol, count in zip("WUBRGC", player.lesson_mana, strict=True)
@@ -481,11 +693,53 @@ class _Renderer:
                 + f". Until-end-of-combat mana total: {player.combat_mana}.",
                 f"Lessons in graveyard: {player.graveyard_lessons}.",
             ]
-            for label, quantities in (
-                ("Publicly known hand minima", player.known_hand),
-                ("Initial sideboard", player.sideboard_counts),
-                ("Remaining sideboard", player.remaining_sideboard_counts),
-            ):
+            for restricted in player.restricted_mana:
+                lines.append(
+                    f"Restricted mana for {_spending(restricted)}: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", restricted.mana, strict=True)
+                        if count
+                    )
+                    + "."
+                )
+            if player.hand_only_until is not None:
+                lines.append(
+                    "Can cast spells only from hand, overriding permissions to cast "
+                    f"from elsewhere, until {self.name(player.hand_only_until)} "
+                    "begins a turn."
+                )
+            if player.no_maximum_hand_size:
+                lines.append("Has no maximum hand size for the rest of the game.")
+            if player.keeps_red_mana:
+                lines.append("Keeps unspent red mana until end of turn.")
+            if history := _turn_history(player.turn_history):
+                lines.append(f"This turn: {history}.")
+            if player.extra_turns:
+                lines.append(
+                    f"Will take {player.extra_turns} extra turn(s) after this one."
+                )
+            if player.additional_combats:
+                lines.append(
+                    f"Has {player.additional_combats} additional combat phase(s) "
+                    "still to come this turn."
+                )
+            if state.shared_effects is None:
+                for effect in player.effects:
+                    lines.append(f"Effect: {self._effect(effect)}.")
+            counts: list[tuple[str, dict[int, int]]] = [
+                ("Publicly known hand minima", player.known_hand)
+            ]
+            if player.main_counts is None:
+                lines.append("Decklist: closed.")
+            else:
+                counts += [
+                    ("Main deck", player.main_counts),
+                    ("Unseen cards", player.unseen_counts or {}),
+                    ("Initial sideboard", player.sideboard_counts or {}),
+                    ("Remaining sideboard", player.remaining_sideboard_counts or {}),
+                ]
+            for label, quantities in counts:
                 lines.append(
                     label
                     + ": "
@@ -526,7 +780,13 @@ class _Renderer:
             )
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
-                optional += f"; printed keywords {keywords}"
+                optional += f"; keywords {keywords}"
+            if card.face_down:
+                optional += "; foretold, face down (hidden from other players)"
+            if card.x is not None:
+                optional += f"; announced X {card.x}"
+            if card.cast_permission is not None:
+                optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
@@ -534,21 +794,154 @@ class _Renderer:
             lines.append("Empty.")
         return lines
 
+    def _cast_permission(self, permission: managym.CastPermission) -> str:
+        terms = [
+            "as a land play"
+            if permission.cost is None
+            else f"cast for {_mana(permission.cost)}"
+        ]
+        if permission.this_turn:
+            terms.append("this turn only")
+        if permission.through_next_turn:
+            terms.append("until the end of their next turn")
+        if permission.own_turn_only:
+            terms.append("during their own turn only")
+        if permission.after_turn is not None:
+            terms.append(f"only after turn {permission.after_turn}")
+        if permission.source_permanent_id is not None:
+            terms.append(
+                f"while they control {self.name(permission.source_permanent_id)}"
+            )
+        if permission.flash:
+            terms.append("as though it had flash")
+        if permission.any_mana:
+            terms.append("spending mana of any type")
+        if permission.waterbend:
+            terms.append("generic may be paid by waterbending")
+        return (
+            f"may be played from exile by {self.name(permission.player_id)}: "
+            + ", ".join(terms)
+        )
+
     def _permanents_lines(self) -> list[str]:
         state = self.state
         lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
             optional = ""
+            if permanent.attacking:
+                optional += "; attacking"
+            if permanent.colors is not None:
+                optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
+            if permanent.keyword_counter_timestamps:
+                optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
+            if permanent.exhausted_abilities:
+                optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
+            if permanent.once_each_turn_used:
+                optional += (
+                    "; once-each-turn abilities used this turn "
+                    f"{permanent.once_each_turn_used}"
+                )
+            if permanent.granted_firebending:
+                optional += (
+                    f"; firebending {permanent.granted_firebending} until end of turn"
+                )
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
+            optional += self._characteristics(permanent)
+            if state.shared_effects is not None:
+                optional += f"; timestamp rank {self.timestamp_ranks[permanent.id if permanent.timestamp is None else permanent.timestamp]}"
             lines.append(
                 f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: controller {self.name(permanent.controller_id)}; power/toughness {permanent.power}/{permanent.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false."
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
         return lines
+
+    def _characteristics(self, permanent: managym.Permanent) -> str:
+        """Effect-derived state, rendered only when present so other text is unchanged."""
+        parts = [
+            f"{kind.replace('_', ' ')} counters {count}"
+            for kind, count in sorted(permanent.counters.items())
+            if count
+        ]
+        if permanent.attached_to is not None:
+            parts.append(f"attached to {self.name(permanent.attached_to)}")
+        if permanent.name is not None:
+            parts.append(f"name set to {permanent.name}")
+        if permanent.creature_types is not None:
+            types = ", ".join(permanent.creature_types) or "none"
+            parts.append(f"creature types set to {types}")
+        if permanent.is_granted_land:
+            parts.append("land through an effect")
+        if permanent.blocking is not None:
+            parts.append(f"blocking {self.name(permanent.blocking)}")
+        if permanent.abilities_lost:
+            parts.append("has lost all abilities")
+        if permanent.transforms:
+            parts.append(f"transformed {permanent.transforms} times")
+        if permanent.used_abilities:
+            used = ", ".join(str(index + 1) for index in permanent.used_abilities)
+            parts.append(f"used-up abilities {used}")
+        if permanent.dealt_damage_this_turn:
+            parts.append("dealt damage this turn")
+        if permanent.copy is not None:
+            parts.append(self._copy(permanent.copy))
+        if self.state.shared_effects is None:
+            parts.extend(
+                f"effect {self._effect(effect)}" for effect in permanent.effects
+            )
+        return "".join(f"; {part}" for part in parts)
+
+    def _copy(self, copy: managym.CopyEffect) -> str:
+        """A copy effect: what it copies, and the exceptions in its copiable values."""
+        exceptions = " and ".join(effect_phrase(effect) for effect in copy.exceptions)
+        return f"copy of {self.definition(copy.registry_key)}" + (
+            f", except {exceptions}" if exceptions else ""
+        )
+
+    def _effect_object(self, reference: managym.EffectObject) -> str:
+        if reference.object_id is None:
+            raise TextEncodingError("unavailable shared-effect object")
+        if reference.incarnation is None:
+            return self.name(reference.object_id)
+        try:
+            return self.objects[reference.object_id, reference.incarnation]
+        except KeyError as error:
+            raise TextEncodingError("stale shared-effect incarnation") from error
+
+    def _shared_effect_lines(self) -> list[str]:
+        lines: list[str] = []
+        for index, record in enumerate(self.state.shared_effects or [], 1):
+            source = (
+                f"; exact source {self._effect_object(record.source)}"
+                if record.source is not None
+                else ""
+            )
+            members = ", ".join(
+                f"{self._effect_object(member.target)} (record {member.order + 1})"
+                for member in record.members
+            )
+            lines.append(
+                f"Effect {index}: {self._effect(record.effect)}; timestamp rank "
+                f"{self.timestamp_ranks[record.effect.timestamp]}; controller "
+                f"{self.name(record.controller_id)}{source}; affects {members}."
+            )
+        return lines
+
+    def _effect(self, effect: managym.ContinuousEffect) -> str:
+        """One continuous-effect record: how long, what, and its source."""
+        until = {
+            "EndOfTurn": "until end of turn: ",
+            "WhileYouControlSource": "while its source's controller controls it: ",
+        }.get(effect.duration, "")
+        source = (
+            f" (from {self.definition(effect.source_registry_key)})"
+            if effect.source_registry_key is not None
+            else ""
+        )
+        return f"{until}{effect_phrase(effect)}{source}"
 
     def _definitions_lines(self) -> list[str]:
         capture = self.capture
@@ -607,7 +1000,31 @@ class _Renderer:
             raise TextEncodingError("incomplete action/offer binding")
         if len({offer["id"] for offer in frame.offers}) != len(frame.offers):
             raise TextEncodingError("duplicate offer identity")
-        if any(card.zone == 1 for card in state.opponent_cards):
+        controls_opponent = (
+            next(
+                (
+                    relation.controller
+                    for relation in reversed(capture.frames)
+                    if relation.kind == 13
+                    and relation.mode == 1
+                    and relation.context is not None
+                    and relation.context.player == state.opponent.player_index
+                ),
+                state.opponent.player_index,
+            )
+            == state.agent.player_index
+        )
+        searching_opponent = any(
+            relation.kind == 6
+            and relation.decision == 25
+            and relation.controller == state.agent.player_index
+            and relation.context is not None
+            and relation.context.player == state.opponent.player_index
+            for relation in capture.frames
+        )
+        if not (searching_opponent or controls_opponent) and any(
+            card.zone == 1 for card in state.opponent_cards
+        ):
             raise TextEncodingError("opponent hand identity in capture")
         lines = [
             "You are choosing one legal action in the current game.",
@@ -637,6 +1054,9 @@ class _Renderer:
             lines.append("Empty.")
         lines += ["", "Battlefield effective state:"]
         lines.extend(self._permanents_lines())
+        if self.state.shared_effects:
+            lines.extend(("", "SHARED CONTINUOUS EFFECTS"))
+            lines.extend(self._shared_effect_lines())
         lines += ["", "Stack (native order, top to bottom):"]
         for index, item in enumerate(state.stack_objects):
             stack_frame = capture.frames[index]
@@ -655,6 +1075,12 @@ class _Renderer:
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
+            if item.x:
+                details.append(f"X = {item.x}")
+            if item.granted_keywords is not None and (
+                granted := _keywords(item.granted_keywords)
+            ):
+                details.append(f"granted keywords {granted}")
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(

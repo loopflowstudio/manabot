@@ -9,9 +9,15 @@
 // lines. Injection clears derived history: there is no authentic transition
 // into an injected position. Never call these from gameplay code paths.
 
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, LazyLock},
+};
+
 use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
-    flow::game::Game,
+    cards::names::{NameCandidate, NameVocabulary},
+    flow::{decision::Decision, game::Game},
     state::{
         game_object::{CardId, PermanentId, PlayerId},
         permanent::Permanent,
@@ -19,7 +25,67 @@ use crate::{
     },
 };
 
+/// The checked-in, provenance-bearing name fixture adds no playable definitions.
+/// Shared by native, policy and Academy proofs; never installed by game setup.
+pub(crate) fn naming_fixture_vocabulary() -> Arc<NameVocabulary> {
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        name: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct Fixture {
+        names: Vec<Entry>,
+    }
+    static NAMES: LazyLock<Arc<NameVocabulary>> = LazyLock::new(|| {
+        let fixture: Fixture =
+            serde_json::from_str(include_str!("../../tests/fixtures/naming_vocabulary.json"))
+                .expect("checked-in naming fixture");
+        let mut entries: BTreeMap<_, _> = fixture
+            .names
+            .into_iter()
+            .map(|entry| (entry.name, None))
+            .collect();
+        for entry in crate::cards::content_pack::default_content_pack()
+            .name_candidates()
+            .iter()
+        {
+            entries.insert(entry.name.clone(), entry.definition);
+        }
+        NameVocabulary::new(
+            entries
+                .into_iter()
+                .map(|(name, definition)| NameCandidate { name, definition })
+                .collect(),
+        )
+    });
+    Arc::clone(&NAMES)
+}
+
 impl Game {
+    /// Replace only a pending naming decision with the validated large fixture.
+    /// This is an injected root, not a legal transition or production vocabulary.
+    pub fn scenario_naming_vocabulary(&mut self) -> Result<Arc<NameVocabulary>, AgentError> {
+        let Some(Decision::NameCard { names, scope, .. }) = self
+            .state
+            .suspended_decision
+            .as_mut()
+            .map(|pending| &mut pending.decision)
+        else {
+            return Err(AgentError(
+                "scenario_naming_vocabulary requires a naming decision".into(),
+            ));
+        };
+        let fixture = naming_fixture_vocabulary();
+        *names = Arc::clone(&fixture);
+        *scope = fixture.root();
+        self.policy_history = Default::default();
+        self.publish_action_space(
+            self.suspended_decision_action_space()
+                .expect("naming decision"),
+        );
+        Ok(fixture)
+    }
+
     /// Set a player's life total directly.
     pub fn scenario_set_life(&mut self, player: PlayerId, life: i32) {
         self.policy_history = Default::default();
@@ -102,7 +168,7 @@ impl Game {
 
         let permanent_id = PermanentId(self.state.permanents.len());
         let mut permanent = Permanent::new(
-            self.state.id_gen.next_id(),
+            self.state.id_gen_mut().next_id(),
             card_id,
             &self.state.cards[card_id],
         );
@@ -139,9 +205,13 @@ impl Game {
                 space.kind
             )));
         }
-        let player = space.player.ok_or_else(|| {
-            AgentError("scenario_refresh_priority: priority space has no player".to_string())
-        })?;
+        let player = space
+            .actions
+            .first()
+            .map(|action| action.player())
+            .ok_or_else(|| {
+                AgentError("scenario_refresh_priority: priority space has no player".to_string())
+            })?;
         let actions = self.compute_player_actions(player);
         self.publish_action_space(ActionSpace {
             player: Some(player),

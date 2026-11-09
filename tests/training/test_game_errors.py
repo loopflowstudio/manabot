@@ -2,23 +2,22 @@
 
 from copy import deepcopy
 import json
-import multiprocessing.connection
-import os
 from pathlib import Path
 import subprocess
 import sys
-import time
 from typing import Any, Literal
 
 import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
-from manabot.eval.models import EvaluationContract
+from manabot.env.failures import read_failure
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
+    ObservationConfig,
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
@@ -29,7 +28,7 @@ from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.returns import transition_gae
-from manabot.training.regime import Learning
+from manabot.training.regime import BatchClosure, Learning
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -40,8 +39,8 @@ from manabot.training.state.game_errors import (
     replay_attempt,
 )
 import managym
+from tests.eval.arena_fixture import arena_fixture
 from tests.training.game_error_fixtures import (
-    PaymentMismatchEnv,
     _bounded_fixture_replay,
     _payment_match,
 )
@@ -60,6 +59,7 @@ class ScriptedFailures:
         *,
         always: bool = False,
         failure_generation: int = 0,
+        resource_limit: bool = False,
     ) -> None:
         self.buffers = buffers
         self.positions = [0, 0]
@@ -67,6 +67,7 @@ class ScriptedFailures:
         self.steps = [0, 0]
         self.always = always
         self.failure_generation = failure_generation
+        self.resource_limit = resource_limit
         self.infos: list[dict[str, Any]] = [{}, {}]
         self.encode()
 
@@ -83,7 +84,7 @@ class ScriptedFailures:
         return [row + self.generation[row] * 2 for row in (0, 1)]
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
+        self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None:
         self.buffers["terminated"].fill(0)
         self.buffers["truncated"].fill(0)
@@ -100,6 +101,13 @@ class ScriptedFailures:
                     "game_error": "not enough producible mana",
                     "game_error_class": "AgentError",
                 }
+                if self.resource_limit:
+                    assert recover_capacity
+                    self.infos[row].update(
+                        game_error="observation capacity exceeded: agent_permanents 41 > 40",
+                        game_error_class="ObservationCapacity",
+                        game_error_kind="resource_limit",
+                    )
                 continue
             self.positions[row] += 1
             if self.positions[row] == 5:
@@ -139,11 +147,62 @@ def attempt(failed: bool, seed: int = 0) -> GameAttempt:
     )
 
 
+@pytest.mark.parametrize("error_class", ["ObservationCapacity", "AgentError", None])
+def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
+    error_class: str | None,
+) -> None:
+    evidence = read_failure(
+        Path(__file__).parents[1] / "fixtures/tla-pilot-permanent-capacity.jsonl"
+    )
+    (game,) = evidence.games
+    hero, villain = game.players
+    actions: list[int] = []
+    for action in game.actions:
+        assert isinstance(action, int)
+        actions.append(action)
+    row = GameAttempt(
+        stream=game.stream,
+        seed=game.seed,
+        seat=1,
+        matchup=MatchConfig(
+            hero=hero.name,
+            villain=villain.name,
+            hero_deck=hero.decklist,
+            villain_deck=villain.decklist,
+            hero_sideboard=hero.sideboard,
+            villain_sideboard=villain.sideboard,
+            world=hero.world,
+        ),
+        outcome="resource_limit",
+        actions=actions,
+        error_class=error_class,
+        error="observation capacity exceeded: agent_permanents 41 > 40",
+        frame_json=game.frame,
+        observation=ObservationConfig(
+            policy_input_version=7,
+            max_cards_per_player=128,
+            max_permanents_per_player=40,
+            max_actions=64,
+            action_overflow="first-legal",
+        ),
+    )
+    result = replay_attempt(row)
+    assert result["status"] == "failed"
+    assert result["matches_binding"] and result["at_retained_failure"]
+    assert result["matches_error"] is (
+        None if error_class is None else error_class == "ObservationCapacity"
+    )
+    assert result["action_index"] == 370
+    assert "recover_capacity" not in GameErrorPolicy().model_dump()
+    assert "observation" not in attempt(False).model_dump()
+
+
 def _tolerant_collector(
     model: ActorCritic,
     ledger: GameErrorLedger,
     *,
     seats: Literal["one", "both"] = "both",
+    closure: BatchClosure = "complete-games",
 ) -> SeatRoutedCollector:
     return SeatRoutedCollector(
         model.observation_space,
@@ -152,39 +211,46 @@ def _tolerant_collector(
         num_envs=2,
         opponent_mode="self",
         learning_seats=seats,
+        batch_closure=closure,
         game_errors=ledger.policy,
         record_attempt=lambda row: ledger.record(row, {}),
     )
 
 
-def test_strict_threshold_window_and_restart(tmp_path: Path) -> None:
-    policy = GameErrorPolicy()
+@pytest.mark.parametrize("threshold", [0.1, 0.25])
+def test_strict_threshold_window_and_restart(tmp_path: Path, threshold: float) -> None:
+    policy = GameErrorPolicy(threshold=threshold)
+    failures = round(threshold * 100)
     ledger = GameErrorLedger(tmp_path / "first.jsonl", policy)
     for index in range(99):
-        ledger.record(attempt(index < 10, index), {})
+        ledger.record(attempt(index < failures, index), {})
     assert ledger.state.stop_reason is None
-    assert ledger.state.error_rate > 0.1  # warmup has not settled
-    assert ledger.state.replacement_samples == ledger.state.discarded_samples == 30
+    assert ledger.state.error_rate > threshold  # warmup has not settled
+    assert (
+        ledger.state.replacement_samples
+        == ledger.state.discarded_samples
+        == failures * 3
+    )
     assert ledger.state.replacement_debt == 0
     restored = GameErrorLedger(
         tmp_path / "second.jsonl", policy, parents=[str(ledger.path)]
     )
     restored.record(attempt(False), {})
-    assert restored.state.error_rate == 0.1
+    assert restored.state.error_rate == threshold
     assert restored.state.stop_reason is None
     restored.record(attempt(True), {})  # oldest failure falls out
-    assert restored.state.error_rate == 0.1
-    for _ in range(9):
+    assert restored.state.error_rate == threshold
+    for _ in range(failures - 1):
         restored.record(attempt(True), {})
     assert restored.state.stop_reason is None
     restored.record(attempt(True), {})
-    assert restored.state.error_rate == 0.11
+    assert restored.state.error_rate == (failures + 1) / 100
     assert restored.state.stop_reason == "game_error_rate_exceeded"
     final = GameErrorLedger(
         tmp_path / "third.jsonl", policy, parents=[str(ledger.path), str(restored.path)]
     )
     assert final.state == restored.state
-    assert final.state.replacement_debt == 33
+    assert final.state.replacement_debt == (failures + 1) * 3
     assert (
         GameErrorState.model_validate_json(final.state.model_dump_json()) == final.state
     )
@@ -192,21 +258,30 @@ def test_strict_threshold_window_and_restart(tmp_path: Path) -> None:
         GameErrorPolicy(window=10)
 
 
+@pytest.mark.parametrize("resource_limit", [False, True])
 @pytest.mark.parametrize("seats", ["one", "both"])
 def test_quarantine_refills_without_leaking_seats_or_returns(
-    tmp_path: Path, seats: Literal["one", "both"]
+    tmp_path: Path, seats: Literal["one", "both"], resource_limit: bool
 ) -> None:
     model = agent()
-    policy = GameErrorPolicy()
+    policy = GameErrorPolicy(threshold=0.25, recover_capacity=resource_limit)
     ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
     collector = _tolerant_collector(model, ledger, seats=seats)
-    scripted = ScriptedFailures(collector._buffers)
+    scripted = ScriptedFailures(collector._buffers, resource_limit=resource_limit)
     collector._env = scripted
     batch = collector.collect(model, 1)
-    markers = batch.obs["agent_player"][:, 0, 0, 0]
+    markers = batch.ordered_obs()["agent_player"][:, 0, 0, 0]
     assert not any(10 <= marker < 100 for marker in markers)
     assert scripted.steps == [5, 9]
     assert ledger.state.completed == 2 and ledger.state.crashed == 1
+    attempts = [
+        GameAttempt.model_validate(json.loads(line)["attempt"])
+        for line in ledger.path.read_text().splitlines()
+    ]
+    (failure,) = [row for row in attempts if row.outcome != "completed"]
+    assert failure.outcome == ("resource_limit" if resource_limit else "engine_error")
+    if resource_limit:
+        assert failure.observation == model.observation_space.encoder.config
     assert ledger.state.discarded_samples == (4 if seats == "both" else 2)
     assert collector.stats.learner_transitions == batch.actions.size
     assert int(batch.dones.sum()) == (4 if seats == "both" else 2)
@@ -231,6 +306,49 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     )
     assert result["rows"] == batch.actions.size
     assert learner.optimizer.state
+
+
+def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
+    tmp_path: Path,
+) -> None:
+    model = agent()
+    policy = GameErrorPolicy(threshold=0.25, recover_capacity=True)
+    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    collector = _tolerant_collector(model, ledger, seats="one", closure="exact-quota")
+    scripted = ScriptedFailures(collector._buffers, resource_limit=True)
+    collector._env = scripted
+
+    # Stream 1 learns from seat 1: its game pauses at its second decision.
+    first = collector.collect(model, 1)
+    assert first.obs["agent_player"][0, 1, 0, 0] == 11
+    assert not first.next_done[1] and ledger.state.crashed == 0
+
+    # That decision overflows. The learned row stays learned, the pending one goes
+    # and the replacement game fills the quota.
+    second = collector.collect(model, 1)
+    assert second.actions.shape == (1, 2)
+    assert second.obs["agent_player"][0, 1, 0, 0] == 111
+    assert not second.dones[0, 1]
+    failure = GameAttempt.model_validate(
+        json.loads(ledger.path.read_text().splitlines()[-1])["attempt"]
+    )
+    assert failure.outcome == "resource_limit"
+    assert (failure.learned_samples, failure.discarded_samples) == (1, 1)
+    assert (ledger.state.learned_samples, ledger.state.discarded_samples) == (1, 1)
+    assert collector.stats.learner_transitions == 4
+    assert not any(collector._pending) and not any(collector._streams)
+    assert len(collector._game_actions[1]) == 3
+
+    # The replacement game finishes across the boundary with all of its rows valid.
+    collector.collect(model, 1)
+    attempts = [
+        GameAttempt.model_validate(json.loads(line)["attempt"])
+        for line in ledger.path.read_text().splitlines()
+    ]
+    (replacement,) = [
+        row for row in attempts if row.stream == 1 and row.outcome == "completed"
+    ]
+    assert replacement.valid_samples == 2
 
 
 def test_all_failures_stop_boundedly_and_count_once_per_game(tmp_path: Path) -> None:
@@ -393,13 +511,20 @@ def test_original_failure_is_immutable_and_cli_replays(
     assert inherited.state.model_dump() == allowance
 
 
-def test_later_crash_preserves_previous_complete_games(tmp_path: Path) -> None:
+@pytest.mark.parametrize("resource_limit", [False, True])
+def test_later_crash_preserves_previous_complete_games(
+    tmp_path: Path, resource_limit: bool
+) -> None:
     model = agent()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", GameErrorPolicy())
+    ledger = GameErrorLedger(
+        tmp_path / "attempts.jsonl", GameErrorPolicy(recover_capacity=resource_limit)
+    )
     collector = _tolerant_collector(model, ledger)
-    collector._env = ScriptedFailures(collector._buffers, failure_generation=1)
+    collector._env = ScriptedFailures(
+        collector._buffers, failure_generation=1, resource_limit=resource_limit
+    )
     batch = collector.collect(model, 7)
-    markers = set(batch.obs["agent_player"][:, 0, 0, 0])
+    markers = set(batch.ordered_obs()["agent_player"][:, 0, 0, 0])
     assert markers == set(range(5)) | set(range(10, 15)) | set(range(100, 105)) | set(
         range(210, 215)
     )
@@ -518,7 +643,7 @@ def test_action_limit_is_a_failed_attempt_and_bounded(tmp_path: Path) -> None:
 def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) -> None:
     class TruncatedGames(ScriptedFailures):
         def step_isolated_into_buffers(
-            self, actions: list[int], active: list[bool]
+            self, actions: list[int], active: list[bool], recover_capacity: bool = False
         ) -> None:
             super().step_isolated_into_buffers(actions, active)
             if "game_error" in self.infos[1]:
@@ -539,43 +664,8 @@ def test_truncation_is_not_a_completed_game_or_a_second_reset(tmp_path: Path) ->
     assert batch.actions.size == 10 and int(batch.dones.sum()) == 4
 
 
-def _payment_game_worker(
-    connection: multiprocessing.connection.Connection,
-    game: dict[str, Any],
-    registrations: list[PlayerRegistration],
-    checkpoint_paths: dict[str, str],
-    max_commands: int,
-) -> None:
-    managym.Env = PaymentMismatchEnv
-    simulation._game_worker(
-        connection, game, registrations, checkpoint_paths, max_commands
-    )
-
-
-def _lost_payment_worker(
-    connection: multiprocessing.connection.Connection,
-    game: dict[str, Any],
-    registrations: list[PlayerRegistration],
-    checkpoint_paths: dict[str, str],
-    max_commands: int,
-) -> None:
-    """Die or hang only after the parent acknowledges retained native inputs."""
-
-    def send(event: tuple[str, Any]) -> None:
-        connection.send(event)
-        if event[0] == "pending":
-            assert connection.recv() == "retained"
-            if game.get("test_hang"):
-                time.sleep(60)
-            os._exit(7)
-
-    simulation._execute_game(game, registrations, checkpoint_paths, max_commands, send)
-
-
 def _arena_fixture() -> tuple[dict[str, Any], list[PlayerRegistration]]:
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_text()
-    )
+    contract = arena_fixture()
     players = list(contract.anchors[:2])
     return {
         "match_id": "payment-failure-fixture",
@@ -602,7 +692,11 @@ def test_arena_payment_failure_is_durable_and_replays_boundedly(
 ) -> None:
     game, players = _arena_fixture()
     journal = tmp_path / "attempt.jsonl"
-    monkeypatch.setattr(simulation, "_game_worker", _payment_game_worker)
+    monkeypatch.setattr(
+        simulation,
+        "GAME_WORKER",
+        "tests.training.game_error_fixtures:_payment_game_worker",
+    )
     failed = simulation.play_game(game, players, {}, 1000, 20, journal)
     assert "fixture payment mismatch" in failed["failure"]
     assert failed["winner"] is None and failed["failed_player_id"] is None
@@ -719,7 +813,11 @@ def test_arena_lost_worker_retains_acknowledged_command(
 ) -> None:
     game, players = _arena_fixture()
     game["test_hang"] = hang
-    monkeypatch.setattr(simulation, "_game_worker", _lost_payment_worker)
+    monkeypatch.setattr(
+        simulation,
+        "GAME_WORKER",
+        "tests.training.game_error_fixtures:_lost_payment_worker",
+    )
     journal = tmp_path / "attempt.jsonl"
     result = simulation.play_game(game, players, {}, 1000, 5, journal)
     assert result["termination_reason"] == ("timeout" if hang else "crash")

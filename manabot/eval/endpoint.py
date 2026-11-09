@@ -15,7 +15,7 @@ from uuid import uuid4
 from manabot.eval.match import play_cell
 from manabot.infra.files import exclusive_file_lock
 from manabot.sim.execution import EvalExecution
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 
 
 @dataclass(frozen=True)

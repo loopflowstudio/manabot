@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from tests.semantic.test_learn_contract import learn_root  # noqa: F401
 
@@ -28,7 +28,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     obs = tensors(space, before)
@@ -42,7 +42,9 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     # The outside rows otherwise have identical bounded features. Their
     # distinct executable programs must affect actual retrieval scores.
     assert len(set(logits[0, take].detach().tolist())) == 3
-    logits[0, take[0]].backward()
+    # Sum the take logits: at this width a single logit can sit at a dead
+    # activation and carry no gradient on its own.
+    logits[0, take].sum().backward()
     assert agent.semantic_cards.token_embedding.weight.grad.abs().sum() > 0
 
     retrieval = contract.frame.find_verb("learn_take_lesson")
@@ -56,11 +58,18 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     forgotten["known_hand"].zero_()
     _, forgotten_value = agent(forgotten)
     assert not torch.equal(value, forgotten_value)
+    # The opponent's open decklist (main, unseen and sideboard rows) also
+    # reaches the value; a closed decklist would encode as these zero rows.
+    assert public["decklists"][0, 1, :, 1].sum() == 41
+    closed = {key: value.clone() for key, value in public.items()}
+    closed["decklists"][:, 1].zero_()
+    _, closed_value = agent(closed)
+    assert not torch.equal(value, closed_value)
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=1 - actor)
         encoded = space.encode(hidden.observation_for_player(1 - actor))
-        for key in ("semantic_cards", "known_hand"):
+        for key in ("semantic_cards", "known_hand", "decklists"):
             np.testing.assert_array_equal(encoded[key], public[key][0].numpy())
 
 
@@ -69,7 +78,7 @@ def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F81
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     actor = SemanticDecisionContract.from_env(learn_root).frame.actor

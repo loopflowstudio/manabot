@@ -4,12 +4,16 @@ use managym::{
     state::{game_object::PlayerId, zone::ZoneType},
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 /// CR 601.2 — A legal cast at sorcery speed becomes available in main phase.
 #[test]
 fn cr_601_2_cast_spell_available_when_cost_is_payable() {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 61);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        61,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -22,7 +26,11 @@ fn cr_601_2_cast_spell_available_when_cost_is_payable() {
 /// CR 601.2i and 608.3 — Cast spells go to stack, then resolve to battlefield.
 #[test]
 fn cr_601_2i_spell_moves_from_stack_to_battlefield_on_resolution() {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 62);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        62,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -46,7 +54,11 @@ fn cr_601_2i_spell_moves_from_stack_to_battlefield_on_resolution() {
 /// CR 117.1a / 307.1 — Sorcery-speed casting is unavailable during combat.
 #[test]
 fn cr_601_negative_no_sorcery_casting_during_combat() {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 63);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        63,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -60,7 +72,7 @@ fn cr_601_negative_no_sorcery_casting_during_combat() {
 /// Negative: lands are played, not cast as spells.
 #[test]
 fn cr_601_negative_land_cards_are_not_cast_actions() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 64);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 64);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.assert_action_not_available(ActionType::PriorityCastSpell);
@@ -69,7 +81,11 @@ fn cr_601_negative_land_cards_are_not_cast_actions() {
 /// CR 117.1a / 307.1 — Sorceries cannot be cast as responses on a nonempty stack.
 #[test]
 fn cr_601_sorcery_cannot_respond() {
-    let mut s = Scenario::new(forest_elves_deck(), forest_elves_deck(), 68);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        68,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");

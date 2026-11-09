@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from manabot.belief.range import BeliefError, BeliefState
-from manabot.sim.search.teacher1_evidence import _fresh_env
+from tests.belief.fresh_env import fresh_env
 
 
 def _space(
@@ -34,7 +34,7 @@ def _space(
 
 
 def test_interactive_opening_belief_uses_canonical_10832_world_space() -> None:
-    env = _fresh_env(71)
+    env = fresh_env(71)
     viewer = int(env._engine.current_agent_index())
     space = PossibleWorldSpace.from_engine(env._engine, viewer)
     belief = BeliefState.compatible_prior(space)
@@ -85,7 +85,7 @@ def test_unknown_draw_joins_next_canonical_space() -> None:
         [({"A": 2}, 1), ({"A": 1, "B": 1}, 2)],
     )
 
-    drawn = BeliefState.compatible_prior(before).draw_unknown(after)
+    drawn = BeliefState.compatible_prior(before).transport(after, hidden_draws=1)
 
     assert drawn.space is after
     assert drawn.probability_of_hand({"A": 2}) == pytest.approx(1 / 3)
@@ -106,7 +106,7 @@ def test_known_exit_conditions_then_joins_next_space() -> None:
         [({"A": 1}, 1), ({"B": 1}, 2)],
     )
 
-    removed = BeliefState.compatible_prior(before).remove_known("A", after)
+    removed = BeliefState.compatible_prior(before).transport(after, known_exits=["A"])
 
     assert removed.probability_of_hand({"A": 1}) == pytest.approx(1 / 5)
     assert removed.probability_of_hand({"B": 1}) == pytest.approx(4 / 5)
@@ -126,7 +126,9 @@ def test_known_return_is_deterministic_over_canonical_rows() -> None:
         [({"A": 2}, 1), ({"A": 1, "B": 1}, 4), ({"B": 2}, 1)],
     )
 
-    returned = BeliefState.compatible_prior(before).add_known("A", after)
+    returned = BeliefState.compatible_prior(before).transport(
+        after, known_returns=["A"]
+    )
 
     assert returned.probability_of_hand({"A": 2}) == pytest.approx(1 / 3)
     assert returned.probability_of_hand({"A": 1, "B": 1}) == pytest.approx(2 / 3)

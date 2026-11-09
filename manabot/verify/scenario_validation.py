@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Literal, TypedDict
 
 from manabot.infra.config import MatchConfig
-from manabot.verify.competency import (
+from manabot.verify.scenarios import (
     SCENARIOS,
     SPACE_ATTACKER,
     SPACE_BLOCKER,
@@ -26,14 +26,14 @@ from manabot.verify.competency import (
     ZONE_GRAVEYARD,
     Scenario,
     ScriptedVillain,
-    _action_casts,
-    _battlefield_pairs,
-    _find_cast_action,
-    _hero_view,
-    _pass_index,
-    _stack_names,
-    _zone_names,
+    action_casts,
+    battlefield_pairs,
     build_scenario_env,
+    find_cast_action,
+    hero_view,
+    pass_index,
+    stack_names,
+    zone_names,
 )
 import managym
 
@@ -77,9 +77,9 @@ class _Hero:
         actions = raw.action_space.actions
         if kind == SPACE_PRIORITY:
             card: str | None = None
-            stack = _stack_names(raw)
-            _, villain = _hero_view(raw)
-            enemies = _battlefield_pairs(raw, villain)
+            stack = stack_names(raw)
+            _, villain = hero_view(raw)
+            enemies = battlefield_pairs(raw, villain)
             if self.name.startswith("s1"):
                 if not self.reference or "Shivan Dragon" in stack:
                     card = "Counterspell"
@@ -97,12 +97,12 @@ class _Hero:
             elif self.name.startswith("s5"):
                 card = "It'll Quench Ya!" if self.reference else "Otter-Penguin"
             if card is not None:
-                index = _find_cast_action(raw, card)
+                index = find_cast_action(raw, card)
                 if index is not None:
                     return index
-            return _pass_index(raw)
+            return pass_index(raw)
         if kind == SPACE_TARGET and self.name.startswith("s3"):
-            _, villain = _hero_view(raw)
+            _, villain = hero_view(raw)
             target = (
                 "Earth King's Lieutenant"
                 if self.reference
@@ -110,7 +110,7 @@ class _Hero:
             )
             ids = {
                 int(p.id)
-                for c, p in _battlefield_pairs(raw, villain)
+                for c, p in battlefield_pairs(raw, villain)
                 if c.name == target
             }
             for index, action in enumerate(actions):
@@ -121,10 +121,10 @@ class _Hero:
                 if not self.reference:
                     return 0
                 focus = int(actions[0].focus[0]) if actions[0].focus else -1
-                hero, _ = _hero_view(raw)
+                hero, _ = hero_view(raw)
                 flying = any(
                     c.name == "Wind Drake" and int(p.id) == focus
-                    for c, p in _battlefield_pairs(raw, hero)
+                    for c, p in battlefield_pairs(raw, hero)
                 )
                 return 0 if flying else len(actions) - 1
             return len(actions) - 1
@@ -146,16 +146,16 @@ def _outcome(
     creatures_at_cast: int,
 ) -> tuple[bool, str] | None:
     """Check actual resolution; cast intent alone never establishes removal."""
-    _, villain = _hero_view(raw)
-    board = Counter(str(c.name) for c, _ in _battlefield_pairs(raw, villain))
-    grave = Counter(_zone_names(raw, villain, ZONE_GRAVEYARD))
+    _, villain = hero_view(raw)
+    board = Counter(str(c.name) for c, _ in battlefield_pairs(raw, villain))
+    grave = Counter(zone_names(raw, villain, ZONE_GRAVEYARD))
     if scenario.name.startswith("s1"):
         if grave["Shivan Dragon"]:
             return reference, "bomb countered"
         if board["Shivan Dragon"]:
             return not reference, "bomb resolved after bait"
     elif (
-        scenario.name.startswith("s2") and cast == "Pyroclasm" and not _stack_names(raw)
+        scenario.name.startswith("s2") and cast == "Pyroclasm" and not stack_names(raw)
     ):
         if grave["Gray Ogre"] >= creatures_at_cast:
             expected = creatures_at_cast >= 4 if reference else creatures_at_cast == 2
@@ -163,7 +163,7 @@ def _outcome(
     elif (
         scenario.name.startswith("s3")
         and cast == "Lightning Bolt"
-        and not _stack_names(raw)
+        and not stack_names(raw)
     ):
         if reference and grave["Earth King's Lieutenant"]:
             return True, "Lieutenant killed by held removal"
@@ -201,11 +201,11 @@ def _run_line(
             int(raw.agent.player_index) != 0
             or int(raw.agent.life) != scenario.hero_life
             or int(raw.opponent.life) != scenario.villain_life
-            or Counter(_zone_names(raw, "agent", int(managym.ZoneEnum.HAND)))
+            or Counter(zone_names(raw, "agent", int(managym.ZoneEnum.HAND)))
             != Counter(scenario.hero_hand)
-            or Counter(str(c.name) for c, _ in _battlefield_pairs(raw, "agent"))
+            or Counter(str(c.name) for c, _ in battlefield_pairs(raw, "agent"))
             != Counter(scenario.hero_battlefield)
-            or Counter(str(c.name) for c, _ in _battlefield_pairs(raw, "opponent"))
+            or Counter(str(c.name) for c, _ in battlefield_pairs(raw, "opponent"))
             != Counter(scenario.villain_battlefield)
         ):
             raise ValueError(
@@ -230,13 +230,13 @@ def _run_line(
             if not 0 <= action < len(raw.action_space.actions):
                 raise ValueError("script selected a nonlegal action index")
             if is_hero:
-                spell = _action_casts(raw, action)
+                spell = action_casts(raw, action)
                 if spell is not None:
                     cast = spell
-                    _, side = _hero_view(raw)
+                    _, side = hero_view(raw)
                     creatures_at_cast = sum(
                         bool(c.card_types.is_creature)
-                        for c, _ in _battlefield_pairs(raw, side)
+                        for c, _ in battlefield_pairs(raw, side)
                     )
             env.step(action)
             steps += 1

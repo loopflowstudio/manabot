@@ -4,7 +4,7 @@ import ast
 from copy import deepcopy
 from typing import Any, Iterable
 
-from manabot.infra import RuntimeConfig, SimulationConfig
+from manabot.infra.config import RuntimeConfig, SimulationConfig
 
 from .presets import (
     DEFAULT_SIM_PRESET,

@@ -31,22 +31,12 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w11-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "78d533368335094f7720c942229dc2cd2a1bcbc9d4e2a70d9b7fa34727fa7f2b"
-TERMINAL_STATE = "3f34856d96bdee401c8b50bb02fe0aa2443adeb80053bbe90b96ea97813ec0b2"
+AUTHORITY_SHA256 = "51fea61f8f3958c56c8b2a9d9ba69636aa6688e831cf472c0b8eccfd1bfe286d"
+TERMINAL_STATE = "695dae4e1db04fc81b2ea21cdd0885127f9db9b1e109b3ebc1a2ced13024cb25"
 
-COMMAND_COUNT = 156
-HISTORICAL_AUTHORITY_SHA256 = (
-    "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
-)
-HISTORICAL_TERMINAL_STATE = (
-    "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7"
-)
-HISTORICAL_RECEIPT_PATH = (
-    ROOT
-    / "conformance/authored-match-parity-v1/release-live-headless-replay-seed-0.json"
-)
+COMMAND_COUNT = 135
 
 
 def _json_bytes(value: object) -> bytes:
@@ -625,9 +615,8 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json",
-        "content/semantic/v1/generated/two_deck.ir.json",
-        "content/semantic/v1/two_deck.source.json",
+        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
+        "content/semantic/current/setups.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",
@@ -641,6 +630,8 @@ def _source_manifest() -> dict[str, Any]:
         "manabot/semantic/decision_contract.py",
         "managym/Cargo.lock",
         "managym/Cargo.toml",
+        "managym/state/Cargo.toml",
+        "managym/cards/Cargo.toml",
         "manabot/managym/decision.py",
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
@@ -648,7 +639,8 @@ def _source_manifest() -> dict[str, Any]:
     }
     paths.update(
         path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "managym/src").rglob("*.rs")
+        for directory in ("managym/src", "managym/state/src", "managym/cards/src")
+        for path in (ROOT / directory).rglob("*.rs")
     )
     files = [
         {"path": path, "sha256": _sha256((ROOT / path).read_bytes())}

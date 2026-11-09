@@ -100,28 +100,18 @@ for (const width of [390, 1500]) {
     await expect(page.getByTestId('decision-context')).toContainText('Selected target');
     const sacrifice = await page.evaluate(entity => window.__surface.frame!.offers.find(offer => offer.action_type === 'SELECT_CARD' && offer.subjects?.some(subject => subject.object.entity_id === entity))!.id, victim);
     await choose(page, sacrifice);
-    await expect(page.getByTestId('decision-context')).toContainText('Reserved, unpaid sacrifice');
-    // The current frame, including reservation, is restored before activation.
-    const paymentHash = await page.evaluate(() => window.__surface.frame!.frame_hash);
-    await page.reload();
-    await expect.poll(() => page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(paymentHash);
-    const treasure = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.label === 'Activate ability: Treasure')!.id);
-    await choose(page, treasure);
+    // Treasure is the only mana source left: its activation, {B} and the final
+    // payment are forced, so native skipping commits them without a prompt.
     await expect(page.getByTestId('decision-surface')).toContainText('sacrificed Treasure');
+    await expect(page.getByTestId('decision-surface')).toContainText('Deadly Precision was cast');
     expect(await page.getByTestId('battlefield').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height))).toEqual(battlefieldHeights);
-    const colorHash = await page.evaluate(() => window.__surface.frame!.frame_hash);
-    await page.reload();
-    await expect.poll(() => page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(colorHash);
-    await expect(page.getByTestId('action-option')).toHaveCount(1);
-    await expect(page.getByTestId('action-option')).toHaveAttribute('aria-label', 'Add {B}');
-    await choose(page, await page.evaluate(() => window.__surface.frame!.offers[0].id));
-    await expect(page.getByTestId('mana-pool').last()).toContainText('1 {B}');
     await page.screenshot({ path: testInfo.outputPath('precision-payment.png'), fullPage: true });
-    const pay = await page.evaluate(() => window.__surface.frame!.offers.find(offer => offer.action_type === 'PAY_COST')!.id);
-    await choose(page, pay);
     const paidHash = await page.evaluate(() => window.__surface.frame!.frame_hash);
-    // A lost receipt can be retried with its exact original Command ID.
-    await page.evaluate(() => window.__surface.socket!.send(JSON.stringify({ type: 'command', command: window.__surface.commands.at(-1) })));
+    const committed = await page.evaluate(() => window.__surface.commands.at(-1)!);
+    await page.reload();
+    await expect.poll(() => page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(paidHash);
+    // A receipt lost across the reconnect can be retried with its exact original Command ID.
+    await page.evaluate(command => window.__surface.socket!.send(JSON.stringify({ type: 'command', command })), committed);
     await expect.poll(() => page.evaluate(() => window.__surface.outcomes.at(-1))).toBe('duplicate');
     expect(await page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(paidHash);
     const overflow = await page.locator('body *').evaluateAll(elements => elements.filter(element => element.getBoundingClientRect().right > window.innerWidth + 1).map(element => ({ tag: element.tagName, class: element.className, width: element.getBoundingClientRect().width })).slice(0, 12));

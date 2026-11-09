@@ -8,22 +8,22 @@ determinization invariants, playout termination) and the Python matchup loop
 import numpy as np
 import pytest
 
-from manabot.belief import ManabotPlayer
-from manabot.env import ObservationSpace
+from manabot.belief.runtime import ManabotPlayer
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
+from manabot.sim.anchors import RandomMatchupPlayer
 import manabot.sim.search.flat_mc as flat_mc
 from manabot.sim.search.flat_mc import (
     AgentMatchupPlayer,
     FlatMCPlayer,
     GameRecord,
-    RandomMatchupPlayer,
     aggregate_records,
     make_player,
     play_games,
     wilson_interval,
 )
-from manabot.verify.util import INTERACTIVE_DECK, wilson_lower_bound
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 SEARCH_4 = {"kind": "search", "sims": 4}
@@ -183,7 +183,8 @@ def test_aggregate_records_per_seat_and_ci():
     assert 0.0 <= metrics["win_ci_lower"] < 0.5 < metrics["win_ci_upper"] <= 1.0
 
 
-def test_wilson_interval_matches_verify_lower_bound():
+def test_wilson_interval_matches_score_bounds():
     lo, hi = wilson_interval(30, 100)
-    assert lo == pytest.approx(wilson_lower_bound(30, 100))
+    assert lo == pytest.approx(0.21894753866228117)
+    assert hi == pytest.approx(0.3958503843281196)
     assert lo < 0.3 < hi

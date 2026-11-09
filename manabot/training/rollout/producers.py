@@ -4,14 +4,16 @@ ShardedVectorEnv gives each worker disjoint native streams and NumPy row views.
 Native buffered calls release the GIL; a barrier completes every shard before
 returning to the collector. The parent retains global batching, policy sampling,
 rollout ordering and recovery. Global reset strides make stream identity
-independent of worker count. No policy or CUDA state enters a producer thread.
+independent of worker count. Sampled rosters (deck sources, elemental-uniform)
+draw each game's pair natively from that game's seed, so draws match for any
+worker count. No policy or CUDA state enters a producer thread.
 """
 
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from functools import partial
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 from numpy.typing import NDArray
@@ -89,7 +91,9 @@ class ShardedVectorEnv:
             self.close()
             raise
 
-    def set_buffers(self, buffers: dict[str, Array]) -> None:
+    def set_buffers(
+        self, buffers: dict[str, Array], action_overflow: str = "error"
+    ) -> None:
         self._check()
         for value in buffers.values():
             self._rows(len(value))
@@ -103,10 +107,49 @@ class ShardedVectorEnv:
                         key: value[shard.start : shard.stop]
                         for key, value in buffers.items()
                     },
+                    action_overflow,
                 )
                 for shard in self._shards
             ]
         )
+
+    # The two roster setters run serially, before reset: native admission is
+    # input-determined, so a rejection comes from the first shard and leaves
+    # every shard unchanged.
+
+    def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
+        self._check()
+        for shard in self._shards:
+            shard.native.set_uniform_roster(roster)
+
+    def set_training_decks(
+        self,
+        decks: list[managym.PlayerConfig],
+        digest: str,
+        sampling: Literal[
+            "uniform-distinct-v1", "uniform-independent-v1"
+        ] = "uniform-distinct-v1",
+    ) -> None:
+        """Replace later roots' decks on every shard."""
+        self._check()
+        for shard in self._shards:
+            shard.native.set_training_decks(decks, digest, sampling)
+
+    def current_player_configs(self) -> list[list[managym.PlayerConfig]]:
+        self._check()
+        return [
+            players
+            for shard in self._shards
+            for players in shard.native.current_player_configs()
+        ]
+
+    def current_matchup_indices(self) -> list[tuple[int, int]]:
+        self._check()
+        return [
+            pair
+            for shard in self._shards
+            for pair in shard.native.current_matchup_indices()
+        ]
 
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
         self._run(
@@ -168,7 +211,7 @@ class ShardedVectorEnv:
         ]
 
     def step_isolated_into_buffers(
-        self, actions: list[int], active: list[bool]
+        self, actions: list[int], active: list[bool], recover_capacity: bool = False
     ) -> None:
         """Gameplay errors are row outcomes; infrastructure errors still stop."""
         self._rows(len(actions))
@@ -179,6 +222,7 @@ class ShardedVectorEnv:
                     shard.native.step_isolated_into_buffers,
                     actions[shard.start : shard.stop],
                     active[shard.start : shard.stop],
+                    recover_capacity,
                 )
                 for shard in self._shards
             ]
@@ -206,6 +250,14 @@ class ShardedVectorEnv:
         self._check()
         return [info for shard in self._shards for info in shard.native.get_last_info()]
 
+    def buffered_call_timings(self) -> tuple[float, float]:
+        """Mean shard stepping and encoding seconds: shards run at once."""
+        shards = [shard.native.buffered_call_timings() for shard in self._shards]
+        return (
+            sum(stepping for stepping, _ in shards) / len(shards),
+            sum(encoding for _, encoding in shards) / len(shards),
+        )
+
     def capture_failure(self, error: BaseException) -> None:
         # Capture from the owning thread so live run coordinates remain available.
         for shard in self._shards:
@@ -215,4 +267,6 @@ class ShardedVectorEnv:
         if not self._closed:
             self._closed = True
             self._pool.shutdown(wait=True, cancel_futures=True)
+            for shard in self._shards:
+                shard.native.close()
             self._shards = ()

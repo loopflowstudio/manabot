@@ -26,6 +26,56 @@ export interface CardState {
   toughness: number;
   mana_value: number;
   types: CardTypes;
+  /** Foretold and face down in exile; only its owner's views list it. */
+  face_down?: boolean;
+  /** The permission to play this card from exile, when it has one. */
+  cast_permission?: CastPermission;
+  /** The value of X announced for this spell on the stack. */
+  x?: number;
+}
+
+/** A public permission to play an exiled card; only set terms are present. */
+export interface CastPermission {
+  player_id: number;
+  /** Mana symbols paid to cast it; absent for a land play. */
+  cost?: string;
+  this_turn?: boolean;
+  /** Ends with the permitted player's next turn. */
+  through_next_turn?: boolean;
+  own_turn_only?: boolean;
+  /** Usable only on a turn numbered after this one. */
+  after_turn?: number;
+  /** Lasts while the permitted player controls this permanent. */
+  source_permanent_id?: number;
+  flash?: boolean;
+  any_mana?: boolean;
+  waterbend?: boolean;
+  foretold?: boolean;
+}
+
+/** Mana spendable only on the named spell or ability-source subtypes. */
+export interface RestrictedMana {
+  spells?: string[];
+  abilities?: string[];
+  mana: number[];
+}
+
+/** One continuous-effect record on a permanent or player (CR 611, 613). */
+export interface ContinuousEffect {
+  /** The engine's `Modification` variant (`ModifyPt`, `AddKeywords`, ...). */
+  modification: string;
+  power?: number;
+  toughness?: number;
+  amount?: number;
+  keywords?: string[];
+  subtypes?: string[];
+  color?: string;
+  /** `EndOfTurn`, `Indefinite` or `WhileYouControlSource`. */
+  duration: string;
+  /** The source's printed name. */
+  source?: string;
+  /** Timestamp order (CR 613.7); larger is later. */
+  timestamp: number;
 }
 
 export interface PermanentState {
@@ -33,6 +83,13 @@ export interface PermanentState {
   is_token?: boolean;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
+  /** Exhaust abilities this object has used. */
+  transforms?: number;
+  exhausted_abilities?: number;
+  /** "Once each turn" abilities this object has used this turn. */
+  once_each_turn_used?: number;
+  /** Firebending granted until end of turn. */
+  granted_firebending?: number;
   text_box?: string;
   id: number;
   name: string | null;
@@ -45,6 +102,34 @@ export interface PermanentState {
   base_power: number | null;
   base_toughness: number | null;
   plus1_counters: number;
+  /** Counters other than +1/+1, by kind (stun, fire, double_strike). */
+  counters?: Record<string, number>;
+  /** The permanent this Aura or Equipment is attached to. */
+  attached_to?: number;
+  /** Creature types set by an effect; `name` is then the set name. */
+  creature_types?: string[];
+  /** A land only through an effect. */
+  is_granted_land?: boolean;
+  /** Attacking in the current combat. */
+  attacking?: boolean;
+  /** The attacking permanent this one blocks. */
+  blocking?: number;
+  /** It has lost all abilities. */
+  abilities_lost?: boolean;
+  /** Activated abilities (indices in its ability list) whose limit is spent. */
+  used_abilities?: number[];
+  /** It was dealt damage this turn. */
+  dealt_damage_this_turn?: boolean;
+  /** Continuous effects on it, in timestamp order. */
+  effects?: ContinuousEffect[];
+  /** The copy effect that made it a copy (CR 707.2). */
+  copy_of?: CopyEffect;
+}
+
+/** A copy effect: the printed card it copies and the exceptions in its copiable values (CR 707.9b). */
+export interface CopyEffect {
+  name: string;
+  exceptions?: ContinuousEffect[];
 }
 
 export interface SideboardCard {
@@ -55,13 +140,31 @@ export interface SideboardCard {
   name: string;
 }
 
+export interface PlayerTurnHistory {
+  attacked?: boolean;
+  permanents_sacrificed?: number;
+  land_entered?: boolean;
+  cards_drawn?: number;
+  /** Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8. */
+  bent?: number;
+}
+
 export interface PlayerState {
   mana?: number[];
   lesson_mana?: number[];
+  /** `lesson_mana` split by restriction class. */
+  restricted_mana?: RestrictedMana[];
+  /** Player id whose next turn ends this player's hand-only casting. */
+  hand_only_until?: number;
+  no_maximum_hand_size?: boolean;
   combat_mana?: number;
   inspected?: CardState[];
   sideboard?: SideboardCard[];
   known_hand?: Record<string, number>;
+  /** Decklist counts, present only when the viewer knows this player's
+   *  decklist (its own, or an open opponent's). Absent means closed. */
+  main_counts?: Record<string, number>;
+  unseen_counts?: Record<string, number>;
   sideboard_counts?: Record<string, number>;
   remaining_sideboard_counts?: Record<string, number>;
   player_index: number;
@@ -72,6 +175,16 @@ export interface PlayerState {
   zone_counts: Record<string, number>;
   library_count: number;
   hand_hidden_count?: number;
+  /** Unspent red mana stays until end of turn. */
+  keeps_red_mana?: boolean;
+  /** What this player has done this turn. */
+  turn_history?: PlayerTurnHistory;
+  /** Extra turns this player will take after this one. */
+  extra_turns?: number;
+  /** Additional combat phases still to come this turn. */
+  additional_combats?: number;
+  /** Continuous effects on this player, in timestamp order. */
+  effects?: ContinuousEffect[];
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
@@ -97,6 +210,7 @@ export interface DecisionTargetView {
 }
 
 export interface DecisionContextView {
+  pending?: string[];
   recent_facts: string[];
   actor: number;
   stage: string;
@@ -116,9 +230,35 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** The announced value of X, when above zero. */
+  x?: number;
+}
+
+export interface PlayerControlView {
+  player: number;
+  controller: number;
+  whole_turn: boolean;
+  active: boolean;
+  effective: boolean;
+}
+
+export interface CombatView {
+  player_index: number;
+  /** Absent means no additional attacker restriction; legal offers still govern. */
+  attackers?: string;
+}
+
+export interface ScheduleView {
+  extra_turns: number[];
+  resume_with?: number;
+  current_combat?: CombatView;
+  additional_combats: CombatView[];
 }
 
 export interface Observation {
+  /** Missing on historical captures means unknown, not an empty schedule. */
+  schedule?: ScheduleView;
+  player_controls?: PlayerControlView[];
   stack_objects?: StackEntryView[];
   decision_context?: DecisionContextView;
   definition_names?: Record<string, string>;
@@ -511,7 +651,11 @@ export interface TraceConfig {
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;
   asset_pack?: AssetPackReference | null;
+  decklists?: Decklists;
 }
+
+/** Open: both players know each other's main deck and sideboard. Closed: neither. */
+export type Decklists = 'open' | 'closed';
 
 export interface AssetPackReference {
   id: string;

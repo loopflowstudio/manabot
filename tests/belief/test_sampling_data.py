@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 
+from managym.decision import Observation
 import pytest
 import torch
 
@@ -14,14 +15,18 @@ from manabot.belief.sampling_data import (
     SamplerGame,
     Split,
     collect_frozen_policy,
+    public_sampler_input,
     read_dataset,
     save_dataset,
 )
-from manabot.env import ObservationSpace
+from manabot.belief.state import ViewerHistory
 from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world
+from manabot.semantic.text_observation import capture_text_decision, submit_response
+from manabot.verify.text_observation import priority_root
 
 
 def _dataset() -> SamplerDataset:
@@ -67,12 +72,9 @@ def test_dataset_round_trip_and_fail_closed_integrity(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.parametrize(
-    "compound,max_actions", [(False, 10), (True, 10), (True, 1), (False, 1)]
-)
+@pytest.mark.parametrize("max_actions", [10, 1])
 def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     tmp_path: Path,
-    compound: bool,
     max_actions: int,
 ) -> None:
     torch.set_num_threads(1)
@@ -82,7 +84,7 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     )
     obs_config = ObservationConfig(max_actions=max_actions)
     obs_space = ObservationSpace(obs_config)
-    agent_config = ModelConfig(hidden_dim=8, compound_decisions=compound)
+    agent_config = ModelConfig(hidden_dim=8)
     agent = ActorCritic(obs_space, agent_config)
     checkpoint = tmp_path / "policy.pt"
     torch.save(
@@ -97,7 +99,9 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
         checkpoint,
     )
     if max_actions == 1:
-        with pytest.raises(ValueError, match="Observation capacity exceeded: actions"):
+        with pytest.raises(
+            ValueError, match="(?i)observation capacity exceeded: actions"
+        ):
             collect_frozen_policy(
                 checkpoint=checkpoint,
                 match_config=match_config,
@@ -127,3 +131,31 @@ def test_real_frozen_collection_keeps_both_viewers_and_three_game_splits(
     path = tmp_path / "real.json"
     save_dataset(dataset, path)
     assert read_dataset(path) == dataset
+
+
+def test_count_sampler_rejects_retained_private_subset_before_inference() -> None:
+    env = priority_root(
+        ("Sokka, Bold Boomeranger", "Island", "Mountain", "Forest"),
+        ("Island", "Mountain"),
+    )
+    decision = capture_text_decision(env)
+    cast = next(action for action in decision.actions if "Cast" in action.description)
+    submit_response(env, decision, cast.reference)
+    for _ in range(12):
+        decision = capture_text_decision(env)
+        if "Stage: select cards." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("Sokka selection not reached")
+    pick = next(action for action in decision.actions if "Select" in action.description)
+    submit_response(env, decision, pick.reference)
+    viewer = 1 - int(env.current_agent_index())
+    history = ViewerHistory.from_observation(
+        Observation.from_json(env.semantic_observation_json(viewer))
+    )
+    constraints = json.loads(env.hidden_hand_constraints_json(viewer))
+    assert constraints["retained_selection"] is True
+    schema = SamplerSchema("fixture", tuple(sorted(constraints["pool"])), 0)
+    with pytest.raises(ValueError, match="cannot represent retained selections"):
+        public_sampler_input(env, history, schema)

@@ -7,7 +7,7 @@
 // root action is applied to `rollouts` clones. The pool then exposes the set
 // of still-running simulations so a caller can advance *all* of them one
 // decision at a time with externally chosen actions — e.g. a policy network
-// evaluated in a single batched forward pass per step (wave/search goal 1).
+// evaluated in a single batched forward pass per step.
 //
 // Scoring matches Env::flat_mc_scores exactly: win 1.0 / loss 0.0 /
 // draw-or-step-cap 0.5 from the deciding player's perspective, averaged over
@@ -18,12 +18,6 @@ use crate::{
     flow::{game::Game, search::mix_seed},
     state::game_object::PlayerId,
 };
-
-#[cfg(test)]
-use std::sync::Arc;
-
-#[cfg(test)]
-use crate::cardsets::alpha::ContentPack;
 
 #[derive(Debug)]
 struct RolloutSlot {
@@ -75,6 +69,7 @@ impl RolloutPool {
         let hero = action_space.player.ok_or_else(|| {
             AgentError("rollout_pool: no agent player in current action space".to_string())
         })?;
+        game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
             return Err(AgentError(
@@ -97,7 +92,7 @@ impl RolloutPool {
         for world_index in 0..worlds {
             let world_seed = mix_seed(seed, world_index as u64);
             let mut world = game.clone();
-            world.determinize(hero, world_seed);
+            world.determinize(hero, world_seed)?;
             for action in 0..num_actions {
                 for rollout in 0..rollouts {
                     let mut sim = world.clone();
@@ -292,11 +287,6 @@ impl RolloutPool {
             .map(|total| total / self.denominator)
             .collect();
         (scores, self.simulations, self.cap_hits)
-    }
-
-    #[cfg(test)]
-    pub(crate) fn content_pack_contract_refs(&self) -> impl Iterator<Item = &Arc<ContentPack>> {
-        self.slots.iter().map(|slot| &slot.game.state.content)
     }
 }
 

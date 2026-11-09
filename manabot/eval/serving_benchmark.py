@@ -33,14 +33,8 @@ from manabot.infra.identity import StrictModel, file_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.replay import read_trace, replay_prefix
-from manabot.sim.serving import (
-    DecisionRequest,
-    PolicyAdmission,
-    PolicyKey,
-    PolicyStore,
-    _infer,
-    sample_rows,
-)
+from manabot.sim.serving import PolicyStore, _infer, sample_rows
+from manabot.sim.serving_protocol import DecisionRequest, PolicyAdmission, PolicyKey
 
 Variant = Literal["cold_scalar", "resident_only", "resident_catalog", "batched"]
 VARIANTS: tuple[Variant, ...] = (
@@ -238,11 +232,7 @@ def _numerical_worker(
                 requests = [
                     DecisionRequest(
                         str(i),
-                        "calibration",
-                        0,
-                        i,
                         PolicyKey.from_registration(bound, execution),
-                        i,
                         seed,
                         obs,
                         plan.deadline_unix,
@@ -333,16 +323,11 @@ def _panel_worker(
     connection: Connection,
     panel: Panel,
     execution: EvalExecution,
-    name: Variant,
     directory: Path,
 ) -> None:
     started = time.monotonic()
     try:
-        result = evaluate(
-            panel.request,
-            out_dir=directory,
-            execution=None if name == "cold_scalar" else execution,
-        )
+        result = evaluate(panel.request, out_dir=directory, execution=execution)
         connection.send(
             {
                 "passed": result.status == "completed",
@@ -412,7 +397,7 @@ def run(plan_path: Path, out: Path) -> dict[str, Any]:
                     execution = plan.configurations[name]
                     attempt.update(
                         _bounded_probe(
-                            _panel_worker, (panel, execution, name, directory), plan
+                            _panel_worker, (panel, execution, directory), plan
                         )
                     )
                     attempt.setdefault("seconds", time.monotonic() - started)

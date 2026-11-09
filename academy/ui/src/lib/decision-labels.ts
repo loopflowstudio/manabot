@@ -15,11 +15,23 @@ export function visibleCardLabel(observation: Observation, id: number): string |
     for (const [zone, cards] of [
       ['hand', player.hand], ['battlefield', player.battlefield],
       ['graveyard', player.graveyard], ['exile', player.exile],
-      ['stack', player.stack], ['private inspection', player.inspected ?? []],
+      ['stack', player.stack],
     ] as const) {
       const card = cards.find(card => card.id === id);
       if (card) return [card.name ?? 'Unknown card', `${index === 0 ? 'your' : "opponent's"} ${zone}`, copyLabel(cards, id)].filter(Boolean).join(' · ');
     }
+  }
+  // Inspection grants visibility, not ownership. These cards may belong to
+  // either seat, even though the viewer's inspection list contains them all.
+  for (const player of [observation.agent, observation.opponent]) {
+    const cards = player.inspected ?? [];
+    const card = cards.find(card => card.id === id);
+    if (!card) continue;
+    const whose = card.owner_id === observation.agent.id ? 'your'
+      : card.owner_id === observation.opponent.id ? "opponent's" : 'unknown owner’s';
+    const zone = card.zone.toLowerCase();
+    const copies = cards.filter(candidate => candidate.owner_id === card.owner_id && candidate.zone === card.zone);
+    return [card.name ?? 'Unknown card', `${whose} ${zone}`, 'private inspection', copyLabel(copies, id)].filter(Boolean).join(' · ');
   }
   return null;
 }
@@ -31,13 +43,19 @@ export function subjectLabel(observation: Observation, object: DecisionObjectVie
 
 export function stageLabel(stage: string): string {
   return ({
+    order_replacement: 'Choose the next replacement',
     order_triggers: 'Choose the next ability to stack', trigger_targets: 'Choose trigger targets',
+    trigger_mode: 'Choose a trigger mode',
     priority: 'Choose an action', targets: 'Choose a target', mode: 'Choose a spell mode',
     additional_cost: 'Choose an additional cost', payment: 'Pay the announced cost',
     mana_color: 'Choose mana to add', declare_attackers: 'Declare attackers',
-    declare_blockers: 'Declare blockers', resolution_sacrifice: 'Sacrifice during resolution',
-    private_search: 'Search your library', learn: 'Learn', private_inspection: 'Inspect cards',
-    scry: 'Scry', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',
-    discard: 'Choose a discard', select_milled: 'Choose a milled card', legend_rule: 'Choose a legend to keep',
+    declare_blockers: 'Declare blockers', resolution_choice: 'Choose a permanent during resolution',
+    name_card: 'Name a card', private_search: 'Search cards', learn: 'Learn', private_inspection: 'Inspect cards',
+    scry: 'Scry', surveil: 'Surveil', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',
+    discard: 'Choose a discard', select_milled: 'Choose a milled card', select_cards: 'Choose cards', legend_rule: 'Choose a legend to keep',
+    keep_creatures: 'Choose creatures to keep', retarget: 'Choose a new target',
+    resolution_cast: 'Cast a spell now',
+    order_library_bottom: 'Order the bottom cards',
+    order_library_top: 'Order the kept cards',
   } as Record<string, string>)[stage] ?? 'Pending decision';
 }

@@ -1,33 +1,18 @@
-use std::{collections::BTreeMap, sync::Arc};
-
 use managym::state::{
-    game_object::{CardId, EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId},
+    game_object::{EntityId, Incarnation, ObjectLookupError, ObjectRef, PlayerId},
     zone::ZoneType,
 };
 
-use super::helpers::*;
-
-fn card_named(s: &Scenario, player: usize, name: &str) -> CardId {
-    let index = s
-        .game()
-        .state
-        .cards
-        .iter()
-        .position(|card| card.owner == PlayerId(player) && card.name == name)
-        .unwrap_or_else(|| panic!("missing {name} for player {player}"));
-    CardId(index)
-}
-
-fn deck(entries: &[(&str, usize)]) -> BTreeMap<String, usize> {
-    entries
-        .iter()
-        .map(|(name, count)| ((*name).to_string(), *count))
-        .collect()
-}
+use crate::support::game::*;
+use crate::support::inspect::owned_card;
 
 #[test]
 fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 400_701);
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        deck(&[("Mountain", 40)]),
+        400_701,
+    );
     let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[permanent]
         .as_ref()
@@ -60,10 +45,11 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         }),
         Err(ObjectLookupError::MissingEntity)
     );
-    let lki = *s
+    let lki = s
         .game()
         .object_lki(old_ref)
-        .expect("departing battlefield LKI");
+        .expect("departing battlefield LKI")
+        .clone();
     assert_eq!(lki.object_ref, old_ref);
     assert_eq!(lki.card, card);
     assert_eq!(lki.from_zone, ZoneType::Battlefield);
@@ -102,7 +88,6 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
     );
 
     let branch = s.game().clone();
-    assert!(Arc::ptr_eq(&s.game().state.content, &branch.state.content));
     assert_eq!(branch.current_object_ref(card), Some(new_ref));
     assert_eq!(branch.object_lki(old_ref), Some(&lki));
     assert_eq!(
@@ -116,7 +101,11 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
 
 #[test]
 fn object_ref_same_zone_move_is_not_a_new_rules_object() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 400_702);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        400_702,
+    );
     let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[permanent]
         .as_ref()
@@ -140,10 +129,10 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
             ("Dragonfly Swarm", 8),
             ("It'll Quench Ya!", 20),
         ]),
-        mountain_deck(),
+        deck(&[("Mountain", 40)]),
         400_703,
     );
-    let lesson = card_named(&s, 0, "It'll Quench Ya!");
+    let lesson = owned_card(&s, 0, "It'll Quench Ya!");
     s.game_mut().move_card(lesson, ZoneType::Graveyard);
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_card = s.game().state.permanents[swarm]
@@ -168,7 +157,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .first()
         .expect("Dragonfly death trigger");
     assert_eq!(pending.source_ref, Some(old_ref));
-    let source_lki = pending.source_lki.expect("trigger source LKI");
+    let source_lki = pending.source_lki.clone().expect("trigger source LKI");
     assert_eq!(source_lki.object_ref, old_ref);
     assert_eq!(source_lki.controller, PlayerId(0));
     assert_eq!(source_lki.presentation_id, old_presentation);

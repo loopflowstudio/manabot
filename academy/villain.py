@@ -29,7 +29,7 @@ from manabot.sim.search.flat import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 # Local imports
 import managym
 
-from .bot_decision import BotDecision, PolicyFactor
+from .bot_decision import BotDecision
 
 if TYPE_CHECKING:
     from .trace import GameConfig
@@ -85,46 +85,21 @@ class CheckpointVillain:
         from manabot.model.checkpoint import load_checkpoint
         from manabot.model.world import validate_agent_setup
 
-        # Keep the optional Torch/model stack behind checkpoint construction.
-        from manabot.sim.action.compound import CompoundPolicy
-
         self.agent, self.obs_space = load_checkpoint(path)
         if player_configs is not None:
             validate_agent_setup(self.agent, player_configs)
         self.deterministic = deterministic
         self.last_decision: BotDecision | None = None
-        self.compound = (
-            CompoundPolicy(self.agent, deterministic=deterministic)
-            if self.agent.config.compound_decisions
-            else None
-        )
 
     def __call__(self, env: managym.Env, obs: managym.Observation) -> int:
+        del env
         self.last_decision = None
-        if self.compound is not None:
-            action = self.compound.act(env, obs)
-            decision = self.compound.last_decision
-            assert decision is not None
-            output = decision.output
-            self.last_decision = BotDecision(
-                action,
-                value=float(output.values[0].item()),
-                value_semantic="signed_outcome at compound root",
-                factors=[
-                    PolicyFactor(token, probabilities.tolist(), float(value.item()))
-                    for token, probabilities, value in zip(
-                        output.tokens, output.probabilities, output.values, strict=True
-                    )
-                ],
-                unavailable="Compound policy: conditional root-sequence factors are shown below; native microchoice marginals are unavailable.",
-            )
-            return action
         # Policy weights score each action independently of the padded action
         # count. At inference preserve the entire rules offer list, including
         # decisions wider than the training batch's storage capacity.
         space = self.obs_space
         if len(obs.action_space.actions) > space.encoder.max_actions:
-            from manabot.env import ObservationSpace
+            from manabot.env.observation import ObservationSpace
 
             space = ObservationSpace(
                 space.encoder.config.model_copy(

@@ -8,12 +8,12 @@ from typing import Any, Literal
 
 from pydantic import Field, model_validator
 
+from manabot.infra.host import HostFacts
 from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
     ProducerCost,
     Strict,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -33,7 +33,9 @@ class PhaseTiming(Strict):
 
     Phase boundaries sit at points that already wait for the device, so a
     phase includes the device work it queued. Nested phases sum to at most
-    their parent; the remainder is untimed work inside the parent.
+    their parent; the remainder is untimed work inside the parent. Native
+    stepping and observation encoding come from the engine's own clock, as the
+    mean across parallel producer shards.
     """
 
     seconds: float = Field(ge=0, allow_inf_nan=False)
@@ -76,11 +78,13 @@ class StageRecord(Strict):
         default=None, exclude_if=lambda value: value is None
     )
     # Completed update iterations in this segment: self-play collect/update
-    # iterations or compound updates. Imported learning-state iterations are
+    # iterations. Imported learning-state iterations are
     # counted by learning_state_origin, not here.
     updates: int = Field(default=0, ge=0)
     games: int = 0
     environment_decisions: int = 0
+    # Slots idled while slower streams closed the batch; 0 in older records.
+    idle_stream_steps: int = Field(default=0, ge=0, exclude_if=lambda value: not value)
     learner_transitions: int = 0
     optimizer_exposures: int = 0
     # Completed optimizer.step calls; unknown in older or unsupported learners.
@@ -92,9 +96,10 @@ class StageRecord(Strict):
     inputs: dict[str, dict] = {}
     artifacts: dict[str, dict] = {}
     rejected_artifacts: dict[str, dict] = {}
-    # Bounded rows of stages Etude does not track: compound, selection or
-    # belief summaries. Self-play update rows are Etude metrics only
-    # (TrainingRun.metrics_run); historical exports retain theirs here.
+    # Bounded rows of stages Etude does not track: selection or belief
+    # summaries (historical records may also hold compound summaries).
+    # Self-play update rows are Etude metrics only (TrainingRun.metrics_run);
+    # historical exports retain theirs here.
     diagnostics: list[dict] = []
     error: str | None = None
 
@@ -144,6 +149,8 @@ class RunRecord[RegimeT](Strict):
     seed: int
     seed_streams: dict[str, int]
     identities: dict
+    # This attempt's machine; absent in runs recorded before it was read.
+    host: HostFacts | None = Field(default=None, exclude_if=lambda value: value is None)
     status: Literal[
         "pending", "running", "completed", "failed", "interrupted", "paused"
     ] = "pending"
@@ -252,9 +259,5 @@ class TrainingRun(RunRecord[TrainingRegime]):
 
     def updates_through(self, stage_id: str | None = None) -> int:
         """Completed learner iterations; collection records are not updates."""
-        learning = {
-            s.id
-            for s in self.regime.stages
-            if isinstance(s, (TrainSelfPlay, TrainCompound))
-        }
+        learning = {s.id for s in self.regime.stages if isinstance(s, TrainSelfPlay)}
         return self._updates_through(learning, stage_id)

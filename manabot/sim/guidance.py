@@ -1,4 +1,8 @@
-"""Build registered simulation players, including checkpoint-guided search."""
+"""Build registered simulation players, including checkpoint-guided search.
+
+`build_registered_player` is the one entry point. Code players come from the
+Torch-free `players`; search and checkpoint players load their policy here.
+"""
 
 from __future__ import annotations
 
@@ -8,18 +12,19 @@ from typing import Any, Mapping
 import numpy as np
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.heuristic import HeuristicPlayer
-from manabot.sim.players import build_player
+from manabot.sim.players import CODE_PLAYER_KINDS, build_code_player
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.search.flat_mc import MatchupPlayer
+from manabot.sim.search import local_update
+from manabot.sim.search.flat_mc import MatchupPlayer, make_player
 from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     LeafEvaluation,
     UniformRandomLeafEvaluator,
+    puct_source_sha256,
 )
 
 
@@ -104,10 +109,12 @@ def build_registered_player(
     """Resolve the additive prior-only candidate or delegate unchanged kinds."""
 
     spec = dict(registration.player_spec)
-    if spec.get("kind") == "heuristic":
-        return HeuristicPlayer(), None
+    if spec.get("kind") in CODE_PLAYER_KINDS:
+        return build_code_player(registration, seed=seed), None
     if spec.get("kind") != "policy_prior_puct":
-        return build_player(registration, seed=seed, checkpoint_path=checkpoint_path)
+        return _build_policy_player(
+            registration, seed=seed, checkpoint_path=checkpoint_path
+        )
     if checkpoint_path is None:
         raise FileNotFoundError("checkpoint candidate bytes are unavailable")
     if spec["implementation_source_sha256"] != file_sha256(Path(__file__)):
@@ -136,3 +143,64 @@ def build_registered_player(
     if spec["root_noise"] != "none" or not spec["deterministic"]:
         raise RuntimeError("policy-prior PUCT stochastic policy semantics drift")
     return player, observation_space
+
+
+def _build_policy_player(
+    registration: PlayerRegistration, *, seed: int, checkpoint_path: str | None = None
+) -> tuple[MatchupPlayer, ObservationSpace | None]:
+    spec = dict(registration.player_spec)
+    if registration.runner_kind == "checkpoint":
+        if checkpoint_path is None:
+            raise FileNotFoundError("checkpoint candidate bytes are unavailable")
+        spec["path"] = checkpoint_path
+        if spec["kind"] == "agent_puct":
+            if puct_source_sha256() != spec["implementation_source_sha256"]:
+                raise ValueError("agent PUCT implementation source drift")
+            if (
+                file_sha256(checkpoint_path) != registration.checkpoint_sha256
+                or Path(checkpoint_path).stat().st_size != registration.checkpoint_bytes
+            ):
+                raise ValueError("agent PUCT checkpoint byte identity drift")
+            spec["checkpoint"] = checkpoint_path
+        if spec["kind"] == "local_update":
+            if (
+                local_update.local_search_source_sha256()
+                != spec["implementation_source_sha256"]
+            ):
+                raise ValueError("local-update implementation source drift")
+            spec["checkpoint"] = checkpoint_path
+            spec["checkpoint_sha256"] = registration.checkpoint_sha256
+    player, obs_space = make_player(spec, seed=seed)
+    attribute_names = {
+        "sims": "simulations"
+        if spec["kind"] in {"determinized_puct", "agent_puct"}
+        else "sims",
+        "rollouts_per_world": "rollouts",
+        "worlds": "worlds",
+        "c_puct": "c_puct",
+        "max_steps": "max_steps",
+        "branch_driver_id": "branch_driver_id",
+        "branch_audit": "branch_audit",
+    }
+    for field, attribute in attribute_names.items():
+        if field in spec and getattr(player, attribute, None) != spec[field]:
+            raise RuntimeError(f"constructed player did not echo {field}")
+    if spec["kind"] == "determinized_puct":
+        semantics = registration.search_semantics
+        if semantics is None:
+            raise RuntimeError("determinized PUCT has no registered search semantics")
+        if player.branch_audit != semantics.branch_audit:
+            raise RuntimeError("constructed player did not echo branch_audit")
+        if type(player.evaluator) is not UniformRandomLeafEvaluator:
+            raise RuntimeError(
+                "constructed player did not use the registered leaf evaluator"
+            )
+    if spec["kind"] == "agent_puct":
+        if player.evaluator.value_mode != spec["value_mode"]:
+            raise RuntimeError("constructed player did not echo value_mode")
+        if (
+            sum(p.numel() for p in player.evaluator.agent.parameters())
+            != registration.parameter_count
+        ):
+            raise ValueError("agent PUCT checkpoint parameter count drift")
+    return player, obs_space

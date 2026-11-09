@@ -73,6 +73,7 @@ def recipe() -> TrainingRegime:
     # This fixture exercises exact-quota tails across updates; whole-game
     # both-seat recovery has its own collector and game-error coverage.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.learning.epochs = 1
     stage.learning.ema = 0.9
     value.agent.hidden_dim = 8
@@ -149,6 +150,7 @@ def test_real_interruption_restores_complete_learning_state(
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = seats
+    stage.batch_closure = "exact-quota" if seats == "one" else "complete-games"
     if gradient == "damped_policy":
         value.agent.value_kind = "categorical_wdl"
         stage.learning = DampedPolicyLearning(
@@ -167,6 +169,13 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
+        # Stage timers describe this attempt while counts continue the trajectory.
+        step = "Environment step and encoding"
+        assert resumed.stages[0].updates == whole.stages[0].updates
+        assert (
+            resumed.stages[0].collection_timings[step].calls
+            < whole.stages[0].collection_timings[step].calls
+        )
         a, b = load_update(whole), load_update(resumed)
         for name in (
             "learner",
@@ -184,7 +193,6 @@ def test_real_interruption_restores_complete_learning_state(
         assert a.iteration == b.iteration == 3
         assert_learning_metrics_equal(whole, resumed, tmp_path)
         assert whole.stages[0].games == resumed.stages[0].games
-        assert whole.stages[0].games > 0
         transitions = whole.stages[0].learner_transitions
         assert transitions == resumed.stages[0].learner_transitions
         if seats == "one":
@@ -192,6 +200,8 @@ def test_real_interruption_restores_complete_learning_state(
         else:
             # Both seats finish their games past the quota; every native
             # decision becomes exactly one learner row, including the overshoot.
+            # One-seat quotas can instead end with every game still in progress.
+            assert whole.stages[0].games > 0
             assert transitions >= 192
             assert transitions == a.collector.stats.micro_steps
             assert a.collector.stats.opponent_decisions == 0

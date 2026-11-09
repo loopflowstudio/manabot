@@ -1,33 +1,45 @@
 #!/usr/bin/env bash
 # Select independent CI jobs from NUL-delimited changed paths. Unknown inputs
 # run everything; docs and unrelated packages do not fan out into browser tests.
+# `--all` selects every job; `--only <job>...` selects exactly the named jobs.
 set -euo pipefail
-jobs=(rust python_unit integration academy_integration protocol_v1 semantic_coverage semantic_conformance frontend clean_machine_play)
+jobs=(rust python_unit integration academy_integration protocol_v1 semantic_conformance frontend clean_machine_play engine_budget)
 for job in "${jobs[@]}"; do declare "$job=false"; done
 select_jobs() { local job; for job in "$@"; do printf -v "$job" true; done; }
 all() { select_jobs "${jobs[@]}"; }
 seen=false
 if [[ "${1:-}" == --all ]]; then
   all
+elif [[ "${1:-}" == --only ]]; then
+  shift
+  for job in "$@"; do
+    [[ " ${jobs[*]} " == *" $job "* ]] || { echo "unknown job: $job" >&2; exit 1; }
+  done
+  select_jobs "$@"
 else
   while IFS= read -r -d '' file; do
     seen=true
     case "$file" in
-      .github/ci/*|.github/workflows/ci.yml|pyproject.toml|uv.lock|managym/Cargo.toml|managym/Cargo.lock|managym/pyproject.toml)
+      .github/ci/*|.github/workflows/ci.yml|pyproject.toml|uv.lock|managym/Cargo.toml|managym/Cargo.lock|managym/*/Cargo.toml|managym/pyproject.toml)
         all ;;
       .github/workflows/manabot-integration.yml) select_jobs integration ;;
       .github/workflows/academy-integration.yml) select_jobs academy_integration ;;
+      .github/workflows/engine-budget.yml) select_jobs python_unit engine_budget ;;
+      managym/examples/bench_search.rs) select_jobs rust engine_budget ;;
+      managym/examples/bench_*.rs|managym/examples/curated/*|managym/perf/*)
+        select_jobs engine_budget ;;
+      scripts/engine_budget.py) select_jobs python_unit engine_budget ;;
       .github/workflows/*) ;; # Separate workflows own their own triggers.
-      scripts/audit_rules.py|docs/rules/audit-2026-10/*)
-        select_jobs python_unit ;;
+      scripts/audit_rules.py) select_jobs python_unit ;;
       content/DECKS.md|AGENTS.md|README.md|VISUAL_DESIGN.md|WORLDS.md|*/README.md) ;;
-      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/*.py|managym/*.pyi)
+      content/*|conformance/*|manabot/managym/*|managym/src/*|managym/state/src/*|managym/cards/src/*|managym/*.py|managym/*.pyi)
         all ;;
-      docs/rules/elemental/decks.json|docs/rules/elemental/cube-snapshot.csv) select_jobs academy_integration ;;
+      tests/semantic/fixtures/elemental/*) select_jobs academy_integration ;;
       protocol/*) select_jobs rust protocol_v1 frontend semantic_conformance ;;
-      managym/tests/*) select_jobs rust semantic_conformance ;;
+      managym/tests/*|managym/cards/tests/*) select_jobs rust semantic_conformance ;;
+      managym/.config/nextest.toml) select_jobs rust ;;
       academy/ui/src/lib/packs/*|academy/ui/src/lib/fixtures/*)
-        select_jobs rust integration academy_integration protocol_v1 frontend semantic_coverage semantic_conformance clean_machine_play ;;
+        select_jobs rust integration academy_integration protocol_v1 frontend semantic_conformance clean_machine_play ;;
       academy/ui/package.json|academy/ui/package-lock.json|academy/ui/*config.*|academy/ui/scripts/*|academy/ui/static/*|academy/ui/src/lib/card-art/*)
         select_jobs frontend clean_machine_play ;;
       academy/ui/*) select_jobs frontend ;;
@@ -43,14 +55,12 @@ else
         select_jobs academy_integration clean_machine_play ;;
       manabot/env/*|manabot/model/world.py|manabot/sim/search/flat.py|manabot/sim/search/flat_mc.py|manabot/sim/action/structured.py)
         select_jobs integration academy_integration protocol_v1 frontend ;;
-      manabot/semantic/*|tests/semantic/*|scripts/compile_semantic_content.py|scripts/generate_coverage_gaps.py)
-        select_jobs integration semantic_coverage ;;
       tests/infra/*) select_jobs python_unit ;;
       manabot/infra/*) select_jobs python_unit integration ;;
-      manabot/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
+      manabot/*|tests/semantic/*|tests/llm/*|tests/agent/*|tests/model/*|tests/env/*|tests/eval/*|tests/sim/*|tests/training/*|tests/bench/*|tests/belief/*|tests/verify/*|tests/test_package_boundaries.py|scripts/*|experiments/*|ops/*|docs/experiment-metrics.md|docs/benchmarks/*)
         select_jobs integration ;;
       website/*) select_jobs python_unit ;;
-      paper/*|wave/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;
+      paper/*|scratch/*|.lf/*|docs/*|*.md|LICENSE|.gitignore|.dockerignore) ;;
       *) all ;;
     esac
   done

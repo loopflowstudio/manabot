@@ -4,11 +4,15 @@ use managym::{
     agent::action::{ActionSpaceKind, ActionType},
     flow::{
         event::GameEvent,
-        trigger::{DelayedTrigger, DelayedTriggerKind},
+        trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::StepKind,
     },
     state::{
-        ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Effect, ObjectSelector, PlayerSelector, TriggerCondition, TriggerSubject,
+        },
+        card::{Keyword, Keywords},
+        effect::Modification,
         game_object::{CardId, ObjectRef, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
@@ -16,29 +20,19 @@ use managym::{
     },
 };
 
-use super::helpers::*;
-
-fn card_named(s: &Scenario, player: usize, name: &str) -> CardId {
-    let index = s
-        .game()
-        .state
-        .cards
-        .iter()
-        .position(|card| card.owner == PlayerId(player) && card.name == name)
-        .unwrap_or_else(|| panic!("missing {name} for player {player}"));
-    CardId(index)
-}
+use crate::support::game::*;
+use crate::support::inspect::owned_card;
 
 fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
-    let deck = BTreeMap::from([
-        ("Dragonfly Swarm".to_string(), 1),
-        ("Firebending Lesson".to_string(), 1),
-        ("Island".to_string(), 6),
+    let swarm = deck(&[
+        ("Dragonfly Swarm", 1),
+        ("Firebending Lesson", 1),
+        ("Island", 6),
     ]);
-    let mut s = Scenario::new(deck, mountain_deck(), seed);
+    let mut s = Scenario::new(swarm, deck(&[("Mountain", 40)]), seed);
     s.advance_to_active_step(0, StepKind::Main);
 
-    let lesson = card_named(&s, 0, "Firebending Lesson");
+    let lesson = owned_card(&s, 0, "Firebending Lesson");
     s.game_mut().move_card(lesson, ZoneType::Graveyard);
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_ref = s
@@ -54,7 +48,7 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
         .zone_cards(ZoneType::Library, PlayerId(0))
         .to_vec();
     for card in library {
-        s.game_mut().state.zones.remove_card(card, PlayerId(0));
+        s.game_mut().state.zones.remove_card(card);
     }
     s.game_mut().state.permanents[swarm]
         .as_mut()
@@ -67,7 +61,7 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
 /// CR 704.5a — A player with 0 or less life loses the game as a state-based action.
 #[test]
 fn cr_704_5a_player_loses_at_zero_life() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 121);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 121);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().state.players[0].life = 0;
@@ -81,7 +75,7 @@ fn cr_704_5a_player_loses_at_zero_life() {
 /// CR 704.5b — A player who attempted to draw from an empty library loses.
 #[test]
 fn cr_704_5b_empty_library_draw_loses_game() {
-    let mut s = Scenario::new(empty_deck(), mountain_deck(), 122);
+    let mut s = Scenario::new(deck(&[]), deck(&[("Mountain", 40)]), 122);
 
     s.advance_until(
         |s| s.game().is_game_over(),
@@ -95,7 +89,11 @@ fn cr_704_5b_empty_library_draw_loses_game() {
 /// CR 704.5g — Creature with lethal damage is destroyed.
 #[test]
 fn cr_704_5g_lethal_damage_destroys_creature() {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 123);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        123,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -157,7 +155,11 @@ fn cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority() {
 /// player iteration order.
 #[test]
 fn cr_704_3_simultaneous_terminal_conditions_are_a_draw() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 704_302);
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 40)]),
+        deck(&[("Mountain", 40)]),
+        704_302,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().state.players[0].life = 0;
     s.game_mut().state.players[1].life = 0;
@@ -176,15 +178,16 @@ fn cr_704_3_simultaneous_terminal_conditions_are_a_draw() {
 /// equivalent replays do not depend on storage traversal accidents.
 #[test]
 fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 704_303);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        704_303,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let land = s.force_permanent_on_battlefield(0, "Mountain");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
 
-    s.game_mut().state.permanents[land]
-        .as_mut()
-        .expect("animated land")
-        .animated = true;
+    animate(&mut s, land);
     s.game_mut().state.permanents[ogre]
         .as_mut()
         .expect("damaged ogre")
@@ -230,17 +233,22 @@ fn cr_704_3_multiple_simultaneous_sbas_commit_in_object_order() {
 /// die even though committed facts have a deterministic serialization order.
 #[test]
 fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 704_306);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        704_306,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
     assert_ne!(first, second);
 
     let ability = Ability::Triggered {
+        intervening_if: None,
         condition: TriggerCondition::Dies {
             subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },
-        effects: vec![Effect::GainLife { amount: 1 }],
+        effects: vec![Effect::gain_life(1)],
     };
     let mut expected_sources = Vec::new();
     for permanent_id in [first, second] {
@@ -285,7 +293,11 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
 /// watcher must not fire for a later incarnation of the same physical card.
 #[test]
 fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 704_304);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        704_304,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let old_permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[old_permanent]
@@ -307,9 +319,26 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
     assert_ne!(old_ref, new_ref);
 
     s.game_mut().state.delayed_triggers.push(DelayedTrigger {
-        watched: old_ref,
+        remembered: Vec::new(),
+        event: DelayedTriggerEvent::Leaves {
+            watched: old_ref,
+            or_exiled: true,
+        },
         controller: PlayerId(0),
-        kind: DelayedTriggerKind::ReturnToBattlefieldTapped,
+        source_card: card,
+        source_ref: Some(old_ref),
+        effects: vec![Effect::Move {
+            library_end: None,
+            what: ObjectSelector::This,
+            to: ZoneType::Battlefield,
+            tapped: true,
+            transformed: false,
+            under: Some(PlayerSelector::Owner),
+            with_counter: None,
+            linked: None,
+        }],
+        frequency: managym::state::ability::DelayedFrequency::Once,
+        expiry: managym::state::ability::DelayedExpiry::Never,
     });
     s.game_mut().state.permanents[new_permanent]
         .as_mut()
@@ -375,11 +404,24 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                         let id = s.force_permanent_on_battlefield(controller, "Gray Ogre");
                         let perm = s.game_mut().state.permanents[id].as_mut().unwrap();
                         let card = perm.card;
-                        perm.temp_toughness = toughness - 2;
                         perm.damage = damage;
                         // A deathtouch flag describes positive damage, never zero.
                         perm.deathtouch_damage = deathtouch && damage > 0;
-                        perm.temp_keywords.indestructible = indestructible;
+                        until_end_of_turn(
+                            &mut s,
+                            id,
+                            Modification::ModifyPt {
+                                power: 0,
+                                toughness: toughness - 2,
+                            },
+                        );
+                        if indestructible {
+                            until_end_of_turn(
+                                &mut s,
+                                id,
+                                Modification::AddKeywords(Keywords::of(&[Keyword::Indestructible])),
+                            );
+                        }
                         s.pass_priority();
                         let dies = toughness <= 0
                             || (!indestructible

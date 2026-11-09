@@ -1,6 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import currentPositionsJson from '../../fixtures/choice-navigation-explicit-w14.json' with { type: 'json' };
-import positionsJson from '../../fixtures/choice-navigation-w14.json' with { type: 'json' };
+import positionsJson from '../../fixtures/choice-navigation-w17.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 
@@ -121,7 +120,7 @@ test('retained large Learn decision keeps modes, cancellation and all original c
 for (const family of ['CHOOSE_TARGET', 'DISCARD'] as const) {
   test(`live retained ${family} can execute an intended choice`, async ({ page }) => {
     test.skip(Boolean(process.env.ACADEMY_REVIEW_CHOICE && process.env.ACADEMY_REVIEW_CHOICE !== family));
-    const position = currentPositionsJson.positions[family];
+    const position = positions[family];
     await page.addInitScript(config => {
       const state: Window['__choiceNavigation'] = {
         socket: null, frame: null, status: '',

@@ -8,8 +8,11 @@ the batched sampler (valid-action guarantees), the K-stream vector driver
 import numpy as np
 import torch
 
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import (
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import (
@@ -20,7 +23,7 @@ from manabot.sim.rollout import (
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 
 
 def make_env(seed: int = 3) -> tuple[Env, dict]:
@@ -96,24 +99,14 @@ class TestRolloutPool:
 
 class TestBatchedSampler:
     def _obs_batch(self, batch: int = 8) -> dict[str, np.ndarray]:
-        obs_space = ObservationSpace()
-        buffers = _allocate_buffers(obs_space, batch)
-        rng = np.random.default_rng(1)
-        for key, arr in buffers.items():
-            if key in ("rewards", "terminated", "truncated"):
-                continue
-            if arr.dtype == np.float32:
-                arr[:] = rng.random(arr.shape, dtype=np.float32)
-        # Transport definition IDs are discrete even in a synthetic feature batch.
-        buffers["semantic_cards"].fill(0)
-        for key in ("agent_permanents", "opponent_permanents"):
-            buffers[key][..., PERMANENT_DEFINITION_INDEX] = 0
-        valid = np.zeros_like(buffers["actions_valid"])
-        valid[:, :5] = (rng.random((batch, 5)) < 0.6).astype(np.float32)
-        valid[np.arange(batch), rng.integers(0, 5, batch)] = 1.0
-        buffers["actions_valid"][:] = valid
-        buffers["actions"][..., -1] = valid
-        buffers["action_focus"][:] = -1
+        """Real opening observations from distinct seeds, one per row."""
+        buffers = _allocate_buffers(ObservationSpace(), batch)
+        for row in range(batch):
+            _, obs = make_env(seed=20 + row)
+            for key, value in obs.items():
+                if key in buffers:
+                    buffers[key][row] = value
+        assert (buffers["actions_valid"].sum(axis=1) > 0).all()
         return buffers
 
     def test_selects_valid_actions_only(self):

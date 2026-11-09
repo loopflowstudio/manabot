@@ -2,7 +2,7 @@
 // Sideboards are admitted setup and owned outside-game copies, not game zones.
 
 use managym::{
-    semantic::SemanticPack,
+    cards::setups::authored_setup,
     state::{game_object::PlayerId, zone::ZoneType},
     Game, PlayerConfig,
 };
@@ -24,7 +24,7 @@ fn configs(sideboard: BTreeMap<String, usize>) -> Vec<PlayerConfig> {
 
 #[test]
 fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats() {
-    let pack = SemanticPack::two_deck().unwrap();
+    let pack = authored_setup("two_deck").unwrap();
     assert_eq!(
         pack.decklist("ur_lessons").unwrap().values().sum::<usize>(),
         41
@@ -34,7 +34,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         40
     );
     assert_eq!(
-        pack.player_config("UR", "ur_lessons").unwrap().sideboard,
+        pack.player_config("UR", "ur_lessons")
+            .unwrap()
+            .deck
+            .sideboard,
         counts(&[
             ("Firebending Lesson", 1),
             ("It'll Quench Ya!", 1),
@@ -42,7 +45,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         ])
     );
     assert_eq!(
-        pack.player_config("GW", "gw_allies").unwrap().sideboard,
+        pack.player_config("GW", "gw_allies")
+            .unwrap()
+            .deck
+            .sideboard,
         counts(&[("Yip Yip!", 1), ("Fancy Footwork", 1)])
     );
     for keys in [["ur_lessons", "gw_allies"], ["gw_allies", "ur_lessons"]] {
@@ -51,13 +57,9 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
             .map(|key| pack.player_config(key, key).unwrap())
             .collect();
         let game = Game::new(configs.clone(), 9, false);
-        assert_eq!(
-            game.state.content.compiled_semantics().unwrap().ir_hash,
-            pack.ir_hash
-        );
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
-            assert_eq!(roster.len(), config.sideboard.values().sum::<usize>());
+            assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
             for &card in roster {
                 assert_eq!(game.state.cards[card].owner, PlayerId(player));
                 assert_eq!(game.state.zones.zone_of(card), None);

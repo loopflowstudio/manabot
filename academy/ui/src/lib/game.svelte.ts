@@ -18,6 +18,7 @@ import type {
   ActionOption,
   ConnectionState,
   DeckNames,
+  Decklists,
   ExperienceFrame,
   GameLogEntry,
   Observation,
@@ -37,6 +38,12 @@ export type OpponentChoice =
 
 export function checkpointChoice(sha256: string): OpponentChoice {
   return `checkpoint:${sha256}`;
+}
+
+// Search opponents sample hidden cards from the opponent's decklists, so the
+// server refuses them in closed-decklist games.
+export function isSearchChoice(choice: OpponentChoice): boolean {
+  return choice.startsWith('search-');
 }
 
 export function buildOpponentConfig(choice: OpponentChoice): OpponentConfig {
@@ -75,9 +82,14 @@ export class GameStore {
   resumeFailed = $state(false);
   selectedTargetId = $state<number | null>(null);
   opponentChoice = $state<OpponentChoice>('search-64');
+  decklists = $state<Decklists>('open');
   // Deck pickers (named decks; gui/server.py NAMED_DECKS). Loaded from
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
+  deckImport = $state<{
+    hero: { source: string; filename: string };
+    villain: { source: string; filename: string };
+  } | null>(null);
   // Display names for the live matchup, echoed by the server on every
   // payload — what the game header renders.
   deckNames = $state<DeckNames | null>(null);
@@ -164,6 +176,10 @@ export class GameStore {
     this.opponentChoice = next;
   }
 
+  setDecklists(next: Decklists): void {
+    this.decklists = next;
+  }
+
   setHeroDeck(next: DeckChoice): void {
     this.updateDecks({ ...this.decks, hero: next });
   }
@@ -181,11 +197,13 @@ export class GameStore {
       ...this.opponentConfig(),
       request_id: crypto.randomUUID(),
       player_token: playerToken(),
+      ...(this.deckImport ? { deck_import: this.deckImport } : {}),
       hero_deck: this.decks.hero,
       villain_deck: this.decks.villain,
       stops: { my: [...this.stops.my], opponent: [...this.stops.opponent] },
       stop_on_stack: this.stops.stop_on_stack,
       auto_pass: this.stops.auto_pass,
+      decklists: this.decklists,
     };
   }
 

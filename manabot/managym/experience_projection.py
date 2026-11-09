@@ -48,8 +48,50 @@ def enum_name(enum_type: type[IntEnum], value: Any) -> str:
         return str(int(value))
 
 
+def _mana_symbols(cost: managym.ManaCost) -> str:
+    colored = "".join(
+        f"{{{symbol}}}" * int(count)
+        for symbol, count in zip("WUBRGC", cost.cost, strict=True)
+    )
+    hybrid = "".join(f"{{{'WUBRG'[a]}/{'WUBRG'[b]}}}" for a, b in cost.hybrid)
+    generic = int(cost.mana_value) - sum(cost.cost) - len(cost.hybrid)
+    return (f"{{{generic}}}" if generic else "") + colored + hybrid or "{0}"
+
+
+def _serialize_cast_permission(permission: managym.CastPermission) -> dict[str, Any]:
+    """Only set terms are written, matching the protocol's omissions."""
+    terms: dict[str, Any] = {"player_id": int(permission.player_id)}
+    if permission.cost is not None:
+        terms["cost"] = _mana_symbols(permission.cost)
+    for key in (
+        "this_turn",
+        "through_next_turn",
+        "own_turn_only",
+        "flash",
+        "any_mana",
+        "waterbend",
+        "foretold",
+    ):
+        if getattr(permission, key):
+            terms[key] = True
+    for key in ("after_turn", "source_permanent_id"):
+        if (value := getattr(permission, key)) is not None:
+            terms[key] = int(value)
+    return terms
+
+
 def _serialize_card(card: managym.Card) -> dict[str, Any]:
+    face_down = {"face_down": True} if card.face_down else {}
+    permission = (
+        {"cast_permission": _serialize_cast_permission(card.cast_permission)}
+        if card.cast_permission is not None
+        else {}
+    )
+    x = {"x": int(card.x)} if card.x is not None else {}
     return {
+        **face_down,
+        **permission,
+        **x,
         "id": int(card.id),
         "registry_key": int(card.registry_key),
         "name": card.name,
@@ -86,9 +128,19 @@ def _serialize_permanent(
     return {
         **details,
         "id": int(permanent.id),
-        "name": card.name if card else None,
+        "name": permanent.name or (card.name if card else None),
         "text_box": card.text_box if card else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
+        **{
+            field: int(getattr(permanent, field))
+            for field in (
+                "transforms",
+                "exhausted_abilities",
+                "once_each_turn_used",
+                "granted_firebending",
+            )
+            if getattr(permanent, field)
+        },
         **(
             {"temp_subtypes": list(permanent.temp_subtypes)}
             if permanent.temp_subtypes
@@ -99,14 +151,76 @@ def _serialize_permanent(
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
         # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
+        # SBA actually checks. `base_power` / `base_toughness` are the card
+        # row's values; on the battlefield the card row reads the layered
+        # characteristics too, so they equal the effective values there.
+        # Printed P/T is not in the projection.
         "power": int(permanent.power),
         "toughness": int(permanent.toughness),
         "base_power": int(card.power) if card else None,
         "base_toughness": int(card.toughness) if card else None,
         "plus1_counters": int(permanent.plus1_counters),
+        **_characteristics(permanent),
     }
+
+
+def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
+    """Effect-derived state, present only when an effect applies."""
+    counters = {kind: int(count) for kind, count in permanent.counters.items() if count}
+    values: dict[str, Any] = {
+        "counters": counters or None,
+        "attached_to": permanent.attached_to,
+        "creature_types": permanent.creature_types,
+        "is_granted_land": bool(permanent.is_granted_land) or None,
+        "attacking": bool(permanent.attacking) or None,
+        "blocking": permanent.blocking,
+        "abilities_lost": bool(permanent.abilities_lost) or None,
+        "used_abilities": list(permanent.used_abilities) or None,
+        "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
+        "effects": _effects(permanent.effects) or None,
+        "copy_of": _copy(permanent.copy),
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
+    """What a player has done this turn, absent facts omitted."""
+    values = {
+        "attacked": history.attacked,
+        "permanents_sacrificed": history.permanents_sacrificed,
+        "land_entered": history.land_entered,
+        "cards_drawn": history.cards_drawn,
+        "bent": history.bent,
+    }
+    return {key: value for key, value in values.items() if value}
+
+
+def _copy(copy: managym.CopyEffect | None) -> dict[str, Any] | None:
+    """The copy effect that made a permanent a copy, or None for an original."""
+    if copy is None:
+        return None
+    exceptions = _effects(copy.exceptions)
+    return {"name": copy.name, **({"exceptions": exceptions} if exceptions else {})}
+
+
+def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
+    """Continuous-effect records in timestamp order, absent values omitted."""
+    out = []
+    for effect in effects:
+        values: dict[str, Any] = {
+            "modification": effect.modification,
+            "power": effect.power,
+            "toughness": effect.toughness,
+            "amount": effect.amount,
+            "keywords": list(effect.keywords) or None,
+            "subtypes": list(effect.subtypes) or None,
+            "color": effect.color,
+            "duration": effect.duration,
+            "source": effect.source_name,
+            "timestamp": int(effect.timestamp),
+        }
+        out.append({key: value for key, value in values.items() if value is not None})
+    return out
 
 
 def _serialize_player(
@@ -149,6 +263,14 @@ def _serialize_player(
         {
             "mana": list(player.mana),
             "lesson_mana": list(player.lesson_mana),
+            "restricted_mana": [
+                {
+                    **({"spells": list(r.spells)} if r.spells else {}),
+                    **({"abilities": list(r.abilities)} if r.abilities else {}),
+                    "mana": list(r.mana),
+                }
+                for r in player.restricted_mana
+            ],
             "combat_mana": int(player.combat_mana),
             "inspected": grouped_cards["LIBRARY"],
         }
@@ -162,18 +284,41 @@ def _serialize_player(
         "is_active": bool(player.is_active),
         "is_agent": bool(player.is_agent),
         "life": int(player.life),
+        **(
+            {"hand_only_until": int(player.hand_only_until)}
+            if player.hand_only_until is not None
+            else {}
+        ),
+        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         "zone_counts": zone_counts,
         "library_count": zone_counts.get("LIBRARY", 0),
         "known_hand": {
             str(key): int(count) for key, count in player.known_hand.items()
         },
-        "sideboard_counts": {
-            str(key): int(count) for key, count in player.sideboard_counts.items()
+        **{
+            name: {str(key): int(count) for key, count in counts.items()}
+            for name in (
+                "main_counts",
+                "unseen_counts",
+                "sideboard_counts",
+                "remaining_sideboard_counts",
+            )
+            if (counts := getattr(player, name)) is not None
         },
-        "remaining_sideboard_counts": {
-            str(key): int(count)
-            for key, count in player.remaining_sideboard_counts.items()
-        },
+        **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **({"extra_turns": player.extra_turns} if player.extra_turns else {}),
+        **(
+            {"additional_combats": player.additional_combats}
+            if player.additional_combats
+            else {}
+        ),
+        **(
+            {"turn_history": turn_history}
+            if (turn_history := _turn_history(player.turn_history))
+            else {}
+        ),
+        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
+        **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
@@ -209,6 +354,17 @@ def serialize_observation(
         ),
     }
 
+    # Native visibility already authorizes these cards. Carry them through the
+    # existing chooser-inspection surface; opponent.hand remains redacted in
+    # portable replay/Study projections. Ownership and original zone stay intact.
+    inspected = [
+        _serialize_card(card)
+        for card in obs.opponent_cards
+        if int(card.zone) in (int(ZoneEnum.HAND), int(ZoneEnum.LIBRARY))
+        or (card.cast_permission is not None and card.cast_permission.foretold)
+    ]
+    if inspected:
+        data["agent"].setdefault("inspected", []).extend(inspected)
     data["agent"]["sideboard"] = [
         {
             "candidate_id": int(card.candidate_id),
@@ -222,6 +378,27 @@ def serialize_observation(
     return data
 
 
+def _definitions_known_to_viewer(observation: managym.Observation) -> set[int]:
+    """Definitions this viewer's observation names: its own lists, cards it can
+    see, publicly known hand cards and the stack."""
+    return {
+        *(observation.agent.main_counts or {}),
+        *(observation.agent.sideboard_counts or {}),
+        *observation.agent.known_hand,
+        *observation.opponent.known_hand,
+        *(
+            card.registry_key
+            for cards in (
+                observation.agent_cards,
+                observation.agent_sideboard,
+                observation.opponent_cards,
+            )
+            for card in cards
+        ),
+        *(entry.source_card_registry_key for entry in observation.stack_objects),
+    }
+
+
 def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """Current viewer projection for play, recorded decisions and Study roots.
 
@@ -231,6 +408,8 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
     """
     observation = env.observation_for_player(viewer)
     data = serialize_observation(observation, include_details=True)
+    data["player_controls"] = json.loads(env.player_controls_json())
+    data["schedule"] = json.loads(env.public_schedule_json())
     context = json.loads(env.decision_context_json(viewer))
     if context is not None:
         data["decision_context"] = context
@@ -250,9 +429,17 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
+            "x": int(entry.x) or None,
         }
         for entry in observation.stack_objects
     ]
+    # The manifest covers both decklists, so a closed opponent narrows it.
+    if observation.opponent.main_counts is None:
+        data["definition_names"] = {
+            str(definition): name
+            for definition in _definitions_known_to_viewer(observation)
+            if (name := data["definition_names"].get(str(definition))) is not None
+        }
     redact_observation(data)
     return LegacyHeroObservation.model_validate(data).model_dump(mode="json")
 
@@ -419,11 +606,23 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
     player_state["hand"] = []
 
 
+def _redact_face_down_exile(player_state: dict[str, Any]) -> None:
+    """Remove foretold cards: only their owner may see a face-down card."""
+    exile = player_state.get("exile")
+    if isinstance(exile, list):
+        player_state["exile"] = [
+            card
+            for card in exile
+            if not (isinstance(card, dict) and card.get("face_down"))
+        ]
+
+
 def redact_observation(observation: dict[str, Any]) -> None:
     """Strip the opponent's hidden information from a serialized observation.
 
     Mutates in place. Only chooser-visible library candidates can be projected;
-    opponent hands, inspection cards and private continuation details are removed.
+    opponent hands, face-down exiled cards, inspection cards and private
+    continuation details are removed.
     """
     if not isinstance(observation, dict):
         return
@@ -442,5 +641,6 @@ def redact_observation(observation: dict[str, Any]) -> None:
     opponent = observation.get("opponent")
     if isinstance(opponent, dict):
         _redact_hand(opponent)
+        _redact_face_down_exile(opponent)
         opponent.pop("sideboard", None)
         opponent.pop("inspected", None)

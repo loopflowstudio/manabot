@@ -22,6 +22,7 @@ from manabot.eval.models import EvaluationKey
 from manabot.experiment.attacks import AttackPlan
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.infra.provenance import authored_matchup_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import valid_game
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
@@ -75,7 +76,7 @@ def _player(path: Path, name: str, seed: int, run: TrainingRun) -> PlayerRegistr
         content_suite=SELECTED_SUITE,
         observation_abi_sha256=identity["observation_abi_sha256"],
         action_abi_sha256=identity["action_abi_sha256"],
-        matchup_sha256=identity["matchup_sha256"],
+        matchup_sha256=authored_matchup_sha256(identity, "attack arena"),
         checkpoint_sha256=file_sha256(path),
         checkpoint_bytes=path.stat().st_size,
         parameter_count=sum(p.numel() for p in agent.parameters()),
@@ -170,7 +171,7 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
             out / "scenarios.json",
             [
                 asdict(item)
-                for item in validate_scenarios(selected_match=plan.template.match)
+                for item in validate_scenarios(selected_match=plan.template.root_match)
             ],
         )
         with VerifyStore(out / "training.sqlite") as store:

@@ -1,6 +1,6 @@
 """Flat determinized Monte Carlo player and seat-balanced matchup evaluation.
 
-The searcher (exp-02, wave/intelligence C3) runs entirely on engine throughput: at
+The searcher (exp-02) runs entirely on engine throughput: at
 each of its decision points it asks the Rust engine (managym.Env.flat_mc_scores)
 to evaluate every legal action by W determinized worlds x R uniformly-random
 playouts per action, then plays the argmax. No network, no training.
@@ -11,9 +11,9 @@ orders. A sampled world replaces the opponent's hand with a uniform draw of
 |hand| cards from their unseen pool (hand + library) and reshuffles both
 libraries; all public state is preserved.
 
-The matchup loop mirrors manabot.verify.util's seat balancing (hero alternates
-between seat 0, on the play, and seat 1, on the draw) and its Wilson CI math,
-but takes two arbitrary players instead of one agent + named opponent policy.
+The matchup loop balances seats (the hero alternates between seat 0, on the
+play, and seat 1, on the draw) and reports a Wilson CI over two arbitrary
+players.
 """
 
 from __future__ import annotations
@@ -26,20 +26,19 @@ from typing import Any, Protocol
 from managym.decision import Command, DecisionFrame
 import numpy as np
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.sim.action.compound import CompoundPolicy
+from manabot.sim.anchors import RandomMatchupPlayer
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
-from manabot.verify.util import (
-    INTERACTIVE_DECK,
-    _select_agent_action,
-    winner_from_info_or_obs,
-)
+from manabot.verify.games import INTERACTIVE_DECK, winner_from_info_or_obs
+from manabot.verify.util import _select_agent_action
 
 DEFAULT_ROLLOUTS_PER_WORLD = 4
 
@@ -139,23 +138,6 @@ class FlatMCPlayer:
         return int(np.argmax(scores))
 
 
-class RandomMatchupPlayer:
-    """Uniform random over valid actions in the encoded observation.
-
-    Matches the RandomPolicy used for every historical vs-random baseline.
-    """
-
-    def __init__(self, seed: int = 0):
-        self._rng = np.random.default_rng(seed)
-
-    def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
-        del env
-        valid = np.flatnonzero(obs["actions_valid"] > 0)
-        if len(valid) == 0:
-            return 0
-        return int(self._rng.choice(valid))
-
-
 class AgentMatchupPlayer:
     """Trained policy player (stochastic, as in prior seat-balanced evals)."""
 
@@ -170,15 +152,6 @@ class AgentMatchupPlayer:
         self.allow_deck_repetition = allow_deck_repetition
         self.deterministic = deterministic
         agent.eval()
-        self.compound = (
-            CompoundPolicy(agent, deterministic=deterministic)
-            if agent.config.compound_decisions
-            else None
-        )
-
-    def start_game(self, env: Env, seat: int) -> None:
-        if self.compound is not None:
-            self.compound.reset()
 
     def act(self, env: Env, obs: dict[str, np.ndarray]) -> int:
         from manabot.model.world import validate_agent_setup
@@ -188,8 +161,6 @@ class AgentMatchupPlayer:
             env.match.to_rust(),
             allow_deck_repetition=self.allow_deck_repetition,
         )
-        if self.compound is not None:
-            return self.compound.act(env._engine, env.last_raw_obs)
         return _select_agent_action(self.agent, obs, deterministic=self.deterministic)
 
 
@@ -478,7 +449,7 @@ def play_games(
 
     Game ``i`` (globally indexed ``game_offset + i``) puts the hero in seat
     ``(game_offset + i) % 2``; seat 0 is on the play. The env is reseeded per
-    game as in manabot.verify.util.
+    game.
     """
 
     hero_player, hero_obs_space = make_player(hero_spec, seed=seed * 2 + 1)

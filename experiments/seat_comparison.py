@@ -17,8 +17,8 @@ one-seat arm `seat-comparison-one-v1` is the dotted baseline.
     uv run etude report experiments/seat_comparison.py --source r2://manabot/jobs --open
 
 v1 ran before Etude evaluation: its retained scores are arena rows under
-`experiments/data/seat-comparison-v1`, summarized by
-`python -m experiments.seat_comparison_report`, not Etude eval runs. Its
+`experiments/data/seat-comparison-v1` (its report is
+`experiments/data/seat-comparison-v1/report.md`), not Etude eval runs. Its
 evaluation (the two-deck heuristic benchmark, `manabot.eval.benchmark`) is
 bound to each checkpoint's training record, so it is not yet an `eval(state)`.
 """

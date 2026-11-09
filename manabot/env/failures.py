@@ -1,12 +1,15 @@
-"""Private native failure evidence, independent of training error tolerance.
+"""Private native game evidence, independent of training error tolerance.
 
 ScalarCapture retains the current game's explicit inputs; CapturedVector retains
 one prefix per native stream, including masked calls and native reset strides.
 Strict calls always re-raise the original exception after fsync. Semantic calls
 also journal pending Commands before execution. CaptureScope adds the owning
-run's live coordinates without adding fields to frozen training recipes.
+run's live coordinates without adding fields to frozen training recipes. Optional
+training exposure retains completed games and interrupted prefixes through the
+same collector; TrainingExposureReceipt preserves replay inputs and card facts.
 """
 
+from collections import Counter
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -23,8 +26,10 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
+from manabot.env.card_capture import CapturedCards
+from manabot.infra.log import getLogger
 import managym
 
 
@@ -32,7 +37,13 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
-    content_pack: str | None
+    # Earlier evidence names the selector `content_pack`.
+    world: str | None = Field(
+        default=None, validation_alias=AliasChoices("world", "content_pack")
+    )
+    disclosure: Literal["open", "closed"] = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @classmethod
     def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
@@ -40,7 +51,8 @@ class PlayerSetup(BaseModel):
             name=player.name,
             decklist=player.decklist,
             sideboard=player.sideboard,
-            content_pack=player.content_pack,
+            world=player.world,
+            disclosure=player.disclosure,
         )
 
     def native(self) -> managym.PlayerConfig:
@@ -61,6 +73,20 @@ class GameInputs(BaseModel):
         self.actions = []
         self.actor = None
         self.frame = None
+
+
+class ActionCutoffCounts(BaseModel):
+    decisions: int = 0
+    overflows: int = 0
+    dropped_actions: int = 0
+
+
+class ActionCutoffSample(BaseModel):
+    original_count: int
+    retained_count: int
+    dropped_count: int
+    decision_kind: str
+    game: GameInputs
 
 
 class BufferSpec(BaseModel):
@@ -99,11 +125,112 @@ class FailureEvidence(BaseModel):
     ] = "execution_outcome_unknown"
 
 
+class NativeTrainingTrace(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    player_configs: list[PlayerSetup]
+    actions: list[int]
+
+
+class NativeTrainingGame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    seed: int
+    terminal: bool
+    trace: NativeTrainingTrace
+    cards: CapturedCards
+
+    @model_validator(mode="after")
+    def bound(self) -> "NativeTrainingGame":
+        if len(self.trace.player_configs) != 2:
+            raise ValueError("training capture seed or seating differs")
+        if self.cards.capture.exposure is None:
+            raise ValueError("training capture has no exposure instrument")
+        for seat, player in enumerate(self.trace.player_configs):
+            for origin, expected in (
+                ("deck", player.decklist),
+                ("outside", player.sideboard),
+            ):
+                observed = Counter(
+                    card.name
+                    for card in self.cards.capture.initial
+                    if card.owner == seat and card.origin == origin
+                )
+                if dict(observed) != expected:
+                    raise ValueError("training capture cards differ from replay decks")
+        choices = self.cards.capture.exposure.choices
+        if len(choices) > len(self.trace.actions) or any(
+            later.revision <= earlier.revision
+            for earlier, later in zip(choices, choices[1:])
+        ):
+            raise ValueError("training choices do not match a committed replay prefix")
+        return self
+
+
+class TrainingExposureReceipt(BaseModel):
+    """Private observed game, not a claim that its transitions reached an update.
+
+    Native replay inputs own sampled decks, seed and committed positional actions.
+    Context binds the learner/run and update coordinates at retention. Terminal
+    and interrupted prefixes remain separate; replay has not been executed.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["training-exposure-v1"] = Field(
+        default="training-exposure-v1", alias="schema"
+    )
+    phase: Literal["training"] = "training"
+    stream: int
+    game: NativeTrainingGame
+    skip_trivial: bool
+    identities: dict[str, object]
+    context: dict[str, object]
+    seconds: float
+
+    @model_validator(mode="after")
+    def committed_choices(self) -> "TrainingExposureReceipt":
+        exposure = self.game.cards.capture.exposure
+        assert exposure is not None
+        if (
+            not self.skip_trivial
+            or [choice.selected for choice in exposure.choices]
+            != self.game.trace.actions
+        ):
+            raise ValueError(
+                "training exposure must retain every surfaced replay choice"
+            )
+        return self
+
+    @property
+    def sha256(self) -> str:
+        """Digest of the exact durable JSONL bytes written by the capture owner."""
+        body = _jsonl(self.model_dump(mode="json", by_alias=True))
+        return hashlib.sha256(body.encode()).hexdigest()
+
+    def replay_inputs(self) -> FailureEvidence:
+        return FailureEvidence(
+            mode="scalar",
+            operation="step",
+            skip_trivial=self.skip_trivial,
+            games=[
+                GameInputs(
+                    stream=self.stream,
+                    seed=self.game.seed,
+                    players=self.game.trace.player_configs,
+                    actions=self.game.trace.actions,
+                )
+            ],
+            identities=self.identities,
+            context=self.context,
+            seconds=self.seconds,
+            execution_outcome="last_command_succeeded",
+        )
+
+
 @dataclass
 class CaptureScope:
     directory: Path
     context: Callable[[], dict[str, object]] = dict
     paths: list[Path] = field(default_factory=list)
+    training_exposure: bool = False
 
 
 _scope: ContextVar[CaptureScope | None] = ContextVar("game_failure_scope", default=None)
@@ -140,10 +267,15 @@ def runtime_identities() -> dict[str, object]:
     }
 
 
+def _jsonl(row: dict[str, object]) -> str:
+    """One serialization for receipt identities and durable journal writes."""
+    return json.dumps(row, sort_keys=True, allow_nan=False) + "\n"
+
+
 def _append(path: Path, row: dict[str, object], *, create: bool = False) -> None:
     flags = os.O_WRONLY | (os.O_CREAT | os.O_EXCL if create else os.O_APPEND)
     with os.fdopen(os.open(path, flags, 0o600), "w") as output:
-        output.write(json.dumps(row, sort_keys=True, allow_nan=False) + "\n")
+        output.write(_jsonl(row))
         output.flush()
         os.fsync(output.fileno())
     if create:
@@ -158,8 +290,88 @@ class _Capture:
     def __init__(self) -> None:
         self.scope = _scope.get()
         self.started = time.perf_counter()
+        self._failed = False
         self.identities = runtime_identities().copy()
         self.context: dict[str, object] = {}
+        self._policy_counts: dict[str, ActionCutoffCounts] = {}
+        self._policy_samples: list[ActionCutoffSample] = []
+        self._policy_path: Path | None = None
+
+    def record_policy_actions(
+        self, count: int, kind: str, capacity: int, game: GameInputs
+    ) -> None:
+        """Count decisions consumed under the explicit first-legal policy.
+
+        Keep at most four exact replay prefixes and log at powers of two, then
+        flush exact aggregate frequencies at collector/game close. The complete
+        native action set is never changed here.
+        """
+        if kind not in self._policy_counts:
+            self._policy_counts[kind] = ActionCutoffCounts()
+        counts = self._policy_counts[kind]
+        counts.decisions += 1
+        retained = managym.policy_action_count(count, capacity, "first-legal")
+        if retained == count:
+            return
+        counts.overflows += 1
+        counts.dropped_actions += count - retained
+        if len(self._policy_samples) < 4:
+            self._policy_samples.append(
+                ActionCutoffSample(
+                    original_count=count,
+                    retained_count=retained,
+                    dropped_count=count - retained,
+                    decision_kind=kind,
+                    game=game.model_copy(deep=True),
+                )
+            )
+        overflows = sum(counts.overflows for counts in self._policy_counts.values())
+        if overflows & (overflows - 1) == 0:
+            self.flush_policy_actions()
+            getLogger(__name__).info(
+                "policy_action_cutoff %s",
+                json.dumps(
+                    {
+                        "overflows": overflows,
+                        "original_count": count,
+                        "retained_count": retained,
+                        "dropped_count": count - retained,
+                        "decision_kind": kind,
+                        "seed": game.seed,
+                        "stream": game.stream,
+                        "replay_path": str(self._policy_path),
+                    }
+                ),
+            )
+
+    def policy_action_report(self) -> dict[str, object]:
+        return {
+            "schema": "policy-action-cutoff-v1",
+            "policy": "first-legal",
+            "counts_by_kind": {
+                kind: counts.model_dump()
+                for kind, counts in self._policy_counts.items()
+            },
+            "samples": [
+                sample.model_dump(mode="json") for sample in self._policy_samples
+            ],
+            "identities": self.identities,
+            **self._coordinates(),
+        }
+
+    def flush_policy_actions(self) -> None:
+        if not self._policy_counts:
+            return
+        if self._policy_path is None:
+            scope = _scope.get() or self.scope
+            directory = scope.directory if scope else Path(".runs/action-cutoffs")
+            directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+            self._policy_path = directory / f"action-cutoff-{uuid4().hex}.json"
+        temporary = self._policy_path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(self.policy_action_report(), sort_keys=True) + "\n"
+        )
+        temporary.replace(self._policy_path)
 
     def _retain(self, evidence: FailureEvidence) -> Path:
         """Create and register private evidence only after its bytes are durable."""
@@ -205,8 +417,10 @@ class _Capture:
     def _failure(
         self, error: BaseException, evidence: Callable[[], FailureEvidence]
     ) -> None:
+        self._failed = True
         # Capture failures must never disguise the original native failure.
         try:
+            self.flush_policy_actions()
             retained = evidence()
             retained.execution_outcome = "failed"
             retained.error_class = type(error).__name__
@@ -333,6 +547,14 @@ class CapturedVector(_Capture):
             opponent_policy=opponent_policy,
             seed_stride=self.stride,
         )
+        self._exposure = bool(self.scope and self.scope.training_exposure)
+        self._closed = False
+        if self._exposure:
+            if opponent_policy != "none" or not skip_trivial:
+                raise ValueError(
+                    "training exposure requires surfaced seats and trivial skipping"
+                )
+            self.native.enable_exposure_capture()
         self.games = [
             GameInputs(
                 stream=stream_offset + i, seed=min(seed + i, 2**64 - 1), players=[]
@@ -340,19 +562,66 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
-        self._roster: list[PlayerSetup] = []
+        # Sampled roots pick setups natively at reset; evidence reads them back.
+        self._sampled_roots = False
+        self._action_cutoff: int | None = None
 
     def __getattr__(self, name: str) -> Any:
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
         return getattr(self.native, name)
 
-    def set_buffers(self, buffers: dict[str, Any]) -> None:
+    def set_buffers(
+        self, buffers: dict[str, Any], action_overflow: str = "error"
+    ) -> None:
         # NumPy owns these buffers; preserve their native encoding ABI as evidence.
         self.identities["input_buffers"] = {
             key: {"shape": list(value.shape[1:]), "dtype": str(value.dtype)}
             for key, value in buffers.items()
         }
-        self.native.set_buffers(buffers)
+        self.native.set_buffers(buffers, action_overflow)
+        self._action_cutoff = (
+            buffers["actions"].shape[1] if action_overflow == "first-legal" else None
+        )
+        if self._action_cutoff is not None:
+            self.identities["action_overflow"] = action_overflow
+
+    def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        try:
+            self._retain_exposure(current=not self._failed)
+        finally:
+            self.flush_policy_actions()
+
+    def _retain_exposure(self, *, current: bool = False) -> None:
+        if not self._exposure or not any(game.players for game in self.games):
+            return
+        assert self.scope is not None
+        retained = self.native.take_exposure()
+        if current:
+            for rows, raw in zip(retained, self.native.current_exposure(), strict=True):
+                rows.append(raw)
+        directory = self.scope.directory.parent / "exposure"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        for inputs, rows in zip(self.games, retained, strict=True):
+            for raw in rows:
+                game = NativeTrainingGame.model_validate_json(raw)
+                # Auto-reset prepares a fresh unused root; it is not an attempted game.
+                if not game.trace.actions and not game.terminal:
+                    continue
+                receipt = TrainingExposureReceipt(
+                    stream=inputs.stream,
+                    game=game,
+                    skip_trivial=self.skip_trivial,
+                    identities=self.identities,
+                    **self._coordinates(),
+                )
+                body = receipt.model_dump(mode="json", by_alias=True)
+                path = directory / f"{receipt.sha256}.jsonl"
+                if not path.exists():
+                    _append(path, body, create=True)
+                    self.scope.paths.append(path)
 
     def capture_failure(self, error: BaseException) -> None:
         self._failure(error, lambda: self._evidence_for(self.games, "step"))
@@ -371,7 +640,26 @@ class CapturedVector(_Capture):
 
     def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
         self.native.set_uniform_roster(roster)
-        self._roster = [PlayerSetup.retain(player) for player in roster]
+        self._sampled_roots = True
+
+    def set_training_decks(
+        self,
+        decks: list[managym.PlayerConfig],
+        digest: str,
+        sampling: Literal[
+            "uniform-distinct-v1", "uniform-independent-v1"
+        ] = "uniform-distinct-v1",
+    ) -> None:
+        """Replace decks for later roots; evidence keeps each game's actual setup."""
+        self.native.set_training_decks(
+            decks, distinct=sampling == "uniform-distinct-v1"
+        )
+        self._sampled_roots = True
+        self.identities["deck_source"] = {
+            "digest": digest,
+            "sampling_policy": sampling,
+            "deck_ids": [player.name for player in decks],
+        }
 
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
@@ -384,7 +672,7 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
-        self._synchronize()
+        self._synchronize(reset=True)
 
     def reassign_roots_into_buffers(
         self, players: list[list[managym.PlayerConfig] | None]
@@ -408,17 +696,24 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
-        self._synchronize()
+        self._synchronize(reset=True)
 
-    def _synchronize(self) -> None:
-        if self._roster:
-            for game, (a, b) in zip(
-                self.games, self.native.current_matchup_indices(), strict=True
-            ):
-                game.players = [self._roster[a], self._roster[b]]
-        for game, seed in zip(
-            self.games, self.native.current_game_seeds(), strict=True
-        ):
+    def _synchronize(self, *, reset: bool = False) -> None:
+        self._retain_exposure()
+        seeds = self.native.current_game_seeds()
+        restarted = [
+            index
+            for index, (game, seed) in enumerate(zip(self.games, seeds, strict=True))
+            if reset or game.seed != seed
+        ]
+        if self._sampled_roots and restarted:
+            # Sampled roots record the native setup actually created.
+            players = self.native.current_player_configs()
+            for index in restarted:
+                self.games[index].players = [
+                    PlayerSetup.retain(player) for player in players[index]
+                ]
+        for game, seed in zip(self.games, seeds, strict=True):
             if game.seed != seed:
                 game.restart(seed)
         self.next_seeds = [
@@ -428,20 +723,53 @@ class CapturedVector(_Capture):
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
     ) -> None:
+        self._step(actions, active, isolated=False)
+
+    def step_isolated_into_buffers(
+        self,
+        actions: list[int],
+        active: list[bool] | None = None,
+        recover_capacity: bool = False,
+    ) -> None:
+        self._step(actions, active, isolated=True, recover_capacity=recover_capacity)
+
+    def replace_failed_into_buffers(self, active: list[bool]) -> None:
+        self.native.replace_failed_into_buffers(active)
+        self._synchronize()
+
+    def _step(
+        self,
+        actions: list[int],
+        active: list[bool] | None,
+        *,
+        isolated: bool,
+        recover_capacity: bool = False,
+    ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
         actors = self.native.current_agent_indices()
         frames = self.native.semantic_decision_frames_json(active)
+        summaries = (
+            self.native.current_action_summaries() if self._action_cutoff else []
+        )
         attempted = []
-        for game, action, selected, actor, frame in zip(
-            self.games, actions, enabled, actors, frames, strict=True
+        for index, (game, action, selected, actor, frame) in enumerate(
+            zip(self.games, actions, enabled, actors, frames, strict=True)
         ):
             if selected:
-                game.actions.append(int(action))
                 game.actor = actor
                 game.frame = frame
+                if self._action_cutoff is not None:
+                    count, kind = summaries[index]
+                    self.record_policy_actions(count, kind, self._action_cutoff, game)
+                game.actions.append(int(action))
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
-            self.native.step_into_buffers(actions, active)
+            if isolated:
+                self.native.step_isolated_into_buffers(
+                    actions, enabled, recover_capacity
+                )
+            else:
+                self.native.step_into_buffers(actions, active)
         self._synchronize()
 
 

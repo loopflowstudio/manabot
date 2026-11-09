@@ -351,3 +351,146 @@ segment ends without a final export (failure before its first export, or
 refusal); the endpoint is then the last tracked export of the last segment
 that produced one. No segment is retried. The evaluator admits every
 segment's exports by absolute update and settles when the chain ends.
+
+## Amendment, 2026-10-25 03:51 UTC (its commit time), before learning: launches that never trained
+
+No w3 attempt has taken a learning step. Etude run `a04845f2548b` booted w1/w2's
+image, which lacks python3.12, and was deleted at its startup deadline
+(~$0.15); `9fe2a28ddbf3` was refused for capacity ($0); `3828021cbc80` booted
+Etude's stock image but its inputs were staged under the storage's `jobs/`
+prefix, while Etude reads an input key from the bucket root. A worker bug left
+the attempt waiting instead of failing, so its pod was deleted by hand
+(~$0.44). `cf7dec5040bc` then failed its numerics gate in 0.3 s because the job
+synced without the dev extra (no `pytest`).
+
+"No segment is retried" governs segments that learned. A launch that ends
+before its first learning update — lost before start, refused, or failed in
+setup or the numerics gate — is not a segment. It is relaunched with the same
+recipe, seed, continuation, target and limits, and its cost counts against
+the $50 cap. w3 is re-frozen at `3317a8dec` (tag `mtg183-w3-source-2`), which
+adds MTG-186's stock-image setup (pinned Rust, `--extra dev`) and git-free
+source bundle; only the job's setup, command, revision and `source_bundle`
+change. Inputs are staged at the bucket-root keys the spec names
+(`r2://manabot/mtg183/w2/`, same digests). The machine is Etude's stock L4
+image (`runpod/pytorch@sha256:4d1721e6…`); the protocol fixes the L4, not
+the image.
+
+## Amendment, 2026-10-25 04:34 UTC (its commit time), before any evaluation game: evaluation on the Mac mini
+
+Jack Heart, 2026-10-25: evaluation leaves the laptop. `elemental_long_eval`
+runs as an Etude job on the Mac mini (`mini-heart.local`, M1, 8 cores), an
+owned machine in Etude pool `mini` at $0; no CPU is rented. The design,
+schedules and digests, agents (identified by artifact digest and inference
+code, not location), the heuristic v2 anchor, the eval run
+(`mtg183-elemental-eval` / `mtg183-eval`) and its R2 tables are unchanged. No
+evaluation game had been played anywhere before the move. Yielding to
+MTG-181's follower was a laptop rule and does not apply on the mini.
+
+- w1/w2 checkpoints are read from R2 copies of the cohort follower's
+  digest-checked exports, at the keys S3 used
+  (`r2://manabot/jobs/<job>/runtime/artifacts/sha256/<sha256>`), listed in
+  `experiments/protocols/elemental-183-windows.json`; every copy was read back
+  and its digest verified.
+- Segment exports and ends come from the tracking bucket
+  (`r2://manabot/jobs`): a segment ends when its run records `state.json`. The
+  evaluator follows every segment run in launch order and is told when the
+  chain continues, so a segment's end settles the seed only when it is the
+  last; each new segment's run is added by relaunching the eval job, which
+  keeps its state directory on the mini.
+
+## Amendment, 2026-10-25 05:14 UTC (its commit time), before w4 allocation: w4 is one rental to the remaining cap
+
+Jack Heart, 2026-10-25: Etude's 43,000-second rental ceiling is removed
+(etude#46, released in etude-sdk 0.2.6). A rental is now bounded by its
+`max_hours`, dollar caps, the on-demand's price ceiling and the storage grant
+(R2: 7 days). w4, which continues w3's final export, is therefore the last
+segment: one rental sized to the remaining cap, on etude-sdk 0.2.6, with the
+same recipe, seed, cadence, continuation path and L4 on-demand. Once w3 has
+ended, with `remaining` = $50 − every receipt (w1, w2, w3, and every launch
+that never trained) − $1.30:
+
+- Hours: `remaining` ÷ the quoted L4 price − 0.25 h, rounded down to a tenth,
+  and no more than 7 days less the 0.25 h setup allowance.
+- Dollars: `max_usd` = the lesser of `remaining` and the $0.60 ceiling ×
+  (hours + 0.25), rounded down to a cent.
+- Update target: w3's final update + 0.9 × w3's measured rate (its updates
+  over its stage wall seconds) × (hours − 0.7), rounded down to a multiple
+  of 50.
+
+The spec `experiments/protocols/elemental-183-w4.json` is committed before
+allocation. A launch that never trains is relaunched under the 03:51 UTC
+amendment. When w4 ends, the chain ends; the evaluator then follows w3 and w4
+with no successor declared and settles at w4's last tracked export. The
+evaluator keeps its pinned revision; only its run list changes.
+
+## Amendment, 2026-10-25 14:30 UTC (its commit time), before any card result: card data from every evaluation game
+
+Jack Heart, 2026-10-25: generate card statistics going forward. Every
+evaluation game now also yields 17Lands-style card data (`card_plays`,
+`card_counts`, `cards`; #368/#369), captured during `play_cell`'s existing
+replay check, with its evidence retained under the eval run's `artifacts/`
+and delivered with the run's tables to `r2://manabot/evaluations`.
+
+- The design, schedules and digests, deals, seats, the heuristic v2 anchor, the
+  checkpoints and the validity rule are unchanged. Card data is descriptive:
+  associations between cards and wins, not part of the rating, the saturation
+  rule or any prediction.
+- The evaluator moves to this commit's code (etude-sdk 0.2.6), whose match keys
+  differ from the 0.2.2 run's. It plays as a new eval run,
+  `mtg183-elemental-eval` / `mtg183-eval-cards`, from the start of the design,
+  state in mini `~/.manabot/mtg183-eval-cards`. Its results are the results.
+  `mtg183-eval` (Etude job `ac6c45760d88`, 22,900 valid games through update
+  200, none invalid) is cancelled and retained as superseded evidence; its
+  units are replayed with the same seeded deals, so it is a reproduction check,
+  not pooled.
+- The evaluator relaunch planned for w4 relaunches this job with w4 added; it
+  keeps this revision.
+
+## Amendment, 2026-10-25 21:39 UTC (its commit time), before w4 allocation: w4 continues w3's raw export at update 3,250
+
+w3 (Etude run `e7d47d8b220f`, attempt `4c9ada27b8d0`) stopped at 14:54 UTC
+on its regime watchdog (`TimeoutError: training resource wall deadline
+exceeded`) after update 3,264, 730 updates past w2, Etude receipt $6.31. Its
+target, 3,500, had been sized from w2's rate (103.55 updates/h); on the Etude
+L4 w3 ran 730 updates in its stage's 39,367 s, 66.76 updates/h. A segment
+then had no way to stop before its watchdog, so w3 exported no final
+raw/EMA/Adam and ended `interrupted`; the 02:06 UTC rule would end the chain
+at its last tracked export. Its monitoring exports (`weights: raw`, every 50
+updates) survive, the last at update 3,250 (ordinal 14, sha256
+`ea3cf99b…`, tracked as `learner_transitions-178800486`).
+
+Jack Heart, 2026-10-25 ~21:10 UTC: the seed continues as w4 from w3's raw
+weights at update 3,250, with EMA := those raw weights and a fresh Adam. This
+is a declared learner-state discontinuity at 3,250:
+
+- w4's import (`LearningStateImport.monitoring_update`, staged by
+  `stage --monitoring-update 3250`) admits only the raw bytes w3's record
+  names at that update, takes the receipt's absolute coordinates (games,
+  decisions, transitions, optimizer exposures/updates, seconds), and records
+  `reset: [ema, optimizer]` in its origin. Recipe, seed, cadence, the L4
+  on-demand and the absolute iteration (and so the damped-policy schedule)
+  are unchanged; streams restart as at every boundary.
+- w3's updates 3,251–3,264 are discarded. w3's exports at or before 3,250 stay
+  in the rated set; no w3 checkpoint after 3,250 exists. Rated checkpoints
+  from w4 lie after the discontinuity, and the report marks 3,250 on the
+  update axis. Consecutive and reference pairs across it are played as
+  designed; a jump in ratings at 3,250 is read as the reset, not learning.
+- From w4 on, a segment stops at an update boundary while another update and
+  its final exports still fit inside its watchdog (reserve 120 s), exports
+  raw/EMA/Adam and ends `paused`, reporting the update it reached. Ending
+  short of the target is then an ordinary end, not a failure.
+- Receipts: w1 $7.2252, w2 $7.2358, w3 $6.31 (Etude), launches that never
+  trained $0.60 (`a04845f2548b` $0.15, `9fe2a28ddbf3` $0,
+  `3828021cbc80` $0.44, `cf7dec5040bc` $0.01: the earlier provider
+  estimates where they exceed Etude's $0.04 and $0.09, since one pod was
+  deleted outside Etude). Spent $21.371; remaining = $50 − $21.371 − $1.30
+  = $27.32.
+- Sizing (05:14 UTC rule, with 3,250 in place of w3's final update): L4
+  quoted $0.59/h at 21:29 UTC; hours = 27.32 ÷ 0.59 − 0.25 → 46.0;
+  `max_usd` = min(27.32, 0.60 × 46.25) = $27.32; target = 3,250 + 0.9 ×
+  66.76 × (46.0 − 0.7) → 5,950.
+
+The spec is `experiments/protocols/elemental-183-w4.json` (source
+`5d676d6df`, tag `mtg183-w4-source`). A w4 launch that never trains is
+relaunched under the 03:51 UTC amendment. w4 is the last segment; the endpoint
+is its final export, or its last tracked export if it fails.

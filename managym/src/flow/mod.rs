@@ -1,21 +1,25 @@
 pub mod action;
 pub mod card_capture;
+pub mod cast_permission;
 pub mod combat;
 pub mod combat_actions;
 pub mod damage;
 pub mod decision;
+pub mod effects;
 pub mod event;
-pub mod event_log;
 pub mod game;
 pub mod identity;
+mod layers;
 pub mod mana;
 pub mod play;
 pub mod priority;
 pub mod proposed_event;
 pub mod resolution;
+pub mod retarget;
 pub mod sba;
 pub mod scenario;
 pub mod search;
+mod selection_sampling;
 pub mod setup;
 pub mod stabilization;
 pub mod statics;
@@ -23,5 +27,7 @@ pub mod tick;
 pub mod trigger;
 pub mod triggers;
 pub mod turn;
-pub mod undo;
 pub mod zones;
+
+#[cfg(test)]
+mod naming_tests;

@@ -7,9 +7,10 @@ import pytest
 import torch
 
 from academy.villain import CheckpointVillain
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 
@@ -25,7 +26,7 @@ def checkpoint():
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     return {
@@ -39,7 +40,9 @@ def checkpoint():
     }
 
 
-def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
+def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(
+    tmp_path: Path,
+) -> None:
     path = tmp_path / "policy.pt"
     payload = checkpoint()
     torch.save(payload, path)
@@ -48,7 +51,7 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
     for match in (selected_match(), selected_match().swapped()):
         policy = CheckpointVillain(str(path), player_configs=match.to_rust())
         assert policy.agent.world_binding == agent.world_binding
-    assert space.shapes["actions"][0] == 64
+    assert space.shapes["actions"][0] == 512
 
 
 @pytest.mark.parametrize(
@@ -61,7 +64,6 @@ def test_ordinary_loader_and_play_accept_full_setup_in_either_seat(tmp_path):
         "input_version",
         "action_width",
         "pack",
-        "sideboard",
     ],
 )
 def test_ordinary_loader_rejects_incompatible_binding_before_weights(
@@ -82,15 +84,24 @@ def test_ordinary_loader_rejects_incompatible_binding_before_weights(
             binding["policy_input_version"] = 1
         elif change == "action_width":
             binding["input_schema"]["actions"]["shape"][1] = 17
-        elif change == "pack":
-            binding["content_manifest"]["content_digest"] = "old"
         else:
-            binding["setups"][0]["sideboard"] = {}
+            binding["content_manifest"]["content_digest"] = "old"
     payload["model_state_dict"] = {}  # Admission must precede weight loading.
     path = tmp_path / "bad.pt"
     torch.save(payload, path)
     with pytest.raises(ValueError, match="binding"):
         load_checkpoint(str(path))
+
+
+def test_retained_manifests_load_only_when_they_name_no_authored_pack() -> None:
+    payload = checkpoint()
+    manifest = payload["world_binding"]["content_manifest"]
+    assert "pack_key" not in manifest
+    manifest["pack_key"] = None
+    validate_checkpoint_world(payload, ObservationSpace())
+    manifest["pack_key"] = "ur-lessons-vs-gw-allies"
+    with pytest.raises(ValueError, match="binding differs"):
+        validate_checkpoint_world(payload, ObservationSpace())
 
 
 def test_same_shapes_do_not_admit_another_matchup():
@@ -105,7 +116,8 @@ def test_same_shapes_do_not_admit_another_matchup():
 
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
 def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
-    from manabot.env import Env, Reward
+    from manabot.env.env import Env
+    from manabot.env.match import Reward
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
     from manabot.sim.search.flat_mc import AgentMatchupPlayer
     from manabot.sim.search.puct import AgentLeafEvaluator, DeterminizedPuctPlayer

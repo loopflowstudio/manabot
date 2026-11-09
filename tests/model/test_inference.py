@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
@@ -17,8 +18,18 @@ from tests.training.test_recovery import recipe
 
 
 def _batch_tensors(batch: RolloutBatch) -> dict[str, torch.Tensor]:
-    result: dict[str, torch.Tensor] = {}
+    rows = batch.observations()
+    result = {
+        "probabilities": torch.from_numpy(rows.probabilities),
+        "log_probabilities": torch.from_numpy(rows.log_probabilities),
+        **{
+            f"obs/{key}": torch.from_numpy(value)
+            for key, value in rows.observation.items()
+        },
+    }
     for field in fields(batch):
+        if field.name in {"recorded", "action_data"}:
+            continue  # Compared above through the complete materialized evidence.
         value = getattr(batch, field.name)
         if isinstance(value, np.ndarray):
             result[field.name] = torch.from_numpy(value)
@@ -37,13 +48,16 @@ class PolicyFixture:
     obs: dict[str, torch.Tensor]
 
 
-def _policy(*, semantic: bool = True) -> PolicyFixture:
+def _policy(*, semantic: bool = True, history: bool = False) -> PolicyFixture:
     torch.set_num_threads(1)
     torch.manual_seed(819)
     config = recipe()
     config.agent.value_aggregation = "masked_mean"
+    if history:
+        config.observation.policy_history_version = 1
+        config.agent.recent_events = True
     if not semantic:
-        config.agent.semantic_pack = None
+        config.agent.world = None
     space = ObservationSpace(config.observation)
     agent = ActorCritic(space, config.agent).eval()
     collector = SeatRoutedCollector(
@@ -81,6 +95,77 @@ def test_preparation_preserves_forward_and_training_gradients(semantic: bool) ->
         assert (a.grad is None) == (b.grad is None)
         if a.grad is not None:
             torch.testing.assert_close(a.grad, b.grad, atol=0, rtol=0)
+
+
+@pytest.mark.parametrize("history", [False, True])
+def test_training_encodes_only_referenced_definitions_without_changing_learning(
+    history: bool,
+) -> None:
+    case = _policy(history=history)
+    if history:
+        # Later decisions carry public history.
+        batch = case.collector.collect(case.agent, 16)
+        case.obs = {
+            key: torch.from_numpy(value[-8:, 0]).float()
+            if key == "action_focus"
+            else torch.from_numpy(value[-8:, 0])
+            for key, value in batch.observations().observation.items()
+        }
+    semantic = case.agent.semantic_cards
+    assert semantic is not None
+    _plant_unseen_definitions(case.obs, semantic.definition_rows, history)
+    full = deepcopy(case.agent)
+    encode = semantic.definitions
+    referenced: list[int] = []
+
+    def poisoned(rows: torch.Tensor | None = None) -> torch.Tensor:
+        """Unreferenced rows read NaN, so any missed reference source fails."""
+        assert rows is not None
+        referenced.append(int(rows.unique().numel()))
+        table = encode(rows)
+        unreferenced = torch.ones(len(table), dtype=torch.bool)
+        unreferenced[0] = False
+        unreferenced[rows] = False
+        return table.masked_fill(unreferenced[:, None], float("nan"))
+
+    semantic.definitions = poisoned  # type: ignore[method-assign]
+    # The reference encodes the complete catalog.
+    full._referenced_definitions = lambda obs, ids: None  # type: ignore[method-assign,assignment,return-value]
+    outputs = []
+    for agent in (case.agent, full):
+        logits, values = agent.forward_distribution(case.obs)
+        outputs.append((logits, values))
+        (
+            logits[case.obs["actions_valid"].bool()].square().mean()
+            + values.square().mean()
+        ).backward()
+    assert 0 < referenced[0] < semantic.catalog_shape.definitions
+    for a, b in zip(outputs[0], outputs[1], strict=True):
+        torch.testing.assert_close(a, b, atol=1e-6, rtol=1e-5)
+    for a, b in zip(case.agent.parameters(), full.parameters(), strict=True):
+        assert (a.grad is None) == (b.grad is None)
+        if a.grad is not None:
+            torch.testing.assert_close(a.grad, b.grad, atol=1e-6, rtol=1e-5)
+
+
+def _plant_unseen_definitions(
+    obs: dict[str, torch.Tensor], lookup: torch.Tensor, history: bool
+) -> None:
+    """Give every reference source a definition no other source names, so
+    the encoded subset must draw on each source separately."""
+    named = set(lookup[obs["semantic_cards"].long()].flatten().tolist())
+    unseen = iter(
+        transport
+        for transport in range(1, len(lookup))
+        if int(lookup[transport]) > 0 and int(lookup[transport]) not in named
+    )
+    obs["agent_permanents"][0, 0, PERMANENT_DEFINITION_INDEX] = next(unseen)
+    obs["known_hand"][0, 0, 0, 0] = next(unseen)
+    obs["decklists"][0, 0, 0, 0] = next(unseen)
+    obs["relations"][0, 0, 5] = next(unseen)
+    if history:
+        batch, event = obs["events_valid"].nonzero()[0].tolist()
+        obs["events"][batch, event, 2] = next(unseen)
 
 
 @pytest.mark.parametrize("bad", [-1.0, 0.5, float("nan"), 1e6])

@@ -36,6 +36,9 @@ from manabot.eval.monitor import MonitorProtocol
 from tests.training.test_monitor_evaluation import _manifest
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/etude_sdk_025"
+# The eval run that played on 0.2.5, before card data moved the live run to
+# `elemental.RUN`; the fixture retains it under this name.
+ELEMENTAL_RUN = "mtg183-eval"
 
 
 def _elemental_state() -> elemental.EvalState:
@@ -78,7 +81,7 @@ def _scheduled(case: str) -> tuple[str, str, list[Match]]:
     if case == "elemental":
         return (
             elemental.EXPERIMENT,
-            elemental.RUN,
+            ELEMENTAL_RUN,
             [unit.matches[0] for unit in elemental.units(_elemental_state())],
         )
     if case == "cards":
@@ -188,6 +191,7 @@ def test_025_resume_preserves_keys_scores_and_native_seats(
             {"name": "heuristic", "version": {"source": source}}
         )
         monkeypatch.setattr(report, "heuristic_code", lambda: heuristic)
+        monkeypatch.setattr(report, "RUN", ELEMENTAL_RUN)
         (tmp_path / "state.json").write_text(_elemental_state().model_dump_json())
         results = load(tmp_path, store)
         assert set(results.heuristic) == {0, 50}

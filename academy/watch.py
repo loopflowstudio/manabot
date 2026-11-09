@@ -44,9 +44,9 @@ class WatchRequest(BaseModel):
 
 def _policy(kind: str, request: WatchRequest, seat: int) -> VillainPolicy:
     if kind in {"greedy", "heuristic"}:
-        from manabot.env import Env
+        from manabot.env.env import Env
+        from manabot.sim.anchors import ScriptedGreedyPlayer
         from manabot.sim.heuristic import HeuristicPlayer
-        from manabot.sim.players import ScriptedGreedyPlayer
 
         player = HeuristicPlayer() if kind == "heuristic" else ScriptedGreedyPlayer()
 

@@ -24,7 +24,8 @@ from experiments.elemental_grid import (
     summarize,
 )
 from experiments.elemental_long_eval import H2HRequest, LocalCheckpoint, play_h2h_group
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
 from manabot.infra.config import ModelConfig, ObservationConfig

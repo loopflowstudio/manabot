@@ -1,8 +1,12 @@
-"""Shared replay-checked arena rows and paired-deal uncertainty records."""
+"""Shared replay-checked arena rows and block-bootstrap mean intervals."""
 
+from collections.abc import Sequence
+
+import numpy as np
+import numpy.typing as npt
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from manabot.eval.models import EvaluationKey
+from manabot.eval.models import EvaluationKey, PolicyActionCounts
 
 
 class EvaluationRow(BaseModel):
@@ -33,6 +37,16 @@ class EvaluationRow(BaseModel):
         return value
 
     @property
+    def policy_action_counts(self) -> PolicyActionCounts | None:
+        """The row's cutoff counts; None when its game returned none.
+
+        Read from the extras: a declared field would dump as None and change the
+        digest `_verify_block` recomputes for frozen rows.
+        """
+        counts = (self.model_extra or {}).get("policy_actions")
+        return None if counts is None else PolicyActionCounts.model_validate(counts)
+
+    @property
     def valid(self) -> bool:
         return (
             self.failure is None
@@ -45,7 +59,25 @@ class EvaluationRow(BaseModel):
 
 
 class RateInterval(BaseModel):
+    """A mean rate or rate difference with its uncertainty bounds."""
+
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     mean: float
     lower: float
     upper: float
+
+
+def bootstrap_mean_interval(
+    block_means: Sequence[float] | npt.NDArray[np.float64],
+    indices: npt.NDArray[np.int64],
+) -> RateInterval:
+    """Estimate a mean's 95% interval from caller-defined independent blocks.
+
+    Callers aggregate correlated legs and supply the resample indices. Reusing
+    those indices across checkpoints preserves paired comparisons.
+    """
+    blocks = np.asarray(block_means, dtype=np.float64)
+    lower, upper = np.quantile(blocks[indices].mean(axis=1), [0.025, 0.975])
+    return RateInterval(
+        mean=float(blocks.mean()), lower=float(lower), upper=float(upper)
+    )

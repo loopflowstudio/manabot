@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::slice;
+use std::{cell::Cell, slice, time::Instant};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -19,11 +19,10 @@ use crate::{
         observation::Observation,
         observation_encoder::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
-            CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
-        vector_env::VectorEnv,
+        vector_env::{ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -41,8 +40,14 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 #[cfg(feature = "python")]
 struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
+    effects: Option<Py<PyAny>>,
+    effect_details: Option<Py<PyAny>>,
+    effect_members: Option<Py<PyAny>>,
+    name_candidates: Option<Py<PyAny>>,
+    facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
+    decklists: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -73,6 +78,23 @@ pub struct PyVectorEnv {
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
     last_info: Vec<InfoDict>,
+    timings: BufferedCallTimings,
+}
+
+/// Cumulative wall time inside buffered calls: every step or reset, split into
+/// stepping (all work in the call except encoding) and observation encoding.
+#[cfg(feature = "python")]
+#[derive(Default)]
+struct BufferedCallTimings {
+    stepping_nanos: u64,
+    encoding_nanos: u64,
+}
+
+// A buffered call stays on its calling thread while the GIL is released, and each
+// stream's row is encoded inside it, so a thread-local counter needs no locks.
+#[cfg(feature = "python")]
+thread_local! {
+    static ENCODING_NANOS: Cell<u64> = const { Cell::new(0) };
 }
 
 #[cfg(feature = "python")]
@@ -118,6 +140,7 @@ impl PyVectorEnv {
             num_envs,
             buffers: None,
             last_info: Vec::new(),
+            timings: BufferedCallTimings::default(),
         })
     }
 
@@ -158,12 +181,26 @@ impl PyVectorEnv {
             .collect())
     }
 
-    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>) -> PyResult<()> {
-        let config = event_buffer_config(&buffers, self.config)?;
+    #[pyo3(signature = (buffers, action_overflow="error"))]
+    fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
+        let mut config = input_buffer_config(&buffers)?;
+        config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
         let buffers = read_observation_buffers(&buffers, self.num_envs, &config)?;
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
+    }
+
+    /// Scenario harness only; does not change deck admission or future resets.
+    fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.scenario_naming_vocabulary_into(|index, obs| {
+                write_buffers
+                    .write_encoded_row(index, obs, 0.0, false, false, &config)
+                    .map_err(AgentError::from)
+            })?;
+            Ok(vec![InfoDict::new(); inner.len()])
+        })
     }
 
     fn reset_all_into_buffers(
@@ -177,6 +214,7 @@ impl PyVectorEnv {
             inner.reset_all_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -194,6 +232,7 @@ impl PyVectorEnv {
             inner.reset_each_into(configs, |env_index, obs, reward, terminated, truncated| {
                 write_buffers
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -216,7 +255,9 @@ impl PyVectorEnv {
                         .map_err(|error| AgentError(error.to_string()))
                 },
                 |index, obs, reward, terminated, truncated| {
-                    buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                    buffers
+                        .write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
                 },
             )
         })
@@ -248,6 +289,7 @@ impl PyVectorEnv {
                 |env_index, obs, reward, terminated, truncated| {
                     write_buffers
                         .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
                 },
             )
         })
@@ -271,12 +313,34 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
+    #[pyo3(signature = (decks, distinct=true))]
+    fn set_training_decks(&mut self, decks: Vec<PyPlayerConfig>, distinct: bool) -> PyResult<()> {
+        self.inner
+            .set_training_decks(
+                decks.into_iter().map(PlayerConfig::from).collect(),
+                distinct,
+            )
+            .map_err(map_agent_err)
+    }
+
+    fn current_player_configs(&self) -> Vec<Vec<PyPlayerConfig>> {
+        self.inner
+            .current_player_configs()
+            .into_iter()
+            .map(|players| players.into_iter().map(PyPlayerConfig::from).collect())
+            .collect()
+    }
+
     fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
         self.inner.current_matchup_indices()
     }
 
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
+    }
+
+    fn current_action_summaries(&self) -> Vec<(usize, String)> {
+        self.inner.current_action_summaries()
     }
 
     #[pyo3(signature = (active=None))]
@@ -289,27 +353,36 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
+    #[pyo3(signature = (actions, active, recover_capacity=false))]
     fn step_isolated_into_buffers(
         &mut self,
         py: Python<'_>,
         actions: Vec<i64>,
         active: Vec<bool>,
+        recover_capacity: bool,
     ) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, buffers, config| {
             // Never leave a preceding terminal flag on a failed/inactive row.
             for index in 0..inner.len() {
                 buffers.write_step_state(index, 0.0, false, false)?;
             }
-            inner.step_isolated_into(&actions, &active, |index, obs, reward, done, truncated| {
-                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
-            })
+            inner.step_isolated_into(
+                &actions,
+                &active,
+                recover_capacity,
+                |index, obs, reward, done, truncated| {
+                    buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+                },
+            )
         })
     }
 
     fn replace_failed_into_buffers(&mut self, py: Python<'_>, failed: Vec<bool>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, buffers, config| {
             inner.replace_failed_into(&failed, |index, obs, reward, done, truncated| {
-                buffers.write_encoded_row(index, obs, reward, done, truncated, &config)
+                buffers
+                    .write_encoded_row(index, obs, reward, done, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -317,9 +390,23 @@ impl PyVectorEnv {
     fn reset_seeds_into_buffers(&mut self, py: Python<'_>, seeds: Vec<u64>) -> PyResult<()> {
         self.run_into_buffers(py, move |inner, write_buffers, config| {
             inner.reset_seeds_into(seeds, |index, obs, reward, terminated, truncated| {
-                write_buffers.write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                write_buffers
+                    .write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                    .map_err(AgentError::from)
             })
         })
+    }
+
+    fn enable_exposure_capture(&mut self) -> PyResult<()> {
+        self.inner.enable_exposure_capture().map_err(map_agent_err)
+    }
+
+    fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.inner.take_exposure()
+    }
+
+    fn current_exposure(&self) -> PyResult<Vec<String>> {
+        self.inner.current_exposure().map_err(map_agent_err)
     }
 
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
@@ -328,31 +415,124 @@ impl PyVectorEnv {
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
     }
+
+    /// Cumulative `(stepping_seconds, encoding_seconds)` of buffered calls.
+    fn buffered_call_timings(&self) -> (f64, f64) {
+        (
+            self.timings.stepping_nanos as f64 / 1e9,
+            self.timings.encoding_nanos as f64 / 1e9,
+        )
+    }
 }
 
+/// Every configurable axis follows the supplied ObservationSpace on both paths.
+/// Companion shapes, dtypes and storage are checked before buffers are written.
+/// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
+/// capacity from the fact axis. At 128 rows their encoding is identical; the
+/// Python configuration/checkpoint still owns the declared version identity.
 #[cfg(feature = "python")]
-fn event_buffer_config(
+pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
-    mut config: ObservationEncoderConfig,
 ) -> PyResult<ObservationEncoderConfig> {
-    let shape: Vec<usize> = buffers
-        .get_item("events")?
-        .ok_or_else(|| PyValueError::new_err("missing events"))?
-        .getattr("shape")?
-        .extract()?;
-    config.relations = buffers.contains("relations")?;
-    config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
-    if config.policy_history {
-        if shape.len() != 3
-            || !(1..=crate::agent::policy_history::HISTORY_LIMIT).contains(&shape[1])
-        {
+    // Strip only the optional batch axis. Full companion and batch shapes are
+    // validated by the caller before any writes.
+    let shape = |name: &str| -> PyResult<[usize; 2]> {
+        let dimensions: Vec<usize> = buffers
+            .get_item(name)?
+            .ok_or_else(|| PyValueError::new_err(format!("missing {name}")))?
+            .getattr("shape")?
+            .extract()?;
+        match dimensions.as_slice() {
+            &[rows, width] | &[_, rows, width] if !dimensions.contains(&0) => Ok([rows, width]),
+            _ => Err(PyValueError::new_err(format!(
+                "invalid {name} buffer shape"
+            ))),
+        }
+    };
+    let [max_events, event_width] = shape("events")?;
+    let policy_history = match event_width {
+        crate::agent::observation_encoder::EVENT_DIM => false,
+        crate::agent::policy_history::HISTORY_DIM => true,
+        _ => return Err(PyValueError::new_err("unsupported event buffer width")),
+    };
+    if policy_history && max_events > crate::agent::policy_history::HISTORY_LIMIT {
+        return Err(PyValueError::new_err(
+            "public history v1 requires 1..32 rows",
+        ));
+    }
+    let mut config = ObservationEncoderConfig {
+        max_cards_per_player: shape("agent_cards")?[0],
+        max_permanents_per_player: shape("agent_permanents")?[0],
+        max_actions: shape("actions")?[0],
+        max_focus_objects: shape("action_focus")?[1],
+        max_events,
+        policy_history,
+        ..ObservationEncoderConfig::default()
+    };
+    let naming = buffers.contains("name_candidates")?;
+    let mut shared_count = 0;
+    for name in ["effects", "effect_details", "effect_members"] {
+        shared_count += usize::from(buffers.contains(name)?);
+    }
+    if shared_count != 0 && shared_count != 3 {
+        return Err(PyValueError::new_err(
+            "v7 requires all shared-effect buffers",
+        ));
+    }
+    if !buffers.contains("relations")? {
+        if shared_count != 0 || naming {
+            return Err(PyValueError::new_err("v7 requires relations"));
+        }
+        config.policy_input_version = 1;
+        return Ok(config);
+    }
+    config.policy_input_version = match shape("relations")?[1] {
+        crate::agent::continuation::LEGACY_RELATION_DIM => 3,
+        crate::agent::continuation::RELATION_DIM => 4,
+        crate::agent::continuation::RELATION_DIM_V5 => {
+            let [rows, width] = shape("facts")?;
+            if width != crate::agent::observation_encoder::FACT_DIM {
+                return Err(PyValueError::new_err("invalid fact buffer shape"));
+            }
+            config.max_facts = rows;
+            if shared_count == 3 {
+                let details = buffers
+                    .get_item("effect_details")?
+                    .expect("shared buffers present");
+                let detail_shape: Vec<usize> = details.getattr("shape")?.extract()?;
+                if detail_shape.get(detail_shape.len().saturating_sub(2))
+                    == Some(&crate::agent::shared_effects::V8_DETAIL_ROWS)
+                {
+                    8
+                } else {
+                    7
+                }
+            } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
+                5
+            } else {
+                6
+            }
+        }
+        _ => {
             return Err(PyValueError::new_err(
-                "public history v1 requires 1..32 rows",
+                "unsupported continuation relation width",
+            ))
+        }
+    };
+    if shared_count != 0 && config.policy_input_version < 7 {
+        return Err(PyValueError::new_err("v7 requires current relation width"));
+    }
+    if naming {
+        // Naming composes the v8 layer layout with name and group-span rows.
+        if config.policy_input_version != 8 {
+            return Err(PyValueError::new_err(
+                "v9 requires the v8 shared-effect layout",
             ));
         }
-        config.max_events = shape[1];
-    } else {
-        config.max_events = ObservationEncoderConfig::default().max_events;
+        if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
+            return Err(PyValueError::new_err("invalid name candidate width"));
+        }
+        config.policy_input_version = 9;
     }
     Ok(config)
 }
@@ -363,8 +543,29 @@ fn read_observation_buffers(
     n: usize,
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
+    let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
+        if c.policy_input_version < 7 {
+            return Ok(None);
+        }
+        Ok(Some(
+            require_numpy_array(buffers, name, &[n, rows, width], "float32")?.unbind(),
+        ))
+    };
     Ok(ObservationBuffers {
-        relations: if c.relations {
+        name_candidates: if c.policy_input_version >= 9 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "name_candidates",
+                    &[n, c.max_actions, c.name_dim()],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
+        relations: if c.policy_input_version >= 2 {
             Some(
                 require_numpy_array(
                     buffers,
@@ -372,7 +573,39 @@ fn read_observation_buffers(
                     &[
                         n,
                         crate::agent::continuation::RELATION_ROWS,
-                        crate::agent::continuation::RELATION_DIM,
+                        c.relation_dim(),
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
+        effects: shared_buffer(
+            "effects",
+            crate::agent::shared_effects::EFFECT_ROWS,
+            crate::agent::shared_effects::EFFECT_DIM,
+        )?,
+        effect_details: shared_buffer(
+            "effect_details",
+            crate::agent::shared_effects::detail_rows(c.policy_input_version),
+            crate::agent::shared_effects::DETAIL_DIM,
+        )?,
+        effect_members: shared_buffer(
+            "effect_members",
+            crate::agent::shared_effects::MEMBER_ROWS,
+            crate::agent::shared_effects::MEMBER_DIM,
+        )?,
+        facts: if c.policy_input_version >= 5 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "facts",
+                    &[
+                        n,
+                        c.fact_rows(),
+                        crate::agent::observation_encoder::FACT_DIM,
                     ],
                     "float32",
                 )?
@@ -388,6 +621,24 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
+        decklists: if c.policy_input_version >= 5 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "decklists",
+                    &[
+                        n,
+                        2,
+                        c.max_cards_per_player,
+                        crate::agent::observation_encoder::DECKLIST_DIM,
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         semantic_cards: require_numpy_array(
             buffers,
             "semantic_cards",
@@ -395,40 +646,45 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        agent_player: require_numpy_array(buffers, "agent_player", &[n, 1, PLAYER_DIM], "float32")?
-            .unbind(),
+        agent_player: require_numpy_array(
+            buffers,
+            "agent_player",
+            &[n, 1, c.player_dim()],
+            "float32",
+        )?
+        .unbind(),
         opponent_player: require_numpy_array(
             buffers,
             "opponent_player",
-            &[n, 1, PLAYER_DIM],
+            &[n, 1, c.player_dim()],
             "float32",
         )?
         .unbind(),
         agent_cards: require_numpy_array(
             buffers,
             "agent_cards",
-            &[n, c.max_cards_per_player, CARD_DIM],
+            &[n, c.max_cards_per_player, c.card_dim()],
             "float32",
         )?
         .unbind(),
         opponent_cards: require_numpy_array(
             buffers,
             "opponent_cards",
-            &[n, c.max_cards_per_player, CARD_DIM],
+            &[n, c.max_cards_per_player, c.card_dim()],
             "float32",
         )?
         .unbind(),
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
@@ -524,10 +780,16 @@ impl PyVectorEnv {
         let config = self.config;
         let inner = &mut self.inner;
 
+        let started = Instant::now();
+        ENCODING_NANOS.set(0);
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
             py.allow_threads(|| run(inner, write_buffers, config))
                 .map_err(map_agent_err)
         });
+        let encoding = ENCODING_NANOS.get();
+        self.timings.encoding_nanos += encoding;
+        self.timings.stepping_nanos +=
+            (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
         self.last_info = result?;
         Ok(())
@@ -626,7 +888,7 @@ impl PyRolloutPool {
     /// (>= num_slots). The rewards/terminated/truncated buffers are required
     /// for layout parity with VectorEnv but are never written.
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, capacity: usize) -> PyResult<()> {
-        let config = event_buffer_config(&buffers, self.config)?;
+        let config = input_buffer_config(&buffers)?;
         if capacity < self.inner.num_slots() {
             return Err(PyValueError::new_err(format!(
                 "buffer capacity {capacity} < num_slots {}",
@@ -643,7 +905,9 @@ impl PyRolloutPool {
     fn encode_active(&mut self, py: Python<'_>) -> PyResult<Vec<usize>> {
         self.run_with_buffers(py, |inner, write_buffers, config| {
             inner.encode_active_into(|slot_index, obs| {
-                write_buffers.encode_observation(slot_index, obs, &config)
+                write_buffers
+                    .encode_observation(slot_index, obs, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -653,7 +917,9 @@ impl PyRolloutPool {
     fn step_active(&mut self, py: Python<'_>, actions: Vec<i64>) -> PyResult<Vec<usize>> {
         self.run_with_buffers(py, move |inner, write_buffers, config| {
             inner.step_active_into(&actions, |slot_index, obs| {
-                write_buffers.encode_observation(slot_index, obs, &config)
+                write_buffers
+                    .encode_observation(slot_index, obs, &config)
+                    .map_err(AgentError::from)
             })
         })
     }
@@ -784,8 +1050,14 @@ impl<T> SendSlice<T> {
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
     relations: Option<SendSlice<f32>>,
+    effects: Option<SendSlice<f32>>,
+    effect_details: Option<SendSlice<f32>>,
+    effect_members: Option<SendSlice<f32>>,
+    name_candidates: Option<SendSlice<f32>>,
+    facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
+    decklists: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -821,8 +1093,10 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self.agent_player.row_ptr(env_index, PLAYER_DIM)?;
-        let opponent_player_ptr = self.opponent_player.row_ptr(env_index, PLAYER_DIM)?;
+        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
+        let opponent_player_ptr = self
+            .opponent_player
+            .row_ptr(env_index, config.player_dim())?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -861,16 +1135,86 @@ impl SendObservationFieldSlices {
             } else {
                 &mut []
             },
+            effects: if let Some(buffer) = self.effects {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effects_len())?,
+                        config.effects_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            effect_details: if let Some(buffer) = self.effect_details {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effect_details_len())?,
+                        config.effect_details_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            name_candidates: if let Some(buffer) = self.name_candidates {
+                // SAFETY: registered buffers partition environments into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.name_candidates_len())?,
+                        config.name_candidates_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            effect_members: if let Some(buffer) = self.effect_members {
+                // SAFETY: registered buffers partition each environment into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.effect_members_len())?,
+                        config.effect_members_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            facts: if let Some(buffer) = self.facts {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.facts_len())?,
+                        config.facts_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             // SAFETY: each call uses disjoint per-env rows.
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
+            decklists: if let Some(buffer) = self.decklists {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.decklists_len())?,
+                        config.decklists_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             // SAFETY: each call uses disjoint per-env rows.
             semantic_cards: unsafe {
                 slice::from_raw_parts_mut(semantic_cards_ptr, semantic_cards_len)
             },
             // SAFETY: each call uses disjoint per-env rows.
-            agent_player: unsafe { slice::from_raw_parts_mut(agent_player_ptr, PLAYER_DIM) },
+            agent_player: unsafe {
+                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
+            },
             // SAFETY: each call uses disjoint per-env rows.
-            opponent_player: unsafe { slice::from_raw_parts_mut(opponent_player_ptr, PLAYER_DIM) },
+            opponent_player: unsafe {
+                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
+            },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
             // SAFETY: each call uses disjoint per-env rows.
@@ -943,9 +1287,9 @@ impl SendWriteBuffers {
         env_index: usize,
         observation: &Observation,
         config: &ObservationEncoderConfig,
-    ) -> Result<(), AgentError> {
+    ) -> Result<(), ObservationWriteError> {
         let out = self.fields.encoded_row_mut(env_index, config)?;
-        encode_into(observation, config, out).map_err(|err| AgentError(err.to_string()))
+        encode_into(observation, config, out).map_err(ObservationWriteError::from)
     }
 
     fn write_step_state(
@@ -976,9 +1320,13 @@ impl SendWriteBuffers {
         terminated: bool,
         truncated: bool,
         config: &ObservationEncoderConfig,
-    ) -> Result<(), AgentError> {
-        self.encode_observation(env_index, observation, config)?;
+    ) -> Result<(), ObservationWriteError> {
+        let started = Instant::now();
+        let encoded = self.encode_observation(env_index, observation, config);
+        ENCODING_NANOS.set(ENCODING_NANOS.get() + started.elapsed().as_nanos() as u64);
+        encoded?;
         self.write_step_state(env_index, reward, terminated, truncated)
+            .map_err(ObservationWriteError::from)
     }
 }
 
@@ -993,9 +1341,39 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "relations"))
         .transpose()?;
+    let effects_buffer = buffers
+        .effects
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effects"))
+        .transpose()?;
+    let effect_details_buffer = buffers
+        .effect_details
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
+        .transpose()?;
+    let name_candidates_buffer = buffers
+        .name_candidates
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "name_candidates"))
+        .transpose()?;
+    let effect_members_buffer = buffers
+        .effect_members
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_members"))
+        .transpose()?;
+    let facts_buffer = buffers
+        .facts
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "facts"))
+        .transpose()?;
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
+    let decklists_buffer = buffers
+        .decklists
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "decklists"))
+        .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -1039,7 +1417,31 @@ fn with_send_write_buffers<R>(
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
             .transpose()?,
+        effects: effects_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effects"))
+            .transpose()?,
+        effect_details: effect_details_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
+            .transpose()?,
+        name_candidates: name_candidates_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "name_candidates"))
+            .transpose()?,
+        effect_members: effect_members_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "effect_members"))
+            .transpose()?,
+        facts: facts_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "facts"))
+            .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
+        decklists: decklists_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))
+            .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
         opponent_player: send_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,

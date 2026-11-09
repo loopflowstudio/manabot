@@ -11,16 +11,16 @@ import psutil
 
 from manabot.eval.admission import register_anchor, register_checkpoint
 from manabot.eval.evaluation import evaluate
-from manabot.eval.execution import bind_execution
+from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import source_bundle_sha256
+from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
 from manabot.sim import players
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
 
@@ -96,13 +96,13 @@ def checkpoint_manifest(
     matchup = protocol.authored_matchup
     expected_match = matchup.match() if matchup else selected_match()
     suite = matchup.content_suite if matchup else SELECTED_SUITE
-    if run.identities["matchup_sha256"] != canonical_sha256(
+    if authored_matchup_sha256(run.identities, "monitoring") != canonical_sha256(
         expected_match.model_dump()
     ):
         raise ValueError("monitoring requires its exact declared authored setup")
     admission = register_checkpoint(
         path,
-        match=run.regime.match,
+        match=run.regime.root_match,
         content_suite=suite,
         player_id="monitor-checkpoint",
         display_name="Monitored checkpoint",
@@ -185,10 +185,8 @@ def evaluate_checkpoint(
     inference: InferenceRuntime | None = None,
 ) -> MonitorResult:
     """Run bounded arena games. Use a new directory per attempt; never overwrite failures."""
-    if inference is not None:
-        if execution is not None and execution != inference.execution:
-            raise ValueError("conflicting execution declaration")
-        execution = inference.execution
+    protocol = protocol or MonitorProtocol()
+    execution = resolve_execution(execution, inference)
     output_dir.mkdir(parents=True, exist_ok=False)
     start, cpu = time.perf_counter(), time.process_time()
     started_unix = time.time()
@@ -199,7 +197,7 @@ def evaluate_checkpoint(
             run,
             artifact,
             coordinates,
-            protocol or MonitorProtocol(),
+            protocol,
             execution=execution,
         )
     except Exception as exc:
@@ -220,6 +218,7 @@ def evaluate_checkpoint(
     result.host_load_before = os.getloadavg()
     atomic_json(output_dir / "monitor.json", result.model_dump(mode="json"))
     try:
+        # A served panel covers every deal; scalar play keeps one block per deal.
         panels = (
             [result.protocol.deal_seeds]
             if execution

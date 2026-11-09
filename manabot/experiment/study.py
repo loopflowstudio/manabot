@@ -29,12 +29,16 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.provenance import (
+    authored_matchup_sha256,
+    runtime_fingerprints,
+    source_bundle_sha256,
+)
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
 from manabot.sim.matchup import SELECTED_SUITE
@@ -42,21 +46,16 @@ from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
 from manabot.training.execution import execute_regime
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import (
-    TrainCompound,
-    TrainingRegime,
-    TrainSelfPlay,
-)
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
-Study = Literal["ataraxos-ablations", "compound-decisions"]
+Study = Literal["ataraxos-ablations"]
 Arm = Callable[[], TrainingRegime]
 # Arms per study; the protocol binds one resolved recipe digest per arm.
 _ARM_COUNTS: dict[Study, int] = {
     "ataraxos-ablations": 5,
-    "compound-decisions": 4,
 }
 _IDENTITY_KEYS = (
     "engine_extension_sha256",
@@ -226,11 +225,7 @@ def smoke_recipe(recipe: TrainingRegime) -> TrainingRegime:
     recipe.agent.hidden_dim = 16
     recipe.agent.num_attention_heads = 2
     for stage in recipe.stages:
-        if isinstance(stage, TrainCompound):
-            stage.games_per_update = 1
-            stage.updates = 1
-            stage.learning.epochs = 1
-        elif isinstance(stage, TrainSelfPlay):
+        if isinstance(stage, TrainSelfPlay):
             stage.transitions = 64
             stage.updates = 2
             stage.learning.epochs = 1
@@ -239,10 +234,6 @@ def smoke_recipe(recipe: TrainingRegime) -> TrainingRegime:
 
 def calibration_plan(study: Study, arms: Sequence[Arm]) -> ResolvedStudy:
     """Resolve a bounded CPU timing cohort without starting training."""
-    if study == "compound-decisions":
-        raise ValueError(
-            "compound scoring needs its own measured protocol and authorized allocation"
-        )
     recipes = []
     for build in arms:
         recipe = build()
@@ -278,10 +269,6 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
     """Reserve the ablation screen inside 168 hours; extrapolation is not timing proof."""
     out = Path(calibration).resolve()
     study = json.loads((out / "study.json").read_text())
-    if study["study"] == "compound-decisions":
-        raise ValueError(
-            "compound study needs a separate allocation; the ETU-91 campaign budget cannot be reused"
-        )
     verify_saved_inputs(out, study)
     if study["profile"] != "calibration" or study["status"] != "completed":
         raise ValueError("a completed integrated calibration cohort is required")
@@ -296,6 +283,8 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
             "campaign has insufficient budget; amend allocations before scoring"
         )
     runs = [json.loads(Path(r["path"]).read_text()) for r in study["runs"]]
+    for run in runs:
+        authored_matchup_sha256(run["identities"], "study calibration")
     identities = {k: runs[0]["identities"][k] for k in _IDENTITY_KEYS}
     if any({k: r["identities"][k] for k in _IDENTITY_KEYS} != identities for r in runs):
         raise ValueError("calibration mixes runtime or source identities")
@@ -490,15 +479,13 @@ def registration(
             "device": "cpu",
             "batch_size": 1,
         },
-        compute_class_id="compound-cpu-one-thread-autoregressive"
-        if run.regime.agent.compound_decisions
-        else "policy-cpu-one-thread-one-pass",
+        compute_class_id="policy-cpu-one-thread-one-pass",
         information_boundary="acting-viewer",
         world=run.regime.world,
         content_suite=SELECTED_SUITE,
         observation_abi_sha256=identity["observation_abi_sha256"],
         action_abi_sha256=identity["action_abi_sha256"],
-        matchup_sha256=identity["matchup_sha256"],
+        matchup_sha256=authored_matchup_sha256(identity, "study arena"),
         checkpoint_sha256=artifact["sha256"],
         checkpoint_bytes=artifact["bytes"],
         parameter_count=sum(p.numel() for p in agent.parameters()),
@@ -569,10 +556,14 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
+    # Arenas register players against one authored matchup; reject a deck
+    # source before training rather than after it.
+    if any(recipe.deck_source is not None for recipe in recipes):
+        raise ValueError("study arena requires authored matchups, not a deck source")
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
         current = runtime_fingerprints(
             protocol.training_seeds[0],
-            match_config=recipes[0].match,
+            match_config=recipes[0].root_match,
             observation_space=ObservationSpace(recipes[0].observation),
         )
         current["training_source_sha256"] = source_bundle_sha256(
@@ -682,7 +673,7 @@ def run_study(
             content_suite=SELECTED_SUITE,
             observation_abi_sha256=identity["observation_abi_sha256"],
             action_abi_sha256=identity["action_abi_sha256"],
-            matchup_sha256=identity["matchup_sha256"],
+            matchup_sha256=authored_matchup_sha256(identity, "study arena"),
             player_seed_derivation_id="arena-pair-deal-player-v1",
         )
 
@@ -731,9 +722,7 @@ def run_study(
             anchor_cohort_sha256=canonical_sha256(
                 [a.model_dump(mode="json") for a in anchors]
             ),
-            evaluation_compute_envelope_id="compound-cpu-one-thread-autoregressive"
-            if study == "compound-decisions"
-            else "policy-cpu-one-thread-one-pass",
+            evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
         )
 
         def compare_variant(
@@ -863,11 +852,6 @@ def run_study(
                             s.optimizer_exposures for s in cumulative
                         ),
                         games=sum(s.games for s in cumulative),
-                        **(
-                            {"compound_accounting": [s.diagnostics for s in cumulative]}
-                            if run.regime.agent.compound_decisions
-                            else {}
-                        ),
                         score=sum(
                             r["score_a"] if is_a else 1 - r["score_a"] for r in rows
                         )

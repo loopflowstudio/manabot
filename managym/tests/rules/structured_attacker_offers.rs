@@ -16,7 +16,7 @@ use managym::{
     Game,
 };
 
-use super::helpers::Scenario;
+use crate::support::game::Scenario;
 
 fn ur_lessons_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([

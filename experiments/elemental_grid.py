@@ -21,9 +21,10 @@ beside the score, never replaced or replayed.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from functools import partial
 from html import escape
 import json
 import math
@@ -33,14 +34,16 @@ import random
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
+from manabot.sim.execution import EvalAllocation, EvalExecution
+from manabot.sim.threads import child_environment
 
 if TYPE_CHECKING:
-    from manabot.sim.serving import InferenceRuntime
+    from manabot.sim.serving_protocol import InferenceRuntime
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -122,6 +125,10 @@ class Request(BaseModel):
     training_seed: int
     group: Group
     output: Path
+    # The eval run's folder: when given, each game's card evidence is retained there.
+    card_evidence: Path | None = None
+    # Shared batched inference for the group's games; None is the frozen scalar path.
+    compute: EvalAllocation | None = None
 
 
 class GameRow(BaseModel):
@@ -171,7 +178,6 @@ def play_group(
     """Run the frozen deck/seat group, optionally on a caller-owned allocation."""
     import torch
 
-    from manabot.eval.match import play_cell
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import file_sha256
     from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -184,30 +190,25 @@ def play_group(
     torch.set_num_threads(1)
     role_a, role_b, leg = _legs(request.group)
     matchup = AuthoredMatchup(pack_key=PACK, role_a=role_a, role_b=role_b)
-    fingerprints = runtime_fingerprints(match_config=matchup.match())
     common = dict(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
         matchup_sha256=canonical_sha256(matchup.match().model_dump()),
         player_seed_derivation_id="arena-pair-deal-player-v1",
     )
     if file_sha256(request.checkpoint) != request.sha256:
         raise ValueError("checkpoint byte identity differs")
     model, space = load_checkpoint(request.checkpoint)
-    # Historical policies retain their saved input version. Shared inference
-    # checks this ABI against the loaded tensor shapes before playing a game.
-    # Keep the heuristic's original registration (and therefore policy seeds).
-    policy_fingerprints = runtime_fingerprints(
-        match_config=matchup.match(), observation_space=space
-    )
+    # The checkpoint's own observation space (its saved policy-input version)
+    # names its ABI; served admission rejects any other. The heuristic plays
+    # in the runtime's default space.
+    own = runtime_fingerprints(match_config=matchup.match(), observation_space=space)
+    default = runtime_fingerprints(match_config=matchup.match())
     candidate = PlayerRegistration(
-        **{
-            **common,
-            "observation_abi_sha256": policy_fingerprints["observation_abi_sha256"],
-        },
+        **common,
+        observation_abi_sha256=own["observation_abi_sha256"],
+        action_abi_sha256=own["action_abi_sha256"],
         player_id="model",
         display_name="Checkpoint",
         role="challenger",
@@ -228,6 +229,8 @@ def play_group(
     )
     heuristic = PlayerRegistration(
         **common,
+        observation_abi_sha256=default["observation_abi_sha256"],
+        action_abi_sha256=default["action_abi_sha256"],
         player_id="heuristic",
         display_name="Heuristic",
         role="anchor",
@@ -249,7 +252,7 @@ def play_group(
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     request.output.mkdir(parents=True, exist_ok=False)
-    rows, trace, replay = play_cell(
+    rows, trace, replay = group_cell(request.compute)(
         key=key,
         player_a=candidate,
         player_b=heuristic,
@@ -262,6 +265,7 @@ def play_group(
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
         inference=inference,
+        card_evidence_dir=request.card_evidence,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
@@ -301,6 +305,52 @@ def play_group(
 
 # ---------------------------------------------------------------------------
 # One checkpoint: every group, durable per group, bounded workers
+
+
+# A machine-wide shared allocation's endpoint (`endpoint_environment`): when set,
+# every group plays its cell through it, so all games share one model batch.
+ENDPOINT = "MANABOT_EVAL_ENDPOINT"
+Cell = tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]
+
+
+def endpoint_environment(endpoint: Any) -> str:
+    """An `InferenceEndpoint` as the `ENDPOINT` value group workers read."""
+    found = asdict(endpoint)
+    return json.dumps(
+        {
+            "address": found["address"],
+            "authkey": found["authkey"].hex(),
+            "execution": endpoint.execution.model_dump(mode="json"),
+        }
+    )
+
+
+def group_cell(compute: EvalAllocation | None) -> Callable[..., Cell]:
+    """How a group plays its cell: through the machine's allocation when
+    `ENDPOINT` names one, else in this process (batched per group under `compute`)."""
+    from manabot.eval.endpoint import InferenceEndpoint
+    from manabot.eval.match import play_cell
+
+    found = os.environ.get(ENDPOINT)
+    if found:
+        if compute is not None:
+            raise ValueError("a group plays under one compute contract")
+        data = json.loads(found)
+        return InferenceEndpoint(
+            address=data["address"],
+            authkey=bytes.fromhex(data["authkey"]),
+            execution=EvalExecution.model_validate(data["execution"]),
+        ).play_cell
+    return partial(play_cell, execution=group_execution(compute))
+
+
+def group_execution(compute: EvalAllocation | None) -> EvalExecution | None:
+    """One group's allocation under `compute`, bounded by the group's wall time."""
+    if compute is None:
+        return None
+    return EvalExecution(
+        **compute.model_dump(), deadline_unix=time.time() + GROUP_SECONDS
+    )
 
 
 def _group_name(group: Group) -> str:
@@ -356,7 +406,7 @@ def evaluate(
                 text=True,
                 capture_output=True,
                 timeout=GROUP_SECONDS,
-                env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+                env=child_environment(),
             )
             error = None if completed.returncode == 0 else completed.stderr[-4000:]
             output = completed.stdout

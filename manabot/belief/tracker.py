@@ -45,6 +45,25 @@ class TrackerStats:
 
 
 @dataclass(frozen=True, slots=True)
+class _TransportFacts:
+    """Public zone facts behind one canonical space change.
+
+    Revealed pool exits are split by the hidden zone they left: the hand or
+    the foretold slot.
+    """
+
+    hand_exits: list[str]
+    foretold_exits: list[str]
+    known_returns: list[str]
+    hidden_draws: int
+    hidden_foretells: int
+
+    @property
+    def known_exits(self) -> list[str]:
+        return [*self.foretold_exits, *self.hand_exits]
+
+
+@dataclass(frozen=True, slots=True)
 class BeliefTransitionRecord:
     sequence: int
     observation_revision: int
@@ -200,9 +219,10 @@ class BeliefTracker:
         transport_commitment = (
             opponent_commitment or pending_commitment if acting != self.viewer else None
         )
-        known_exits, known_returns, hidden_draws = self._public_transport_facts(
+        facts = self._public_transport_facts(
             before_space, next_space, transport_commitment
         )
+        known_exits = facts.known_exits
         if known_exits:
             pending_commitment = None
 
@@ -228,9 +248,11 @@ class BeliefTracker:
 
         posterior = posterior.transport(
             next_space,
-            known_exits=known_exits,
-            known_returns=known_returns,
-            hidden_draws=hidden_draws,
+            known_exits=facts.hand_exits,
+            known_returns=facts.known_returns,
+            hidden_draws=facts.hidden_draws,
+            foretold_exits=facts.foretold_exits,
+            hidden_foretells=facts.hidden_foretells,
         )
         prior = BeliefState.compatible_prior(next_space)
         elapsed = time.perf_counter() - started
@@ -240,9 +262,9 @@ class BeliefTracker:
         )
         stats.updates += 1
         stats.action_updates += action_updates
-        stats.hidden_draws += hidden_draws
+        stats.hidden_draws += facts.hidden_draws
         stats.known_exits += len(known_exits)
-        stats.known_returns += len(known_returns)
+        stats.known_returns += len(facts.known_returns)
         stats.update_seconds += elapsed
         stats.likelihood_seconds += likelihood_seconds
         stats.peak_range_bytes = max(
@@ -261,9 +283,9 @@ class BeliefTracker:
             command_id=transition.receipt.command_id,
             public_commitment=opponent_commitment,
             event_ids=transition.receipt.events,
-            hidden_draws=hidden_draws,
+            hidden_draws=facts.hidden_draws,
             known_exits=tuple(known_exits),
-            known_returns=tuple(known_returns),
+            known_returns=tuple(facts.known_returns),
             posterior_digest=posterior.digest,
             prior_digest=prior.digest,
             posterior_normalization_error=posterior.normalization_error,
@@ -286,7 +308,7 @@ class BeliefTracker:
         before: PossibleWorldSpace,
         after: PossibleWorldSpace,
         commitment: Mapping[str, Any] | None,
-    ) -> tuple[list[str], list[str], int]:
+    ) -> _TransportFacts:
         before_pool = dict(before.pool)
         after_pool = dict(after.pool)
         names = sorted(set(before_pool) | set(after_pool))
@@ -314,10 +336,31 @@ class BeliefTracker:
                 raise RulesProviderGap(
                     "public commitment card does not match canonical pool change"
                 )
-        hidden_draws = after.hand_size - before.hand_size + len(exits) - len(returns)
+        # The foretold slot is public as a count: a foretell moves one hidden
+        # hand card into it, and a card leaving it is revealed (a pool exit
+        # that never was in hand).
+        hidden_foretells = max(0, after.foretold - before.foretold)
+        slot_departures = max(0, before.foretold - after.foretold)
+        if slot_departures > len(exits):
+            raise BeliefError("foretold slot shrank without a revealed exit")
+        foretold_exits = exits[:slot_departures]
+        hand_exits = exits[slot_departures:]
+        hidden_draws = (
+            after.hand_size
+            - before.hand_size
+            + len(hand_exits)
+            - len(returns)
+            + hidden_foretells
+        )
         if hidden_draws < 0:
             raise BeliefError("canonical space change has an unexplained hand exit")
-        return exits, returns, hidden_draws
+        return _TransportFacts(
+            hand_exits=hand_exits,
+            foretold_exits=foretold_exits,
+            known_returns=returns,
+            hidden_draws=hidden_draws,
+            hidden_foretells=hidden_foretells,
+        )
 
     def diagnostics(self) -> dict[str, Any]:
         return {

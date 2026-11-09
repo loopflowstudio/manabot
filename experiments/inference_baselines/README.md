@@ -11,7 +11,7 @@ Prepare an admitted `EvaluationRequest` JSON with the existing
 workload references that request, explicit legs (for example `[0]` for one game,
 `[0, 1]` for both seats of one deck pair), and optionally a retained Command trace.
 The request owns decks, world/ABI, checkpoints, seeds, opponent and game limits.
-A cell references an existing `EvalCompute` JSON, or omits `execution` for scalar
+A cell references an existing `EvalAllocation` JSON, or omits `execution` for scalar
 CPU play. For example:
 
 ```json

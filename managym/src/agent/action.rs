@@ -53,6 +53,21 @@ pub enum Action {
         permanent: PermanentId,
         ability_index: usize,
     },
+    /// An ability of a card in its owner's hand or graveyard (cycling,
+    /// graveyard returns). Same action type as `ActivateAbility`; its focus
+    /// is the card, as for casting it.
+    ActivateCardAbility {
+        player: PlayerId,
+        card: CardId,
+        ability_index: usize,
+    },
+    /// The foretell special action (CR 702.143a): pay {2} and exile this
+    /// card from hand face down. Same action type as `ActivateCardAbility`
+    /// (a card ability functioning from hand); its focus is the card.
+    Foretell {
+        player: PlayerId,
+        card: CardId,
+    },
     PassPriority {
         player: PlayerId,
     },
@@ -110,12 +125,39 @@ pub enum Action {
 }
 
 impl Action {
+    /// The player performing this rules action, whose resources and objects
+    /// it uses. The published ActionSpace.player separately authorizes its chooser.
+    pub fn player(&self) -> PlayerId {
+        match self {
+            Action::ChooseTrigger { player, .. }
+            | Action::PlayLand { player, .. }
+            | Action::CastSpell { player, .. }
+            | Action::ActivateAbility { player, .. }
+            | Action::ActivateCardAbility { player, .. }
+            | Action::Foretell { player, .. }
+            | Action::PassPriority { player, .. }
+            | Action::DeclareAttacker { player, .. }
+            | Action::DeclareBlocker { player, .. }
+            | Action::ChooseTarget { player, .. }
+            | Action::ScryCard { player, .. }
+            | Action::LearnTakeLesson { player, .. }
+            | Action::LearnDiscard { player, .. }
+            | Action::SelectCard { player, .. }
+            | Action::Decline { player, .. }
+            | Action::PayCost { player, .. }
+            | Action::ChooseMode { player, .. }
+            | Action::WaterbendTap { player, .. } => *player,
+        }
+    }
+
     pub fn action_type(&self) -> ActionType {
         match self {
             Action::ChooseTrigger { .. } => ActionType::ChooseTrigger,
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
-            Action::ActivateAbility { .. } => ActionType::PriorityActivateAbility,
+            Action::ActivateAbility { .. }
+            | Action::ActivateCardAbility { .. }
+            | Action::Foretell { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,
             Action::DeclareBlocker { .. } => ActionType::DeclareBlocker,
@@ -166,6 +208,7 @@ pub enum ActionSpaceKind {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ActionSpace {
+    /// The player authorized to choose, resolved when the space is published.
     pub player: Option<PlayerId>,
     pub kind: ActionSpaceKind,
     pub actions: Vec<Action>,

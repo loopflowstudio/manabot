@@ -14,8 +14,7 @@ impl Game {
     /// suspend stabilization. Completing that choice re-enters this routine
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
-        self.journal_priority();
-        self.state.priority.sba_done = false;
+        self.state.priority_mut().sba_done = false;
 
         loop {
             // CR 603.3b: finish this placement round before another SBA or
@@ -32,10 +31,13 @@ impl Game {
 
             // CR 704.3 — after any SBA is performed, check the complete set
             // again before putting waiting triggers on the stack.
-            if self.perform_state_based_actions() {
+            let progress = self.perform_state_based_actions();
+            if progress == crate::flow::sba::SbaProgress::Pending {
+                return self.suspended_decision_action_space();
+            }
+            if progress == crate::flow::sba::SbaProgress::Changed {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.journal_turn();
-                    self.state.turn.cleanup_priority = true;
+                    self.state.set_cleanup_priority(true);
                 }
                 if self.is_game_over() {
                     return None;
@@ -55,17 +57,14 @@ impl Game {
             let had_waiting_triggers = !self.state.pending_triggers.is_empty();
             if had_waiting_triggers {
                 if self.state.turn.current_step_kind() == crate::flow::turn::StepKind::Cleanup {
-                    self.journal_turn();
-                    self.state.turn.cleanup_priority = true;
+                    self.state.set_cleanup_priority(true);
                 }
                 if let Some(choice) = self.flush_triggers() {
                     return Some(choice);
                 }
                 continue;
             }
-
-            self.journal_priority();
-            self.state.priority.sba_done = true;
+            self.state.priority_mut().sba_done = true;
             return None;
         }
     }

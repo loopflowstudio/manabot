@@ -55,16 +55,6 @@ def _bolt_scenario(trace_dir) -> GameSession:
     return session
 
 
-def _resolve_bolt(session: GameSession) -> dict[str, Any]:
-    for index in range(12):
-        result = _command(session, "Pass priority", f"response-pass.{index}")
-        if any(
-            event["kind"]["kind"] == "resolved" for event in session.presentation_events
-        ):
-            return result
-    raise AssertionError("Bolt did not resolve after explicit priority responses")
-
-
 def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
     session = _bolt_scenario(tmp_path)
 
@@ -73,12 +63,9 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
 
     recovery_cursor = session.presentation.next_seq
     target_command = _command_payload(session, "Target Gray Ogre", "command-target")
-    target = session.hero_command(target_command)
-    assert [event["kind"]["kind"] for event in target["update"]["presentation"]] == [
-        "cast",
-        "targeted",
-    ]
-    latest = _resolve_bolt(session)
+    # Neither player can respond, so native skipping resolves Bolt within the
+    # targeting Command.
+    latest = session.hero_command(target_command)
     live_events = list(session.presentation_events)
 
     bolt_events = live_events[:5]
@@ -89,11 +76,11 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
         "damage",
         "died",
     ]
+    assert latest["update"]["presentation"][:5] == bolt_events
     assert [event["seq"] for event in live_events] == list(range(len(live_events)))
-    assert all(event["from_revision"] == 1 for event in bolt_events[:2])
-    assert all(event["to_revision"] == 2 for event in bolt_events[:2])
-    assert all(event["caused_by"] == "command-target" for event in bolt_events[:2])
-    assert all(event["from_revision"] >= 2 for event in bolt_events[2:])
+    assert all(event["from_revision"] == 1 for event in bolt_events)
+    assert all(event["to_revision"] == 2 for event in bolt_events)
+    assert all(event["caused_by"] == "command-target" for event in bolt_events)
     assert all(
         1 <= event["from_revision"] < event["to_revision"] <= session.revision
         for event in live_events
@@ -117,7 +104,7 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
 
     duplicate = session.hero_command(target_command)
     assert duplicate["status"] == "duplicate"
-    assert duplicate["receipt"] == target["update"]["receipt"]
+    assert duplicate["receipt"] == latest["update"]["receipt"]
     assert duplicate["recovery"]["presentation_tail"] == live_events
     assert session.revision == accepted_revision
     assert len(session.trace.events) == trace_length
@@ -141,8 +128,7 @@ def test_bolt_facts_are_identical_in_live_update_and_persisted_replay(tmp_path):
 def test_recovery_cursor_slices_tail_and_recovers_from_gaps(tmp_path):
     session = _bolt_scenario(tmp_path)
     _command(session, "Cast Lightning Bolt", "command-cast")
-    _command(session, "Target Gray Ogre", "command-target")
-    latest = _resolve_bolt(session)
+    latest = _command(session, "Target Gray Ogre", "command-target")
     events = list(session.presentation_events)
     assert session.presentation_events == events
     head = session.presentation.next_seq

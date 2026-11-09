@@ -9,7 +9,12 @@ from managym.decision import (
     Observation,
     SemanticContractError,
 )
-from managym.possible_worlds import PossibleWorldError, PossibleWorldSpace, WorldQuery
+from managym.possible_worlds import (
+    POSSIBLE_WORLD_SPACE_VERSION,
+    PossibleWorldError,
+    PossibleWorldSpace,
+    WorldQuery,
+)
 import pytest
 
 from manabot.belief.encoding import belief_schema_from_engine
@@ -97,18 +102,25 @@ def test_retrieval_transports_belief_into_reveal_constrained_native_space(learn_
         acting=contract.frame.actor,
     )
     assert after.known_hand == ((lesson, 1),)
-    assert after.world_schema_identity == "managym.possible-world-space/v2"
+    assert after.world_schema_identity == "managym.possible-world-space/v3"
     assert after.total_weight == math.comb(
         sum(dict(after.pool).values()) - 1, after.hand_size - 1
     )
     assert after.support(WorldQuery.lacks(lesson)).support_size == 0
     assert all(world.count(lesson) >= 1 for world in after.worlds)
-    exits, returns, draws = BeliefTracker._public_transport_facts(
+    facts = BeliefTracker._public_transport_facts(
         before, after, offer["public_commitment"]
     )
-    assert (exits, returns, draws) == ([], [lesson], 0)
+    assert (facts.known_exits, facts.known_returns, facts.hidden_draws) == (
+        [],
+        [lesson],
+        0,
+    )
     transported = prior.transport(
-        after, known_exits=exits, known_returns=returns, hidden_draws=draws
+        after,
+        known_exits=facts.hand_exits,
+        known_returns=facts.known_returns,
+        hidden_draws=facts.hidden_draws,
     )
     assert transported.normalization_error < 1e-12
     assert transported.probabilities == pytest.approx(
@@ -159,7 +171,7 @@ def test_known_hand_fixture_identity_and_constraints():
         PossibleWorldSpace.from_fixture(**args, known_hand={"Lesson": 2})
 
 
-@pytest.mark.parametrize("version", [1, 3, "2", 2.0, True])
+@pytest.mark.parametrize("version", [1, 2, "3", 3.0, True])
 def test_world_reader_rejects_incompatible_version(version):
     class IncompatibleEngine:
         def possible_world_space_json(self, viewer):
@@ -177,7 +189,7 @@ def test_world_reader_requires_explicit_known_counts(known_hand):
         def possible_world_space_json(self, viewer):
             return json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": POSSIBLE_WORLD_SPACE_VERSION,
                     "source_observation": {
                         "schema_version": SEMANTIC_DECISION_VERSION,
                         "viewer": viewer,
@@ -208,7 +220,7 @@ def test_world_reader_rejects_incompatible_source_observation(version):
         def possible_world_space_json(self, viewer):
             return json.dumps(
                 {
-                    "schema_version": 2,
+                    "schema_version": POSSIBLE_WORLD_SPACE_VERSION,
                     "source_observation": {"schema_version": version},
                 }
             )

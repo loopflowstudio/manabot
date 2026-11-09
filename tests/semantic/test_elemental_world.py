@@ -15,8 +15,9 @@ import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ObservationEncoder
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationEncoder, ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -31,7 +32,6 @@ from manabot.model.world import (
     validate_agent_setup,
     validate_checkpoint_world,
 )
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.training.execution import execute_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
@@ -39,21 +39,11 @@ from manabot.verify.store import VerifyStore
 import managym
 
 PACK = "elemental-world-v2"
-BASE = Path("content/semantic/w11")
 
 
-def test_exact_accepted_lists_inventory_and_compiled_closure() -> None:
-    ir, coverage = compile_paths(
-        BASE / "elemental_world.source.json", BASE / "elemental_world.fixtures.json"
-    )
-    assert (BASE / "generated/elemental_world.ir.json").read_text() == pretty_json(ir)
-    assert (
-        BASE / "generated/elemental_world.coverage.json"
-    ).read_text() == pretty_json(coverage)
-    assert coverage["definition_count"] == 100
-    assert coverage["admission_closure_complete"]
-    accepted = json.loads(Path("docs/rules/elemental/decks.json").read_text())
-    with Path("docs/rules/elemental/cube-snapshot.csv").open(newline="") as stream:
+def test_exact_accepted_lists_match_inventory() -> None:
+    accepted = json.loads(Path("tests/semantic/fixtures/elemental/decks.json").read_text())
+    with Path("tests/semantic/fixtures/elemental/cube-snapshot.csv").open(newline="") as stream:
         inventory = Counter(row["name"] for row in csv.DictReader(stream))
     basics = {"Plains", "Island", "Swamp", "Mountain", "Forest"}
     assert len(accepted["decks"]) == 10
@@ -87,10 +77,10 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
             expected = managym.authored_deck_setup(PACK, key)
             assert actual.decklist == expected.decklist
             assert actual.sideboard == expected.sideboard
-            assert actual.content_pack == PACK
+            assert actual.world is None
         engine = managym.Env(seed=164)
         engine.reset(configs)
-        assert engine.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+        assert "pack_key" not in engine.content_pack_manifest()
 
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
@@ -108,14 +98,11 @@ def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
             == binding
         )
     bad = pair.to_rust()
-    bad[0] = managym.PlayerConfig("wrong pool", bad[0].decklist, {}, PACK)
+    bad[0] = managym.PlayerConfig("wrong pool", bad[0].decklist, {})
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(agent, bad)
-    missing_pack = [
-        managym.PlayerConfig(p.name, p.decklist, p.sideboard) for p in pair.to_rust()
-    ]
-    with pytest.raises(ValueError, match="explicit content pack"):
-        validate_agent_setup(agent, missing_pack)
+    with pytest.raises(ValueError, match="retired"):
+        managym.PlayerConfig("legacy", bad[0].decklist, {}, PACK)
     drifted = deepcopy(binding)
     drifted["setups"][0]["sideboard"] = {}
     with pytest.raises(ValueError, match="invalid setup|binding differs"):
@@ -138,16 +125,14 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
         seed=164,
     )
     observation, _ = env.reset(seed=164)
-    agent = ActorCritic(
-        space, ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True)
-    )
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16, world=PACK, policy_film=True))
     native = managym.Env(seed=164)
     native.reset(
         Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
-    assert len(pack.ir.definitions) == 100
-    assert pack.schema.raw["schema_version"] == 7
+    assert pack.definition_count == managym.CARD_DEFINITION_COUNT
+    assert pack.schema.raw["schema_version"] == 10
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
@@ -195,7 +180,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
         id="elemental-ppo-smoke",
         world=managym.WORLD_VERSION,
         match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
-        agent=ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True),
+        agent=ModelConfig(hidden_dim=16, world=PACK, policy_film=True),
         stages=[
             TrainSelfPlay(
                 id="self-play",
@@ -204,6 +189,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
                 streams=2,
                 transitions=8,
                 learning_seats="one",
+                batch_closure="exact-quota",
                 learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
             )
         ],
@@ -319,7 +305,7 @@ def test_academy_records_a_real_elemental_command_with_the_exact_pack(
     )
     assert result["status"] == "accepted"
     assert session.env is not None
-    assert session.env.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+    assert "pack_key" not in session.env.content_pack_manifest()
     assert session.trace is not None
     assert (
         session.trace.config.hero_sideboard

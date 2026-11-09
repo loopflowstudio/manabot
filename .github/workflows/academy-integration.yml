@@ -12,8 +12,6 @@ jobs:
   academy-integration:
     name: Academy Integration (${{ inputs.runner }})
     runs-on: ${{ inputs.runner }}
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
     steps:
       - uses: actions/checkout@v4
 
@@ -49,16 +47,17 @@ jobs:
         run: uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
 
       - name: Elemental roster admission
-        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q
+        run: uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
 
       - name: Elemental local play contracts
         run: |
           uv run --python 3.12 --extra dev --extra artifacts pytest -q \
             tests/academy/test_elemental_play_launcher.py \
+            tests/academy/test_named_search_recovery.py \
+            tests/academy/test_schedule_recovery.py \
             tests/academy/test_forced_step_automation.py
 
       - name: Frozen-policy search fixtures
         run: |
           uv run --python 3.12 --extra dev pytest -q \
-            tests/sim/test_local_update_sampling.py \
-            tests/sim/test_local_update_compound.py
+            tests/sim/test_local_update_sampling.py

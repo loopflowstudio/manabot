@@ -1,7 +1,15 @@
 <script lang="ts">
   import { copyLabel } from '$lib/decision-labels';
-  import type { CardPreview, CardState, PlayerState } from '$lib/types';
+  import { effectNote } from '$lib/permanent-notes';
 
+  import type {
+    CardPreview,
+    CardState,
+    CastPermission,
+    PermanentState,
+    PlayerState,
+    RestrictedMana
+  } from '$lib/types';
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
   import Battlefield from './Battlefield.svelte';
@@ -12,6 +20,8 @@
   interface Props {
     label: string;
     player: PlayerState;
+    /** Every visible permanent at the table, for attachments across seats. */
+    tablePermanents: PermanentState[];
     deckName?: string | null;
     definitionNames?: Record<string, string>;
     opponent?: boolean;
@@ -25,6 +35,7 @@
   let {
     label,
     player,
+    tablePermanents,
     deckName = null,
     definitionNames = {},
     opponent = false,
@@ -38,6 +49,44 @@
   const hiddenHandCount = $derived(
     player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length,
   );
+  function total(counts: Record<string, number> | undefined): number {
+    return Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0);
+  }
+  // Another player's face-down exiled cards are counted, never listed.
+  const exileCount = $derived(Math.max(player.zone_counts.EXILE ?? 0, player.exile.length));
+  const hiddenExileCount = $derived(exileCount - player.exile.length);
+
+  function exileDescription(card: CardState): string {
+    const parts = [
+      card.face_down ? 'foretold, face down' : '',
+      card.cast_permission ? permissionText(card.cast_permission) : '',
+      copyLabel(player.exile, card.id),
+    ];
+    return parts.filter(Boolean).join(', ');
+  }
+
+  // Every term of the permission is shown; whether it can be used right now
+  // is the offer list's job.
+  function permissionText(permission: CastPermission): string {
+    const who = permission.player_id === player.id ? 'its owner' : 'the other player';
+    const terms = [permission.cost ? `may be cast by ${who} for ${permission.cost}` : `may be played by ${who}`];
+    if (permission.this_turn) terms.push('this turn');
+    if (permission.through_next_turn) terms.push('until the end of their next turn');
+    if (permission.own_turn_only) terms.push('during their turn');
+    if (permission.after_turn !== undefined) terms.push(`after turn ${permission.after_turn}`);
+    if (permission.source_permanent_id !== undefined) terms.push('while they control the card that exiled it');
+    if (permission.flash) terms.push('as though it had flash');
+    if (permission.any_mana) terms.push('with mana of any type');
+    if (permission.waterbend) terms.push('waterbending for generic');
+    return terms.join(' ');
+  }
+
+  function spendingText(restricted: RestrictedMana): string {
+    const parts = [];
+    if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
+    if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
+    return parts.join(' or ');
+  }
 
   // The bar wears its deck's colors at full Magic saturation — G→W for
   // Allies, U→R for Lessons. Like the banner and the card plates it is a
@@ -91,10 +140,40 @@
 {#snippet playerBar()}
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
-      {#if player.lesson_mana?.some(Boolean)} · Lesson-only mana: {manaText(player.lesson_mana)}{/if}
+      {#if player.restricted_mana?.length}
+        {#each player.restricted_mana as restricted}
+          · {manaText(restricted.mana)} only for {spendingText(restricted)}
+        {/each}
+      {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
       {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
+      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </p>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
+  {#if player.hand_only_until !== undefined}
+    <p class="type-caption py-1" data-testid="hand-only">
+      {label} can cast spells only from hand until the other player's next turn.
+    </p>
+  {/if}
+  {#each player.effects ?? [] as effect}
+    <p class="type-caption py-1" data-testid="player-effect">{label}: {effectNote(effect)}.</p>
+  {/each}
+  {#if player.no_maximum_hand_size}
+    <p class="type-caption py-1" data-testid="no-maximum-hand-size">
+      {label} has no maximum hand size.
+    </p>
+  {/if}
+  {#if player.turn_history}
+    {@const history = player.turn_history}
+    <p class="type-caption py-1" data-testid="turn-history">
+      {label} this turn: {[
+        history.attacked && 'attacked',
+        history.permanents_sacrificed && `sacrificed ${history.permanents_sacrificed} permanent${history.permanents_sacrificed === 1 ? '' : 's'}`,
+        history.land_entered && 'a land entered',
+        history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
+        history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
+      ].filter(Boolean).join(' · ')}.
+    </p>
+  {/if}
   <!-- The player bar, in the manner of a chess clock plate: identity at
        one end, life at the other. The opponent's sits above their side of
        the table; yours below yours — the players bracket the battlefield. -->
@@ -127,9 +206,19 @@
   {/if}
 
   <div class="staves">
+    {#if player.main_counts}
+      <details class="type-caption py-2" data-testid="decklist-summary">
+        <summary>Decklist ({total(player.main_counts)} cards, {total(player.unseen_counts)} unseen)</summary>
+        {#each Object.entries(player.main_counts) as [definition, initial]}
+          <div>{definitionNames[definition] ?? `Card ${definition}`}: {player.unseen_counts?.[definition] ?? 0} unseen of {initial}</div>
+        {/each}
+      </details>
+    {:else if opponent}
+      <div class="type-caption py-2 text-ink-2" data-testid="decklist-summary">Decklist closed</div>
+    {/if}
     {#if Object.keys(player.sideboard_counts ?? {}).length > 0}
       <details class="type-caption py-2" data-testid="sideboard-summary">
-        <summary>Sideboard ({Object.values(player.remaining_sideboard_counts ?? {}).reduce((a, b) => a + b, 0)} remaining)</summary>
+        <summary>Sideboard ({total(player.remaining_sideboard_counts)} remaining)</summary>
         {#each Object.entries(player.sideboard_counts ?? {}) as [definition, initial]}
           <div>{definitionNames[definition] ?? `Card ${definition}`}: {player.remaining_sideboard_counts?.[definition] ?? 0} of {initial}</div>
         {/each}
@@ -161,6 +250,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}
@@ -173,6 +263,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}
@@ -232,14 +323,19 @@
       </div>
     </div>
 
-    {#if player.exile.length > 0}
+    {#if exileCount > 0}
       <div class="staff">
-        {@render rubric(`Exile (${player.exile.length})`)}
+        {@render rubric(`Exile (${exileCount})`)}
         <div class="flex flex-wrap items-end gap-2">
+          {#if hiddenExileCount > 0}
+            <div class="type-caption px-1 py-1 text-ink-3">
+              {hiddenExileCount} face-down {hiddenExileCount === 1 ? 'card' : 'cards'}
+            </div>
+          {/if}
           {#each player.exile as card}
             <Card
               name={card.name}
-              copyDescription={copyLabel(player.exile, card.id)}
+              copyDescription={exileDescription(card)}
               power={card.types.is_creature ? card.power : null}
               toughness={card.types.is_creature ? card.toughness : null}
               focused={focusedIds.has(card.id)}

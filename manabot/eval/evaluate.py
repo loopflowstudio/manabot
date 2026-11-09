@@ -18,7 +18,7 @@ import sys
 import time
 from typing import Any
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey, MatchRow
 from manabot.eval.rating import bootstrap_population, fit_population
@@ -89,8 +89,8 @@ def registration_source_paths(registration: PlayerRegistration) -> list[str]:
     kind = registration.player_spec["kind"]
     if kind == "demo_search":
         return ["manabot/sim/search/flat.py", "manabot/sim/players.py"]
-    if kind == "scripted_greedy":
-        return ["manabot/sim/players.py"]
+    if kind in {"scripted_greedy", "random"}:
+        return ["manabot/sim/anchors.py"]
     if kind == "heuristic":
         return [str(path.relative_to(REPO_ROOT)) for path in heuristic_source_paths()]
     if kind == "determinized_puct":
@@ -284,7 +284,7 @@ def evaluate_matchup(args: argparse.Namespace) -> None:
             role="challenger",
             compute_class_id="random-cpu-v1",
             player_spec={"kind": "random"},
-            source_sha256=source_digest(["manabot/sim/search/flat_mc.py"]),
+            source_sha256=source_digest(["manabot/sim/anchors.py"]),
         )
     )
     # No inherited INT-6 predictions, anchor population, budget or promotion rule.

@@ -8,9 +8,10 @@ import pytest
 import torch
 
 # Local imports
-from manabot.env import Env, Reward, VectorEnv
-from manabot.env.match import Match
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import RewardConfig
 
 logging.basicConfig(level=logging.DEBUG)

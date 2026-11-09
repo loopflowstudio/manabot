@@ -1,18 +1,76 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use managym::{
-    cardsets::alpha::ContentPack,
+    cards::content_pack::{default_content_pack, ContentPack},
     state::{
-        card::{CardDefId, CardDefinition},
+        card::{CardDefId, CardDefinition, Keyword, Keywords},
         game_object::{CardId, ObjectId, PlayerId},
+        permanent::{CounterKind, Counters},
         stack_object::{SpellOnStack, StackObject},
         zone::ZoneType,
     },
     Game, MATCH_STATE_HASH_VERSION,
 };
+
+#[test]
+fn sparse_counters_preserve_ordered_serialization_across_spill_and_removal() {
+    let mut counters = Counters::default();
+    // Insert out of order and exceed the two inline entries. Canonical bytes
+    // must match the previous dense representation, independently of storage.
+    counters.change(CounterKind::Fire, 3);
+    counters.change(CounterKind::Stun, 2);
+    counters.change(CounterKind::PlusOnePlusOne, 1);
+    assert_eq!(
+        serde_json::to_string(&counters).unwrap(),
+        r#"{"plus_one_plus_one":1,"stun":2,"fire":3}"#
+    );
+    let retained = counters.clone();
+    counters.change(CounterKind::Stun, -9);
+    assert_eq!(retained.get(CounterKind::Stun), 2);
+    assert_eq!(
+        serde_json::to_string(&counters).unwrap(),
+        r#"{"plus_one_plus_one":1,"fire":3}"#
+    );
+    counters.change(CounterKind::Fire, i32::MAX);
+    assert_eq!(counters.get(CounterKind::Fire), i32::MAX);
+    counters.change(CounterKind::Fire, i32::MIN);
+    counters.change(CounterKind::PlusOnePlusOne, -1);
+    assert!(counters.is_empty());
+    assert_eq!(serde_json::to_string(&counters).unwrap(), "{}");
+}
+
+#[test]
+fn keyword_serialization_contains_only_present_kinds_in_enum_order() {
+    let keywords = Keywords::of(&[Keyword::Haste, Keyword::Flying, Keyword::Haste]);
+    assert_eq!(
+        serde_json::to_string(&keywords).unwrap(),
+        r#"["flying","haste"]"#
+    );
+    assert_eq!(serde_json::to_string(&Keywords::default()).unwrap(), "[]");
+    let existing_keywords = Keywords::of(&[
+        Keyword::Indestructible,
+        Keyword::Hexproof,
+        Keyword::Menace,
+        Keyword::Defender,
+        Keyword::Lifelink,
+        Keyword::Deathtouch,
+        Keyword::DoubleStrike,
+        Keyword::FirstStrike,
+        Keyword::Trample,
+        Keyword::Vigilance,
+        Keyword::Flash,
+        Keyword::Haste,
+        Keyword::Reach,
+        Keyword::Flying,
+    ]);
+    assert_eq!(
+        serde_json::to_string(&existing_keywords).unwrap(),
+        r#"["flying","reach","haste","flash","vigilance","trample","first_strike","double_strike","deathtouch","lifelink","defender","menace","hexproof","indestructible"]"#
+    );
+}
 
 fn interactive_deck() -> BTreeMap<String, usize> {
     BTreeMap::from([
@@ -71,7 +129,7 @@ fn independently_built_seeded_traces_have_the_same_hash() {
 #[test]
 fn clone_and_allocation_addresses_do_not_change_the_hash() {
     let game = make_game(11);
-    let mut clone = game.clone();
+    let clone = game.clone();
 
     assert_ne!(game.state.cards.as_ptr(), clone.state.cards.as_ptr());
     assert_eq!(
@@ -79,11 +137,10 @@ fn clone_and_allocation_addresses_do_not_change_the_hash() {
         clone.state.deterministic_hash()
     );
 
-    clone.state.content = Arc::new(ContentPack::default());
-    assert!(!Arc::ptr_eq(&game.state.content, &clone.state.content));
+    let reallocated = ContentPack::default();
     assert_eq!(
         game.state.deterministic_hash(),
-        clone.state.deterministic_hash()
+        game.state.deterministic_hash_over(&reallocated)
     );
 }
 
@@ -123,7 +180,7 @@ fn meaningful_mutable_facts_change_the_hash() {
     let card = CardId(0);
     let original_id = definition.state.cards[card].definition_id;
     definition.state.cards[card].definition_id =
-        CardDefId((original_id.0 + 1) % definition.state.content.len() as u32);
+        CardDefId((original_id.0 + 1) % default_content_pack().len() as u32);
     assert_ne!(baseline, definition.state.deterministic_hash());
 
     let mut rng = game.clone();
@@ -140,20 +197,16 @@ fn content_schema_and_content_change_the_hash() {
     let game = make_game(19);
     let baseline = game.state.deterministic_hash();
 
-    let mut schema = game.clone();
-    let mut schema_pack = (*schema.state.content).clone();
+    let mut schema_pack = default_content_pack().clone();
     schema_pack.schema_version += 1;
-    schema.state.content = Arc::new(schema_pack);
-    assert_ne!(baseline, schema.state.deterministic_hash());
+    assert_ne!(baseline, game.state.deterministic_hash_over(&schema_pack));
 
-    let mut content = game.clone();
-    let mut content_pack = (*content.state.content).clone();
+    let mut content_pack = default_content_pack().clone();
     content_pack.register_card(CardDefinition {
         name: "State Hash Test Definition".to_string(),
         ..Default::default()
     });
-    content.state.content = Arc::new(content_pack);
-    assert_ne!(baseline, content.state.deterministic_hash());
+    assert_ne!(baseline, game.state.deterministic_hash_over(&content_pack));
 }
 
 #[test]
@@ -180,6 +233,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         kicked: false,
+        x: 0,
         mode: None,
     };
     let stack_object = StackObject::Spell(spell.clone());
@@ -206,4 +260,37 @@ fn canonical_hash_source_has_no_compatibility_or_formatting_dispatch() {
     assert!(source.contains("definition_id: CardDefId"));
     assert!(source.contains("let GameState {"));
     assert!(!source.contains(".. } = state"));
+}
+
+#[test]
+fn pending_turn_and_combat_schedules_are_part_of_match_identity() {
+    let baseline = make_game(17);
+    let hash = baseline.state.deterministic_hash();
+    let mut first = baseline.clone();
+    first.state.turn.extra_turns = vec![PlayerId(0), PlayerId(1)];
+    assert_ne!(first.state.deterministic_hash(), hash);
+    let mut reordered = first.clone();
+    reordered.state.turn.extra_turns.reverse();
+    assert_ne!(
+        first.state.deterministic_hash(),
+        reordered.state.deterministic_hash()
+    );
+    let mut resumed = first.clone();
+    resumed.state.turn.resume_with = Some(PlayerId(1));
+    assert_ne!(
+        resumed.state.deterministic_hash(),
+        first.state.deterministic_hash()
+    );
+    let mut combat = baseline.clone();
+    combat
+        .state
+        .turn
+        .additional_combats
+        .push(managym::flow::turn::AdditionalCombat { attackers: None });
+    assert_ne!(combat.state.deterministic_hash(), hash);
+    combat.state.turn.additional_combats[0].attackers =
+        Some(managym::state::predicate::CardPredicate::creature());
+    let restricted = combat.state.deterministic_hash();
+    combat.state.turn.combat_attackers = Some(managym::state::predicate::CardPredicate::creature());
+    assert_ne!(combat.state.deterministic_hash(), restricted);
 }

@@ -1,29 +1,44 @@
 // sba.rs
 // State-based actions.
 
+use crate::state::card::Keyword;
 use crate::{
-    flow::{event::GameEvent, game::Game},
+    flow::{
+        decision::{EffectFrame, FrameCompletion},
+        game::Game,
+        proposed_event::{EventBinding, ProposedEvent},
+    },
     state::{
+        ability::{Ability, TriggerCondition},
         game_object::{CardId, PermanentId, PlayerId},
+        permanent::CounterKind,
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SbaProgress {
+    Stable,
+    Changed,
+    Pending,
+}
+
 impl Game {
-    /// Duplicate legendary names, grouped by controller in APNAP order.
+    /// Duplicate legendary names (layered `is_legendary` and `name`),
+    /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<&str, Vec<CardId>>::new();
-            for id in self.battlefield_permanents(player) {
+            let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
+            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
+            {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                let card = &self.state.cards[permanent.card];
-                if card
-                    .supertypes
-                    .iter()
-                    .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-                {
-                    names.entry(&card.name).or_default().push(permanent.card);
+                if characteristics.is_legendary {
+                    names
+                        .entry(characteristics.name.clone())
+                        .or_default()
+                        .push(permanent.card);
                 }
             }
             groups.extend(names.into_values().filter(|cards| cards.len() > 1));
@@ -33,7 +48,7 @@ impl Game {
 
     /// Perform one simultaneous batch, or suspend for required legend choices.
     /// Stabilization repeats changed batches before granting priority (CR 704.3).
-    pub(crate) fn perform_state_based_actions(&mut self) -> bool {
+    pub(crate) fn perform_state_based_actions(&mut self) -> SbaProgress {
         // Choose all legends before applying any of this simultaneous batch.
         // Terminal SBAs take precedence over asking a player who already lost.
         if self
@@ -54,19 +69,29 @@ impl Game {
                     groups,
                     keep: Vec::new(),
                 });
-                return false;
+                return SbaProgress::Pending;
             }
+            // No legend choice was needed, so this same simultaneous batch
+            // has no legend losers. Do not discover the groups a second time.
+            return self.perform_state_based_batch(&[]);
         }
         self.perform_state_based_actions_with_legends(&[])
     }
 
-    pub(crate) fn perform_state_based_actions_with_legends(&mut self, keep: &[CardId]) -> bool {
+    pub(crate) fn perform_state_based_actions_with_legends(
+        &mut self,
+        keep: &[CardId],
+    ) -> SbaProgress {
         let legend_losers: Vec<CardId> = self
             .legend_groups()
             .into_iter()
             .flatten()
             .filter(|card| !keep.contains(card))
             .collect();
+        self.perform_state_based_batch(&legend_losers)
+    }
+
+    fn perform_state_based_batch(&mut self, legend_losers: &[CardId]) -> SbaProgress {
         let mut performed = false;
         for player in [PlayerId(0), PlayerId(1)] {
             // CR 704.5a, 704.5b — A player loses at 0 or less life or for drawing from empty library.
@@ -78,74 +103,114 @@ impl Game {
         }
 
         if self.is_game_over() {
-            return performed;
+            return if performed {
+                SbaProgress::Changed
+            } else {
+                SbaProgress::Stable
+            };
         }
 
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
         let mut candidates = Vec::new();
-        for (permanent_id, permanent) in self
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, perm)| perm.as_ref().map(|p| (PermanentId(idx), p)))
+        for (permanent_id, characteristics) in
+            self.layer_views((0..self.state.permanents.len()).map(PermanentId))
         {
+            let permanent = self.state.permanents[permanent_id].as_ref().unwrap();
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
-            let zero_toughness = self.permanent_is_creature(permanent_id)
-                && self.effective_toughness(permanent_id) <= 0;
-            // CR 704.5g — Creatures with lethal damage are destroyed.
-            let destroy = !zero_toughness
-                && self.has_lethal_damage(permanent_id)
-                && !self.effective_keywords(permanent_id).indestructible;
+            let zero_toughness = characteristics.is_creature() && characteristics.toughness <= 0;
+            // CR 704.5i/v. No supported battle has a defeat trigger; if one
+            // is introduced, its pending trigger must delay this battle SBA.
+            let zero_counters = (characteristics.types.is_planeswalker()
+                && permanent.counter_count(CounterKind::Loyalty) == 0)
+                || (characteristics.types.is_battle()
+                    && permanent.counter_count(CounterKind::Defense) == 0);
             let legend_loser = legend_losers.contains(&permanent.card);
-            if !zero_toughness && !destroy && !legend_loser {
+            // CR 704.5m — An Aura attached to an illegal object or to
+            // nothing is put into its owner's graveyard.
+            let illegal_aura = self.aura_attachment_illegal(permanent_id);
+            let put_in_graveyard = zero_toughness || zero_counters || legend_loser || illegal_aura;
+            // CR 704.5g — Lethal damage destroys. The other graveyard SBAs
+            // above do not destroy, even when lethal damage also applies.
+            let destroy = !put_in_graveyard
+                && self.has_lethal_damage(permanent_id, &characteristics)
+                && !characteristics.keywords.has(Keyword::Indestructible);
+            if !put_in_graveyard && !destroy {
                 continue;
             }
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
                 continue;
             };
-            let Some(event_ref) = self.object_event_ref(object_ref) else {
-                continue;
-            };
-            candidates.push((
-                object_ref,
-                event_ref,
-                permanent.controller,
-                destroy && !legend_loser,
-            ));
+            candidates.push((object_ref, destroy));
         }
-        candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
+        candidates.sort_by_key(|(object_ref, _)| *object_ref);
 
-        // CR 704.3 — all applicable SBAs are one simultaneous event. Commits
-        // have a deterministic ObjectRef order for replay, while every death
-        // event sees the same pre-batch trigger-source snapshot.
-        let trigger_sources = self.snapshot_trigger_sources();
-        let mut died = Vec::new();
-        for (object_ref, event_ref, controller, destroy) in candidates {
-            let committed = if destroy {
-                // CR 704.5g destruction has its own proposal before the
-                // consequent battlefield-to-graveyard move.
-                self.destroy_object(object_ref)
-            } else {
-                // CR 704.5f is a zone move, not destruction.
-                self.move_object_to_zone(object_ref, ZoneType::Graveyard)
-            };
-            if committed {
-                performed = true;
-                if self.state.zones.zone_of(CardId::from(object_ref.entity))
-                    == Some(ZoneType::Graveyard)
-                {
-                    died.push(event_ref);
+        let mut events: Vec<_> = candidates
+            .into_iter()
+            .map(|(target, destroy)| {
+                if destroy {
+                    ProposedEvent::Destroy { target }
+                } else {
+                    self.zone_move_proposal(
+                        CardId::from(target.entity),
+                        ZoneType::Graveyard,
+                        Default::default(),
+                    )
                 }
-                self.invalidate_mana_cache(controller);
-            }
+            })
+            .collect();
+        events.extend(
+            self.finished_sagas()
+                .into_iter()
+                .filter_map(|id| self.permanent_object_ref(id))
+                .map(|target| ProposedEvent::Sacrifice { target }),
+        );
+        if !events.is_empty() {
+            let mut batch = self.event_batch(events);
+            batch.binding = EventBinding::Deaths;
+            let mut frame = EffectFrame::new(self.active_player(), Vec::new());
+            frame.batch = Some(batch);
+            frame.completion = FrameCompletion::StateBased {
+                next: Box::new(FrameCompletion::Continue),
+            };
+            self.run_frame(frame);
+            return if self.state.suspended_decision.is_some() {
+                SbaProgress::Pending
+            } else {
+                SbaProgress::Changed
+            };
         }
-        if !died.is_empty() {
-            self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
+        if self.finish_state_based_batch() {
+            performed = true;
+        }
+        if performed {
+            SbaProgress::Changed
+        } else {
+            SbaProgress::Stable
+        }
+    }
+
+    pub(crate) fn finish_state_based_batch(&mut self) -> bool {
+        let mut performed = false;
+        // CR 704.5n — An Equipment attached to an object that is gone or is
+        // no longer a creature becomes unattached and stays on the battlefield.
+        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+            .map(PermanentId)
+            .filter(|&id| {
+                self.state.permanents[id].as_ref().is_some_and(|equipment| {
+                    equipment.attached_to.is_some()
+                        && self.state.cards[equipment.card].enchant().is_none()
+                }) && self.attached_creature(id).is_none()
+            })
+            .collect();
+        for permanent_id in detached {
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.attached_to = None;
+            }
+            performed = true;
         }
 
         // CR 704.5d — A token in a zone other than the battlefield ceases to
@@ -158,23 +223,80 @@ impl Game {
             }
             let card_id = CardId(index);
             match self.state.zones.zone_of(card_id) {
-                Some(ZoneType::Battlefield) | None => {}
+                // A spell copy is a token card while on the stack (CR 704.5e).
+                Some(ZoneType::Battlefield | ZoneType::Stack) | None => {}
                 Some(_) => tokens_to_remove.push((card_id, card.owner)),
             }
         }
         for (card_id, owner) in tokens_to_remove {
-            self.journal_zone_move(card_id, owner);
             let from = self.state.zones.zone_of(card_id);
-            self.state.zones.remove_card(card_id, owner);
+            self.state.zones.remove_card(card_id);
             self.capture_card_move(card_id, from, None, owner);
             performed = true;
         }
 
-        if performed {
-            self.process_game_events_with_sources(&trigger_sources);
-        }
-
         performed
+    }
+
+    fn finished_sagas(&self) -> Vec<PermanentId> {
+        self.layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .filter(|(id, view)| {
+                let permanent = self.state.permanents[*id].as_ref().unwrap();
+                let Some(last) = view.final_chapter() else {
+                    return false;
+                };
+                permanent.counter_count(CounterKind::Lore) >= i32::from(last)
+                    && !self.chapter_ability_pending(permanent.card)
+            })
+            .map(|(id, _)| id)
+            .collect()
+    }
+
+    /// Whether a chapter ability of this Saga has triggered and not yet left
+    /// the stack: waiting to be put on it, or on it.
+    fn chapter_ability_pending(&self, saga: CardId) -> bool {
+        let object = self.current_object_ref(saga);
+        let is_chapter = |card, source_ref, inline: &Option<_>, index: usize| {
+            card == saga
+                && source_ref == object
+                && inline.is_none()
+                && matches!(
+                    self.state.cards[saga].abilities.get(index),
+                    Some(Ability::Triggered {
+                        condition: TriggerCondition::Chapter { .. },
+                        ..
+                    })
+                )
+        };
+        self.state.pending_triggers.iter().any(|trigger| {
+            is_chapter(
+                trigger.source_card,
+                trigger.source_ref,
+                &trigger.inline_effects,
+                trigger.ability_index,
+            )
+        }) || self.state.stack_objects.iter().any(|item| {
+            matches!(item, StackObject::TriggeredAbility(ability) if is_chapter(
+                ability.source_card,
+                ability.source_ref,
+                &ability.inline_effects,
+                ability.ability_index,
+            ))
+        })
+    }
+
+    /// Whether an Aura is unattached, or attached to itself or an object its
+    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
+    fn aura_attachment_illegal(&self, aura: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[aura].as_ref() else {
+            return false;
+        };
+        let Some(enchant) = self.state.cards[permanent.card].enchant() else {
+            return false;
+        };
+        !self.attached_permanent(aura).is_some_and(|object| {
+            object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
+        })
     }
 
     pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {

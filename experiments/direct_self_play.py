@@ -18,7 +18,7 @@ def direct_self_play() -> TrainingRegime:
         id="direct-self-play",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=ModelConfig(semantic_pack=PACK),
+        agent=ModelConfig(world=PACK),
         stages=ppo_checkpoints(2, Learning()),
         wall_seconds=900,
     )

@@ -6,13 +6,12 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cardsets::alpha::{default_content_pack, ContentPack},
+    cards::{content_pack::default_content_pack, deck_admission::admit_submitted},
     flow::{
-        game::{Game, GameState},
+        game::{Game, GameState, TrackedState},
         priority::PriorityState,
         turn::TurnState,
     },
-    semantic::content_pack_for_authored_match,
     state::{
         game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},
@@ -20,23 +19,11 @@ use crate::{
     },
 };
 
-use std::sync::Arc;
-
 impl Game {
+    /// A match on the catalog. Panics when a deck submitted to the world fails
+    /// admission; [`crate::agent::env::Env::reset`] checks that first.
     pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .unwrap_or_else(|error| panic!("compiled authored content is invalid: {error}"))
-            .unwrap_or_else(default_content_pack);
-        Self::new_with_content(player_configs, seed, skip_trivial, content)
-    }
-
-    pub fn new_with_content(
-        player_configs: Vec<PlayerConfig>,
-        seed: u64,
-        skip_trivial: bool,
-        content: Arc<ContentPack>,
-    ) -> Self {
-        Self::construct(player_configs, seed, skip_trivial, content, false)
+        Self::construct(player_configs, seed, skip_trivial, false)
     }
 
     pub(crate) fn new_capturing(
@@ -44,19 +31,18 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .expect("validated authored content")
-            .unwrap_or_else(default_content_pack);
-        Self::construct(player_configs, seed, skip_trivial, content, true)
+        Self::construct(player_configs, seed, skip_trivial, true)
     }
 
     fn construct(
         player_configs: Vec<PlayerConfig>,
         seed: u64,
         skip_trivial: bool,
-        content: Arc<ContentPack>,
         capture: bool,
     ) -> Self {
+        admit_submitted(&player_configs)
+            .unwrap_or_else(|error| panic!("submitted deck is not admitted: {error}"));
+        let content = default_content_pack();
         assert_eq!(player_configs.len(), 2, "game supports exactly two players");
 
         let mut id_gen = IdGenerator::default();
@@ -72,7 +58,8 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.decklist {
+            players[player_index].disclosure = config.disclosure;
+            for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
                     let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
@@ -88,7 +75,7 @@ impl Game {
 
         // Allocate outside copies after both main decks so setup preserves deal identity.
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.sideboard {
+            for (name, qty) in &config.deck.sideboard {
                 assert!(*qty > 0, "sideboard count must be positive: {name}");
                 let definition_id = content
                     .definition_id(name)
@@ -131,7 +118,8 @@ impl Game {
         }
 
         let mut game = Self {
-            state: GameState {
+            derived: Default::default(),
+            state: TrackedState::new(GameState {
                 cards,
                 permanents: PermanentVec::default(),
                 card_to_permanent,
@@ -151,12 +139,13 @@ impl Game {
                 trigger_placement: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
+                effects: crate::state::effect::EffectRecords::default(),
+                cast_permissions: Default::default(),
                 suspended_decision: None,
                 trigger_enqueue_counter: 0,
                 rng,
                 id_gen,
-                content,
-            },
+            }),
             policy_history: Default::default(),
             skip_trivial,
             current_action_space: None,
@@ -165,7 +154,6 @@ impl Game {
             pending_choice: None,
             skip_trivial_count: 0,
             trackers: [BehaviorTracker::new(false), BehaviorTracker::new(false)],
-            undo: None,
             card_capture: None,
         };
 

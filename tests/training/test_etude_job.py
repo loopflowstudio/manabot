@@ -7,7 +7,10 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import sys
+import time
 
+from etude.experiment import observe
 from etude.train.read import read_all
 import pytest
 
@@ -175,6 +178,44 @@ def test_worker_rejects_before_learning(
     with pytest.raises(ValueError, match=message):
         run_worker()
     assert not (tmp_path / "output").exists()
+
+
+def test_a_terminated_worker_records_its_end_and_keeps_its_exports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Etude stops an attempt with SIGTERM, well before training polls its stop file."""
+    spec = specification()
+    stage = spec.regime.stages[0]
+    assert isinstance(stage, TrainSelfPlay)
+    stage.updates = 100_000
+    worker_environment(
+        tmp_path, monkeypatch, spec.model_copy(update={"milestones": ()})
+    )
+    worker = subprocess.Popen(
+        [sys.executable, "-m", "manabot.experiment.job"],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    tracking = tmp_path / "tracking"
+    try:
+        deadline = time.monotonic() + 120
+        while not any(tracking.rglob("*.pt")) and worker.poll() is None:
+            assert time.monotonic() < deadline, "the worker exported nothing"
+            time.sleep(0.2)
+        assert worker.poll() is None, worker.stderr and worker.stderr.read()
+        worker.send_signal(signal.SIGTERM)
+        assert worker.wait(timeout=60) != 0
+    finally:
+        worker.kill()
+        worker.communicate()
+    (run,) = observe(tracking, "fixture").runs
+    assert run.state == "failed"
+    assert run.checkpoints.last is not None
+    receipt = TrainingRun.model_validate_json(
+        (tmp_path / "output/training/run.json").read_text()
+    )
+    assert receipt.status == "interrupted"
 
 
 def test_executor_cancellation_retains_failed_receipt(tmp_path: Path) -> None:
@@ -375,7 +416,8 @@ def test_worker_imports_exact_initial_weights_and_keeps_optimizer_fresh(
 ) -> None:
     import torch
 
-    from manabot.env import Match, ObservationSpace
+    from manabot.env.match import Match
+    from manabot.env.observation import ObservationSpace
     from manabot.model.actor_critic import ActorCritic
     from manabot.model.checkpoint import save_checkpoint
 
@@ -408,3 +450,76 @@ def test_worker_imports_exact_initial_weights_and_keeps_optimizer_fresh(
         torch.testing.assert_close(copied.state_dict()[key], value, rtol=0, atol=0)
     assert run.stages[0].learning_state_origin is None
     assert run.stages[0].inputs["initial_weights"]["sha256"] == file_sha256(path)
+
+
+def test_segment_out_of_wall_budget_succeeds_paused_with_learner_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    regime = ema_regime(5)
+    watchdog = min(regime.wall_seconds, regime.stages[0].execution.wall_seconds)
+    # A reserve just inside the watchdog: the stage stops after one update.
+    spec = TrainingJob(
+        regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3
+    )
+    worker_environment(tmp_path, monkeypatch, spec)
+    run = run_worker()
+    assert run.status == "paused" and run.updates_through() == 1
+    assert {"raw", "ema", "optimizer"} <= set(run.stages[0].artifacts)
+    result = json.loads((tmp_path / "output/etude-result.json").read_text())
+    assert result["clocks"] == {"updates": 1}
+    with pytest.raises(ValueError, match="inside the regime watchdog"):
+        TrainingJob(regime=regime, experiment="fixture", stop_reserve_seconds=watchdog)
+
+
+def test_monitoring_continuation_stages_raw_alone_and_resets_learner_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with VerifyStore(tmp_path / "parent.sqlite") as store:
+        parent = execute_regime(
+            ema_regime(3), 12250, tmp_path / "parent", store, checkpoint_updates=1
+        )
+    # Retained as a watchdog kill would leave it: interrupted after update 3.
+    record = json.loads((tmp_path / "parent/run.json").read_text())
+    record["status"] = record["stages"][0]["status"] = "interrupted"
+    (tmp_path / "parent/run.json").write_text(json.dumps(record))
+    receipt = parent.monitoring_checkpoints[1]
+    assert receipt.updates == 2 and receipt.artifact is not None
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    staged = {}
+    for role, source, name in (
+        ("source_run", tmp_path / "parent/run.json", "parent-run.json"),
+        ("raw", Path(receipt.artifact["path"]), "parent-raw.pt"),
+    ):
+        (inputs / name).write_bytes(source.read_bytes())
+        staged[role] = StagedExport(
+            key=f"mtg-fixture/{name}",
+            sha256=file_sha256(source),
+            bytes=source.stat().st_size,
+        )
+    with pytest.raises(ValueError, match="raw alone"):
+        LearnerContinuation(
+            from_update=2,
+            source_stage="fit",
+            from_monitoring=True,
+            optimizer=staged["raw"],
+            **staged,
+        )
+    continuation = LearnerContinuation(
+        from_update=2, source_stage="fit", from_monitoring=True, **staged
+    )
+    spec = TrainingJob(
+        regime=ema_regime(4),
+        experiment="fixture",
+        milestones=(3,),
+        continuation=continuation,
+    )
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
+    assert {i.name for i in job.inputs} == {"parent-run.json", "parent-raw.pt"}
+    worker_environment(tmp_path, monkeypatch, spec)
+    monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
+    run = run_worker()
+    origin = run.stages[0].learning_state_origin
+    assert origin is not None and origin.iteration == 2
+    assert origin.reset == ("ema", "optimizer")
+    assert run.status == "completed" and run.updates_through() == 4

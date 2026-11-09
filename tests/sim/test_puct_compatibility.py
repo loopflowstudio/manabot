@@ -1,38 +1,31 @@
-"""Current-policy PUCT admission and canonical-prefix behavior, without fitting."""
+"""Current-policy PUCT admission and search behavior, without fitting."""
 
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.sim.match import _execute_game
-from manabot.sim.players import build_player
+from manabot.sim.guidance import build_registered_player
+from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search.branch import SELECTED_BRANCH_DRIVER_ID
-from manabot.sim.search.compound import advance_compound, project_compound
 from manabot.sim.search.puct import (
     AgentLeafEvaluator,
     DeterminizedPuctPlayer,
-    determinized_puct,
     puct_source_sha256,
 )
 import managym
 from tests.sim.test_local_update import small_match
 from tests.sim.test_mcts import _fresh_engine_and_observation
-from tests.training.test_compound import _agent, _block_root, _root, _waterbend_root
-
-
-def _check() -> None:
-    pass
 
 
 def _flat_agent(*, categorical: bool = False) -> tuple[ActorCritic, ObservationSpace]:
@@ -137,115 +130,28 @@ def test_nonfinite_values_and_incomplete_offers_fail_closed() -> None:
         evaluator.root_priors(obs, action_count=env.action_count())
 
 
-@pytest.mark.parametrize("kind", ["attack", "blockers", "cast", "payment"])
-def test_compound_tree_grows_without_flat_head_or_root_mutation(kind: str) -> None:
-    env, _ = (
-        _block_root(2, 2)
-        if kind == "blockers"
-        else _waterbend_root(6, lands=2)
-        if kind == "payment"
-        else _root(kind, 3)
-    )
-    torch.manual_seed(9)
-    agent = _agent()
-    # A compound search must be independent of both unused flat heads.
-    with torch.no_grad():
-        for parameter in agent.value_head.parameters():
-            parameter.fill_(float("nan"))
-    evaluator = AgentLeafEvaluator(agent, ObservationSpace())
-    before = env.state_digest()
-    first = determinized_puct(
-        env, simulations=12, worlds=2, seed=91, max_steps=5, evaluator=evaluator
-    )
-    second = determinized_puct(
-        env, simulations=12, worlds=2, seed=91, max_steps=5, evaluator=evaluator
-    )
-    assert env.state_digest() == before
-    assert first.visit_counts.sum() == 12
-    assert first.max_depth > 1
-    np.testing.assert_array_equal(first.visit_counts, second.visit_counts)
-    np.testing.assert_array_equal(first.q_values, second.q_values)
-    assert np.isfinite(first.q_values).all()
-
-
-def test_retained_payment_prefix_excludes_still_legal_actions() -> None:
-    env, _ = _waterbend_root(6, lands=2)
-    agent = _agent().eval()
-    with torch.no_grad():
-        agent.compound_decoder.value.weight.zero_()
-        agent.compound_decoder.value.bias.fill_(-4)
-    projection = project_compound(agent, env, None, _check)
-    action = next(
-        i for i, choice in enumerate(projection.choices) if choice.prefix == (0, 0, 1)
-    )
-    cursor = advance_compound(agent, projection, action, _check)
-    assert cursor is not None
-    env.execute_semantic_command_json(projection.choices[action].command.to_json())
-    expected = project_compound(agent, env, cursor, _check)
-    excluded = expected.probabilities == 0
-    assert excluded.any()
-    evaluator = AgentLeafEvaluator(agent, ObservationSpace())
-    before = env.state_digest()
-    result = determinized_puct(
-        env,
-        simulations=8,
-        worlds=2,
-        seed=13,
-        max_steps=4,
-        evaluator=evaluator,
-        compound_cursor=cursor,
-    )
-    assert env.state_digest() == before
-    assert np.all(result.visit_counts[excluded] == 0)
-    assert result.visit_counts.sum() == 8
-    assert evaluator.last_root_projection.cursor.root is cursor.root
-    np.testing.assert_array_equal(evaluator.last_root_priors, expected.probabilities)
-    swapped = env.clone_env()
-    swapped.determinize(124, int(env.current_agent_index()))
-    other = project_compound(agent, swapped, cursor, _check)
-    np.testing.assert_array_equal(other.probabilities, expected.probabilities)
-
-
-def test_live_player_retains_prefix_and_resets_at_game_boundary() -> None:
-    env, _ = _root("attack", 3)
-    agent = _agent()
+def test_live_player_deadline_yields_no_decision() -> None:
+    env, obs = _fresh_engine_and_observation(51)
+    agent, space = _flat_agent()
+    agent.value_semantic = "signed_outcome"
     player = DeterminizedPuctPlayer(
-        4,
-        worlds=1,
-        max_steps=3,
-        evaluator=AgentLeafEvaluator(agent, ObservationSpace()),
+        4, worlds=1, max_steps=3, evaluator=AgentLeafEvaluator(agent, space)
     )
     wrapper = SimpleNamespace(_engine=env, match=Match(small_match()))
-    before = env.state_digest()
-    action = player.act(wrapper, {})
-    assert env.state_digest() == before
-    first = player.compound_cursor
-    assert first is not None
-    env.step(action)
-    player.act(wrapper, {})
-    second = player.compound_cursor
-    assert second is not None
-    assert second.root is first.root
-    assert len(second.commands) == len(first.commands) + 1
     player.start_game(wrapper, 0)
-    assert player.compound_cursor is None
     player.deadline = 1.0
-    decisions = player.stats.decisions
     with pytest.raises(TimeoutError):
-        player.act(wrapper, {})
-    assert player.stats.decisions == decisions
+        player.act(wrapper, space.encode(obs))
+    assert player.stats.decisions == 0
 
 
-@pytest.mark.parametrize("compound", [False, True])
-def test_registered_puct_completes_games_and_replays(
-    tmp_path: Path, compound: bool
-) -> None:
+def test_registered_puct_completes_games_and_replays(tmp_path: Path) -> None:
     torch.set_num_threads(1)
     torch.manual_seed(15)
     space = ObservationSpace()
     agent = ActorCritic(
         space,
-        ModelConfig(hidden_dim=16, num_attention_heads=2, compound_decisions=compound),
+        ModelConfig(hidden_dim=16, num_attention_heads=2),
     )
     path = tmp_path / "fixture.pt"
     save_checkpoint(
@@ -311,10 +217,10 @@ def test_registered_puct_completes_games_and_replays(
         }
     )
     with pytest.raises(ValueError, match="source drift"):
-        build_player(drift, seed=1, checkpoint_path=str(path))
+        build_registered_player(drift, seed=1, checkpoint_path=str(path))
     wrong_bytes = candidate.model_copy(update={"checkpoint_sha256": identity})
     with pytest.raises(ValueError, match="byte identity drift"):
-        build_player(wrong_bytes, seed=1, checkpoint_path=str(path))
+        build_registered_player(wrong_bytes, seed=1, checkpoint_path=str(path))
     opponent = PlayerRegistration(
         **common,
         player_id="random-fixture",
@@ -327,7 +233,7 @@ def test_registered_puct_completes_games_and_replays(
     for leg in range(2):
         registrations = [candidate, opponent] if leg == 0 else [opponent, candidate]
         game: dict[str, Any] = dict(
-            match_id=f"puct-fixture-{compound}-{leg}",
+            match_id=f"puct-fixture-{leg}",
             deal_seed=93,
             leg=leg,
             match_hypers=small_match().model_dump(),
@@ -339,7 +245,7 @@ def test_registered_puct_completes_games_and_replays(
             ),
         )
         messages: list[tuple[str, object]] = []
-        _execute_game(
+        execute_game(
             game, registrations, {candidate.player_id: str(path)}, 1000, messages.append
         )
         assert game.get("terminated"), game.get("failure")

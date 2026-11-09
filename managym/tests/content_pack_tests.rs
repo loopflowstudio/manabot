@@ -1,7 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use managym::{
-    cardsets::alpha::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
+    cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
         game_object::{CardId, PlayerId},
         player::PlayerConfig,
@@ -94,7 +94,7 @@ fn trace_point(game: &Game) -> String {
 }
 
 #[test]
-fn stable_card_def_ids_preserve_legacy_registry_values() {
+fn stable_card_def_ids_are_deterministic() {
     let first = ContentPack::default();
     let second = ContentPack::default();
     assert_eq!(first.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -120,16 +120,12 @@ fn stable_card_def_ids_preserve_legacy_registry_values() {
         assert_eq!(first_id, second_id, "unstable CardDefId for {name}");
         assert_eq!(first.definition(first_id).unwrap().name, name);
     }
-    for (name, legacy_value) in [("Plains", 0), ("Lightning Bolt", 7), ("Counterspell", 9)] {
-        assert_eq!(first.definition_id(name).unwrap().0, legacy_value);
-    }
 
     let game = make_game(7);
     for card in game.state.cards.iter() {
         assert_eq!(card.registry_key.0, card.definition_id.0);
         assert_eq!(
-            game.state
-                .content
+            default_content_pack()
                 .definition(card.definition_id)
                 .unwrap()
                 .name,
@@ -148,31 +144,23 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
     let sibling = game.clone();
     let first_card = CardId(0);
 
-    assert!(Arc::ptr_eq(&game.state.content, &admitted));
-    assert!(Arc::ptr_eq(&game.state.content, &other_match.state.content));
-    assert!(Arc::ptr_eq(&game.state.content, &branch.state.content));
-    assert!(Arc::ptr_eq(&game.state.content, &sibling.state.content));
-    for content in [
-        &game.state.content,
-        &other_match.state.content,
-        &branch.state.content,
-        &sibling.state.content,
-    ] {
-        assert_eq!(content.schema_version, CONTENT_PACK_SCHEMA_VERSION);
-        assert_eq!(content.content_digest(), expected_digest);
-    }
+    assert!(std::ptr::eq(admitted, default_content_pack()));
+    assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
+    assert_eq!(admitted.content_digest(), expected_digest);
 
-    for ((original, branched), sibling_card) in game
+    for (((original, branched), sibling_card), other_card) in game
         .state
         .cards
         .iter()
         .zip(branch.state.cards.iter())
         .zip(sibling.state.cards.iter())
+        .zip(other_match.state.cards.iter())
     {
         assert_eq!(original.definition_id, branched.definition_id);
         assert_eq!(original.definition_id, sibling_card.definition_id);
         assert!(original.shares_definition_with(branched));
         assert!(original.shares_definition_with(sibling_card));
+        assert!(original.shares_definition_with(other_card));
     }
 
     let original_hash = game.state.deterministic_hash();
@@ -184,7 +172,6 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
     assert_eq!(game.state.players[0].life, original_life);
     assert_eq!(sibling.state.players[0].life, original_life);
     assert_eq!(branch.state.players[0].life, original_life - 3);
-    assert!(Arc::ptr_eq(&game.state.content, &branch.state.content));
 
     // The legacy scenario mutation seam is copy-on-write and cannot mutate a
     // definition in either the source branch or the process-wide pack.
@@ -193,9 +180,7 @@ fn matches_and_search_clones_share_one_immutable_content_pack() {
         .push("scenario-only".to_string());
     assert!(!game.state.cards[first_card].has_subtype("scenario-only"));
     assert!(!branch.state.cards[first_card].shares_definition_with(&game.state.cards[first_card]));
-    assert!(!game
-        .state
-        .content
+    assert!(!admitted
         .definition(game.state.cards[first_card].definition_id)
         .unwrap()
         .subtypes

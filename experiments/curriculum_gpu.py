@@ -27,10 +27,10 @@ from experiments.elemental_long_eval import (
     play_h2h_group,
 )
 from manabot.infra.files import atomic_json
-from manabot.sim.execution import EvalCompute, EvalExecution
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.execution import EvalAllocation, EvalExecution
+from manabot.sim.serving_protocol import InferenceRuntime
 
-COMPUTE = EvalCompute(
+COMPUTE = EvalAllocation(
     device="cuda", max_active_games=4, max_batch_rows=4, max_delay_seconds=0.005
 )
 
@@ -38,7 +38,7 @@ COMPUTE = EvalCompute(
 class GPUConditions(Conditions):
     """The original schedule plus its explicit serving identity."""
 
-    compute: EvalCompute
+    compute: EvalAllocation
 
 
 def benchmark(original: Benchmark) -> Benchmark:

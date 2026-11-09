@@ -3,14 +3,11 @@
 from dataclasses import replace
 from pathlib import Path
 
-from managym.possible_worlds import PossibleWorldSpace
 import pytest
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.range import BeliefState
 from manabot.belief.sampling import (
-    AutoregressiveBeliefSampler,
     SamplerInput,
     SamplerSchema,
 )
@@ -21,9 +18,7 @@ from manabot.belief.sampling_data import (
     Split,
 )
 from manabot.belief.sampling_fit import (
-    compare_exact_reference,
     evaluate_sampler,
-    evaluate_sampler_cohort,
     fit_belief_sampler,
     save_belief_sampler,
 )
@@ -155,35 +150,6 @@ def test_budget_callback_stops_before_fit() -> None:
         fit_belief_sampler(_dataset(), steps=100, check=expired)
 
 
-def test_exact_reference_scores_joint_posterior_without_refitting() -> None:
-    dataset = _dataset()
-    model = AutoregressiveBeliefSampler(dataset.schema, hidden_size=4)
-    reference = BeliefState.from_probabilities(
-        PossibleWorldSpace.from_fixture(
-            viewer=0,
-            source_revision=0,
-            source_viewer_state_hash="root",
-            pool={"A": 2, "B": 2},
-            hands=[({"A": 1}, 2), ({"B": 1}, 2)],
-        ),
-        "exact-tracker",
-        (0.8, 0.2),
-    )
-    result = compare_exact_reference(
-        model, dataset.games[0].examples[0].inputs, reference
-    )
-    assert result.learned_cross_entropy == pytest.approx(result.physical_cross_entropy)
-    assert result.learned_kl == pytest.approx(result.physical_kl)
-    assert result.learned_reference_support_mass == pytest.approx(1.0)
-    assert result.reference_identity == reference.digest
-    with pytest.raises(ValueError, match="physical domain"):
-        compare_exact_reference(
-            model,
-            replace(dataset.games[0].examples[0].inputs, pool_counts=(3, 2)),
-            reference,
-        )
-
-
 def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
     dataset = _dataset()
     result = fit_belief_sampler(
@@ -200,27 +166,6 @@ def test_foreign_baiting_is_identified_and_safe_baseline_retained() -> None:
         replace(row, target_hand=tuple(reversed(row.target_hand)))
         for row in dataset.games[2].examples
     )
-    evidence = evaluate_sampler_cohort(
-        result,
-        bait,
-        evaluation_policy_identity="synthetic-baiting-policy",
-        cohort_identity="synthetic-opposite-history-v1",
-        world_identity=dataset.world_identity,
-        adversarial_selection=True,
-        samples=8,
-    )
-    assert evidence.distribution_shift and evidence.adversarial_selection
-    assert evidence.training_policy_identity == dataset.policy_identity
-    assert (
-        evidence.metrics.learned.joint_nll
-        > evidence.metrics.physical_baseline.joint_nll
-    )
-    assert evidence.metrics.physical_baseline.support_violations == 0
-    with pytest.raises(ValueError, match="world differs"):
-        evaluate_sampler_cohort(
-            result,
-            bait,
-            evaluation_policy_identity="foreign",
-            cohort_identity="cohort",
-            world_identity="different",
-        )
+    metrics = evaluate_sampler(result.model, bait, samples=8)
+    assert metrics.learned.joint_nll > metrics.physical_baseline.joint_nll
+    assert metrics.physical_baseline.support_violations == 0

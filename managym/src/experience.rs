@@ -310,17 +310,107 @@ pub struct LegacyCardView {
     pub toughness: i32,
     pub mana_value: i32,
     pub types: LegacyCardTypesView,
+    /// Foretold and face down in exile; only its owner's views list it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
+    /// The permission to play this card from exile, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cast_permission: Option<LegacyCastPermissionView>,
+    /// The value of X announced for this spell on the stack.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+}
+
+/// A public permission to play an exiled card. Only set terms are present.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyCastPermissionView {
+    pub player_id: u32,
+    /// Mana symbols paid to cast it, such as `{2}`; absent for a land play.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub this_turn: bool,
+    /// Ends in the cleanup step of the permitted player's next turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub through_next_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own_turn_only: bool,
+    /// Usable only on a turn numbered after this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after_turn: Option<u32>,
+    /// Lasts while the permitted player controls this permanent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_permanent_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flash: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub any_mana: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub foretold: bool,
+}
+
+/// Mana spendable only on spells with one of `spells`' subtypes or abilities
+/// of sources with one of `abilities`' subtypes; W/U/B/R/G/C amounts.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyRestrictedManaView {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spells: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub abilities: Vec<String>,
+    pub mana: [i32; 6],
+}
+
+/// One continuous-effect record on a permanent or player (CR 611, 613).
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContinuousEffectView {
+    /// The engine's `Modification` variant.
+    pub modification: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toughness: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// `EndOfTurn` or `Indefinite`.
+    pub duration: String,
+    /// The source's printed name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Timestamp order (CR 613.7).
+    pub timestamp: u32,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub transforms: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub types: Option<LegacyCardTypesView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub is_token: Option<bool>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
+    /// Exhaust abilities this object has used (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: u32,
+    /// "Once each turn" abilities this object has used this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: u32,
+    /// Firebending granted until end of turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -341,6 +431,49 @@ pub struct LegacyPermanentView {
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub base_toughness: RequiredNullable<i32>,
     pub plus1_counters: u32,
+    /// Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, u32>,
+    /// The permanent this Aura or Equipment is attached to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<u32>,
+    /// Creature types set by an effect (Honest Work); `name` is then the set name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creature_types: Option<Vec<String>>,
+    /// A land only through an effect.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_granted_land: bool,
+    /// Attacking in the current combat.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// The attacking permanent this one blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<u32>,
+    /// It has lost all abilities.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is spent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<u32>,
+    /// It was dealt damage this turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
+    /// Continuous effects on it, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
+    /// The copy effect that made it a copy (CR 707.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy_of: Option<CopyView>,
+}
+
+/// A copy effect: the printed card it copies and the exceptions that are
+/// part of its copiable values (CR 707.9b), in application order.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CopyView {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<ContinuousEffectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -361,6 +494,14 @@ pub struct LegacyPlayerView {
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lesson_mana: Option<[i32; 6]>,
+    /// `lesson_mana` split by restriction class.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restricted_mana: Vec<LegacyRestrictedManaView>,
+    /// Player id whose next turn ends this player's hand-only casting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hand_only_until: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -374,14 +515,36 @@ pub struct LegacyPlayerView {
     pub library_count: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub known_hand: BTreeMap<String, u32>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub sideboard_counts: BTreeMap<String, u32>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub remaining_sideboard_counts: BTreeMap<String, u32>,
+    /// Decklist counts by definition, present only when this frame's viewer
+    /// knows the player's decklist (its own, or an open opponent's). Absent
+    /// means hidden; an empty map means known and empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unseen_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sideboard_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_sideboard_counts: Option<BTreeMap<String, u32>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sideboard: Vec<SideboardCardView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_hidden_count: Option<u32>,
+    /// Unspent red mana stays until end of turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
+    /// What this player has done this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Extra turns this player will take after this one.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub extra_turns: u32,
+    /// Additional combat phases still to come this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub additional_combats: u32,
+    /// Continuous effects on this player, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
@@ -426,6 +589,9 @@ pub struct StackEntryView {
     pub ability_index: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chosen_mode: Option<u32>,
+    /// The announced value of X, when one was announced above zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<u32>,
 }
 
 /// Read-only explanation of the current native continuation. This adds no
@@ -433,6 +599,9 @@ pub struct StackEntryView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionContextView {
+    /// Native pending execution, omitted on older recorded projections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending: Vec<String>,
     pub recent_facts: Vec<String>,
     pub actor: u8,
     pub stage: String,
@@ -457,9 +626,49 @@ pub struct DecisionObjectView {
     pub label: String,
 }
 
+/// Public player-control effects in creation order. Effective distinguishes
+/// the last-created active effect from another whose interval also runs now.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerControlView {
+    pub player: u8,
+    pub controller: u8,
+    pub whole_turn: bool,
+    pub active: bool,
+    pub effective: bool,
+}
+
+/// Public committed scheduling only; absent on historical projections that
+/// did not record it. Order is execution order, independently in each domain.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ScheduleView {
+    pub extra_turns: Vec<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resume_with: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_combat: Option<CombatView>,
+    pub additional_combats: Vec<CombatView>,
+}
+
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct CombatView {
+    pub player_index: u32,
+    /// Rules-derived predicate description. Absent means no extra restriction;
+    /// ordinary native attack legality still applies.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attackers: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyHeroObservation {
+    /// Absent in historical frames; present empty means no scheduled control.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub player_controls: Option<Vec<PlayerControlView>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<ScheduleView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stack_objects: Option<Vec<StackEntryView>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -479,7 +688,8 @@ impl LegacyHeroObservation {
     pub fn exposes_other_private_context(&self) -> bool {
         self.decision_context.as_ref().is_some_and(|context| {
             context.actor != self.agent.player_index
-                && (context.source.0.is_some()
+                && (!context.pending.is_empty()
+                    || context.source.0.is_some()
                     || !context.targets.is_empty()
                     || context.reserved_sacrifice.0.is_some()
                     || context.mana_cost.0.is_some()

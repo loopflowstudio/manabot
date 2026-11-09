@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,
@@ -125,8 +126,11 @@ def test_both_seat_targets_and_recovery_preserve_physical_games(
     np.testing.assert_array_equal(left.assignments, right.assignments)
     np.testing.assert_array_equal(left.actions, right.actions)
     np.testing.assert_array_equal(left.values, right.values)
-    for key in left.obs:
-        np.testing.assert_array_equal(left.obs[key], right.obs[key])
+    left_rows, right_rows = left.observations(), right.observations()
+    for key in left_rows.observation:
+        np.testing.assert_array_equal(
+            left_rows.observation[key], right_rows.observation[key]
+        )
 
 
 def test_mirror_roles_share_one_supporting_game_and_duplicates_are_rejected() -> None:

@@ -8,6 +8,7 @@ from collections.abc import Iterator
 import json
 import os
 from pathlib import Path
+import time
 
 import numpy as np
 import pytest
@@ -15,7 +16,8 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
@@ -284,6 +286,7 @@ class ExtremeAgent(ActorCritic):
 
 
 def test_extreme_real_collector_to_learner() -> None:
+    torch.manual_seed(213)
     space = ObservationSpace()
     agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
@@ -294,10 +297,14 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
+        # This numerical fixture needs four decisions per stream. Complete-game
+        # closure waits for whole games, which this extreme policy can stall.
+        learning_seats="one",
+        batch_closure="exact-quota",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
-    assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
+    assert np.isfinite(batch.action_data.log_probabilities).all()
     trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
 
     learning = DampedPolicyLearning(
@@ -313,6 +320,18 @@ def test_extreme_real_collector_to_learner() -> None:
     assert all(torch.isfinite(p).all() for p in agent.parameters())
 
 
+class _AccountingClock:
+    def __init__(self) -> None:
+        self.epoch = time.perf_counter()
+        self.elapsed = 0.0
+
+    def perf_counter(self) -> float:
+        return self.epoch + self.elapsed
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(time, name)
+
+
 @pytest.mark.parametrize("fault", ["none", "capture", "telemetry"])
 def test_failed_update_retains_state_and_excludes_prior_overhead(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
@@ -326,11 +345,16 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert isinstance(stage, TrainSelfPlay)
     stage.transitions = 2
     stage.updates = 2
+    # Fault accounting needs two tiny updates, not completion of sampled games.
+    # Keep the workload bounded as well as the injected accounting clock.
+    stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
-    offset = [0.0]
-    clock = execution.time.perf_counter
-    monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset[0])
+    # Charge only injected durations in the executor. Keep watchdogs and the
+    # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
+    clock = _AccountingClock()
+    monkeypatch.setattr(execution, "time", clock)
     original_update = execution.update_iteration
     calls = [0]
     corrupted_rows: list[int] = []
@@ -338,15 +362,18 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     def update(*args: object, **kwargs: object) -> object:
         calls[0] += 1
         if calls[0] == 1:
-            return original_update(*args, **kwargs)
-        offset[0] += 0.25
+            result = original_update(*args, **kwargs)
+            clock.elapsed += 10.0
+            return result
+        clock.elapsed += 0.25
         batch = args[1]
-        probabilities = torch.as_tensor(batch.probabilities).clone()
+        rows = batch.observations()
+        probabilities = torch.as_tensor(rows.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
         corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
         check_probabilities(
             probabilities,
-            torch.as_tensor(batch.obs["actions_valid"]) > 0,
+            torch.as_tensor(rows.observation["actions_valid"]) > 0,
             positive=False,
         )
         raise AssertionError("expected invariant failure")
@@ -366,7 +393,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         # Simulates expensive initialization/persistence accumulated before the
         # failing operation. Keep watchdog limits unchanged and generous.
         if run.status == "running":
-            offset[0] += 2.0
+            clock.elapsed += 2.0
 
     monkeypatch.setattr(execution, "update_iteration", update)
     monkeypatch.setattr(VerifyStore, "save_training_run", save)
@@ -394,9 +421,8 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         return
     assert "incident capture failed" not in run["error"]
     assert record["updates"] == 1
-    assert record["learning_seconds"] >= 0.25
+    assert record["learning_seconds"] == pytest.approx(10.25)
     assert record["diagnostic_seconds"] >= 2
-    assert record["learning_seconds"] < record["diagnostic_seconds"]
     artifacts = record["rejected_artifacts"]
     assert set(artifacts) == {
         "numerical/tensors.pt",
@@ -407,6 +433,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         Path(artifacts["numerical/incident.json"]["path"]).read_text()
     )
     assert metadata["iteration"] == 2 and metadata["completed_updates"] == 1
+    assert metadata["schema"] == 2
+    assert "packed_actions/offsets" in metadata["tensors"]
+    assert "packed_actions/slots" in metadata["tensors"]
+    assert "packed_actions/log_probabilities" in metadata["tensors"]
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
     assert torch.isnan(tensors["probabilities"]).any()

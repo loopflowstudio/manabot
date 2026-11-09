@@ -5,19 +5,20 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim.rollout import OBS_KEYS, _allocate_buffers
+from manabot.sim.rollout import _allocate_buffers
 from manabot.sim.search.flat_mc import make_player, spec_name
 from manabot.sim.search.value import (
     ValueScorer,
     ValueSearchPlayer,
     VGreedyPlayer,
-    spearman,
 )
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 
@@ -36,22 +37,6 @@ def make_env(seed: int = 3) -> tuple[Env, dict]:
     return env, obs
 
 
-class TestSpearman:
-    def test_perfect_and_inverse(self):
-        x = np.array([1.0, 2.0, 3.0, 4.0])
-        assert spearman(x, x) == 1.0
-        assert spearman(x, -x) == -1.0
-
-    def test_ties_average(self):
-        x = np.array([1.0, 1.0, 2.0, 3.0])
-        y = np.array([1.0, 1.0, 2.0, 3.0])
-        assert abs(spearman(x, y) - 1.0) < 1e-12
-
-    def test_known_value(self):
-        # One transposition among four: rho = 1 - 6*2/(4*15) = 0.8
-        assert abs(spearman(np.arange(4.0), np.array([0.0, 2, 1, 3])) - 0.8) < 1e-12
-
-
 class TestValueScorer:
     def test_scores_are_probs(self):
         env, obs = make_env()
@@ -60,7 +45,7 @@ class TestValueScorer:
             key: np.asarray(obs[key])[None].astype(
                 np.int32 if key == "action_focus" else np.float32
             )
-            for key in OBS_KEYS
+            for key in scorer.agent.observation_space.shapes
         }
         probs = scorer.score(batch, np.array([0]))
         assert probs.shape == (1,)

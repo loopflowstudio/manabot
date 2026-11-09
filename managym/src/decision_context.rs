@@ -6,6 +6,7 @@
 //! typed continuation projection is shared with tensor and text inputs; the
 //! frozen semantic observation/digest contract stays intact.
 
+use crate::state::ability::LibraryEnd;
 use crate::{
     agent::continuation::ContinuationFrame,
     experience::{
@@ -63,6 +64,7 @@ impl Game {
                 Some(view)
             }
             Target::StackSpell(card) => self.decision_card(*card),
+            Target::StackAbility(id) => self.decision_card(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
                 let mut view = self.decision_card(CardId::from(reference.entity))?;
                 // Keep the announced incarnation even if the card later moved.
@@ -134,7 +136,9 @@ impl Game {
                         let role = match action {
                             Action::PlayLand { .. }
                             | Action::CastSpell { .. }
-                            | Action::ActivateAbility { .. } => "source",
+                            | Action::ActivateAbility { .. }
+                            | Action::ActivateCardAbility { .. }
+                            | Action::Foretell { .. } => "source",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",
@@ -184,7 +188,8 @@ impl Game {
     /// Only the decision owner receives announcement/private continuation
     /// details. Other viewers receive the public owner/kind and committed facts.
     pub fn decision_context(&self, viewer: PlayerId) -> Option<DecisionContextView> {
-        let frames = self.continuation_frames(viewer);
+        let mut frames = self.continuation_frames(viewer);
+        self.describe_effect_execution(viewer, &mut frames);
         let mut view = self.decision_context_from_frames(viewer, &frames)?;
         view.recent_facts = self
             .state
@@ -210,6 +215,10 @@ impl Game {
                     GameEvent::SpellCountered { card, .. } => {
                         Some(format!("{} was countered.", self.state.cards[*card].name))
                     }
+                    GameEvent::AbilityCountered { source_card, .. } => Some(format!(
+                        "An ability of {} was countered.",
+                        self.state.cards[*source_card].name
+                    )),
                     _ => None,
                 }
             })
@@ -230,8 +239,10 @@ impl Game {
         if self.is_game_over() {
             return None;
         }
+        let player = space.actions.first().map(|action| action.player())?;
         let actor = space.player?;
         let mut view = DecisionContextView {
+            pending: Vec::new(),
             actor: actor.0 as u8,
             stage: "priority".into(),
             instruction: "Choose an explicit legal offer to commit one decision.".into(),
@@ -247,6 +258,10 @@ impl Game {
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
+        view.pending = frames
+            .iter()
+            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
+            .collect();
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
@@ -304,12 +319,20 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::DiscardPayment { .. }) =>
+                ("additional_cost", "Choose a card to discard as an activation cost."),
+            Some(PendingChoice::TapPayment { .. }) =>
+                ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
             Some(PendingChoice::SacrificePayment { .. }) =>
                 ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::Crew { .. }) =>
+                ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
+            Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
                 crate::agent::action::ActionSpaceKind::DeclareBlocker => ("declare_blockers", "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -322,22 +345,46 @@ impl Game {
             let (stage, instruction) = match &suspended.decision {
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
-                Decision::Sacrifice { .. } => ("resolution_sacrifice", "Choose a permanent to sacrifice as a resolving effect, not as an announcement cost."),
-                Decision::SearchBasicLand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land or the legal failure-to-find offer; no library order is disclosed."),
+                Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
+                Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
+                Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
+                Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
+                Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
+                Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
+                Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
+                Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
-                Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
-                Decision::SelectMilled { .. } => ("select_milled", "Choose from the milled cards, or decline when offered."),
+                Decision::Discard { .. } => ("discard", "Choose a card to discard, or decline when offered."),
+                Decision::SelectCards { origin: crate::flow::decision::SelectionOrigin::Library, .. } => ("private_search", "Inspect the permitted library candidates. Choose a card, then finish searching when offered."),
+                Decision::SelectCards { .. } => ("select_cards", "Choose from the eligible cards, then finish selection when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
+                Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
+                Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
+                Decision::CastDuringResolution { paid: false, .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
+                Decision::CastDuringResolution { paid: true, .. } => ("resolution_cast", "Choose a spell to cast now, paying its costs, or decline."),
+                Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
+                Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
+                Decision::ChooseToExile { .. } => ("choose_to_exile", "Choose up to one permanent from among those the resolving ability's controller's opponents control; every chosen permanent is then exiled."),
+                Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
+                Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
+                Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
         }
         if let Some(placement) = &self.state.trigger_placement {
-            view.stage = if placement.placing.is_some() {
+            let choosing_mode = placement
+                .placing
+                .as_ref()
+                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+            view.stage = if choosing_mode {
+                "trigger_mode"
+            } else if placement.placing.is_some() {
                 "trigger_targets"
             } else {
                 "order_triggers"
@@ -349,10 +396,22 @@ impl Game {
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );
-                format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                if choosing_mode {
+                    format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
+                } else {
+                    format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                }
             } else {
                 "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
             };
+        }
+        if actor != player {
+            view.instruction = format!(
+                "Seat {} chooses for Seat {} using that player's resources. {}",
+                actor.0 + 1,
+                player.0 + 1,
+                view.instruction
+            );
         }
         Some(view)
     }

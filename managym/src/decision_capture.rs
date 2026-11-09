@@ -1,5 +1,5 @@
-//! Atomic, representation-neutral input for one acting decision. Capture v3
-//! combines schema-7 observations with native continuation, content and public-history
+//! Atomic, representation-neutral input for one acting decision. Capture v5
+//! combines schema-8 observations with native continuation, content and public-history
 //! authorities. The digest covers every serialized fact, excluding itself.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
     agent::policy_history::{HistoryReference, HISTORY_LIMIT},
+    cards::content_pack::default_content_pack,
     decision::{Observation, SemanticError},
     experience::DecisionContextView,
     flow::game::Game,
@@ -17,8 +18,8 @@ use crate::{
 };
 
 /// Changes to capture field inclusion, ordering or digest semantics require a
-/// new version. Embedded Observation remains SEMANTIC_DECISION_VERSION (6).
-pub const DECISION_CAPTURE_VERSION: u16 = 3;
+/// new version. Embedded Observation follows SEMANTIC_DECISION_VERSION.
+pub const DECISION_CAPTURE_VERSION: u16 = 5;
 
 #[derive(Clone, Debug, Serialize)]
 pub struct DecisionCapture {
@@ -54,10 +55,13 @@ impl Game {
                 "public history v1 requires 0..32 rows".into(),
             ));
         }
-        let (observation, agent) = self.semantic_observation_with_input(viewer)?;
+        let (observation, mut agent) = self.semantic_observation_with_input(viewer)?;
         if observation.decision.is_none() {
             return Err(SemanticError::NoActiveDecision);
         }
+        // Captured frames carry the effect execution text the LLM view and
+        // pending summaries read; the policy observation itself never does.
+        self.describe_effect_execution(viewer, &mut agent.continuation);
         // Capture admits only policy history, not the presentation's prose suffix.
         let continuation = self.decision_context_from_frames(viewer, &agent.continuation);
         let mut objects = BTreeMap::new();
@@ -95,11 +99,16 @@ impl Game {
             ids.insert(stack.source_card_registry_key as u32);
         }
         for player in [&agent.agent, &agent.opponent] {
+            ids.extend(player.known_hand.keys());
             for counts in [
-                &player.known_hand,
+                &player.main_counts,
+                &player.unseen_counts,
                 &player.sideboard_counts,
                 &player.remaining_sideboard_counts,
-            ] {
+            ]
+            .into_iter()
+            .flatten()
+            {
                 ids.extend(counts.keys());
             }
         }
@@ -136,19 +145,52 @@ impl Game {
                 "source": reference(&event.source), "target": reference(&event.target)})
             })
             .collect();
+        for effects in [&agent.agent.effects, &agent.opponent.effects]
+            .into_iter()
+            .chain(
+                agent
+                    .agent_permanents
+                    .iter()
+                    .chain(&agent.opponent_permanents)
+                    .map(|permanent| &permanent.effects),
+            )
+        {
+            ids.extend(
+                effects
+                    .iter()
+                    .filter_map(|effect| effect.source_registry_key)
+                    .map(|key| key as u32),
+            );
+        }
         for frame in &agent.continuation {
             ids.extend(frame.source.definition);
             for target in &frame.targets {
                 ids.extend(target.reference.definition);
             }
             ids.extend(frame.context.and_then(|r| r.definition));
+            ids.extend(frame.remembered.iter().filter_map(|r| r.definition));
+            ids.extend(
+                frame
+                    .effect_execution_references
+                    .iter()
+                    .filter_map(|r| r.definition),
+            );
+            ids.extend(frame.inherited_from.and_then(|r| r.definition));
+            ids.extend(
+                frame
+                    .program
+                    .iter()
+                    .chain(&frame.effect_execution)
+                    .filter_map(|&(kind, value)| {
+                        (kind == crate::cards::tokens::TokenKind::DefinitionRef as u16)
+                            .then_some(value as u32)
+                    }),
+            );
             ids.extend(frame.sacrifice.and_then(|r| r.definition));
         }
         let mut definitions = BTreeMap::new();
         for id in ids {
-            let definition = self
-                .state
-                .content
+            let definition = default_content_pack()
                 .public_definition(CardDefId(id))
                 .ok_or_else(|| {
                     SemanticError::IllegalCommand(format!("missing public definition {id}"))
@@ -158,7 +200,7 @@ impl Game {
         let mut capture = DecisionCapture {
             capture_version: DECISION_CAPTURE_VERSION,
             world_version: crate::WORLD_VERSION.into(),
-            content_digest: self.state.content.content_digest(),
+            content_digest: default_content_pack().content_digest(),
             observation,
             objects,
             continuation,

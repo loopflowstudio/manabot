@@ -1544,6 +1544,163 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
+    "CombatView": {
+      "additionalProperties": false,
+      "properties": {
+        "attackers": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attackers"
+        },
+        "player_index": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Player Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_index"
+      ],
+      "title": "CombatView",
+      "type": "object"
+    },
+    "ContinuousEffectView": {
+      "additionalProperties": false,
+      "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "duration": {
+          "title": "Duration",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "modification": {
+          "title": "Modification",
+          "type": "string"
+        },
+        "power": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Power"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "subtypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subtypes",
+          "type": "array"
+        },
+        "timestamp": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Timestamp",
+          "type": "integer"
+        },
+        "toughness": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Toughness"
+        }
+      },
+      "required": [
+        "modification",
+        "duration",
+        "timestamp"
+      ],
+      "title": "ContinuousEffectView",
+      "type": "object"
+    },
+    "CopyView": {
+      "additionalProperties": false,
+      "description": "A copy effect: the printed card it copies and its exceptions (CR 707.9b).",
+      "properties": {
+        "exceptions": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CopyView",
+      "type": "object"
+    },
     "DecisionContextView": {
       "additionalProperties": false,
       "properties": {
@@ -1580,6 +1737,13 @@
             }
           ],
           "title": "Mana Cost"
+        },
+        "pending": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pending",
+          "type": "array"
         },
         "recent_facts": {
           "items": {
@@ -2131,6 +2295,22 @@
     "LegacyCardView": {
       "additionalProperties": false,
       "properties": {
+        "cast_permission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCastPermissionView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "face_down": {
+          "default": false,
+          "title": "Face Down",
+          "type": "boolean"
+        },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2179,6 +2359,20 @@
         "types": {
           "$ref": "#/$defs/LegacyCardTypesView"
         },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
+        },
         "zone": {
           "title": "Zone",
           "type": "string"
@@ -2196,6 +2390,97 @@
         "types"
       ],
       "title": "LegacyCardView",
+      "type": "object"
+    },
+    "LegacyCastPermissionView": {
+      "additionalProperties": false,
+      "properties": {
+        "after_turn": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Turn"
+        },
+        "any_mana": {
+          "default": false,
+          "title": "Any Mana",
+          "type": "boolean"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost"
+        },
+        "flash": {
+          "default": false,
+          "title": "Flash",
+          "type": "boolean"
+        },
+        "foretold": {
+          "default": false,
+          "title": "Foretold",
+          "type": "boolean"
+        },
+        "own_turn_only": {
+          "default": false,
+          "title": "Own Turn Only",
+          "type": "boolean"
+        },
+        "player_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "source_permanent_id": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Permanent Id"
+        },
+        "this_turn": {
+          "default": false,
+          "title": "This Turn",
+          "type": "boolean"
+        },
+        "through_next_turn": {
+          "default": false,
+          "title": "Through Next Turn",
+          "type": "boolean"
+        },
+        "waterbend": {
+          "default": false,
+          "title": "Waterbend",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "player_id"
+      ],
+      "title": "LegacyCastPermissionView",
       "type": "object"
     },
     "LegacyHeroObservation": {
@@ -2228,6 +2513,32 @@
         },
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
+        },
+        "player_controls": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PlayerControlView"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Controls"
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "stack_objects": {
           "anyOf": [
@@ -2265,6 +2576,30 @@
     "LegacyPermanentView": {
       "additionalProperties": false,
       "properties": {
+        "abilities_lost": {
+          "default": false,
+          "title": "Abilities Lost",
+          "type": "boolean"
+        },
+        "attached_to": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attached To"
+        },
+        "attacking": {
+          "default": false,
+          "title": "Attacking",
+          "type": "boolean"
+        },
         "base_power": {
           "anyOf": [
             {
@@ -2291,11 +2626,60 @@
           ],
           "title": "Base Toughness"
         },
+        "blocking": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocking"
+        },
         "controller_id": {
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Controller Id",
           "type": "integer"
+        },
+        "copy_of": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "counters": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
+        },
+        "creature_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Creature Types"
         },
         "damage": {
           "maximum": 2147483647,
@@ -2303,16 +2687,47 @@
           "title": "Damage",
           "type": "integer"
         },
+        "dealt_damage_this_turn": {
+          "default": false,
+          "title": "Dealt Damage This Turn",
+          "type": "boolean"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "exhausted_abilities": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Exhausted Abilities",
+          "type": "integer"
+        },
         "exile_if_dies_this_turn": {
           "default": false,
           "title": "Exile If Dies This Turn",
           "type": "boolean"
+        },
+        "granted_firebending": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Granted Firebending",
+          "type": "integer"
         },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Id",
           "type": "integer"
+        },
+        "is_granted_land": {
+          "default": false,
+          "title": "Is Granted Land",
+          "type": "boolean"
         },
         "is_token": {
           "anyOf": [
@@ -2336,6 +2751,13 @@
             }
           ],
           "title": "Name"
+        },
+        "once_each_turn_used": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Once Each Turn Used",
+          "type": "integer"
         },
         "plus1_counters": {
           "maximum": 4294967295,
@@ -2389,6 +2811,13 @@
           ],
           "title": "Toughness"
         },
+        "transforms": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Transforms",
+          "type": "integer"
+        },
         "types": {
           "anyOf": [
             {
@@ -2399,6 +2828,15 @@
             }
           ],
           "default": null
+        },
+        "used_abilities": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Used Abilities",
+          "type": "array"
         }
       },
       "required": [
@@ -2420,6 +2858,13 @@
     "LegacyPlayerView": {
       "additionalProperties": false,
       "properties": {
+        "additional_combats": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Additional Combats",
+          "type": "integer"
+        },
         "battlefield": {
           "items": {
             "$ref": "#/$defs/LegacyPermanentView"
@@ -2441,12 +2886,26 @@
           "default": null,
           "title": "Combat Mana"
         },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
         "exile": {
           "items": {
             "$ref": "#/$defs/LegacyCardView"
           },
           "title": "Exile",
           "type": "array"
+        },
+        "extra_turns": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Extra Turns",
+          "type": "integer"
         },
         "graveyard": {
           "items": {
@@ -2476,6 +2935,20 @@
           "default": null,
           "title": "Hand Hidden Count"
         },
+        "hand_only_until": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hand Only Until"
+        },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
@@ -2495,6 +2968,11 @@
         },
         "is_agent": {
           "title": "Is Agent",
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "default": false,
+          "title": "Keeps Red Mana",
           "type": "boolean"
         },
         "known_hand": {
@@ -2564,6 +3042,23 @@
           "title": "Life",
           "type": "integer"
         },
+        "main_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Main Counts"
+        },
         "mana": {
           "anyOf": [
             {
@@ -2610,6 +3105,11 @@
           "default": null,
           "title": "Mana"
         },
+        "no_maximum_hand_size": {
+          "default": false,
+          "title": "No Maximum Hand Size",
+          "type": "boolean"
+        },
         "player_index": {
           "maximum": 255,
           "minimum": 0,
@@ -2617,13 +3117,28 @@
           "type": "integer"
         },
         "remaining_sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Sideboard Counts"
+        },
+        "restricted_mana": {
+          "items": {
+            "$ref": "#/$defs/LegacyRestrictedManaView"
           },
-          "title": "Remaining Sideboard Counts",
-          "type": "object"
+          "title": "Restricted Mana",
+          "type": "array"
         },
         "sideboard": {
           "items": {
@@ -2633,13 +3148,21 @@
           "type": "array"
         },
         "sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Sideboard Counts",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sideboard Counts"
         },
         "stack": {
           "items": {
@@ -2647,6 +3170,26 @@
           },
           "title": "Stack",
           "type": "array"
+        },
+        "turn_history": {
+          "$ref": "#/$defs/PlayerTurnHistoryView"
+        },
+        "unseen_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unseen Counts"
         },
         "zone_counts": {
           "additionalProperties": {
@@ -2673,6 +3216,68 @@
         "battlefield"
       ],
       "title": "LegacyPlayerView",
+      "type": "object"
+    },
+    "LegacyRestrictedManaView": {
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Abilities",
+          "type": "array"
+        },
+        "mana": {
+          "maxItems": 6,
+          "minItems": 6,
+          "prefixItems": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          ],
+          "title": "Mana",
+          "type": "array"
+        },
+        "spells": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Spells",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mana"
+      ],
+      "title": "LegacyRestrictedManaView",
       "type": "object"
     },
     "LegacyTurnView": {
@@ -3027,6 +3632,44 @@
       "title": "PlayerAuthoredBeliefProvenance",
       "type": "object"
     },
+    "PlayerControlView": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "title": "Active",
+          "type": "boolean"
+        },
+        "controller": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Controller",
+          "type": "integer"
+        },
+        "effective": {
+          "title": "Effective",
+          "type": "boolean"
+        },
+        "player": {
+          "maximum": 255,
+          "minimum": 0,
+          "title": "Player",
+          "type": "integer"
+        },
+        "whole_turn": {
+          "title": "Whole Turn",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "player",
+        "controller",
+        "whole_turn",
+        "active",
+        "effective"
+      ],
+      "title": "PlayerControlView",
+      "type": "object"
+    },
     "PlayerSubject": {
       "additionalProperties": false,
       "properties": {
@@ -3047,6 +3690,44 @@
         "id"
       ],
       "title": "PlayerSubject",
+      "type": "object"
+    },
+    "PlayerTurnHistoryView": {
+      "additionalProperties": false,
+      "properties": {
+        "attacked": {
+          "default": false,
+          "title": "Attacked",
+          "type": "boolean"
+        },
+        "bent": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Bent",
+          "type": "integer"
+        },
+        "cards_drawn": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Cards Drawn",
+          "type": "integer"
+        },
+        "land_entered": {
+          "default": false,
+          "title": "Land Entered",
+          "type": "boolean"
+        },
+        "permanents_sacrificed": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Permanents Sacrificed",
+          "type": "integer"
+        }
+      },
+      "title": "PlayerTurnHistoryView",
       "type": "object"
     },
     "PolicyMass": {
@@ -3132,6 +3813,59 @@
         "sampled_worlds"
       ],
       "title": "SampledWorldRobustness",
+      "type": "object"
+    },
+    "ScheduleView": {
+      "additionalProperties": false,
+      "description": "Committed native scheduling, in execution order within each domain.",
+      "properties": {
+        "additional_combats": {
+          "items": {
+            "$ref": "#/$defs/CombatView"
+          },
+          "title": "Additional Combats",
+          "type": "array"
+        },
+        "current_combat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CombatView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extra_turns": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Extra Turns",
+          "type": "array"
+        },
+        "resume_with": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resume With"
+        }
+      },
+      "required": [
+        "extra_turns",
+        "additional_combats"
+      ],
+      "title": "ScheduleView",
       "type": "object"
     },
     "SearchValue": {
@@ -3319,6 +4053,20 @@
           ],
           "default": null,
           "title": "Source Permanent"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
         }
       },
       "required": [

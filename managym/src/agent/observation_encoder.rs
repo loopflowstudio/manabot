@@ -1,14 +1,145 @@
-use std::{collections::HashMap, fmt};
-
-use crate::{
-    agent::observation::{CardData, EventData, Observation, PermanentData, PlayerData, TurnData},
-    flow::turn::{PhaseKind, StepKind},
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
 };
 
-pub const PLAYER_DIM: usize = 40;
-pub const CARD_DIM: usize = 41;
+use crate::{
+    agent::observation::{
+        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData, TurnData,
+    },
+    cards::tokens::name_value,
+    flow::turn::{PhaseKind, StepKind},
+    state::mana::SPEND_SUBTYPES,
+};
+
+/// Player and card widths before policy input v5, which appends cast
+/// permissions, the hand-only lock and restricted mana by spending subtype.
+pub const LEGACY_PLAYER_DIM: usize = 40;
+/// v5 player columns: restricted mana each spending subtype may use
+/// (`SPEND_SUBTYPES` × W/U/B/R/G/C), then the hand-only casting lock, the
+/// hand-size freedom, the turn number, the seat (0 is on the play), kept
+/// red mana, then turn history: attacked, permanents sacrificed, a land
+/// entered and cards drawn this turn.
+pub const PLAYER_RESTRICTED_INDEX: usize = LEGACY_PLAYER_DIM;
+pub const PLAYER_HAND_ONLY_INDEX: usize = PLAYER_RESTRICTED_INDEX + 3 * 6;
+pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = PLAYER_HAND_ONLY_INDEX + 1;
+pub const PLAYER_TURN_INDEX: usize = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1;
+pub const PLAYER_SEAT_INDEX: usize = PLAYER_TURN_INDEX + 1;
+pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = PLAYER_SEAT_INDEX + 1;
+pub const PLAYER_ATTACKED_INDEX: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
+pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
+pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
+pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
+/// Bending done this turn: water, earth, fire, air.
+pub const PLAYER_BENT_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
+pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_BENT_INDEX + 4;
+pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
+pub const PLAYER_DIM: usize = PLAYER_ADDITIONAL_COMBATS_INDEX + 1;
+pub const LEGACY_CARD_DIM: usize = 41;
+/// v5 card columns replace v4's trailing validity flag, which moves to the
+/// new last column: 13 cast-permission terms, then announced X. A face-down
+/// card is foretold, so its permission's foretold term marks it.
+pub const CARD_PERMISSION_INDEX: usize = LEGACY_CARD_DIM - 1;
+pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 13;
+pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const PERMANENT_DIM: usize = 28;
+pub const LEGACY_PERMANENT_DIM: usize = 29;
+// V5 permanent terms start where v4's validity flag was; validity stays last.
+// Open-ended vocabularies (counter kinds, subtypes, set characteristics, used
+// abilities, continuous-effect records) are fact rows, not columns.
+pub const PERMANENT_EXHAUSTED_INDEX: usize = LEGACY_PERMANENT_DIM - 1;
+pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = PERMANENT_EXHAUSTED_INDEX + 1;
+pub const PERMANENT_FIREBENDING_INDEX: usize = PERMANENT_ONCE_EACH_TURN_INDEX + 1;
+/// Object index + 1 of the permanent this Aura or Equipment is attached to;
+/// zero when unattached. A join like action focus, never a numeric feature.
+pub const PERMANENT_ATTACHED_INDEX: usize = PERMANENT_FIREBENDING_INDEX + 1;
+pub const PERMANENT_GRANTED_LAND_INDEX: usize = PERMANENT_ATTACHED_INDEX + 1;
+/// Object index + 1 of the attacker this creature blocks; a join.
+pub const PERMANENT_BLOCKING_INDEX: usize = PERMANENT_GRANTED_LAND_INDEX + 1;
+pub const PERMANENT_ABILITIES_LOST_INDEX: usize = PERMANENT_BLOCKING_INDEX + 1;
+/// Its timestamp's rank among this observation's timestamps (`FACT_ORDER_INDEX`).
+pub const PERMANENT_TIMESTAMP_INDEX: usize = PERMANENT_ABILITIES_LOST_INDEX + 1;
+/// It was dealt damage this turn, whether or not that damage is still marked.
+pub const PERMANENT_DEALT_DAMAGE_INDEX: usize = PERMANENT_TIMESTAMP_INDEX + 1;
+pub const PERMANENT_DIM: usize = PERMANENT_DEALT_DAMAGE_INDEX + 2;
+
+/// v5 fact rows: one open-vocabulary fact about a player or permanent, joined
+/// to it like relation references. Vocabulary ids are the learning tokens'
+/// values (`cards::tokens::name_value` of the same Rust or printed name), split
+/// into 16-bit halves so f32 keeps them exact.
+pub const V5_FACT_ROWS: usize = 128;
+/// Object index + 1 of the player or permanent the fact is about.
+pub const FACT_OBJECT_INDEX: usize = 0;
+/// `FactKind` value.
+pub const FACT_KIND_INDEX: usize = 1;
+/// Vocabulary id (high, low halves): the counter kind, subtype, name,
+/// creature type, ability index or `Modification` variant.
+pub const FACT_ID_INDEX: usize = 2;
+/// Effect detail id (high, low): a keyword, subtype or color it names.
+pub const FACT_DETAIL_INDEX: usize = 4;
+/// Amounts / 10: a count, power or firebending N, then toughness.
+pub const FACT_VALUE_INDEX: usize = 6;
+/// Effect duration: 1 until end of turn, 2 indefinite.
+pub const FACT_DURATION_INDEX: usize = 8;
+/// Effect timestamp rank among this observation's timestamps (1-based).
+pub const FACT_ORDER_INDEX: usize = 9;
+/// Effect source definition + 1.
+pub const FACT_SOURCE_INDEX: usize = 10;
+pub const FACT_VALID_INDEX: usize = 11;
+pub const FACT_DIM: usize = 12;
+
+/// What a fact row states. Kinds 1–10 are frozen v5; 11–14 require input v8.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FactKind {
+    /// Counters of one kind (+1/+1 included); value: the count.
+    Counter = 1,
+    /// A subtype an effect added.
+    AddedSubtype = 2,
+    /// The name an effect set.
+    SetName = 3,
+    /// A creature type an effect set.
+    SetCreatureType = 4,
+    /// An activated ability (id: its index) whose use limit is spent.
+    UsedAbility = 5,
+    /// A continuous-effect record (id: its `Modification`), one row per
+    /// keyword, subtype or color it names.
+    Effect = 6,
+    /// The copy effect that made a permanent a copy (CR 707.2); source: the
+    /// copied printed definition, order: the copy's timestamp.
+    Copy = 7,
+    /// An exception that is part of a copy's copiable values (CR 707.9b),
+    /// encoded like an `Effect` row of the same `Modification`.
+    CopyException = 8,
+    /// Transform count: id 0 for a permanent, frame index + 1 for a continuation.
+    Transforms = 9,
+    /// Attacker predicate token for a combat continuation (id: frame index).
+    CombatRestriction = 10,
+    EffectProgram = 11,
+    EffectiveColor = 12,
+    KeywordCounterTimestamp = 13,
+    ContinuationProgram = 14,
+}
+
+impl FactKind {
+    pub const ALL: [FactKind; 14] = [
+        FactKind::Counter,
+        FactKind::AddedSubtype,
+        FactKind::SetName,
+        FactKind::SetCreatureType,
+        FactKind::UsedAbility,
+        FactKind::Effect,
+        FactKind::Copy,
+        FactKind::CopyException,
+        FactKind::Transforms,
+        FactKind::CombatRestriction,
+        FactKind::EffectProgram,
+        FactKind::EffectiveColor,
+        FactKind::KeywordCounterTimestamp,
+        FactKind::ContinuationProgram,
+    ];
+}
+
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -24,12 +155,56 @@ pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
 
+/// Policy support selection only; the game's legal actions remain complete.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActionOverflow {
+    #[default]
+    Error,
+    FirstLegal,
+}
+
+impl std::str::FromStr for ActionOverflow {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "error" => Ok(Self::Error),
+            "first-legal" => Ok(Self::FirstLegal),
+            _ => Err("unknown action overflow policy"),
+        }
+    }
+}
+
+/// Retain a prefix without renumbering native actions or their Commands.
+pub fn policy_action_count(
+    count: usize,
+    capacity: usize,
+    overflow: ActionOverflow,
+) -> Result<usize, ObservationEncodeError> {
+    if count > capacity && matches!(overflow, ActionOverflow::Error) {
+        return Err(ObservationEncodeError::Capacity {
+            field: "actions",
+            capacity,
+            actual: count,
+        });
+    }
+    Ok(count.min(capacity))
+}
+/// v9 name candidate columns per action row.
+pub const NAME_DIM_V9: usize = 4;
+
+/// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
+/// remaining-sideboard counts (`PlayerData` decklist maps).
+pub const DECKLIST_DIM: usize = 5;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
-    pub relations: bool,
+    pub policy_input_version: u8,
+    pub max_facts: usize,
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
     pub max_actions: usize,
+    pub action_overflow: ActionOverflow,
     pub max_focus_objects: usize,
     pub max_events: usize,
     pub policy_history: bool,
@@ -40,30 +215,126 @@ impl Default for ObservationEncoderConfig {
         Self {
             max_cards_per_player: 60,
             max_permanents_per_player: 40,
-            max_actions: 64,
+            max_actions: 512,
+            action_overflow: ActionOverflow::Error,
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-            relations: true,
+            policy_input_version: 6,
+            max_facts: 512,
         }
     }
 }
 
 impl ObservationEncoderConfig {
+    /// Candidate rows share the action axis, but never consume object capacity.
+    pub fn name_candidates_len(&self) -> usize {
+        self.name_dim() * self.max_actions
+    }
+
+    /// v9 rows: name row + 1, definition + 1, then the first and last name
+    /// rows (+ 1) of a naming group choice. Earlier inputs carry no name
+    /// identity and see naming prompts as anonymous modal choices.
+    pub fn name_dim(&self) -> usize {
+        match self.policy_input_version {
+            9.. => NAME_DIM_V9,
+            _ => 0,
+        }
+    }
+
+    pub fn relation_dim(&self) -> usize {
+        match self.policy_input_version {
+            5.. => super::continuation::RELATION_DIM_V5,
+            4 => super::continuation::RELATION_DIM,
+            _ => super::continuation::LEGACY_RELATION_DIM,
+        }
+    }
+
+    pub fn player_dim(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            PLAYER_DIM
+        } else {
+            LEGACY_PLAYER_DIM
+        }
+    }
+
+    pub fn card_dim(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            CARD_DIM
+        } else {
+            LEGACY_CARD_DIM
+        }
+    }
+
+    pub fn permanent_dim(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            PERMANENT_DIM
+        } else {
+            LEGACY_PERMANENT_DIM
+        }
+    }
+
     pub fn relations_len(&self) -> usize {
-        if self.relations {
-            super::continuation::RELATION_ROWS * super::continuation::RELATION_DIM
+        if self.policy_input_version >= 2 {
+            super::continuation::RELATION_ROWS * self.relation_dim()
         } else {
             0
         }
     }
 
+    /// Two seats of decklist rows at v5; absent before.
+    pub fn decklists_len(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            2 * self.max_cards_per_player * DECKLIST_DIM
+        } else {
+            0
+        }
+    }
+
+    /// V5 is frozen; v6 changes capacity only, not row meanings.
+    pub fn fact_rows(&self) -> usize {
+        match self.policy_input_version {
+            0..=4 => 0,
+            5 => V5_FACT_ROWS,
+            _ => self.max_facts,
+        }
+    }
+
+    pub fn effects_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::EFFECT_ROWS * super::shared_effects::EFFECT_DIM
+        } else {
+            0
+        }
+    }
+
+    pub fn effect_details_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::detail_rows(self.policy_input_version)
+                * super::shared_effects::DETAIL_DIM
+        } else {
+            0
+        }
+    }
+
+    pub fn effect_members_len(&self) -> usize {
+        if self.policy_input_version >= 7 {
+            super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
+        } else {
+            0
+        }
+    }
+
+    pub fn facts_len(&self) -> usize {
+        self.fact_rows() * FACT_DIM
+    }
+
     pub fn cards_len(&self) -> usize {
-        self.max_cards_per_player * CARD_DIM
+        self.max_cards_per_player * self.card_dim()
     }
 
     pub fn permanents_len(&self) -> usize {
-        self.max_permanents_per_player * PERMANENT_DIM
+        self.max_permanents_per_player * self.permanent_dim()
     }
 
     pub fn actions_len(&self) -> usize {
@@ -90,8 +361,14 @@ impl ObservationEncoderConfig {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
     pub relations: Vec<f32>,
+    pub effects: Vec<f32>,
+    pub effect_details: Vec<f32>,
+    pub effect_members: Vec<f32>,
+    pub name_candidates: Vec<f32>,
+    pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
+    pub decklists: Vec<f32>,
     pub agent_player: Vec<f32>,
     pub opponent_player: Vec<f32>,
     pub agent_cards: Vec<f32>,
@@ -113,8 +390,14 @@ pub struct EncodedObservation {
 
 pub struct EncodedObservationMut<'a> {
     pub relations: &'a mut [f32],
+    pub effects: &'a mut [f32],
+    pub effect_details: &'a mut [f32],
+    pub effect_members: &'a mut [f32],
+    pub name_candidates: &'a mut [f32],
+    pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
+    pub decklists: &'a mut [f32],
     pub agent_player: &'a mut [f32],
     pub opponent_player: &'a mut [f32],
     pub agent_cards: &'a mut [f32],
@@ -139,8 +422,14 @@ impl EncodedObservation {
     pub fn buffers_mut(&mut self) -> EncodedObservationMut<'_> {
         EncodedObservationMut {
             relations: &mut self.relations,
+            effects: &mut self.effects,
+            effect_details: &mut self.effect_details,
+            effect_members: &mut self.effect_members,
+            name_candidates: &mut self.name_candidates,
+            facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
+            decklists: &mut self.decklists,
             agent_player: &mut self.agent_player,
             opponent_player: &mut self.opponent_player,
             agent_cards: &mut self.agent_cards,
@@ -164,6 +453,10 @@ impl EncodedObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObservationEncodeError {
+    UnsupportedLayerInput(u8),
+    UnsupportedEffectExecutionInput(u8),
+    InvalidShared(&'static str),
+    InvalidName(&'static str),
     Capacity {
         field: &'static str,
         capacity: usize,
@@ -179,6 +472,16 @@ pub enum ObservationEncodeError {
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::UnsupportedEffectExecutionInput(version) => write!(
+                f,
+                "policy input v{version} cannot represent effect execution; select v8 or later"
+            ),
+            Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
+            Self::UnsupportedLayerInput(version) => write!(
+                f,
+                "policy input v{version} cannot represent layer payload; select v8"
+            ),
+            Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
                 capacity,
@@ -207,10 +510,16 @@ pub fn encode(
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
         relations: vec![0.0; config.relations_len()],
+        effects: vec![0.0; config.effects_len()],
+        effect_details: vec![0.0; config.effect_details_len()],
+        effect_members: vec![0.0; config.effect_members_len()],
+        name_candidates: vec![0.0; config.name_candidates_len()],
+        facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
-        agent_player: vec![0.0; PLAYER_DIM],
-        opponent_player: vec![0.0; PLAYER_DIM],
+        decklists: vec![0.0; config.decklists_len()],
+        agent_player: vec![0.0; config.player_dim()],
+        opponent_player: vec![0.0; config.player_dim()],
         agent_cards: vec![0.0; config.cards_len()],
         opponent_cards: vec![0.0; config.cards_len()],
         agent_permanents: vec![0.0; config.permanents_len()],
@@ -232,11 +541,71 @@ pub fn encode(
     Ok(encoded)
 }
 
+/// Input compatibility is independent of card/deck admission. Both encoders
+/// call this before writing buffers, so retained models never silently omit a
+/// new layer payload or fail later on an embedding index.
+pub fn validate_policy_input(obs: &Observation, version: u8) -> Result<(), ObservationEncodeError> {
+    if !(1..=9).contains(&version) {
+        return Err(ObservationEncodeError::InvalidShared(
+            "unsupported policy input version",
+        ));
+    }
+    if version >= 8 {
+        return Ok(());
+    }
+    if obs.continuation.iter().any(|frame| {
+        frame.effect_execution_requires_v8
+            || frame.kind == 6
+                && (matches!(frame.decision, 27 | 29)
+                    || (frame.decision == 28 && frame.legacy_decision.is_none()))
+    }) {
+        return Err(ObservationEncodeError::UnsupportedEffectExecutionInput(
+            version,
+        ));
+    }
+    let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    let novel = |e: &ContinuousEffectData| {
+        !e.program.is_empty()
+            || matches!(
+                e.modification.as_str(),
+                "SetCreatureTypes" | "SwitchPt" | "LoseNonManaAbilities"
+            )
+    };
+    let needs_v8 = permanents.clone().any(|p| {
+        p.colors.is_some()
+            || !p.keyword_counter_timestamps.is_empty()
+            || p.effects.iter().any(novel)
+            || p.copy
+                .as_ref()
+                .is_some_and(|c| c.exceptions.iter().any(novel))
+    }) || obs
+        .agent
+        .effects
+        .iter()
+        .chain(&obs.opponent.effects)
+        .any(novel)
+        || obs
+            .shared_effects
+            .iter()
+            .flatten()
+            .any(|r| novel(&r.effect));
+    if needs_v8
+        || obs
+            .continuation
+            .iter()
+            .any(|frame| !frame.program.is_empty())
+    {
+        return Err(ObservationEncodeError::UnsupportedLayerInput(version));
+    }
+    Ok(())
+}
+
 pub fn encode_into(
     obs: &Observation,
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
+    validate_policy_input(obs, config.policy_input_version)?;
     validate_buffer_len(
         "semantic_cards",
         out.semantic_cards.len(),
@@ -247,8 +616,13 @@ pub fn encode_into(
         out.known_hand.len(),
         4 * config.max_cards_per_player,
     )?;
-    validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
-    validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
+    validate_buffer_len("decklists", out.decklists.len(), config.decklists_len())?;
+    validate_buffer_len("agent_player", out.agent_player.len(), config.player_dim())?;
+    validate_buffer_len(
+        "opponent_player",
+        out.opponent_player.len(),
+        config.player_dim(),
+    )?;
     validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
     validate_buffer_len(
         "opponent_cards",
@@ -267,11 +641,28 @@ pub fn encode_into(
     )?;
     validate_buffer_len("actions", out.actions.len(), config.actions_len())?;
     validate_buffer_len(
+        "name_candidates",
+        out.name_candidates.len(),
+        config.name_candidates_len(),
+    )?;
+    validate_buffer_len(
         "action_focus",
         out.action_focus.len(),
         config.action_focus_len(),
     )?;
     validate_buffer_len("events", out.events.len(), config.events_len())?;
+    validate_buffer_len("effects", out.effects.len(), config.effects_len())?;
+    validate_buffer_len(
+        "effect_details",
+        out.effect_details.len(),
+        config.effect_details_len(),
+    )?;
+    validate_buffer_len(
+        "effect_members",
+        out.effect_members.len(),
+        config.effect_members_len(),
+    )?;
+    validate_buffer_len("facts", out.facts.len(), config.facts_len())?;
     validate_buffer_len("agent_player_valid", out.agent_player_valid.len(), 1)?;
     validate_buffer_len("opponent_player_valid", out.opponent_player_valid.len(), 1)?;
     validate_buffer_len(
@@ -320,7 +711,11 @@ pub fn encode_into(
         ),
         (
             "actions",
-            obs.action_space.actions.len(),
+            policy_action_count(
+                obs.action_space.actions.len(),
+                config.max_actions,
+                config.action_overflow,
+            )?,
             config.max_actions,
         ),
     ] {
@@ -332,12 +727,20 @@ pub fn encode_into(
             });
         }
     }
-    for action in &obs.action_space.actions {
+    for action in obs.action_space.actions.iter().take(config.max_actions) {
+        if let Some(definition) = action.name_definition {
+            if action.name_index.is_none() || definition as usize > MAX_ACTION_SELECTOR {
+                return Err(ObservationEncodeError::InvalidName(
+                    "missing identity or definition exceeds exact integer capacity",
+                ));
+            }
+        }
+
         if let Some(index) = action.continuation_index {
-            if !config.relations || index >= obs.continuation.len() {
+            if config.policy_input_version < 2 || index >= obs.continuation.len() {
                 return Err(ObservationEncodeError::Capacity {
                     field: "action continuation reference",
-                    capacity: if config.relations {
+                    capacity: if config.policy_input_version >= 2 {
                         obs.continuation.len()
                     } else {
                         0
@@ -346,9 +749,10 @@ pub fn encode_into(
                 });
             }
         }
-        for index in [action.mode_index, action.ability_index]
+        for index in [action.mode_index, action.ability_index, action.name_index]
             .into_iter()
             .flatten()
+            .chain(action.name_group.into_iter().flatten())
         {
             if index > MAX_ACTION_SELECTOR {
                 return Err(ObservationEncodeError::Capacity {
@@ -368,6 +772,7 @@ pub fn encode_into(
     }
     out.semantic_cards.fill(0.0);
     out.known_hand.fill(0.0);
+    out.decklists.fill(0.0);
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
     out.agent_cards.fill(0.0);
@@ -375,6 +780,7 @@ pub fn encode_into(
     out.agent_permanents.fill(0.0);
     out.opponent_permanents.fill(0.0);
     out.actions.fill(0.0);
+    out.name_candidates.fill(0.0);
     out.events.fill(0.0);
     out.action_focus.fill(-1);
     out.agent_player_valid.fill(0.0);
@@ -413,6 +819,22 @@ pub fn encode_into(
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
     }
+    if config.policy_input_version >= 5 {
+        for (seat, player) in [&obs.agent, &obs.opponent].into_iter().enumerate() {
+            let rows = decklist_rows(player);
+            if rows.len() > config.max_cards_per_player {
+                return Err(ObservationEncodeError::Capacity {
+                    field: "decklist definitions",
+                    capacity: config.max_cards_per_player,
+                    actual: rows.len(),
+                });
+            }
+            for (slot, row) in rows.iter().enumerate() {
+                let offset = (seat * config.max_cards_per_player + slot) * DECKLIST_DIM;
+                out.decklists[offset..offset + DECKLIST_DIM].copy_from_slice(row);
+            }
+        }
+    }
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::with_capacity(
         2 + obs.agent_cards.len()
@@ -441,10 +863,16 @@ pub fn encode_into(
     );
     out.opponent_player_valid[0] = 1.0;
 
+    let card_context = CardContext {
+        width: config.card_dim(),
+        max_cards: config.max_cards_per_player,
+        viewer_id: obs.agent.id,
+        turn_number: obs.turn.turn_number,
+    };
     encode_cards(
         &obs.agent_cards,
         1.0,
-        config.max_cards_per_player,
+        &card_context,
         out.agent_cards,
         out.agent_cards_valid,
         &mut object_to_index,
@@ -453,7 +881,7 @@ pub fn encode_into(
     encode_cards(
         &obs.opponent_cards,
         0.0,
-        config.max_cards_per_player,
+        &card_context,
         out.opponent_cards,
         out.opponent_cards_valid,
         &mut object_to_index,
@@ -462,10 +890,11 @@ pub fn encode_into(
 
     for (offset, card) in obs.agent_sideboard.iter().enumerate() {
         let index = obs.agent_cards.len() + offset;
-        let row = &mut out.agent_cards[index * CARD_DIM..(index + 1) * CARD_DIM];
+        let width = config.card_dim();
+        let row = &mut out.agent_cards[index * width..(index + 1) * width];
         row[7] = 1.0;
         row[37] = 1.0; // outside inventory; all seven zone bits remain zero
-        row[CARD_DIM - 1] = 1.0;
+        row[width - 1] = 1.0;
         out.agent_cards_valid[index] = 1.0;
         object_to_index.insert(card.candidate_id, 2 + index as i32);
     }
@@ -473,7 +902,7 @@ pub fn encode_into(
     encode_permanents(
         &obs.agent_permanents,
         1.0,
-        config.max_permanents_per_player,
+        config,
         out.agent_permanents,
         out.agent_permanents_valid,
         &mut object_to_index,
@@ -482,17 +911,60 @@ pub fn encode_into(
     encode_permanents(
         &obs.opponent_permanents,
         0.0,
-        config.max_permanents_per_player,
+        config,
         out.opponent_permanents,
         out.opponent_permanents_valid,
         &mut object_to_index,
         &mut current_object_index,
     );
+    if config.policy_input_version >= 5 {
+        // Hosts may be listed after their attachments, so links follow indexing.
+        let ranks = timestamp_ranks(obs, config.policy_input_version >= 7);
+        let link = |object: Option<i32>| {
+            object
+                .and_then(|object| object_to_index.get(&object))
+                .map_or(0.0, |index| (index + 1) as f32)
+        };
+        for (permanents, out) in [
+            (&obs.agent_permanents, &mut *out.agent_permanents),
+            (&obs.opponent_permanents, &mut *out.opponent_permanents),
+        ] {
+            for (row, permanent) in out
+                .as_chunks_mut::<PERMANENT_DIM>()
+                .0
+                .iter_mut()
+                .zip(permanents)
+            {
+                row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
+                row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
+                row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp()];
+            }
+        }
+        encode_facts(
+            obs,
+            &object_to_index,
+            &ranks,
+            out.facts,
+            config.policy_input_version >= 7,
+            config.policy_input_version >= 8,
+        )?;
+        if config.policy_input_version >= 7 {
+            super::shared_effects::encode(
+                obs,
+                &object_to_index,
+                &ranks,
+                out.effects,
+                out.effect_details,
+                out.effect_members,
+            )?;
+        }
+    }
 
-    if config.relations {
+    if config.policy_input_version >= 2 {
         super::continuation::encode_into(
             &obs.continuation,
             obs.agent.player_index as usize,
+            config.policy_input_version,
             &object_to_index,
             out.relations,
         )?;
@@ -500,13 +972,14 @@ pub fn encode_into(
 
     encode_actions(
         obs,
-        config.max_actions,
-        config.max_focus_objects,
+        config,
         out.actions,
         out.actions_valid,
         out.action_focus,
+        out.name_candidates,
         &object_to_index,
     );
+
     if config.policy_history {
         for (index, row) in
             super::policy_history::encode(obs, config.max_events, config.max_cards_per_player)
@@ -527,6 +1000,31 @@ pub fn encode_into(
     }
 
     Ok(())
+}
+
+/// One row per definition in the union of a known player's main deck and
+/// sideboard, sorted by definition id; none for a closed decklist. Unseen
+/// counts are a subset of the main deck's definitions plus retrieved
+/// sideboard copies, so the union covers every count map.
+fn decklist_rows(player: &PlayerData) -> Vec<[f32; DECKLIST_DIM]> {
+    let maps = [
+        &player.main_counts,
+        &player.unseen_counts,
+        &player.sideboard_counts,
+        &player.remaining_sideboard_counts,
+    ];
+    let mut rows: std::collections::BTreeMap<u32, [f32; DECKLIST_DIM]> = Default::default();
+    for (column, counts) in maps.into_iter().enumerate() {
+        for (definition, count) in counts.iter().flatten() {
+            let row = rows.entry(*definition).or_insert_with(|| {
+                let mut row = [0.0; DECKLIST_DIM];
+                row[0] = (definition + 1) as f32;
+                row
+            });
+            row[column + 1] = *count as f32;
+        }
+    }
+    rows.into_values().collect()
 }
 
 fn validate_buffer_len(
@@ -574,37 +1072,78 @@ fn encode_player_features(
         out[28 + slot] = player.mana[slot] as f32 / 10.0;
         out[34 + slot] = player.lesson_mana[slot] as f32 / 10.0;
     }
+    if out.len() == PLAYER_DIM {
+        // Restricted mana each spending subtype may use, by color. A class
+        // admitting several subtypes counts under each, so these columns
+        // overlap and need not sum to the total above.
+        for (index, subtype) in SPEND_SUBTYPES.iter().enumerate() {
+            for class in player
+                .restricted_mana
+                .iter()
+                .filter(|class| class.admits(subtype))
+            {
+                for slot in 0..6 {
+                    out[PLAYER_RESTRICTED_INDEX + 6 * index + slot] +=
+                        class.mana[slot] as f32 / 10.0;
+                }
+            }
+        }
+        out[PLAYER_HAND_ONLY_INDEX] = bool_to_f32(player.hand_only_until.is_some());
+        out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
+        out[PLAYER_TURN_INDEX] = turn.turn_number as f32 / 20.0;
+        // Seat 0 is on the play.
+        out[PLAYER_SEAT_INDEX] = player.player_index as f32;
+        out[PLAYER_KEEPS_RED_MANA_INDEX] = bool_to_f32(player.keeps_red_mana);
+        let history = &player.turn_history;
+        out[PLAYER_ATTACKED_INDEX] = bool_to_f32(history.attacked);
+        out[PLAYER_SACRIFICED_INDEX] = history.permanents_sacrificed as f32 / 10.0;
+        out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
+        out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
+        for (index, kind) in crate::flow::turn::Bending::ALL.into_iter().enumerate() {
+            out[PLAYER_BENT_INDEX + index] = bool_to_f32(history.bent & kind as u8 != 0);
+        }
+        out[PLAYER_EXTRA_TURNS_INDEX] = player.extra_turns as f32;
+        out[PLAYER_ADDITIONAL_COMBATS_INDEX] = player.additional_combats as f32;
+    }
 
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
 }
 
+/// Facts every card row of one observation reads.
+struct CardContext {
+    width: usize,
+    max_cards: usize,
+    viewer_id: i32,
+    turn_number: u32,
+}
+
 fn encode_cards(
     cards: &[CardData],
     is_mine: f32,
-    max_cards: usize,
+    context: &CardContext,
     out: &mut [f32],
     out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
-    let ordered_cards = cards.iter().take(max_cards);
+    let ordered_cards = cards.iter().take(context.max_cards);
     let mut encoded_count = 0;
 
     for (i, card) in ordered_cards.enumerate() {
-        let start = i * CARD_DIM;
-        let end = start + CARD_DIM;
-        encode_card_features(card, is_mine, &mut out[start..end]);
+        let start = i * context.width;
+        let end = start + context.width;
+        encode_card_features(card, is_mine, context, &mut out[start..end]);
         out_valid[i] = 1.0;
         object_to_index.insert(card.id, *current_object_index);
         *current_object_index += 1;
         encoded_count += 1;
     }
 
-    *current_object_index += (max_cards.saturating_sub(encoded_count)) as i32;
+    *current_object_index += (context.max_cards.saturating_sub(encoded_count)) as i32;
 }
 
-fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
+fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, out: &mut [f32]) {
     let zone_index = (card.zone as i32 & 0xFF) as usize;
     if zone_index < ZONE_DIM {
         out[zone_index] = 1.0;
@@ -641,24 +1180,56 @@ fn encode_card_features(card: &CardData, is_mine: f32, out: &mut [f32]) {
     out[36] = bool_to_f32(card.keywords.hexproof);
     out[38] = bool_to_f32(card.keywords.indestructible);
     out[39] = bool_to_f32(card.is_legendary);
-    out[CARD_DIM - 1] = 1.0; // validity flag
+    if context.width == CARD_DIM {
+        if let Some(permission) = &card.cast_permission {
+            let base = CARD_PERMISSION_INDEX;
+            out[base] = 1.0;
+            out[base + 1] = bool_to_f32(permission.player_id == context.viewer_id);
+            if let Some(cost) = &permission.cost {
+                out[base + 2] = 1.0;
+                out[base + 3] = cost.mana_value as f32 / 10.0;
+            }
+            out[base + 4] = bool_to_f32(permission.this_turn);
+            out[base + 5] = bool_to_f32(permission.own_turn_only);
+            // Not yet usable: "cast it on a later turn" and this is that turn
+            // or earlier.
+            out[base + 6] = bool_to_f32(
+                permission
+                    .after_turn
+                    .is_some_and(|turn| context.turn_number <= turn),
+            );
+            out[base + 7] = bool_to_f32(permission.source_permanent_id.is_some());
+            out[base + 8] = bool_to_f32(permission.flash);
+            out[base + 9] = bool_to_f32(permission.any_mana);
+            out[base + 10] = bool_to_f32(permission.waterbend);
+            out[base + 11] = bool_to_f32(permission.foretold);
+            out[base + 12] = bool_to_f32(permission.through_next_turn);
+        }
+        if let Some(x) = card.x {
+            out[CARD_X_INDEX] = 1.0;
+            out[CARD_X_INDEX + 1] = x as f32 / 10.0;
+        }
+    }
+    out[context.width - 1] = 1.0; // validity flag
 }
 
 fn encode_permanents(
     permanents: &[PermanentData],
     is_mine: f32,
-    max_permanents: usize,
+    config: &ObservationEncoderConfig,
     out: &mut [f32],
     out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
+    let max_permanents = config.max_permanents_per_player;
+    let width = config.permanent_dim();
     let ordered_permanents = permanents.iter().take(max_permanents);
     let mut encoded_count = 0;
 
     for (i, permanent) in ordered_permanents.enumerate() {
-        let start = i * PERMANENT_DIM;
-        let end = start + PERMANENT_DIM;
+        let start = i * width;
+        let end = start + width;
         encode_permanent_features(permanent, is_mine, &mut out[start..end]);
         out_valid[i] = 1.0;
         object_to_index.insert(permanent.id, *current_object_index);
@@ -698,24 +1269,338 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
     out[25] = bool_to_f32(permanent.keywords.indestructible);
     out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
+    out[27] = bool_to_f32(permanent.attacking);
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
-    out[PERMANENT_DIM - 1] = 1.0;
+    if out.len() == PERMANENT_DIM {
+        // Ability-use limits and granted firebending.
+        out[PERMANENT_EXHAUSTED_INDEX] = permanent.exhausted_abilities as f32;
+        out[PERMANENT_ONCE_EACH_TURN_INDEX] = permanent.once_each_turn_used as f32;
+        out[PERMANENT_FIREBENDING_INDEX] = permanent.granted_firebending as f32 / 10.0;
+        // PERMANENT_ATTACHED_INDEX and PERMANENT_BLOCKING_INDEX are written
+        // once every object is indexed; PERMANENT_TIMESTAMP_INDEX with facts.
+        out[PERMANENT_GRANTED_LAND_INDEX] = bool_to_f32(permanent.is_granted_land);
+        out[PERMANENT_ABILITIES_LOST_INDEX] = bool_to_f32(permanent.abilities_lost);
+        out[PERMANENT_DEALT_DAMAGE_INDEX] = bool_to_f32(permanent.dealt_damage_this_turn);
+    }
+    out[out.len() - 1] = 1.0;
+}
+
+/// One fact row before its object join and timestamp rank are known.
+struct Fact {
+    object: i32,
+    kind: FactKind,
+    id: i32,
+    detail: i32,
+    values: [f32; 2],
+    effect: Option<(f32, i32, Option<i32>)>,
+}
+
+/// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
+/// object order (agent, opponent, agent permanents, opponent permanents).
+fn facts(obs: &Observation, shared: bool, effect_execution: bool) -> Vec<Fact> {
+    let mut out = Vec::new();
+    let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
+        out.push(Fact {
+            object,
+            kind,
+            id,
+            detail: 0,
+            values: [value, 0.0],
+            effect: None,
+        })
+    };
+    let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    for permanent in permanents() {
+        let object = permanent.id;
+        if permanent.plus1_counters > 0 {
+            push(
+                object,
+                FactKind::Counter,
+                name_value("CounterKind::plus_one_plus_one"),
+                permanent.plus1_counters as f32 / 10.0,
+            );
+        }
+        for (kind, count) in &permanent.counters {
+            push(
+                object,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
+            );
+        }
+        if let Some(colors) = &permanent.colors {
+            if colors.is_empty() {
+                push(
+                    object,
+                    FactKind::EffectiveColor,
+                    name_value("Color::Colorless"),
+                    1.0,
+                );
+            }
+            for color in colors {
+                push(
+                    object,
+                    FactKind::EffectiveColor,
+                    name_value(&format!("Color::{color}")),
+                    1.0,
+                );
+            }
+        }
+        for subtype in &permanent.temp_subtypes {
+            push(object, FactKind::AddedSubtype, name_value(subtype), 1.0);
+        }
+        if let Some(name) = &permanent.name {
+            push(object, FactKind::SetName, name_value(name), 1.0);
+        }
+        for creature_type in permanent.creature_types.iter().flatten() {
+            push(
+                object,
+                FactKind::SetCreatureType,
+                name_value(creature_type),
+                1.0,
+            );
+        }
+        if permanent.transforms > 0 {
+            push(object, FactKind::Transforms, 0, permanent.transforms as f32);
+        }
+        for index in &permanent.used_abilities {
+            push(object, FactKind::UsedAbility, *index as i32, 1.0);
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        if frame.source_transforms > 0 {
+            push(
+                frame.source.object.unwrap_or(
+                    if frame.controller == obs.agent.player_index as usize {
+                        obs.agent.id
+                    } else {
+                        obs.opponent.id
+                    },
+                ),
+                FactKind::Transforms,
+                (index + 1) as i32,
+                frame.source_transforms as f32,
+            );
+        }
+    }
+    for (index, frame) in obs.continuation.iter().enumerate() {
+        for program in std::iter::once(&frame.program)
+            .chain(effect_execution.then_some(&frame.effect_execution))
+        {
+            for (ordinal, &(kind, value)) in program.iter().enumerate() {
+                out.push(Fact {
+                    object: if frame.controller == obs.agent.player_index as usize {
+                        obs.agent.id
+                    } else {
+                        obs.opponent.id
+                    },
+                    kind: FactKind::ContinuationProgram,
+                    id: (index + 1) as i32,
+                    detail: value,
+                    values: [kind as f32, ordinal as f32],
+                    effect: None,
+                });
+            }
+        }
+        if let Some(attackers) = &frame.attackers {
+            out.push(Fact {
+                object: if frame.controller == obs.agent.player_index as usize {
+                    obs.agent.id
+                } else {
+                    obs.opponent.id
+                },
+                kind: FactKind::CombatRestriction,
+                id: (index + 1) as i32,
+                detail: name_value(attackers),
+                values: [0.0, 0.0],
+                effect: None,
+            });
+        }
+    }
+    for permanent in permanents() {
+        let Some(copy) = &permanent.copy else {
+            continue;
+        };
+        out.push(Fact {
+            object: permanent.id,
+            kind: FactKind::Copy,
+            id: name_value("CopyEffect"),
+            detail: 0,
+            values: [0.0, 0.0],
+            effect: Some((2.0, permanent.timestamp(), Some(copy.registry_key))),
+        });
+        for exception in &copy.exceptions {
+            effect_facts(permanent.id, FactKind::CopyException, exception, &mut out);
+        }
+    }
+    for permanent in permanents() {
+        for (kind, &timestamp) in &permanent.keyword_counter_timestamps {
+            out.push(Fact {
+                object: permanent.id,
+                kind: FactKind::KeywordCounterTimestamp,
+                id: name_value(&format!("CounterKind::{kind}")),
+                detail: 0,
+                values: [0.0, 0.0],
+                effect: Some((0.0, timestamp, None)),
+            });
+        }
+    }
+    if shared {
+        return out;
+    }
+    let holders = [
+        (obs.agent.id, &obs.agent.effects),
+        (obs.opponent.id, &obs.opponent.effects),
+    ]
+    .into_iter()
+    .chain(permanents().map(|permanent| (permanent.id, &permanent.effects)));
+    for (object, effects) in holders {
+        for effect in effects {
+            effect_facts(object, FactKind::Effect, effect, &mut out);
+        }
+    }
+    out
+}
+
+/// The rows of one modification: a record (`FactKind::Effect`) or a copy
+/// exception (`FactKind::CopyException`).
+fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
+    let id = name_value(&format!("Modification::{}", effect.modification));
+    let duration = match effect.duration.as_str() {
+        "EndOfTurn" => 1.0,
+        "WhileYouControlSource" => 3.0,
+        _ => 2.0,
+    };
+    let values = [
+        effect.power.or(effect.amount).unwrap_or(0) as f32 / 10.0,
+        effect.toughness.unwrap_or(0) as f32 / 10.0,
+    ];
+    let details: Vec<i32> = effect
+        .keywords
+        .iter()
+        .chain(&effect.subtypes)
+        .map(|name| name_value(name))
+        .chain(
+            effect
+                .color
+                .iter()
+                .map(|color| name_value(&format!("Color::{color}"))),
+        )
+        .collect();
+    for (ordinal, &(token_kind, token_value)) in effect.program.iter().enumerate() {
+        out.push(Fact {
+            object,
+            kind: FactKind::EffectProgram,
+            id,
+            detail: token_value,
+            values: [f32::from(token_kind), ordinal as f32],
+            effect: Some((duration, effect.timestamp, effect.source_registry_key)),
+        });
+    }
+    for detail in if details.is_empty() { vec![0] } else { details } {
+        out.push(Fact {
+            object,
+            kind,
+            id,
+            detail,
+            values,
+            effect: Some((duration, effect.timestamp, effect.source_registry_key)),
+        });
+    }
+}
+
+/// Rank of each timestamp among the observation's permanents and effect
+/// records (1-based), so order is visible without exposing raw ids.
+fn timestamp_ranks(obs: &Observation, shared: bool) -> BTreeMap<i32, f32> {
+    let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    let mut stamps: Vec<i32> = permanents.clone().map(PermanentData::timestamp).collect();
+    if shared {
+        stamps.extend(
+            obs.shared_effects
+                .iter()
+                .flatten()
+                .map(|record| record.effect.timestamp),
+        );
+    } else {
+        stamps.extend(
+            [&obs.agent.effects, &obs.opponent.effects]
+                .into_iter()
+                .chain(permanents.map(|permanent| &permanent.effects))
+                .flatten()
+                .map(|effect| effect.timestamp),
+        );
+    }
+    stamps.extend(
+        obs.agent_permanents
+            .iter()
+            .chain(&obs.opponent_permanents)
+            .flat_map(|p| p.keyword_counter_timestamps.values().copied()),
+    );
+    stamps.sort_unstable();
+    stamps.dedup();
+    stamps
+        .into_iter()
+        .enumerate()
+        .map(|(rank, stamp)| (stamp, (rank + 1) as f32))
+        .collect()
+}
+
+pub(super) fn split_id(id: i32) -> [f32; 2] {
+    let id = id as u32;
+    [(id >> 16) as f32, (id & 0xffff) as f32]
+}
+
+fn encode_facts(
+    obs: &Observation,
+    object_to_index: &HashMap<i32, i32>,
+    ranks: &BTreeMap<i32, f32>,
+    out: &mut [f32],
+    shared: bool,
+    effect_execution: bool,
+) -> Result<(), ObservationEncodeError> {
+    let facts = facts(obs, shared, effect_execution);
+    let capacity = out.len() / FACT_DIM;
+    if facts.len() > capacity {
+        return Err(ObservationEncodeError::Capacity {
+            field: "facts",
+            capacity,
+            actual: facts.len(),
+        });
+    }
+    out.fill(0.0);
+    for (row, fact) in out.as_chunks_mut::<FACT_DIM>().0.iter_mut().zip(&facts) {
+        row[FACT_OBJECT_INDEX] = object_to_index
+            .get(&fact.object)
+            .map_or(0.0, |index| (index + 1) as f32);
+        row[FACT_KIND_INDEX] = fact.kind as u8 as f32;
+        row[FACT_ID_INDEX..FACT_ID_INDEX + 2].copy_from_slice(&split_id(fact.id));
+        row[FACT_DETAIL_INDEX..FACT_DETAIL_INDEX + 2].copy_from_slice(&split_id(fact.detail));
+        row[FACT_VALUE_INDEX..FACT_VALUE_INDEX + 2].copy_from_slice(&fact.values);
+        if let Some((duration, timestamp, source)) = fact.effect {
+            row[FACT_DURATION_INDEX] = duration;
+            row[FACT_ORDER_INDEX] = ranks[&timestamp];
+            row[FACT_SOURCE_INDEX] = source.map_or(0.0, |key| (key + 1) as f32);
+        }
+        row[FACT_VALID_INDEX] = 1.0;
+    }
+    Ok(())
 }
 
 fn encode_actions(
     obs: &Observation,
-    max_actions: usize,
-    max_focus_objects: usize,
+    config: &ObservationEncoderConfig,
     out_actions: &mut [f32],
     out_valid: &mut [f32],
     out_focus: &mut [i32],
+    out_names: &mut [f32],
     object_to_index: &HashMap<i32, i32>,
 ) {
+    // encode_into has validated the retained policy support and its focus capacity.
     for (action_index, action) in obs
         .action_space
         .actions
         .iter()
-        .take(max_actions)
+        .take(config.max_actions)
         .enumerate()
     {
         let action_start = action_index * ACTION_DIM;
@@ -727,7 +1612,23 @@ fn encode_actions(
             row[action_type_index] = 1.0;
         }
         row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
-        row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+        let names = config.name_dim();
+        let name_row = &mut out_names[names * action_index..names * (action_index + 1)];
+        match (action.name_index, action.name_group) {
+            // A name is categorical; its position is never a numeric mode feature.
+            (Some(index), _) if names > 0 => {
+                name_row[0] = (index + 1) as f32;
+                name_row[1] = action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+            }
+            // A group is its public member span.
+            (_, Some([first, last])) if names == NAME_DIM_V9 => {
+                name_row[2] = (first + 1) as f32;
+                name_row[3] = (last + 1) as f32;
+            }
+            _ => {
+                row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+            }
+        }
         row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
         row[ACTION_CONTINUATION_INDEX] = action
             .continuation_index
@@ -735,8 +1636,8 @@ fn encode_actions(
         row[ACTION_DIM - 1] = 1.0;
         out_valid[action_index] = 1.0;
 
-        let focus_start = action_index * max_focus_objects;
-        for (focus_index, focus_id) in action.focus.iter().take(max_focus_objects).enumerate() {
+        let focus_start = action_index * config.max_focus_objects;
+        for (focus_index, focus_id) in action.focus.iter().enumerate() {
             out_focus[focus_start + focus_index] =
                 object_to_index.get(focus_id).copied().unwrap_or(-1);
         }
@@ -806,8 +1707,8 @@ mod tests {
         agent::{
             action::{ActionSpaceKind, ActionType},
             observation::{
-                ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData,
-                Observation, PermanentData, PlayerData, TurnData,
+                ActionOption, ActionSpaceData, CardData, CardTypeData, ContinuousEffectData,
+                EventData, KeywordData, Observation, PermanentData, PlayerData, TurnData,
             },
         },
         flow::turn::{PhaseKind, StepKind},
@@ -816,8 +1717,9 @@ mod tests {
 
     use super::{
         encode, encode_into, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, PERMANENT_DIM, PLAYER_DIM,
-        ZONE_DIM,
+        ObservationEncoderConfig, ACTION_DIM, EVENT_DIM, FACT_DIM, FACT_ORDER_INDEX,
+        FACT_SOURCE_INDEX, FACT_VALID_INDEX, LEGACY_CARD_DIM, LEGACY_PERMANENT_DIM,
+        LEGACY_PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
@@ -849,8 +1751,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn versioned_fact_capacity_preserves_every_effect() {
+        let mut obs = sample_observation();
+        // The retained Drill failure has 70 records, two keyword facts each.
+        obs.agent.effects = (1..=70)
+            .map(|timestamp| ContinuousEffectData {
+                modification: "LoseKeywords".into(),
+                keywords: vec!["hexproof".into(), "indestructible".into()],
+                duration: "EndOfTurn".into(),
+                timestamp,
+                source_registry_key: Some(271),
+                ..Default::default()
+            })
+            .collect();
+        let legacy = ObservationEncoderConfig {
+            policy_input_version: 5,
+            ..Default::default()
+        };
+        assert!(matches!(
+            encode(&obs, &legacy),
+            Err(ObservationEncodeError::Capacity {
+                field: "facts",
+                capacity: 128,
+                actual: 140,
+            })
+        ));
+        let config = ObservationEncoderConfig::default();
+        let encoded = encode(&obs, &config).unwrap();
+        assert_eq!(encoded.facts.len(), 512 * FACT_DIM);
+        for (index, row) in encoded.facts.as_chunks::<FACT_DIM>().0.iter().enumerate() {
+            if index < 140 {
+                assert_eq!(row[FACT_VALID_INDEX], 1.0);
+                assert_eq!(row[FACT_ORDER_INDEX], (index / 2 + 1) as f32);
+                assert_eq!(row[FACT_SOURCE_INDEX], 272.0);
+            } else {
+                assert!(row.iter().all(|value| *value == 0.0));
+            }
+        }
+        let exact = encode(
+            &obs,
+            &ObservationEncoderConfig {
+                max_facts: 140,
+                ..config
+            },
+        )
+        .unwrap();
+        assert_eq!(exact.facts, encoded.facts[..140 * FACT_DIM]);
+    }
+
     fn sample_observation() -> Observation {
         Observation {
+            shared_effects: None,
             continuation: Vec::new(),
             game_over: false,
             won: false,
@@ -870,6 +1822,9 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -879,6 +1834,9 @@ mod tests {
                         declared: None,
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -888,6 +1846,9 @@ mod tests {
                         declared: Some(true),
                         description: None,
                         mode_index: None,
+                        name_definition: None,
+                        name_index: None,
+                        name_group: None,
                         ability_index: None,
                         continuation_index: None,
                     },
@@ -903,11 +1864,21 @@ mod tests {
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                main_counts: Default::default(),
+                unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
+                keeps_red_mana: false,
+                turn_history: Default::default(),
+                extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
+                restricted_mana: Vec::new(),
+                hand_only_until: None,
+                no_maximum_hand_size: false,
+                effects: Vec::new(),
             },
             agent_sideboard: Vec::new(),
             agent_cards: vec![
@@ -925,11 +1896,21 @@ mod tests {
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                main_counts: Default::default(),
+                unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
+                keeps_red_mana: false,
+                turn_history: Default::default(),
+                extra_turns: 0,
+                additional_combats: 0,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
+                restricted_mana: Vec::new(),
+                hand_only_until: None,
+                no_maximum_hand_size: false,
+                effects: Vec::new(),
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -990,6 +1971,9 @@ mod tests {
                 declared: Some(declared),
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -1031,6 +2015,9 @@ mod tests {
             is_lesson: false,
             ward_cost: 0,
             kicker_cost: 0,
+            face_down: false,
+            cast_permission: None,
+            x: None,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,
@@ -1047,16 +2034,19 @@ mod tests {
             },
             keywords: KeywordData::default(),
             mana_cost: ManaCost {
-                spend_on_lesson: false,
+                purpose: Default::default(),
                 cost: [0; 7],
                 mana_value,
                 hybrid: Vec::new(),
+                x: 0,
             },
         }
     }
 
     fn make_permanent(id: i32, mine: bool) -> PermanentData {
         PermanentData {
+            colors: None,
+            keyword_counter_timestamps: Default::default(),
             id,
             registry_key: 0,
             controller_id: if mine { 10 } else { 20 },
@@ -1070,8 +2060,7 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
-            temp_subtypes: Vec::new(),
-            keywords: KeywordData::default(),
+            ..Default::default()
         }
     }
 
@@ -1085,7 +2074,8 @@ mod tests {
             max_focus_objects: 2,
             max_events: 2,
             policy_history: false,
-            relations: true,
+            policy_input_version: 4,
+            ..ObservationEncoderConfig::default()
         };
 
         let encoded = encode(&obs, &config).unwrap();
@@ -1096,12 +2086,12 @@ mod tests {
         assert_eq!(encoded.opponent_player[9 + 2], 1.0);
 
         // Validity flags for populated card/permanent slots.
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM], 1.0);
-        assert_eq!(encoded.agent_cards[CARD_DIM - 1 + CARD_DIM * 2], 0.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM * 2 - 1], 1.0);
+        assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM * 3 - 1], 0.0);
+        assert_eq!(encoded.agent_permanents[LEGACY_PERMANENT_DIM - 1], 1.0);
         assert_eq!(
-            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            encoded.agent_permanents[LEGACY_PERMANENT_DIM - 1 + LEGACY_PERMANENT_DIM],
             0.0
         );
 
@@ -1153,6 +2143,9 @@ mod tests {
                 declared: None,
                 description: None,
                 mode_index: None,
+                name_definition: None,
+                name_index: None,
+                name_group: None,
                 ability_index: None,
                 continuation_index: None,
             })
@@ -1165,10 +2158,10 @@ mod tests {
             encoded.action_focus[last * config.max_focus_objects],
             2 + obs.agent_cards.len() as i32 + last as i32
         );
-        let row = (obs.agent_cards.len() + last) * CARD_DIM;
+        let row = (obs.agent_cards.len() + last) * config.card_dim();
         assert_eq!(encoded.agent_cards[row..row + ZONE_DIM], [0.0; ZONE_DIM]);
         assert_eq!(encoded.agent_cards[row + 37], 1.0);
-        assert_eq!(encoded.agent_cards[row + CARD_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_cards[row + config.card_dim() - 1], 1.0);
         for undersized in [
             ObservationEncoderConfig {
                 max_actions: 32,
@@ -1200,17 +2193,18 @@ mod tests {
             max_focus_objects: 2,
             max_events: 1,
             policy_history: false,
-            relations: true,
+            policy_input_version: 4,
+            ..ObservationEncoderConfig::default()
         };
 
         let mut agent_player = vec![0.0; 1];
         let mut semantic_cards = vec![0.0; 4];
         let mut known_hand = vec![0.0; 8];
-        let mut opponent_player = vec![0.0; PLAYER_DIM];
-        let mut agent_cards = vec![0.0; 2 * CARD_DIM];
-        let mut opponent_cards = vec![0.0; 2 * CARD_DIM];
-        let mut agent_permanents = vec![0.0; PERMANENT_DIM];
-        let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
+        let mut opponent_player = vec![0.0; LEGACY_PLAYER_DIM];
+        let mut agent_cards = vec![0.0; 2 * LEGACY_CARD_DIM];
+        let mut opponent_cards = vec![0.0; 2 * LEGACY_CARD_DIM];
+        let mut agent_permanents = vec![0.0; LEGACY_PERMANENT_DIM];
+        let mut opponent_permanents = vec![0.0; LEGACY_PERMANENT_DIM];
         let mut actions = vec![0.0; 2 * ACTION_DIM];
         let mut events = vec![0.0; EVENT_DIM];
         let mut action_focus = vec![-1; 2 * 2];
@@ -1224,9 +2218,11 @@ mod tests {
         let mut events_valid = vec![0.0; 1];
 
         let out = EncodedObservationMut {
+            name_candidates: &mut [],
             relations: &mut [],
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
+            decklists: &mut [],
             agent_player: &mut agent_player,
             opponent_player: &mut opponent_player,
             agent_cards: &mut agent_cards,
@@ -1235,6 +2231,10 @@ mod tests {
             opponent_permanents: &mut opponent_permanents,
             actions: &mut actions,
             events: &mut events,
+            effects: &mut [],
+            effect_details: &mut [],
+            effect_members: &mut [],
+            facts: &mut [],
             action_focus: &mut action_focus,
             agent_player_valid: &mut agent_player_valid,
             opponent_player_valid: &mut opponent_player_valid,
@@ -1249,7 +2249,7 @@ mod tests {
         let err = encode_into(&obs, &config, out).expect_err("invalid length must fail");
         assert_eq!(
             err.to_string(),
-            format!("invalid length for agent_player: expected {PLAYER_DIM}, got 1")
+            format!("invalid length for agent_player: expected {LEGACY_PLAYER_DIM}, got 1")
         );
     }
 }

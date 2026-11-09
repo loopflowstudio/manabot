@@ -9,7 +9,10 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cardsets::alpha::ContentPackManifest,
+    cards::{
+        content_pack::{default_content_pack, ContentPackManifest},
+        names::NameVocabulary,
+    },
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -17,11 +20,14 @@ use crate::{
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
-    search_state::{BranchDriver, FullCloneDriver, SearchStateWitness},
+    search_state::{witness, SearchStateWitness},
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
@@ -87,10 +93,13 @@ pub struct FlatMcResult {
     pub cap_hits: u64,
 }
 
-/// Private scalar replay input retained only for diagnostics at vector failures.
+/// Private scalar replay input for failure diagnostics and training exposure.
 #[derive(Clone, Debug, serde::Serialize)]
 struct NativeActionTrace {
-    player_configs: Vec<PlayerConfig>,
+    #[serde(skip)]
+    seed: u64,
+    /// Fixed at reset; forks share it rather than copying the decklists.
+    player_configs: Arc<[PlayerConfig]>,
     actions: Vec<usize>,
 }
 
@@ -99,6 +108,8 @@ pub struct Env {
     game: Option<Game>,
     action_trace: Option<NativeActionTrace>,
     capture_cards: bool,
+    capture_exposure: bool,
+    retained_exposure: Vec<String>,
     skip_trivial: bool,
     seed: u64,
     pub profiler: Profiler,
@@ -184,6 +195,8 @@ impl Env {
             game: None,
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial,
             seed,
             profiler: Profiler::new(enable_profiler, 64),
@@ -194,10 +207,15 @@ impl Env {
         }
     }
 
-    fn construct_possible_world_space(&self, game: &Game, viewer: PlayerId) -> PossibleWorldSpace {
+    fn construct_possible_world_space(
+        &self,
+        game: &Game,
+        viewer: PlayerId,
+    ) -> Result<PossibleWorldSpace, AgentError> {
+        game.require_open_decklist(viewer)?;
         self.possible_world_space_constructions
             .fetch_add(1, Ordering::Relaxed);
-        PossibleWorldSpace::for_viewer(game, viewer)
+        Ok(PossibleWorldSpace::for_viewer(game, viewer))
     }
 
     fn branch_from_game(&self, game: Game) -> Env {
@@ -205,6 +223,8 @@ impl Env {
             game: Some(game),
             action_trace: None,
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -224,13 +244,17 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        // Validate explicit authored setup bindings at the fallible environment
-        // boundary, before Game construction can panic on invalid content.
-        crate::semantic::content_pack_for_authored_match(&player_configs)
+        // Admit submitted decks at the fallible environment boundary, before
+        // Game construction can panic on them.
+        crate::cards::deck_admission::admit_submitted(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
+        if self.capture_exposure && self.game.is_some() {
+            self.retained_exposure.push(self.exposure_json()?);
+        }
         self.action_trace = Some(NativeActionTrace {
-            player_configs: player_configs.clone(),
+            seed: self.seed,
+            player_configs: Arc::from(player_configs.clone()),
             actions: Vec::new(),
         });
         let mut game = if self.capture_cards {
@@ -238,6 +262,12 @@ impl Env {
         } else {
             Game::new(player_configs, self.seed, self.skip_trivial)
         };
+        if self.capture_exposure {
+            game.card_capture
+                .as_mut()
+                .expect("card capture enabled")
+                .exposure = Some(crate::flow::card_capture::ExposureCapture::default());
+        }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
         self.capture_generation += 1;
@@ -256,7 +286,36 @@ impl Env {
         Ok(())
     }
 
+    /// Training uses the same card capture, adding consumed choices and completed frames.
+    pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
+        self.enable_card_capture()?;
+        self.capture_exposure = true;
+        Ok(())
+    }
+
+    pub fn exposure_json(&self) -> Result<String, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("capture before reset".into()))?;
+        serde_json::to_string(&serde_json::json!({
+            "seed": self.action_trace.as_ref().map(|trace| trace.seed),
+            "terminal": game.is_game_over(),
+            "trace": self.action_trace,
+            "cards": self.card_capture_value()?,
+        }))
+        .map_err(|e| AgentError(e.to_string()))
+    }
+
+    pub fn take_exposure(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.retained_exposure)
+    }
+
     pub fn card_capture_json(&self) -> Result<String, AgentError> {
+        serde_json::to_string(&self.card_capture_value()?).map_err(|e| AgentError(e.to_string()))
+    }
+
+    fn card_capture_value(&self) -> Result<serde_json::Value, AgentError> {
         let game = self
             .game
             .as_ref()
@@ -265,12 +324,11 @@ impl Env {
             .card_capture
             .as_ref()
             .ok_or_else(|| AgentError("card capture unavailable".into()))?;
-        serde_json::to_string(&serde_json::json!({
+        Ok(serde_json::json!({
             "capture": capture,
             "final_cards": crate::flow::card_capture::snapshots(game),
             "turn": game.state.turn.turn_number,
         }))
-        .map_err(|e| AgentError(e.to_string()))
     }
 
     pub fn set_seed(&mut self, seed: u64) {
@@ -280,6 +338,13 @@ impl Env {
     /// Seed of the current game, for private collector recovery.
     pub fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Setups this game was reset with; empty before the first reset.
+    pub fn player_configs(&self) -> &[PlayerConfig] {
+        self.action_trace
+            .as_ref()
+            .map_or(&[], |trace| &trace.player_configs[..])
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
@@ -483,6 +548,14 @@ impl Env {
             .decision_offer_subjects(PlayerId(viewer)))
     }
 
+    pub fn player_controls(&self) -> Result<Vec<crate::experience::PlayerControlView>, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env.player_controls called before reset".into()))?;
+        Ok(game.player_control_views())
+    }
+
     pub fn decision_context(
         &self,
         viewer: usize,
@@ -495,6 +568,17 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("no active game".into()))?
             .decision_context(PlayerId(viewer)))
+    }
+
+    /// Identical for both viewers: only committed public turn/phase state.
+    pub fn public_schedule(&self) -> Result<crate::experience::ScheduleView, AgentError> {
+        Ok(self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("no active game".into()))?
+            .state
+            .turn
+            .public_schedule())
     }
 
     pub fn capture_decision(
@@ -532,6 +616,7 @@ impl Env {
                 "hidden_hand_constraints: invalid viewer".to_string(),
             ));
         }
+        game.require_open_decklist(PlayerId(viewer))?;
         Ok(crate::possible_worlds::HiddenHandConstraints::for_viewer(
             game,
             PlayerId(viewer),
@@ -553,7 +638,7 @@ impl Env {
             )));
         }
         Ok(self
-            .construct_possible_world_space(game, PlayerId(viewer))
+            .construct_possible_world_space(game, PlayerId(viewer))?
             .projection())
     }
 
@@ -571,7 +656,7 @@ impl Env {
                 "possible_world_support: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_support: space identity mismatch".to_string(),
@@ -594,7 +679,7 @@ impl Env {
                 "possible_world_condition: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_condition: space identity mismatch".to_string(),
@@ -651,7 +736,7 @@ impl Env {
                 "materialize_possible_world: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "materialize_possible_world: space identity mismatch".to_string(),
@@ -696,7 +781,7 @@ impl Env {
             ));
         }
         let before = self.possible_world_space_construction_count();
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         let space_identity = space.identity();
         if space_identity != expected_space_identity {
             return Err(AgentError(
@@ -797,12 +882,12 @@ impl Env {
         info
     }
 
-    /// Manifest for the exact immutable content pack retained by this match.
+    /// Manifest of the catalog this match runs on.
     pub fn content_pack_manifest(&self) -> Result<ContentPackManifest, AgentError> {
-        let game = self.game.as_ref().ok_or_else(|| {
+        self.game.as_ref().ok_or_else(|| {
             AgentError("env.content_pack_manifest called before reset".to_string())
         })?;
-        Ok(game.state.content.manifest())
+        Ok(default_content_pack().manifest())
     }
 
     pub fn encode_observation(
@@ -867,6 +952,8 @@ impl Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -877,17 +964,19 @@ impl Env {
         })
     }
 
-    /// Production search fork bound to the RUL-1 retained driver.
+    /// Production search fork: an exact full clone of the match.
     pub fn selected_fork(&self) -> Result<Env, AgentError> {
         let source = self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_fork called before reset".to_string()))?;
-        let game = FullCloneDriver.fork_exact(source);
+        let game = source.clone();
         Ok(Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
+            capture_exposure: false,
+            retained_exposure: Vec::new(),
             skip_trivial: self.skip_trivial,
             seed: self.seed,
             profiler: Profiler::new(false, 64),
@@ -911,7 +1000,8 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
-        FullCloneDriver.determinize(game, PlayerId(perspective), seed);
+        game.require_open_decklist(PlayerId(perspective))?;
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -919,7 +1009,7 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_reseed_rollout called before reset".to_string())
         })?;
-        FullCloneDriver.reseed_rollout(game, seed);
+        game.reseed(seed);
         Ok(())
     }
 
@@ -928,7 +1018,17 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_witness called before reset".to_string()))?;
-        Ok(FullCloneDriver.witness(game))
+        Ok(witness(game))
+    }
+
+    /// Complete native support, independent of any policy tensor cutoff.
+    pub fn current_action_summary(&self) -> (usize, String) {
+        self.game
+            .as_ref()
+            .and_then(|game| game.action_space())
+            .map_or((0, "None".into()), |space| {
+                (space.actions.len(), format!("{:?}", space.kind))
+            })
     }
 
     pub fn selected_revision(&self) -> Result<u64, AgentError> {
@@ -995,7 +1095,8 @@ impl Env {
     //
     // FOR TEST AND MEASUREMENT HARNESSES ONLY: bypasses the rules engine.
     // Typical use: reset, inject at the first priority decision, then call
-    // scenario_refresh to recompute the action space and observation.
+    // scenario_refresh to recompute the action space and observation. The
+    // naming fixture requires and republishes an existing naming decision.
     // ------------------------------------------------------------------
 
     fn scenario_game_mut(&mut self, method: &str) -> Result<&mut Game, AgentError> {
@@ -1007,6 +1108,13 @@ impl Env {
             .ok_or_else(|| AgentError(format!("env.{method} called before reset")))
     }
 
+    /// Fixture access for opt-in native measurement, absent from Python/wheels.
+    /// The harness must refresh priority after changing its constructed board.
+    #[cfg(feature = "benchmark")]
+    pub fn benchmark_game_mut(&mut self) -> &mut Game {
+        self.scenario_game_mut("benchmark_game_mut").unwrap()
+    }
+
     fn scenario_player(player: usize) -> Result<PlayerId, AgentError> {
         if player > 1 {
             return Err(AgentError(format!(
@@ -1014,6 +1122,11 @@ impl Env {
             )));
         }
         Ok(PlayerId(player))
+    }
+
+    pub fn scenario_naming_vocabulary(&mut self) -> Result<Arc<NameVocabulary>, AgentError> {
+        self.scenario_game_mut("scenario_naming_vocabulary")?
+            .scenario_naming_vocabulary()
     }
 
     pub fn scenario_set_life(&mut self, player: usize, life: i32) -> Result<(), AgentError> {
@@ -1072,7 +1185,8 @@ impl Env {
             .game
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
-        game.determinize(PlayerId(perspective), seed);
+        game.require_open_decklist(PlayerId(perspective))?;
+        game.determinize(PlayerId(perspective), seed)?;
         Ok(())
     }
 
@@ -1113,7 +1227,7 @@ impl Env {
             |game, hero, world_index| {
                 let world_seed = mix_seed(seed, world_index as u64);
                 let mut world = game.clone();
-                world.determinize(hero, world_seed);
+                world.determinize(hero, world_seed)?;
                 Ok((world, world_seed))
             },
         )
@@ -1152,6 +1266,7 @@ impl Env {
                 actor.0
             )));
         }
+        game.require_open_decklist(actor)?;
         let space = PossibleWorldSpace::for_viewer(game, actor);
         if space.identity() != space_identity {
             return Err(AgentError(
@@ -1204,6 +1319,7 @@ impl Env {
         let hero = action_space
             .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
             return Err(AgentError("no valid actions available".to_string()));
@@ -1278,10 +1394,11 @@ impl Env {
         let action_space = game
             .action_space()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        if action_space.actions.is_empty() {
+        let count = action_space.actions.len();
+        if count == 0 {
             return Err(AgentError("no valid actions available".to_string()));
         }
-        Ok(game.state.rng.gen_range(0..action_space.actions.len()))
+        Ok(game.state.rng_mut().gen_range(0..count))
     }
 
     fn add_profiler_info(&self, info: &mut InfoDict) {
@@ -1321,13 +1438,10 @@ impl Env {
 
 #[cfg(test)]
 mod content_pack_contract_tests {
-    use std::{collections::BTreeMap, sync::Arc};
+    use std::collections::BTreeMap;
 
-    use super::Env;
-    use crate::{
-        cardsets::alpha::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
-        state::player::PlayerConfig,
-    };
+    use super::{default_content_pack, Env};
+    use crate::{cards::content_pack::CONTENT_PACK_SCHEMA_VERSION, state::player::PlayerConfig};
 
     fn interactive_deck() -> BTreeMap<String, usize> {
         BTreeMap::from([
@@ -1373,10 +1487,14 @@ mod content_pack_contract_tests {
         let first_game = first.game.as_ref().expect("first game");
         let second_game = second.game.as_ref().expect("second game");
         assert_eq!(admitted.schema_version, CONTENT_PACK_SCHEMA_VERSION);
-        assert!(Arc::ptr_eq(&first_game.state.content, &admitted));
-        assert!(Arc::ptr_eq(&second_game.state.content, &admitted));
-        assert_eq!(first_game.state.content.content_digest(), expected_digest);
-        assert_eq!(second_game.state.content.content_digest(), expected_digest);
+        for (first_card, second_card) in first_game
+            .state
+            .cards
+            .iter()
+            .zip(second_game.state.cards.iter())
+        {
+            assert!(first_card.shares_definition_with(second_card));
+        }
 
         let manifest = first.content_pack_manifest().expect("content manifest");
         assert_eq!(manifest.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -1396,12 +1514,6 @@ mod content_pack_contract_tests {
         let root_life = first_game.state.players[0].life;
         let mut changed = first.fork().expect("changed sibling");
         let untouched = first.fork().expect("untouched sibling");
-        let pool = first.rollout_pool(1, 1, 0x208, 2000).expect("rollout pool");
-
-        for content in pool.content_pack_contract_refs() {
-            assert!(Arc::ptr_eq(content, &admitted));
-            assert_eq!(content.content_digest(), expected_digest);
-        }
 
         let action = changed.action_count().expect("changed action count");
         assert!(action > 0);
@@ -1419,8 +1531,6 @@ mod content_pack_contract_tests {
         assert_eq!(changed_game.state.players[0].life, root_life - 3);
 
         for branch in [changed_game, untouched_game] {
-            assert!(Arc::ptr_eq(&branch.state.content, &admitted));
-            assert_eq!(branch.state.content.content_digest(), expected_digest);
             for (root_card, branch_card) in root.state.cards.iter().zip(branch.state.cards.iter()) {
                 assert_eq!(root_card.definition_id, branch_card.definition_id);
                 assert!(root_card.shares_definition_with(branch_card));

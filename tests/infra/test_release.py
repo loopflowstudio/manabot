@@ -36,6 +36,9 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     )
     assert config["tool"]["maturin"]["module-name"] == "manabot.managym._managym"
     assert (bot / "managym/src/lib.rs").is_file()
+    for crate in ("state", "cards"):
+        assert (bot / "managym" / crate / "Cargo.toml").is_file()
+        assert (bot / "managym" / crate / "src/lib.rs").is_file()
     assert (bot / "manabot/managym/decision.py").is_file()
     assert (bot / "manabot/sim/match.py").is_file()
     assert (bot / "manabot/eval/cards.py").is_file()
@@ -43,7 +46,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (bot / "manabot/arena").exists()
     assert not (bot / "managym/pyproject.toml").exists()
     assert not (bot / "managym/libmanagym.dylib.dSYM").exists()
-    assert (bot / "content/semantic/v1/generated/two_deck.ir.json").is_file()
+    assert (bot / "content/semantic/current/setups.json").is_file()
     assert (bot / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json").is_file()
     assert (bot / "protocol/experience-v1.schema.json").read_bytes() == (
         ROOT / "protocol/experience-v1.schema.json"

@@ -560,6 +560,27 @@
         }
       ]
     },
+    "CombatView": {
+      "type": "object",
+      "properties": {
+        "attackers": {
+          "description": "Rules-derived predicate description. Absent means no extra restriction;\nordinary native attack legality still applies.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "player_index": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player_index"
+      ]
+    },
     "Command": {
       "type": "object",
       "properties": {
@@ -625,6 +646,97 @@
         "asset_manifest_sha256"
       ]
     },
+    "ContinuousEffectView": {
+      "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "color": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration": {
+          "description": "`EndOfTurn` or `Indefinite`.",
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modification": {
+          "description": "The engine's `Modification` variant.",
+          "type": "string"
+        },
+        "power": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "source": {
+          "description": "The source's printed name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subtypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timestamp": {
+          "description": "Timestamp order (CR 613.7).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "toughness": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "modification",
+        "duration",
+        "timestamp"
+      ]
+    },
+    "CopyView": {
+      "description": "A copy effect: the printed card it copies and the exceptions that are\npart of its copiable values (CR 707.9b), in application order.",
+      "type": "object",
+      "properties": {
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
     "DecisionAlternative": {
       "type": "object",
       "properties": {
@@ -659,6 +771,13 @@
         },
         "mana_cost": {
           "$ref": "#/$defs/RequiredNullable3"
+        },
+        "pending": {
+          "description": "Native pending execution, omitted on older recorded projections.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "recent_facts": {
           "type": "array",
@@ -1064,6 +1183,21 @@
     "LegacyCardView": {
       "type": "object",
       "properties": {
+        "cast_permission": {
+          "description": "The permission to play this card from exile, when it has one.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCastPermissionView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "face_down": {
+          "description": "Foretold and face down in exile; only its owner's views list it.",
+          "type": "boolean"
+        },
         "id": {
           "type": "integer",
           "format": "uint32",
@@ -1100,6 +1234,14 @@
         "types": {
           "$ref": "#/$defs/LegacyCardTypesView"
         },
+        "x": {
+          "description": "The value of X announced for this spell on the stack.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
         "zone": {
           "type": "string"
         }
@@ -1115,6 +1257,68 @@
         "toughness",
         "mana_value",
         "types"
+      ]
+    },
+    "LegacyCastPermissionView": {
+      "description": "A public permission to play an exiled card. Only set terms are present.",
+      "type": "object",
+      "properties": {
+        "after_turn": {
+          "description": "Usable only on a turn numbered after this one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "any_mana": {
+          "type": "boolean"
+        },
+        "cost": {
+          "description": "Mana symbols paid to cast it, such as `{2}`; absent for a land play.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "flash": {
+          "type": "boolean"
+        },
+        "foretold": {
+          "type": "boolean"
+        },
+        "own_turn_only": {
+          "type": "boolean"
+        },
+        "player_id": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "source_permanent_id": {
+          "description": "Lasts while the permitted player controls this permanent.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "this_turn": {
+          "type": "boolean"
+        },
+        "through_next_turn": {
+          "description": "Ends in the cleanup step of the permitted player's next turn.",
+          "type": "boolean"
+        },
+        "waterbend": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player_id"
       ]
     },
     "LegacyHeroObservation": {
@@ -1145,6 +1349,26 @@
         "opponent": {
           "$ref": "#/$defs/LegacyPlayerView"
         },
+        "player_controls": {
+          "description": "Absent in historical frames; present empty means no scheduled control.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/PlayerControlView"
+          }
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ScheduleView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "stack_objects": {
           "type": [
             "array",
@@ -1173,28 +1397,111 @@
     "LegacyPermanentView": {
       "type": "object",
       "properties": {
+        "abilities_lost": {
+          "description": "It has lost all abilities.",
+          "type": "boolean"
+        },
+        "attached_to": {
+          "description": "The permanent this Aura or Equipment is attached to.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "attacking": {
+          "description": "Attacking in the current combat.",
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "blocking": {
+          "description": "The attacking permanent this one blocks.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "controller_id": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
         },
+        "copy_of": {
+          "description": "The copy effect that made it a copy (CR 707.2).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counters": {
+          "description": "Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "creature_types": {
+          "description": "Creature types set by an effect (Honest Work); `name` is then the set name.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "damage": {
           "type": "integer",
           "format": "int32"
         },
+        "dealt_damage_this_turn": {
+          "description": "It was dealt damage this turn.",
+          "type": "boolean"
+        },
+        "effects": {
+          "description": "Continuous effects on it, in timestamp order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
+        "exhausted_abilities": {
+          "description": "Exhaust abilities this object has used (CR 702.177a).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "exile_if_dies_this_turn": {
           "type": "boolean"
+        },
+        "granted_firebending": {
+          "description": "Firebending granted until end of turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "id": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "is_granted_land": {
+          "description": "A land only through an effect.",
+          "type": "boolean"
         },
         "is_token": {
           "type": [
@@ -1204,6 +1511,12 @@
         },
         "name": {
           "$ref": "#/$defs/RequiredNullable3"
+        },
+        "once_each_turn_used": {
+          "description": "\"Once each turn\" abilities this object has used this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "plus1_counters": {
           "type": "integer",
@@ -1231,6 +1544,11 @@
         "toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "transforms": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "types": {
           "anyOf": [
             {
@@ -1240,6 +1558,15 @@
               "type": "null"
             }
           ]
+        },
+        "used_abilities": {
+          "description": "Activated abilities (indices in its ability list) whose limit is spent.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         }
       },
       "additionalProperties": false,
@@ -1260,6 +1587,12 @@
     "LegacyPlayerView": {
       "type": "object",
       "properties": {
+        "additional_combats": {
+          "description": "Additional combat phases still to come this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "battlefield": {
           "type": "array",
           "items": {
@@ -1273,11 +1606,24 @@
           ],
           "format": "int32"
         },
+        "effects": {
+          "description": "Continuous effects on this player, in timestamp order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
         "exile": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/LegacyCardView"
           }
+        },
+        "extra_turns": {
+          "description": "Extra turns this player will take after this one.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "graveyard": {
           "type": "array",
@@ -1292,6 +1638,15 @@
           }
         },
         "hand_hidden_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "hand_only_until": {
+          "description": "Player id whose next turn ends this player's hand-only casting.",
           "type": [
             "integer",
             "null"
@@ -1314,6 +1669,10 @@
           "type": "boolean"
         },
         "is_agent": {
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "description": "Unspent red mana stays until end of turn.",
           "type": "boolean"
         },
         "known_hand": {
@@ -1345,6 +1704,18 @@
           "type": "integer",
           "format": "int32"
         },
+        "main_counts": {
+          "description": "Decklist counts by definition, present only when this frame's viewer\nknows the player's decklist (its own, or an open opponent's). Absent\nmeans hidden; an empty map means known and empty.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "mana": {
           "type": [
             "array",
@@ -1357,6 +1728,9 @@
           "maxItems": 6,
           "minItems": 6
         },
+        "no_maximum_hand_size": {
+          "type": "boolean"
+        },
         "player_index": {
           "type": "integer",
           "format": "uint8",
@@ -1364,11 +1738,21 @@
           "minimum": 0
         },
         "remaining_sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
             "minimum": 0
+          }
+        },
+        "restricted_mana": {
+          "description": "`lesson_mana` split by restriction class.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LegacyRestrictedManaView"
           }
         },
         "sideboard": {
@@ -1378,7 +1762,10 @@
           }
         },
         "sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
@@ -1389,6 +1776,21 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "turn_history": {
+          "description": "What this player has done this turn.",
+          "$ref": "#/$defs/PlayerTurnHistory"
+        },
+        "unseen_counts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "zone_counts": {
@@ -1414,6 +1816,37 @@
         "exile",
         "stack",
         "battlefield"
+      ]
+    },
+    "LegacyRestrictedManaView": {
+      "description": "Mana spendable only on spells with one of `spells`' subtypes or abilities\nof sources with one of `abilities`' subtypes; W/U/B/R/G/C amounts.",
+      "type": "object",
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mana": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "maxItems": 6,
+          "minItems": 6
+        },
+        "spells": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mana"
       ]
     },
     "LegacyTurnView": {
@@ -1515,6 +1948,75 @@
         "pay",
         "special"
       ]
+    },
+    "PlayerControlView": {
+      "description": "Public player-control effects in creation order. Effective distinguishes\nthe last-created active effect from another whose interval also runs now.",
+      "type": "object",
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "controller": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "effective": {
+          "type": "boolean"
+        },
+        "player": {
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "whole_turn": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "player",
+        "controller",
+        "whole_turn",
+        "active",
+        "effective"
+      ]
+    },
+    "PlayerTurnHistory": {
+      "description": "What one player has done this turn, for conditions that read turn history\n(\"if you attacked this turn\", \"your second card each turn\"). The owner of\nevery such fact: the turn reset, the state hash and the policy's player\nrow all read this struct.",
+      "type": "object",
+      "properties": {
+        "attacked": {
+          "description": "Declared one or more attackers (raid; CR 508.1). Creatures put onto\nthe battlefield attacking were never declared and do not count.",
+          "type": "boolean"
+        },
+        "bent": {
+          "description": "The kinds of bending this player has done: one bit per [`Bending`]\n(\"if you've done all four this turn\").",
+          "type": "integer",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0
+        },
+        "cards_drawn": {
+          "description": "Cards this player drew (\"your Nth card each turn\").",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "land_entered": {
+          "description": "A land entered the battlefield under this player's control.",
+          "type": "boolean"
+        },
+        "permanents_sacrificed": {
+          "description": "Permanents this player sacrificed (CR 701.21).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     },
     "PolicyMass": {
       "type": "object",
@@ -1674,6 +2176,49 @@
         "sampled_worlds"
       ]
     },
+    "ScheduleView": {
+      "description": "Public committed scheduling only; absent on historical projections that\ndid not record it. Order is execution order, independently in each domain.",
+      "type": "object",
+      "properties": {
+        "additional_combats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CombatView"
+          }
+        },
+        "current_combat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CombatView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extra_turns": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "resume_with": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "extra_turns",
+        "additional_combats"
+      ]
+    },
     "SearchValue": {
       "type": "object",
       "properties": {
@@ -1768,6 +2313,15 @@
           "type": "string"
         },
         "source_permanent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "x": {
+          "description": "The announced value of X, when one was announced above zero.",
           "type": [
             "integer",
             "null"

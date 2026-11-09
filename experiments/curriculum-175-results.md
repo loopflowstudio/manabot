@@ -1,52 +1,125 @@
-# Curriculum adapters: interim results
+# Curriculum adapters: results
 
-Development outcomes observed 2026-10-27T11:38:53.947448+00:00; operational
-status checked at 12:29 UTC. **The final four-arm effects comparison is not yet
-available.** This interim report records complete U/M/E development results,
-their deck/seat breakdowns and the retained initial-evaluation failure while
-the experiment continues.
+Final report, 2026-11-08. The study closed with the evidence below; no further
+training or evaluation is planned. Four curricula chose which deck matchups the
+learner played during two-seat Elemental-v2 self-play, all from the same
+initial weights:
 
-The treatments are uniform U, moderate-matchup preference M (peaks near 33/67
-and 67/33), value-target error E, and their normalized-rank mixture ME. Jack's
-latest allocation is **$10 inclusive per arm, $40 total**, superseding the
-original $5-per-arm goal. The [protocol](protocols/curriculum-175.md) defines
-selection, fixed evaluation deals, cost-based checkpoint selection and analysis.
+- **U**, uniform: MTG-183's existing seed-18301 window, reused rather than retrained.
+- **M**, moderate-matchup preference: favours pairings whose estimated win rate is near 33/67 or 67/33.
+- **E**, value-target error: favours pairings where the value prediction misses its bootstrapped target most.
+- **ME**: an equal mixture of the normalized M and E distributions.
 
-## Update-200 development results
+The [protocol](protocols/curriculum-175.md) defines selection, the fixed
+evaluation deals and the analysis. Every number here is one training seed
+against heuristic v2 or another arm, scored with equal weight per ordered deck
+cell and native seat. No invalid or missing game appears in any cohort below.
 
-On the predeclared 400-game development grid, **U scored 55.50%, M scored
-53.00%, and E scored 49.75%**. M was **2.50 percentage points below U** and E
-was **5.75 percentage points below U** on these fixed deals. Each cohort contains
-all 400 planned games, all valid, with zero missing or invalid games. Scores
-weight ordered deck cells and native seats equally.
+## Summary
 
-| Arm | Valid / planned games | Observed full-grid score |
-|---|---|---|
-| U | 400 / 400 | 55.50% |
-| M | 400 / 400 | 53.00% |
-| E | 400 / 400 | 49.75% |
-| ME | 0 / 400 | Pending |
+- **No curriculum beat uniform.** Against heuristic v2 at update 800, U scored
+  67.75%, E 65.00% and M 64.25% (400 development games each). Head to head at
+  update 800, U beat M 54.75% and E 53.00%; M beat E 52.00% (400 games per pair).
+- **M and E finished level on the held-out deals.** At their cost-matched
+  checkpoints, M (update 700) scored 64.65% and E (update 750) 63.50% over 2,000
+  games each. M−E is +1.15 points, 95% paired-deal bootstrap interval
+  −0.95 to +3.20.
+- **The primary U comparison is missing.** U's held-out endpoint was never
+  evaluated, so the preregistered gain-over-initialization contrast against U
+  cannot be computed. ME has no trained-policy score at all.
+- **The curricula did change what was played.** E concentrated play on fewer
+  pairings (27.9% of starts in its top ten cells, against 15.9% for M) and on
+  red-green, as the sampling section below shows. That shift did not show up as
+  strength.
 
-This is an exploratory development point at equal update counts, not the primary
-cost-selected or held-out endpoint comparison. It describes the observed grid;
-it does not establish a general curriculum effect or final ranking. The
-preregistered four-arm paired confidence intervals and interaction remain
-pending ME. The single historical-control seed and maintenance/coverage
-confounds still apply. Missing arms are not assigned zero scores.
+Against the protocol's practical threshold (+5 points over U without any deck
+worsening by more than 5), neither M nor E comes close on the evidence there is.
 
-The frozen identities, admitted rows, coverage and complete-grid bounds are
-published at `experiments/data/curriculum-175/development-200/three-arm-outcomes.json`.
-The earlier U/E snapshot remains in `early-outcomes.json`. All three update-200
-evaluation jobs have now succeeded, with their rentals confirmed ended.
-Delivered valid games are retained independently of that operational status.
+## Development curve against heuristic v2
 
-## Development results by deck and native seat
+Development uses two deals per ordered cell in both seats: 400 games per point.
+The initial weights are shared, so update 0 is the same policy for every arm.
+
+| Update | U | M | E | ME |
+|---:|---:|---:|---:|---:|
+| 0 | 6.75% | 6.75% | 6.75% | 6.75% |
+| 100 | — | 45.75% | 38.50% | — |
+| 200 | 55.50% | 53.00% | 49.75% | — |
+| 400 | — | 56.25% | 57.75% | — |
+| 800 | 67.75% | 64.25% | 65.00% | — |
+
+The update-0, 100 and 400 points were played on the owned CPU host; 200 on
+rented A4000s; 800 in one batched CUDA allocation. Placement does not change
+the deals or the heuristic, and the three update-0 rows (one per arm's copy of
+the initial weights) agree exactly. U has no 100/400 points because its window
+was reused from MTG-183, which was monitored on a different deal family.
+
+## Head to head at update 800
+
+All 100 ordered deck cells, two deals each, both native seats: 400 games per pair.
+
+| Pair | First arm's score | Games (W–L) |
+|---|---:|---:|
+| U vs M | 54.75% | 219–181 |
+| U vs E | 53.00% | 212–188 |
+| M vs E | 52.00% | 208–192 |
+
+The ordering is consistent (U > M > E) and modest; with one seed it is
+exploratory, not an established ranking.
+
+## Held-out endpoints
+
+Held-out uses ten deals per ordered cell in both seats: 2,000 games per point,
+on a deal family disjoint from development and from MTG-183. The protocol
+selects each arm's last export whose first-seen inclusive cost estimate stays
+within U's $7.225 reference, without consulting scores: update 700 for M and
+750 for E.
+
+| Policy | Score | Gain over initial |
+|---|---:|---:|
+| Initial weights | 5.80% | — |
+| M, update 700 | 64.65% | +58.85 |
+| E, update 750 | 63.50% | +57.70 |
+| U endpoint | not evaluated | — |
+
+| Model deck | M700 | E750 |
+|---|---:|---:|
+| Black-green | 75.0% | 70.5% |
+| Red-green | 64.5% | 70.5% |
+| Green-white | 49.5% | 49.0% |
+| Black-red | 71.0% | 64.5% |
+| Blue-black | 62.5% | 62.0% |
+| Blue-green | 63.5% | 69.5% |
+| Blue-red | 82.5% | 78.0% |
+| White-blue | 44.5% | 41.5% |
+| White-black | 62.0% | 61.5% |
+| Red-white | 71.5% | 68.0% |
+
+By native seat, M scored 64.9% / 64.4% and E 65.0% / 62.0% (seat 0 / seat 1).
+The paired interval resamples whole deals (both seats of one deal together),
+1,000 shared deals, 5,000 resamples.
+
+## What is missing, and why
+
+- **U held-out endpoint.** Its evaluation was cancelled when the study closed.
+- **ME strength.** ME trained to update 870 (last export 850), but its update-800
+  GPU evaluation lost its machine before starting, and its CPU evaluations were
+  cancelled at close. Only its initial weights were scored.
+- **Development points at 1,200 and later**, and U's initial held-out cohort
+  (1,600 of 2,000 games, retained as delivered).
+
+Most CPU evaluations were delayed for days: the owned CPU host had no storage,
+so it never received checkpoints that training had written to R2. Etude 0.2.13
+fixed that delivery, and those runs then played every game. Lost and cancelled
+attempts remain in the launcher and in the Task's retained records; none is
+counted as a score.
+
+### Update-200 development results by deck and native seat
 
 Each deck row contains **40 valid games per observed arm**: ten opposing decks,
 two deals per pairing and both native seats. Cells receive equal weight. Each
 seat row contains **200 valid games per arm**, with all 100 ordered cells.
-There are no missing or invalid U/M/E games in these strata; ME remains pending
-throughout. Differences are percentage points against U on the same deals.
+There are no missing or invalid U/M/E games in these strata; Differences are percentage points against U on the same deals.
 
 | Model deck | U | M | E | M−U | E−U |
 |---|---:|---:|---:|---:|---:|
@@ -185,120 +258,40 @@ This window was inspected after it existed and is descriptive, not a new
 preregistered efficacy endpoint. Final strength, uncertainty, full-history
 coverage/forgetting and the combined arm remain outstanding.
 
-## Initial-policy evidence
+## Cost
 
-The common initial policy's held-out evaluation delivered **1,600 valid games
-of 2,000 planned**, with **0 delivered invalid games and 400 missing games**.
-Eight of ten match units finished before the one-hour execution deadline.
-Etude subsequently recorded `lost / machine_lost`, with rental termination
-confirmed. No missing game is imputed or automatically replayed.
+Training cost, as launcher estimates at each arm's last export (not invoices):
+M $7.63 (update 800), E $7.88 (850), ME $7.58 (850). U reuses MTG-183's window
+with a $7.225 cleanup estimate. Each arm stayed inside its $10 inclusive
+allocation; no allowance moved between arms. Evaluation used owned CPU hosts at
+no rental cost, about $0.16–0.18 of A4000 time per update-200 point (detailed in
+`evaluation-costs/completed-rentals.json`) and at most $1.50 per batched GPU
+allocation.
 
-Giving each ordered deck cell and native seat equal weight, the complete-grid
-initial-policy score is bounded by **4.7%–24.7%** when each missing score may
-lie anywhere in [0, 1]. These are identification bounds, not confidence
-intervals or an adapter-effect estimate. The observed cells are not substituted
-for the full target population.
+## Identity and limits
 
-The initial weights are shared by the adaptive arms and the reused MTG-183
-control. This initial evaluation therefore establishes starting-policy context;
-it cannot establish that a curriculum helped or hurt.
-
-Training status below is the 12:27 UTC snapshot, with evaluation completion
-checked at 12:29 UTC; the live dashboard updates independently. The scores above
-retain their original frozen-data read.
-
-| Arm | Training at 12:27 UTC | Update-200 evaluation |
-|---|---|---|
-| U | Reused MTG-183's genuine window through update 1,325 | Succeeded; 400 valid games |
-| M | Running, update 444 | Succeeded; 400 valid games |
-| E | Running, update 472 | Succeeded; 400 valid games |
-| ME | Queued for an L4 | Awaits its genuine export and budget check |
-
-M's first remote update-200 request was refused before machine acquisition or
-command start, with a recorded charge of $0. Its unchanged checkpoint and match
-keys were retained for a capacity recovery. This is distinct from U's timed-out
-evaluation. Both failures and all unstarted-request cancellations remain in the
-operational evidence; they are not silently dropped from the experiment history.
-
-## Identity and reproducibility
-
-Scientific execution remains frozen at Manabot
-`0fc90e4130aca0e28a5e1b56cd9f2004b86a6845`, world w13 and historical v1 policy
-inputs. U's initialization digest is
+Training and the evaluations above ran from the frozen Manabot runtime
+`0fc90e4130aca0e28a5e1b56cd9f2004b86a6845`, world w13, v1 policy input and
+heuristic v2. U's initialization digest is
 `1004ccdf46f373e833dadcb5278351a758e5328ed7c28049259c8c06be614688`.
-The retained outcome reader verifies checkpoint digest, policy and heuristic
-versions, world identity and tournament against the original launch record.
-It does not recompute these identities from the newer reporting checkout.
+Current Manabot reads saved recipes as the current policy input, so the
+experiment file on main is a record of the study, not a relaunch path.
 
-The admitted initial outcomes, frozen policy/anchor/world records and failure
-receipts are published as:
+One training seed per arm, U's reuse of a window trained under earlier runtime
+maintenance, and the curricula's coverage safeguards (20% coverage, 20% age,
+60% priority, 5% cap per cell) all limit causal interpretation. Missing points
+are reported as missing, never as zero.
 
-- `experiments/data/curriculum-175/initial-evaluation/outcomes.json`
-- `experiments/data/curriculum-175/initial-evaluation/operations.json`
+## Data
 
-Their immutable content hashes are in [the artifact manifest](data.manifest.json).
-Fetch them with:
+Published under `experiments/data/curriculum-175/` (hashes in
+[the artifact manifest](data.manifest.json)):
+
+- `final/held-out-summary.json`: held-out scores, breakdowns and the paired M−E interval.
+- `final/development-800-scores.json`, `final/h2h-800-scores.json`: update-800 results.
+- `final/tables/`: game tables of the eleven CPU evaluations (development 0/100/400, held-out 0/700/750).
+- `development-200/`, `distribution-500/`, `initial-evaluation/`, `evaluation-costs/`: earlier published results.
 
 ```sh
 uv run --extra artifacts python -m manabot.data fetch experiments/data/curriculum-175
 ```
-
-The original match records and tables also remain in Etude's
-`r2://manabot/jobs` store. The [implementation PR](https://github.com/loopflowstudio/manabot/pull/383)
-and [report-read support](https://github.com/loopflowstudio/etude/pull/58) provide
-integration evidence, not evidence of curriculum gains.
-
-## Cost and interpretation
-
-U retains its historical $7.225 cleanup estimate; it was not trained again.
-Its incomplete initial eval had a nominal rental limit of $0.3125. The
-update-200 capacity allowance is at most $0.34 per arm. The retained M/E training
-rental limits are $8.9975 each; prior startup charges and the full $0.50 reserve
-remain included in each arm's $10 limit. ME requires a fresh bound before its
-evaluation is submitted. No unused allowance moves between arms.
-
-Live provider billing revised U's elapsed-rate estimate downward when a
-closed-hour record arrived. These amounts remain provisional, not invoices;
-the lower estimate is not treated as extra spending permission. SDK run-share
-cost ends at command completion and can omit the paid evidence-delivery tail.
-Final inclusive costs must include each dedicated rental through confirmed
-machine deletion, plus setup failures and earlier evaluation charges.
-
-A read-only provider billing check at **2026-10-27T12:47:31Z** found revised
-charges for completed rentals that the controller had already stopped refreshing.
-The table retains the distinct measurements. Provider hour records are a dated
-snapshot, **not settled invoices**; an SDK `estimated=false` flag alone does not
-prove that subsequent provider revisions are absent.
-
-| Evaluation rental | Dedicated minutes | Nominal limit | Elapsed-rate estimate | Provider hour records |
-|---|---:|---:|---:|---:|
-| U initial, lost | 75.05 | $0.3125 | $0.31271 | $0.31457 |
-| U update 200, succeeded | 44.11 | $0.3125 | $0.18379 | $0.18494 |
-| M update 200, succeeded | 43.30 | $0.3125 | $0.18043 | $0.18169 |
-| E update 200, succeeded | 39.06 | $0.3125 | $0.16277 | $0.16384 |
-
-U's initial deletion receipt arrived about three seconds after its deadline;
-its later provider record also exceeds the nominal limit. Thus these nominal
-limits are retained control settings, not evidence that the final charge is
-mathematically bounded by the same amount. The study's $10-per-arm allocation
-remains the constraint; no apparent billing reduction authorizes extra work.
-
-For M update 200, the controller retained only $0.00453 of rental billing while
-the fresh provider read returned $0.18169. Its run-share field was lower still,
-about $0.00113. U/M/E update-200 rentals remained alive for approximately
-30.94/32.52/28.93 minutes after their successful commands finished, respectively.
-Those intervals include evidence delivery and deletion. The old worker archives
-remain unchanged; the bounded-delivery SDK repair applies to future launches.
-
-The lifecycle records, both billing observations and exact read-only audit
-sources are retained in
-`experiments/data/curriculum-175/evaluation-costs/completed-rentals.json`.
-These later observations never rewrite the prospective checkpoint-selection
-ledger or select policies based on their evaluation scores.
-
-The final report still requires genuine trained-policy results across all four
-arms, paired whole-deal contrasts and uncertainty, deck/seat outcomes, exposure,
-coverage and forgetting, and cumulative inclusive cost receipts. It will report
-M−U, E−U, ME−U and ME−M−E+U without hiding invalid or missing cells. One historical
-control seed, runtime maintenance and adaptive coverage safeguards limit causal
-interpretation even when those results arrive.

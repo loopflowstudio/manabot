@@ -6,46 +6,30 @@ use managym::{
     },
     state::{
         card::ReplacementEffect,
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
 
-use super::helpers::*;
-
-fn card_for_permanent(s: &Scenario, permanent: PermanentId) -> CardId {
-    s.game().state.permanents[permanent]
-        .as_ref()
-        .expect("driver permanent")
-        .card
-}
-
-fn card_named_outside_battlefield(s: &Scenario, player: usize, name: &str) -> CardId {
-    s.game()
-        .state
-        .cards
-        .iter()
-        .enumerate()
-        .find_map(|(index, card)| {
-            let card_id = CardId(index);
-            (card.owner == PlayerId(player)
-                && card.name == name
-                && s.game().state.zones.zone_of(card_id) != Some(ZoneType::Battlefield))
-            .then_some(card_id)
-        })
-        .unwrap_or_else(|| panic!("missing {name} outside battlefield"))
-}
+use crate::support::game::*;
+use crate::support::inspect::{card_of, find_owned_card_off_battlefield};
 
 fn resolve_bolt_with_drivers(
     seed: u64,
     driver_effects: Vec<Vec<ReplacementEffect>>,
     target: PlayerId,
+    first_replacement: usize,
 ) -> (i32, Vec<GameEvent>) {
-    let mut s = Scenario::new(ogre_only_deck(), bolt_deck(), seed);
+    let mut s = Scenario::new(
+        deck(&[("Gray Ogre", 40)]),
+        deck_of("Mountain", "Lightning Bolt"),
+        seed,
+    );
 
     for effects in driver_effects {
         let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
-        let card = card_for_permanent(&s, permanent);
+        let card = card_of(&s, permanent);
         // Scenario-local COW definitions make these rule drivers without
         // expanding the production card pack.
         s.game_mut().state.cards[card].replacement_effects = effects;
@@ -62,6 +46,18 @@ fn resolve_bolt_with_drivers(
     s.pass_priority();
     s.pass_priority();
 
+    if matches!(
+        s.game()
+            .state
+            .suspended_decision
+            .as_ref()
+            .map(|s| &s.decision),
+        Some(managym::flow::decision::Decision::OrderReplacement { .. })
+    ) {
+        assert_eq!(s.action_space().player, Some(target));
+        assert_eq!(s.life(target.0), 20, "proposal has not committed");
+        crate::support::play::choose_mode(&mut s, first_replacement);
+    }
     let life = s.life(target.0);
     let events = s.drain_events();
     (life, events)
@@ -87,6 +83,7 @@ fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
             amount: 3,
         }]],
         PlayerId(0),
+        0,
     );
 
     assert_eq!(life, 20);
@@ -100,17 +97,16 @@ fn cr_615_prevented_damage_emits_no_committed_damage_or_life_event() {
     )));
 }
 
-/// CR 616.1 is broader than this slice. The curated contract uses exact
-/// source identity then definition order, making noncommuting effects replay
-/// deterministically until an affected-player choice ABI exists.
+/// CR 616.1: the affected player chooses an order on the same battlefield.
+/// The chosen order is replayable; source insertion does not choose for them.
 #[test]
-fn cr_616_curated_replacement_order_is_deterministic_and_observable() {
+fn cr_616_affected_player_chooses_replacement_order() {
     let prevent_then_double = vec![
         vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
         vec![ReplacementEffect::DoubleDamageToController],
     ];
-    let first = resolve_bolt_with_drivers(614_002, prevent_then_double.clone(), PlayerId(0));
-    let replay = resolve_bolt_with_drivers(614_002, prevent_then_double, PlayerId(0));
+    let first = resolve_bolt_with_drivers(614_002, prevent_then_double.clone(), PlayerId(0), 0);
+    let replay = resolve_bolt_with_drivers(614_002, prevent_then_double, PlayerId(0), 0);
 
     assert_eq!(
         first, replay,
@@ -127,10 +123,11 @@ fn cr_616_curated_replacement_order_is_deterministic_and_observable() {
     let (reverse_life, reverse_events) = resolve_bolt_with_drivers(
         614_002,
         vec![
-            vec![ReplacementEffect::DoubleDamageToController],
             vec![ReplacementEffect::PreventDamageToController { amount: 1 }],
+            vec![ReplacementEffect::DoubleDamageToController],
         ],
         PlayerId(0),
+        1,
     );
     assert_eq!(reverse_life, 15, "(3 * 2) - 1 damage");
     assert_eq!(committed_damage(&reverse_events, PlayerId(0)), Some(5));
@@ -138,13 +135,14 @@ fn cr_616_curated_replacement_order_is_deterministic_and_observable() {
 
 #[test]
 fn nonmatching_replacement_preserves_the_legacy_committed_trace() {
-    let baseline = resolve_bolt_with_drivers(614_003, vec![Vec::new()], PlayerId(1));
+    let baseline = resolve_bolt_with_drivers(614_003, vec![Vec::new()], PlayerId(1), 0);
     let nonmatching = resolve_bolt_with_drivers(
         614_003,
         vec![vec![ReplacementEffect::PreventDamageToController {
             amount: 3,
         }]],
         PlayerId(1),
+        0,
     );
 
     assert_eq!(baseline, nonmatching);
@@ -156,50 +154,74 @@ fn nonmatching_replacement_preserves_the_legacy_committed_trace() {
 /// committed and observed by triggers.
 #[test]
 fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 614_004);
-    let card = card_named_outside_battlefield(&s, 0, "Gray Ogre");
-    let from = s.game().state.zones.zone_of(card);
-    let old_ref = s.game().current_object_ref(card).expect("departing object");
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        deck(&[("Mountain", 40)]),
+        614_004,
+    );
+    let card = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(card, ZoneType::Hand);
     s.game_mut().state.cards[card].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters { count: 2 },
+        ReplacementEffect::EntersWithPlusOneCounters {
+            count: 2,
+            condition: None,
+        },
     ];
     let _ = s.drain_events();
 
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::parse("RRR");
+    // Re-publish the position after controlled fixture mana was supplied.
+    s.game_mut().scenario_refresh_priority().unwrap();
+    crate::support::play::cast_card(&mut s, card);
+    let from = Some(ZoneType::Stack);
+    let old_ref = s.game().current_object_ref(card).expect("spell object");
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Stack));
+    crate::support::play::choose_mode(&mut s, 0);
 
     let permanent_id = s.game().state.card_to_permanent[card].expect("entered permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("entered permanent facts");
     assert!(permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 2);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
     assert_ne!(s.game().current_object_ref(card), Some(old_ref));
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
         card,
         from,
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
+        face_down: false,
     }));
 }
 
 #[test]
 fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 614_005);
-    let driver = card_named_outside_battlefield(&s, 0, "Gray Ogre");
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        614_005,
+    );
+    let driver = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
     s.game_mut().state.cards[driver].replacement_effects = vec![
         ReplacementEffect::EntersTapped,
-        ReplacementEffect::EntersWithPlusOneCounters { count: 2 },
+        ReplacementEffect::EntersWithPlusOneCounters {
+            count: 2,
+            condition: None,
+        },
     ];
     s.game_mut().move_card(driver, ZoneType::Graveyard);
     assert_eq!(s.game().state.card_to_permanent[driver], None);
 
-    let mountain = card_named_outside_battlefield(&s, 0, "Mountain");
+    let mountain = find_owned_card_off_battlefield(&s, 0, "Mountain");
     s.game_mut().move_card(mountain, ZoneType::Battlefield);
     let permanent_id = s.game().state.card_to_permanent[mountain].expect("mountain permanent");
     let permanent = s.game().state.permanents[permanent_id]
         .as_ref()
         .expect("mountain facts");
     assert!(!permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 0);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 0);
 }

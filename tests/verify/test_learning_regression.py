@@ -5,11 +5,12 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.experiment.checkpoint_evaluation import checkpoint_manifest
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.recipes.baseline import baseline
 from manabot.training.records import TrainingCoordinates, TrainingRun
@@ -138,9 +139,10 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
                 plan.evaluation,
             )
             assert admitted.expected_games == 96
-            fixture = decision_case("attack")
+            # An authored-setup case, so its card IDs are the policy's pack.
+            fixture = decision_case("target")
             case = Case(
-                name="attack",
+                name="target",
                 seed=0,
                 swapped=False,
                 trace=[],

@@ -90,6 +90,7 @@ def _run(
             Checkpoint(
                 run=name,
                 experiment=study.EXPERIMENT,
+                line=name,
                 ordinal=ordinal,
                 artifact=ArtifactRef(
                     uri=checkpoint.as_uri(), sha256="0" * 64, size_bytes=1
@@ -256,22 +257,6 @@ def test_imported_export_bytes_are_discoverable_as_etude_job_inputs(
     with pytest.raises(ValueError, match="cached uniform bytes differ"):
         uniform.materialize_uniform(directory, cache)
     assert first.read_bytes() == before
-
-
-def test_frozen_183_input_version_survives_job_and_bound_input_roundtrips() -> None:
-    from manabot.infra.config import ObservationConfig
-    from manabot.training.regime import TrainingRegime
-
-    # Fresh defaults evolve; the historical campaign must still round-trip v1.
-    assert ObservationConfig().policy_input_version > 1
-    regime = study.recipe("M")
-    assert regime.observation.policy_input_version == 1
-    raw = regime.model_dump(mode="json")
-    assert "policy_input_version" not in raw["observation"]
-    assert TrainingRegime.model_validate(raw).observation.policy_input_version == 1
-    spec = TrainingJob.model_validate_json(study.runs("HEAD")[0].job.config)
-    assert spec.regime.observation.policy_input_version == 1
-    assert spec.bound_regime(Path("/inputs")).observation.policy_input_version == 1
 
 
 def test_cost_selection_uses_first_seen_cost_and_never_backdates_exports(

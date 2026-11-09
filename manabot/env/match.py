@@ -5,12 +5,12 @@ Defines configuration for a Magic: The Gathering match between two players.
 
 from copy import deepcopy
 from dataclasses import dataclass
-import json
 from typing import Dict
 
 # Local imports
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
+from managym import WORLD_SETUP
 
 
 @dataclass
@@ -38,9 +38,18 @@ class Match:
         self.hero_sideboard = deepcopy(config.hero_sideboard)
         self.villain_sideboard = deepcopy(config.villain_sideboard)
 
+    @property
+    def _submission(self) -> str | None:
+        """Only a world submission reaches the engine; authored labels run as given."""
+        return WORLD_SETUP if self.config.world == WORLD_SETUP else None
+
     def to_rust_hero(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(
-            self.hero, self.hero_deck, self.hero_sideboard, self.config.content_pack
+            self.hero,
+            self.hero_deck,
+            self.hero_sideboard,
+            self._submission,
+            self.config.decklists,
         )
 
     def to_rust_villain(self) -> "managym.PlayerConfig":
@@ -48,7 +57,8 @@ class Match:
             self.villain,
             self.villain_deck,
             self.villain_sideboard,
-            self.config.content_pack,
+            self._submission,
+            self.config.decklists,
         )
 
     def to_rust(self) -> "list[managym.PlayerConfig]":
@@ -64,40 +74,22 @@ class Match:
         """
         return Match(
             MatchConfig(
-                content_pack=self.config.content_pack,
+                world=self.config.world,
+                hero_source=self.config.villain_source,
+                villain_source=self.config.hero_source,
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,
                 villain_deck=self.hero_deck,
                 hero_sideboard=self.villain_sideboard,
                 villain_sideboard=self.hero_sideboard,
+                decklists=self.config.decklists,
             )
         )
 
     def __str__(self) -> str:
         """Return a human-readable string representation of the match."""
         return f"Match({self.hero} vs {self.villain})"
-
-
-def parse_deck(deck_str: str) -> Dict[str, int]:
-    """Parse a deck string into a dictionary of card counts.
-
-    Accepts either:
-    1. JSON string: '{"Mountain": 12, "Forest": 12}'
-    2. Simple format: 'Mountain:12,Forest:12'
-    """
-    try:
-        # First try JSON format
-        return json.loads(deck_str)
-    except json.JSONDecodeError:
-        # Fall back to simple format
-        deck = {}
-        for pair in deck_str.split(","):
-            if ":" not in pair:
-                raise ValueError(f"Invalid deck format: {deck_str}")
-            card, count = pair.split(":")
-            deck[card.strip()] = int(count)
-        return deck
 
 
 class Reward:

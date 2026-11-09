@@ -5,13 +5,29 @@ use std::collections::BTreeMap;
 use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
-        ability::{Effect, TargetRequirement, TargetSpec},
-        game_object::{CardId, PlayerId, Target},
+        ability::{
+            Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
+        },
+        card::{Keyword, Keywords},
+        effect::{EffectDuration, Modification},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// Hexproof until end of turn, as a resolved spell would grant it.
+fn grant_hexproof(game: &mut Game, id: PermanentId) {
+    let affected = game.affected_permanent(id).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
+        EffectDuration::EndOfTurn,
+    );
+}
 
 fn fixture() -> (Game, CardId, CardId, Target, Target) {
     let deck = BTreeMap::from([
@@ -44,8 +60,8 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
     };
     let bolt = card_named("Lightning Bolt");
     let ogre_spell = card_named("Gray Ogre");
-    game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], false);
-    game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], false);
+    game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], Default::default());
+    game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], Default::default());
     (
         game,
         bolt,
@@ -57,6 +73,8 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
 
 fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        program: false,
+        remembered: Vec::new(),
         source_card: source,
         source_ref: None,
         source_lki: None,
@@ -68,7 +86,11 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         id: crate::flow::trigger::TriggerId(order),
         ordering_class: crate::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
+        chosen_modes: Vec::new(),
+        attacker: None,
         inline_effects: Some(effects),
+        x: 0,
     }
 }
 
@@ -138,7 +160,7 @@ fn player_and_graveyard_targets_preserve_scope_and_order() {
             vec![Target::Player(opponent)]
         );
         assert_eq!(
-            game.legal_targets_for_spec(&TargetSpec::CreatureOrPlayer, controller),
+            game.legal_targets_for_spec(&TargetSpec::AnyTarget, controller),
             vec![
                 Target::Player(PlayerId(0)),
                 Target::Player(PlayerId(1)),
@@ -178,7 +200,7 @@ fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
     game.state.pending_triggers.push(trigger(
         bolt,
         vec![Effect::CounterSpell {
-            target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+            what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
         }],
         0,
     ));
@@ -201,9 +223,9 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
         bolt,
         vec![
             Effect::CounterSpell {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+                what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -227,9 +249,9 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         source,
         vec![
             Effect::CounterSpell {
-                target: TargetSpec::SpellOrPermanent { min_mana_value: 2 },
+                what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -238,7 +260,7 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     game.move_card(ogre, ZoneType::Hand);
-    game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], false);
+    game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], Default::default());
     assert_ne!(game.current_object_ref(ogre).unwrap(), original);
 
     // CR 405.2 / 608.2b: the recast object is above the older ability, so
@@ -268,7 +290,7 @@ fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
                 requirement: TargetRequirement::one(spec),
                 effects: vec![],
             },
-            Effect::GainLife { amount: 7 },
+            Effect::gain_life(7),
         ],
         0,
     ));
@@ -289,8 +311,15 @@ fn trigger_target_distinctness_is_enforced_per_clause_at_submission() {
 fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();
     game.state.pending_triggers = vec![
-        trigger(bolt, vec![Effect::GainLife { amount: 2 }], 0),
-        trigger(bolt, vec![Effect::DealDamageToController { amount: 2 }], 1),
+        trigger(bolt, vec![Effect::gain_life(2)], 0),
+        trigger(
+            bolt,
+            vec![Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(2),
+            }],
+            1,
+        ),
     ];
     // At 2 life, the controller may stack damage below gain (survive at 2),
     // or gain below damage (lose at 0 before gain resolves): CR 603.3b,
@@ -311,8 +340,11 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
     for (gain_last, expected_life, expected_alive) in [(true, 2, true), (false, 0, false)] {
         let (mut game, source, _, _, _) = fixture();
         game.state.players[0].life = 2;
-        let gain = vec![Effect::GainLife { amount: 2 }];
-        let damage = vec![Effect::DealDamageToController { amount: 2 }];
+        let gain = vec![Effect::gain_life(2)];
+        let damage = vec![Effect::DealDamageToPlayer {
+            player: PlayerSelector::You,
+            amount: EffectValue::Fixed(2),
+        }];
         game.state.pending_triggers = vec![trigger(source, gain, 0), trigger(source, damage, 1)];
         let choice = game.flush_triggers().unwrap();
         assert_eq!(choice.actions.len(), 2);
@@ -341,11 +373,7 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     let Target::Permanent(id) = permanent else {
         unreachable!()
     };
-    game.state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .hexproof = true;
+    grant_hexproof(&mut game, id);
     // CR 702.11b applies regardless of the wording used to target the object.
     // A creature-only restriction and a spell-or-permanent restriction must
     // both exclude this opposing Ogre; changing spec cannot bypass hexproof.
@@ -365,16 +393,12 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
         let target = Target::Permanent(id);
-        game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, id);
         for controller in [PlayerId(0), PlayerId(1)] {
             let own = controller == owner;
             let cases = [
                 (TargetSpec::Creature, own),
-                (TargetSpec::CreatureOrPlayer, own),
+                (TargetSpec::AnyTarget, own),
                 (TargetSpec::CreatureYouControl, own),
                 (TargetSpec::CreatureOpponentControls, false),
                 (
@@ -421,11 +445,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
         let land = game
             .scenario_force_battlefield(owner, "Mountain", true)
             .unwrap();
-        game.state.permanents[land]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, land);
         assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
         assert!(!game.target_is_legal(
             Target::Permanent(land),
@@ -453,15 +473,13 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
                 vec![
                     Effect::TargetClause {
                         requirement: TargetRequirement::one(spec.clone()),
-                        effects: vec![Effect::ReturnToHand {
-                            target: spec.clone(),
-                        }],
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(spec.clone()))],
                     },
                     Effect::TargetClause {
                         requirement: TargetRequirement::one(spec.clone()),
-                        effects: vec![Effect::ReturnToHand { target: spec }],
+                        effects: vec![Effect::return_to_hand(ObjectSelector::Target(spec))],
                     },
-                    Effect::GainLife { amount: 7 },
+                    Effect::gain_life(7),
                 ],
                 0,
             );
@@ -476,17 +494,9 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
             let second_card = game.state.permanents[second].as_ref().unwrap().card;
             // CR 608.2b: gaining hexproof after selection invalidates an opposing
             // target; remaining legal targets and untargeted instructions survive.
-            game.state.permanents[first]
-                .as_mut()
-                .unwrap()
-                .temp_keywords
-                .hexproof = true;
+            grant_hexproof(&mut game, first);
             if !mixed {
-                game.state.permanents[second]
-                    .as_mut()
-                    .unwrap()
-                    .temp_keywords
-                    .hexproof = true;
+                grant_hexproof(&mut game, second);
             }
             game.resolve_top_of_stack();
             assert!(game.state.permanents[first].is_some());
@@ -520,10 +530,8 @@ fn spell_or_permanent_target_does_not_follow_a_reentered_card() {
         let mut pending = trigger(
             source,
             vec![
-                Effect::ReturnToHand {
-                    target: spec.clone(),
-                },
-                Effect::GainLife { amount: 7 },
+                Effect::return_to_hand(ObjectSelector::Target(spec.clone())),
+                Effect::gain_life(7),
             ],
             0,
         );
@@ -559,15 +567,7 @@ fn trigger_order_all_three_occurrence_permutations_are_legal() {
     ] {
         let (mut game, source, ..) = fixture();
         game.state.pending_triggers = (0..3)
-            .map(|id| {
-                trigger(
-                    source,
-                    vec![Effect::GainLife {
-                        amount: id as i32 + 1,
-                    }],
-                    id,
-                )
-            })
+            .map(|id| trigger(source, vec![Effect::gain_life(id as i32 + 1)], id))
             .collect();
         for (position, id) in order[..2].iter().enumerate() {
             let space = game.flush_triggers().unwrap();
@@ -592,7 +592,7 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
     use crate::flow::trigger::{TriggerId, TriggerOrderingClass};
     for active in [PlayerId(0), PlayerId(1)] {
         let (mut game, source, ..) = fixture();
-        let ordinary = trigger(source, vec![Effect::GainLife { amount: 1 }], 0);
+        let ordinary = trigger(source, vec![Effect::gain_life(1)], 0);
         let mut batch = Vec::new();
         for group in 0..4 {
             for id in 0..2 {
@@ -619,7 +619,7 @@ fn trigger_order_two_passes_precede_controller_and_defer_new_arrivals() {
         });
         game.state
             .pending_triggers
-            .push(trigger(source, vec![Effect::GainLife { amount: 9 }], 99));
+            .push(trigger(source, vec![Effect::gain_life(9)], 99));
         for group in 0..4 {
             let space = game.flush_triggers().unwrap();
             let player = if group % 2 == 0 {
@@ -650,10 +650,10 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
     assert!(game.flush_triggers().is_none());
     game.state
         .pending_triggers
-        .push(trigger(source, vec![Effect::GainLife { amount: 1 }], 0));
+        .push(trigger(source, vec![Effect::gain_life(1)], 0));
     assert!(game.flush_triggers().is_none());
     game.state.pending_triggers = (1..66)
-        .map(|id| trigger(source, vec![Effect::GainLife { amount: 1 }], id))
+        .map(|id| trigger(source, vec![Effect::gain_life(1)], id))
         .collect();
     let space = game.flush_triggers().unwrap();
     assert_eq!(space.actions.len(), 65);
@@ -686,7 +686,7 @@ fn trigger_order_large_menu_is_complete_and_empty_singleton_are_forced() {
 fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
     use crate::agent::{observation::Observation, observation_encoder};
     let (mut game, source, other, ..) = fixture();
-    let mut first = trigger(source, vec![Effect::GainLife { amount: 1 }], 900);
+    let mut first = trigger(source, vec![Effect::gain_life(1)], 900);
     first.source_ref = game.current_object_ref(source);
     first.context = Some(Target::StackSpell(source));
     let mut second = first.clone();
@@ -725,38 +725,28 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
 }
 
 #[test]
-fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
+fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     use crate::agent::action::{Action, ActionSpaceKind};
-    use crate::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use crate::search_state::witness;
     let (mut game, source, ..) = fixture();
     game.state.pending_triggers = vec![
         trigger(
             source,
             vec![Effect::TargetClause {
                 requirement: TargetRequirement::one(TargetSpec::Player),
-                effects: vec![Effect::GainLife { amount: 1 }],
+                effects: vec![Effect::gain_life(1)],
             }],
             0,
         ),
-        trigger(source, vec![Effect::GainLife { amount: 2 }], 1),
-        trigger(source, vec![Effect::GainLife { amount: 3 }], 2),
+        trigger(source, vec![Effect::gain_life(2)], 1),
+        trigger(source, vec![Effect::gain_life(3)], 2),
     ];
     game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
     game.current_action_space = game.flush_triggers();
     let root = witness(&game);
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(&game);
-    let outer = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let mut branch = game.clone();
+    let outer = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::ChooseTarget
@@ -774,18 +764,9 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .unwrap()
         .instruction
         .contains("Lightning Bolt"));
-    let targeting = driver.witness(&branch);
-    let inner = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let targeting = witness(&branch);
+    let inner = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::OrderTriggers
@@ -797,10 +778,10 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .actions
         .iter()
         .all(|a| matches!(a, Action::ChooseTrigger { .. })));
-    driver.rollback(&mut branch, inner);
-    assert_eq!(driver.witness(&branch), targeting);
-    driver.rollback(&mut branch, outer);
-    assert_eq!(driver.witness(&branch), root);
+    branch = inner;
+    assert_eq!(witness(&branch), targeting);
+    branch = outer;
+    assert_eq!(witness(&branch), root);
     assert_eq!(witness(&game), root);
 }
 
@@ -811,16 +792,20 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let (mut game, source, ..) = fixture();
     game.state.cards[source].abilities = vec![
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DrawCards { count: 2 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            }],
         },
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::GainLife { amount: 3 }],
+            effects: vec![Effect::gain_life(3)],
         },
     ];
     let mut dies = trigger(source, vec![], 0);
@@ -828,7 +813,20 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let mut enters = dies.clone();
     enters.id = crate::flow::trigger::TriggerId(1);
     enters.ability_index = 1;
-    let mut delayed = trigger(source, vec![Effect::ReturnSourceToBattlefieldTapped], 2);
+    let mut delayed = trigger(
+        source,
+        vec![Effect::Move {
+            library_end: None,
+            what: ObjectSelector::This,
+            to: ZoneType::Battlefield,
+            tapped: true,
+            transformed: false,
+            under: Some(PlayerSelector::Owner),
+            with_counter: None,
+            linked: None,
+        }],
+        2,
+    );
     delayed.ability_index = usize::MAX; // Inline effects do not reference a card slot.
     game.state.pending_triggers = vec![dies, enters, delayed];
     game.current_action_space = game.flush_triggers();

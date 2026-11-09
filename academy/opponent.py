@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from manabot.model.catalog import CheckpointSummary, UnavailableEntry
+    import managym
 
 OpponentSource = Literal["path", "runs", "tournament"]
 
@@ -104,10 +105,15 @@ class CatalogEntry:
             model=summary.model,
             parameters=summary.parameters,
             step=summary.step,
-            setups=[asdict(setup) for setup in summary.setups],
+            setups=[_setup_record(deck) for deck in summary.setups],
             available=summary.compatible,
             reason=summary.incompatibility,
         )
+
+
+def _setup_record(deck: managym.Deck) -> dict[str, dict[str, int]]:
+    """A bound seat in the catalog's ``{"deck", "sideboard"}`` wire shape."""
+    return {"deck": deck.main, "sideboard": deck.sideboard}
 
 
 def checkpoint_sources() -> list[Path]:
@@ -186,7 +192,7 @@ def catalog_opponent(sha256: str) -> Opponent | None:
         world=summary.world,
         model=summary.model,
         step=summary.step,
-        setups=[asdict(setup) for setup in summary.setups],
+        setups=[_setup_record(deck) for deck in summary.setups],
     )
     opponent.verify()
     return opponent

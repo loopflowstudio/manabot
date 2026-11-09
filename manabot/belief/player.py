@@ -14,7 +14,7 @@ from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.tracker import ActionLikelihood, BeliefTracker
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     DEFAULT_ROLLOUTS_PER_WORLD,
@@ -271,18 +271,6 @@ class ExactRangePlayer:
 
     def replay_receipts(self) -> list[dict[str, Any]]:
         return list(self.completed_replays)
-
-
-class UniformRangePlayer(ExactRangePlayer):
-    def __init__(
-        self, sims: int, *, likelihood: ActionLikelihood, **kwargs: Any
-    ) -> None:
-        super().__init__(
-            sims,
-            likelihood=likelihood,
-            sampling=RangeSampling.COMPATIBLE_PRIOR,
-            **kwargs,
-        )
 
 
 def _quantile_ms(values: np.ndarray, quantile: float) -> float | None:

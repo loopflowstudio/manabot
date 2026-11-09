@@ -6,7 +6,18 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
+
+from managym import WORLD_SETUP, Deck, DeckImport, Decklist
+
+StateEncoder = Literal["rows", "typed_pool", "typed_gru"]
 
 
 def _default_deck() -> dict[str, int]:
@@ -30,32 +41,73 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3] = Field(
-        default=3, exclude_if=lambda value: value == 1
+    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9] = Field(
+        default=6, exclude_if=lambda value: value == 1
     )
-
-    @classmethod
-    def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
-        """Missing version means the frozen input-v1 contract, never today's default."""
-        return cls(**{"policy_input_version": 1, **payload})
+    # V6 onward carries a configurable local-fact capacity. Omission on older inputs
+    # preserves their serialized architecture receipts, including v1 defaults.
+    max_facts: int | None = Field(
+        default=None, gt=0, exclude_if=lambda value: value is None
+    )
 
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Fits all Learn choices in the selected setup. Larger action sets fail
-    # encoding explicitly; this is not a universal priority/combat bound.
-    max_actions: int = 64
+    # Every input uses this capacity directly; v9 names through bounded group
+    # prompts. A pilot may explicitly retain a legal prefix.
+    max_actions: int = Field(default=512, gt=0)
+    action_overflow: Literal["error", "first-legal"] = Field(
+        default="error", exclude_if=lambda value: value == "error"
+    )
     max_focus_objects: int = 2
     max_events: int = 32
     policy_history_version: Literal[0, 1] = Field(
         default=0, exclude_if=lambda value: value == 0
     )
 
+    @model_validator(mode="after")
+    def validate_fact_capacity(self) -> "ObservationConfig":
+        if self.policy_input_version >= 6:
+            if self.max_facts is None:
+                self.max_facts = 128 if self.policy_input_version == 7 else 512
+        elif self.max_facts is not None:
+            raise ValueError("max_facts requires policy input v6")
+        return self
+
+    @property
+    def fact_rows(self) -> int:
+        if self.policy_input_version < 5:
+            return 0
+        if self.policy_input_version == 5:
+            return 128
+        assert self.max_facts is not None
+        return self.max_facts
+
+    @classmethod
+    def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
+        """Missing version means the frozen input-v1 contract, never today's default."""
+        return cls(**{"policy_input_version": 1, "max_actions": 64, **payload})
+
 
 class MatchConfig(BaseConfig):
     """Parameters passed to the match builder."""
 
-    content_pack: str | None = Field(
+    # `WORLD_SETUP` submits the decks to the installed world's admission;
+    # `None` runs them as given. Every match runs on the world's one catalog.
+    # Frozen regimes name this selector `content_pack` and may record an
+    # authored setup's `pack_key` here; that label is kept so their identities
+    # hold, and it runs like `None`.
+    world: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("world", "content_pack"),
+        exclude_if=lambda value: value is None,
+    )
+    # Private import provenance: each seat's admitted decklist, retained beside
+    # (never instead of) that seat's deck. Viewer frames never carry it.
+    hero_source: Decklist | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    villain_source: Decklist | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     hero: str = "gaea"
@@ -64,6 +116,48 @@ class MatchConfig(BaseConfig):
     villain_deck: dict[str, int] = Field(default_factory=_default_deck)
     hero_sideboard: dict[str, int] = Field(default_factory=dict)
     villain_sideboard: dict[str, int] = Field(default_factory=dict)
+    # Open decklists disclose each player's main deck and sideboard to the
+    # opponent; closed disclose neither. One setting covers both players.
+    # Omitted when open, so earlier configurations keep their identity.
+    decklists: Literal["open", "closed"] = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
+
+    @field_validator("world")
+    @classmethod
+    def validate_world(cls, value: str | None) -> str | None:
+        if value is not None and value != WORLD_SETUP:
+            import managym
+
+            managym.authored_deck_keys(value)  # raises for an unknown setup
+        return value
+
+    @model_validator(mode="after")
+    def validate_sources(self) -> "MatchConfig":
+        """Each retained source must re-admit to its seat's deck in the installed world."""
+        for source, main, sideboard in (
+            (self.hero_source, self.hero_deck, self.hero_sideboard),
+            (self.villain_source, self.villain_deck, self.villain_sideboard),
+        ):
+            if source is None:
+                continue
+            if self.world != WORLD_SETUP:
+                raise ValueError("an imported decklist plays in the world")
+            source.validate_deck(Deck(main, sideboard))
+        return self
+
+    @classmethod
+    def from_import(cls, hero: DeckImport, villain: DeckImport) -> "MatchConfig":
+        """The playable setup of two admitted decklists, in the world."""
+        return cls(
+            world=WORLD_SETUP,
+            hero_source=hero.decklist,
+            villain_source=villain.decklist,
+            hero_deck=hero.deck.main,
+            villain_deck=villain.deck.main,
+            hero_sideboard=hero.deck.sideboard,
+            villain_sideboard=villain.deck.sideboard,
+        )
 
     @field_validator("hero_sideboard", "villain_sideboard", mode="before")
     @classmethod
@@ -81,25 +175,19 @@ class MatchConfig(BaseConfig):
     @classmethod
     def authored(
         cls,
-        pack_key: str,
+        setup: str,
         hero_deck: str,
         villain_deck: str,
         *,
         hero: str = "gaea",
         villain: str = "urza",
     ) -> "MatchConfig":
-        """Resolve both complete setups from the compiled rules pack."""
+        """Resolve both complete setups of an authored setup (preset or `pack_key`)."""
         import managym
 
-        first = managym.authored_deck_setup(pack_key, hero_deck)
-        second = managym.authored_deck_setup(pack_key, villain_deck)
+        first = managym.authored_deck_setup(setup, hero_deck)
+        second = managym.authored_deck_setup(setup, villain_deck)
         return cls(
-            content_pack=(
-                pack_key
-                if hero_deck == villain_deck
-                or len(managym.authored_deck_keys(pack_key)) > 2
-                else None
-            ),
             hero=hero,
             villain=villain,
             hero_deck=first.decklist,
@@ -120,6 +208,15 @@ class RuntimeConfig(BaseConfig):
     log_level: str = "INFO"
 
 
+# Compound-decision policies (a learned ragged decoder over native compound
+# offers) were removed; their checkpoints and regimes run only from the source
+# that trained them.
+COMPOUND_DECISIONS_REMOVED = (
+    "compound-decision policies are no longer executable; reproduce them at "
+    "commit ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b"
+)
+
+
 class ModelConfig(BaseConfig):
     """Model construction contract, independent of learning and execution settings.
 
@@ -127,10 +224,21 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
-    compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Within-observation reducers for frozen v5 fragments or explicit v7 shared
+    # payloads and typed continuations. Capacity belongs to ObservationConfig;
+    # none of these encoders carries temporal memory.
+    state_encoder: StateEncoder = Field(
+        default="rows", exclude_if=lambda value: value == "rows"
+    )
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
-    semantic_pack: str | None = None
+    # The semantic vocabulary the model reads: the world's one catalog. Fresh
+    # recipes write "world"; older labels in `FROZEN_VOCABULARY_LABELS` are
+    # accepted on read and bind the same catalog. Frozen checkpoints and
+    # recipes name the field `semantic_pack`.
+    world: str | None = Field(
+        default=None, validation_alias=AliasChoices("world", "semantic_pack")
+    )
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (
@@ -145,6 +253,15 @@ class ModelConfig(BaseConfig):
     attention_feedforward_dim: int | None = Field(
         default=None, ge=1, exclude_if=lambda value: value is None
     )
+    # How fact and shared-effect ids embed on explicit inputs v8 onward:
+    # `catalog` reads the card encoder's exact token rows and definition
+    # rows; `hashed` learns 4096 hashed rows per id column. Earlier inputs and
+    # models without a world have only the hashed layout. Saved v8+ world
+    # checkpoints that omit the field are hashed (`from_checkpoint`); regimes
+    # omit the fresh default.
+    record_vocabulary: Literal["hashed", "catalog"] = Field(
+        default="catalog", exclude_if=lambda value: value == "catalog"
+    )
     # Shared embedding space for game objects and actions.
     hidden_dim: int = 64
     # Number of attention heads used in the GameObjectAttention layer.
@@ -158,6 +275,47 @@ class ModelConfig(BaseConfig):
     belief_owner_role_vocab_size: int = 2
     belief_hidden_zone_vocab_size: int = 7
 
+    @model_validator(mode="before")
+    @classmethod
+    def reject_compound_decisions(cls, data: Any) -> Any:
+        """Admit the retired flag only when false; never load it as a flat policy."""
+        if not isinstance(data, dict) or "compound_decisions" not in data:
+            return data
+        data = dict(data)
+        if data.pop("compound_decisions") is not False:
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        return data
+
+    @classmethod
+    def from_checkpoint(
+        cls, payload: dict[str, Any], policy_input_version: int
+    ) -> "ModelConfig":
+        """Read a saved configuration for its saved policy input version.
+
+        A checkpoint that omits the record vocabulary predates the choice, so
+        it means the frozen hashed ids where the choice exists (v8+ with a
+        world). Elsewhere both values build the same model, and omission
+        reads as the fresh default so it equals its regime's configuration.
+        """
+        config = cls(**payload)
+        predates_choice = "record_vocabulary" not in payload
+        if predates_choice and config.world is not None and policy_input_version >= 8:
+            return cls(**{**payload, "record_vocabulary": "hashed"})
+        return config
+
+    def checkpoint_payload(self) -> dict[str, Any]:
+        """The serialized configuration with the record vocabulary explicit, so
+        `from_checkpoint` reads a fresh catalog model back as catalog."""
+        return {**self.model_dump(), "record_vocabulary": self.record_vocabulary}
+
+    def catalog_records(self, policy_input_version: int) -> bool:
+        """Whether fact and shared-effect ids read the card vocabulary."""
+        return (
+            self.record_vocabulary == "catalog"
+            and self.world is not None
+            and policy_input_version >= 8
+        )
+
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":
         if self.hidden_dim < 1 or self.num_attention_heads < 1:
@@ -170,17 +328,6 @@ class ModelConfig(BaseConfig):
             or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
-        if self.compound_decisions and (
-            self.value_aggregation != "historical_mean" or self.attention_layers != 1
-        ):
-            raise ValueError(
-                "compound critic does not support value aggregation variants"
-            )
-        if self.compound_decisions and self.policy_film:
-            raise ValueError(
-                "compound decoder owns its own state conditioning; "
-                "set agent.policy_film=false"
-            )
         return self
 
 

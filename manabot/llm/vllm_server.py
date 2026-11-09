@@ -11,21 +11,34 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import threading
 import time
 from types import TracebackType
 from urllib.error import URLError
 from urllib.request import urlopen
 
 from huggingface_hub import snapshot_download
-from transformers import AutoTokenizer
 
 from manabot.llm.cache import MODEL_PATTERNS
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
+from manabot.llm.tokenization import load_tokenizer
+from manabot.llm.vllm_runtime import SERVICE_PORT, SERVICE_URL, verify_service
 
 
-def server_command(config: InferenceConfig, model: str, concurrency: int) -> list[str]:
-    """No remote template, prefix reuse, quantization or generation defaults."""
-    return [
+def server_command(
+    config: InferenceConfig,
+    model: str,
+    concurrency: int,
+    speculative_tokens: int | None = None,
+) -> list[str]:
+    """No remote template, prefix reuse, quantization or generation defaults.
+
+    `speculative_tokens` enables the checkpoint's own multi-token-prediction
+    head as a draft; rejection sampling keeps the target distribution, but the
+    server argv, and so the behavior version, records it. This is the base argv;
+    the derived behavior route is appended after identity hashing.
+    """
+    command = [
         "uv",
         "run",
         "--no-project",
@@ -38,12 +51,10 @@ def server_command(config: InferenceConfig, model: str, concurrency: int) -> lis
         "vllm.entrypoints.openai.api_server",
         "--model",
         model,
-        "--served-model-name",
-        config.model_id,
         "--host",
         "127.0.0.1",
         "--port",
-        "8123",
+        str(SERVICE_PORT),
         "--dtype",
         config.precision,
         "--max-model-len",
@@ -60,15 +71,34 @@ def server_command(config: InferenceConfig, model: str, concurrency: int) -> lis
         "--max-num-batched-tokens",
         "4096",
     ]
+    if speculative_tokens is not None:
+        command.extend(
+            [
+                "--speculative-config",
+                json.dumps(
+                    {"method": "mtp", "num_speculative_tokens": speculative_tokens},
+                    separators=(",", ":"),
+                ),
+            ]
+        )
+    return command
 
 
 class VLLMServer(AbstractContextManager["VLLMServer"]):
-    def __init__(self, config: InferenceConfig, out: Path, concurrency: int) -> None:
+    def __init__(
+        self,
+        config: InferenceConfig,
+        out: Path,
+        concurrency: int,
+        speculative_tokens: int | None = None,
+    ) -> None:
         self.process: subprocess.Popen[bytes] | None = None
         self.out = out
         self.log = (out / "vllm.log").open("wb")
         self.config = config
         self.concurrency = concurrency
+        self.speculative_tokens = speculative_tokens
+        self._stop = threading.Event()
 
     def __enter__(self) -> "VLLMServer":
         started = time.monotonic()
@@ -79,15 +109,13 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 allow_patterns=MODEL_PATTERNS,
                 local_files_only=True,
             )
-            tokenizer = AutoTokenizer.from_pretrained(
-                model,
-                local_files_only=True,
-                trust_remote_code=False,
+            tokenizer = load_tokenizer(self.config, offline=True)
+            command = server_command(
+                self.config, model, self.concurrency, self.speculative_tokens
             )
-            command = server_command(self.config, model, self.concurrency)
             # Query the separate server interpreter, not the client's packages.
             probe = subprocess.run(
-                command[:7]
+                command[: command.index("-m")]
                 + [
                     "-c",
                     "import json,platform,torch; from importlib.metadata import version; print(json.dumps(dict(runtime_version=version('vllm'),torch_version=torch.__version__,python_version=platform.python_version(),device_name=torch.cuda.get_device_name())))",
@@ -106,7 +134,8 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 **facts,
                 chat_template=tokenizer.get_chat_template(),
                 generation_config={
-                    "server_argv": command,
+                    # The derived route cannot participate in its own hash.
+                    "server_argv_without_identity": command,
                     "concurrency": self.concurrency,
                     "client": "exact-token-completions-v1",
                     "model_revision": self.config.model_revision,
@@ -115,9 +144,9 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                     "context_tokens": self.config.context_tokens,
                 },
             )
-            (self.out / "vllm-identity.json").write_text(
-                identity.model_dump_json(indent=2)
-            )
+            version = identity.behavior_version(self.config)
+            command = [*command, "--served-model-name", version]
+            (self.out / "vllm-command.json").write_text(json.dumps(command, indent=2))
             self.process = subprocess.Popen(
                 command,
                 stdout=self.log,
@@ -134,13 +163,20 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                         f"vLLM exited during startup: {self.process.returncode}; see vllm.log"
                     )
                 try:
-                    with urlopen("http://127.0.0.1:8123/health", timeout=2) as response:
+                    with urlopen(f"{SERVICE_URL}/health", timeout=2) as response:
                         if response.status == 200:
+                            verify_service(version, timeout=2)
+                            (self.out / "vllm-identity.json").write_text(
+                                identity.model_dump_json(indent=2)
+                            )
                             self.seconds = time.monotonic() - started
                             print(
                                 f"vLLM server healthy after {self.seconds:.3f}s",
                                 flush=True,
                             )
+                            threading.Thread(
+                                target=self._relay_metrics, daemon=True
+                            ).start()
                             return self
                 except (URLError, TimeoutError):
                     pass
@@ -150,7 +186,27 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
             self.close()
             raise
 
+    def _relay_metrics(self, interval: float = 60) -> None:
+        """Copy vLLM's periodic throughput and speculative-acceptance lines to stdout.
+
+        Job stdout is retrievable while the campaign runs; vllm.log arrives only
+        with the outputs. At most one line of each kind per interval.
+        """
+        last: dict[str, float] = {}
+        with (self.out / "vllm.log").open("r", errors="replace") as log:
+            while not self._stop.is_set():
+                line = log.readline()
+                if not line:
+                    self._stop.wait(1)
+                    continue
+                for kind in ("throughput", "SpecDecoding"):
+                    now = time.monotonic()
+                    if kind in line and now - last.get(kind, -interval) >= interval:
+                        last[kind] = now
+                        print(f"VLLM {line.strip()}", flush=True)
+
     def close(self) -> None:
+        self._stop.set()
         if self.process is not None:
             for sig in (signal.SIGTERM, signal.SIGKILL):
                 try:

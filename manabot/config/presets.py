@@ -1,6 +1,6 @@
 """Built-in runtime presets for simulation commands."""
 
-from manabot.infra import RuntimeConfig, SimulationConfig
+from manabot.infra.config import RuntimeConfig, SimulationConfig
 
 DEFAULT_SIM_PRESET = "sim"
 

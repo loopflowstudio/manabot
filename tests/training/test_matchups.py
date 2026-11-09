@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world, validate_agent_setup
@@ -61,7 +62,7 @@ def test_native_mixed_collector_replays_terminal_resets() -> None:
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
 
@@ -97,7 +98,3 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
         assert engine.content_pack_manifest() == expected
         engine.reset(mirror.swapped().to_rust())
         assert engine.content_pack_manifest() == expected
-        wrong = mirror.to_rust()
-        wrong[0].content_pack = None
-        with pytest.raises(RuntimeError, match="explicit pack"):
-            engine.reset(wrong)

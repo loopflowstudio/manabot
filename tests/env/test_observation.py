@@ -239,7 +239,9 @@ class TestObservationEncoder:
             "events_valid",
             "semantic_cards",
             "known_hand",
+            "decklists",
             "relations",
+            "facts",
         }
 
     def test_encode_observation(
@@ -405,27 +407,20 @@ class TestObservationEncoder:
                 atol=1e-6,
             )
 
-    def test_action_space_overflow_rejects_incomplete_policy_input(self):
-        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
-        obs = SimpleNamespace(
-            action_space=SimpleNamespace(actions=[SimpleNamespace(focus=[])] * 3),
-            agent_cards=[],
-            opponent_cards=[],
-            agent_permanents=[],
-            opponent_permanents=[],
+    @pytest.mark.parametrize("version", [6, 8])
+    def test_action_space_overflow_rejects_incomplete_policy_input(
+        self, observation: managym.Observation, version: int
+    ) -> None:
+        count = len(observation.action_space.actions)
+        assert count > 1
+        encoder = ObservationEncoder(
+            ObservationConfig(policy_input_version=version, max_actions=count - 1)
         )
-        with pytest.raises(ValueError, match="actions 3 > 2"):
-            encoder.encode(obs)
-
-    def test_action_capacity_rejects_omitted_choices(self):
-        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
-        obs = SimpleNamespace(
-            action_space=SimpleNamespace(
-                actions=[SimpleNamespace(action_type=i, focus=[]) for i in range(3)]
-            )
-        )
-        with pytest.raises(ValueError, match="capacity exceeded: actions 3 > 2"):
-            encoder._encode_actions(obs)
+        with pytest.raises(
+            ValueError, match=rf"capacity exceeded: actions {count} > {count - 1}"
+        ):
+            encoder.encode(observation)
+        assert len(observation.action_space.actions) == count
 
     @pytest.mark.parametrize(
         "method, capacity, label",
@@ -437,8 +432,10 @@ class TestObservationEncoder:
     def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
         encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
         objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        # Card rows also read the viewer and turn for cast permissions.
+        context = {"viewer": 0, "turn": 1} if method == "_encode_cards" else {}
         with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
-            getattr(encoder, method)(objects, is_mine=1.0)
+            getattr(encoder, method)(objects, is_mine=1.0, **context)
         assert encoder.object_to_index == {}
 
     def test_focus_capacity_rejects_partial_action(self) -> None:
@@ -459,7 +456,7 @@ class TestObservationEncoder:
             )
         )
         with pytest.raises(ValueError, match="capacity exceeded: action focus"):
-            encoder._encode_actions(obs)
+            encoder._encode_actions(obs.action_space.actions)
 
 
 if __name__ == "__main__":

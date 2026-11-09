@@ -21,12 +21,14 @@ from manabot.belief.encoding import (
 )
 from manabot.belief.runtime import ManabotPlayer, viewer_decision_from_engine
 from manabot.belief.state import EmptyBeliefSupport, condition_belief, query_mass
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.search.flat_mc import make_player
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 
 
 def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:

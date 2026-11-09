@@ -3,6 +3,7 @@
 
 use crate::{
     agent::action::ActionSpace,
+    cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
         card::CardDefinition,
@@ -73,9 +74,28 @@ impl Game {
         let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
         let definition = &self.state.cards[card];
+        let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
-            keywords: self.effective_keywords(permanent_id),
-            animated_creature: permanent.animated,
+            transforms: permanent.transforms,
+            inherited_from: self.inherited_definition_id(permanent_id),
+            granted_abilities: characteristics
+                .triggered_abilities
+                .iter()
+                .skip(if characteristics.abilities_lost {
+                    0
+                } else {
+                    definition.abilities.len()
+                })
+                .cloned()
+                .collect(),
+            keywords: characteristics.keywords,
+            creature_types: characteristics.creature_types.clone(),
+            permanent: permanent_id,
+            animated_creature: characteristics.is_animated,
+            abilities_lost: characteristics.abilities_lost,
+            dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            power: characteristics.power,
+            counters: permanent.counters.clone(),
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,
@@ -87,7 +107,18 @@ impl Game {
     }
 
     pub fn object_lki(&self, object_ref: ObjectRef) -> Option<&ObjectLki> {
-        self.state.object_lki.get(&object_ref)
+        self.state.object_lki.get(object_ref)
+    }
+
+    /// Last known information of the object that occupied a battlefield
+    /// slot, once it has left.
+    pub(crate) fn departed_permanent_lki(&self, permanent_id: PermanentId) -> Option<&ObjectLki> {
+        self.state.object_lki.for_permanent(permanent_id)
+    }
+
+    /// Last known information of `card`'s most recent battlefield object.
+    pub(crate) fn latest_card_lki(&self, card: CardId) -> Option<&ObjectLki> {
+        self.state.object_lki.latest_for_card(card)
     }
 
     /// Capture the stable viewer identity for a current or departed object.
@@ -114,24 +145,11 @@ impl Game {
     /// clone.
     pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&CardDefinition> {
         let lki = self.object_lki(object_ref)?;
-        self.state.content.definition(lki.definition_id)
+        default_content_pack().definition(lki.definition_id)
     }
 
     pub(crate) fn record_object_lki(&mut self, lki: ObjectLki) {
-        self.journal_object_lki(lki.object_ref);
-        self.state.object_lki.insert(lki.object_ref, lki);
-    }
-
-    pub(crate) fn advance_object_incarnation(&mut self, card: CardId) {
-        self.journal_incarnation(card);
-        let incarnation = self
-            .state
-            .object_incarnations
-            .get_mut(card.0)
-            .expect("card entity must have an incarnation");
-        *incarnation = incarnation
-            .checked_next()
-            .expect("rules object incarnation overflow");
+        self.state.object_lki_mut().insert(lki);
     }
 
     pub fn action_space(&self) -> Option<&ActionSpace> {
@@ -151,6 +169,52 @@ impl Game {
             .as_ref()
             .and_then(|space| space.player)
             .unwrap_or(PlayerId(0))
+    }
+
+    /// Public schedules in creation order, including overridden controls.
+    pub fn player_control_views(&self) -> Vec<crate::experience::PlayerControlView> {
+        self.state
+            .turn
+            .player_controls
+            .iter()
+            .enumerate()
+            .map(|(index, control)| crate::experience::PlayerControlView {
+                player: control.player.0 as u8,
+                controller: control.controller.0 as u8,
+                whole_turn: control.duration
+                    == crate::state::ability::PlayerControlDuration::NextTurn,
+                active: control.active,
+                effective: control.active
+                    && !self.state.turn.player_controls[index + 1..]
+                        .iter()
+                        .any(|later| later.active && later.player == control.player),
+            })
+            .collect()
+    }
+
+    /// Who chooses for `player`. Actions and costs still belong to `player`.
+    pub fn decision_controller(&self, player: PlayerId) -> PlayerId {
+        self.state
+            .turn
+            .player_controls
+            .iter()
+            .rev()
+            .find(|control| control.player == player && control.active)
+            .map_or(player, |control| control.controller)
+    }
+
+    /// A controller sees what the controlled player may see in the game.
+    /// Outside-game cards are deliberately excluded at their own authority.
+    pub(crate) fn shares_information(&self, viewer: PlayerId, player: PlayerId) -> bool {
+        viewer == player || self.decision_controller(player) == viewer
+    }
+
+    pub(crate) fn remember_controlled_hands(&mut self) {
+        for player in [PlayerId(0), PlayerId(1)] {
+            if self.decision_controller(player) != player {
+                self.remember_hand(player);
+            }
+        }
     }
 
     pub fn players_starting_with_active(&self) -> [PlayerId; 2] {

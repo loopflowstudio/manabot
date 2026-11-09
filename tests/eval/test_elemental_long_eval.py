@@ -1,6 +1,5 @@
 """MTG-183's Etude evaluation: admission, the frozen design as matches, and following."""
 
-from decimal import Decimal
 import hashlib
 import json
 from pathlib import Path
@@ -9,7 +8,6 @@ from typing import Literal
 
 from etude.eval.match import Tables
 from etude.eval.records import Match
-from etude.launch.records import Status
 from etude.run.records import ArtifactRef
 from etude.train.records import CheckpointRecord
 import pytest
@@ -17,10 +15,12 @@ import pytest
 from experiments.elemental_grid import DECKS, GameRow, schedule
 from experiments.elemental_long import h2h_schedule
 from experiments.elemental_long_eval import (
+    CARDS,
     EVIDENCE,
     Checkpoint,
     Conditions,
     EvalState,
+    Observed,
     SegmentSource,
     admit,
     checkpoint_model,
@@ -51,62 +51,92 @@ def _record(path: Path, updates: int) -> CheckpointRecord:
     )
 
 
-def _status(phase: str, outcome: str | None) -> Status:
-    return Status.model_validate(
-        {
-            "run": "w3",
-            "phase": phase,
-            "reason": None,
-            "outcome": outcome,
-            "cause": None,
-            "until": "updates=2700",
-            "clocks": {},
-            "usd": Decimal(1),
-            "attempts": 1,
-            "rental_ended": None,
-        }
+def _windows_file(tmp_path: Path, updates: tuple[int, ...]) -> Path:
+    """A windows file as `elemental-183-windows.json` holds w1/w2."""
+    entries = [
+        Checkpoint(
+            updates=u,
+            run="mtg183-elemental-long-w2",
+            artifact=_artifact(tmp_path / f"w2-{u}.pt", f"w2-{u}".encode()),
+            coordinates={"updates": u},
+        ).model_dump(mode="json")
+        for u in updates
+    ]
+    path = tmp_path / "windows.json"
+    path.write_text(json.dumps(entries))
+    return path
+
+
+def _segment(
+    run: str, exports: list[CheckpointRecord], ended: list[str | None]
+) -> SegmentSource:
+    """A segment whose exports and end the test changes in place."""
+    return SegmentSource(
+        run=run, observe=lambda: Observed(checkpoints=list(exports), ended=ended[0])
     )
-
-
-def _ledger(tmp_path: Path, updates: tuple[int, ...]) -> Path:
-    """The retired cohort follower's ledger shape, as it holds w1/w2."""
-    checkpoints = {}
-    for u in updates:
-        path = tmp_path / f"w2-{u}.pt"
-        path.write_bytes(f"w2-{u}".encode())
-        checkpoints[str(u)] = {
-            "updates": u,
-            "job": "mtg183-elemental-long-w2",
-            "training_run": "w2-run",
-            "path": str(path),
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-            "coordinates": {"updates": u},
-        }
-    ledger = tmp_path / "ledger.json"
-    ledger.write_text(json.dumps({"checkpoints": checkpoints, "units": {}}))
-    return ledger
 
 
 def test_segment_joins_windows_and_settles_when_terminal(tmp_path: Path) -> None:
-    windows = window_checkpoints(_ledger(tmp_path, (2500, 2550)))
-    exports = [_record(tmp_path / f"{u}.pt", u) for u in (2550, 2600, 2650)]
-    phase = ["running", None]
-    segment = SegmentSource(
-        run="w3",
-        checkpoints=lambda: exports[:2] if phase[0] == "running" else exports,
-        status=lambda: _status(phase[0], phase[1]),
-    )
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2550)))
+    exports = [_record(tmp_path / f"{u}.pt", u) for u in (2550, 2600)]
+    ended: list[str | None] = [None]
+    segment = _segment("w3", exports, ended)
     state = EvalState()
-    admit(state, windows, segment)
+    admit(state, windows, [segment])
     # The segment's initial export repeats w2's endpoint; the window keeps it.
     assert state.checkpoints[2550].run == "mtg183-elemental-long-w2"
     assert state.checkpoints[2600].run == "w3"
     assert state.segment_outcome is None and state.endpoint is None
     # A segment that stops short of its target still ends the seed.
-    phase[:] = ["done", "failed"]
-    admit(state, windows, segment)
+    exports.append(_record(tmp_path / "2650.pt", 2650))
+    ended[0] = "failed"
+    admit(state, windows, [segment])
     assert state.segment_outcome == "failed" and state.endpoint == 2650
     assert state.error is None
+
+
+def test_segment_ended_before_training_does_not_end_the_seed(tmp_path: Path) -> None:
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2550)))
+    segment = _segment("w3", [_record(tmp_path / "2550.pt", 2550)], ["failed"])
+    state = EvalState()
+    admit(state, windows, [segment])
+    assert state.segment_outcome is None and state.endpoint is None
+    assert state.error == "w3: ended failed without training"
+
+
+def test_continuing_seed_settles_only_at_its_last_segment(tmp_path: Path) -> None:
+    windows = window_checkpoints(_windows_file(tmp_path, (2500, 2534)))
+    w3 = _segment(
+        "w3",
+        [_record(tmp_path / f"w3-{u}.pt", u) for u in (2534, 2550, 2600)],
+        ["finished"],
+    )
+    w4_exports = [_record(tmp_path / "w4-2600.pt", 2600)]
+    w4_ended: list[str | None] = [None]
+    w4 = _segment("w4", w4_exports, w4_ended)
+    state = EvalState()
+    # w3 has ended, but the seed was declared to continue: nothing settles.
+    admit(state, windows, [w3], continues=True)
+    assert state.endpoint is None and state.error is None
+    # Restarted naming w4 as the final segment: w3's end is the chain's course.
+    admit(state, windows, [w3, w4])
+    assert state.endpoint is None and state.checkpoints[2600].run == "w3"
+    w4_exports.append(_record(tmp_path / "w4-2650.pt", 2650))
+    w4_ended[0] = "finished"
+    admit(state, windows, [w3, w4])
+    assert state.checkpoints[2650].run == "w4"
+    assert state.segment_outcome == "finished" and state.endpoint == 2650
+
+
+def test_later_segment_ended_before_training_does_not_end_the_seed(
+    tmp_path: Path,
+) -> None:
+    windows = window_checkpoints(_windows_file(tmp_path, (2534,)))
+    w3 = _segment("w3", [_record(tmp_path / "w3.pt", 2600)], ["finished"])
+    w4 = _segment("w4", [_record(tmp_path / "w4.pt", 2600)], ["failed"])
+    state = EvalState()
+    admit(state, windows, [w3, w4])
+    assert state.endpoint is None and state.error == "w4: ended failed without training"
 
 
 def _state(tmp_path: Path, updates: tuple[int, ...], endpoint: int | None) -> EvalState:
@@ -173,6 +203,7 @@ def test_failed_group_is_stored_as_invalid_games(
 ) -> None:
     """A worker that cannot load the checkpoint fails its group, not the run."""
     monkeypatch.setenv(EVIDENCE, str(tmp_path / "arena"))
+    monkeypatch.setenv(CARDS, str(tmp_path / "run"))
     state = _state(tmp_path, (0,), None)
     unit = units(state)[0]
     first = Conditions.model_validate(unit.matches[0].conditions)
@@ -248,12 +279,8 @@ def _fake_play(match: Match) -> Tables:
 
 
 def test_follow_plays_every_unit_through_the_endpoint(tmp_path: Path) -> None:
-    ledger = _ledger(tmp_path, (0, 50))
-    segment = SegmentSource(
-        run="w3",
-        checkpoints=lambda: [_record(tmp_path / "100.pt", 100)],
-        status=lambda: _status("done", "succeeded"),
-    )
+    windows_file = _windows_file(tmp_path, (0, 50))
+    segment = _segment("w3", [_record(tmp_path / "100.pt", 100)], ["finished"])
     played: list[str] = []
 
     def counted(match: Match) -> Tables:
@@ -263,15 +290,15 @@ def test_follow_plays_every_unit_through_the_endpoint(tmp_path: Path) -> None:
     state = follow(
         tmp_path / "eval",
         until=float("inf"),
-        windows=lambda: window_checkpoints(ledger),
-        segment=segment,
+        windows=window_checkpoints(windows_file),
+        segments=[segment],
         storages=[],
         play_match=counted,
         workers=1,
         poll_seconds=0,
         yielding=lambda: False,
     )
-    assert state.done and state.endpoint == 100 and state.segment_outcome == "succeeded"
+    assert state.done and state.endpoint == 100 and state.segment_outcome == "finished"
     design = units(state)
     assert len(played) == len(set(played)) == 10 * len(design)
     assert {m.key for u in design for m in u.matches} <= done_keys(

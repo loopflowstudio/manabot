@@ -9,19 +9,20 @@ from typing import Any, cast
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import pytest
 
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
-from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import file_sha256
-from manabot.sim import players
+from manabot.sim import anchors
+from manabot.sim.anchors import ScriptedGreedyPlayer
 from manabot.sim.heuristic import (
     HeuristicPlayer,
     TargetedSpell,
     heuristic_source_paths,
     targeted_spells,
 )
-from manabot.sim.players import ScriptedGreedyPlayer
+from manabot.sim.players import build_code_player
+from tests.eval.arena_fixture import arena_fixture
 
 OWN, OPPONENT = 10, 20
 
@@ -155,6 +156,71 @@ def offer(
 # Card knowledge -------------------------------------------------------------
 
 
+@pytest.mark.parametrize("count", [2, 64])
+def test_explicit_prefix_preserves_choices_within_capacity(count: int) -> None:
+    actions = [offer(ActionEnum.PRIORITY_CAST_SPELL, cid) for cid in range(count)]
+    cards = [hand(cid, "Gray Ogre", cid + 1) for cid in range(count)]
+    assert act(ActionSpaceEnum.PRIORITY, actions, cards=cards) == count - 1
+    assert (
+        act(
+            ActionSpaceEnum.PRIORITY,
+            actions,
+            cards=cards,
+            player=HeuristicPlayer(max_actions=64),
+        )
+        == count - 1
+    )
+
+
+def test_prefix_also_restricts_greedy_fallback() -> None:
+    actions = [offer(ActionEnum.DECLINE_CHOICE) for _ in range(64)]
+    actions.append(offer(ActionEnum.PAY_COST))
+    # This choice has no heuristic-specific rule, so it uses the frozen greedy fallback.
+    assert act(ActionSpaceEnum.MODAL, actions) == 64
+    assert (
+        act(ActionSpaceEnum.MODAL, actions, player=HeuristicPlayer(max_actions=64))
+        == 63
+    )
+
+
+def test_registered_heuristic_keeps_explicit_prefix() -> None:
+    registration = register_anchor(
+        arena_fixture().anchors[0], "heuristic", player_id="bounded"
+    )
+    registration = registration.model_copy(
+        update={
+            "player_spec": {
+                "kind": "heuristic",
+                "max_actions": 64,
+                "action_overflow": "first-legal",
+            }
+        }
+    )
+    player = build_code_player(registration, seed=213)
+    assert isinstance(player, HeuristicPlayer)
+    actions = [offer(ActionEnum.DECLINE_CHOICE) for _ in range(64)]
+    actions.append(offer(ActionEnum.PAY_COST))
+    assert act(ActionSpaceEnum.MODAL, actions, player=player) == 63
+
+
+@pytest.mark.parametrize("capacity", [None, True, 0, -1, "64"])
+def test_registered_heuristic_rejects_invalid_capacity(capacity: object) -> None:
+    registration = register_anchor(
+        arena_fixture().anchors[0], "heuristic", player_id="bounded"
+    )
+    registration = registration.model_copy(
+        update={
+            "player_spec": {
+                "kind": "heuristic",
+                "max_actions": capacity,
+                "action_overflow": "first-legal",
+            }
+        }
+    )
+    with pytest.raises(ValueError, match="explicit first-legal support"):
+        build_code_player(registration, seed=213)
+
+
 def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
     spells = targeted_spells()
     assert {name: s.polarity for name, s in spells.items()} == {
@@ -166,6 +232,9 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Yip Yip!": "beneficial",
         "Fancy Footwork": "beneficial",
         "Lightning Bolt": "harmful",
+        "Counterspell": "harmful",
+        "Cunning Maneuver": "beneficial",
+        "Pillar Launch": "beneficial",
         # The Elemental world's ten decks.
         "Boomerang Basics": "harmful",
         "Combustion Technique": "harmful",
@@ -186,6 +255,43 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Origin of Metalbending": None,
         "Sokka's Haiku": None,
         "True Ancestry": None,
+        # TLA T2: earthbending one's own land, and effects (airbend, linked
+        # exile, hand reveal, graveyard return) the heuristic does not rate.
+        "Earthbending Lesson": "beneficial",
+        "Rockalanche": "beneficial",
+        "Airbender's Reversal": None,
+        "Airbending Lesson": None,
+        "Avatar's Wrath": None,
+        "Dai Li Indoctrination": None,
+        "Lost Days": None,
+        "Sandbenders' Storm": None,
+        "Zuko's Conviction": None,
+        # TLA T3: modal, distributed or attached effects (stun counters, Auras,
+        # conditional shrinks) the heuristic does not rate.
+        "Razor Rings": "harmful",
+        "Crashing Wave": None,
+        "Heartless Act": None,
+        "Honest Work": None,
+        "Path to Redemption": None,
+        "Swampsnare Trap": None,
+        "The Last Agni Kai": None,
+        "Watery Grasp": None,
+        # TLA T4: kicked, delayed-trigger and copy effects, rated by the
+        # target effects the derivation finds.
+        "Earth Rumble": "beneficial",
+        "Fatal Fissure": "beneficial",
+        "How to Start a Riot": "beneficial",
+        "Jet's Brainwashing": "beneficial",
+        "Price of Freedom": "harmful",
+        "Rocky Rebuke": "harmful",
+        "Sold Out": "harmful",
+        "Avatar Destiny": None,
+        "Bumi Bash": None,
+        "Redirect Lightning": None,
+        # Copying exiled graveyard cards is not battlefield removal.
+        "Foggy Swamp Visions": None,
+        # Player control uses the heuristic's fallback for unrated effects.
+        "Secret of Bloodbending": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)
@@ -197,24 +303,39 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
     assert not spells["Fancy Footwork"].side_restricted
 
 
-def test_unknown_or_mixed_target_ops_have_no_polarity() -> None:
+def test_unknown_or_mixed_target_effects_have_no_polarity() -> None:
     from manabot.sim.heuristic import derive_targeted_spells
 
-    def source(*ops: dict[str, Any]) -> dict[str, Any]:
-        program = {
-            "kind": "spell",
-            "targets": [{"role": "t", "selector": {"kind": "creature"}}],
-            "ops": [dict(op, target="t") for op in ops],
-        }
-        return {"definitions": [{"registry_name": "X", "programs": [program]}]}
+    def spell(*effects: dict[str, Any]) -> list[dict[str, Any]]:
+        targeting = [{"spec": "Creature", "min": 1, "max": 1}]
+        return [{"name": "X", "spell_effects": list(effects), "targeting": targeting}]
 
-    assert derive_targeted_spells(source({"op": "tap"}))["X"].polarity is None
-    mixed = source({"op": "deal_damage", "amount": 1}, {"op": "untap"})
+    def verb(name: str, **fields: Any) -> dict[str, Any]:
+        return {name: {**fields, "what": {"Target": "Creature"}}}
+
+    assert derive_targeted_spells(spell(verb("Tap")))["X"].polarity is None
+    mixed = spell(verb("DealDamage", amount={"Fixed": 1}), verb("Untap"))
     assert derive_targeted_spells(mixed)["X"].polarity is None
-    shrink = source({"op": "modify_pt", "power": -2, "toughness": -2})
+    bounce = spell(verb("Move", to="Hand"))
+    assert derive_targeted_spells(bounce)["X"].polarity == "harmful"
+    reanimate = spell(verb("Move", to="Battlefield"))
+    assert derive_targeted_spells(reanimate)["X"].polarity is None
+    shrink = spell(
+        {
+            "ApplyContinuous": {
+                "affected": {"Target": "Creature"},
+                "modification": {
+                    "ModifyPt": {"power": {"Fixed": -2}, "toughness": {"Fixed": -2}}
+                },
+                "duration": "EndOfTurn",
+            }
+        }
+    )
     assert derive_targeted_spells(shrink)["X"] == TargetedSpell(
         "harmful", "creature", False, pump=(-2, -2)
     )
+    modal = spell({"Modal": {"modes": [[verb("DealDamage", amount={"Fixed": 4})]]}})
+    assert derive_targeted_spells(modal)["X"] == TargetedSpell(None, "creature", False)
 
 
 # Priority -------------------------------------------------------------------
@@ -364,12 +485,10 @@ def test_v1_monitor_identity_is_unchanged_and_heuristic_has_its_own() -> None:
         == MonitorProtocol(opponent="scripted_greedy").model_dump()
     )
     assert "opponent" not in MonitorProtocol().model_dump()
-    candidate = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    ).anchors[0]
+    candidate = arena_fixture().anchors[0]
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     heuristic = register_anchor(candidate, "heuristic", player_id="heuristic")
-    assert scripted.source_sha256 == file_sha256(Path(players.__file__))
+    assert scripted.source_sha256 == file_sha256(Path(anchors.__file__))
     assert heuristic.source_sha256 != scripted.source_sha256
     assert all(path.exists() for path in heuristic_source_paths())
 
@@ -538,9 +657,10 @@ def test_burn_holds_for_a_kill_or_lethal() -> None:
     assert act(ActionSpaceEnum.CHOOSE_TARGET, targets, **lethal) == 1
 
 
-def test_cracks_fetch_lands_when_offered() -> None:
+@pytest.mark.parametrize("name", ["Fabled Passage", "Prismatic Vista"])
+def test_cracks_fetch_lands_when_offered(name: str) -> None:
     passage, card = creature(60, OWN, 0, 0)
-    card.name = "Fabled Passage"
+    card.name = name
     card.card_types = SimpleNamespace(is_creature=False, is_land=True)
     actions = [
         offer(ActionEnum.PRIORITY_PASS_PRIORITY),

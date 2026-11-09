@@ -11,18 +11,20 @@ import pytest
 from manabot.verify.competency import (
     MICRO_AGGRO,
     MICRO_CONTROL,
+    parse_agent_specs,
+    play_probed_games,
+    run_scenario_once,
+)
+from manabot.verify.scenarios import (
     SCENARIOS,
     SPACE_ATTACKER,
     SPACE_BLOCKER,
     SPACE_PRIORITY,
     SPACE_TARGET,
-    _find_cast_action,
-    _pass_index,
-    _stack_names,
     build_scenario_env,
-    parse_agent_specs,
-    play_probed_games,
-    run_scenario_once,
+    find_cast_action,
+    pass_index,
+    stack_names,
 )
 
 
@@ -34,7 +36,7 @@ class PassHero:
         kind = int(raw.action_space.action_space_type)
         actions = raw.action_space.actions
         if kind == SPACE_PRIORITY:
-            return _pass_index(raw)
+            return pass_index(raw)
         if kind == SPACE_ATTACKER:
             return 1  # decline
         if kind == SPACE_BLOCKER:
@@ -53,7 +55,7 @@ class CastWhenLegalHero(PassHero):
     def act(self, env, obs):
         raw = env.last_raw_obs
         if int(raw.action_space.action_space_type) == SPACE_PRIORITY:
-            index = _find_cast_action(raw, self.name)
+            index = find_cast_action(raw, self.name)
             if index is not None:
                 return index
         return super().act(env, obs)
@@ -68,8 +70,8 @@ class CounterBombHero(PassHero):
     def act(self, env, obs):
         raw = env.last_raw_obs
         if int(raw.action_space.action_space_type) == SPACE_PRIORITY:
-            index = _find_cast_action(raw, "Counterspell")
-            if index is not None and self.bomb in _stack_names(raw):
+            index = find_cast_action(raw, "Counterspell")
+            if index is not None and self.bomb in stack_names(raw):
                 return index
         return super().act(env, obs)
 
@@ -114,9 +116,7 @@ def test_scenario_positions_construct(name):
 
 def test_counter_bomb_scored_correct_when_bomb_countered():
     scenario = SCENARIOS["s1_counter_the_bomb"]
-    result = run_scenario_once(
-        scenario, CounterBombHero("Shivan Dragon"), None, seed=3
-    )
+    result = run_scenario_once(scenario, CounterBombHero("Shivan Dragon"), None, seed=3)
     assert result["correct"] is True
     assert result["counter_cast_on"] == "Shivan Dragon"
     assert not result["bomb_resolved"]
@@ -190,18 +190,18 @@ class BlockLineHero(PassHero):
         self._blocks_this_turn: dict[int, int] = {}
 
     def act(self, env, obs):
-        from manabot.verify.competency import _battlefield_pairs, _hero_view
+        from manabot.verify.scenarios import battlefield_pairs, hero_view
 
         raw = env.last_raw_obs
         kind = int(raw.action_space.action_space_type)
         actions = raw.action_space.actions
         if kind == SPACE_ATTACKER:
             focus = int(actions[0].focus[0]) if actions[0].focus else -1
-            hero_side, _ = _hero_view(raw)
+            hero_side, _ = hero_view(raw)
             name = next(
                 (
                     str(card.name)
-                    for card, perm in _battlefield_pairs(raw, hero_side)
+                    for card, perm in battlefield_pairs(raw, hero_side)
                     if int(perm.id) == focus
                 ),
                 "?",

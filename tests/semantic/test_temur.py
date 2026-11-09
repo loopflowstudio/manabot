@@ -1,28 +1,21 @@
-"""Temur compiled admission and current-world learning observations."""
-
-from pathlib import Path
+"""Temur setup: learning catalog binding and training observations."""
 
 import numpy as np
 
-from manabot.env import Env, Reward
-from manabot.env.match import Match
-from manabot.env.observation import ObservationEncoder, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import (
+    CARD_DIM,
+    PLAYER_DIM,
+    ObservationEncoder,
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
 import managym
 
-BASE = Path("content/semantic/v1")
 
-
-def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> None:
-    ir, coverage = compile_paths(
-        BASE / "temur.source.json", BASE / "temur.fixtures.json"
-    )
-    assert (BASE / "generated/temur.ir.json").read_text() == pretty_json(ir)
-    assert (BASE / "generated/temur.coverage.json").read_text() == pretty_json(coverage)
-    assert coverage["definition_count"] == 9
-    assert coverage["admission_closure_complete"]
+def test_temur_learning_catalog_closes_the_registered_cards() -> None:
     env = managym.Env(seed=163, skip_trivial=False)
     env.reset(
         [
@@ -31,21 +24,18 @@ def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> No
         ]
     )
     binding = BoundSemanticPack.bind(env.content_pack_manifest())
-    assert binding.schema.raw["schema_version"] == 5
+    assert binding.schema.raw == LearningSchema.load().raw
     assert binding.pad_catalog()
-    assert len(binding.definition_row_by_card_def_id) == 9
-    assert (
-        len(LearningSchema.load("content/semantic/w8/learning_schema.json").opcodes)
-        == 55
-    )
+    assert len(binding.definition_row_by_card_def_id) == managym.CARD_DEFINITION_COUNT
 
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:
     match = MatchConfig.authored("elemental-temur-v1", "temur_left", "temur_right")
     env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=163)
     observation, _ = env.reset(seed=163)
-    assert observation["agent_player"].shape[-1] == 40
-    assert observation["agent_cards"].shape[-1] == 41
+    # Policy input v5, the default: every observed fact has a column.
+    assert observation["agent_player"].shape[-1] == PLAYER_DIM
+    assert observation["agent_cards"].shape[-1] == CARD_DIM
     rng = np.random.default_rng(163)
     for _ in range(5000):
         actions = np.flatnonzero(observation["actions_valid"])
@@ -56,7 +46,7 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
         assert not info["permanent_space_truncated"]
         if terminal:
             return
-    raise AssertionError("compiled Temur game did not terminate")
+    raise AssertionError("Temur game did not terminate")
 
 
 def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:

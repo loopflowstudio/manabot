@@ -154,17 +154,14 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import copy
-    import json
 
     from academy.watch import import_arena
     from manabot.eval.match import play_cell
-    from manabot.eval.models import EvaluationContract
     from manabot.sim.replay import read_trace
+    from tests.eval.arena_fixture import arena_fixture
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
-    contract = EvaluationContract.model_validate(
-        json.loads(Path("tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     _, trace, receipt = play_cell(
         key=contract.key,
         player_a=contract.anchors[0],
@@ -209,10 +206,11 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     tmp_path: Path,
     compound: bool,
 ) -> None:
+    """Flat checkpoints play; removed compound checkpoints fail before play."""
     import torch
 
     from academy.villain import CheckpointVillain, choose_bot
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
     from manabot.model.world import checkpoint_world
@@ -226,14 +224,17 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         }
     )
     space = ObservationSpace()
-    spec = ModelConfig(hidden_dim=16, compound_decisions=compound)
+    spec = ModelConfig(hidden_dim=16)
     agent = ActorCritic(space, spec)
+    agent_hypers = spec.model_dump()
+    if compound:
+        agent_hypers["compound_decisions"] = True
     checkpoint = tmp_path / "agent.pt"
     torch.save(
         {
             "hypers": {
                 "observation_hypers": space.encoder.config.model_dump(),
-                "agent_hypers": spec.model_dump(),
+                "agent_hypers": agent_hypers,
             },
             "model_state_dict": agent.state_dict(),
             "world_binding": checkpoint_world(config.to_rust(), space),
@@ -241,6 +242,10 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
         },
         checkpoint,
     )
+    if compound:
+        with pytest.raises(ValueError, match="no longer executable"):
+            CheckpointVillain(str(checkpoint), player_configs=config.to_rust())
+        return
     policy = CheckpointVillain(
         str(checkpoint), deterministic=True, player_configs=config.to_rust()
     )
@@ -250,14 +255,8 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     decision = choose_bot(policy, engine, observation)
     assert decision.value is not None
     assert engine.state_digest() == digest
-    if compound:
-        assert decision.factors
-        assert all(
-            sum(factor.probabilities) == pytest.approx(1) for factor in decision.factors
-        )
-    else:
-        assert len(decision.probabilities) == len(observation.action_space.actions)
-        assert sum(decision.probabilities) == pytest.approx(1)
-        assert decision.action == max(
-            range(len(decision.probabilities)), key=decision.probabilities.__getitem__
-        )
+    assert len(decision.probabilities) == len(observation.action_space.actions)
+    assert sum(decision.probabilities) == pytest.approx(1)
+    assert decision.action == max(
+        range(len(decision.probabilities)), key=decision.probabilities.__getitem__
+    )

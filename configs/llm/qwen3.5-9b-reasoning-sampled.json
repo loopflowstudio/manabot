@@ -1,0 +1,22 @@
+{
+  "model_id": "Qwen/Qwen3.5-9B",
+  "model_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "tokenizer_id": "Qwen/Qwen3.5-9B",
+  "tokenizer_revision": "c202236235762e1c871ad0ccb60c8ee5ba337b9a",
+  "device": "cuda",
+  "precision": "bfloat16",
+  "context_tokens": 65536,
+  "max_new_tokens": 16384,
+  "deadline_seconds": 1800,
+  "fallback_seed": 37,
+  "decoding": "sampled",
+  "sampling": {
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+    "presence_penalty": 1.5,
+    "seed": 4160
+  },
+  "enable_thinking": true
+}

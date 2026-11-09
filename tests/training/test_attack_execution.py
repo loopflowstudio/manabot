@@ -7,7 +7,8 @@ import signal
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.experiment import attack_execution
 from manabot.experiment.attack_execution import execute_attack_plan
 from manabot.experiment.attacks import AttackPlan, AttackTarget
@@ -30,7 +31,7 @@ def _plan(tmp_path: Path) -> AttackPlan:
     match = selected_match()
     space = ObservationSpace()
     config = ModelConfig(
-        hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+        hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
     )
     target = tmp_path / "target.pt"
     torch.manual_seed(17)

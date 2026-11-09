@@ -6,17 +6,16 @@ import time
 import pytest
 
 from manabot.eval.match import derive_seed, play_cell
-from manabot.eval.models import EvaluationContract, MatchRow
+from manabot.eval.models import MatchRow
 from manabot.sim.replay import read_trace, replay_games
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_comparison_alias_shares_seed_without_changing_default_identity() -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     key = contract.key
     default = derive_seed(key, ("candidate-a", "random-v1"), 61001, "candidate-a")
     assert default != derive_seed(
@@ -39,9 +38,7 @@ def test_comparison_alias_shares_seed_without_changing_default_identity() -> Non
 
 
 def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     random, scripted = contract.anchors[:2]
     rows, trace, replay = play_cell(
         key=contract.key,
@@ -56,6 +53,11 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
     assert {row["player_a_seat"] for row in rows} == {0, 1}
     assert all(row["replay_passed"] for row in rows)
     assert all(MatchRow.model_validate(row) for row in rows)
+    # Without first-legal overflow, rows and their digests gain no cutoff key.
+    assert not any("policy_actions" in row for row in rows)
+    assert "policy_actions" not in MatchRow.model_validate(rows[0]).model_dump()
+    counted = {**rows[0], "policy_actions": {"decisions": 7, "dropped_actions": 1}}
+    assert MatchRow.model_validate(counted).policy_actions is not None
     assert replay["passed"]
     games = read_trace(Path(trace["path"]))
     assert replay_games(games).passed
@@ -65,12 +67,13 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         for game in games
         for decision in game["decisions"]
     )
+    counters = json.loads((tmp_path / "performance.json").read_text())["counters"]
+    assert counters["threads/group_worker"] >= 1
+    assert counters["threads_budget/group_worker"] == 8
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     _, trace, _ = play_cell(
         key=contract.key,
         player_a=contract.anchors[0],
@@ -90,9 +93,7 @@ def selected_players():
     from manabot.infra.identity import canonical_sha256
     from manabot.sim.matchup import SELECTED_SUITE, selected_match
 
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     key = contract.key.model_copy(
         update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
     )
@@ -110,7 +111,7 @@ def selected_players():
 
 
 def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path):
-    from manabot.eval.rating import bootstrap_population, payoff_matrix
+    from manabot.eval.rating import bootstrap_population
     from manabot.sim.matchup import selected_match
     from manabot.sim.replay import replay_environment
 
@@ -141,9 +142,6 @@ def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path
             setup.villain_sideboard if ur_seat == 0 else setup.hero_sideboard
         )
         assert env._engine.state_digest() == game["initial_state_digest"]
-    matrix = payoff_matrix(rows)["random-v1__scripted-greedy-v1"]
-    assert matrix["games"] == 4
-    assert sum(matrix["paired_blocks"].values()) == 1
     assert bootstrap_population(rows, seed=83, replicates=5)["failures"] == 0
     games[0]["match_hypers"]["hero_sideboard"] = {}
     assert not replay_games(games).passed
@@ -210,7 +208,9 @@ def test_game_cap_retains_all_four_failed_prefixes_without_draw_credit(tmp_path)
     )
 
 
-def _dead_worker(connection, game, registrations, checkpoint_paths, max_commands):
+def _dead_worker(
+    connection, game, registrations, checkpoint_paths, max_commands, *_endpoint
+):
     import os
 
     connection.send(("phase", game["seat_players"][0]))
@@ -227,7 +227,9 @@ def test_native_worker_crash_and_timeout_are_retained(
 
     _, players = selected_players()
     game = {"seat_players": [p.player_id for p in players], "decisions": []}
-    monkeypatch.setattr(match, "_game_worker", _dead_worker)
+    monkeypatch.setattr(
+        match, "GAME_WORKER", "tests.eval.test_evaluation_match:_dead_worker"
+    )
     if exit_between_polls:
         original_poll = Connection.poll
 
@@ -254,7 +256,7 @@ def test_native_worker_crash_and_timeout_are_retained(
 
 
 def test_policy_exception_retains_player_failure(monkeypatch):
-    from manabot.sim.match import _execute_game
+    from manabot.sim.native_game import execute_game
 
     _, players = selected_players()
     game = {"player_seeds": {p.player_id: 1 for p in players}}
@@ -262,9 +264,9 @@ def test_policy_exception_retains_player_failure(monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("policy failed")
 
-    monkeypatch.setattr("manabot.sim.match.build_registered_player", fail)
+    monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
     messages = []
-    _execute_game(game, players, {}, 1, messages.append)
+    execute_game(game, players, {}, 1, messages.append)
     result = messages[-1][1]
     assert result["termination_reason"] == "crash"
     assert result["failed_player_id"] == players[0].player_id
@@ -274,7 +276,7 @@ def test_policy_exception_retains_player_failure(monkeypatch):
 def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     import torch
 
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.eval.evaluate import validate_registered_player
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.infra.identity import file_sha256
@@ -292,9 +294,9 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
         )
     )
     torch.manual_seed(83)
-    agent = ActorCritic(space, ModelConfig(semantic_pack="ur-lessons-vs-gw-allies"))
+    agent = ActorCritic(space, ModelConfig(world="ur-lessons-vs-gw-allies"))
     path = tmp_path / "fixture.pt"
-    from manabot.env import Match
+    from manabot.env.match import Match
 
     save_checkpoint(
         agent, space, path, player_configs=Match(selected_match()).to_rust()

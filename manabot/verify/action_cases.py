@@ -11,13 +11,17 @@ from typing import Literal
 import numpy as np
 import torch
 
-from manabot.env import ObservationSpace, observation as observation_schema
+from manabot.env import observation as observation_schema
+from manabot.env.observation import ObservationSpace
 import managym
 
 
 def initial(
     *, authored: bool = True, seed: int = 111, deck: dict[str, int] | None = None
 ) -> managym.Env:
+    # Diagnostic exception: `reach` and the outcome probes step constructed
+    # positions one native window at a time, including sole-offer ones. These
+    # fixed cases (CASE_SET) never play a game for a model or policy.
     env = managym.Env(seed=seed, skip_trivial=False)
     configs = (
         [
@@ -273,9 +277,11 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
     if case.family in columns:
         obs["actions"][..., columns[case.family]] = 0
     elif case.family == "target":
-        obs["opponent_permanents"][
-            ..., observation_schema.PERMANENT_DEFINITION_INDEX
-        ] = 0
+        permanents = obs["opponent_permanents"]
+        permanents[..., observation_schema.PERMANENT_DEFINITION_INDEX] = 0
+        # Policy input v5 also orders permanents by timestamp (CR 613.7).
+        if permanents.shape[-1] == observation_schema.PERMANENT_DIM:
+            permanents[..., observation_schema.PERMANENT_TIMESTAMP_INDEX] = 0
     else:
         obs["semantic_cards"].zero_()
     return obs
@@ -315,6 +321,18 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
                 result["relations"][..., column][mask] = (
                     2 * offset + count + 1 - refs[mask]
                 )
+        if "facts" in obs:
+            refs = obs["facts"][..., 0]  # FACT_OBJECT_INDEX
+            mask = (refs > offset) & (refs <= offset + count)
+            result["facts"][..., 0][mask] = 2 * offset + count + 1 - refs[mask]
+        for block, columns in (("effects", (10, 12)), ("effect_members", (0,))):
+            if block in obs:
+                for column in columns:
+                    refs = obs[block][..., column]
+                    mask = (refs > offset) & (refs <= offset + count)
+                    result[block][..., column][mask] = (
+                        2 * offset + count + 1 - refs[mask]
+                    )
         offset += count
     return result
 

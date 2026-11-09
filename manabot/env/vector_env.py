@@ -15,7 +15,6 @@ from .match import Match, Reward
 from .observation import ObservationSpace
 
 VALID_OPPONENT_POLICIES = ("none", "passive", "random")
-OBSERVATION_BUFFER_DTYPES = {"action_focus": np.int32}
 
 
 class VectorEnv:
@@ -45,7 +44,9 @@ class VectorEnv:
         self._rust_env = self._build_rust_env(seed=seed)
 
         self._buffers = self._allocate_buffers()
-        self._rust_env.set_buffers(self._buffers)
+        self._rust_env.set_buffers(
+            self._buffers, self.observation_space.encoder.config.action_overflow
+        )
         self._build_tensor_views()
 
         self._battlefield_zone_index = int(managym.ZoneEnum.BATTLEFIELD)
@@ -292,9 +293,12 @@ class VectorEnv:
         self, *, seed: Optional[int] = None, options: Optional[dict] = None
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
         if seed is not None and seed != self._base_seed:
+            self._rust_env.close()
             self._base_seed = seed
             self._rust_env = self._build_rust_env(seed=seed)
-            self._rust_env.set_buffers(self._buffers)
+            self._rust_env.set_buffers(
+                self._buffers, self.observation_space.encoder.config.action_overflow
+            )
         if options and "match" in options:
             self._player_configs = options["match"].to_rust()
 
@@ -353,5 +357,5 @@ class VectorEnv:
         self._sync_tensors_from_buffers()
         return self
 
-    def close(self):
-        return None
+    def close(self) -> None:
+        self._rust_env.close()

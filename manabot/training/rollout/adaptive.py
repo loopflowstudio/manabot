@@ -34,7 +34,7 @@ class AdaptiveConfig(BaseModel):
     def unique_cells(self) -> "AdaptiveConfig":
         identities = [
             (
-                c.content_pack,
+                c.world,
                 tuple(sorted(c.hero_deck.items())),
                 tuple(sorted(c.hero_sideboard.items())),
                 tuple(sorted(c.villain_deck.items())),

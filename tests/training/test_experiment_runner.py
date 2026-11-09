@@ -20,11 +20,11 @@ from manabot.experiment.execution import (
 )
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig
-from manabot.recipes.ataraxos import ataraxos
 from manabot.reports.notebook import write_comparison_notebook
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_monitor_evaluation import failure_summary
+from tests.training.wdl_baseline import wdl_baseline
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ def isolated_account_leases(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
 
 def demo_declaration() -> Experiment:
     """Four short training runs and four milestones: a workflow fixture."""
-    base = ataraxos().regime()
+    base = wdl_baseline().regime()
     base.world = managym.WORLD_VERSION
     base.id = f"fixture-{base.world}"
     base.stages = base.stages[:1]

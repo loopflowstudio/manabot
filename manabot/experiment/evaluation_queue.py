@@ -31,6 +31,7 @@ from manabot.experiment.checkpoint_evaluation import (
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.reports.training import evaluation_dashboard
+from manabot.sim.threads import child_environment
 from manabot.training.clock import arm_worker_deadline
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.training.regime import ArtifactReference, Strict
@@ -416,11 +417,7 @@ class CheckpointQueue:
                         stderr=subprocess.STDOUT,
                         start_new_session=True,
                         pass_fds=(self.lock.fileno(),),
-                        env={
-                            **os.environ,
-                            "OMP_NUM_THREADS": "1",
-                            "MKL_NUM_THREADS": "1",
-                        },
+                        env=child_environment(),
                     )
                 self.active = attempt
             except Exception as error:

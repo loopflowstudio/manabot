@@ -12,7 +12,8 @@ import torch
 
 from experiments import mtg186_cards as cards
 from experiments.mtg186_eval import GW, UR, Checkpoint, Pairing, Player
-from manabot.env import Match as EnvMatch, ObservationSpace
+from manabot.env.match import Match as EnvMatch
+from manabot.env.observation import ObservationSpace
 from manabot.eval.card_metrics import CARD_ROLLUPS
 from manabot.eval.card_query import CardSelection, card_data, card_db
 from manabot.infra.config import ModelConfig
@@ -26,9 +27,7 @@ def _checkpoint(path: Path, seed: int, trial: str) -> Player:
     space = ObservationSpace()
     model = ActorCritic(
         space,
-        ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="elemental-world-v2"
-        ),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world="elemental-world-v2"),
     )
     save_checkpoint(
         model,

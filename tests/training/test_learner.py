@@ -4,8 +4,9 @@ from pathlib import Path
 
 import torch
 
-from manabot.env import Match, ObservationSpace
-from manabot.infra import MatchConfig, ModelConfig
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.training.learning.learner import Learner

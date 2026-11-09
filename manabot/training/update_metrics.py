@@ -104,15 +104,8 @@ def _subphases(phase: str, timings: Mapping[str, PhaseTiming]) -> dict[str, floa
 
 
 def time_since(before: Mapping[str, float], now: Mapping[str, float]) -> MetricRow:
-    """Seconds each timer gained between two `phase_seconds` readings.
-
-    A timer that went down was restarted, as a new attempt's profiler is
-    under a resumed stage's totals, so all of its value is new.
-    """
-    return {
-        key: value - before.get(key, 0.0) if value >= before.get(key, 0.0) else value
-        for key, value in now.items()
-    }
+    """Seconds each timer gained between two `phase_seconds` readings of one attempt."""
+    return {key: value - before.get(key, 0.0) for key, value in now.items()}
 
 
 def _flatten(value: object, name: str, row: MetricRow) -> None:

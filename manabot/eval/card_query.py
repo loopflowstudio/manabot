@@ -1,8 +1,9 @@
 """Card statistics over an experiment's kept database, with shared-deal uncertainty.
 
 `card_data` reports 17Lands-style columns per card for one selection of the
-games in every eval run of one experiment; `card_variants` reports them for
-every combination of the selection's filters in one pass. Both read only the
+games in every eval run of one experiment; `card_variants` reports them as
+columns for every combination of the selection's filters in one pass, with
+one batched bootstrap per deal count. Both read only the
 per-deal totals of `CARD_ROLLUPS` (`card_deals`, `game_deals`), which Etude
 keeps as each match is stored, so no card row is read again. Open the database
 with `card_db` so runs stored without those rollups are summed once. Players
@@ -22,12 +23,12 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import combinations, product
+from itertools import combinations, pairwise, product
 from pathlib import Path
 from typing import Literal
 
 import duckdb
-from etude.eval.query import estimate, read_blobs, statsdb
+from etude.eval.query import REPLICATES, Estimate, estimate, read_blobs, statsdb
 from etude.eval.records import Match, TournamentRun, assemble
 from etude.run.errors import EtudeError
 from etude.run.listing import as_storage, places
@@ -257,22 +258,156 @@ def _game_groups(
     ]
 
 
-def _rate(count: float, won: float) -> Rate:
-    return Rate(count=int(count), rate=won / count if count else None)
+@dataclass(frozen=True)
+class _Segments:
+    """Grouped rows ordered by combination: `at[variant]` slices out its rows."""
+
+    at: dict[Variant, slice]
+    columns: dict[str, npt.NDArray[np.generic]]
+
+    def rows(self, variant: Variant, column: str) -> npt.NDArray[np.generic]:
+        """A combination's rows of `column`; none for a combination without any."""
+        return self.columns[column][self.at.get(variant, slice(0))]
+
+
+def _segments(
+    db: duckdb.DuckDBPyConnection,
+    table: str,
+    dimensions: Sequence[Dimension],
+    within: Sequence[str],
+    values: dict[str, str],
+    where: str = "true",
+    *,
+    ordered: bool = True,
+) -> _Segments:
+    """Totals per filter combination and `within` columns, as columns by combination.
+
+    Millions of rows arrive as arrays, so they are never Python objects one
+    by one; a combination is a run of rows with one `segment`, in `within`
+    order when `ordered`. Combinations are numbered from their distinct keys,
+    so the rows themselves are sorted once.
+    """
+    group_by, mask = _grouping(dimensions, within)
+    keys = ["mask", *dimensions]
+    picked = ", ".join(
+        [
+            f"{mask} as mask",
+            *dimensions,
+            *within,
+            *(f"{sql} as {name}" for name, sql in values.items()),
+        ]
+    )
+    db.execute(
+        "create or replace temp table grouped as"
+        f" select {picked} from {table} where {where} {group_by}"
+    )
+    db.execute(
+        "create or replace temp table segment_keys as"
+        " select (row_number() over () - 1)::INTEGER as segment, *"
+        f" from (select distinct {', '.join(keys)} from grouped)"
+    )
+    variants = {
+        int(segment): _variant(int(bits), found)
+        for segment, bits, *found in db.execute(
+            f"select segment, {', '.join(keys)} from segment_keys"
+        ).fetchall()
+    }
+    # A rolled-up dimension is null in both tables.
+    on = " and ".join(f"g.{key} is not distinct from k.{key}" for key in keys)
+    columns = db.execute(
+        f"select k.segment, {', '.join(f'g.{c}' for c in [*within, *values])}"
+        f" from grouped g join segment_keys k on {on}"
+        f" order by {', '.join(['k.segment', *(within if ordered else ())])}"
+    ).fetchnumpy()
+    segment = np.asarray(columns.pop("segment"))
+    bounds = [*np.flatnonzero(np.diff(segment, prepend=-1)).tolist(), len(segment)]
+    return _Segments(
+        at={
+            variants[int(segment[start])]: slice(start, end)
+            for start, end in pairwise(bounds)
+        },
+        columns={name: np.asarray(column) for name, column in columns.items()},
+    )
+
+
+@dataclass(frozen=True)
+class CardColumns:
+    """One combination's per-card statistics as aligned columns, in display order.
+
+    Rows are cards, by GIH WR descending, cards without one last, then name.
+    `counts` and `rates` hold GP, OH, GD, GIH and GNS in that order; a rate,
+    interval bound or IWD without opportunities is NaN.
+    """
+
+    cards: tuple[str, ...]
+    names: tuple[str, ...]
+    counts: npt.NDArray[np.int64]
+    rates: npt.NDArray[np.float64]
+    gih_interval: npt.NDArray[np.float64]
+    # Copy-weighted GIH WR minus GNS WR, in percentage points.
+    iwd: npt.NDArray[np.float64]
+
+    def records(self) -> tuple[CardStats, ...]:
+        def rate(row: int, metric: int) -> Rate:
+            value = float(self.rates[row, metric])
+            return Rate(
+                count=int(self.counts[row, metric]),
+                rate=None if np.isnan(value) else value,
+            )
+
+        stats = []
+        for row, (card, name) in enumerate(zip(self.cards, self.names, strict=True)):
+            low, high = self.gih_interval[row].tolist()
+            iwd = float(self.iwd[row])
+            stats.append(
+                CardStats(
+                    card=card,
+                    name=name,
+                    gp=rate(row, 0),
+                    oh=rate(row, 1),
+                    gd=rate(row, 2),
+                    gih=rate(row, 3),
+                    gih_interval=None if np.isnan(low) else (low, high),
+                    gns=rate(row, 4),
+                    iwd=None if np.isnan(iwd) else iwd,
+                )
+            )
+        return tuple(stats)
+
+
+_NO_CARDS = CardColumns(
+    cards=(),
+    names=(),
+    counts=np.zeros((0, 5), dtype=np.int64),
+    rates=np.zeros((0, 5)),
+    gih_interval=np.zeros((0, 2)),
+    iwd=np.zeros(0),
+)
+
+
+@dataclass(frozen=True)
+class CardVariant:
+    """One combination: its `CardData` without card records, and its cards as columns."""
+
+    data: CardData
+    columns: CardColumns
+
+    def card_data(self) -> CardData:
+        return self.data.model_copy(update={"cards": self.columns.records()})
 
 
 def card_variants(
     db: duckdb.DuckDBPyConnection,
     selection: CardSelection,
     dimensions: Sequence[Dimension] = (),
-) -> dict[Variant, CardData]:
-    """`CardData` for `selection` narrowed to every combination of `dimensions`.
+) -> dict[Variant, CardVariant]:
+    """A `CardVariant` for `selection` narrowed to every combination of `dimensions`.
 
     Each combination gives each dimension one value present in the selection's
     games, or all of them (None). Combinations without any game are absent;
-    those without eligible games report exclusions only. Each statistic equals
-    `card_data` of the narrowed selection; the empty combination is
-    `card_data(db, selection)`.
+    those without eligible games report exclusions only. Each one's
+    `card_data()` equals `card_data` of the narrowed selection; the empty
+    combination's is `card_data(db, selection)`.
     """
     if not _has_cards(db):
         raise ValueError("this experiment has no card evaluations")
@@ -315,12 +450,47 @@ def card_variants(
     ):
         excluded[variant][outcome] = int(games)
     # Eligible deals (the bootstrap blocks) with their player-games and wins.
-    deals: dict[Variant, dict[int, tuple[float, float]]] = defaultdict(dict)
-    for variant, (deal, games, wins) in _game_groups(
-        db, dims, ("deal",), "sum(rows), sum(wins)", "eligible"
-    ):
-        deals[variant][int(deal)] = (float(games), float(wins or 0))
-    cards = _card_blocks(db, dims)
+    deals = _segments(
+        db,
+        "picked_games",
+        dims,
+        ("deal",),
+        {"games": "sum(rows)::DOUBLE", "wins": "coalesce(sum(wins), 0)::DOUBLE"},
+        "eligible",
+    )
+    # Cards are numbered in key order, so a card is an integer from here on.
+    db.execute(
+        "create or replace temp table card_codes as select card,"
+        " (row_number() over (order by card) - 1)::INTEGER as code"
+        " from (select distinct card from picked_cards)"
+    )
+    keys = [
+        card
+        for (card,) in db.execute(
+            "select card from card_codes order by code"
+        ).fetchall()
+    ]
+    db.execute(
+        "create or replace temp view coded_cards as"
+        " select * from picked_cards join card_codes using (card)"
+    )
+    summed = _segments(
+        db,
+        "coded_cards",
+        dims,
+        ("code",),
+        {name: f"sum({name})::DOUBLE" for name in _SUMS},
+    )
+    # Only GIH needs deal-level totals, for its uncertainty; a zero adds nothing.
+    gih = _segments(
+        db,
+        "coded_cards",
+        dims,
+        ("code", "deal"),
+        {"opportunities": "sum(gih)::DOUBLE", "wins": "sum(gih_won)::DOUBLE"},
+        "gih > 0",
+        ordered=False,
+    )
     failed = dict(
         db.execute(
             "select run, count(*) from matches where state = 'failed' group by run"
@@ -328,42 +498,65 @@ def card_variants(
     )
     names = dict(db.execute("select player, name from players").fetchall())
     labels = dict(db.execute("select distinct card, name from cards").fetchall())
-    found: dict[Variant, CardData] = {}
+    card_names = [labels.get(card, card) for card in keys]
+    name_rank = np.argsort(
+        np.argsort(np.array(card_names, dtype=object), kind="stable")
+    )
+    totals: dict[Variant, _CardTotals] = {}
+    played: dict[Variant, tuple[int, float, float]] = {}
+    for variant in deals.at:
+        per_deal = deals.rows(variant, "deal")
+        games = float(deals.rows(variant, "games").sum())
+        played[variant] = (
+            len(per_deal),
+            games,
+            float(deals.rows(variant, "wins").sum()),
+        )
+        if games and variant in summed.at:
+            totals[variant] = _card_totals(variant, per_deal, summed, gih)
+    estimates = dict(zip(totals, _gih_estimates(list(totals.values())), strict=True))
+    found: dict[Variant, CardVariant] = {}
     for variant, variant_runs in runs.items():
-        per_deal = deals.get(variant, {})
-        games = sum(g for g, _ in per_deal.values())
-        found[variant] = CardData(
-            selection=selection,  # Narrowed once when fixed dimensions are expanded.
-            subjects={p: names[p] for p in sorted(subjects[variant])},
-            opponents=opponents[variant],
-            runs=variant_runs,
-            games=int(games),
-            deals=len(per_deal),
-            win_rate=sum(w for _, w in per_deal.values()) / games if games else None,
-            excluded=excluded.get(variant, {}),
-            failed_matches=sum(int(failed.get(run, 0)) for run in variant_runs),
-            cards=_card_stats(sorted(per_deal), cards.get(variant), labels)
-            if games
-            else (),
+        deal_count, games, wins = played.get(variant, (0, 0.0, 0.0))
+        found[variant] = CardVariant(
+            data=CardData(
+                selection=selection,  # Narrowed once fixed dimensions are expanded.
+                subjects={p: names[p] for p in sorted(subjects[variant])},
+                opponents=opponents[variant],
+                runs=variant_runs,
+                games=int(games),
+                deals=deal_count,
+                win_rate=wins / games if games else None,
+                excluded=excluded.get(variant, {}),
+                failed_matches=sum(int(failed.get(run, 0)) for run in variant_runs),
+                cards=(),
+            ),
+            columns=_card_columns(
+                totals[variant], estimates[variant], keys, card_names, name_rank
+            )
+            if variant in totals
+            else _NO_CARDS,
         )
     return _expanded(found, selection, dims, tuple(dimensions), fixed)
 
 
 def _expanded(
-    found: dict[Variant, CardData],
+    found: dict[Variant, CardVariant],
     selection: CardSelection,
     split: tuple[Dimension, ...],
     dimensions: tuple[Dimension, ...],
     fixed: dict[Dimension, str | bool],
-) -> dict[Variant, CardData]:
+) -> dict[Variant, CardVariant]:
     """Results over `split` keyed by every dimension, each fixed one as its value or all."""
-    expanded: dict[Variant, CardData] = {}
-    for variant, data in found.items():
+    expanded: dict[Variant, CardVariant] = {}
+    for variant, table in found.items():
         given = dict(zip(split, variant, strict=True))
         choices = [(None, fixed[d]) if d in fixed else (given[d],) for d in dimensions]
         for key in product(*choices):
-            expanded[key] = data.model_copy(
-                update={"selection": _narrowed(selection, dimensions, key)}
+            narrowed = _narrowed(selection, dimensions, key)
+            expanded[key] = CardVariant(
+                data=table.data.model_copy(update={"selection": narrowed}),
+                columns=table.columns,
             )
     return expanded
 
@@ -383,111 +576,135 @@ def _narrowed(
 
 
 @dataclass(frozen=True)
-class _CardBlocks:
-    """Aligned columns for one variant: each row is one card/deal's metric totals."""
+class _CardTotals:
+    """One combination's per-card sums and its GIH opportunities and wins per deal.
 
-    cards: npt.NDArray[np.str_]
-    deals: npt.NDArray[np.int64]
-    sums: npt.NDArray[np.float64]
-
-
-def _card_blocks(
-    db: duckdb.DuckDBPyConnection, dimensions: Sequence[Dimension]
-) -> dict[Variant, _CardBlocks]:
-    """Per combination: card, deal and the `_SUMS` totals of each (card, deal) as arrays.
-
-    Hundreds of thousands of rows arrive as columns, so they are never Python
-    objects one by one; a combination is a run of rows with one `segment`.
+    `codes` are the combination's cards in key order and `summed` their
+    `_SUMS`. `deal` and `card` index a sparse deals × cards matrix: `deal` is
+    the position among the combination's eligible deals in key order, the
+    order `estimate` resamples them in, and `card` a row of `codes`.
     """
-    group_by, mask = _grouping(dimensions, ("card", "deal"))
-    keys = ", ".join(["mask", *dimensions])
-    picked = ", ".join([f"{mask} as mask", *dimensions, "card", "deal"])
-    db.execute(
-        "create or replace temp table card_blocks as"
-        f" select dense_rank() over (order by {keys}) - 1 as segment, *"
-        f" from (select {picked}, "
-        + ", ".join(f"sum({name})::DOUBLE as {name}" for name in _SUMS)
-        + f" from picked_cards {group_by})"
-    )
-    variants = {
-        int(segment): _variant(int(bits), values)
-        for segment, bits, *values in db.execute(
-            f"select distinct segment, {keys} from card_blocks"
-        ).fetchall()
-    }
-    columns = db.execute(
-        f"select segment, card, deal, {', '.join(_SUMS)} from card_blocks"
-        " order by segment"
-    ).fetchnumpy()
-    segments = np.asarray(columns["segment"])
-    if not len(segments):
-        return {}
-    cards = np.asarray(columns["card"]).astype(str)
-    deals = np.asarray(columns["deal"]).astype(np.int64)
-    sums = np.column_stack(
-        [np.nan_to_num(np.asarray(columns[name], dtype=np.float64)) for name in _SUMS]
-    )
-    starts = np.flatnonzero(np.diff(segments, prepend=-1))
-    ends = np.append(starts[1:], len(segments))
-    return {
-        variants[int(segments[start])]: _CardBlocks(
-            cards=cards[start:end],
-            deals=deals[start:end],
-            sums=sums[start:end],
-        )
-        for start, end in zip(starts, ends, strict=True)
-    }
+
+    deals: int
+    codes: npt.NDArray[np.int32]
+    summed: npt.NDArray[np.float64]
+    deal: npt.NDArray[np.intp]
+    card: npt.NDArray[np.intp]
+    opportunities: npt.NDArray[np.float64]
+    wins: npt.NDArray[np.float64]
 
 
-def _card_stats(
-    deals: Sequence[int], blocks: _CardBlocks | None, labels: dict[str, str]
-) -> tuple[CardStats, ...]:
-    """Per card, from one combination's (card, deal, sums) over its eligible deals."""
-    if blocks is None:
-        return ()
-    order, column = np.unique(blocks.cards, return_inverse=True)
-    row = np.searchsorted(np.asarray(deals), blocks.deals)
-    # Only GIH needs deal-level matrices for uncertainty. All other metrics
-    # need per-card sums, without expanding absent card/deal pairs to zeros.
-    summed = np.zeros((len(order), len(_SUMS)))
-    np.add.at(summed, column, blocks.sums)
-    opportunities = np.zeros((len(deals), len(order)))
-    wins = np.zeros_like(opportunities)
-    gih_index = _SUMS.index("gih")
-    opportunities[row, column] = blocks.sums[:, gih_index]
-    wins[row, column] = blocks.sums[:, gih_index + 1]
-    # One shared bootstrap resamples whole deals for every card at once.
-    estimates = estimate(list(deals), wins, opportunities)
-    stats = []
-    for j, card in enumerate(order.tolist()):
-        gp, gp_won, oh, oh_won, gd, gd_won, gih, _, gns_n, gns_won = summed[j]
-        gih_estimate = estimates[j]
-        gih_rate = gih_estimate.value if gih_estimate else None
-        gns = _rate(gns_n, gns_won)
-        stats.append(
-            CardStats(
-                card=card,
-                name=labels.get(card, card),
-                gp=_rate(gp, gp_won),
-                oh=_rate(oh, oh_won),
-                gd=_rate(gd, gd_won),
-                gih=Rate(count=int(gih), rate=gih_rate),
-                gih_interval=gih_estimate.interval if gih_estimate else None,
-                gns=gns,
-                iwd=None
-                if gih_rate is None or gns.rate is None
-                else 100 * (gih_rate - gns.rate),
-            )
+def _card_totals(
+    variant: Variant,
+    deals: npt.NDArray[np.generic],
+    summed: _Segments,
+    gih: _Segments,
+) -> _CardTotals:
+    codes = summed.rows(variant, "code")
+    return _CardTotals(
+        deals=len(deals),
+        codes=codes,
+        summed=np.column_stack([summed.rows(variant, name) for name in _SUMS]),
+        deal=np.searchsorted(deals, gih.rows(variant, "deal")),
+        card=np.searchsorted(codes, gih.rows(variant, "code")),
+        opportunities=gih.rows(variant, "opportunities"),
+        wins=gih.rows(variant, "wins"),
+    )
+
+
+# Bounds each batched `estimate` call's matrices to about 32 MB apiece.
+_BATCH_CELLS = 4_000_000
+
+
+def _gih_estimates(totals: Sequence[_CardTotals]) -> list[list[Estimate | None]]:
+    """Each combination's per-card GIH `estimate`, batched by deal count.
+
+    `estimate`'s bootstrap weights depend only on the number of deals, and a
+    column's result only on its own numerators and denominators. So the
+    columns of every combination with `n` deals share calls, with the deals'
+    positions as keys, and each equals the combination's own call. Inputs
+    are integer counts, so resampled totals are exact in any summation order.
+    Columns are ordered by how many deals hold opportunities, which groups
+    the sparse ones whose replicates can draw none.
+    """
+    found: list[list[Estimate | None]] = [[None] * len(t.codes) for t in totals]
+    by_count: dict[int, list[tuple[int, int, int]]] = defaultdict(list)
+    for index, total in enumerate(totals):
+        held = np.bincount(total.card, minlength=len(total.codes))
+        for column, count in enumerate(held.tolist()):
+            by_count[total.deals].append((count, index, column))
+    for deals, columns in by_count.items():
+        columns.sort()
+        width = max(1, min(_BATCH_CELLS // deals, _BATCH_CELLS // REPLICATES))
+        for start in range(0, len(columns), width):
+            batch = columns[start : start + width]
+            wins = np.zeros((deals, len(batch)))
+            opportunities = np.zeros_like(wins)
+            positions: dict[int, npt.NDArray[np.intp]] = {}
+            for position, (_, index, column) in enumerate(batch):
+                if index not in positions:
+                    positions[index] = np.full(len(totals[index].codes), -1)
+                positions[index][column] = position
+            for index, position_of in positions.items():
+                total = totals[index]
+                placed = position_of[total.card]
+                rows = placed >= 0
+                opportunities[total.deal[rows], placed[rows]] = total.opportunities[
+                    rows
+                ]
+                wins[total.deal[rows], placed[rows]] = total.wins[rows]
+            for (_, index, column), result in zip(
+                batch, estimate(range(deals), wins, opportunities), strict=True
+            ):
+                found[index][column] = result
+    return found
+
+
+def _card_columns(
+    totals: _CardTotals,
+    gih: Sequence[Estimate | None],
+    keys: Sequence[str],
+    names: Sequence[str],
+    name_rank: npt.NDArray[np.intp],
+) -> CardColumns:
+    counts = totals.summed[:, 0::2]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rates = np.where(counts > 0, totals.summed[:, 1::2] / counts, np.nan)
+    # GIH WR and its interval are the shared bootstrap's.
+    rates[:, 3] = [np.nan if e is None else e.value for e in gih]
+    interval = np.array(
+        [
+            (np.nan, np.nan) if e is None or e.interval is None else e.interval
+            for e in gih
+        ],
+        dtype=np.float64,
+    ).reshape(-1, 2)
+    gih_rate = rates[:, 3]
+    # Missing GIH WR last, then descending; ties by name, then card key.
+    order = np.lexsort(
+        (
+            totals.codes,
+            name_rank[totals.codes],
+            -np.nan_to_num(gih_rate),
+            np.isnan(gih_rate),
         )
-    stats.sort(key=lambda s: (s.gih.rate is None, -(s.gih.rate or 0), s.name))
-    return tuple(stats)
+    )
+    codes = totals.codes[order].tolist()
+    return CardColumns(
+        cards=tuple(keys[code] for code in codes),
+        names=tuple(names[code] for code in codes),
+        counts=counts[order].astype(np.int64),
+        rates=rates[order],
+        gih_interval=interval[order],
+        iwd=100 * (gih_rate - rates[:, 4])[order],
+    )
 
 
 def card_data(db: duckdb.DuckDBPyConnection, selection: CardSelection) -> CardData:
     """17Lands-style card columns for the selected games of one experiment."""
     found = card_variants(db, selection)
     if () in found:
-        return found[()]
+        return found[()].card_data()
     # No game matches: nothing to report, but the selection is still valid.
     return CardData(
         selection=selection,

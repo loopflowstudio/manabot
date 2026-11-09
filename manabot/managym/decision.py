@@ -4,8 +4,8 @@ These dataclasses parse the canonical JSON produced by the PyO3 methods
 ``Env.semantic_decision_frame_json``, ``Env.semantic_observation_json``, and
 ``Env.execute_semantic_command_json`` (see ``managym/src/decision.rs``).
 
-This is the cross-package contract surface for docs/ARCHITECTURE.md step 1 /
-Rules R1: manabot (agent/search) and academy (experience) both consume it so
+This is the cross-package contract surface for the README's one-rules-authority
+contract: manabot (agent/search) and academy (experience) both consume it so
 the two sides share one revision-bound, viewer-safe, fail-closed authority.
 Positional action indices and offer decoding remain private to Rust; match
 identity stays Academy-owned; possible-world semantics (RUL-8) are not here.
@@ -13,11 +13,11 @@ identity stays Academy-owned; possible-world semantics (RUL-8) are not here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import InitVar, dataclass
 import json
 from typing import Any, Mapping
 
-SEMANTIC_DECISION_VERSION: int = 7
+SEMANTIC_DECISION_VERSION: int = 8
 
 PUBLIC_COMMITMENT_KINDS: tuple[str, ...] = (
     "cast",
@@ -40,11 +40,14 @@ class SemanticContractError(Exception):
         self.code = code
 
 
-def _validate_version(version: int) -> None:
-    if type(version) is not int or version != SEMANTIC_DECISION_VERSION:
+def _validate_version(version: int, expected: int = SEMANTIC_DECISION_VERSION) -> None:
+    if (
+        expected not in (7, SEMANTIC_DECISION_VERSION)
+        or type(version) is not int
+        or version != expected
+    ):
         raise SemanticContractError(
-            f"unsupported semantic decision schema {version!r}; "
-            f"expected {SEMANTIC_DECISION_VERSION}",
+            f"unsupported semantic decision schema {version!r}; expected {expected}",
             code="unsupported_schema",
         )
 
@@ -106,17 +109,22 @@ class DecisionFrame:
     offers: tuple[Mapping[str, Any], ...]
     object_candidates: tuple[Mapping[str, Any], ...]
 
-    def __post_init__(self) -> None:
-        _validate_version(self.schema_version)
+    _expected_version: InitVar[int] = SEMANTIC_DECISION_VERSION
+
+    def __post_init__(self, _expected_version: int) -> None:
+        _validate_version(self.schema_version, _expected_version)
         for offer in self.offers:
             commitment = offer.get("public_commitment")
             if commitment is not None:
                 PublicCommitment.from_payload(commitment)
 
     @classmethod
-    def from_json(cls, text: str) -> "DecisionFrame":
+    def from_json(
+        cls, text: str, *, _expected_version: int = SEMANTIC_DECISION_VERSION
+    ) -> "DecisionFrame":
         payload = json.loads(text)
         return cls(
+            _expected_version=_expected_version,
             schema_version=payload["schema_version"],
             revision=int(payload["revision"]),
             actor=int(payload["actor"]),
@@ -206,17 +214,24 @@ class Observation:
     events: tuple[str, ...]
     decision: DecisionFrame | None
 
-    def __post_init__(self) -> None:
-        _validate_version(self.schema_version)
+    _expected_version: InitVar[int] = SEMANTIC_DECISION_VERSION
+
+    def __post_init__(self, _expected_version: int) -> None:
+        _validate_version(self.schema_version, _expected_version)
 
     @classmethod
-    def from_json(cls, text: str) -> "Observation":
+    def from_json(
+        cls, text: str, *, _expected_version: int = SEMANTIC_DECISION_VERSION
+    ) -> "Observation":
         payload = json.loads(text)
         identity = payload["identity"]
         decision = None
         if payload["decision"] is not None:
-            decision = DecisionFrame.from_json(json.dumps(payload["decision"]))
+            decision = DecisionFrame.from_json(
+                json.dumps(payload["decision"]), _expected_version=_expected_version
+            )
         return cls(
+            _expected_version=_expected_version,
             schema_version=identity["schema_version"],
             revision=int(identity["revision"]),
             viewer=int(identity["viewer"]),

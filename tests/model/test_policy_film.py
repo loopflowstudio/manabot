@@ -8,9 +8,9 @@ give state-conditioned offer choices a gradient.
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline
 from manabot.recipes.local import local_smoke
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
@@ -26,8 +26,8 @@ def _agent(seed: int, film: bool) -> ActorCritic:
 def test_disabled_film_preserves_serialized_spec() -> None:
     assert "policy_film" not in ModelConfig(**SPEC).model_dump()
     assert ModelConfig(**SPEC, policy_film=True).model_dump()["policy_film"] is True
-    with pytest.raises(ValueError, match="compound"):
-        ModelConfig(compound_decisions=True, policy_film=True)
+    with pytest.raises(ValueError, match="no longer executable"):
+        ModelConfig.model_validate({"compound_decisions": True, "policy_film": True})
 
 
 def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:

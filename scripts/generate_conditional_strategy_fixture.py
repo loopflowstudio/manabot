@@ -30,7 +30,7 @@ from manabot.sim.search.conditional import (
     serialize_result,
     validate_result,
 )
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

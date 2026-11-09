@@ -1,11 +1,97 @@
-"""Complete typed card programs joined to viewer-safe card and knowledge rows."""
+"""Complete typed card programs joined to viewer-safe card and knowledge rows.
+
+`SemanticCardEncoder` owns the one token vocabulary of card text. With
+`records`, it also owns the exact vocabulary of fact and shared-effect ids
+(`RecordNamespace` keys): every name native `learning_record_names` lists reads
+the row of the card token for the same concept, or a row appended after the
+card tokens when no card text contains it. Nothing is hashed; an id outside
+the vocabulary fails loudly.
+"""
 
 from dataclasses import dataclass
+from enum import IntEnum
 
 import torch
 from torch import nn
 
 from manabot.semantic.policy_catalog import bind_policy_catalog
+import managym
+
+
+class RecordNamespace(IntEnum):
+    """Id column families of fact and shared-effect rows (native namespaces)."""
+
+    TOKEN = 1
+    NAME = 2
+    RESTRICTION = 3
+
+
+# Learning token kinds whose value is a number, not an id.
+NUMBER_TOKEN_KINDS = (4, 5)
+
+
+def record_key(high: torch.Tensor, low: torch.Tensor) -> torch.Tensor:
+    """One int64 key from a family (namespace or token kind) and a u32 word."""
+    return (high.long() << 32) | (low.long() & 0xFFFFFFFF)
+
+
+@dataclass(frozen=True)
+class _RecordTables:
+    """Token-embedding rows of record ids: `names` by (namespace, value),
+    `tokens` by (kind, value) over card tokens and appended ones, `numbers` by
+    numeric token kind. `size` is the embedding's row count."""
+
+    names: dict[tuple[int, int], int]
+    tokens: dict[tuple[int, int], int]
+    numbers: dict[int, int]
+    size: int
+
+
+def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
+    """A name whose card token exists reads that token's row, so a granted
+    keyword and the printed keyword share one embedding; every other name,
+    token and numeric kind gets a row appended after the card tokens."""
+    tokens = dict(vocabulary)
+    names: dict[tuple[int, int], int] = {}
+    size = len(vocabulary) + 1
+
+    def append() -> int:
+        nonlocal size
+        size += 1
+        return size - 1
+
+    for space, name, value, kind, token in managym.learning_record_names():
+        key = (int(RecordNamespace[space.upper()]), value)
+        if key in names:
+            raise ValueError(f"record name {name!r} shares an id with another")
+        if kind is None or token is None:
+            names[key] = append()
+        else:
+            if (kind, token) not in tokens:
+                tokens[(kind, token)] = append()
+            names[key] = tokens[(kind, token)]
+    numbers = {kind: append() for kind in NUMBER_TOKEN_KINDS}
+    return _RecordTables(names, tokens, numbers, size)
+
+
+def _sorted_keys(
+    table: dict[tuple[int, int], int],
+) -> tuple[torch.Tensor, torch.Tensor]:
+    pairs = torch.tensor(list(table), dtype=torch.long)
+    keys = record_key(pairs[:, 0], pairs[:, 1])
+    order = keys.argsort()
+    return keys[order], torch.tensor(list(table.values()))[order]
+
+
+def _lookup(
+    keys: torch.Tensor, rows: torch.Tensor, query: torch.Tensor, message: str
+) -> torch.Tensor:
+    if len(query) == 0:
+        return query.new_zeros(0, dtype=torch.long)
+    index = torch.searchsorted(keys, query).clamp_max(len(keys) - 1)
+    if not torch.equal(keys[index], query):
+        raise ValueError(message)
+    return rows[index]
 
 
 @dataclass(frozen=True)
@@ -13,8 +99,8 @@ class CatalogShape:
     """Separate catalog dimensions; lengths include expanded definition references.
 
     Counts describe representation cost, not encountered-card diversity or an
-    experimentally established difficulty score. Padding is embedded before
-    packing, while the GRU processes only expanded_tokens positions.
+    experimentally established difficulty score. Only real tokens are embedded
+    and recurrently encoded; padded_tokens describes the stored token table.
     """
 
     definitions: int
@@ -46,22 +132,27 @@ def admit_definition_ids(
 
 @dataclass(frozen=True)
 class CardReferences:
-    """Admitted catalog indexes for visible cards, permanents and public hands."""
+    """Admitted catalog indexes for visible cards, permanents, public hands and
+    known decklists."""
 
     cards: torch.Tensor
     permanents: torch.Tensor
     known: torch.Tensor | None
-
-    def to(self, device: torch.device) -> "CardReferences":
-        return CardReferences(
-            self.cards.to(device),
-            self.permanents.to(device),
-            None if self.known is None else self.known.to(device),
-        )
+    decklists: torch.Tensor | None = None
 
 
 class SemanticCardEncoder(nn.Module):
-    def __init__(self, pack_key: str, hidden_dim: int) -> None:
+    def __init__(
+        self,
+        pack_key: str,
+        hidden_dim: int,
+        decklists: bool = False,
+        *,
+        records: bool = False,
+    ) -> None:
+        """`decklists` (policy input v5) adds a projection of the pooled
+        decklist rows into each player's knowledge vector; `records` adds the
+        fact and shared-effect id vocabulary (see the module docstring)."""
         super().__init__()
         pack = bind_policy_catalog(pack_key)
         catalog = pack.catalog
@@ -99,7 +190,7 @@ class SemanticCardEncoder(nn.Module):
 
         # Structure, execution order, program boundaries and referenced token
         # definitions come from the checked catalog. Nothing is truncated.
-        rows = [definition_tokens(row) for row in range(len(pack.ir.definitions))]
+        rows = [definition_tokens(row) for row in range(pack.definition_count)]
         width = max(map(len, rows))
         self.token_vocabulary = tuple(sorted(vocabulary))
         self.catalog_shape = CatalogShape(
@@ -109,7 +200,11 @@ class SemanticCardEncoder(nn.Module):
             maximum_program_tokens=width,
             padded_tokens=len(rows) * width,
         )
-        self.token_embedding = nn.Embedding(len(vocabulary) + 1, hidden_dim)
+        tables = _record_tables(vocabulary) if records else None
+        # Appended record rows follow the card tokens, whose rows are unchanged.
+        self.token_embedding = nn.Embedding(
+            len(vocabulary) + 1 if tables is None else tables.size, hidden_dim
+        )
         self.encoder = nn.GRU(hidden_dim, hidden_dim, batch_first=True)
         self.register_buffer(
             "tokens",
@@ -126,21 +221,137 @@ class SemanticCardEncoder(nn.Module):
         for definition, row in pack.definition_row_by_card_def_id.items():
             lookup[definition + 1] = row + 1
         self.register_buffer("definition_rows", lookup)
+        # One count-weighted definition pool per decklist count column (main,
+        # unseen, sideboard, remaining sideboard), projected to one vector.
+        self.decklist_projection = (
+            nn.Linear(4 * hidden_dim, hidden_dim) if decklists else None
+        )
+        self.records = records
+        if tables is not None:
+            # Sorted int64 keys for `searchsorted`.
+            for prefix, table in (
+                ("record_name", tables.names),
+                ("record_token", tables.tokens),
+            ):
+                keys, rows = _sorted_keys(table)
+                self.register_buffer(f"{prefix}_keys", keys)
+                self.register_buffer(f"{prefix}_rows", rows)
+            self.register_buffer(
+                "record_number_rows",
+                torch.tensor([tables.numbers.get(kind, 0) for kind in range(6)]),
+            )
+
+    def record_names(
+        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
+    ) -> torch.Tensor:
+        """Embed name ids (u32 words) of one namespace, or of one namespace
+        each; [*] -> [*, D]."""
+        rows = _lookup(
+            self.record_name_keys,
+            self.record_name_rows,
+            record_key(torch.as_tensor(namespace), words).reshape(-1),
+            "policy received an id outside the record vocabulary",
+        )
+        return self.token_embedding(rows).reshape(
+            *words.shape, self.token_embedding.embedding_dim
+        )
+
+    def record_tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+        """Embed program learning tokens: ids read their vocabulary row; numbers
+        read their kind's row (callers add the exact value). [*] -> [*, D]."""
+        kinds, words = kinds.long().reshape(-1), words.reshape(-1)
+        number = (kinds == NUMBER_TOKEN_KINDS[0]) | (kinds == NUMBER_TOKEN_KINDS[1])
+        if bool(((kinds < 1) | (kinds > 9)).any()):
+            raise ValueError("policy received an invalid program token kind")
+        rows = self.record_number_rows[kinds.clamp(0, 5)].clone()
+        rows[~number] = _lookup(
+            self.record_token_keys,
+            self.record_token_rows,
+            record_key(kinds[~number], words[~number]),
+            "policy received a program token outside the vocabulary",
+        )
+        return self.token_embedding(rows)
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return admit_definition_ids(
             ids, len(self.definition_rows), self.definition_rows
         )
 
-    def definitions(self) -> torch.Tensor:
-        """Encode the immutable catalog once for visible and historical references."""
-        tokens = self.token_embedding(self.tokens)
-        packed = nn.utils.rnn.pack_padded_sequence(
-            tokens, self.lengths.cpu(), batch_first=True, enforce_sorted=False
+    def definitions(self, rows: torch.Tensor | None = None) -> torch.Tensor:
+        """Encode catalog programs into a [definitions + 1, hidden] table; row 0
+        is the zero padding row and every consumer indexes by catalog row + 1.
+
+        With `rows` (unique catalog rows + 1, from `referenced_rows`), only
+        those programs run through the GRU and the rest of the table is zero.
+        Each program is encoded independently, so selected rows and parameter
+        gradients agree with full encoding up to floating-point roundoff;
+        unreferenced rows receive none. Training uses this because the catalog
+        grows with the world while a batch references a small subset. Inference
+        caches the full table once per policy scope instead.
+        """
+        count = len(self.tokens)
+        if rows is None:
+            rows = torch.arange(1, count + 1, device=self.tokens.device)
+        table = self.token_embedding.weight.new_zeros(
+            (count + 1, self.token_embedding.embedding_dim)
         )
-        _, state = self.encoder(packed)
-        definitions = torch.cat((state.new_zeros((1, state.shape[-1])), state[0]))
-        return definitions
+        if len(rows) == 0:
+            return table
+        return table.index_copy(0, rows, self._encode_programs(rows))
+
+    def _encode_programs(self, rows: torch.Tensor) -> torch.Tensor:
+        """Encode nonempty one-based catalog rows, preserving their supplied order.
+
+        Packing sorts programs by length. Within each chunk, completed programs
+        occupy the hidden state's suffix; only the active prefix continues.
+        """
+        # Pack integer IDs first: padding needs neither embeddings nor gradients.
+        packed = nn.utils.rnn.pack_padded_sequence(
+            self.tokens[rows - 1],
+            self.lengths[rows - 1].cpu(),
+            batch_first=True,
+            enforce_sorted=False,
+        )
+        # Packed GRU backward creates a packed-input-sized slice gradient at
+        # each time step. Bound that copying to 64 steps per call. This is full
+        # backpropagation through time: hidden states keep their gradients at
+        # every chunk boundary. The same GRU encodes every real token once.
+        batches = packed.batch_sizes.split(64)
+        sizes = [int(batch.sum()) for batch in batches]
+        chunks = self.token_embedding(packed.data).split(sizes)
+        state: torch.Tensor | None = None
+        finished: list[torch.Tensor] = []
+        for index, (data, batch) in enumerate(zip(chunks, batches, strict=True)):
+            active = int(batch[0])
+            _, state = self.encoder(
+                nn.utils.rnn.PackedSequence(data, batch),
+                None if state is None else state[:, :active],
+            )
+            remaining = int(batches[index + 1][0]) if index + 1 < len(batches) else 0
+            finished.append(state[:, remaining:])
+        # Packed sequences end shortest first. Reverse their completed suffixes
+        # to restore descending-length order, then undo the original sorting.
+        encoded = torch.cat(finished[::-1], dim=1)[0]
+        assert packed.unsorted_indices is not None
+        return encoded[packed.unsorted_indices]
+
+    def referenced_rows(self, ids: list[torch.Tensor]) -> torch.Tensor:
+        """Unique catalog rows + 1 named by admissible transport IDs in `ids`.
+
+        Inadmissible IDs are skipped here, not rejected: each consumer admits
+        its own references and raises its own error, and padding is ignored.
+        """
+        found = []
+        for values in ids:
+            values = values.reshape(-1)
+            admissible = (
+                (values == values.floor())
+                & (values >= 0)
+                & (values < len(self.definition_rows))
+            )
+            found.append(self.definition_rows[values[admissible].long()])
+        rows = torch.cat(found).unique()
+        return rows[rows > 0]
 
     def embed_definitions(
         self, ids: torch.Tensor, definitions: torch.Tensor
@@ -168,4 +379,38 @@ class SemanticCardEncoder(nn.Module):
         assert known_rows is not None
         known = definitions[known_rows]
         known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)
+        if self.decklist_projection is not None:
+            decklists = obs["decklists"]
+            deck_rows = (
+                self._rows(decklists[..., 0])
+                if references is None or references.decklists is None
+                else references.decklists
+            )
+            # [batch, seat, row, hidden] x [batch, seat, row, 4 counts]
+            # -> [batch, seat, 4 * hidden]; a closed decklist pools to zero.
+            pooled = torch.einsum(
+                "bsrh,bsrc->bsch", definitions[deck_rows], decklists[..., 1:] / 60.0
+            ).flatten(start_dim=2)
+            known = known + self.decklist_projection(pooled)
         return cards, known
+
+
+@dataclass(frozen=True)
+class RecordEmbeddings:
+    """The card encoder's record vocabulary bound to one forward pass's
+    definition table: what catalog fact and shared-effect ids read."""
+
+    cards: SemanticCardEncoder
+    definitions: torch.Tensor
+
+    def names(
+        self, namespace: RecordNamespace | torch.Tensor, words: torch.Tensor
+    ) -> torch.Tensor:
+        return self.cards.record_names(namespace, words)
+
+    def tokens(self, kinds: torch.Tensor, words: torch.Tensor) -> torch.Tensor:
+        return self.cards.record_tokens(kinds, words)
+
+    def sources(self, ids: torch.Tensor) -> torch.Tensor:
+        """Source definition ids (definition id + 1) to their program rows."""
+        return self.cards.embed_definitions(ids, self.definitions)

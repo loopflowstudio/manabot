@@ -1,15 +1,47 @@
-//! Batched games with native reset-seed ownership and optional exact Elemental sampling.
+//! Batched games with native reset-seed ownership and admitted per-game roster sampling.
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
-    agent::{action::AgentError, env::Env, observation::Observation, opponent::OpponentPolicy},
+    agent::{
+        action::AgentError, env::Env, observation::Observation,
+        observation_encoder::ObservationEncodeError, opponent::OpponentPolicy,
+    },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
 };
 
 const HERO_PLAYER_INDEX: i32 = 0;
+
+/// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
+/// faults and malformed observation payloads are never disposable game outcomes.
+#[derive(Debug)]
+pub enum ObservationWriteError {
+    Encoding(ObservationEncodeError),
+    Buffer(AgentError),
+}
+
+impl From<AgentError> for ObservationWriteError {
+    fn from(error: AgentError) -> Self {
+        Self::Buffer(error)
+    }
+}
+
+impl From<ObservationEncodeError> for ObservationWriteError {
+    fn from(error: ObservationEncodeError) -> Self {
+        Self::Encoding(error)
+    }
+}
+
+impl From<ObservationWriteError> for AgentError {
+    fn from(error: ObservationWriteError) -> Self {
+        match error {
+            ObservationWriteError::Encoding(error) => Self(error.to_string()),
+            ObservationWriteError::Buffer(error) => error,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct StepResult {
@@ -20,6 +52,32 @@ pub struct StepResult {
     pub info: InfoDict,
 }
 
+/// One root sampler with explicit pair semantics and roster ownership.
+#[derive(Debug, Default)]
+struct RootRoster {
+    players: Vec<PlayerConfig>,
+    distinct: bool,
+    elemental: bool,
+}
+
+impl RootRoster {
+    fn is_empty(&self) -> bool {
+        self.players.is_empty()
+    }
+
+    fn pair(&self, seed: u64) -> (usize, usize) {
+        if !self.distinct {
+            return uniform_pair(seed, self.players.len());
+        }
+        // uniform-distinct-v1: independent of shuffle/policy RNG. Drawing the
+        // second index from N-1 makes every ordered non-mirror pair equiprobable.
+        let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0x6465636b70616972);
+        let first = rng.gen_range(0..self.players.len());
+        let second = rng.gen_range(0..self.players.len() - 1);
+        (first, second + usize::from(second >= first))
+    }
+}
+
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
@@ -27,7 +85,7 @@ pub struct VectorEnv {
     opponent_policy: OpponentPolicy,
     next_seeds: Vec<u64>,
     seed_stride: u64,
-    uniform_roster: Vec<PlayerConfig>,
+    uniform_roster: RootRoster,
     skip_trivial: bool,
     fresh_roots: Vec<bool>,
 }
@@ -42,6 +100,23 @@ impl VectorEnv {
             .map(|_| root.fork())
             .collect::<Result<_, _>>()?;
         self.opponent_policy = OpponentPolicy::None;
+        Ok(())
+    }
+
+    /// Scenario-only large naming roots, written through the normal vector encoder.
+    pub fn scenario_naming_vocabulary_into(
+        &mut self,
+        mut write: impl FnMut(usize, &Observation) -> Result<(), AgentError>,
+    ) -> Result<(), AgentError> {
+        self.validate_ready_for_step()?;
+        for (index, env) in self.envs.iter_mut().enumerate() {
+            env.scenario_naming_vocabulary()?;
+            let obs = env.observation_for_player(
+                env.current_agent_index()
+                    .ok_or_else(|| AgentError("naming fixture has no chooser".into()))?,
+            )?;
+            write(index, &obs)?;
+        }
         Ok(())
     }
 
@@ -64,10 +139,30 @@ impl VectorEnv {
             opponent_policy,
             next_seeds,
             seed_stride: num_envs.max(1) as u64,
-            uniform_roster: Vec::new(),
+            uniform_roster: RootRoster::default(),
             skip_trivial,
             fresh_roots: vec![false; num_envs],
         }
+    }
+
+    pub fn enable_exposure_capture(&mut self) -> Result<(), AgentError> {
+        if !self.player_configs.is_empty() {
+            return Err(AgentError(
+                "exposure capture must be enabled before reset".into(),
+            ));
+        }
+        for env in &mut self.envs {
+            env.enable_exposure_capture()?;
+        }
+        Ok(())
+    }
+
+    pub fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.envs.iter_mut().map(Env::take_exposure).collect()
+    }
+
+    pub fn current_exposure(&self) -> Result<Vec<String>, AgentError> {
+        self.envs.iter().map(Env::exposure_json).collect()
     }
 
     /// Configure only before allocation of roots; native authored setups are the authority.
@@ -75,42 +170,97 @@ impl VectorEnv {
         if !self.player_configs.is_empty() {
             return Err(AgentError("uniform roster must be set before reset".into()));
         }
-        let pack = crate::semantic::SemanticPack::optional_payments()
+        let setup = crate::cards::setups::authored_setup("optional_payments")
             .map_err(|e| AgentError(e.to_string()))?;
-        let expected: Vec<PlayerConfig> = pack
+        let expected: Vec<PlayerConfig> = setup
             .decks
             .iter()
-            .map(|deck| pack.player_config(&deck.key, &deck.key).unwrap())
+            .map(|deck| setup.player_config(&deck.key, &deck.key).unwrap())
             .collect();
         if roster.len() != expected.len()
-            || expected.iter().any(|e| {
-                roster
-                    .iter()
-                    .filter(|r| {
-                        r.decklist == e.decklist
-                            && r.sideboard == e.sideboard
-                            && r.content_pack.as_deref() == Some("elemental-world-v2")
-                    })
-                    .count()
-                    != 1
-            })
+            || expected
+                .iter()
+                .any(|e| roster.iter().filter(|r| r.deck == e.deck).count() != 1)
         {
             return Err(AgentError(
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
-        self.uniform_roster = roster;
+        self.uniform_roster = RootRoster {
+            players: roster,
+            distinct: false,
+            elemental: true,
+        };
         Ok(())
     }
 
-    /// Current ordered indices into the configured uniform roster; empty for fixed setups.
+    /// Replace the training decks sampled at subsequent roots.
+    /// Independent draws include mirrors and preserve repeated population entries.
+    ///
+    /// Every deck is submitted to the world ([`crate::world::WORLD_POOL`]) and
+    /// passes its native admission before the replacement takes effect; on any
+    /// error the previous decks remain. Games already underway keep their
+    /// decks. Membership never grants permission: game creation admits each
+    /// submitted deck again.
+    pub fn set_training_decks(
+        &mut self,
+        decks: Vec<PlayerConfig>,
+        distinct_pairs: bool,
+    ) -> Result<(), AgentError> {
+        if self.uniform_roster.elemental {
+            return Err(AgentError(
+                "the Elemental roster cannot be replaced by training decks".into(),
+            ));
+        }
+        if decks.is_empty() || (distinct_pairs && decks.len() < 2) {
+            return Err(AgentError(
+                "uniform-distinct-v1 requires at least two training decks".into(),
+            ));
+        }
+        let mut distinct = std::collections::BTreeSet::new();
+        for player in &decks {
+            if !player.submitted {
+                return Err(AgentError(
+                    "training decks must be submitted to the world".into(),
+                ));
+            }
+            if let Some(message) = crate::cards::deck_admission::development_rejection(player) {
+                return Err(AgentError(format!(
+                    "training deck {}: {message}",
+                    player.name
+                )));
+            }
+            if distinct_pairs && !distinct.insert(&player.deck) {
+                return Err(AgentError(
+                    "training decks must be distinct normalized lists".into(),
+                ));
+            }
+        }
+        self.uniform_roster = RootRoster {
+            players: decks,
+            distinct: distinct_pairs,
+            elemental: false,
+        };
+        Ok(())
+    }
+
+    /// The setups each game was actually reset with, in seat order.
+    pub fn current_player_configs(&self) -> Vec<Vec<PlayerConfig>> {
+        self.envs
+            .iter()
+            .map(|env| env.player_configs().to_vec())
+            .collect()
+    }
+
+    /// Current ordered indices into the fixed Elemental roster; empty otherwise.
+    /// Replaceable training decks report actual setups via `current_player_configs`.
     pub fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
-        if self.uniform_roster.is_empty() {
+        if !self.uniform_roster.elemental {
             return Vec::new();
         }
         self.envs
             .iter()
-            .map(|env| uniform_pair(env.seed(), self.uniform_roster.len()))
+            .map(|env| self.uniform_roster.pair(env.seed()))
             .collect()
     }
 
@@ -195,6 +345,10 @@ impl VectorEnv {
             .iter()
             .map(|env| env.current_agent_index().map_or(-1, |index| index as i64))
             .collect()
+    }
+
+    pub fn current_action_summaries(&self) -> Vec<(usize, String)> {
+        self.envs.iter().map(Env::current_action_summary).collect()
     }
 
     pub fn reset_all(
@@ -308,7 +462,8 @@ impl VectorEnv {
     }
 
     /// Change only untouched reset roots, keeping their native seed succession.
-    /// Validate every setup and encoding before publishing any new root. A live
+    /// Every setup is built (game creation admits its decks against the world's
+    /// one catalog) and encoded before any new root is published. A live
     /// game cannot be reassigned, even when its stream was masked in the last step.
     pub fn reassign_roots_into<V, F>(
         &mut self,
@@ -334,16 +489,17 @@ impl VectorEnv {
                     return Err(AgentError("cannot reassign a live game".into()));
                 }
                 Self::validate_player_configs(setup.len())?;
-                let content = crate::semantic::content_pack_for_authored_match(&setup)
-                    .map_err(|error| AgentError(error.to_string()))?
-                    .unwrap_or_else(crate::cardsets::alpha::default_content_pack);
+                // Game creation panics on these; reject them as errors first.
+                crate::cards::deck_admission::admit_submitted(&setup)
+                    .map_err(|error| AgentError(error.to_string()))?;
+                let content = crate::cards::content_pack::default_content_pack();
                 for player in &setup {
-                    for name in player.decklist.keys() {
+                    for name in player.deck.main.keys() {
                         if content.definition_id(name).is_none() {
                             return Err(AgentError(format!("unknown card in decklist: {name}")));
                         }
                     }
-                    for (name, count) in &player.sideboard {
+                    for (name, count) in &player.deck.sideboard {
                         let valid = content
                             .definition_id(name)
                             .and_then(|id| content.definition(id))
@@ -416,15 +572,17 @@ impl VectorEnv {
 
     /// Settle each active gameplay call independently. Failed games are poisoned:
     /// callers must retain their inputs and replace them before stepping again.
-    /// Encoding and reset failures remain fatal, rather than looking like games.
+    /// Only explicitly selected observation capacity failures may join gameplay
+    /// failures. Reset, buffer integrity and malformed payload failures stay fatal.
     pub fn step_isolated_into<F>(
         &mut self,
         actions: &[i64],
         active: &[bool],
+        recover_capacity: bool,
         write: F,
     ) -> Result<Vec<InfoDict>, AgentError>
     where
-        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), AgentError>,
+        F: Fn(usize, &Observation, f64, bool, bool) -> Result<(), ObservationWriteError>,
     {
         self.validate_actions_len(actions.len())?;
         self.validate_actions_len(active.len())?;
@@ -479,7 +637,28 @@ impl VectorEnv {
                 )?;
                 out.obs = obs;
             }
-            write(index, &out.obs, out.reward, out.terminated, out.truncated)?;
+            if let Err(error) = write(index, &out.obs, out.reward, out.terminated, out.truncated) {
+                if recover_capacity && !out.terminated && !out.truncated {
+                    if let ObservationWriteError::Encoding(
+                        error @ ObservationEncodeError::Capacity { .. },
+                    ) = &error
+                    {
+                        return Ok(InfoDict::from([
+                            ("game_error".into(), InfoValue::String(error.to_string())),
+                            (
+                                "game_error_class".into(),
+                                InfoValue::String("ObservationCapacity".into()),
+                            ),
+                            (
+                                "game_error_kind".into(),
+                                InfoValue::String("resource_limit".into()),
+                            ),
+                            ("game_error_frame".into(), InfoValue::String(frame)),
+                        ]));
+                    }
+                }
+                return Err(error.into());
+            }
             Ok(out.info)
         })
     }
@@ -518,7 +697,7 @@ impl VectorEnv {
             &mut Env,
             &mut u64,
             &[PlayerConfig],
-            &[PlayerConfig],
+            &RootRoster,
             &mut bool,
         ) -> Result<R, AgentError>,
     {
@@ -574,7 +753,7 @@ impl VectorEnv {
     }
 
     fn step_with_autoreset_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         action: i64,
@@ -667,7 +846,7 @@ impl VectorEnv {
     }
 
     fn skip_opponent_turns_until_hero_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         mut obs: Observation,
         next_seed: &mut u64,
@@ -705,7 +884,7 @@ impl VectorEnv {
     }
 
     fn reset_env_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         seed_stride: u64,
@@ -717,14 +896,14 @@ impl VectorEnv {
         let configs = if roster.is_empty() {
             player_configs.to_vec()
         } else {
-            let (a, b) = uniform_pair(seed, roster.len());
-            vec![roster[a].clone(), roster[b].clone()]
+            let (a, b) = roster.pair(seed);
+            vec![roster.players[a].clone(), roster.players[b].clone()]
         };
         env.reset(configs)
     }
 
     fn reset_to_hero_turn_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         player_configs: &[PlayerConfig],
@@ -764,9 +943,181 @@ mod tests {
     use std::{cell::RefCell, collections::BTreeMap};
 
     use crate::{
-        agent::{action::AgentError, env::Env, opponent::OpponentPolicy, vector_env::VectorEnv},
+        agent::{
+            action::AgentError, env::Env, observation_encoder::ObservationEncodeError,
+            opponent::OpponentPolicy, vector_env::VectorEnv,
+        },
+        infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn exposure_capture_retains_old_seed_before_reset() {
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 20)])))
+            .collect();
+        let mut vector = VectorEnv::new(1, 245, true, OpponentPolicy::None);
+        vector.enable_exposure_capture().unwrap();
+        vector.reset_all(players.clone()).unwrap();
+        vector.step(&[0]).unwrap();
+        vector.reset_all(players).unwrap();
+        let retained = vector.take_exposure();
+        assert_eq!(retained[0].len(), 1);
+        let receipt: serde_json::Value = serde_json::from_str(&retained[0][0]).unwrap();
+        assert_eq!(receipt["seed"], 245);
+        assert_eq!(receipt["trace"]["actions"], serde_json::json!([0]));
+        assert_eq!(
+            receipt["cards"]["capture"]["exposure"]["choices"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_ne!(vector.current_game_seeds()[0], 245);
+        assert!(vector.take_exposure()[0].is_empty());
+    }
+
+    #[test]
+    fn first_legal_policy_prefix_keeps_vector_execution_identity() {
+        use crate::agent::observation_encoder::{encode, ActionOverflow, ObservationEncoderConfig};
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
+            .collect();
+        let mut vector = VectorEnv::new(1, 213, true, OpponentPolicy::None);
+        vector.reset_all(players).unwrap();
+        vector.envs[0].scenario_clear_hand(0).unwrap();
+        for _ in 0..70 {
+            vector.envs[0]
+                .scenario_force_card_in_hand(0, "Mountain")
+                .unwrap();
+        }
+        let observation = vector.envs[0].scenario_refresh().unwrap();
+        assert_eq!(observation.action_space.actions.len(), 71);
+        let config = ObservationEncoderConfig {
+            max_actions: 64,
+            max_cards_per_player: 128,
+            action_overflow: ActionOverflow::FirstLegal,
+            ..ObservationEncoderConfig::default()
+        };
+        let encoded = encode(&observation, &config).unwrap();
+        assert_eq!(encoded.actions_valid, vec![1.0; 64]);
+        assert_eq!(
+            vector.current_action_summaries(),
+            vec![(71, "Priority".into())]
+        );
+        let mut scalar = vector.envs[0].fork().unwrap();
+        let expected = scalar.step(63).unwrap().0;
+        vector
+            .step_into(&[63], None, |_, obs, _, _, _| {
+                assert_eq!(obs.to_json(), expected.to_json());
+                assert_eq!(
+                    encode(obs, &config).unwrap().actions,
+                    encode(&expected, &config).unwrap().actions
+                );
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            vector.envs[0].selected_witness().unwrap(),
+            scalar.selected_witness().unwrap()
+        );
+    }
+
+    #[test]
+    fn training_decks_are_admitted_distinct_replayable_and_replaceable() {
+        let deck = |name: &str| {
+            PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)])).submit_to_world()
+        };
+        let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
+        let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
+        assert!(vector
+            .set_training_decks(vec![decks[0].clone(); 2], true)
+            .is_err());
+        let mut bad = decks.clone();
+        bad[0].deck.main = BTreeMap::from([("Black Lotus".into(), 12)]);
+        assert!(vector.set_training_decks(bad, true).is_err());
+        vector.set_training_decks(decks.clone(), true).unwrap();
+        vector.reset_all(decks[..2].to_vec()).unwrap();
+        let seeds = vector.current_game_seeds();
+        let actual = vector.current_player_configs();
+        for (index, players) in actual.iter().enumerate() {
+            assert_ne!(players[0].deck.main, players[1].deck.main);
+            let mut scalar = Env::new(seeds[index], true, false, false);
+            scalar.reset(players.clone()).unwrap();
+            assert_eq!(
+                scalar.state_digest().unwrap(),
+                vector.envs[index].state_digest().unwrap()
+            );
+        }
+        vector.reset_all(decks[..2].to_vec()).unwrap();
+        assert_ne!(seeds, vector.current_game_seeds());
+        vector
+            .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+
+        // A later root may use a deck nobody registered before training began.
+        // An unadmitted replacement fails before any game and keeps prior decks.
+        let mut generated = deck("Island");
+        generated.deck.main.insert("Cat-Gator".into(), 1);
+        let mut invalid = generated.clone();
+        invalid.deck.main.insert("Ally".into(), 1);
+        assert!(vector
+            .set_training_decks(vec![decks[0].clone(), invalid], true)
+            .is_err());
+        vector
+            .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+        let replacement = vec![generated, deck("Swamp")];
+        vector
+            .set_training_decks(replacement.clone(), true)
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+        vector
+            .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
+            .unwrap();
+        for players in vector.current_player_configs() {
+            assert!(players.iter().all(|player| replacement.contains(player)));
+        }
+        assert!(vector.current_matchup_indices().is_empty());
+    }
+
+    #[test]
+    fn independent_training_decks_preserve_mirrors_entries_and_seed_recovery() {
+        let mut first = PlayerConfig::new("event-a", BTreeMap::from([("Plains".into(), 12)]));
+        first.submitted = true;
+        let mut second = first.clone();
+        second.name = "event-b".into();
+        let decks = vec![first.clone(), second];
+        let mut vector = VectorEnv::new(2, 21301, true, OpponentPolicy::None);
+        vector.set_training_decks(decks.clone(), false).unwrap();
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        let seeds = vector.current_game_seeds();
+        let actual = vector.current_player_configs();
+        for (index, players) in actual.iter().enumerate() {
+            let (a, b) = super::uniform_pair(seeds[index], decks.len());
+            assert_eq!(players, &vec![decks[a].clone(), decks[b].clone()]);
+            // Identical content in different events remains in the population.
+            assert_eq!(players[0].deck, players[1].deck);
+        }
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        vector
+            .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+        assert!(vector.current_matchup_indices().is_empty());
+        vector
+            .set_training_decks(vec![first.clone()], false)
+            .unwrap();
+        vector.reset_all(vec![first.clone(); 2]).unwrap();
+        assert!(vector
+            .current_player_configs()
+            .iter()
+            .all(|pair| pair == &vec![first.clone(); 2]));
+    }
 
     fn sample_player_configs() -> Vec<PlayerConfig> {
         vec![
@@ -792,14 +1143,11 @@ mod tests {
     }
 
     fn elemental_roster() -> Vec<PlayerConfig> {
-        let pack = crate::semantic::SemanticPack::optional_payments().unwrap();
-        pack.decks
+        let setup = crate::cards::setups::authored_setup("optional_payments").unwrap();
+        setup
+            .decks
             .iter()
-            .map(|d| {
-                let mut p = pack.player_config(&d.key, &d.key).unwrap();
-                p.content_pack = Some(pack.pack_key.clone());
-                p
-            })
+            .map(|d| setup.player_config(&d.key, &d.key).unwrap())
             .collect()
     }
 
@@ -810,7 +1158,7 @@ mod tests {
         let mut reached = [BTreeSet::new(), BTreeSet::new()];
         let mut vector = VectorEnv::new(2, 174, true, OpponentPolicy::None);
         let mut bad = roster.clone();
-        bad[0].sideboard.clear();
+        bad[0].deck.sideboard.clear();
         assert!(vector.set_uniform_roster(bad).is_err());
         assert!(vector.set_uniform_roster(roster[..9].to_vec()).is_err());
         vector.set_uniform_roster(roster.clone()).unwrap();
@@ -895,7 +1243,7 @@ mod tests {
             )
             .is_err());
         let mut invalid = sample_player_configs();
-        invalid[0].content_pack = Some("missing-pack".into());
+        invalid[0].deck.main.insert("Not A Real Card".into(), 1);
         assert!(vector
             .reassign_roots_into(
                 vec![None, Some(sample_player_configs()), Some(invalid)],
@@ -956,7 +1304,7 @@ mod tests {
             .unwrap();
         assert_eq!(vector.current_game_seeds(), seeds);
         assert_eq!(vector.next_seeds, next);
-        assert_eq!(vector.player_configs[0][0].decklist, setup[0].decklist);
+        assert_eq!(vector.player_configs[0][0].deck, setup[0].deck);
     }
 
     #[test]
@@ -972,6 +1320,56 @@ mod tests {
     }
 
     #[test]
+    fn isolated_encoding_recovers_only_opted_in_capacity_errors() {
+        for recover in [false, true] {
+            for kind in 0..3 {
+                let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                vector.reset_all(sample_player_configs()).unwrap();
+                let mut control = VectorEnv::new(3, 7, true, OpponentPolicy::None);
+                control.reset_all(sample_player_configs()).unwrap();
+                let result =
+                    vector.step_isolated_into(&[0; 3], &[true; 3], recover, |index, _, _, _, _| {
+                        if index != 1 {
+                            return Ok(());
+                        }
+                        Err(match kind {
+                            0 => ObservationEncodeError::Capacity {
+                                field: "agent_permanents",
+                                capacity: 40,
+                                actual: 41,
+                            }
+                            .into(),
+                            1 => ObservationEncodeError::InvalidShared("missing source").into(),
+                            _ => AgentError("invalid buffer pointer".into()).into(),
+                        })
+                    });
+                if !recover || kind != 0 {
+                    assert!(result.is_err());
+                    continue;
+                }
+                let info = result.unwrap();
+                assert!(
+                    matches!(info[1].get("game_error_kind"), Some(InfoValue::String(kind)) if kind == "resource_limit")
+                );
+                assert!(info[1].contains_key("game_error_frame"));
+                assert!(!info[0].contains_key("game_error"));
+                assert!(!info[2].contains_key("game_error"));
+                control.step(&[0; 3]).unwrap();
+                vector
+                    .replace_failed_into(&[false, true, false], |_, _, _, _, _| Ok(()))
+                    .unwrap();
+                assert_eq!(vector.current_game_seeds(), vec![7, 11, 9]);
+                for index in [0, 2] {
+                    assert_eq!(
+                        vector.envs[index].state_digest().unwrap(),
+                        control.envs[index].state_digest().unwrap()
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn isolated_failure_preserves_successful_streams_and_seed_stride() {
         let mut vector = VectorEnv::new(3, 7, true, OpponentPolicy::None);
         vector.reset_all(sample_player_configs()).unwrap();
@@ -979,7 +1377,7 @@ mod tests {
         control.reset_all(sample_player_configs()).unwrap();
         let rows = RefCell::new(Vec::new());
         let outcomes = vector
-            .step_isolated_into(&[0, -1, 0], &[true; 3], |index, _, _, _, _| {
+            .step_isolated_into(&[0, -1, 0], &[true; 3], false, |index, _, _, _, _| {
                 rows.borrow_mut().push(index);
                 Ok(())
             })
@@ -1170,8 +1568,11 @@ mod tests {
             .map(|index| {
                 let mut players = sample_player_configs();
                 players[0].name = format!("Hero {index}");
-                players[0].decklist.insert("Mountain".into(), 12 + index);
-                players[1].sideboard.insert("Gray Ogre".into(), index + 1);
+                players[0].deck.main.insert("Mountain".into(), 12 + index);
+                players[1]
+                    .deck
+                    .sideboard
+                    .insert("Gray Ogre".into(), index + 1);
                 players
             })
             .collect();

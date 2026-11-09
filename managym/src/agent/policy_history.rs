@@ -65,6 +65,9 @@ fn card_reference(game: &Game, card: CardId) -> HistoryReference {
     let Some(zone) = game.state.zones.zone_of(card).filter(|zone| public(*zone)) else {
         return HistoryReference::Unavailable;
     };
+    if game.is_foretold(card) {
+        return HistoryReference::Unavailable;
+    }
     let data = &game.state.cards[card];
     HistoryReference::Card {
         definition: data.definition_id.0,
@@ -96,6 +99,10 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
         Target::StackSpell(card) => card_reference(game, card),
+        Target::StackAbility(id) => game
+            .stack_ability_source(id)
+            .map(|card| card_reference(game, card))
+            .unwrap_or(HistoryReference::Unavailable),
         Target::GraveyardCard(object) => card_reference(game, CardId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
@@ -106,7 +113,7 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 
 /// Update the derived suffix at the same append that owns the committed ledger.
 /// Work is bounded by 4*HISTORY_LIMIT reference comparisons plus the current
-/// event's target count, independent of game length. Clones and undo marks share
+/// event's target count, independent of game length. Clones share
 /// this copy-on-write projection; it never executes or reconstructs rules.
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
@@ -136,8 +143,19 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     }
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
-        GameEvent::CardMoved { card, to, .. } if public(*to) => {
-            (Arrival, 0, card_reference(game, *card), vec![unknown])
+        GameEvent::CardMoved {
+            card,
+            to,
+            face_down,
+            ..
+        } if public(*to) => {
+            // A face-down arrival is public, but not which card it was.
+            let source = if *face_down {
+                unknown.clone()
+            } else {
+                card_reference(game, *card)
+            };
+            (Arrival, 0, source, vec![unknown])
         }
         GameEvent::DamageDealt {
             source,
@@ -182,6 +200,15 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             0,
             source_reference(game, *by),
             vec![card_reference(game, *card)],
+        ),
+        // The countered ability is gone; its source card stands for it.
+        GameEvent::AbilityCountered {
+            source_card, by, ..
+        } => (
+            Countered,
+            0,
+            source_reference(game, *by),
+            vec![source_reference(game, Some(*source_card))],
         ),
         _ => return,
     };
@@ -400,8 +427,7 @@ mod tests {
         assert_eq!(a[0][6], 0.0); // unavailable source
     }
     #[test]
-    fn observations_share_bounded_suffix_and_forks_restore_it() {
-        use crate::flow::{event_log::CowStats, undo::JournalStats};
+    fn observations_share_bounded_suffix_and_forks_isolate_it() {
         let mut game = game();
         game.create_token("Ally", PlayerId(0), false);
         let token = CardId(game.state.cards.len() - 1);
@@ -442,20 +468,11 @@ mod tests {
                 ..
             }
         ));
-        game.admit_page_cow_root();
-        let mut fork = game.page_cow_fork(Arc::new(CowStats::default()));
+        let mut fork = game.clone();
         assert!(Arc::ptr_eq(&root, &fork.policy_history));
-        fork.enable_undo(Arc::new(JournalStats::default()), 1);
-        let mark = fork.undo_mark();
         fork.move_card(token, ZoneType::Graveyard);
         assert_ne!(fork.policy_history, root);
-        assert_eq!(game.policy_history, root);
-        fork.undo_rollback(mark);
-        assert!(Arc::ptr_eq(&root, &fork.policy_history));
-        assert_eq!(
-            encode(&Observation::for_player(&fork, PlayerId(0)), 32, 60),
-            encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
-        );
+        assert!(Arc::ptr_eq(&root, &game.policy_history));
     }
     #[test]
     fn physical_card_slots_are_only_routing() {
@@ -463,7 +480,7 @@ mod tests {
             let mut game = game();
             game.scenario_clear_hand(PlayerId(0));
             game.scenario_clear_hand(PlayerId(1));
-            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], false);
+            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
             game.move_card(destination, ZoneType::Battlefield);
             let target = game.state.card_to_permanent[destination].unwrap();
             game.emit(GameEvent::SpellCast {

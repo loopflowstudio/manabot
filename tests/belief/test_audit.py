@@ -11,11 +11,11 @@ from manabot.belief.audit import (
     viewer_equivalence_audit,
 )
 from manabot.belief.tracker import BeliefTracker
-from manabot.sim.search.teacher1_evidence import _fresh_env
+from tests.belief.fresh_env import fresh_env
 
 
 def test_authority_truth_is_scored_outside_the_tracker_boundary() -> None:
-    env = _fresh_env(149)
+    env = fresh_env(149)
     viewer = int(env._engine.current_agent_index())
     tracker = BeliefTracker.from_engine(
         env._engine, viewer=viewer, likelihood=None, epsilon=0.0
@@ -33,7 +33,7 @@ def test_authority_truth_is_scored_outside_the_tracker_boundary() -> None:
 
 
 def test_known_truth_aggregate_reports_per_definition_calibration() -> None:
-    env = _fresh_env(151)
+    env = fresh_env(151)
     viewer = int(env._engine.current_agent_index())
     tracker = BeliefTracker.from_engine(
         env._engine, viewer=viewer, likelihood=None, epsilon=0.0
@@ -57,7 +57,7 @@ def test_known_truth_aggregate_reports_per_definition_calibration() -> None:
 
 
 def test_paired_truth_scores_the_same_hand_and_world_space() -> None:
-    env = _fresh_env(157)
+    env = fresh_env(157)
     viewer = int(env._engine.current_agent_index())
     tracker = BeliefTracker.from_engine(
         env._engine, viewer=viewer, likelihood=None, epsilon=0.0
@@ -79,7 +79,7 @@ def test_paired_truth_scores_the_same_hand_and_world_space() -> None:
 
 
 def test_viewer_equivalent_exact_hands_hide_authority_differences() -> None:
-    env = _fresh_env(163)
+    env = fresh_env(163)
     viewer = int(env._engine.current_agent_index())
     tracker = BeliefTracker.from_engine(
         env._engine, viewer=viewer, likelihood=None, epsilon=0.0

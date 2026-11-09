@@ -7,14 +7,13 @@ from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION, PossibleWorldS
 import pytest
 import torch
 
-from manabot.belief import (
-    BeliefError,
-    ManabotPlayer,
-    belief_schema_from_engine,
-)
-from manabot.env import Match, ObservationSpace
+from manabot.belief.encoding import belief_schema_from_engine
+from manabot.belief.range import BeliefError
+from manabot.belief.runtime import ManabotPlayer
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world
 from manabot.sim.search.flat_mc import make_player
@@ -93,6 +92,7 @@ class NativeContractEngine:
                 },
                 "hand_size": 2,
                 "known_hand": {},
+                "foretold": 0,
                 "pool": {
                     "Counterspell": 2,
                     "Lightning Bolt": 2,

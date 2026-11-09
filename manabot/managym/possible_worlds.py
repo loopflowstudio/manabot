@@ -16,8 +16,8 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from manabot.managym.decision import SEMANTIC_DECISION_VERSION
 
-POSSIBLE_WORLD_SPACE_VERSION: int = 2
-WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v2"
+POSSIBLE_WORLD_SPACE_VERSION: int = 3
+WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v3"
 
 
 class PossibleWorldError(ValueError):
@@ -115,6 +115,9 @@ class PossibleWorldSpace:
     total_weight: int
     worlds: tuple[PossibleWorld, ...]
     known_hand: tuple[tuple[str, int], ...] = ()
+    # Public count of the opponent's face-down foretold cards; the pool holds
+    # their names, so they are neither in hand nor in the library.
+    foretold: int = 0
     world_schema_identity: str = WORLD_SCHEMA_IDENTITY
     content_manifest_identity: str = ""
     _engine: Any | None = field(default=None, repr=False, compare=False, hash=False)
@@ -153,6 +156,9 @@ class PossibleWorldSpace:
             raise PossibleWorldError(
                 "known_hand must contain positive definition counts"
             )
+        foretold = payload["foretold"]
+        if type(foretold) is not int or foretold < 0:
+            raise PossibleWorldError("foretold must be a non-negative count")
         canonical_pool = tuple(
             (str(name), int(count)) for name, count in sorted(payload["pool"].items())
         )
@@ -192,6 +198,7 @@ class PossibleWorldSpace:
             total_weight=int(payload["total_weight"]),
             worlds=rows,
             known_hand=tuple(sorted(known_hand.items())),
+            foretold=foretold,
             content_manifest_identity=content_manifest_identity,
             _engine=engine,
         )
@@ -360,7 +367,7 @@ class PossibleWorldSpace:
 
     @property
     def library_size(self) -> int:
-        return sum(count for _, count in self.pool) - self.hand_size
+        return sum(count for _, count in self.pool) - self.hand_size - self.foretold
 
     def world(self, index: int) -> PossibleWorld:
         if index < 0 or index >= len(self.worlds):

@@ -21,21 +21,21 @@ import torch
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world, validate_agent_setup
+from manabot.sim.frames import build_command, build_viewer_frame
 from manabot.sim.replay import read_trace, replay_games, write_trace
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
-from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
-from manabot.verify.competency import (
-    SCENARIOS,
-    ScriptedVillain,
-    _action_casts,
-    _battlefield_pairs,
-    _hero_view,
-    build_scenario_env,
-)
 from manabot.verify.scenario_validation import (
     _outcome,
     scenario_identity,
     validate_scenarios,
+)
+from manabot.verify.scenarios import (
+    SCENARIOS,
+    ScriptedVillain,
+    action_casts,
+    battlefield_pairs,
+    build_scenario_env,
+    hero_view,
 )
 
 
@@ -86,7 +86,6 @@ def score_checkpoint(
         scenario = SCENARIOS[scenario_name]
         env, observation, _ = build_scenario_env(scenario, space, seed)
         validate_agent_setup(player.agent, env.match.to_rust())
-        player.start_game(env, 0)
         game = {
             "match_id": f"scenario:{scenario_name}:{seed}:{score.checkpoint_sha256}",
             "scenario_root": scenario_identity(scenario_name),
@@ -146,13 +145,13 @@ def score_checkpoint(
                 raise ValueError("player selected illegal offer")
             if actor == 0:
                 tracker.observe_hero(raw, action)
-                spell = _action_casts(raw, action)
+                spell = action_casts(raw, action)
                 if spell is not None:
                     cast = spell
-                    _, side = _hero_view(raw)
+                    _, side = hero_view(raw)
                     creatures_at_cast = sum(
                         bool(card.card_types.is_creature)
-                        for card, _ in _battlefield_pairs(raw, side)
+                        for card, _ in battlefield_pairs(raw, side)
                     )
             command = build_command(frame, action)
             observation, _, terminated, truncated, _ = env.step(action)

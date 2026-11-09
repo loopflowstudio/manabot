@@ -10,13 +10,16 @@ matchup whose winner is deck-determined must flip player index with the seat).
 import numpy as np
 import pytest
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.verify.decision_profile import (
     GameProfile,
     play_profile_games,
     summarize_profiles,
 )
-from manabot.verify.util import STANDARD_DECK, build_verification_config
+from manabot.verify.games import STANDARD_DECK
+from manabot.verify.util import build_verification_config
 
 MOUNTAIN_ONLY = {"Mountain": 40}
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { visibleCardLabel, copyLabel } from '$lib/decision-labels';
+  import { visibleCardLabel } from '$lib/decision-labels';
   import { tick } from 'svelte';
 
   import type { CardPreview, Observation } from '$lib/types';
@@ -7,6 +7,7 @@
 
   import HoverPreview from './HoverPreview.svelte';
   import PlayerArea from './PlayerArea.svelte';
+  import Schedule from './Schedule.svelte';
   import PresentationStage from './PresentationStage.svelte';
 
   // The score column of the sheet: the opponent's region, the stack — the
@@ -46,6 +47,7 @@
   let preview = $state<CardPreview | null>(null);
   let resultDialog: HTMLDivElement | null = $state(null);
   let resultAction: HTMLButtonElement | null = $state(null);
+  const tablePermanents = $derived([...observation.agent.battlefield, ...observation.opponent.battlefield]);
   const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
 
   $effect(() => {
@@ -116,10 +118,14 @@
     </span>
   </div>
 
+  <Schedule schedule={observation.schedule} heroSeat={observation.agent.player_index}
+    {heroLabel} {villainLabel} />
+
   <PlayerArea
         definitionNames={observation.definition_names ?? {}}
     label={villainLabel}
     player={observation.opponent}
+    {tablePermanents}
     deckName={deckNames?.villain ?? null}
     opponent={true}
     {focusedIds}
@@ -137,11 +143,12 @@
         {#each observation.stack_objects as entry, index}
           <li>{index === 0 ? 'Top' : index + 1} · {entry.label} · {entry.kind.replaceAll('_', ' ')} · Seat {entry.controller + 1}
             {#if entry.source_permanent !== undefined}
-              {#if [...observation.agent.battlefield, ...observation.opponent.battlefield].some(permanent => permanent.id === entry.source_permanent)}
+              {#if tablePermanents.some(permanent => permanent.id === entry.source_permanent)}
                 <button class="underline" onclick={() => inspectTarget(entry.source_permanent!)}>Inspect source</button>
               {:else}<span>Source no longer on the battlefield</span>{/if}
             {/if}
             {#if entry.chosen_mode !== undefined} · Mode {entry.chosen_mode + 1}{/if}
+            {#if entry.x !== undefined} · X = {entry.x}{/if}
           </li>
         {/each}
       </ol>
@@ -174,7 +181,8 @@
               <span
                 class="type-annotation inline-block rounded border border-mountain/50 bg-mountain/10 px-3 py-2 text-ink"
               >
-                <b class="not-italic font-semibold text-mountain-ink">{card.name}</b>
+                <b class="not-italic font-semibold text-mountain-ink">{card.name}</b>{#if card.x !== undefined}
+                  <span> · X = {card.x}</span>{/if}
               </span>
             </button>
           {/each}
@@ -188,6 +196,7 @@
         definitionNames={observation.definition_names ?? {}}
       label={heroLabel}
       player={observation.agent}
+      {tablePermanents}
       deckName={deckNames?.hero ?? null}
       {focusedIds}
       {clickableTargets}
@@ -201,7 +210,7 @@
     <section aria-label="Private inspection" class="border-t border-line py-3">
       <h3 class="type-title">Private inspection · not library order</h3>
       {#each observation.agent.inspected as card}
-        <button class="btn btn-secondary m-1" onclick={() => inspectTarget(card.id)}>{card.name}{#if copyLabel(observation.agent.inspected ?? [], card.id)} · {copyLabel(observation.agent.inspected ?? [], card.id)}{/if}</button>
+        <button class="btn btn-secondary m-1" onclick={() => inspectTarget(card.id)}>{visibleCardLabel(observation, card.id) ?? card.name}</button>
       {/each}
     </section>
   {/if}

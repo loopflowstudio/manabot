@@ -6,6 +6,10 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      measure:
+        description: Engine Budget only; commit or branch to benchmark with this ref's benchmarks and record without comparing
+        default: ''
 
 # A newer PR revision replaces its obsolete run. Main and manual runs retain
 # independent groups, so publication does not cancel another main verification.
@@ -25,10 +29,10 @@ jobs:
       integration: ${{ steps.classify.outputs.integration }}
       academy_integration: ${{ steps.classify.outputs.academy_integration }}
       protocol_v1: ${{ steps.classify.outputs.protocol_v1 }}
-      semantic_coverage: ${{ steps.classify.outputs.semantic_coverage }}
       semantic_conformance: ${{ steps.classify.outputs.semantic_conformance }}
       frontend: ${{ steps.classify.outputs.frontend }}
       clean_machine_play: ${{ steps.classify.outputs.clean_machine_play }}
+      engine_budget: ${{ steps.classify.outputs.engine_budget }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,8 +43,11 @@ jobs:
         env:
           EVENT: ${{ github.event_name }}
           BEFORE: ${{ github.event.before }}
+          MEASURE: ${{ inputs.measure || '' }}
         run: |
-          if [ "$EVENT" = workflow_dispatch ]; then
+          if [ -n "$MEASURE" ]; then
+            bash .github/ci/select-tests.sh --only engine_budget | tee -a "$GITHUB_OUTPUT"
+          elif [ "$EVENT" = workflow_dispatch ]; then
             bash .github/ci/select-tests.sh --all | tee -a "$GITHUB_OUTPUT"
           elif [ "$EVENT" = pull_request ]; then
             git diff --no-renames --name-only -z HEAD^1 HEAD | bash .github/ci/select-tests.sh | tee -a "$GITHUB_OUTPUT"
@@ -55,11 +62,6 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
-    env:
-      # Optimize the engine while keeping debug assertions and overflow
-      # checks: opt-level changes neither, and both stay on in the dev and
-      # test profiles. It cuts managym's test runtime about 3x.
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -72,9 +74,33 @@ jobs:
           workspaces: |
             managym -> target
 
+      - name: Setup cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      # nextest runs every test of every binary in parallel and reports each
+      # failure as it happens; the `ci` profile (managym/.config/nextest.toml)
+      # kills any single test after 5 minutes. The suite has no doctests.
       - name: Rust tests
         working-directory: managym
-        run: cargo test
+        run: cargo nextest run --profile ci
+
+      - name: Upload Rust test timings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-test-junit
+          path: managym/target/nextest/ci/junit.xml
+          if-no-files-found: ignore
+
+      - name: Preserve regenerated conformance cases
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-conformance-mismatches
+          path: target/semantic-conformance/**/*.json
+          if-no-files-found: ignore
 
   python-unit:
     name: Python Unit Tests
@@ -168,52 +194,11 @@ jobs:
           npm test -- --run src/lib/protocol-conformance.test.ts
           npm run check
 
-  semantic-coverage:
-    name: Semantic Coverage Gate
-    needs: [changes]
-    if: needs.changes.outputs.semantic_coverage == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install dependencies
-        run: |
-          uv venv .venv --python 3.12
-          uv sync --extra dev
-
-      - name: Check semantic coverage evidence
-        run: |
-          uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
-          uv run scripts/generate_coverage_gaps.py --check
-          uv run python scripts/compile_semantic_content.py --check \
-            --source content/semantic/v1/elemental_world.source.json \
-            --fixtures content/semantic/v1/elemental_world.fixtures.json \
-            --ir-output content/semantic/v1/generated/elemental_world.ir.json \
-            --coverage-output content/semantic/v1/generated/elemental_world.coverage.json
-      - name: Check optional payment content
-        run: |
-          uv run scripts/compile_semantic_content.py --check \
-            --source content/semantic/w11/elemental_world.source.json \
-            --fixtures content/semantic/w11/elemental_world.fixtures.json \
-            --ir-output content/semantic/w11/generated/elemental_world.ir.json \
-            --coverage-output content/semantic/w11/generated/elemental_world.coverage.json
-
   semantic-conformance:
     name: Semantic Kernel Conformance
     needs: [changes]
     if: needs.changes.outputs.semantic_conformance == 'true'
     runs-on: ubuntu-latest
-    env:
-      CARGO_PROFILE_DEV_OPT_LEVEL: '1'  # see Rust Tests
-
     steps:
       - uses: actions/checkout@v4
 
@@ -226,14 +211,10 @@ jobs:
           workspaces: |
             managym -> target
 
-      - name: Check replay, property, and metamorphic evidence
-        run: cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests
-
-      - name: Reproduce checked conformance artifacts
-        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-w14-v1
-
+      # Rust Tests runs whenever this job does; its semantic_conformance_tests
+      # check the replay, property and metamorphic evidence.
       - name: Run bounded valid-action fuzzing
-        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w14-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
+        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w17-v2 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
 
       - name: Preserve exact fuzz replay seeds
         if: failure()
@@ -347,10 +328,21 @@ jobs:
             .cache/clean-machine/launch.log
           if-no-files-found: warn
 
+  # Release benchmarks against managym/perf/baseline.json on a runner of
+  # their own; a dispatch with `measure` benchmarks that commit and records
+  # it without comparing (docs/development.md, Engine performance budget).
+  engine-budget:
+    name: Engine Budget
+    needs: [changes]
+    if: needs.changes.outputs.engine_budget == 'true'
+    uses: ./.github/workflows/engine-budget.yml
+    with:
+      measure: ${{ inputs.measure || '' }}
+
   result:
     name: Tests Result
     runs-on: ubuntu-latest
-    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-coverage, semantic-conformance, frontend, clean-machine-play]
+    needs: [changes, rust, python-unit, integration, academy-integration, protocol-v1, semantic-conformance, frontend, clean-machine-play, engine-budget]
     if: always()
     steps:
       - name: Check all jobs
@@ -364,10 +356,10 @@ jobs:
             integration=${{ needs.integration.result }}
             academy-integration=${{ needs.academy-integration.result }}
             protocol-v1=${{ needs.protocol-v1.result }}
-            semantic-coverage=${{ needs.semantic-coverage.result }}
             semantic-conformance=${{ needs.semantic-conformance.result }}
             frontend=${{ needs.frontend.result }}
             clean-machine-play=${{ needs.clean-machine-play.result }}
+            engine-budget=${{ needs.engine-budget.result }}
         run: |
           [ "$CHANGES" = success ] || exit 1
           failed=0

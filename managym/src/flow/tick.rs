@@ -9,7 +9,7 @@ use crate::{
         game::Game,
         turn::{StepKind, TurnState},
     },
-    state::game_object::PlayerId,
+    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind},
 };
 
 impl Game {
@@ -17,9 +17,6 @@ impl Game {
         if self.is_game_over() {
             return Err(AgentError("game is over".to_string()));
         }
-
-        self.journal_action_space();
-        self.journal_transition_queues();
         let action_space = self
             .current_action_space
             .take()
@@ -33,12 +30,23 @@ impl Game {
             )));
         }
 
+        let exposure = self.exposure_choice(&action_space, action);
         let selected_action = action_space.actions[action].clone();
         if let Err(error) = self.execute_action(&selected_action) {
             self.current_action_space = Some(action_space);
             return Err(error);
         }
 
+        if let Some(choice) = exposure {
+            self.card_capture
+                .as_mut()
+                .unwrap()
+                .exposure
+                .as_mut()
+                .unwrap()
+                .choices
+                .push(choice);
+        }
         Ok(self.finish_action_step())
     }
 
@@ -47,13 +55,11 @@ impl Game {
     /// cast-plus-target has the same SBA, priority, tracking, and consistency
     /// behavior as the legacy positional path.
     pub(crate) fn finish_action_step(&mut self) -> bool {
-        self.journal_priority();
-        self.state.priority.sba_done = false;
+        self.state.priority_mut().sba_done = false;
 
         let game_over = self.tick();
         if game_over {
             if let Some(winner) = self.winner_index() {
-                self.journal_trackers();
                 self.trackers[winner].on_game_won();
             }
         }
@@ -64,13 +70,17 @@ impl Game {
 
     /// Publish a newly computed external decision and invalidate commands
     /// decoded from every previously published structured offer set.
-    pub(crate) fn publish_action_space(&mut self, action_space: ActionSpace) {
-        self.journal_decision_epoch();
-        self.journal_action_space();
+    pub(crate) fn publish_action_space(&mut self, mut action_space: ActionSpace) {
         self.decision_epoch = self
             .decision_epoch
             .checked_add(1)
             .expect("decision epoch exhausted");
+        action_space.player = action_space
+            .actions
+            .first()
+            .map(|action| action.player())
+            .map(|player| self.decision_controller(player));
+        self.remember_controlled_hands();
         self.current_action_space = Some(action_space);
     }
 
@@ -81,8 +91,7 @@ impl Game {
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
-        self.journal_events();
-        self.state.events.take_vec()
+        self.state.events_mut().take()
     }
 
     pub(crate) fn tick(&mut self) -> bool {
@@ -98,8 +107,6 @@ impl Game {
                     self.publish_action_space(space);
                     return false;
                 }
-
-                self.journal_skip_trivial_count();
                 self.skip_trivial_count += 1;
                 if let Some(action) = space.actions.first() {
                     if self.execute_action(action).is_err() {
@@ -112,13 +119,12 @@ impl Game {
     }
 
     fn turn_tick(&mut self) -> Option<ActionSpace> {
-        self.journal_turn();
         let step = self.state.turn.current_step_kind();
 
         if !self.state.turn.step_initialized {
             self.on_step_start(step);
-            self.state.turn.step_initialized = true;
-            self.state.turn.turn_based_actions_complete = false;
+            self.state.set_step_initialized(true);
+            self.state.set_turn_based_actions_complete(false);
         }
 
         if let Some(space) = self.suspended_decision_action_space() {
@@ -129,13 +135,18 @@ impl Game {
             if let Some(space) = self.perform_turn_based_actions(step) {
                 return Some(space);
             }
-            self.state.turn.turn_based_actions_complete = true;
+            self.state.set_turn_based_actions_complete(true);
+            if let Some(space) = self.suspended_decision_action_space() {
+                return Some(space);
+            }
         }
 
         if step == StepKind::Cleanup {
             if !self.state.turn.cleanup_priority {
                 let choice = self.stabilize_before_priority();
-                self.state.turn.cleanup_priority |= choice.is_some();
+                if choice.is_some() {
+                    self.state.set_cleanup_priority(true);
+                }
                 if let Some(space) = choice {
                     return Some(space);
                 }
@@ -145,8 +156,8 @@ impl Game {
                     return Some(space);
                 }
                 // CR 514.3a: repeat cleanup after this priority round finishes.
-                self.state.turn.cleanup_priority = false;
-                self.state.turn.turn_based_actions_complete = false;
+                self.state.set_cleanup_priority(false);
+                self.state.set_turn_based_actions_complete(false);
                 return None;
             }
         }
@@ -160,21 +171,28 @@ impl Game {
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
         self.clear_mana_pools();
         self.on_step_end(step);
-        self.state.turn.advance_step();
+        self.remember_controlled_hands();
+        self.state.advance_step();
 
         None
     }
 
+    /// Give the active player priority with no passes yet in the round, as
+    /// at a step's start and after any non-pass action (CR 117.3).
+    pub(crate) fn restart_priority_round(&mut self) {
+        let active = self.active_player();
+        self.state.priority_mut().start_round(active);
+    }
+
     fn on_step_start(&mut self, step: StepKind) {
-        self.journal_priority();
-        self.state.priority.start_round(self.active_player());
+        self.restart_priority_round();
         if step == StepKind::Untap {
             let player = self.active_player();
             let event = GameEvent::TurnStarted {
                 player,
                 turn_number: self.state.turn.turn_number,
             };
-            self.state.events.push(event.clone());
+            self.state.events_mut().push(event.clone());
             self.emit_observation_event(event);
         }
         // Emitted (not just logged) so step-based triggers such as
@@ -183,14 +201,12 @@ impl Game {
         match step {
             StepKind::BeginningOfCombat => {
                 // CR 507.1 — Beginning of combat creates/refreshes combat state.
-                self.journal_combat();
                 self.state.combat = Some(CombatState::default());
             }
             StepKind::DeclareAttackers => {
                 // CR 508.1 — Active player declares attackers.
                 let active = self.active_player();
                 let eligible = self.eligible_attackers(active);
-                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 combat.attackers_to_declare = eligible;
             }
@@ -198,7 +214,6 @@ impl Game {
                 // CR 509.1 — Defending player declares blockers.
                 let defender = self.non_active_player();
                 let eligible = self.eligible_blockers(defender);
-                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 combat.blockers_to_declare = eligible;
             }
@@ -212,14 +227,12 @@ impl Game {
             for index in 0..self.state.permanents.len() {
                 let permanent_id = crate::state::game_object::PermanentId(index);
                 if self.state.permanents[permanent_id].is_some() {
-                    self.journal_permanent(permanent_id);
                     self.state.permanents[permanent_id]
                         .as_mut()
                         .expect("checked permanent")
                         .attacking = false;
                 }
             }
-            self.journal_combat();
             self.state.combat = None;
             // Until-end-of-combat mana (firebending) empties now.
             self.clear_combat_mana_pools();
@@ -227,6 +240,7 @@ impl Game {
         if matches!(step, StepKind::Cleanup) {
             // Safety net: no combat mana survives the turn.
             self.clear_combat_mana_pools();
+            self.expire_turn_cast_grants();
         }
     }
 
@@ -235,8 +249,36 @@ impl Game {
             StepKind::Untap => {
                 // CR 502.2 — Active player untaps permanents they control.
                 let active = self.active_player();
+                self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
+                self.untap_during_other_untap_steps(active);
+                None
+            }
+            StepKind::Main => {
+                // CR 714.3c — As the precombat main phase begins, the active
+                // player puts a lore counter on each Saga they control.
+                let active = self.active_player();
+                let events = self
+                    .battlefield_permanents(active)
+                    .into_iter()
+                    .filter(|&id| self.characteristics(id).final_chapter().is_some())
+                    .map(
+                        |id| crate::flow::proposed_event::ProposedEvent::CounterChange {
+                            provenance: crate::flow::proposed_event::CounterProvenance::new(
+                                crate::flow::proposed_event::EventCause::TurnAction,
+                            ),
+                            target: self.permanent_object_ref(id).expect("battlefield"),
+                            kind: CounterKind::Lore,
+                            delta: 1,
+                            by: Some(active),
+                        },
+                    )
+                    .collect();
+                let mut frame = crate::flow::decision::EffectFrame::new(active, Vec::new());
+                frame.batch = Some(self.event_batch(events));
+                frame.completion = crate::flow::decision::FrameCompletion::Continue;
+                self.run_frame(frame);
                 None
             }
             StepKind::Draw => {
@@ -252,7 +294,6 @@ impl Game {
             }
             StepKind::DeclareAttackers => {
                 let active = self.active_player();
-                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(attacker) = combat.attackers_to_declare.pop() else {
                     // CR 508.1 — Attack triggers fire once the whole batch of
@@ -297,7 +338,6 @@ impl Game {
             }
             StepKind::DeclareBlockers => {
                 let defending = self.non_active_player();
-                self.journal_combat();
                 let combat = self.state.combat.get_or_insert_with(CombatState::default);
                 let Some(blocker) = combat.blockers_to_declare.pop() else {
                     self.cleanup_illegal_menace_blocks();
@@ -361,10 +401,12 @@ impl Game {
             }
             StepKind::Cleanup => {
                 let player = self.active_player();
-                let unlimited = self.battlefield_permanents(player).iter().any(|id| {
-                    let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
-                    self.state.cards[permanent.card].no_maximum_hand_size
-                });
+                let unlimited = self.has_no_maximum_hand_size_effect(player)
+                    || self.battlefield_permanents(player).iter().any(|id| {
+                        self.characteristics(*id)
+                            .static_abilities
+                            .contains(&StaticAbility::NoMaximumHandSize)
+                    });
                 if !unlimited
                     && self
                         .state
@@ -380,7 +422,7 @@ impl Game {
                 }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
-                self.clear_temporary_modifiers();
+                self.end_turn_modifiers();
                 None
             }
             _ => None,
@@ -388,6 +430,9 @@ impl Game {
     }
 
     fn tick_priority(&mut self) -> Option<ActionSpace> {
+        // An automatic pass changes only the priority holder. Reuse this
+        // invocation's fixed-point proof until a stack object resolves.
+        let mut stabilized = false;
         loop {
             // A suspended resolution owns the game until its decision is
             // made — no SBAs, triggers, or priority in between (CR 608.2).
@@ -399,36 +444,36 @@ impl Game {
                 return Some(choice_space);
             }
 
-            if let Some(space) = self.stabilize_before_priority() {
-                return Some(space);
+            if !stabilized {
+                if let Some(space) = self.stabilize_before_priority() {
+                    return Some(space);
+                }
+                stabilized = true;
             }
             if self.is_game_over() {
                 return None;
             }
 
             if self.state.priority.consecutive_passes >= self.state.players.len() {
-                self.journal_priority();
-                self.state.priority.start_round(self.active_player());
+                self.restart_priority_round();
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
-                    self.journal_priority();
-                    self.state.priority.on_non_pass_action(self.active_player());
+                    self.restart_priority_round();
+                    stabilized = false;
                     continue;
                 }
                 return None;
             }
 
             let player = self.state.priority.holder;
-
-            if self.skip_trivial && !self.can_player_act(player) {
+            let actions = self.compute_player_actions(player);
+            if self.skip_trivial && actions.len() == 1 {
                 let next = self.next_player(player);
-                self.journal_priority();
-                self.state.priority.on_pass(next);
+                self.state.priority_mut().on_pass(next);
                 continue;
             }
 
-            let actions = self.compute_player_actions(player);
             return Some(ActionSpace {
                 player: Some(player),
                 kind: ActionSpaceKind::Priority,

@@ -27,8 +27,8 @@ def configure_root(env: managym.Env) -> managym.Observation:
     return env.scenario_refresh()
 
 
-def root(*, skip_trivial: bool = False) -> tuple[managym.Env, managym.Observation]:
-    env = managym.Env(seed=SEED, skip_trivial=skip_trivial)
+def root() -> tuple[managym.Env, managym.Observation]:
+    env = managym.Env(seed=SEED)
     env.reset(
         [
             managym.PlayerConfig("Hero", DECK),

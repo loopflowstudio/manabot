@@ -32,11 +32,6 @@ impl PriorityState {
         self.sba_done = false;
     }
 
-    pub fn pass_priority(&mut self) {
-        self.pass_count += 1;
-        self.consecutive_passes += 1;
-    }
-
     pub fn on_pass(&mut self, next: PlayerId) {
         self.consecutive_passes += 1;
         self.holder = next;

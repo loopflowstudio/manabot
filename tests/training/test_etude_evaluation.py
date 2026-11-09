@@ -84,15 +84,17 @@ def test_allocation_window_does_not_change_model_or_benchmark(tmp_path: Path) ->
         execution.model_copy(
             update={"deadline_unix": time.time() + 3600, "instrumentation": False}
         ),
-        execution.model_copy(update={"max_batch_rows": 1}),
+        # Allocation settings are attempt facts, not part of the contract.
+        execution.model_copy(update={"max_batch_rows": 1, "max_active_games": 64}),
+        execution.model_copy(update={"device": "cuda"}),
     ):
         manifest = original.model_copy(deep=True)
         manifest.key, (manifest.candidate, manifest.opponent) = bind_execution(
             manifest.key, (manifest.candidate, manifest.opponent), settings
         )
         benchmarks.append(evaluation.benchmark(manifest))
-    assert benchmarks[0] == benchmarks[1]
-    assert benchmarks[0] != benchmarks[2]
+    assert benchmarks[0] == benchmarks[1] == benchmarks[2]
+    assert benchmarks[0] != benchmarks[3]
     assert "execution" not in original.candidate.player_spec
 
 

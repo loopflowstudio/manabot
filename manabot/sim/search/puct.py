@@ -5,7 +5,7 @@ its tree-search primitives to compare beliefs at one decision.
 
 The exact branch backend supports Teacher-1's uniform/random evaluator and
 frozen neural priors/critics. Values use win-score units (0/.5/1), including
-actor-perspective inversion; compound nodes retain their decoder prefix.
+actor-perspective inversion.
 Separate trees are built for separate hidden-information determinizations,
 so this does not claim
 information-set-consistent search.
@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 import numpy as np
 import torch
 
-from manabot.env import Env, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import (
@@ -32,12 +33,6 @@ from manabot.sim.search.branch import (
     SearchBranchBackend,
     branch_backend as resolve_branch_backend,
     structured_random_playout,
-)
-from manabot.sim.search.compound import (
-    CompoundCursor,
-    CompoundProjection,
-    advance_compound,
-    project_compound,
 )
 from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS, SearchStats
 
@@ -53,10 +48,7 @@ def puct_source_sha256() -> str:
     paths = (
         "manabot/sim/search/puct.py",
         "manabot/sim/search/flat_mc.py",
-        "manabot/sim/search/compound.py",
-        "manabot/sim/action/structured.py",
         "manabot/sim/search/branch.py",
-        "manabot/model/compound.py",
         "manabot/model/actor_critic.py",
         "manabot/model/world.py",
         "manabot/env/observation.py",
@@ -105,7 +97,6 @@ class LeafEvaluation:
     priors: np.ndarray
     root_value: float
     cap_hit: bool = False
-    compound_projection: CompoundProjection | None = None
 
 
 class LeafEvaluator(Protocol):
@@ -170,8 +161,7 @@ class AgentLeafEvaluator:
 
     Signed outcomes map affinely: -1/0/+1 becomes 0/.5/1. Scalar predictions
     remain unconstrained, so estimates outside those endpoints are not clipped.
-    Only explicitly declared win logits use sigmoid. Compound critics and priors
-    come from the retained decoder prefix, never the ordinary flat head.
+    Only explicitly declared win logits use sigmoid.
     """
 
     def __init__(
@@ -202,11 +192,8 @@ class AgentLeafEvaluator:
         self.agent = agent.eval()
         self.observation_space = observation_space
         self.value_mode = value_mode
-        self.forward_calls = (
-            0  # Flat forwards only; compound projection decodes many prefixes.
-        )
+        self.forward_calls = 0
         self.last_root_priors: np.ndarray | None = None
-        self.last_root_projection: CompoundProjection | None = None
 
     def _score(self, value: float) -> float:
         if not math.isfinite(value):
@@ -222,8 +209,6 @@ class AgentLeafEvaluator:
     def _predict(
         self, observation: Any | Mapping[str, np.ndarray], *, action_count: int
     ) -> tuple[np.ndarray, float]:
-        if self.agent.config.compound_decisions:
-            raise ValueError("compound PUCT requires an engine and retained prefix")
         encoded = (
             observation
             if isinstance(observation, Mapping)
@@ -255,20 +240,11 @@ class AgentLeafEvaluator:
             self._score(float(value[0])),
         )
 
-    def project(
-        self,
-        env: Any,
-        cursor: CompoundCursor | None,
-        check: Callable[[], None] = _no_deadline,
-    ) -> CompoundProjection:
-        return project_compound(self.agent, env, cursor, check)
-
     def root_priors(self, observation: Any | None, *, action_count: int) -> np.ndarray:
         if observation is None:
             raise ValueError("agent leaf evaluator requires the root observation")
         priors, _ = self._predict(observation, action_count=action_count)
         self.last_root_priors = priors.copy()
-        self.last_root_projection = None
         return priors
 
     def evaluate(
@@ -281,22 +257,13 @@ class AgentLeafEvaluator:
         seed: int,
         max_steps: int,
         branch_session: BranchSession | None = None,
-        compound_cursor: CompoundCursor | None = None,
-        check: Callable[[], None] = _no_deadline,
     ) -> LeafEvaluation:
         del branch_session, seed, max_steps
-        projection = None
-        if self.agent.config.compound_decisions:
-            projection = self.project(env, compound_cursor, check)
-            priors, node_value = projection.probabilities, self._score(projection.value)
-        else:
-            priors, node_value = self._predict(
-                observation, action_count=int(env.action_count())
-            )
-        root_value = node_value if node_player == root_player else 1.0 - node_value
-        return LeafEvaluation(
-            priors=priors, root_value=root_value, compound_projection=projection
+        priors, node_value = self._predict(
+            observation, action_count=int(env.action_count())
         )
+        root_value = node_value if node_player == root_player else 1.0 - node_value
+        return LeafEvaluation(priors=priors, root_value=root_value)
 
 
 @dataclass
@@ -329,7 +296,6 @@ class _Node:
     value_sums: np.ndarray
     priors: np.ndarray
     terminal: bool
-    compound_projection: CompoundProjection | None = None
     children: dict[int, "_Node"] = field(default_factory=dict)
 
     @classmethod
@@ -339,7 +305,6 @@ class _Node:
         *,
         terminal: bool | None = None,
         priors: np.ndarray | None = None,
-        compound_projection: CompoundProjection | None = None,
     ) -> "_Node":
         is_terminal = env.is_game_over() if terminal is None else terminal
         if is_terminal:
@@ -371,7 +336,6 @@ class _Node:
             value_sums=np.zeros(action_count, dtype=np.float64),
             priors=np.asarray(node_priors, dtype=np.float64),
             terminal=False,
-            compound_projection=compound_projection,
         )
 
 
@@ -391,8 +355,7 @@ def _select_action(node: _Node, hero: int, c_puct: float) -> int:
     )
     acting_q = q if node.player == hero else 1.0 - q
     exploration = c_puct * node.priors * math.sqrt(total + 1.0) / (node.visits + 1.0)
-    # Ordered compound prefixes can exclude still-legal native micro-actions.
-    # Their exact zero prior is a support boundary, not an unvisited .5 estimate.
+    # An exact zero prior is a support boundary, not an unvisited .5 estimate.
     return int(np.argmax(np.where(node.priors > 0, acting_q + exploration, -np.inf)))
 
 
@@ -427,12 +390,6 @@ def _simulate(
         path.append((node, action))
         child = node.children.get(action)
         if child is None:
-            cursor = None
-            if node.compound_projection is not None:
-                assert isinstance(evaluator, AgentLeafEvaluator)
-                cursor = advance_compound(
-                    evaluator.agent, node.compound_projection, action, check
-                )
             site = "world" if depth == 0 else "child"
             child_env = branch_session.fork_exact(node.env, site)
             child_observation, _, terminated, truncated, _ = (
@@ -446,37 +403,21 @@ def _simulate(
                 child_player = child_env.current_agent_index()
                 if child_player is None:
                     raise RuntimeError("nonterminal PUCT child has no acting player")
-                if isinstance(evaluator, AgentLeafEvaluator):
-                    evaluation = evaluator.evaluate(
-                        child_env,
-                        child_observation,
-                        root_player=hero,
-                        node_player=int(child_player),
-                        seed=rollout_seed,
-                        max_steps=max(1, max_steps - depth - 1),
-                        branch_session=branch_session,
-                        compound_cursor=cursor,
-                        check=check,
-                    )
-                else:
-                    evaluation = evaluator.evaluate(
-                        child_env,
-                        child_observation,
-                        root_player=hero,
-                        node_player=int(child_player),
-                        seed=rollout_seed,
-                        max_steps=max(1, max_steps - depth - 1),
-                        branch_session=branch_session,
-                    )
+                evaluation = evaluator.evaluate(
+                    child_env,
+                    child_observation,
+                    root_player=hero,
+                    node_player=int(child_player),
+                    seed=rollout_seed,
+                    max_steps=max(1, max_steps - depth - 1),
+                    branch_session=branch_session,
+                )
                 if not math.isfinite(evaluation.root_value):
                     raise ValueError("PUCT leaf returned a nonfinite value")
             child = _Node.from_env(
                 child_env,
                 terminal=is_terminal,
                 priors=evaluation.priors if evaluation is not None else None,
-                compound_projection=(
-                    evaluation.compound_projection if evaluation is not None else None
-                ),
             )
             node.children[action] = child
             added_nodes += 1
@@ -515,7 +456,6 @@ def determinized_puct(
     branch_backend: SearchBranchBackend | None = None,
     branch_audit: bool = False,
     branch_match_id: str | None = None,
-    compound_cursor: CompoundCursor | None = None,
     deadline: float | None = None,
 ) -> PuctResult:
     """Search one decision and return aggregated root visits and values.
@@ -558,19 +498,7 @@ def determinized_puct(
         match_id=branch_match_id or f"puct-{seed}", audit=branch_audit
     )
     evaluator = evaluator or UniformRandomLeafEvaluator()
-    root_projection = None
-    if (
-        isinstance(evaluator, AgentLeafEvaluator)
-        and evaluator.agent.config.compound_decisions
-    ):
-        root_projection = evaluator.project(root_env, compound_cursor, check)
-        root_priors = root_projection.probabilities
-        evaluator.last_root_projection = root_projection
-        evaluator.last_root_priors = root_priors.copy()
-    else:
-        if compound_cursor is not None:
-            raise ValueError("a compound prefix requires a compound evaluator")
-        root_priors = evaluator.root_priors(root_observation, action_count=action_count)
+    root_priors = evaluator.root_priors(root_observation, action_count=action_count)
     visits = np.zeros(action_count, dtype=np.int64)
     value_sums = np.zeros(action_count, dtype=np.float64)
     total_value = 0.0
@@ -592,9 +520,7 @@ def determinized_puct(
         branch_session.determinize(world, seed=world_seed, perspective=hero)
         if int(world.action_count()) != action_count:
             raise RuntimeError("determinization changed the root legal action count")
-        root = _Node.from_env(
-            world, priors=root_priors.copy(), compound_projection=root_projection
-        )
+        root = _Node.from_env(world, priors=root_priors.copy())
         tree_nodes += 1
         world_value = 0.0
         for simulation_index in range(world_simulations):
@@ -652,7 +578,7 @@ def determinized_puct(
 
 
 class DeterminizedPuctPlayer:
-    """Multi-world PUCT player, retaining only the chosen compound prefix."""
+    """Multi-world PUCT player; each decision searches from the live engine."""
 
     def __init__(
         self,
@@ -683,14 +609,10 @@ class DeterminizedPuctPlayer:
         self.stats = PuctSearchStats()
         self.last_scores: np.ndarray | None = None
         self.last_result: PuctResult | None = None
-        self.compound_cursor: CompoundCursor | None = None
-        self._engine: Any | None = None
         self.deadline: float | None = None
 
     def start_game(self, env: Env, seat: int) -> None:
         del seat
-        self.compound_cursor = None
-        self._engine = env._engine
         self._calls = 0
         if isinstance(self.evaluator, AgentLeafEvaluator):
             validate_agent_setup(self.evaluator.agent, env.match.to_rust())
@@ -703,9 +625,6 @@ class DeterminizedPuctPlayer:
         agent = getattr(self.evaluator, "agent", None)
         if agent is not None:
             validate_agent_setup(agent, env.match.to_rust())
-        if self._engine is not env._engine:
-            self.compound_cursor = None
-            self._engine = env._engine
         self._calls += 1
         call_seed = _mix_seed(self._seed, self._calls)
         started = time.perf_counter()
@@ -721,19 +640,12 @@ class DeterminizedPuctPlayer:
             branch_driver_id=self.branch_driver_id,
             branch_audit=self.branch_audit,
             branch_match_id=f"teacher-{self._seed}-{self._calls}",
-            compound_cursor=self.compound_cursor,
             deadline=self.deadline,
         )
         candidates = np.flatnonzero(
             result.visit_counts == int(result.visit_counts.max())
         )
         action = int(candidates[np.argmax(result.q_values[candidates])])
-        if isinstance(self.evaluator, AgentLeafEvaluator):
-            projection = self.evaluator.last_root_projection
-            if projection is not None:
-                self.compound_cursor = advance_compound(
-                    self.evaluator.agent, projection, action, self._check_deadline
-                )
         self._check_deadline()
         elapsed = time.perf_counter() - started
         self.last_result = result

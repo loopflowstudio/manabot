@@ -6,15 +6,15 @@ from pathlib import Path
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
 from manabot.env.observation import (
     ACTION_ABILITY_INDEX,
     ACTION_MODE_INDEX,
     MAX_ACTION_SELECTOR,
     PERMANENT_DEFINITION_INDEX,
+    ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.verify.action_cases import (
     Family,
     decision_case,
@@ -57,7 +57,7 @@ def test_policy_choice_can_learn_either_preference(
         ModelConfig(
             hidden_dim=16,
             num_attention_heads=2,
-            semantic_pack="ur-lessons-vs-gw-allies" if semantic else None,
+            world="ur-lessons-vs-gw-allies" if semantic else None,
         ),
     )
     # Erasing precisely the repaired information reproduces the forced tie.

@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
@@ -43,11 +43,22 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     """
     resolved = ModelConfig.model_validate(spec.model_dump())
     payload = resolved.model_dump(mode="json")
+    # The vocabulary selector hashes under its historical key so frozen
+    # receipts verify; the rename changed no meaning.
+    payload = {
+        ("semantic_pack" if key == "world" else key): value
+        for key, value in payload.items()
+    }
     if (
         resolved.attention_feedforward_dim
         == resolved.hidden_dim * resolved.num_attention_heads
     ):
         payload.pop("attention_feedforward_dim", None)
+    # Hashed record ids are the historical layout and hash as omitted; the
+    # selector names the catalog layout only where it changes the model.
+    payload.pop("record_vocabulary", None)
+    if resolved.catalog_records(space.encoder.config.policy_input_version):
+        payload["record_vocabulary"] = "catalog"
     return canonical_sha256(
         {
             "layout_version": 2,

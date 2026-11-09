@@ -17,6 +17,9 @@ const LAUNCH_STARTED_MS = Number(process.env.ACADEMY_CLEAN_START_MS ?? '0');
 const PLAYABLE_BUDGET_MS = 90_000;
 // Hang guard shared with scripts/verify-clean-machine.
 const READY_LIMIT_MS = 600_000;
+// A move advances the board only after the Search 64 opponent replies; its
+// flat Monte Carlo rollouts take tens of seconds on a hosted runner.
+const OPPONENT_REPLY_LIMIT_MS = 120_000;
 
 interface AssetPackReference {
   id: string;
@@ -128,7 +131,7 @@ async function chooseDeterministicAction(page: Page): Promise<void> {
   const before = await updateSequence(page);
   await actions.nth(index).click();
   await expect
-    .poll(() => updateSequence(page), { timeout: 30_000 })
+    .poll(() => updateSequence(page), { timeout: OPPONENT_REPLY_LIMIT_MS })
     .toBeGreaterThan(before);
 }
 
@@ -178,7 +181,7 @@ test('clean command reaches pinned play and reloads without public network', asy
   browser: Browser;
   page: Page;
 }, testInfo) => {
-  test.setTimeout(READY_LIMIT_MS + 120_000);
+  test.setTimeout(READY_LIMIT_MS + 120_000 + 2 * OPPONENT_REPLY_LIMIT_MS);
   expect(LAUNCH_STARTED_MS, 'clean verifier did not provide an external start time').toBeGreaterThan(0);
   const expected = expectedPack();
   const errors = collectErrors(page);

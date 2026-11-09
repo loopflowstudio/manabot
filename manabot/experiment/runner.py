@@ -32,6 +32,7 @@ from manabot.experiment.execution import ExperimentRun, HardwareInventory, Regim
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import source_bundle_sha256
+from manabot.sim.threads import child_environment
 from manabot.training.clock import arm_worker_deadline, boot_identity
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
@@ -358,11 +359,7 @@ def run_experiment(
                             stderr=subprocess.STDOUT,
                             start_new_session=True,
                             pass_fds=(host_lease.fileno(), queue.lock.fileno()),
-                            env={
-                                **os.environ,
-                                "OMP_NUM_THREADS": "1",
-                                "MKL_NUM_THREADS": "1",
-                            },
+                            env=child_environment(),
                         )
                     while process.poll() is None:
                         check()

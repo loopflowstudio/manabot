@@ -16,16 +16,19 @@ JOBS = {
     "integration",
     "academy_integration",
     "protocol_v1",
-    "semantic_coverage",
     "semantic_conformance",
     "frontend",
     "clean_machine_play",
+    "engine_budget",
 }
 
 
-def selected(paths: list[str], *, full: bool = False) -> set[str]:
+def selected(
+    paths: list[str], *, full: bool = False, only: list[str] | None = None
+) -> set[str]:
+    flags = ["--all"] if full else ["--only", *only] if only else []
     result = subprocess.run(
-        ["bash", str(SELECTOR), *(["--all"] if full else [])],
+        ["bash", str(SELECTOR), *flags],
         input="".join(path + "\0" for path in paths),
         text=True,
         capture_output=True,
@@ -41,9 +44,8 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
     ("path", "expected"),
     [
         ("docs/design.md", set()),
-        ("docs/rules/audit-2026-10/index.jsonl", {"python_unit"}),
         ("scripts/audit_rules.py", {"python_unit"}),
-        ("docs/rules/elemental/decks.json", {"academy_integration"}),
+        ("tests/semantic/fixtures/elemental/decks.json", {"academy_integration"}),
         ("academy/README.md", set()),
         ("scratch/notes.md", set()),
         ("website/app.py", {"python_unit"}),
@@ -55,19 +57,32 @@ def selected(paths: list[str], *, full: bool = False) -> set[str]:
         ("manabot/experiment/job.py", {"integration"}),
         ("experiments/protocols/recipe.md", {"integration"}),
         ("docs/experiment-metrics.md", {"integration"}),
-        ("manabot/semantic/compiler.py", {"integration", "semantic_coverage"}),
+        ("manabot/semantic/learning.py", {"integration"}),
         ("academy/server.py", {"academy_integration", "protocol_v1", "frontend"}),
         ("academy/study_runtime.py", {"academy_integration", "protocol_v1"}),
         ("scripts/play.py", {"python_unit", "protocol_v1", "clean_machine_play"}),
         ("scripts/play-elemental", {"academy_integration", "clean_machine_play"}),
         ("scripts/play_elemental.py", {"academy_integration", "clean_machine_play"}),
         ("managym/src/flow/decision.rs", JOBS),
-        ("content/semantic/v1/fixtures.json", JOBS),
+        ("managym/state/Cargo.toml", JOBS),
+        ("managym/cards/Cargo.toml", JOBS),
+        ("managym/state/src/card.rs", JOBS),
+        ("managym/cards/src/tla.rs", JOBS),
+        ("managym/cards/tests/cards/tla.rs", {"rust", "semantic_conformance"}),
+        ("managym/.config/nextest.toml", {"rust"}),
+        ("content/semantic/current/setups.json", JOBS),
         ("uv.lock", JOBS),
         ("pyproject.toml", JOBS),
         (".github/workflows/ci.yml", JOBS),
         (".github/ci/select-tests.sh", JOBS),
         (".github/workflows/manabot-integration.yml", {"integration"}),
+        (".github/workflows/engine-budget.yml", {"python_unit", "engine_budget"}),
+        ("managym/examples/bench_search.rs", {"rust", "engine_budget"}),
+        ("managym/examples/bench_steps.rs", {"engine_budget"}),
+        ("managym/examples/curated/mod.rs", {"engine_budget"}),
+        ("managym/perf/baseline.json", {"engine_budget"}),
+        ("managym/examples/export_study_index.rs", JOBS),
+        ("scripts/engine_budget.py", {"python_unit", "engine_budget"}),
         ("unknown-new-package/code.py", JOBS),
     ],
 )
@@ -87,6 +102,14 @@ def test_renames_and_mixed_changes_select_both_consumers() -> None:
 def test_empty_diff_and_manual_dispatch_run_all_jobs() -> None:
     assert selected([]) == JOBS
     assert selected(["docs/notes.md"], full=True) == JOBS
+
+
+def test_measurement_dispatch_selects_only_the_engine_budget() -> None:
+    assert selected(["managym/src/flow/decision.rs"], only=["engine_budget"]) == {
+        "engine_budget"
+    }
+    with pytest.raises(subprocess.CalledProcessError):
+        selected([], only=["no_such_job"])
 
 
 @pytest.mark.parametrize(
