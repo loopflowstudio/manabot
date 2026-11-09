@@ -182,6 +182,7 @@ def test_initial_admission_precedes_collection(
         clock.offset += 100
         digest = run.stages[0].artifacts["initial_raw"]["sha256"]
         gate.write_text(digest if admitted else "wrong-checkpoint")
+        # Subtracting the real clock epoch can round the injected 100-second wait.
         if admitted:
             finished = future.result(timeout=30)
             assert finished.status == "completed"

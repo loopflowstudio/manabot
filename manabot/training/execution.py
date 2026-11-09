@@ -8,6 +8,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 import time
 from typing import TYPE_CHECKING
@@ -187,6 +188,13 @@ def validate_regime(
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
+    for stage in regime.stages:
+        if isinstance(stage, TrainSelfPlay) and stage.adaptive is not None:
+            if regime.recovery_max_microsteps is not None:
+                raise ValueError("adaptive sampling requires current-game recovery")
+            if regime.agent.world == "elemental-world-v2":
+                for cell in stage.adaptive.cells:
+                    elemental_roster(Match(cell))
     if regime.deck_source is not None:
         if require_current_world:
             regime.deck_source.check()
@@ -1099,6 +1107,54 @@ def _execute_regime(
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    if stage.initial_weights is not None:
+                        reference = stage.initial_weights
+                        copied = out / f"{stage.id}-initialization-source.pt"
+                        if (
+                            file_sha256(reference["path"]) != reference["sha256"]
+                            or Path(reference["path"]).stat().st_size
+                            != reference["bytes"]
+                        ):
+                            raise ValueError(
+                                "initialization checkpoint digest/size differs"
+                            )
+                        if not copied.exists():
+                            shutil.copyfile(reference["path"], copied)
+                        if file_sha256(copied) != reference["sha256"]:
+                            raise ValueError(
+                                "retained initialization checkpoint differs"
+                            )
+                        payload = torch.load(
+                            copied, map_location="cpu", weights_only=False
+                        )
+                        if not isinstance(payload, dict):
+                            raise ValueError(
+                                "initial weights require a checkpoint mapping"
+                            )
+                        bc = payload.get("bc")
+                        if (
+                            payload.get("global_step") != 0
+                            or not isinstance(bc, dict)
+                            or bc.get("weights") != "initial_raw"
+                        ):
+                            raise ValueError(
+                                "initial weights require a retained update-zero initialization"
+                            )
+                        with torch.random.fork_rng(devices=[]):
+                            initialization, initial_space = load_checkpoint(copied)
+                        if (
+                            initialization.config != regime.agent
+                            or initial_space.encoder.config != space.encoder.config
+                        ):
+                            raise ValueError(
+                                "initialization model or observation differs"
+                            )
+                        validate_agent_setup(
+                            initialization, Match(regime.match).to_rust()
+                        )
+                        agent.load_state_dict(initialization.state_dict())
+                        record.inputs["initial_weights"] = dict(reference)
+                        record.artifacts["initialization_source"] = artifact(copied)
                     if imported is not None:
                         agent.load_state_dict(imported.raw.state_dict())
                     if pretrained is not None:
@@ -1190,6 +1246,7 @@ def _execute_regime(
                         deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
+                        adaptive=stage.adaptive,
                         precision=stage.execution.precision,
                     )
                     producers.callback(collector.close)
@@ -1386,6 +1443,9 @@ def _execute_regime(
                                         "numerical": {"optimizer_steps": 0},
                                     }
                                 )
+                                adaptive_diagnostics = collector.commit_adaptive(batch)
+                                if adaptive_diagnostics is not None:
+                                    diagnostic["adaptive"] = adaptive_diagnostics
                                 if stage.matchup_curriculum != "fixed":
                                     diagnostic["matchup_curriculum"] = (
                                         stage.matchup_curriculum
