@@ -1,8 +1,10 @@
 # Magnetic-mirror search on MTG-183
 
-Status: reconstructed design for MTG-269, 2026-11-08. The existing oracle
-campaign continues under its original authority. Follow-up settings and bounds
-below are proposals for interactive design review, not a freeze or launch grant.
+Status: continuation of the existing experiment in MTG-269, 2026-11-08.
+Finish and analyze the existing oracle campaign under its original authority;
+Task adoption does not reopen its design or require another approval. Preserve
+all existing work and resume only what remains. Follow-up settings and bounds
+below remain separate proposals and do not block this campaign's completion.
 This document owns the study protocol; `scratch/mirror-search.md` is its handoff.
 
 ## Question and scope
@@ -284,10 +286,21 @@ The retained conversation summary mentions an earlier $25 rental allowance;
 remaining spend has not been reconciled, so it supplies no usable new rental
 budget here. The beta-0.01 follow-up was an assistant proposal, not a launch receipt.
 
-The current directive says: “This launch stops at interactive design review and
-supplies no new rental, merge or auto-ship authority.” Existing games continue;
-this design launches nothing and does not accept its own proposed follow-up.
-Missing consequential decisions are the candidate/uniform comparison plan,
-resource ceiling and subsequent execution authority, plus w13 batching admission.
-Stop this step at that review boundary without waiting for a reply or proceeding
-into freeze/execution. The empirical Task remains open.
+The earlier assistant launch directive stopped at design review. The subsequent
+conversation direction supersedes that stop for the retained experiment:
+“i dont think i need to review the deisgn, we were kind of half way through an
+existing experient when i transferred this to a task” and “make sure to not
+throw away that work or do unnecessary . kjust start from what we have”.
+
+Resume the experiment workflow at execution/reconciliation and analysis for the
+existing 8,000-game campaign. Preserve source, checkpoints, logs and completed
+keys; inspect current workers before any recovery. Do not rerun design, training,
+completed games or noise collection, wait for batching to finish the existing
+sweep, or make new receipt instruments a prerequisite for analyzing retained
+data. Report historical evidence limits honestly. Make only reporting fixes
+needed for an accurate final result and reuse checks that still apply.
+
+The proposed 5,000-game extension, new resource ceiling and batching adaptation
+remain future decisions; they are not approved by this continuation and must not
+become prerequisites for finishing and reporting the original experiment. No new
+rental, merge or auto-ship authority is supplied here.

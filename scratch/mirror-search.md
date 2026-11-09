@@ -1,5 +1,16 @@
 # Mirror search continuation
 
+## Current direction — continue the retained experiment
+
+The conversation supersedes the design-review stop: “i dont think i need to
+review the deisgn, we were kind of half way through an existing experient when
+i transferred this to a task” and “make sure to not throw away that work or do
+unnecessary . kjust start from what we have”. Resume execution/reconciliation
+and analysis of the existing 8,000-game run. Do not redesign or rerun completed
+work, block on MTG-268, or require prospective capture upgrades for historical
+results. The proposed 5,000-game extension is separate, not approved or required
+to finish the original sweep. Preserve all evidence and report its limitations.
+
 ## Design handoff — 2026-11-08 23:40 UTC
 
 The reconstructed owning protocol is
