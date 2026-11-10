@@ -2,6 +2,7 @@
 
 import hashlib
 from pathlib import Path
+from typing import Literal
 
 from etude.launch.job_file import read_job_file
 import pytest
@@ -15,7 +16,7 @@ from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.training.records import StageRecord, TrainingRun
+from manabot.training.records import NumericalFailure, StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime
 from scripts.check_throughput_admission import check
 from tests.training.test_training_throughput import _worker
@@ -220,9 +221,8 @@ def test_c1_refuses_nonfinite_or_negative_limits(pace: float) -> None:
         sizes.limits(sizes.C1_LEGS["c1-fast-a384l8-k1-float32-u8"], pace)
 
 
-def test_admission_reloads_receipt_artifact_and_rejects_unhealthy_or_changed_bytes(
-    tmp_path: Path,
-) -> None:
+@pytest.fixture
+def admission_receipt(tmp_path: Path) -> TrainingRun:
     """A synthetic CUDA receipt exercises admission plumbing, not CUDA execution."""
     regime = sizes.leg_recipe(sizes.C1_LEGS["c1-fast-w160l8-k1-bf16-u2-admission"])
     regime.agent.hidden_dim = 8
@@ -238,7 +238,8 @@ def test_admission_reloads_receipt_artifact_and_rejects_unhealthy_or_changed_byt
     digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     stage = StageRecord(
         id=regime.stages[0].id,
-        actual_device="cuda",
+        actual_device="cuda:0",
+        status="completed",
         updates=2,
         optimizer_updates=2,
         artifacts={
@@ -249,7 +250,7 @@ def test_admission_reloads_receipt_artifact_and_rejects_unhealthy_or_changed_byt
             }
         },
     )
-    receipt = TrainingRun(
+    return TrainingRun(
         id="admission-fixture",
         seed=26400,
         seed_streams={},
@@ -259,17 +260,59 @@ def test_admission_reloads_receipt_artifact_and_rejects_unhealthy_or_changed_byt
         status="completed",
         stages=[stage],
     )
-    receipt_path = tmp_path / "training/run.json"
-    receipt_path.write_text(receipt.model_dump_json())
+
+
+@pytest.mark.parametrize("device", ["cuda:0", "cuda", "cuda:1"])
+def test_admission_reloads_receipt_artifact_and_rejects_changed_bytes(
+    tmp_path: Path, admission_receipt: TrainingRun, device: str
+) -> None:
+    admission_receipt.stages[0].actual_device = device
+    (tmp_path / "training/run.json").write_text(admission_receipt.model_dump_json())
+    checkpoint = tmp_path / "training/raw.pt"
+    digest = hashlib.sha256(checkpoint.read_bytes()).hexdigest()
     assert check(tmp_path)["checkpoint_sha256"] == digest
 
-    for updates in (None, 0):
-        stage.optimizer_updates = updates
-        receipt_path.write_text(receipt.model_dump_json())
-        with pytest.raises(ValueError, match="healthy CUDA BF16"):
-            check(tmp_path)
-    stage.optimizer_updates = 2
-    receipt_path.write_text(receipt.model_dump_json())
     checkpoint.write_bytes(b"changed checkpoint")
     with pytest.raises(ValueError, match="artifact bytes differ"):
+        check(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("device", "error"),
+    [(device, "healthy CUDA BF16") for device in ("cpu", "cpu:0", "mps", "meta")]
+    + [
+        (device, "invalid device")
+        for device in (None, "", "cuda:no", "cuda:-1", "cuda:0:1")
+    ],
+)
+def test_admission_rejects_non_cuda_or_invalid_device(
+    tmp_path: Path, admission_receipt: TrainingRun, device: str | None, error: str
+) -> None:
+    admission_receipt.stages[0].actual_device = device
+    (tmp_path / "training/run.json").write_text(admission_receipt.model_dump_json())
+    with pytest.raises(ValueError, match=error):
+        check(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("status", "failure", "optimizer_updates"),
+    [
+        ("failed", None, 2),
+        ("completed", NumericalFailure(invariant="nonfinite_loss", iteration=2), 2),
+        ("completed", None, None),
+        ("completed", None, 0),
+    ],
+)
+def test_admission_rejects_unhealthy_receipt(
+    tmp_path: Path,
+    admission_receipt: TrainingRun,
+    status: Literal["completed", "failed"],
+    failure: NumericalFailure | None,
+    optimizer_updates: int | None,
+) -> None:
+    admission_receipt.status = status
+    admission_receipt.stages[0].numerical_failure = failure
+    admission_receipt.stages[0].optimizer_updates = optimizer_updates
+    (tmp_path / "training/run.json").write_text(admission_receipt.model_dump_json())
+    with pytest.raises(ValueError, match="healthy CUDA BF16"):
         check(tmp_path)

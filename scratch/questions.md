@@ -13,12 +13,13 @@ BF16, lengthening the packed cells, and completing the missing measurements."
 Comment 079b3f46 authorizes the bounded continuation. Comment 8cb4c5af records
 C1 review against that authority, not a new approval. The owning protocol is
 `experiments/protocols/training-throughput-b015d5-v1.md`, C1; the implementation
-handoff and deletion list are in `scratch/step-3-continuation.md`.
+handoff is retained at `c2c813a47:scratch/step-3-continuation.md`. The current
+device-validator repair and deletion list are below.
 
 Keep effective hashed v6 / 512 facts and the Elemental learning recipe. c5fba4
 owns its shared-effect catalog repair; do not infer TLA catalog speed from the
 hashed ladder. Exact quotes and external diagnostic findings remain in
-`scratch/vocabulary-performance.md`.
+`7be759c04:scratch/vocabulary-performance.md`.
 
 The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
 six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
@@ -36,8 +37,9 @@ Integrated software review is recorded in comment e98993af.
   unchanged. Original source cb722dc8c results remain separate, with fresh C1
   controls required. On 2026-11-09 the CUDA regression passed and the w160l8
   BF16 worker completed two updates, but admission rejected `cuda:0` against
-  literal `cuda` before checkpoint reload. Repair and a new freeze/admission
-  remain required before opening other rentals.
+  literal `cuda` before checkpoint reload. The device-validator repair is now
+  implemented and verified offline; delivery and a new freeze/admission remain
+  required before opening other rentals.
 - Billing was refreshed before C1: prior conservative bounds $1.917 step 3 /
   $4.012 overall. C1 adds at most $0.133502 pending billing, for inclusive
   bounds $2.050474 / $4.145347. Original $10/$50 caps and the C1 15 GPU-hour /
@@ -123,8 +125,42 @@ landing authority and budget do not replace this experiment's boundaries.
   absence and no active attempts were verified. No execution process remains.
   All 87 cell dispositions and export/game accounting are retained under
   `step-3-c1/`; private game ledgers and checkpoints stay in the Etude store.
-- Next software work belongs to manabot's C1 admission validator and its
-  existing test: parse CUDA device types, preserve CPU/unhealthy/corrupt-byte
-  rejection, then freeze prospectively and rerun full admission. No bypass or
-  further paid execution is part of this stopped pass; no new approval or
-  expanded budget is implied. The parent experiment remains open.
+- Comment d85854eb routes the device-validator repair through the existing
+  software Graph. New freeze and full worker/reload admission follow delivery;
+  no paid execution belongs to this implementation step. The parent experiment
+  remains open.
+
+## C1 device-validator repair — 2026-11-09
+
+Implemented: parse `stage.actual_device` with `torch.device` and admit its CUDA
+type. The real-checkpoint cases accept `cuda:0`, `cuda` and
+`cuda:1`, rejects CPU/MPS/meta and missing/malformed device names, and retains
+failed-run, numerical-failure, missing/zero optimizer-step and corrupt-byte
+rejection. Each parametrized case starts with a fresh receipt and checkpoint,
+so rejection cases need no reset of earlier mutations. No training, launch,
+checkpoint or scientific-recipe owner changed.
+
+Offline audit of unchanged run `3a1380d94b69` passed on 2026-11-09. Its receipt
+has one completed BF16/256-stream stage, seed 26400, two updates, 420 optimizer
+steps and no numerical failure. Retrieved the original 30,398,287-byte raw
+checkpoint read-only from Etude, SHA-256
+`c4a4cae0600cf4e169d4cb0e11405b24cde426822967b475597e6c030516b5a1`.
+The actual `check` entry point passed artifact mapping/hash/size, ordinary
+world/input/architecture reload, effective hashed v6 and finite-weight checks.
+The receipt retains v6/512 configuration. Temporary local copies were removed;
+no historical bytes, run status or artifact manifest changed. The initial fetch
+lacked R2 environment variables; the protocol's existing manabot/prd Doppler
+context supplied them without auth changes.
+
+Check: `uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py -k admission -q` — 16 passed; focused Ruff and `git diff --check` passed. Gate owns affected suites; execution owns the future CUDA proof.
+
+Local receipt replay does not retroactively admit the failed execution or
+replace the future CUDA worker/reload proof. Gate/delivery, prospective source
+freeze/amendment and full admission on one rental remain later Graph steps.
+No new paid execution occurred; C1 consumption and inclusive cost bounds above
+remain unchanged. The parent experiment remains open.
+
+Delete — do not maintain (removed): the literal `actual_device == "cuda"` predicate in
+`scripts/check_throughput_admission.py`. Preserve the existing validator and
+checkpoint loader as the sole owners; no alternate admission path or fixture
+copy of historical evidence is needed.
