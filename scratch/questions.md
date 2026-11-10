@@ -13,8 +13,9 @@ BF16, lengthening the packed cells, and completing the missing measurements."
 Comment 079b3f46 authorizes the bounded continuation. Comment 8cb4c5af records
 C1 review against that authority, not a new approval. The owning protocol is
 `experiments/protocols/training-throughput-b015d5-v1.md`, C1; the implementation
-handoff is retained at `c2c813a47:scratch/step-3-continuation.md`. The current
-device-validator repair and deletion list are below.
+handoff is retained at `c2c813a47:scratch/step-3-continuation.md`. The protocol's
+dated C1 device-validator repair status distinguishes implemented software,
+offline reload evidence and remaining delivery/freeze/CUDA admission.
 
 Keep effective hashed v6 / 512 facts and the Elemental learning recipe. c5fba4
 owns its shared-effect catalog repair; do not infer TLA catalog speed from the
@@ -152,18 +153,15 @@ no historical bytes, run status or artifact manifest changed. The initial fetch
 lacked R2 environment variables; the protocol's existing manabot/prd Doppler
 context supplied them without auth changes.
 
-Check: `uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py -k admission -q` — 16 passed; focused Ruff and `git diff --check` passed. Gate owns affected suites; execution owns the future CUDA proof.
+The implementation check passed 16 admission cases plus focused Ruff and
+`git diff --check`; the protocol records the post-sync check. Gate owns affected
+suites; execution owns the future CUDA proof.
 
 Local receipt replay does not retroactively admit the failed execution or
 replace the future CUDA worker/reload proof. Gate/delivery, prospective source
 freeze/amendment and full admission on one rental remain later Graph steps.
 No new paid execution occurred; C1 consumption and inclusive cost bounds above
 remain unchanged. The parent experiment remains open.
-
-Delete — do not maintain (removed): the literal `actual_device == "cuda"` predicate in
-`scripts/check_throughput_admission.py`. Preserve the existing validator and
-checkpoint loader as the sole owners; no alternate admission path or fixture
-copy of historical evidence is needed.
 
 ## Main sync resolution — 2026-11-09
 
@@ -172,4 +170,4 @@ notes as this Task’s active context. Main’s unrelated MTG-268 study notes re
 verbatim at `e73ed9208915e623173b2f5409d1ad3c301169b3:scratch/questions.md`; their
 measurement conclusions and landing direction do not replace this experiment’s
 boundaries. Only scratch context conflicted; the source merge required no manual
-resolution. Check the device-admission regression after continuing the owned sync.
+resolution. The sync completed at `9ed7c133e`; no new experiment freeze is implied.

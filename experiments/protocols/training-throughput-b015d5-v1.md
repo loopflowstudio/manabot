@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 stopped at admission; CUDA device-name check rejects receipt)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 admission repair implemented; delivery and new freeze pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -32,6 +32,11 @@ Jack Heart then said "keep going" after the recommendation to repair BF16,
 lengthen packed cells and complete missing measurements (2026-11-08, comment
 079b3f46). The prospective continuation below governs new runs; the original
 step-3 design, freeze and results remain historical evidence.
+The first C1 attempt stopped at its device-name validator. The repair is
+implemented and its retained-checkpoint audit passed offline (2026-11-09);
+delivery, a prospective source freeze and full CUDA worker/reload admission
+remain before comparative measurements. The C1 repair status below owns the
+remaining work; the original freeze and failed attempt are not replaced.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -1093,8 +1098,10 @@ The retained `step-3/overhead-audit.md` lists hypotheses, not measured fixes.
   software below lands. Record native build/world identity, deck-definition
   and roster digests, resolved observation/model/regime bytes, dependency lock,
   CUDA/PyTorch/driver versions, GPU, CPU, quotas and actual precision switches.
-  C1 is frozen at `58eb3c7299f6078a56d5027ac738bc7af76d8fdc`; the receipt
-  below binds the integrated repair and the current catalog separately from step 3.
+  The first C1 attempt used `58eb3c7299f6078a56d5027ac738bc7af76d8fdc`;
+  its receipt below retains that binding separately from step 3. The repaired
+  validator requires a new prospective freeze after delivery, not another run
+  at that historical source.
 - Keep `elemental_recipe`, 256 streams, both learning seats, complete games,
   at least 64 decisions per stream, one producer, damped-policy schedules,
   capacity recovery and trivial skipping. Freeze input v6 / 512 facts and all
@@ -1227,9 +1234,12 @@ Implemented:
    destination dtype without detaching gradients. Float32 output/gradient parity
    and injected Half/BF16 joins are covered. The CPU coverage claim was corrected;
    a CUDA-required regression covers full/cached/selected/empty paths, backward,
-   optimizer and reload, and emits actual GRU dtypes. Real CUDA remains pending;
-   unchanged float32 outputs/gradients and default checkpoint bytes remain
-   acceptance constraints, and a CUDA skip cannot admit the campaign.
+   optimizer and reload, and emits actual GRU dtypes. Both CUDA regression cases
+   passed on the first C1 A40 rental, and the BF16 worker completed two updates.
+   Full worker/checkpoint admission did not pass: its post-worker validator
+   rejected `cuda:0` before reload. Unchanged float32 outputs/gradients and
+   default checkpoint bytes remain acceptance constraints; neither a CUDA skip
+   nor the partial execution admits the campaign.
 2. The existing launch owner adds distinct C1 IDs, endpoints, seeds and two-update
    worker admission while retaining legacy discovery/identities. `read_job_file`
    tests compare recipe bytes outside declared size/precision/endpoint/identity
@@ -1269,6 +1279,9 @@ No general planner, new precision default, changed minibatch, CUDA graph,
 engine optimization or launcher rewrite is required.
 
 ### C1 freeze receipt — 2026-11-09 UTC
+
+Historical binding for the first C1 attempt, which stopped at admission below.
+It does not bind execution of the subsequently repaired validator.
 
 **Admission result: source, discovery and local world/input admission pass.**
 Real CUDA admission has not run. No games, training, rentals or paid work were
@@ -1476,6 +1489,54 @@ cell dispositions and evidence locations are retained in
 `step-3-c1/`. Private game-ledger bytes remain in the original Etude store.
 This bounded admission establishes only its recorded execution observations;
 C1 has not measured a384l8, packing crossover or learning equivalence.
+
+### C1 device-validator repair status — 2026-11-09
+
+Comment d85854eb directs the remaining software repair under Jack Heart's
+existing "keep going" authority. Implemented in `419da4ad4` and retained by
+the main sync `9ed7c133e`: the existing checker parses `stage.actual_device`
+with `torch.device` and requires CUDA type. Real-checkpoint tests accept
+`cuda`, `cuda:0` and `cuda:1`; they reject non-CUDA, missing/malformed device
+names, failed or numerically unhealthy receipts, absent/zero optimizer updates
+and changed checkpoint bytes. No alternate admission or training path was added.
+
+The offline audit passed the actual `check()` entry point against unchanged run
+`3a1380d94b69` and its original 30,398,287-byte raw checkpoint, SHA-256
+`c4a4cae0600cf4e169d4cb0e11405b24cde426822967b475597e6c030516b5a1`.
+Artifact mapping, size/hash, ordinary world/input/architecture reload, effective
+hashed v6 and finite weights passed. This establishes local reload compatibility;
+it neither changes the failed Etude job nor retroactively passes CUDA admission.
+
+Remaining: software gate/delivery, prospective freeze of the integrated source
+and resolved identities, refreshed billing/quotes and full CUDA regression plus
+two-update worker/checkpoint reload on one rental before expansion. Main since
+the first freeze includes critic/advantage diagnostics (`6933edd0d`) and CPU
+inference/search changes (`cb75f2166`); these are not matched speed evidence.
+The resolved Elemental recipe/roster and hashed v6/512 remain constraints, with
+fresh same-source/host controls. No new model, precision default or planner
+decision is made by this repair. Larger-model costs, admissible packing
+comparisons and the gross precision-health block remain unmeasured by C1.
+
+No new paid work occurred in this repair. Aggregate C1 consumption still includes
+0.206 GPU-hours, two updates and at most $0.133502 pending billing; all C1 line,
+15 GPU-hour, 1,600-update and $8 allocation ceilings carry forward without reset.
+Inclusive step-3/experiment bounds remain $2.050474/$4.145347 against $10/$50.
+The parent experiment remains open; no new decision is needed within these bounds.
+
+Check: `uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py -k admission -q` — 16 passed, 15 deselected after main sync; full CUDA admission belongs to execution after delivery and freeze.
+
+Concept review (2026-11-09): no design change or unresolved product choice.
+The operator requests one complete CUDA admission, not a particular device
+string. `StageRecord.actual_device` retains the worker's exact device; the
+checker derives its CUDA type without rewriting that record. The existing
+launch command owns regression → worker → verified checkpoint reload, and
+only completion of that chain admits expansion. A healthy worker followed by
+a failed validator remains a failed attempt; an offline reload is diagnostic
+evidence, not a replacement execution. Recovery uses a newly frozen source
+and fresh full admission, retaining the old receipt, checkpoint and aggregate
+cost/exposure. CPU execution, corrupt bytes or failed reload still invalidate
+admission. The implemented repair follows this contract; the next proof remains
+the full one-rental chain after delivery and prospective freeze.
 
 ### C1 software interface
 
