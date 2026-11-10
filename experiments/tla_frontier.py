@@ -3,13 +3,15 @@
 One seed per size trains under the same damped self-play rule, population,
 input v9, four producers and wall budget; the large size is the frozen w64
 regime with only its width, depth, heads and damping horizon replaced (see the
-protocol `experiments/protocols/tla-frontier-c5fba4-v1.md`). `eval` plays, at
+protocol `experiments/protocols/tla-frontier-c5fba4-v1.md`). Primary progress is
+each learner against its latest trained checkpoint at or before half its elapsed
+training hours, on the frozen random 17Lands deck pairs. `eval` also plays, at
 every shared update milestone, each size against the matched first-64 heuristic and
 the larger size against the smaller at equal updates; at the endpoints it adds
 each size against its own initialization and the two endpoints against each
 other, which is equal wall budget only when both runs finished. At every
 w160l8 milestone and its endpoint it also pairs w160l8 with w64's last
-checkpoint at or before the same training hours (`checkpoint_hours`, waiting on
+checkpoint at or before the same training hours (`checkpoint_hours` reads
 Etude's `Checkpoint.wall_ms`). A failed run's endpoint is its last stored
 checkpoint, so its reach is still played and read.
 Only a worker writes a run's end, so `with_launcher_ends` joins the launcher's
@@ -524,15 +526,32 @@ def endpoint(run: TrainingRun | None) -> int | None:
 
 
 def checkpoint_hours(state: ExperimentState) -> CheckpointHours | None:
-    """Each stored checkpoint's training hours, as `eval` sees them.
+    """Stored wall time since each learner's update zero, excluding setup.
 
-    None until Etude's `Checkpoint` carries the `wall_ms` its store already
-    keeps (the protocol's Before freeze item 3); then this rebases it per run. No
-    manabot clock stands in, so until then equal-hours slots stay unplayable and
-    analysis, which schedules from this same source, reports them missing.
+    A missing historical timestamp leaves that checkpoint unavailable to timed
+    comparisons. Missing update zero leaves the whole run unavailable; never
+    substitute another run's origin or infer elapsed time from update counts.
     """
-    del state
-    return None
+    result: dict[str, dict[int, float]] = {}
+    for run in state.runs:
+        if size_label(run) is None:
+            continue
+        initial = run.checkpoints.at("updates", 0).last
+        if initial is None or initial.wall_ms is None:
+            continue
+        elapsed: dict[int, float] = {}
+        previous = initial.wall_ms
+        for saved in sorted(run.checkpoints, key=checkpoint_update):
+            if saved.wall_ms is None:
+                continue
+            if saved.wall_ms < previous:
+                raise ValueError(f"checkpoint wall time went backwards in {run.name}")
+            elapsed[checkpoint_update(saved)] = (
+                saved.wall_ms - initial.wall_ms
+            ) / 3_600_000
+            previous = saved.wall_ms
+        result[run.name] = elapsed
+    return result
 
 
 def _partner(
@@ -689,6 +708,59 @@ def comparison_schedule(
             hours=(at, found[1]),
         )
 
+    def half_training(label: SizeLabel, update: int | None) -> ScheduledComparison:
+        """Progress against this learner's latest trained checkpoint by half time."""
+        tag = f"half-training-{label}"
+        slot = ScheduledComparison(
+            tag,
+            update,
+            None,
+            unreached=short(label)
+            or (update is not None and past_endpoint(label, update)),
+        )
+        if slot.unreached or update is None:
+            return slot
+        clock = run_hours(label)
+        at = clock.get(update)
+        if at is None:
+            return slot
+        eligible = [(t, u) for u, t in clock.items() if 0 < u < update and t <= at / 2]
+        if not eligible:
+            # The first export may have no trained half-time predecessor. It is
+            # unavailable, never replaced with initialization or a later policy.
+            missing = any(0 < u < update and u not in clock for u in saved[label])
+            return replace(slot, unreached=not missing)
+        partner_hours, partner_update = max(eligible)
+        if any(partner_update < u < update and u not in clock for u in saved[label]):
+            return slot
+        candidate, partner = model(label, update), model(label, partner_update)
+        if candidate is None or partner is None:
+            return slot
+        return ScheduledComparison(
+            tag,
+            update,
+            paired_matchup(
+                f"{label} u{update} vs {label} u{partner_update} at half training",
+                (candidate, partner),
+                tag,
+                protocol,
+            ),
+            hours=(at, partner_hours),
+        )
+
+    # Primary progress comparisons come first so limited evaluation spend serves
+    # the newest learner against its own earlier policy before secondary baselines.
+    progress = [
+        half_training(label, update)
+        for update in protocol.milestones
+        for label in SIZES
+    ]
+    progress.extend(
+        half_training(label, endpoints[label])
+        for label in SIZES
+        if endpoints[label] not in protocol.milestones
+    )
+
     # Equal wall budget when both finished; analysis reads no scale otherwise.
     expect(
         "endpoint-head-to-head",
@@ -703,7 +775,7 @@ def comparison_schedule(
     schedule.extend(equal_hours(update) for update in protocol.milestones)
     if endpoints[LARGE] not in protocol.milestones:
         schedule.append(equal_hours(endpoints[LARGE]))
-    return schedule
+    return progress + schedule
 
 
 def eval(state: ExperimentState) -> list[Job]:
@@ -971,6 +1043,14 @@ def report() -> Report:
         score=Score(table="games", value="score", reference=0.5),
         clock="updates",
         evals=(
+            Curve(
+                title="Width 64 vs itself at half the training hours (primary)",
+                matches=Matches(tag=f"half-training-{SMALL}"),
+            ),
+            Curve(
+                title="Width 160, 8 layers vs itself at half the training hours (primary)",
+                matches=Matches(tag=f"half-training-{LARGE}"),
+            ),
             Curve(
                 title="Width 64 vs fixed heuristic",
                 matches=Matches(tag=f"heuristic-{SMALL}"),

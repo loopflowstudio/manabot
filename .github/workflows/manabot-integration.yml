@@ -64,6 +64,7 @@ jobs:
             tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
             tests/academy/test_trigger_order.py \
             tests/sim/test_structured_policy.py tests/sim/test_guidance.py tests/sim/test_heuristic.py \
+            tests/sim/test_local_update.py tests/sim/test_local_update_sampling.py tests/sim/test_search_command_evidence.py \
             tests/verify/test_checkpoint_scenarios.py tests/verify/test_continuation_input.py tests/training/test_scenario_validation.py \
             tests/verify/test_shared_effect_transport.py tests/verify/test_native_buffer_capacities.py tests/training/test_state_representation_study.py \
             tests/verify/test_observation_parity.py::test_v5_encodes_every_observed_permanent_and_card_field_in_parity \

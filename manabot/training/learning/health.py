@@ -18,6 +18,20 @@ from manabot.model.policy_distribution import NumericalError, require
 from manabot.training.rollout.actions import PackedActions
 
 HEALTH_INTERVAL = 25
+# ActorCritic parameter prefixes that only the critic output reads, in every
+# value aggregation.
+_CRITIC_READOUT = ("value_head.", "value_readout.")
+# The value token is an unmasked key in object attention, so actor logits read
+# it too: its gradient mixes policy and value loss and is reported on its own.
+_VALUE_TOKEN = "value_token"
+
+
+def _norm(tensors: list[Tensor]) -> float:
+    if not tensors:
+        return 0.0
+    return float(
+        torch.stack([t.detach().double().square().sum() for t in tensors]).sum().sqrt()
+    )
 
 
 class NumericalHealth(TypedDict, total=False):
@@ -36,6 +50,13 @@ class NumericalHealth(TypedDict, total=False):
     sampled_steps: int
     gradient_norm_before: float
     gradient_norm_after: float
+    # Pre-clip norm over critic-only parameters (value_head, value_readout).
+    # The rest of gradient_norm_before is shared encoder and actor; encoder
+    # gradients from the value loss are not separated.
+    gradient_norm_critic_readout: float
+    # Pre-clip norm of the value token, present only in the value_token
+    # aggregation. Actor and critic share it: policy and value loss both reach it.
+    gradient_norm_value_token: float
     gradient_missing_tensors: int
     gradient_zero_tensors: int
     gradient_nonzero_tensors: int
@@ -138,6 +159,19 @@ class OptimizerHealth:
         grads = [p.grad for p in parameters if p.grad is not None]
         if not grads:
             raise NumericalError("missing_all_gradients", {"loss": loss})
+        # Read before clipping rescales the gradients in place.
+        named = dict(self.model.named_parameters()) if measured else {}
+        critic_norm = _norm(
+            [
+                p.grad
+                for name, p in named.items()
+                if p.grad is not None and name.startswith(_CRITIC_READOUT)
+            ]
+        )
+        token = named.get(_VALUE_TOKEN)
+        token_norm = (
+            None if token is None else _norm([] if token.grad is None else [token.grad])
+        )
         try:
             # error_if_nonfinite reads the norm on the host: the device wait
             # that ends the backward timer.
@@ -157,11 +191,8 @@ class OptimizerHealth:
             self.health.update(
                 sampled_steps=1,
                 gradient_norm_before=float(norm),
-                gradient_norm_after=float(
-                    torch.stack([g.detach().double().square().sum() for g in grads])
-                    .sum()
-                    .sqrt()
-                ),
+                gradient_norm_after=_norm(grads),
+                gradient_norm_critic_readout=critic_norm,
                 gradient_missing_tensors=sum(
                     p.requires_grad and p.grad is None for p in parameters
                 ),
@@ -169,6 +200,8 @@ class OptimizerHealth:
                 gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
                 frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
             )
+            if token_norm is not None:
+                self.health["gradient_norm_value_token"] = token_norm
         return norm, measured
 
     def _optimize(self, parameters: list[nn.Parameter], measured: bool) -> None:

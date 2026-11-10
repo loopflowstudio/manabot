@@ -164,3 +164,12 @@ Delete — do not maintain (removed): the literal `actual_device == "cuda"` pred
 `scripts/check_throughput_admission.py`. Preserve the existing validator and
 checkpoint loader as the sole owners; no alternate admission path or fixture
 copy of historical evidence is needed.
+
+## Main sync resolution — 2026-11-09
+
+Assumption (reversible): retain b015d5 continuation, billing and device-validator
+notes as this Task’s active context. Main’s unrelated MTG-268 study notes remain
+verbatim at `e73ed9208915e623173b2f5409d1ad3c301169b3:scratch/questions.md`; their
+measurement conclusions and landing direction do not replace this experiment’s
+boundaries. Only scratch context conflicted; the source merge required no manual
+resolution. Check the device-admission regression after continuing the owned sync.

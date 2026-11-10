@@ -1,8 +1,9 @@
 """Frozen c5fba4 analysis over retained Etude matches and training checkpoints.
 
 `analyze` accounts for every comparison `comparison_schedule` expects before
-estimating anything, then applies the protocol's readings: learning per size,
-strength against the heuristic, and scale from the equal-compute endpoint
+estimating anything, then applies the protocol's readings: progress against the
+same learner at half its training hours, secondary initialization and heuristic
+comparisons, and scale from the equal-compute endpoint
 head-to-head. A milestone past an ended run's endpoint is unreached rather than
 missing, because no run can still produce it; every other absent comparison
 leaves the analysis incomplete and its reading unknown. A failed run keeps its
@@ -27,8 +28,8 @@ so a nonzero count adds no issue and `complete` stays about missing and failed
 games. The totals span both players, so they support no per-policy rate.
 
 Each pair's four correlated legs move together, and one set of bootstrap
-indices serves every comparison. Etude keeps each checkpoint's wall time only
-in its database, so `TrainingPoint` reads it here to show how far each size got
+indices serves every comparison. `TrainingPoint` reads checkpoint wall time
+from the database to show how far each size got
 per hour. Equal-hours slots take their hours from `checkpoint_hours`, the
 source `eval` schedules them from, so both read one schedule; each slot reports
 both sizes' hours. Each size also shows its damping horizon and producers beside the
@@ -145,7 +146,11 @@ class TrainingPoint(StrictModel):
 
 
 class SizeReading(StrictModel):
-    """One size's protocol reading; None means unknown, not negative."""
+    """Endpoint progress and secondary baselines; None means unknown, not negative.
+
+    `progressing` reads the half-training comparison. `learned` retains the
+    historical initialization check as a secondary descriptive reading.
+    """
 
     label: SizeLabel
     state: str | None
@@ -154,6 +159,8 @@ class SizeReading(StrictModel):
     against_initial: Bounded | None
     against_heuristic: Bounded | None
     learned: bool | None
+    against_half_training: Bounded | None = None
+    progressing: bool | None = None
     # The damping horizon S and producer count the size's regime declared.
     horizon: int
     workers: int
@@ -293,6 +300,15 @@ def learned(initial: Bounded | None) -> bool | None:
     return False if initial.best.lower <= 0.5 else None
 
 
+def _progressing(result: Bounded | None) -> bool | None:
+    """A half-training interval crossing 0.5 is inconclusive, not no progress."""
+    if result is None:
+        return None
+    if result.worst.lower > 0.5:
+        return True
+    return False if result.best.upper < 0.5 else None
+
+
 def _training_points(
     db: duckdb.DuckDBPyConnection, run: TrainingRun | None
 ) -> list[TrainingPoint]:
@@ -330,6 +346,9 @@ def _reading(
     heuristic = next(
         c for c in comparisons if c.tag == f"heuristic-{label}" and c.update == end
     )
+    half = next(
+        c for c in comparisons if c.tag == f"half-training-{label}" and c.update == end
+    )
     return SizeReading(
         label=label,
         state=run.state if run else None,
@@ -338,6 +357,8 @@ def _reading(
         against_initial=initial.result,
         against_heuristic=None if initial.unreached else heuristic.result,
         learned=learned(initial.result),
+        against_half_training=half.result,
+        progressing=_progressing(half.result),
         horizon=horizon(regime),
         workers=regime.stages[0].execution.workers,
         pod=pods.get(run.name) if run else None,
@@ -389,12 +410,18 @@ def analyze(
         issues.append("Evaluation source is missing or differs across the cohort.")
     if any(c.result is None and not c.unreached for c in comparisons):
         issues.append("The frozen comparison schedule is incomplete.")
-    receipted = [
-        pair.counts
-        for c in comparisons
-        for pair in c.pairs
-        if pair.counts.attempted_matches
-    ]
+    # Several curves can name the same checkpoint matchup. The runner plays
+    # those matches once; cohort totals must count their evidence once too.
+    matches: set[str] = set()
+    unique_pairs: list[PairResult] = []
+    for comparison in comparisons:
+        for pair in comparison.pairs:
+            if pair.match is not None:
+                if pair.match in matches:
+                    continue
+                matches.add(pair.match)
+            unique_pairs.append(pair)
+    receipted = [p.counts for p in unique_pairs if p.counts.attempted_matches]
     unscored = sum(counts.expected - counts.valid for counts in receipted)
     if unscored:
         played = sum(counts.expected for counts in receipted)
@@ -403,9 +430,16 @@ def analyze(
     return FrontierAnalysis(
         protocol_sha256=file_sha256(PROTOCOL),
         bootstrap_seed=protocol.bootstrap_seed,
-        counts=field_totals(Counts, [c.counts for c in comparisons]),
+        counts=field_totals(Counts, [p.counts for p in unique_pairs]),
         policy_actions=field_totals(
-            PolicyActions, [c.policy_actions for c in comparisons]
+            PolicyActions,
+            [
+                actions
+                for key, actions in _policy_actions_by_match(
+                    db, environment(protocol).identity
+                ).items()
+                if key in matches
+            ],
         ),
         comparisons=comparisons,
         sizes=sizes,

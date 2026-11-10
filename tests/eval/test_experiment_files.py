@@ -53,6 +53,7 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "tla_frontier_vocabulary",
         "tla_pilot_v10",
         "two_seat",
+        "value_readout_252",
     }
 
 

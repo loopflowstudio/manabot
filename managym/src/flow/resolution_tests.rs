@@ -4,6 +4,8 @@
 use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
+use sha2::{Digest, Sha256};
+
 use crate::{
     agent::action::Action,
     decision::Command,
@@ -3263,6 +3265,23 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
                 .any(|card| card.id == root.state.cards[entering].id.0 as i32 && card.zone == zone),
             "a precommit entrant is public during replacement choices"
         );
+        let before = crate::search_state::witness(&root);
+        for perspective in [player, viewer] {
+            let bytes = Observation::for_player(&root, perspective).to_json();
+            let expected = format!("{:x}", Sha256::digest(bytes.as_bytes()));
+            assert_eq!(
+                root.semantic_viewer_state_hash(perspective).unwrap(),
+                expected
+            );
+            assert_eq!(
+                root.semantic_observation(perspective)
+                    .unwrap()
+                    .identity
+                    .viewer_state_hash,
+                expected
+            );
+        }
+        assert_eq!(crate::search_state::witness(&root), before);
         let space = PossibleWorldSpace::for_viewer(&root, viewer);
         let materialized = space
             .materialize_index(&root, 0, 31, MaterializeMode::RefreshOpponentCommitment)

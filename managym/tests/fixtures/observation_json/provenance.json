@@ -1,0 +1,65 @@
+{
+  "capture_description": "Six constructed serializer cases from Game::new(seed=42), plus both viewers of pending hand/library entrants in hidden_selection_public_entry_is_pinned_through_both_samplers. Captured before the ownership edit. JSON files contain exact baseline bytes without a trailing newline.",
+  "cases": [
+    {
+      "blake3": "1bb3d083b50397045618045f3d14df12af8813d260074ffd028629f0e683e30b",
+      "name": "acting",
+      "sha256": "83dd3b5e03ddfd5c18c37150ded3701fe7dd880d95f5afb4bd19329f9d30cc82"
+    },
+    {
+      "blake3": "bffb38f0c1d25a69040d360b87bf19422f633055ae84d63b8f6e0d0261075fb8",
+      "name": "viewer-0",
+      "sha256": "f403302e3621b2d34b3d26ad22e808af8933bdc782338f87d3511c30db2a64e9"
+    },
+    {
+      "blake3": "712dcde7f1cd00f4f654a11b368f03b5cf67ecaf996403f1a0a35af8f53f6b35",
+      "name": "viewer-1",
+      "sha256": "f4b1f2fdeef00f7b82815e32f7a811e3003133e45ff6a5c310ba1e31c90d8fe9"
+    },
+    {
+      "blake3": "2b0aedce9ce2593d5dc83b4070cc5463a4cb8f0c10e41b702aad76879995abe4",
+      "name": "terminal",
+      "sha256": "7ec585b4811baec64640baa8ec8ce0eb1f3d32384eaa6aeac595cdc6764d6ee7"
+    },
+    {
+      "blake3": "909afc8181f91f4b2adeedefdda8201f7e72ded12d979723a9216eda8d71fdfe",
+      "name": "empty",
+      "sha256": "c6999e913db5d04dc3d40f8254f70b8e0d73ffb4b6414a8c7b320abc2088e1e1"
+    },
+    {
+      "blake3": "614d9db50a5e6c8ba2084d7798655260bfd31d20f2b7d17649da7f2a88c3b15a",
+      "name": "populated",
+      "sha256": "1f575c0d1e53f0f4bff69e7a0246ff6a5ca495ec1945de8e6a0171fe5cdbd01c"
+    },
+    {
+      "blake3": "16d02a1bd4429333bafab0f762fac7ad51be08f0c6edee904e9bc44b663cd54b",
+      "name": "pending-0-0",
+      "sha256": "9ee2e0c9ab01b0ea2cf19466141e6c0aad3ed66abf1a012c66b0d3b71f31e819"
+    },
+    {
+      "blake3": "1c684bac36f4afd872d107ef901dd363cf89c46877a9a88a3cab03275e2bafee",
+      "name": "pending-0-1",
+      "sha256": "0fbc79c1ba3817c2188576a6cfa8896ac10d7d0822ef4077d1669a9757fd15e0"
+    },
+    {
+      "blake3": "f7fa08e3d0c46417ca57e72d19915d236fc3ee8361a9e3e58a2f68e7adc49a51",
+      "name": "pending-1-0",
+      "sha256": "876905969f0b7d3e5e5ae29996e77271a0ac21b465d7273fc6bdb15694420e18"
+    },
+    {
+      "blake3": "cf5f51c411c9a17fce6cb50bdaf5d4912dfb130b772b52e4e489ecf3aca48097",
+      "name": "pending-1-1",
+      "sha256": "14a354b1957730c64cf4420933c88af9a54dff47d44fe5a64bcb5cd23c33cb21"
+    },
+    {
+      "blake3": "16a42f8dcea2fbfa2962ff4b52b13c8af808539e924908825dd22d95e802a0b6",
+      "generator": ".cache/mtg-268/borrowed-json/supplement.rs",
+      "name": "sparse-optionals",
+      "sha256": "2af7536602e60d14481b7d79686b340efe8e92dfe5da2a66819fcf3fb46d6ce7"
+    }
+  ],
+  "generator": ".cache/mtg-268/json-array-move/freeze_observation_json.rs",
+  "generator_sha256": "f36a53ace2de3e456745d421377de6ee86ebbd0a48c10e7329e74a256bd697b5",
+  "serializer_sha256": "a596d81b064771cf91581bf022bd0bc702fdba48a05a52639c80f8d006c4be7c",
+  "source": "0bbb055127a79aa0e1bde4f6aa36c792dab61317"
+}

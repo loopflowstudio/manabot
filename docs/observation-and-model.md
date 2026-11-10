@@ -50,6 +50,8 @@ frozen input version never silently falls behind the rules.
 4. **Estimate value.** Objects are projected, pooled by a mean over valid
    objects (`masked_mean`, as in the TLA pilot; the historical default averages
    every slot) and read by the value head. The output is a scalar or loss/draw/win logits.
+   `value_token` and `attention_readout` replace the mean with a learned summary
+   ([readout comparison](../experiments/value-readout-252.md)).
 
 The GRU encodes a card's rules program, not game history. The network has no
 recurrent game memory, and the optional recent-event encoder is off by default.
@@ -434,7 +436,8 @@ is not evidence for any of them:
   ([longer learning](../experiments/longer-learning-017.md)).
 - **Value-token and pooling variants are unresolved**
   ([value token](../experiments/value-token-screen.md),
-  [pooling follow-up](../experiments/pooling-filter-followup.md)).
+  [pooling follow-up](../experiments/pooling-filter-followup.md),
+  [three-seed depth/readout results](../experiments/value-readout-252-results.md)).
 - **No history input has shown a training benefit**, and the v7 shared-effect
   transport is an engineering proof, not a learning result.
 

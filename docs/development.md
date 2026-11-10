@@ -110,6 +110,16 @@ Run the existing encoder tests alongside cutoff/parity fixtures so callers of
 changed private helpers are checked too. Action overflow is checked at the
 public encoder boundary, before the retained action list reaches row encoding.
 
+**Local-update search.** Run `tests/sim/test_local_update.py`,
+`tests/sim/test_local_update_sampling.py` and
+`tests/sim/test_search_command_evidence.py` together. The core integration job
+includes all three: collection alone cannot check receipt replay, terminal
+frontiers, deadlines or atomic Command rejection. When games are restricted to
+a remote host, defer the game-based cases to that job explicitly.
+Inspect collector fixtures before selecting laptop-safe model tests:
+`SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
+`collect(model, 1)` can play a complete game.
+
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:
 `uv run pytest tests/eval/test_local_evaluation.py::test_cli_completes_without_training_cloud_or_callback -q`
@@ -129,6 +139,10 @@ focused tests too. Synthetic scheduling/analysis fixtures must pin both identity
 and schema; test real runtime rejection separately, and keep those fixtures off
 replay, encoding and training paths. Never rewrite frozen protocols to fit the
 current runtime.
+Checkpoint-time scheduling changes also require
+`uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_frontier.py -q`.
+Store synthetic checkpoints with an injected wall clock, and cover both relative
+run speeds; filesystem timing must not decide the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.

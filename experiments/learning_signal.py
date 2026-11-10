@@ -260,6 +260,18 @@ def evaluation_jobs(
     matchups = tuple(
         matchup for run in state.runs for matchup in scheduled_matchups(run, design)
     )
+    return benchmark_jobs(matchups, name, design, hours=hours, usd=usd)
+
+
+def benchmark_jobs(
+    matchups: tuple[Matchup, ...],
+    name: str,
+    design: Design,
+    *,
+    hours: float,
+    usd: float,
+) -> list[Job]:
+    """One rented evaluation job playing `matchups` over `design`'s pairings."""
     if not matchups:
         return []
     benchmark = Benchmark(
@@ -341,7 +353,9 @@ def play_deal(match: Match) -> Tables:
         raise ValueError("evaluation conditions differ from the frozen schedule")
     matchup = design.matchup(conditions.pairing)
     candidate, path = _registration("candidate", match.players[0], matchup, design.name)
-    opponent, _ = _registration("opponent", match.players[1], matchup, design.name)
+    opponent, opponent_path = _registration(
+        "opponent", match.players[1], matchup, design.name
+    )
     assert path is not None
     key = EvaluationKey(
         world=managym.WORLD_VERSION,
@@ -365,7 +379,15 @@ def play_deal(match: Match) -> Tables:
                     key=key,
                     candidate=candidate,
                     opponent=opponent,
-                    checkpoint_paths={"candidate": str(path)},
+                    # A checkpoint opponent (a head-to-head) loads its own file.
+                    checkpoint_paths={
+                        "candidate": str(path),
+                        **(
+                            {"opponent": str(opponent_path)}
+                            if opponent_path is not None
+                            else {}
+                        ),
+                    },
                     deal_seeds=(conditions.deal,),
                     matchup_mode=design.matchup_mode,
                     authored_matchup=matchup,

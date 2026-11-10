@@ -329,6 +329,14 @@ class ActorCritic(nn.Module):
             else None
         )
 
+        # Built last: every other parameter keeps the masked-mean arm's draws
+        # under the same seed, so the two readouts start from one shared model.
+        self.value_readout = (
+            AttentionReadout(embed_dim, config.num_attention_heads)
+            if config.value_aggregation == "attention_readout"
+            else None
+        )
+
         # When True, forward() stashes legal logits at original coordinates on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
@@ -408,6 +416,25 @@ class ActorCritic(nn.Module):
             and (validity.sum(1) == 0).any()
         ):
             raise ValueError("value aggregation requires a valid object")
+        original_slots = objects.shape[1]
+        columns = None
+        if (
+            self.config.attention_on
+            and objects.device.type == "cpu"
+            and not torch.is_grad_enabled()
+        ):
+            # Padding is never an attention key and every layer zeros its query
+            # output. Omit columns unused by the entire inference batch, then
+            # restore the original coordinates for focus joins and historical
+            # mean pooling (whose denominator includes padding). Learning keeps
+            # fixed shapes and its existing autograd path; device inference
+            # avoids a host synchronization to discover the compact shape.
+            used = (validity != 0).any(0).nonzero().flatten()
+            if 0 < used.numel() < original_slots:
+                columns = used
+                objects = objects.index_select(1, columns)
+                is_agent = is_agent.index_select(1, columns)
+                validity = validity.index_select(1, columns)
         key_padding_mask = validity == 0
         if self.value_token is not None:
             objects = torch.cat(
@@ -422,16 +449,37 @@ class ActorCritic(nn.Module):
             )
             for layer in self.extra_attention:
                 objects = layer(objects, is_agent, key_padding_mask)
+        if columns is not None:
+            # Restore the optional neutral value token in the same scatter,
+            # at the slot immediately after the original object coordinates.
+            if self.value_token is not None:
+                columns = torch.cat((columns, columns.new_tensor([original_slots])))
+                original_slots += 1
+            objects = objects.new_zeros(
+                (objects.shape[0], original_slots, objects.shape[2])
+            ).index_copy(1, columns, objects)
         return objects
 
     def _value_from_objects(
         self, objects: torch.Tensor, validity: torch.Tensor
     ) -> torch.Tensor:
-        """Read the critic while preserving historical value_head parameter names."""
+        """Summarize final objects [B,N(+1),D] and apply the critic MLP.
+
+        historical_mean averages every slot, padding included. masked_mean
+        averages valid objects after the per-object projection, so N similar
+        permanents carry N shares of the summary. value_token reads the
+        trailing token that attended alongside the objects (and so also changed
+        their actor-facing outputs). attention_readout pools the final valid
+        objects with one learned query after attention; the actor never reads
+        it, though critic gradients still reach the shared encoder. All
+        variants share value_head's parameter names and MLP.
+        """
         if self.config.value_aggregation == "historical_mean":
             return self.value_head(objects)
         if self.value_token is not None:
             objects = objects[:, -1]
+        elif self.value_readout is not None:
+            objects = self.value_readout(objects, validity == 0)
         projected = self.value_head[1](self.value_head[0](objects))
         if self.config.value_aggregation == "masked_mean":
             projected = projected.masked_fill((validity == 0).unsqueeze(-1), 0)
@@ -859,6 +907,38 @@ class MeanPoolingLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.mean(dim=self.dim)
+
+
+class AttentionReadout(nn.Module):
+    """One learned query cross-attending over final objects [B,N,D] -> [B,D].
+
+    A Set Transformer pooling-by-attention seed (Lee et al., 2019, PMA with one
+    seed and no feedforward block). Each copy of an object receives its own
+    softmax weight, so, as in a mean, copies share in proportion to their count;
+    unlike a mean, the learned query can weight informative objects above the
+    rest. Duplicating every object leaves the output unchanged. Cost is one O(N)
+    query per observation, outside the object-attention path.
+    """
+
+    def __init__(self, embedding_dim: int, num_heads: int) -> None:
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(1, 1, embedding_dim) / embedding_dim**0.5)
+        self.mha = nn.MultiheadAttention(
+            embedding_dim, num_heads=num_heads, batch_first=True
+        )
+
+    def forward(
+        self, objects: torch.Tensor, key_padding_mask: torch.Tensor
+    ) -> torch.Tensor:
+        query = self.query.expand(objects.shape[0], -1, -1)
+        pooled, _ = self.mha(
+            query,
+            objects,
+            objects,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )
+        return pooled.squeeze(1)
 
 
 class ProjectionLayer(nn.Module):
