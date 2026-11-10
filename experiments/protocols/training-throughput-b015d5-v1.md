@@ -1663,7 +1663,10 @@ Results, dispositions and operational defects (controller hangs, per-seed
 source-preparation fetches, phantom rentals and the reader's float-only update
 schema) are in `experiments/data/training-throughput-b015d5-v1/report.md`
 ("Step 3 continuation C1 at the repaired source") with evidence under
-`c1-repaired/step-3-c1/`. The parent experiment remains open for evidence review.
+`c1-repaired/step-3-c1/`. Its "Analysis against the frozen criteria — 2026-11-10"
+reproduces `readings.json` exactly with the frozen reader, checks every requirement
+and leaves the packing crossover unknown. The parent experiment remains open for
+evidence review.
 
 ### C1 software interface
 

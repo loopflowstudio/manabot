@@ -286,3 +286,13 @@ No quote, bill or rental was touched. Execution review comes next.
   watchdog left running. Phantom A4000 records `75457219a81c` / `79384dd06468`
   remain in the isolated database with no provider pod. Evidence review is next;
   the parent experiment stays open.
+
+## C1 repaired-source analysis, 2026-11-10
+
+- Frozen reader reproduced `c1-repaired/step-3-c1/readings.json` exactly; 280 evidence
+  files match the manifest. Report section "Analysis against the frozen criteria —
+  2026-11-10" appended and republished (R2 credentials from Doppler `manabot/prd`).
+- Health scan of `updates-raw.json` (23 runs, 186 updates): 0 nonfinite, 0 rejected,
+  4 empty-filter minibatch skips (benign).
+- Open for evidence review: whether to spend the remaining ~$4.09 C1 envelope on
+  w160l8/a384l8 packing (crossover still unknown), the A4000, or stop.
