@@ -185,3 +185,34 @@ cases. Focused Ruff and `git diff --check origin/main` passed. Manifest fetch
 verified all 538 existing throughput evidence files without downloading or
 changing them. No paid execution occurred; the prospective freeze and complete
 one-rental CUDA worker/reload proof remain after delivery.
+
+## Gate — 2026-11-09
+
+Comparison: checkout base `cb75f2166` through PR #455 HEAD `910766b93`, plus
+the working tree. Only the admission checker and its existing test module
+change executable behavior. Protocol, artifact manifest, Infrastructure memory
+and scratch changes retain C1 evidence and delivery boundaries.
+
+Validation plan: run `tests/training/test_training_throughput_sizes.py` for
+device parsing, checkpoint reload/rejection and bounded launch smoke; run
+`tests/infra/test_experiment_data_untracked.py` for evidence storage. Then run
+focused Ruff lint/format checks and `git diff --check`. The repository selector
+`.github/ci/select-tests.sh` selects integration only and has no local result
+cache; all three Linux integration groups already passed on this PR HEAD.
+No training/model/native/frontend owner changed, so their broader suites and
+performance measurements are outside this repair. Full CUDA worker/reload
+admission remains an execution proof after delivery and prospective freeze.
+
+Gate results (no executable changes needed):
+
+- `uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py tests/infra/test_experiment_data_untracked.py -q` — 32 passed in 132.96 seconds; no timeout or skipped test.
+- `uv run --locked --extra dev ruff check scripts/check_throughput_admission.py tests/training/test_training_throughput_sizes.py` — passed.
+- `uv run --locked --extra dev ruff format --check scripts/check_throughput_admission.py tests/training/test_training_throughput_sizes.py` — both files already formatted.
+- `git diff --check cb75f2166` — passed.
+- `gh pr view 455 --json state,baseRefName,headRefOid,statusCheckRollup` — open against main at `910766b93`; all selected CI jobs and aggregate passed, unrelated jobs skipped.
+
+The existing PR description matches the repair and its limits. No software
+delivery blocker remains. No paid execution occurred, no background process was
+left running, and the parent experiment remains open. Full CUDA admission is
+deferred to the authorized execution Graph after landing and prospective freeze;
+local tests and green Linux CI do not claim that proof.
