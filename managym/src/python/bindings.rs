@@ -14,6 +14,7 @@ use std::{
 
 #[cfg(feature = "python")]
 use pyo3::{
+    buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
@@ -69,13 +70,13 @@ fn to_numpy_array_f32(
     data: &[f32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("float32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    // Bulk-copy exact f32 bits into Python-owned storage; no scalar boxing.
+    PyBuffer::<f32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -85,13 +86,12 @@ fn to_numpy_array_i32(
     data: &[i32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("int32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    PyBuffer::<i32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -2972,6 +2972,19 @@ impl PyStructuredOfferSet {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PySelectedBranchRuntime {
+    #[cfg(feature = "benchmark")]
+    #[staticmethod]
+    fn start_benchmark() {
+        crate::benchmark_search::start();
+    }
+
+    #[cfg(feature = "benchmark")]
+    #[staticmethod]
+    fn finish_benchmark_json() -> PyResult<String> {
+        serde_json::to_string(&crate::benchmark_search::finish())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     #[new]
     #[pyo3(signature = (match_id, audit=false))]
     fn new(match_id: String, audit: bool) -> PyResult<Self> {
@@ -3075,13 +3088,19 @@ impl PySelectedBranchRuntime {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
 
-        let require_witness = runtime.audit
+        let require_identity = runtime.audit
             || overrides.authority_hash.is_some()
             || overrides.legal_surface_hash.is_some();
-        let current_witness = require_witness
-            .then(|| env.selected_witness())
+        #[cfg(feature = "benchmark")]
+        let identity_timer = crate::benchmark_search::Timer::new("witness_construction");
+        let current_identity = require_identity
+            .then(|| env.selected_identity())
             .transpose()
             .map_err(map_agent_err)?;
+        #[cfg(feature = "benchmark")]
+        drop(identity_timer);
+        #[cfg(feature = "benchmark")]
+        let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let current_revision = env.selected_revision().map_err(map_agent_err)?;
         let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
         let current_offer = current_offers
@@ -3099,14 +3118,14 @@ impl PySelectedBranchRuntime {
         let expected_prompt_id = overrides.prompt_id.unwrap_or(current_revision);
         let expected_revision = overrides.expected_revision.unwrap_or(current_revision);
         let expected_authority_hash = overrides.authority_hash.as_deref().or_else(|| {
-            current_witness
+            current_identity
                 .as_ref()
-                .map(|witness| witness.authority.hash.as_str())
+                .map(|identity| identity.authority.hash.as_str())
         });
         let expected_legal_hash = overrides.legal_surface_hash.as_deref().or_else(|| {
-            current_witness
+            current_identity
                 .as_ref()
-                .map(|witness| witness.legal_surface.hash.as_str())
+                .map(|identity| identity.legal_surface.hash.as_str())
         });
 
         if current_offer.id.0 != expected_offer_id {
@@ -3119,20 +3138,22 @@ impl PySelectedBranchRuntime {
             return Err(PyAgentError::new_err("revision precondition mismatch"));
         }
         if expected_authority_hash.is_some_and(|expected| {
-            current_witness
+            current_identity
                 .as_ref()
-                .is_none_or(|witness| witness.authority.hash != expected)
+                .is_none_or(|identity| identity.authority.hash != expected)
         }) {
             return Err(PyAgentError::new_err("authority precondition mismatch"));
         }
         if expected_legal_hash.is_some_and(|expected| {
-            current_witness
+            current_identity
                 .as_ref()
-                .is_none_or(|witness| witness.legal_surface.hash != expected)
+                .is_none_or(|identity| identity.legal_surface.hash != expected)
         }) {
             return Err(PyAgentError::new_err("legal-surface precondition mismatch"));
         }
 
+        // All caller preconditions are checked above while both locks are held.
+        // Construct the retained Command from those validated values.
         let command_id = format!("search.{}.{}", runtime.match_id, runtime.next_command_id);
         let command = ExperienceCommand {
             command_id: CommandId(command_id),
@@ -3142,27 +3163,12 @@ impl PySelectedBranchRuntime {
             offer_id: ExperienceOfferId(expected_offer_id),
             answers: Vec::new(),
         };
-        if command.match_id.0 != runtime.match_id {
-            return Err(PyAgentError::new_err("match ID precondition mismatch"));
-        }
-        if command.expected_revision.0 != current_revision {
-            return Err(PyAgentError::new_err("revision precondition mismatch"));
-        }
-        if command.prompt_id.0 != current_revision {
-            return Err(PyAgentError::new_err("prompt ID precondition mismatch"));
-        }
-        if command.offer_id.0 != current_offer.id.0 {
-            return Err(PyAgentError::new_err("offer ID precondition mismatch"));
-        }
-        if !command.answers.is_empty() {
-            return Err(PyAgentError::new_err(
-                "search policy Command unexpectedly contains answers",
-            ));
-        }
         let submission = OfferSubmission {
             offer_id: StructuredOfferId(command.offer_id.0),
             answers: Vec::new(),
         };
+        #[cfg(feature = "benchmark")]
+        drop(validation_timer);
         let (observation, reward, terminated, truncated, info, native_actions) = env
             .step_structured(&current_offers, &submission)
             .map_err(map_agent_err)?;
@@ -3177,6 +3183,8 @@ impl PySelectedBranchRuntime {
             Value::Null
         };
 
+        #[cfg(feature = "benchmark")]
+        let audit_timer = crate::benchmark_search::Timer::new("audit_record");
         let apply_sequence = runtime.next_apply_sequence;
         let site_sequence = runtime.applies.increment(site);
         runtime.next_apply_sequence += 1;
@@ -3206,6 +3214,12 @@ impl PySelectedBranchRuntime {
             runtime.tape_mut(site).push(record.clone());
         }
 
+        let record_json = serde_json::to_string(&record)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        #[cfg(feature = "benchmark")]
+        drop(audit_timer);
+        #[cfg(feature = "benchmark")]
+        let _conversion = crate::benchmark_search::Timer::new("returned_python_conversion");
         let py_info = info_dict_to_pydict(py, &info);
         Ok((
             PyObservation::from(observation),
@@ -3213,8 +3227,7 @@ impl PySelectedBranchRuntime {
             terminated,
             truncated,
             py_info.into_any().unbind(),
-            serde_json::to_string(&record)
-                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+            record_json,
         ))
     }
 
@@ -3737,8 +3750,21 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let observation = env.semantic_observation(viewer).map_err(map_agent_err)?;
+        #[cfg(feature = "benchmark")]
+        let _serialization =
+            crate::benchmark_search::Timer::new("semantic/composite_serialization");
         serde_json::to_string(&observation)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Exact semantic viewer-state SHA-256, rebuilt under the Env lock.
+    fn semantic_viewer_state_hash(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.semantic_viewer_state_hash(viewer)
+            .map_err(map_agent_err)
     }
 
     /// Viewer-safe hand-count constraints; never enumerates possible worlds.
@@ -4241,12 +4267,22 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
         action_overflow: &str,
     ) -> PyResult<()> {
+        #[cfg(feature = "benchmark")]
+        let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
         let rust_obs = Observation::from(obs);
+        #[cfg(feature = "benchmark")]
+        drop(conversion_timer);
+        #[cfg(feature = "benchmark")]
+        let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
         let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+        #[cfg(feature = "benchmark")]
+        drop(config_timer);
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
+        #[cfg(feature = "benchmark")]
+        let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
 }
@@ -4567,7 +4603,12 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
 #[cfg(feature = "python")]
 #[pyfunction]
 fn validate_policy_input(obs: &PyObservation, version: u8) -> PyResult<()> {
-    crate::agent::observation_encoder::validate_policy_input(&obs.clone().into(), version)
+    #[cfg(feature = "benchmark")]
+    let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
+    let observation = obs.clone().into();
+    #[cfg(feature = "benchmark")]
+    drop(conversion_timer);
+    crate::agent::observation_encoder::validate_policy_input(&observation, version)
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 

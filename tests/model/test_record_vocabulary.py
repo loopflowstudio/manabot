@@ -141,6 +141,31 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     assert grad[printed].abs().sum() > 0 and grad[modification].abs().sum() > 0
 
 
+@pytest.mark.parametrize("empty", [False, True])
+def test_catalog_fact_inference_preserves_sparse_rows(
+    cards: SemanticCardEncoder, empty: bool
+) -> None:
+    torch.set_num_threads(1)
+    encoder = _fact_encoder()
+    source = int(cards.definition_rows.nonzero()[0])
+    records = RecordEmbeddings(cards, cards.definitions())
+    facts = torch.cat(
+        (_granted_keyword("flying", source), _granted_keyword("trample", source)), 0
+    )
+    facts[1] = facts[1].flip(0)
+    if empty:
+        facts.zero_()
+    objects = torch.randn(2, 2, WIDTH)
+    expected = encoder(facts, objects, records)
+    with torch.inference_mode():
+        actual = encoder(facts, objects, records)
+    torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+    if empty:
+        torch.testing.assert_close(actual, objects)
+    else:
+        assert not torch.allclose(actual[:, 0], objects[:, 0])
+
+
 def test_unknown_ids_fail_instead_of_hashing(cards: SemanticCardEncoder) -> None:
     encoder = _fact_encoder()
     objects = torch.zeros(1, 2, WIDTH)

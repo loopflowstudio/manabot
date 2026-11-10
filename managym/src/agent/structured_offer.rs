@@ -1259,7 +1259,11 @@ impl Game {
         offers: &StructuredOfferSet,
         submission: &OfferSubmission,
     ) -> Result<bool, StructuredOfferError> {
+        #[cfg(feature = "benchmark")]
+        let decode_timer = crate::benchmark_search::Timer::new("command_validation");
         let command = offers.decode(submission)?;
+        #[cfg(feature = "benchmark")]
+        drop(decode_timer);
         self.apply_atomic_command(&command)
     }
 
@@ -1531,6 +1535,8 @@ impl Game {
         &mut self,
         command: &AtomicCommand,
     ) -> Result<bool, StructuredOfferError> {
+        #[cfg(feature = "benchmark")]
+        let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let AtomicCommand::SearchAction { binding, action } = command else {
             return Err(StructuredOfferError::WrongDecision);
         };
@@ -1555,6 +1561,10 @@ impl Game {
             ));
         }
 
+        #[cfg(feature = "benchmark")]
+        drop(validation_timer);
+        #[cfg(feature = "benchmark")]
+        let _rules_timer = crate::benchmark_search::Timer::new("rules_execution");
         let action = action.clone();
         self.current_action_space.take();
         self.execute_action(&action).unwrap_or_else(|error| {
