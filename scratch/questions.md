@@ -1,834 +1,218 @@
-# MTG-268 — batched local-update rollouts
+# b015d5 — remaining decisions and evidence
+
+Historical step-1/2/3 design, implementation, reviews and execution notes are at
+`c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
+run projections, bills and cleanup receipts remain published in
+`experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
+run IDs and dated direction; no historical result is being rewritten.
+
+## Current authority and boundaries
+
+Jack Heart replied "keep going" to the recommendation "I recommend repairing
+BF16, lengthening the packed cells, and completing the missing measurements."
+Comment 079b3f46 authorizes the bounded continuation. Comment 8cb4c5af records
+C1 review against that authority, not a new approval. The owning protocol is
+`experiments/protocols/training-throughput-b015d5-v1.md`, C1; the implementation
+handoff is retained at `c2c813a47:scratch/step-3-continuation.md`. The protocol's
+dated C1 device-validator repair status distinguishes implemented software,
+offline reload evidence and remaining delivery/freeze/CUDA admission.
+
+Keep effective hashed v6 / 512 facts and the Elemental learning recipe. c5fba4
+owns its shared-effect catalog repair; do not infer TLA catalog speed from the
+hashed ladder. Exact quotes and external diagnostic findings remain in
+`7be759c04:scratch/vocabulary-performance.md`.
+
+The first pass had 11 valid solo cells, seven insufficient-overlap packed cells,
+six BF16 startup failures and no a384l8 measurements. Original Float/Half error:
+`index_copy_(): self and source expected to have the same dtype, but got (self)
+Float and (source) Half`. CPU autocast had not covered CUDA's recurrent behavior.
+The repair was delivered here for ed2300 in PR #451, with no second checkout.
+Integrated software review is recorded in comment e98993af.
+
+## Execution status and remaining work
+
+- Source/world/input freeze is recorded in the owning protocol's C1 receipt
+  (2026-11-09), at integrated PR #451 commit 58eb3c729. All 87 declarations
+  passed isolated-client discovery and current-world admission; 20 targeted
+  checks passed. The catalog digest changed while the roster and recipe stayed
+  unchanged. Original source cb722dc8c results remain separate, with fresh C1
+  controls required. On 2026-11-09 the CUDA regression passed and the w160l8
+  BF16 worker completed two updates, but admission rejected `cuda:0` against
+  literal `cuda` before checkpoint reload. The device-validator repair is now
+  implemented and verified offline; delivery and a new freeze/admission remain
+  required before opening other rentals.
+- Billing was refreshed before C1: prior conservative bounds $1.917 step 3 /
+  $4.012 overall. C1 adds at most $0.133502 pending billing, for inclusive
+  bounds $2.050474 / $4.145347. Original $10/$50 caps and the C1 15 GPU-hour /
+  1,600-update ceilings remain; C1 used about 0.206 GPU-hours and two updates.
+  No rental liability remains beyond this completed window.
+- Same isolated client/home as the protocol. Original provider DELETE/GET 429s
+  required explicit provider deletion confirmation; all three original pods
+  were absent at 13:19 UTC on 2026-11-08. No controller was left running.
+- Original TF32 clip-fraction shift was 3.45x the float32 repeat difference;
+  finite metrics alone did not establish equivalence. Packing crossover remains
+  unknown. Step 2's accepted recipe is four seeds/one producer on A4000;
+  L4 recommendation remains an inference until these measurements.
+
+## Reversible implementation choices, 2026-11-08
+
+- Keep the definition table in embedding-weight dtype, including empty rows;
+  cast recurrent outputs at the join. This is a float32 no-op with gradients.
+- C1 uses the existing launch owner and distinct `c1-...-u8/u12` keys. An
+  `-overlap` key is a conditional whole-cell retry, not automatic permission to
+  rerun or select the fastest cell. Source freeze and cost admission are external
+  execution checks; discovery never rents. Preserve legacy four-update jobs.
+- The maintained C1 reader lives under `experiments/`; historical artifact
+  readers stay immutable. Explicit per-cell dispositions and rental bills are
+  required; steady-state cost never stands in for the whole rental bill.
+- Diagnostics take one retained 256-row observation fixture. They instrument
+  fixed host recording and learner-style device/host selection/transfer only,
+  one child with a 120-second deadline each. They do not reproduce a complete
+  update or prove the cause of the original recording stall. No speculative
+  performance repair or policy/collector/learning behavior change is included.
+
+## Older unresolved findings
+
+- The schema-7 retained replay fixture in
+  `test_resource_limit_receipt_replays_its_retained_encoding_boundary` differs
+  from runtime schema 8 (`binding_mismatch`); no fixture rewrite is authorized.
+- Original step-1 recording stall and step-2 M2 seed-26214 hang remain unexplained.
+  Step-1 RSS near 61.05 GB was consistent with the later measured 62 GB pod
+  allowance, not proof of memory-pressure cause. Cgroup memory admission was
+  repaired in step 2. Etude 429 cleanup, placement lease failures and absent
+  `etude-result.json` blobs remain historical launcher findings; callback results
+  were recovered from attempt records, so no missing callback is inferred.
+- Infrastructure memory now retains the host-confound, CUDA-admission and
+  overlap lessons. The ~50k-row launch-cost diagnosis remains specific to its
+  measured model/input; it is not a conclusion for all sizes.
+- The earlier $100/336h planner sketch incorrectly said dollars bind at
+  $.256/hour; 336h costs about $86, so hours bind for one machine. The protocol
+  sketch now agrees with the retained report; dollars limit the machine count.
+- Frozen Elemental recipe omitted input version but resolved to v6; investigate
+  legacy loading separately if needed. C1 pins resolved v6 explicitly by admission.
+
+## Main sync — 2026-11-08
+
+Assumption (reversible): keep this Task's b015d5 continuation notes as the
+active scratch context. Main's separate 5da5f4 study decisions remain at
+`e0832f67fc66a1f2033bafefdb4598e394fd5ca1:scratch/questions.md`; its study
+landing authority and budget do not replace this experiment's boundaries.
+
+## C1 execution, 2026-11-09
+
+- Existing C1 work was absent in the isolated Etude database; provider inventory
+  was empty. The original seven rentals all had deletion records. Refreshed
+  posted bills total $3.804; reserving every unposted second through deletion at
+  each pod's maximum observed all-in rate, plus one minute for rounding, bounds
+  prior step 3 at $1.917 and the experiment at $4.012. Exact rows are retained
+  under `step-3-c1/preflight/` in the artifact evidence directory.
+- Reversible execution choice: use a separate setup-only Etude job with the
+  frozen training job's source/setup/config and a read-only identity command.
+  This validates the remote Linux build before queuing the unchanged scientific
+  job; it initializes one native match and plays no games. Its command and run
+  receipt are retained separately from the 87 declared cells.
+- A40 rental `b015d5-a40-0e2b61730e5f` / pod `iaimonawexhw5a` began at
+  22:34:22 UTC, initially bounded to 03:34:22 UTC on November 10. Quote/provider rate
+  $0.59/hour, 9 vCPUs, 50 GB; reserve $3.05 including cleanup within the $3.30
+  line. Identity job `442a11544648` passed all frozen hashes on real CUDA 12.8 /
+  Torch 2.10.0. Admission `3a1380d94b69` passed both CUDA test cases and
+  completed 2 updates / 420 optimizer steps / 514 games / 107,129 learner
+  decisions, with no nonfinite/rejected steps or discarded ledger samples.
+  It then failed at the validator's exact device-name comparison, before reload.
+  The unchanged receipt reproduces the error on CPU; the prior synthetic test
+  used `actual_device="cuda"`, missing the real `cuda:0` form.
+- Etude termination was initially refused by the controller's lease. After
+  stopping the controller, termination succeeded at 22:46:44 UTC; provider
+  absence and no active attempts were verified. No execution process remains.
+  All 87 cell dispositions and export/game accounting are retained under
+  `step-3-c1/`; private game ledgers and checkpoints stay in the Etude store.
+- Comment d85854eb routes the device-validator repair through the existing
+  software Graph. New freeze and full worker/reload admission follow delivery;
+  no paid execution belongs to this implementation step. The parent experiment
+  remains open.
+
+## C1 device-validator repair — 2026-11-09
+
+Implemented: parse `stage.actual_device` with `torch.device` and admit its CUDA
+type. The real-checkpoint cases accept `cuda:0`, `cuda` and
+`cuda:1`, rejects CPU/MPS/meta and missing/malformed device names, and retains
+failed-run, numerical-failure, missing/zero optimizer-step and corrupt-byte
+rejection. Each parametrized case starts with a fresh receipt and checkpoint,
+so rejection cases need no reset of earlier mutations. No training, launch,
+checkpoint or scientific-recipe owner changed.
+
+Offline audit of unchanged run `3a1380d94b69` passed on 2026-11-09. Its receipt
+has one completed BF16/256-stream stage, seed 26400, two updates, 420 optimizer
+steps and no numerical failure. Retrieved the original 30,398,287-byte raw
+checkpoint read-only from Etude, SHA-256
+`c4a4cae0600cf4e169d4cb0e11405b24cde426822967b475597e6c030516b5a1`.
+The actual `check` entry point passed artifact mapping/hash/size, ordinary
+world/input/architecture reload, effective hashed v6 and finite-weight checks.
+The receipt retains v6/512 configuration. Temporary local copies were removed;
+no historical bytes, run status or artifact manifest changed. The initial fetch
+lacked R2 environment variables; the protocol's existing manabot/prd Doppler
+context supplied them without auth changes.
+
+The implementation check passed 16 admission cases plus focused Ruff and
+`git diff --check`; the protocol records the post-sync check. Gate owns affected
+suites; execution owns the future CUDA proof.
+
+Local receipt replay does not retroactively admit the failed execution or
+replace the future CUDA worker/reload proof. Gate/delivery, prospective source
+freeze/amendment and full admission on one rental remain later Graph steps.
+No new paid execution occurred; C1 consumption and inclusive cost bounds above
+remain unchanged. The parent experiment remains open.
 
 ## Main sync resolution — 2026-11-09
 
-Assumption (reversible): retain MTG-268's design, measurements and open
-questions as this checkout's scratch context. Main's unrelated MTG-252 and
-continuation notes remain verbatim at
-`add3acbe44790acf891ba96b1541b49eb9133124:scratch/questions.md`.
-Combine the CPU attention compaction regression with main's readout coverage;
-include `attention_readout` in dense/inference parity at both attention depths.
-Validate only that bounded tensor regression after continuing the owned sync;
-full games, training and broader checks remain with gate and CI.
-
-## Gate result — 2026-11-09
-
-Ready for delivery's required CI, not a claim that all checks have passed.
-Reviewed the complete production/test diff against the preserved design and
-package guidance. No additional production change was needed; the reviewed
-Rollout/RolloutReceipt split remains intact. Added both local-update suites and
-Command-evidence tests to CI core, which previously omitted them. Updated the
-validation guide and linked a lasting measurement summary from manabot/README.md.
-`docs/benchmarks/local-update.html` is byte-identical to the complete historical
-report (SHA-256 faef56c69550eb92f713d571a58923215ec315cda12ee92bf5280a7e5325d78a).
-`scratch-evidence/` under `.cache/mtg-268/gate/` also preserves scratch's raw
-profiles, error journals and wrapper before delivery cleanup. Existing scratch
-files remain in place. No PR copy existed, so delivery still owns its generation.
-
-Fresh validation: 171 passed, six CUDA skips, five deliberately excluded cases;
-CI core's expanded exact invocation collects 1,300 tests. All-target/all-feature
-Clippy passes with one worker. Ruff passes on all 15 changed production/test/
-stub Python files without edits; Cargo format and diff checks pass. Ruff initially
-also formatted the historical scratch profiler wrapper; restored its exact HEAD
-bytes rather than alter frozen measurement evidence. No production file changed
-in this gate, so earlier review parity and the 88 selected test results remain
-reusable (counts overlap today's suite; do not sum them). Fourteen writer source/
-fixture hashes and the installed ordinary runtime match the retained validation.
-Reuse the eleven exact-byte/SHA/BLAKE3 cases, five debug contracts and prior
-1,281 encoder comparisons. No native rebuild or timing rerun was necessary.
-
-Selection deviation: five existing value-aggregation cases invoke
-`SeatRoutedCollector.collect(agent, 1)` with default complete-game closure; they
-were mistakenly included despite the laptop restriction. They finished within
-the 7.80-second focused run before this was recognized. Do not describe that run
-as exclusively fixed-position, or repeat those cases locally. The validation
-guide now explicitly calls out this default. No training optimizer/executor or
-evaluation suite was launched; all test processes exited. No server/watcher was
-started, and no process from this gate remains running.
-
-Commands and results (logs under `.cache/mtg-268/gate/`):
-
-- `git diff --no-renames --name-only -z 51d10f8 | bash .github/ci/select-tests.sh` — all CI jobs selected by native changes.
-- `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/model/test_value_aggregation.py tests/model/test_agent.py tests/model/test_layer_input.py tests/model/test_record_vocabulary.py tests/model/test_state_records.py tests/model/test_shared_effects.py tests/sim/test_search_command_evidence.py tests/infra/test_ci_selection.py tests/infra/test_release.py -k 'not test_v8_recipe_collector_and_evaluation_select_saved_input and not test_treatment_trains_with_existing_executor and not test_shared_effect_policy_uses_ordinary_learner_and_export' -q` — 171 passed, 6 CUDA skips, 5 deselected, 7.80 s; `focused-tests.log`.
-- `bash -eo pipefail .cache/mtg-268/gate/collect.sh` — exact expanded CI core invocation plus `--collect-only -q`, 1,300 collected, 4.63 s; `collection.log` (wrapper invoked through uv).
-- `PYO3_PYTHON="$PWD/.venv/bin/python" CARGO_BUILD_JOBS=1 cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -- -D warnings` — passed, 39.00 s; `clippy.log`.
-- `uv run --extra dev ruff check --fix <changed Python/stub paths>` — passed; full literal command in `ruff.log`.
-- `uv run --extra dev ruff format <changed Python/stub paths>` — production/test/stub files unchanged; historical scratch wrapper restoration described above; full command in `ruff.log`.
-- `cargo fmt --manifest-path managym/Cargo.toml` then `cargo fmt --manifest-path managym/Cargo.toml --check` — passed, Rust files unchanged.
-- `git diff --check` — passed.
-- `uv run python` hash verification against `borrowed-json/candidate-source.json` — all 14 hashes and runtime match; `result.json` retains current Python hashes and report/runtime identities.
-
-CI deferrals, still required before merge: complete local-update suites; model
-inference and the excluded layer/state/shared-effect training cases; active
-training, observation, action-cutoff and full native-buffer capacity coverage;
-complete debug Rust suite (including search-state and pending-entry contracts);
-Engine Budget and all other selected required CI jobs. These are not local passes.
-The native runtime remains bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0;
-HEAD remains afcee56b996175130c057cb8c01656f7b79078d8 plus the reviewed split and
-gate workflow/docs edits. No publication, merge or Task completion in this step.
-
-Performance conclusions are unchanged: pre-writer equal-work 16-world speedups
-3.41×/3.45× and the separate writer A/B reductions 24.93%/23.93% are retained.
-Interrupted final scaling, original near-singleton goal, representative trained/
-terminal positions and MTG-183/w13 admission remain unresolved. Shipping direction
-below authorizes this implementation with those limits; no fresh experiment or
-acceptance reinterpretation was introduced.
-
-## Gate plan — 2026-11-09
-
-Reversible choices: keep the production implementation unchanged unless focused
-validation finds a defect; use the existing CI core job for game/training tests
-that cannot run on this laptop. Add both local-update suites and Command-evidence
-tests to that job: they were absent, so merely deferring them would skip them.
-Preserve the complete measurement report in docs/benchmarks before scratch cleanup.
-
-Diff-based validation: model CPU padding/fact changes reach value aggregation,
-agent, layer input, record vocabulary, state-record and shared-effect tests.
-Run their bounded fixed-position/tensor cases locally; defer actual collector,
-training and evaluation cases, inference collection, active-training, observation,
-action-cutoff and full capacity suites to CI core. Native writer/Command changes
-reuse the unchanged ordinary runtime and eleven exact-byte/hash fixtures plus
-five debug contracts; full debug suite and Engine Budget remain CI requirements.
-Run bounded Command evidence locally. Reuse the reviewed split's 88-test and
-fixed-position parity results; rerun CI collection because its invocation changes,
-and CI selection/release tests because the workflow changes. Finish with changed
-Python Ruff auto-fix/format, Cargo fmt, all-target/all-feature Clippy (one worker),
-and diff whitespace checks. No new timing study, games or training locally.
-
-## Shipping direction (2026-11-09)
-
-Jack Heart, after the rollout-model fix and its checks:
-> ok lg2m ship it
-
-Ship this implementation and reviewed model split. This supersedes earlier
-no-shipping instructions for the current work. The stopped code Graph completed
-implementation iterations; the two optimization passes and review fix completed
-in this conversation. Use `deliver` (gate then waited landing), not another
-implementation/optimization loop. Preserve the historical measurements and their
-limits in PR copy: equal-work speedups and the writer A/B are distinct studies;
-the original near-singleton target is not established. Do not claim that target
-passed or start another measurement campaign to reinterpret this shipping request.
-Gate owns the remaining checks listed below. Reuse the reviewed fix's valid
-88-test/collection/parity results where inputs match. Full games/evals/native
-suite stay off the laptop; use the Mac mini or CI for those, with bounded workers,
-one build at a time, and no induced load. Follow CI through merge, verify the
-delivered source/outcome, and confirm Task completion. No Co-Authored tags.
-
-## Review direction — rollout model (2026-11-09)
-
-Jack Heart, reviewing `class _Rollout:`:
-> I generally consider _ classes a code smell that the data model is not propertly split up
-
-Follow-up direction:
-> ok. fix that here.
-
-Implemented in this checkout: `rollout.py::Rollout` owns each branch's execution
-state, independent RNG, Command advancement and result construction.
-`rollout_receipt.py::RolloutReceipt` owns the immutable serialized result,
-without importing execution or the teacher. `LocalUpdateTeacher` retains batch
-scheduling/inference, world/root allocation and the regularized update. The
-source-identity hash now covers both new owners; its regression changes each
-owner independently. Receipt fields, seed order and the benchmark oracle stay
-unchanged. The walkthrough now labels this uncommitted review fix separately
-from its pinned base/head excerpts.
-
-Validation: 88 selected tests pass (64 source-identity, scripted terminal/sign/
-truncation, update-rule and CI/release checks; 24 bounded batch parity, deadline,
-legal-support and capacity checks). CI core's exact invocation collects 1,257
-tests successfully; both local-update test modules also collect. Changed-file
-Ruff lint/format and `git diff --check` pass.
-The unchanged fixed-position harness compares pre-refactor `afcee56b996175130c057cb8c01656f7b79078d8`
-with this working tree at openings 42/43, depth 20, one world: all receipt
-comparisons pass, with zero base/value/target differences (4/5 rollouts and
-80/100 Commands respectively). Its ordinary native runtime is unchanged.
-Evidence: `.cache/mtg-268/rollout-model/`. These incidental timings are not a
-performance study or an update to the kept writer result. No games, training,
-evaluation, Graph launch, publication or completion. The broader gate and
-original performance acceptance below remain open.
-
-## Second optimize step 9 — final scaling interrupted (2026-11-09)
-
-**Inconclusive.** Singleton preflight passed (2 live/2 saved receipt cells,
-81 exact encodings). Two of five primary-grid invocations completed; unrelated
-Cargo transport tests restarted during the second. Only one invocation has no
-observed overlap. The runner retained both outputs and stopped before grid-3;
-3 grid and all 5 eight-world invocations are missing, not zero. No retry or
-replacement. A new complete bounded series needs a no-test/build host window;
-this interrupted series must remain separate. No new optimization is selected.
-
-The observed-clean run's sixteen-world batched times are 0.86304 / 1.00167 s
-at 42/43, equal-work ratios 4.326× / 3.852×, and same-runtime sequential-singleton
-ratios 4.401× / 3.794× (n=1, diagnostics only). Full n=2 median/ranges and every
-sample, including the overlapping invocation, are in scratch/measure.html and
-.cache/mtg-268/final-measurement-2/report.md. No five-sample scaling claim follows.
-The writer remains kept on its **original** five-pair 24.93% / 23.93% result;
-this is neither that A/B trial nor a historical-engine comparison.
-
-Both benchmark processes exited zero with empty stderr: 12 live and 12 saved
-full receipt comparisons passed, max base/value/target error 1.0242171e-10 /
-4.09781933e-8 / 3.13064846e-9 at unchanged atol 1e-6 / rtol 1e-5. Independent
-post-stop JSON validation confirms both identities/work counts. One orchestrator
-exit 1 records host overlap, not a benchmark failure. Per side: 378 timed
-rollouts / 7,560 Commands, plus 128 profiled rollouts / 2,560 Commands. Both
-42/16 profiles retain 21 forwards and 1,280 Commands. No latency/profile mixing.
-The clean profile has Command/audit 0.25093 s, network 0.24788 s, encoding
-0.15780 s, direct hashing 0.08331 s and snapshots 0.00696 s; complete snapshot
-removal has an optimistic 1.0094× profile ceiling, not ordinary-time savings.
-
-Final source afcee56b996175130c057cb8c01656f7b79078d8; runtime
-bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0.
-Fresh identity passed: w17/catalog/checkpoint, vector API, ordinary wheel,
-world=None. All 25 step-8 frozen hashes match. Reuse eleven independent byte/
-SHA/BLAKE3 cases, five debug contracts, six live/saved cells and 1,281 exact
-encodings with frozen source/runtime; no rebuild or native-test repetition.
-Both paths use this runtime; sequential Python owners remain 841b1c50c.
-
-Full evidence, exact direction, 530 source hashes, 167 reused-artifact hashes,
-all outputs/errors, process snapshots and original notes/report are under
-.cache/mtg-268/final-measurement-2/. Earlier rows/results are preserved.
-Reversible notes choice: replace the superseded step-8 plan here with this
-current status; its full text remains in before-questions.md in that directory.
-The upstream dtype join is outside the world=None benchmark; original writer
-compatibility evidence survives the sync. Rejected trials stay rejected.
-
-All started measurement processes finished; no server/watcher started, no
-other work stopped. No Graph, shipping or Task completion. Final scaling,
-the broader gate listed below, original “near” definition, trained/terminal
-positions and MTG-183/w13 admission remain open.
-
-## Main sync — 2026-11-09
-
-Assumption (reversible): retain MTG-268's branch-specific design, measurements
-and open acceptance questions as this checkout's active scratch context.
-Main's unrelated b015d5 continuation notes remain recoverable verbatim at
-`51d10f8828b2018610d1bd76398d905712ef1a93:scratch/questions.md`;
-its experiment authority and budgets do not apply to MTG-268.
-Only this notes conflict required manual resolution. Incoming source changes
-include semantic-card recurrent-output dtype normalization; final measurement
-must reconcile the merged Python source with the retained baseline. Native
-source and the installed extension are unchanged by this sync.
-
-## Second optimize step 6 — compress (2026-11-09)
-
-Notes-only reduction. Reviewed the branch diff, retained design, writer/decoder,
-Command and semantic-hash consumers, batched/model paths, regression coverage,
-configuration and user docs. No worthwhile production simplification remains
-within this cut: the explicit field adapters make lexical order, omission and
-integer casts visible; a generic framework or broader derived-record rewrite
-would add risk without simplifying the contract. Existing production, tests,
-fixtures, harness, runtime and every HTML measurement row remain unchanged.
-No build, test or timing rerun is needed for this notes-only edit.
-
-Current step direction, verbatim:
-> Second optimize checklist step6. Step5 ADVANCE recorded at top scratch/questions.md. Keep borrowed canonical writer: five alternating pairs showed 24.93%/23.93% lower 16-world latency with disjoint ranges and exact compatibility. Preserve one writer owner and narrow sorted-derived-record boundaries; rejected dtype and five-array trials remain rejected. Review code for worthwhile simplification without altering canonical bytes or re-opening optimization. Curate oversized repeated notes, preserving exact user direction, every historical measurement row/result, failed fixture correction, baseline provenance, trial/revert history and artifact locations. Full originals must remain recoverable. If production changes, run relevant exact-byte/debug checks and record rebuild needs for final measure; otherwise avoid redundant tests. Keep existing work. No Graph, publication, shipping or Task completion. Return source/runtime identity and final-measurement requirements.
-
-Reversible curation choice: condense superseded implementation/protocol plans
-and repeated identities; keep measurement sections and contrary findings.
-Before editing, moved the complete 51,321-byte original to
-`.cache/mtg-268/compress-step6/before-questions.md` (SHA-256
-`30fd226008a7098fba69333703ae4a806c0b4733ea1f3e0da511006771ed0861`).
-`before.json` records its hash plus all 50 other branch-file hashes and the
-installed runtime. Earlier originals remain at the historical paths below.
-`scratch/measure.html` is untouched, preserving every historical row/result.
-
-Source/runtime still match the kept measurement: HEAD `0bbb055127a79aa0e1bde4f6aa36c792dab61317`
-plus candidate patch `c9bbc1e8efeeff84c4f5786ffb6ae851136903e1754b61cd285987d7b9b8c03f`;
-installed runtime `bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0`.
-All 14 frozen candidate source/fixture hashes match. No runtime replacement or
-rebuild was performed or made necessary by compression.
-
-Step 9 above now owns post-sync measurement status; the full step-8 plan is archived. This compression record describes its historical source state.
-
-Validation: `git diff --check` passes; SHA-256 preservation checks confirm all
-50 other branch files, the runtime and every Markdown table row unchanged;
-`lf context` is below both configured limits. No tests/builds/timings rerun.
-
-## Second optimize step 5 — advance with borrowed writer (2026-11-09)
-
-Decision: **advance**. Read every current/historical HTML table row, the complete
-borrowed-writer result, and the retained writer plus its Command/hash call sites.
-Keep the 24.93% / 23.93% reduction: both openings pass the declared >=5% and
-disjoint-range rule with exact receipt/byte/hash compatibility. The smaller
-array-only trial and dtype trial stay rejected, with their evidence retained.
-Command/audit and network now cost about the same; no newly measured removable
-substep supports another comparable bounded change. Snapshot/allocation remain
-small. Extending borrowed serialization to derived nested records is the best
-remaining idea, but its removable fraction is unmeasured and it expands the
-ordering/omission contract; do not select it without new attribution. No witness
-caching, hash substitution or audit reduction is justified. Finish compress,
-sync, realign and final measurement; broader gate and original acceptance are
-separate, with no shipping or Task completion authorization.
-
-## Second optimize step 4 — borrowed JSON measurement (2026-11-09)
-
-**Better; keep the candidate.** Median sixteen-world decision latency falls
-24.93% at opening 42 and 23.93% at opening 43. Both candidate maxima are below
-their baseline minima, and all correctness/work/identity checks pass. The
-predeclared >=5% reduction AND disjoint-range rule passes at both openings.
-This result exceeds the provisional 8–15% hypothesis; that estimate was not
-an acceptance ceiling. Original near-singleton and trained-policy acceptance
-remain unmet, and the full delivery gate remains separate.
-
-Claim tested: “Borrowed canonical JSON emission reduces sixteen-world decision
-latency by 8–15% at openings 42 and 43, with unchanged behavior.”
-The supported claim is 24.93% / 23.93% lower median latency on these two fixed
-initialized-policy openings. These are whole `teacher.search` latencies, not
-serializer microbenchmarks. Only `after_seconds` enters this comparison.
-
-Seconds per decision, median [minimum, maximum], n=5 per binary per opening:
-
-| Opening | Baseline seconds | Candidate seconds | Median reduction | A/B median ratio |
-| --- | --- | --- | --- | --- |
-| 42 | 0.97506 [0.95206, 0.97882] | 0.73197 [0.71286, 0.75503] | 24.93% | 1.33211× |
-| 43 | 1.20364 [1.19115, 1.23144] | 0.91563 [0.89085, 0.92580] | 23.93% | 1.31454× |
-
-Savings are 0.24309 s / 0.28801 s per decision. Baseline is the immediate kept
-batched implementation at `0bbb055127a79aa0e1bde4f6aa36c792dab61317`, not the
-historical sequential implementation. No prior times or gains are pooled here.
-
-### Protocol and actual work
-
-Five adjacent serial pairs ran AB/BA/AB/BA/AB. Every invocation used a fresh
-process after a hash-verified atomic binary swap, with the frozen command:
-`uv run --extra dev python scripts/bench_local_update.py --worlds 16 --position-seeds 42 43 --native-reference .cache/mtg-268/merged-reference`.
-All ten samples, stdout, stderr, timestamps and exit codes are retained;
-none was retried, replaced or dropped. All exited zero, all measurement stderr
-files are empty, and there are zero receipt/work/identity failures, deadline
-rejections or missing samples. No builds, tests or other benchmarks overlapped
-timing; no artificial load, games/evals, Graph launch, publication or shipping.
-
-Both preserved builds are ordinary release wheels with only the Python Cargo
-feature, no native benchmark instrumentation and no serde_json preserve_order.
-They were built and verified before this series; their frozen build/install
-journals are retained rather than rebuilding during measurement. Same local
-Apple M4 Max, macOS 26.0.1, Python 3.12.12, Torch 2.10.0 and locked environment;
-same warmed initialized 64-wide/two-layer v6 scalar policy, openings 42/43,
-search seed 17, depth 20, sixteen worlds, one Torch CPU/inter-op thread and
-OMP/OpenBLAS/MKL each one. The fixed harness runs sequential control then
-batched search, with separate profiles after opening 42. Setup, warming,
-swaps, comparisons and profiles are outside each latency region.
-
-Each timed search executes 64 rollouts / 1,280 Commands at 42 and 80 / 1,600
-at 43, all at depth 20. Per binary: 720 timed batched rollouts / 14,400 Commands,
-the same timed sequential-control work, plus 640 separate profiled rollouts /
-12,800 Commands. Total series work: 4,160 rollouts / 83,200 Commands. Every
-batched opening-42 profile has 21 forwards and 1,280 Commands. Earlier retained
-1/4/16-world runs establish workload sensitivity; no scaling grid was repeated.
-
-Twenty live and twenty saved full receipt comparisons pass. Commands, canonical
-hashes, audits, legal support, terminal flags, sampling and policy/world identity
-match exactly under the unchanged comparator's existing runtime/source/time
-exceptions and prediction tolerances (atol 1e-6, rtol 1e-5). Maximum absolute
-base/value/target differences are 1.0242171000207634e-10 /
-4.0978193283081055e-08 / 1.8624171926884259e-09. Numeric prediction equality is
-toleranced, not claimed bitwise. No new exceptions were added.
-
-The implementation handoff retains eleven independently baseline-produced exact
-byte/SHA-256/BLAKE3 fixtures, five debug contracts, six live/saved receipt pairs
-and 1,281 exact native/Python encodings. After the final swap, a fresh process
-again passes all eleven exact-byte/SHA-256 fixtures and verifies the installed
-runtime, uninstrumented build, w17/catalog, vector API and checkpoint identity.
-These final checks contain no latency samples.
-
-### Mechanism and limits
-
-Separate ordinary-wheel profiles at opening 42/16, seconds per search,
-median [minimum, maximum], n=5 per binary; these are not decision latency:
-
-| Bucket | Baseline profile seconds | Candidate profile seconds |
-| --- | --- | --- |
-| native_step_and_audit | 0.40358 [0.39611, 0.41982] | 0.24599 [0.24254, 0.24865] |
-| semantic_direct_hash | 0.15898 [0.15579, 0.16236] | 0.08189 [0.08062, 0.08289] |
-| network | 0.24509 [0.23976, 0.25466] | 0.24235 [0.23529, 0.24324] |
-| observation_encoding | 0.15772 [0.15716, 0.16646] | 0.15527 [0.15205, 0.15887] |
-| session_snapshot | 0.00702 [0.00692, 0.00842] | 0.00679 [0.00653, 0.00712] |
-
-Command/audit falls 39.05% and semantic direct hash 48.49%, with disjoint
-ranges for both. Network and encoding ranges overlap. This localizes the change
-to the two consumers of `Observation::to_json`: `ViewerProjectionWitness::new`
-in `search_state.rs`, and `Game::semantic_viewer_input` in `decision.rs`.
-The single borrowed writer in `observation_json.rs` removes handwritten Value
-tree construction, repeated traversal and destruction, retaining sorted-Value
-boundaries for derived records. The profile agrees with that mechanism; it
-does not isolate each allocation or prove every saved millisecond's cause.
-
-The earlier 21.99–23.75% materialization fraction yields an impossible
-full-removal bound of 1/(1−0.2375) = 1.312× **for that instrumented category
-and denominator**. It excludes stringify (another 10.88–11.88%) and some
-unseparated cleanup; the borrowed writer also replaces final Value traversal.
-It is not a strict bound on this broader rewrite or on ordinary-wheel latency.
-The observed 1.332× / 1.315× does not justify subtracting instrumented seconds
-from ordinary times. No new internal-timer campaign ran, and the fraction of
-the gain due to construction versus traversal/cleanup remains unmeasured.
-
-Command/audit (0.24599 s) and network (0.24235 s) are now similar in the
-candidate's separate profile, with encoding next (0.15527 s). Snapshots remain
-small (0.00679 s). These are profile attribution, not additive ordinary savings.
-Five observations are not confidence intervals; alternating five pairs is not
-fully order-balanced. Results cover one host and two full-depth opening searches,
-not terminal-heavy positions, trained strength, other capacities or checkpoints.
-The original “near today's one-world cost” requirement is not established by
-this series. No new workload or broader optimization campaign was started.
-
-### All paired observations
-
-Positive reduction means candidate time is lower. JSON retains full precision.
-
-| Pair | Order | Opening | Baseline seconds | Candidate seconds | Reduction |
-| --- | --- | --- | --- | --- | --- |
-| 1 | AB | 42 | 0.975062750 | 0.742224833 | +23.879% |
-| 1 | AB | 43 | 1.231443333 | 0.915634583 | +25.645% |
-| 2 | BA | 42 | 0.978821292 | 0.731967917 | +25.219% |
-| 2 | BA | 43 | 1.203099958 | 0.922797958 | +23.298% |
-| 3 | AB | 42 | 0.975891708 | 0.755026959 | +22.632% |
-| 3 | AB | 43 | 1.203642208 | 0.890850417 | +25.987% |
-| 4 | BA | 42 | 0.952060000 | 0.712864459 | +25.124% |
-| 4 | BA | 43 | 1.210987084 | 0.893580500 | +26.211% |
-| 5 | AB | 42 | 0.963193167 | 0.722468209 | +24.992% |
-| 5 | AB | 43 | 1.191153708 | 0.925798625 | +22.277% |
-
-### Kept source and runtime for step 5
-
-Source is unchanged from the frozen candidate: base
-`0bbb055127a79aa0e1bde4f6aa36c792dab61317` plus uncommitted patch SHA-256
-`c9bbc1e8efeeff84c4f5786ffb6ae851136903e1754b61cd285987d7b9b8c03f`.
-Kept installed runtime B:
-`bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0`.
-Preserved baseline runtime A:
-`292cc8e190d8f29e6945ee587ecf1975e786e5517fd9da8d0c9bc58936d52881`.
-Candidate `observation.rs` SHA-256:
-`9d3f817f66fc6c31a3ccfe39c16f03b7240f7fa64ea44748ba68a7c88bd3ab80`.
-Candidate `observation_json.rs` SHA-256:
-`ac80ca5a5f2014102778e5074dbdac988b114479160559160de11723afd2090f`.
-Frozen harness: `3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a`.
-Checkpoint: `57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb`.
-World w17 catalog: `0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f`.
-
-All samples and journals, pre-series notes/report, summary, reporting scripts,
-this report and final artifact hashes are in
-`.cache/mtg-268/borrowed-json/measurement/`. The parent retains both binaries,
-candidate wheel/patch, fixtures, source manifest, build/verification journals and
-the original immutable `handoff.json`; `installations.jsonl` is append-only.
-`step4-kept-identity` and `step4-kept-bytes` journals record final verification.
-`measurement/disposition.json` supersedes the original handoff's unmeasured
-status. All historical HTML rows and earlier implementation/evidence remain.
-No server, watcher or measurement child remains running. No commit, shipping or
-Task completion occurs here; step 5 receives the kept candidate and this result.
-
-
-## Borrowed JSON implementation — frozen handoff (2026-11-09)
-
-Historical pre-measurement handoff; verification below remains evidence.
-Performance was subsequently measured and kept as recorded above. One borrowed
-canonical writer in `observation_json` owns `Observation::to_json`. Handwritten
-root/turn/action/card/mana/permission/stack/target/event fields stream directly
-in lexical order, with no intermediate Value trees or collected arrays. The
-existing derived records retain narrow sorted-Value boundaries. No caller,
-hash algorithm, schema, projection, audit or dependency changed.
-
-Reversible coverage choice: the ten old fixtures were verified against the
-retained hashes before restoration. Added one baseline-produced sparse-optionals
-case before changing production source: absent permission terms, all target
-joins, signed event fields, numeric-map lexical ordering and present empty
-shared effects. All eleven passed on the unchanged baseline, then candidate,
-with exact bytes/SHA-256/BLAKE3. Generator, source hash and capture journal are
-preserved; candidate code never generated expected bytes.
-
-Verification (all command/stdout/stderr/exit journals in the handoff directory):
-
-- Debug `cargo test` filters for `canonical_json_preserves_baseline_bytes_and_hashes`,
-  `hidden_selection_public_entry_is_pinned_through_both_samplers`, and the three
-  bounded `search_state_contract` event/privacy/terminal tests: **5 passed**.
-- Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o .cache/mtg-268/borrowed-json/wheels`:
-  **passed**, one build worker, ordinary `python` feature only. Default and
-  Python feature trees confirm no `serde_json/preserve_order`. Wheel extension
-  extracted, hash checked, written to a sibling temporary file and atomically
-  renamed. Fresh processes verify eleven byte fixtures and uninstrumented
-  w17/catalog/checkpoint identities on both binaries.
-- `uv run --extra dev python scripts/bench_local_update.py --native-reference .cache/mtg-268/merged-reference --compare-encoders`:
-  **6 live + 6 saved receipt cells pass; 1,281 exact native/Python encodings**.
-  Baseline's preceding singleton preflight passes 2 live/2 saved cells and 81
-  encodings. Same comparators/tolerances (atol 1e-6, rtol 1e-5); no new exceptions.
-  Maximum base/value/target errors: 1.0242171000207634e-10 /
-  4.0978193283081055e-08 / 3.1306484626902886e-09.
-  Sixteen-world work stays 64/80 rollouts and 1,280/1,600 Commands at 42/43;
-  the ordinary 42/16 profile has 21 forwards. All incidental times/profiles are
-  retained and excluded from performance conclusions.
-- `cargo fmt --check` and `git diff --check`: **passed**. User docs rechecked;
-  their behavior, example and limits remain accurate. Full gate stays below.
-
-### Frozen artifacts
-
-`.cache/mtg-268/borrowed-json/handoff.json` retains the pre-measurement source,
-wheel/member/binary hashes, fixtures, lockfiles, harness, six saved references,
-identities, verification results and protocol. Beside it: `candidate.patch`,
-`candidate-source.json`, both ordinary binaries, candidate wheel, `fixtures/`,
-all run journals and atomic `install.py`. `measurement/disposition.json`
-supersedes the handoff's unmeasured status. Identities and the completed paired
-protocol are recorded once in the measurement above. No pending implementation
-or trial-revert instruction remains from this handoff.
-
-## Borrowed-writer selection — historical (2026-11-09)
-
-After rejecting the dtype and five-array trials, step 5 selected borrowed
-emission of the handwritten observation fields, keeping derived records behind
-narrow sorted-Value boundaries. The provisional 8–15% hypothesis and >=5%
-median reduction AND disjoint-range keep rule at both openings were declared
-before measurement. The result above passes that rule. The baseline's 22–24%
-materialization attribution motivated the experiment; it did not measure the
-removable fraction. No generic serializer framework, derived-record redesign,
-projection cache, hash substitution, audit reduction or new dependency was
-selected. The independent baseline fixtures were reused after hash checks,
-with sparse-optionals captured before changing production source.
-
-## Second optimize step 4 — five-array move measurement (2026-11-09)
-
-**No measurable difference; speedup inconclusive. Candidate reverted.** Both
-openings have overlapping observed ranges. Opening 42's candidate median is
-1.23% higher; opening 43's is 10.35% lower. Neither clears the predeclared rule:
-each opening must improve at least 3% AND candidate maximum must be below
-baseline minimum. The expected 3–6% gain is not established. The immediate
-batched baseline, source `0bbb055127a79aa0e1bde4f6aa36c792dab61317`, is restored;
-all earlier batching work remains. Original near-singleton acceptance is unmet.
-
-Claim tested: “Moving the five JSON arrays reduces sixteen-world decision
-latency by 3–6% at openings 42 and 43, with unchanged behavior.”
-Seconds per decision below are median [minimum, maximum], n=5 per side per
-opening. Only `after_seconds` enters this A/B comparison. No historical
-sequential-to-batched gain or previous ordinary timing is pooled with it.
-
-| Opening | Baseline seconds | Candidate seconds | Median reduction | A/B median ratio |
-| --- | --- | --- | --- | --- |
-| 42 | 1.09405 [1.01709, 1.91236] | 1.10751 [0.94544, 1.16997] | -1.23% | 0.98785× |
-| 43 | 1.32530 [1.27261, 1.46090] | 1.18819 [1.06747, 1.43368] | +10.35% | 1.11539× |
-
-Five adjacent serial pairs ran AB, BA, AB, BA, AB, each in a fresh process
-after the preserved installer verified and atomically swapped the binary.
-Exact command for every invocation:
-`uv run --extra dev python scripts/bench_local_update.py --worlds 16 --position-seeds 42 43 --native-reference .cache/mtg-268/merged-reference`.
-No builds, tests or other benchmarks overlapped the series; no artificial load,
-games/evals, Graph launch, publication, shipping or extra profiling campaign.
-All ten samples and errors are retained, without retries or replacements.
-The baseline pair-3 opening-42 sample is 1.91236 s; its cause is unmeasured.
-Five samples are not confidence intervals. This study cannot resolve a small
-benefit; a separately declared repeated comparison on a quieter controlled host
-would be needed. No further series is started here.
-
-Same local Apple M4 Max/macOS 26.0.1, Python 3.12.12, Torch 2.10.0 and locked
-checkout environment; ordinary release binaries, only python Cargo feature.
-Both warmed initialized 64-wide/two-layer v6 scalar policies use position seeds
-42/43, search seed 17, depth 20, sixteen worlds and one Torch CPU/inter-op thread;
-OMP/OpenBLAS/MKL are explicitly one. The unchanged harness executes sequential
-control then batched search internally, with separate profile searches after
-opening 42. Alternating binaries limits drift but five pairs are not fully
-order-balanced. Setup, warming, swaps, comparisons and profiles are outside
-`teacher.search`, the only latency region. Prior 1/4/16 results established
-that the harness distinguishes workload size; no scaling grid was repeated.
-
-### Correctness and actual work
-
-All ten invocations exited zero, with zero receipt/work/identity failures,
-retries, deadline rejections or missing samples. Measurement stderr files are
-empty. Twenty live and twenty saved full receipt comparisons passed, including
-Commands, hashes, private audits, support, terminal flags and sampling identity.
-Only existing time/runtime/source and floating prediction exceptions apply;
-no comparator, fixture, receipt or tolerance changed (atol 1e-6, rtol 1e-5).
-Maximum base/value/target errors: 1.0242171000207634e-10 /
-4.0978193283081055e-8 / 1.8624171926884259e-9.
-Step 3's ten independent baseline byte/SHA/BLAKE3 fixtures, debug privacy/event/
-terminal/pending-entry tests and 1,281 exact encodings remain valid evidence.
-
-Every timed search did 64 rollouts / 1,280 Commands at opening 42 and 80 /
-1,600 at 43, all depth 20. Each wheel did 720 timed batched rollouts / 14,400
-Commands plus the same sequential-control work. Separate harness profiles add
-640 rollouts / 12,800 Commands per wheel; total series work is 4,160 rollouts /
-83,200 Commands. Every batched opening-42 profile has 21 network calls and
-1,280 Commands. The openings are neither terminal-heavy nor trained-strength
-measurements, and supply no MTG-183/w13 admission or acceptance bridge.
-
-### Limiter and mechanism, separate from latency
-
-The retained native attribution maps witness and semantic JSON to
-`Observation::to_json` in `managym/src/agent/observation.rs`, reached through
-`ViewerProjectionWitness::new` in `search_state.rs` and
-`Game::semantic_viewer_input` in `decision.rs`. Moving five prebuilt arrays
-removes recursive Value serialization, copying and destruction at that owner;
-the necessary initial tree and final serialization remain. Previous separate
-timers put value-build at 18.05–19.63% of instrumented search. The design's
-assumed removable 15–30% gives 2.7–5.9% of the whole path, not a measured
-fraction. Even impossible removal of the full 23.75% materialization category
-would yield only 1/(1−0.2375) = 1.312× there, not near-singleton performance.
-No such profile subtraction is used to claim ordinary savings.
-
-This series' already-produced ordinary profiles show Command/audit median
-0.45120 s [0.41014, 0.50972] → 0.40057 s [0.35116, 0.52531] and semantic direct
-hash 0.17526 s [0.16023, 0.19862] → 0.14429 s [0.13084, 0.18245], n=5 per side.
-Both overlap: direction is consistent with the mechanism but does not isolate
-array savings. Command/audit remains the largest median bucket. Network and
-encoding variability also remain; no cause for that variability was measured.
-Profile seconds are separate from ordinary latency and are never added as savings.
-
-### Restoration and evidence
-
-Reversed only the frozen `candidate.patch`, including its added serializer test
-and fixtures. Both Rust files now match HEAD byte for byte; previous baseline
-work is untouched. The candidate patch, binaries, wheel, fixtures and every
-verification/sample remain preserved. The baseline was atomically reinstalled.
-Fresh identity confirms uninstrumented w17, catalog
-`0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f`, vector-root
-API and initialized checkpoint
-`57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb`.
-Bounded restored 42/43 singleton checks pass two live and two saved comparisons
-and 81 exact native/Python encodings; their incidental times are excluded.
-
-Restored runtime A: `292cc8e190d8f29e6945ee587ecf1975e786e5517fd9da8d0c9bc58936d52881`.
-Rejected runtime B: `5d4f0a641152bbd8537c2fb349b23f4638ce7be3a93bbe6baa8e2d2d7714e84a`.
-Frozen harness: `3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a`.
-Patch: `c670303d4c53c9eb04794465ebf7805e3c6adb40ffdd7bc7df2957cb680de6d9`.
-
-New evidence: `.cache/mtg-268/json-array-move/measurement/` contains `before.json`,
-both prior notes/report files, `measure.py`, exact `pair-{1..5}-{baseline,candidate}`
-stdout/stderr/run journals and install journals, `runs.json`, `summary.json`,
-`summarize.py`, preserved `fixtures/`, this `report.md`, `write_report.py` and
-`final-artifacts.json`. The parent directory retains the frozen implementation
-handoff and all earlier evidence; `installations.jsonl` is append-only.
-`step4-restored-{install,identity,parity}.{out,err,run.json}` records restoration.
-Historical HTML rows are preserved in full. No server/watcher or child remains
-running. Broad gate checks and Task acceptance remain for later steps.
-
-### All paired reductions
-
-Positive means candidate time is lower; none is dropped.
-
-- Opening 42, pairs 1–5: -4.368%, +1.107%, +39.252%, +8.133%, -8.890%.
-- Opening 43, pairs 1–5: -8.178%, +16.475%, +8.910%, +12.949%, +24.502%.
-
-## Second optimize step 3 — historical implementation handoff
-
-The implementation was completed and verified, then rejected and reverted by
-step 4 above. Full original notes are preserved verbatim in
-`.cache/mtg-268/json-array-move/measurement/before-questions.md`; the immutable
-step-3 manifest remains `../handoff.json` relative to that evidence directory.
-Ten independent exact byte/hash fixtures, debug bounded checks, ordinary identity
-checks, six live/saved receipt cells and 1,281 exact encodings passed before
-measurement. Both ordinary binaries and the frozen patch remain preserved.
-
-Failed-fixture correction: the first populated case put an agent-owned hand
-card in the opponent list. Rust byte roundtrip passed, but native canonical
-validation correctly rejected it. Ownership was corrected and the baseline
-regenerated **before production edits**; corrected baseline debug and ordinary
-checks passed. Original files and failure remain under
-`.cache/mtg-268/json-array-move/initial-fixtures/` and
-`baseline-wheel-bytes.{run.json,out,err}` in that same trial directory.
-Pending-entrant capture used a temporary four-line write in the constructed
-regression, removed after capture. Synthetic optional combinations isolate
-serialization; they do not claim admitted card behavior.
-
-## Five-array design — historical, rejected (2026-11-09)
-
-The bounded trial moved only `action_space.actions`, `agent_cards`,
-`opponent_cards`, `stack_objects` and `recent_events` into parent Values.
-Locked serde_json 1.0.150 `json!` sends expression values through `to_value`,
-recursively rebuilding owned strings/maps/vectors; ordinary/default and Python
-feature trees had no `preserve_order`. Moving these arrays preserved sorted
-keys but retained initial trees, inner helpers and final stringify.
-
-The assumed removable 15–30% of the measured 18.05–19.63% value-build category
-implied 2.7–5.9% of instrumented search: a provisional 3–6% ordinary target,
-not a measured fraction. Conditional illustrations were 29–59 ms / 37–73 ms
-at 42/43, approximately 1.03–1.06×. The 3% median reduction AND disjoint-range
-keep rule at both openings was declared before the five AB/BA/AB/BA/AB pairs.
-It failed; do not retry the five-array patch alone. The completed measurement
-above owns actual work, results and restoration. Full design and commands are
-in `.cache/mtg-268/compress-step6/before-questions.md`, under this heading's
-former title “Second optimize step 2 — working design: move observation arrays”.
-
-## Prior native attribution (2026-11-09)
-
-Exact witnesses occupy 91.3–92.1% of native Command/audit. Five instrumented
-42/16 profiles attribute 21.99–23.75% of full search to JSON Value build/drop
-(3,908 calls; median 0.40120 s [0.35370, 0.42119]), including both witness and
-semantic serializers. This is a category ceiling, not the removable-array
-fraction or ordinary latency. Acting builds are already eliminated in this
-workload. Authority Value construction is 4.19–4.42%; rules, audit and acting
-byte clones are too small to close the target gap. One 43/16 diagnostic agrees
-on mechanism (23.48% JSON materialization), not variance. Detailed profile totals
-rose 1.489→1.815 s; cause unmeasured, all samples retained.
-
-Seven instrumented invocations passed live/saved discrete comparisons with max
-base/value/target errors 1.0242171e-10 / 4.09781933e-8 / 1.86241719e-9.
-No latency claim follows from instrumentation. Full tables, limits, commands and
-all artifacts remain in `scratch/measure.html`, the preserved pre-step-3 notes,
-and `.cache/mtg-268/native-attribution-2/`. Temporary timers were removed and the
-292cc8e1 ordinary binary restored. No experiment/world/receipt was rebound.
-
-## Historical first optimize step 9 — pre-writer measurement (2026-11-09)
-
-**Better for equal work.** On synced `0bbb05512`, sixteen-world search takes
-0.97911 s / 1.22335 s at openings 42/43, versus live sequential 3.33854 s /
-4.21951 s: **3.41× / 3.45× faster**. Eight-world search takes 0.50590 s /
-0.62788 s: **3.47× / 3.50× faster** for equal work. Every cell has disjoint
-sequential/batched ranges. The original near-singleton outcome remains unmet;
-this result neither supplies original-world singleton equivalence nor trained
-strength. Dtype validation remains rejected and reverted.
-
-Claim tested: “Batched local-update search is faster for equal work on two fixed
-openings, with matching receipts.” All values below are seconds per decision,
-median [minimum, maximum], n=5 per implementation per cell. Speedups divide
-medians. All samples, stderr and exit codes are retained; none was retried,
-replaced or dropped. Five samples are not confidence intervals.
-
-### Primary 1/4/16-world grid
-
-| Position | Worlds | Sequential seconds | Batched seconds | Speedup | Rollouts / Commands per search |
-| --- | --- | --- | --- | --- | --- |
-| 42 | 1 | 0.21538 [0.21306, 0.22106] | 0.08589 [0.08175, 0.08840] | 2.51× | 4 / 80 |
-| 42 | 4 | 0.84463 [0.81816, 0.86687] | 0.26746 [0.26138, 0.27197] | 3.16× | 16 / 320 |
-| 42 | 16 | 3.33854 [3.30155, 3.47404] | 0.97911 [0.96551, 0.99997] | 3.41× | 64 / 1280 |
-| 43 | 1 | 0.26266 [0.26003, 0.27264] | 0.09705 [0.09452, 0.10423] | 2.71× | 5 / 100 |
-| 43 | 4 | 1.05185 [1.03508, 1.09272] | 0.32409 [0.31470, 0.33016] | 3.25× | 20 / 400 |
-| 43 | 16 | 4.21951 [4.10531, 4.36913] | 1.22335 [1.20339, 1.24545] | 3.45× | 80 / 1600 |
-
-### Separate eight-world supplement
-
-| Position | Worlds | Sequential seconds | Batched seconds | Speedup | Rollouts / Commands per search |
-| --- | --- | --- | --- | --- | --- |
-| 42 | 8 | 1.75341 [1.72520, 1.78252] | 0.50590 [0.50534, 0.51032] | 3.47× | 32 / 640 |
-| 43 | 8 | 2.20035 [2.17964, 2.20853] | 0.62788 [0.62208, 0.63177] | 3.50× | 40 / 800 |
-
-The primary grid has 30 live and 30 saved comparisons; each implementation
-executes 945 timed rollouts / 18,900 Commands. The separate supplement has ten
-live comparisons, no saved eight-world references, and 360 timed rollouts /
-7,200 Commands per implementation. All ten measurement invocations exited zero;
-zero parity failures, retries or deadline rejections. Preflight separately
-passed six live/saved comparisons and 1,281 exact native/Python encodings;
-its incidental timing is excluded. No missing or failed samples are encoded as
-zero. The only stderr message is uv ignoring an unrelated VIRTUAL_ENV and using
-this checkout's pinned environment.
-
-Maximum absolute base/value/target differences across the forty live and thirty
-saved measurement comparisons are 1.0242171000207634e-10 /
-4.0978193283081055e-8 / 3.1306484626902886e-9, within atol 1e-6 / rtol 1e-5.
-Complete discrete receipts, legal support, Commands, canonical hashes, private
-audits, terminal flags, sampling identities and policy/world identities agree.
-Only the comparator's existing runtime/source and measured numeric/time
-exceptions apply. No reference or comparator exception was changed.
-
-### Interpretation and retained evidence
-
-The 8-world/current sequential-singleton ratios are 2.35×/2.39×; 16-world ratios
-are 4.55×/4.66×. These are not original-world acceptance. All opening rollouts
-reach depth 20, so terminal-heavy and trained positions remain unmeasured.
-The ordinary 42/16 profile shows 1,280 Commands and 21 forwards; median buckets:
-Command/audit 0.40657 s, network 0.24983 s, semantic direct hash 0.15986 s,
-encoding 0.15919 s, snapshot 0.00736 s. Categories are profile attribution,
-not ordinary savings. Snapshot removal cannot close the gap.
-
-Full post-sync evidence lives in `.cache/mtg-268/final-measurement/`, including
-`before.json`, wheel/build/install/identity journals, six-cell preflight, five
-grid and five eight-world runs, summaries and preserved historical report.
-All source/lock/receipt identities, historical full tables and detailed limits
-remain in unchanged `scratch/measure.html` and the preserved pre-step-3 notes.
-The harness is 3e1c2bf414c4a7654fd6741eede6f979f704a14f9d4cbc2cd29cb76c4496d67a.
-Policy is 57fd8f999d15426e9cebb73ce0f917fe987757f992bba2d5ab0b5c41542bddeb,
-world w17, catalog 0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f.
-
-## Implemented behavior and removed mechanisms
-
-Keep independent policy RNGs, stable world/action receipt order, every receipt
-field and private audit, native Commands, canonical hashes, full legal support,
-terminal/sign semantics, sampling identities, atomic rejection and deadlines.
-No input/checkpoint/schema change or batching flag. Semantic SHA-256 is rebuilt
-under the Env lock on every read; witness BLAKE3 is not equivalent. Memory still
-scales with worlds × supported root actions.
-
-### Delete — do not maintain
-
-No remaining deletion targets. Completed cuts:
-
-- Handwritten nested Value builders and root assembly in `Observation::to_json`:
-  one borrowed writer in `observation_json.rs` now owns canonical bytes. Preserve
-  its explicit lexical field order and narrow sorted-derived-record boundaries;
-  replacing them with a generic adapter would obscure the compatibility contract.
-- Five-array production trial, reverted after its keep rule failed. The later
-  borrowed writer reuses only its independent fixtures/test, with a new sparse
-  case. The rejected production path stays removed; its full patch is archived.
-- Sequential production rollouts and separate singleton inference: one batch
-  implementation; git supplies the timing oracle.
-- Per-ply Python semantic parsing, unused composite envelopes and repeated
-  root/config/prepared-constraint parsing. Real composite consumers remain.
-- Pre-Command viewer projections, duplicate equivalent acting-view serialization
-  and revalidation of a Command just constructed under both locks.
-- Globally empty CPU attention/fact columns, preserving coordinates, historical
-  pooling and program order. No state-derived cache.
-- Receipt-field allowlists, duplicate fact-word decoding, validity conversions,
-  fact-program guards and native profiling lifecycles.
-- Scalar Python-list conversion in native array returns and per-row Python
-  encoding/stack copies in `predict_batch`. Keep the Python encoder oracle,
-  selected capacities and independent writable arrays.
-
-Compound execution was already removed (`docs/training.md#compound-decisions-removed`);
-retain historical readers, not the directive's obsolete sequential fallback.
-The rejected dtype-name experiment and its tests stay reverted.
-
-## Historical evidence (condensed for context budget)
-
-Full pre-step-3 notes are preserved at `.cache/mtg-268/json-array-move/before-questions.md`.
-Committed earlier history is `0bbb05512:scratch/questions.md`; earlier complete
-curation is `c0c3c2b4476755676115c602a97f57bacac6a7ea:scratch/questions.md`.
-All historical tables and the new attribution remain in unchanged `scratch/measure.html`.
-Dtype trial remains rejected: all six observed ranges overlapped despite a 60.7%
-profiled encoding reduction. Smaller-cell medians rose; the 0.76723 s candidate
-42/four-world sample remains unexplained. Its patch, binaries, failed setup
-(traceback from a wrapper shadowing stdlib profile), all samples and restoration
-proof stay in `.cache/mtg-268/dtype-validation/`. No retry is selected.
-Earlier equal-work sixteen-world gains were 3.35×/3.62×, distinct from the
-pre-writer post-sync 3.41×/3.45×. Original-world receipts failed comparison after the catalog
-merge; `.cache/mtg-268/reference/` and MTG-183/w13 remain frozen, separate from
-`.cache/mtg-268/merged-reference/`. There is no cross-world acceptance bridge.
-
-The directive says: "Batching should bring 8-16 worlds near today's one-world cost."
-And: "Never run games/evals on the laptop; small fixed-position timing benches are fine, or use the Mac mini (mini-heart.local)."
-No numeric definition of "near" or relaxation has been agreed. The 30-second
-README value is a budget, not a latency promise. Original near-singleton acceptance
-and trained-policy admission remain unmet. Current source/runtime reconciliation
-is recorded in second optimize step 9 above; model typed/v7+ integration
-remains a gate concern. No Wave was selected or modified.
-
-## Remaining gate and acceptance requirements
-
-Gate still owns complete local-update suites and Command-evidence coverage;
-model suites `test_value_aggregation`, `test_inference`, `test_agent`,
-`test_layer_input`, `test_record_vocabulary`; upstream integration suites
-`test_state_records` and `test_shared_effects`; `tests/training/test_active_training.py`,
-`tests/env/test_observation.py`, `tests/training/test_action_cutoff.py` and
-`tests/verify/test_native_buffer_capacities.py`. In particular, retained terminal
-frontier, sign, deadline, legal-support and selected-capacity tests cover cases
-absent from the two full-depth opening measurements. Reuse valid earlier results
-with their source/runtime identities; focused sync checks do not
-replace these suites.
-
-Native gate requires `cargo fmt --check`,
-`cargo clippy --all-targets --all-features -- -D warnings` and the complete debug
-suite (`cargo nextest run --profile ci`, or debug `cargo test`) from `managym/`,
-with bounded workers and one Cargo operation at a time. Direct/composite hash
-parity includes `hidden_selection_public_entry_is_pinned_through_both_samplers`
-and `search_state_contract`. Applicable engine-budget CI checks remain required;
-release-only success is insufficient. Suites that play games, train or evaluate,
-including full debug engine tests, belong on the Mac mini or CI under the Task's
-laptop restriction. The rebuilt ordinary wheel is restored/verified after any
-debug binding validation, before final timing. There is no world/shape change
-in this sync; if one is discovered, the documented current-world arena/monitoring
-and checkpoint-admission checks become required too, without changing frozen
-worlds. Gate also retains changed-file lint/format checks and `git diff --check`.
-
-Open for demo: what maximum 8–16-world/original-singleton latency ratio,
-checkpoint and representative positions define "near"? No numeric threshold or
-relaxation has been agreed. Eight worlds remain unmeasured after the writer change;
-the selected openings are not terminal-heavy or trained-strength evidence.
-MTG-183/w13 admission remains unresolved. The README's 30 seconds is a budget,
-not a promise. After the borrowed writer, Command/audit and network have similar
-profiled costs; no newly identified safe removal closes the gap. Snapshots/allocation
-cannot explain it.
-Meeting a looser same-runtime target would require an explicit decision, not a
-reinterpretation of the existing outcome.
+Assumption (reversible): retain b015d5 continuation, billing and device-validator
+notes as this Task’s active context. Main’s unrelated MTG-268 study notes remain
+verbatim at `e73ed9208915e623173b2f5409d1ad3c301169b3:scratch/questions.md`; their
+measurement conclusions and landing direction do not replace this experiment’s
+boundaries. Only scratch context conflicted; the source merge required no manual
+resolution. The sync completed at `9ed7c133e`; no new experiment freeze is implied.
+
+## Publication verification — 2026-11-09
+
+`lf sync` completed without conflicts at `77cf3641f`. The publication diff
+contains the indexed-CUDA validator repair, its checkpoint tests, and retained
+C1 execution/protocol evidence. The prior PR #451 is merged; this publication
+is the subsequent repair, not a claim that full CUDA admission passed.
+
+`uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py tests/infra/test_experiment_data_untracked.py -q`
+passed all 32 tests in 103.01 seconds, including both bounded CPU worker smoke
+cases. Focused Ruff and `git diff --check origin/main` passed. Manifest fetch
+verified all 538 existing throughput evidence files without downloading or
+changing them. No paid execution occurred; the prospective freeze and complete
+one-rental CUDA worker/reload proof remain after delivery.
+
+## Gate — 2026-11-09
+
+Comparison: checkout base `cb75f2166` through PR #455 HEAD `910766b93`, plus
+the working tree. Only the admission checker and its existing test module
+change executable behavior. Protocol, artifact manifest, Infrastructure memory
+and scratch changes retain C1 evidence and delivery boundaries.
+
+Validation plan: run `tests/training/test_training_throughput_sizes.py` for
+device parsing, checkpoint reload/rejection and bounded launch smoke; run
+`tests/infra/test_experiment_data_untracked.py` for evidence storage. Then run
+focused Ruff lint/format checks and `git diff --check`. The repository selector
+`.github/ci/select-tests.sh` selects integration only and has no local result
+cache; all three Linux integration groups already passed on this PR HEAD.
+No training/model/native/frontend owner changed, so their broader suites and
+performance measurements are outside this repair. Full CUDA worker/reload
+admission remains an execution proof after delivery and prospective freeze.
+
+Gate results (no executable changes needed):
+
+- `uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py tests/infra/test_experiment_data_untracked.py -q` — 32 passed in 132.96 seconds; no timeout or skipped test.
+- `uv run --locked --extra dev ruff check scripts/check_throughput_admission.py tests/training/test_training_throughput_sizes.py` — passed.
+- `uv run --locked --extra dev ruff format --check scripts/check_throughput_admission.py tests/training/test_training_throughput_sizes.py` — both files already formatted.
+- `git diff --check cb75f2166` — passed.
+- `gh pr view 455 --json state,baseRefName,headRefOid,statusCheckRollup` — open against main at `910766b93`; all selected CI jobs and aggregate passed, unrelated jobs skipped.
+
+The existing PR description matches the repair and its limits. No software
+delivery blocker remains. No paid execution occurred, no background process was
+left running, and the parent experiment remains open. Full CUDA admission is
+deferred to the authorized execution Graph after landing and prospective freeze;
+local tests and green Linux CI do not claim that proof.
