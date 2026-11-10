@@ -171,3 +171,17 @@ verbatim at `e73ed9208915e623173b2f5409d1ad3c301169b3:scratch/questions.md`; the
 measurement conclusions and landing direction do not replace this experiment’s
 boundaries. Only scratch context conflicted; the source merge required no manual
 resolution. The sync completed at `9ed7c133e`; no new experiment freeze is implied.
+
+## Publication verification — 2026-11-09
+
+`lf sync` completed without conflicts at `77cf3641f`. The publication diff
+contains the indexed-CUDA validator repair, its checkpoint tests, and retained
+C1 execution/protocol evidence. The prior PR #451 is merged; this publication
+is the subsequent repair, not a claim that full CUDA admission passed.
+
+`uv run --locked --extra dev --extra artifacts pytest tests/training/test_training_throughput_sizes.py tests/infra/test_experiment_data_untracked.py -q`
+passed all 32 tests in 103.01 seconds, including both bounded CPU worker smoke
+cases. Focused Ruff and `git diff --check origin/main` passed. Manifest fetch
+verified all 538 existing throughput evidence files without downloading or
+changing them. No paid execution occurred; the prospective freeze and complete
+one-rental CUDA worker/reload proof remain after delivery.
