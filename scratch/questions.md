@@ -231,3 +231,58 @@ Discovery ran `uv run --locked --extra dev --with <Etude a7718f5>` under the
 isolated home, without Doppler, because discovery reads no secrets. The client
 SDK reports 0.2.14, the same as at the first freeze.
 No quote, bill or rental was touched. Execution review comes next.
+
+## C1 repaired-source execution, 2026-11-10
+
+- Preflight (18:24 UTC): no runs, cohorts or rentals of the repaired source existed in
+  the isolated home. Posted bills for the seven earlier pods are unchanged
+  ($3.803594); C1's first A40 posted $0.120043 (bound $0.133502 kept). Quotes:
+  A40 and L4 at $0.59/h available, A4000 unavailable.
+- Reversible choice: the new cohort's evidence goes in
+  `experiments/data/training-throughput-b015d5-v1/c1-repaired/step-3-c1/` (the
+  reader requires a directory named `step-3-c1`), so the old failed attempt's
+  `step-3-c1/` files and their manifest paths stay as they are.
+- Reversible choice: each non-admission rental runs a setup-only identity job that
+  also runs the fixed-input CUDA regression (`identity_job.py cuda_test=1`), which
+  is the per-GPU admission before BF16 legs without another training smoke.
+- Other pods on the RunPod account (`etude-8a95fe6d04e9`, `etude-ecca7abeb4df`,
+  `etude-61d222a90653`) and the 0.2.15 controller under the default Etude home do
+  not belong to this home; they were left alone.
+- Rentals (all inside the C1 line windows): A40 `b015d5-a40-ca270fabef30` 18:33–≤23:18 UTC
+  ($0.59/h, rent max $3.00); L4 `b015d5-l4x4-63b721717acc` 18:56–≤22:47 ($0.59/h,
+  max $2.30); A4000 `b015d5-a4000x4-75457219a81c` 19:07–≤01:07 ($0.25/h, max $1.55).
+  Several A40 creates were refused by stock before the A40 rent succeeded (no machine
+  records). Admission `537b2f764bba` (A40, seed 26400) passed the whole chain:
+  CUDA regression 2 passed, 2 BF16 updates on cuda:0, verified checkpoint reload.
+  Identity jobs `1d4183bcd812` / `60470ec08b59` / `c82420726c04` matched every frozen hash
+  (Linux extension 1b29bf48…); L4 and A4000 also passed the CUDA regression.
+- Driver: `c1-repaired/step-3-c1/campaign.py` (state in `campaign-<gpu>.json`, logs in
+  `execution/`), launched via `run_campaign.sh`. Controller for the isolated home runs
+  under caffeinate (log `~/.etude-b015d5-step2/logs/c1r-controller.log`).
+- A4000: `etude rent b015d5-a4000x4` exited 0 and printed "rented until 01:07" for
+  `75457219a81c` although the provider refused the create (machine log: "Refused: no
+  NVIDIA RTX A4000 available in any data center"). Queuing with `--rent` then made Etude
+  rent a real pod `b9dee825076c` (identity/CUDA job `c82420726c04` passed; deleted
+  19:17:04) and later a second refused record `79384dd06468`, losing cell run
+  `9c669820d400` (no game played). The driver correctly stopped on "run placed outside
+  the named rental". A4000 is unmeasured in this pass (30-minute window expired).
+  Etude defect for its owner: refused creates must not report a rental (exit 0),
+  and phantom records survive `etude terminate`.
+- Operations: the isolated controller's loop hung on a storage read at 19:45 (runs
+  waited ~15 min) and was restarted; `etude queue` spends ~4–6 min per seed in a full
+  `git fetch` of the repository for source preparation, so K=4 queues idle the rental
+  ~20–25 min and K seeds start staggered. A 600 s queue timeout killed the L4 driver
+  once after the runs were created; the driver resumed from the existing cohort.
+- The maintained C1 reader (`load_run`) rejects real `_updates()` projections, which
+  carry constant string labels (gradient, value_kind, …); its fixtures were all-float.
+  Runs retain `updates-raw.json` (full) and `updates.json` (numeric fields only); no
+  measured value is dropped. Reader defect for its owner.
+- L4 ladder ended 21:14 by rule (remaining window < next watchdog + cleanup; a384l8
+  K=2 exceeds 85% of L4 memory; w64 not needed). `etude terminate` was refused
+  ("busy") until both of this home's controllers were stopped and the lease expired;
+  Etude deletion 21:24:22 UTC, provider pod `i0p0guzl2a84m0` confirmed absent.
+- Execution complete 22:24 UTC. Evidence published (281 manifest entries), report and
+  protocol receipt written. All rentals deleted; no controller, driver, selector or
+  watchdog left running. Phantom A4000 records `75457219a81c` / `79384dd06468`
+  remain in the isolated database with no provider pod. Evidence review is next;
+  the parent experiment stays open.

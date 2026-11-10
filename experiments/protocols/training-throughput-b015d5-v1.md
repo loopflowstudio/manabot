@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 admission repair implemented; delivery and new freeze pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 executed at the repaired source; evidence review pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -1632,6 +1632,38 @@ reload. Expansion requires that whole chain to pass. The offline reload of
 `3a1380d94b69` is supporting evidence only. A failed identity or CUDA check
 requires repair and another prospective freeze. The parent experiment remains
 open.
+
+### C1 repaired-source execution receipt — 2026-11-10 UTC
+
+Executed under the existing "keep going" authority (079b3f46) and operator execution
+review ebf759be, at the frozen source `b5e8f404adf55a2315a2810906cbb81c49465781`.
+No budget, window or ceiling was reset. Before renting: no repaired-source runs or
+rentals existed in the isolated home; posted bills for all earlier pods were
+unchanged ($3.803594), and the first C1 A40 had posted $0.120043 (its $0.133502
+bound is kept).
+
+- **Admission passed on the first rental** (A40 `b015d5-a40-ca270fabef30`,
+  run `537b2f764bba`, seed 26400): CUDA regression, two healthy BF16 updates on
+  `cuda:0`, verified checkpoint reload. Remote identity jobs on every rental
+  reproduced all frozen hashes; L4 and A4000 also passed the CUDA regression.
+- **Measured:** 13 speed cells (A40: w128l4 K=1/2/4, a384l8 K=1, the four-leg
+  w160l8 precision block; L4: w128l4 K=1/2/4, w160l8 K=1, a384l8 K=1). w128l4
+  packing gains: A40 1.50 (K=2) / 1.78 (K=4); L4 1.34 / 1.42. The L4 K=2 late
+  window (1.29) crosses 1.30, so its K=4 admission was provisional.
+- **Not measured:** A4000 (no stock within the selection window; Etude reported a
+  refused create as a rental), w160l8/a384l8 packing, a384l8 precision and
+  non-A40 precision (watchdog-plus-cleanup no longer fit the windows), and L4
+  a384l8 K=2 (memory rule). No crossover is established.
+- **Accounting:** this cohort $3.775008 inclusive bound (posted $3.141916);
+  C1 ≤ $3.908510 / $8 and 6.60 / 15 GPU-hours; step 3 ≤ $5.825483 / $10;
+  experiment ≤ $7.920355 / $50. 196 of 1,600 updates queued (8 never ran).
+  All three provider pods were confirmed deleted; no execution process remains.
+
+Results, dispositions and operational defects (controller hangs, per-seed
+source-preparation fetches, phantom rentals and the reader's float-only update
+schema) are in `experiments/data/training-throughput-b015d5-v1/report.md`
+("Step 3 continuation C1 at the repaired source") with evidence under
+`c1-repaired/step-3-c1/`. The parent experiment remains open for evidence review.
 
 ### C1 software interface
 
