@@ -1538,6 +1538,101 @@ cost/exposure. CPU execution, corrupt bytes or failed reload still invalidate
 admission. The implemented repair follows this contract; the next proof remains
 the full one-rental chain after delivery and prospective freeze.
 
+### C1 repaired-source freeze receipt — 2026-11-10 UTC
+
+This receipt binds every subsequent C1 execution and offline analysis. It
+replaces the 2026-11-09 binding for new work only: that receipt, its failed
+admission `3a1380d94b69`, its exports and all 87 dispositions remain historical
+evidence and are never relabelled.
+
+**Admission result: source, discovery and local world/input admission pass.**
+Real CUDA admission has not run. No games, training, rentals or paid work ran
+for this freeze; checkpoint-binding inspection initialized one native match
+without playing it. PR #455 is merged on main at
+`b5e8f404adf55a2315a2810906cbb81c49465781` (GitHub merge time
+2026-11-10T01:40:32Z), and the checkout tree is identical
+(`14866182e992c9e914bb936310f77a0e29f75928`). Comment 257d99bc records the integrated
+software review. Every C1 launch uses this full commit
+(`--revision b5e8f404adf55a2315a2810906cbb81c49465781`) and the reader uses
+`--source b5e8f404adf55a2315a2810906cbb81c49465781`, never a moving `HEAD`.
+
+**Source.** `bundle_at` binds all 1,544 archived regular files. The digest of the
+canonical source bundle (commit plus files) is
+`54954d248f102e510190935f2c4d14ad55b9a4ff6516e3693b7ed4e8bc36a231`.
+The protocol's bytes at the revision have SHA-256
+`34f3ba86a81e0cfc1fdd08acae3461f6e41b0fd893fc36f5bf6ac18f8b7aa89c`; this
+receipt is outside them. Compared with the 2026-11-09 table, only these
+frozen files changed; the other nine are byte-identical:
+
+| Frozen file | SHA-256 |
+|---|---|
+| `scripts/check_throughput_admission.py` | `e3127bd7f39db305d8bab46b4795fe67444cdca13889109faec3dab071b1bd33` |
+| `experiments/learning_signal.py` | `dbed3ca0da67a78c32a115209e654cd218385255c6b0a01f314f5d2cf46e1ba6` |
+
+`learning_signal.py` adds a head-to-head evaluation path that C1 never calls.
+The shared training runtime from main also changed after the first freeze
+(`6933edd0d`, `cb75f2166`, `6cd54d349`, `93a2e30ef`): critic-readout and value-scale
+diagnostics, an opt-in `attention_readout` value aggregation, CPU-only
+no-grad inference compaction and native observation JSON/search-state changes.
+None changes a C1 recipe or input. They can change timing, so C1 compares only
+fresh controls from this source and host. No earlier speed figure is a control.
+
+**World, roster, input and recipes: unchanged identities.** Recomputed at this
+revision with the rebuilt local extension, every identity in the 2026-11-09
+receipt reproduces exactly: native world **w17**, card/content digest
+`0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f`, content manifest
+`a6df2e46ea733e3998c8b3303412c943bee4575c020bbb4383a11a41f9c98770`, checkpoint binding
+`44f5228f96ed1874cae7fc2502b41fb0cde1bf0cb2dd129ea772b2949b03d7a8`, ten-deck setups
+`68d04d4bd40b52b103a9efea613c52c280e1e143975efbf1ea1f5bad5af578bd`, resolved observation configuration
+`d2452a5262468a83ac6e3f9a0548caa456cddbed22dc439f870b68fec4d03c8f`, input schema
+`d8b744ee345230295ffd4728308f07804eae22be22bf3197bfb8cea4356991ab` and learning schema
+`1ae4b9e56e5b50172ec88b5c78a38c11705252287eb5fa73df3a2b085057d920`. Input stays v6 with 512 facts, 60 cards, 40 permanents,
+64 actions, 2 focus objects, 32 events and 64 × 49 relations, with effective
+hashed records. All 15 regime digests and their canonical ID map
+`5fdd3ee6558663f1068ccbe5fd4dc3f0becd668853139b0d79e5e3c9cb5499d4` are unchanged.
+`validate_regime` admitted every declaration against the current world.
+The local Darwin CPython 3.12 extension rebuilt from this source has SHA-256
+`bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0`. Remote setup
+must again retain its Linux build hash and verify these identities before
+training; a mismatch stops admission.
+
+**Discovery.** The isolated Etude client at
+`a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11` (SDK 0.2.14),
+`ETUDE_HOME=$HOME/.etude-b015d5-step2`, ran `read_job_file` for all **87 C1
+legs** at this revision without executing anything: 3 two-update admission,
+45 eight-update and 39 twelve-update declarations, 183 seed jobs if every
+declaration were selected (not authority to run them). Every job validates as
+`TrainingJob` under `training-throughput-sizes-c1` with the declared seeds,
+and carries the source bundle above. Its regime equals the declared control
+outside ID and `wall_seconds`. Seeds, schedule, readings, stop rules and
+isolation are unchanged from the C1 sections above. Admission seed 26400 is
+reused: the failed attempt left no checkpoint or game that the new run reads.
+
+**Validation.** In the locked environment, 40 targeted size, limit, reader,
+cost, admission and precision tests passed. Two CUDA-required precision cases
+were skipped and belong to the rental. Both real-worker CPU smoke cases
+(w128l4, a384l8; 8 streams, 1 update) passed. These include the
+indexed-device checkpoint reload and the non-CUDA, malformed, unhealthy and
+corrupt-byte rejections. None of these checks admits CUDA.
+
+**Carried-forward accounting and authority.** Jack Heart's existing "keep
+going" direction (comment 079b3f46) remains the only execution authority.
+Comments 257d99bc and 72b37622 continue it and claim no new approval. C1
+consumption carries forward without reset: about 0.206 GPU-hours, two updates,
+and at most $0.133502 pending billing. The inclusive bounds stay at $2.050474
+for step 3 and $4.145347 overall, against the $10 / $50 caps. The 15 GPU-hour,
+1,600-update and $8 C1 ceilings, the line ceilings and the rate ceilings are
+unchanged and count the failed attempt. No quote or bill was refreshed in this
+offline freeze.
+
+Before any paid work: reconcile billing, or hold a defensible upper bound;
+re-quote; admit watchdog and cleanup liability. On one rental, run the full
+CUDA regression, then the two-update BF16 worker, then the verified checkpoint
+reload. Expansion requires that whole chain to pass. The offline reload of
+`3a1380d94b69` is supporting evidence only. A failed identity or CUDA check
+requires repair and another prospective freeze. The parent experiment remains
+open.
+
 ### C1 software interface
 
 `experiments/training_throughput_sizes.py` retains the original `LEGS` and

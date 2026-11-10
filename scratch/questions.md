@@ -216,3 +216,18 @@ delivery blocker remains. No paid execution occurred, no background process was
 left running, and the parent experiment remains open. Full CUDA admission is
 deferred to the authorized execution Graph after landing and prospective freeze;
 local tests and green Linux CI do not claim that proof.
+
+## Repaired-source freeze — 2026-11-10
+
+Recorded in the protocol's "C1 repaired-source freeze receipt" at merged PR #455
+source `b5e8f404adf55a2315a2810906cbb81c49465781`. Identities were recomputed with a
+temporary read-only script (not retained). It reproduced every 2026-11-09
+world, content, binding, setup, observation, input-schema, learning-schema and
+regime digest exactly. This validated the method and showed that no identity moved.
+The stale local extension (built 2026-11-08, before Rust changes in `cb75f2166`)
+was rebuilt from this source before computing them.
+
+Discovery ran `uv run --locked --extra dev --with <Etude a7718f5>` under the
+isolated home, without Doppler, because discovery reads no secrets. The client
+SDK reports 0.2.14, the same as at the first freeze.
+No quote, bill or rental was touched. Execution review comes next.
