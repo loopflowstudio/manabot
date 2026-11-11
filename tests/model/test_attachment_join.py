@@ -1,15 +1,18 @@
 """Policy input v5's permanent links are joins between object embeddings."""
 
 import numpy as np
+import pytest
 import torch
 
 from manabot.env.observation import (
     PERMANENT_ATTACHED_INDEX,
+    PERMANENT_LINK_INDEXES,
     ObservationConfig,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.verify.action_cases import reorder_objects
 import managym
 
 
@@ -71,3 +74,27 @@ def test_permanent_link_joins_exist_only_for_v5() -> None:
         ModelConfig(hidden_dim=16, num_attention_heads=2),
     )
     assert not any("link_" in name for name in v4.state_dict())
+
+
+@pytest.mark.parametrize("column", PERMANENT_LINK_INDEXES)
+def test_object_permutation_preserves_learned_permanent_links(column: int) -> None:
+    space, encoded, host = _attached_observation()
+    encoded["agent_permanents"][1, PERMANENT_ATTACHED_INDEX] = 0
+    encoded["agent_permanents"][1, column] = host + 1
+    torch.manual_seed(5)
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16, num_attention_heads=2))
+    agent.eval()
+    with torch.no_grad():
+        # Initialization zeros these joins, so an untrained model hides bad remaps.
+        for layer in (*agent.link_to_target, *agent.link_from_target):
+            layer.weight.normal_()
+        obs = _batch(encoded)
+        permuted = reorder_objects(obs)
+        count = obs["agent_permanents"].shape[1]
+        assert permuted["agent_permanents"][0, count - 2, column] == host + count
+        expected_logits, expected_value = agent(obs)
+        logits, value = agent(permuted)
+        torch.testing.assert_close(logits.softmax(-1), expected_logits.softmax(-1))
+        torch.testing.assert_close(value, expected_value)
+        for key, original in obs.items():
+            torch.testing.assert_close(reorder_objects(permuted)[key], original)

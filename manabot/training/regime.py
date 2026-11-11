@@ -214,7 +214,7 @@ Precision = Literal["float32", "tf32", "bf16"]
 
 
 class Execution(Strict):
-    device: Literal["cpu", "cuda"] = "cpu"
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
@@ -804,14 +804,21 @@ class TrainingRegime(Strict):
             for stage in self.stages
         ):
             raise ValueError("active-time process recovery is unsupported")
-        if any(stage.execution.device == "cuda" for stage in self.stages):
+        if any(stage.execution.device != "cpu" for stage in self.stages):
+            accelerator = (
+                "CUDA"
+                if any(stage.execution.device == "cuda" for stage in self.stages)
+                else "MPS"
+            )
             if self.recoverable:
-                raise ValueError("CUDA process recovery is unsupported")
+                raise ValueError(f"{accelerator} process recovery is unsupported")
             if self.agent.belief_count_buckets or any(
                 not isinstance(stage, TrainSelfPlay) or stage.opponent is not None
                 for stage in self.stages
             ):
-                raise ValueError("CUDA requires self-contained ordinary self-play")
+                raise ValueError(
+                    f"{accelerator} requires self-contained ordinary self-play"
+                )
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:

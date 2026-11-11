@@ -248,7 +248,7 @@ Runtime inputs such as experiment Markdown and benchmark data are not prose-only
 update both when adding a package or consumer.
 
 **Other workflows.** `macos-nightly.yml` reruns both integration suites on
-`macos-latest` nightly. `baseline.yml` trains the baseline recipe nightly on
+`macos-latest` nightly. `baseline.yml` trains the CPU test variant nightly on
 seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regression`.
 `card-evaluation.yml` (manual) verifies 1024 native games with
 `manabot.eval.cards verify` (see [evaluation](evaluation.md)).
@@ -418,7 +418,12 @@ For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
 explicitly. CI validates CPU, not GPU, execution.
 
 Supported: CPython 3.12 (no free-threaded ABI) on Linux x86-64 with glibc
-2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU Torch). Windows,
+2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
+MPS is admitted for float32 self-play training with Torch 2.10. Baseline requires
+CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
+Evaluation and search run on CPU for this workflow. GPU-less tests use
+`baseline_test()`, which shares baseline construction and changes only the device.
+No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
 Wheels contain the compiled engine; the sdist needs Rust and a C linker
