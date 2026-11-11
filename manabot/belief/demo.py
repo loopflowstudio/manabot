@@ -46,7 +46,6 @@ def _runtime_env() -> tuple[Env, dict[str, np.ndarray]]:
         observation_space,
         Reward(RewardConfig()),
         seed=19,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

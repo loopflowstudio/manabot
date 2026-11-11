@@ -174,7 +174,7 @@ def test_custom_setup_does_not_infer_sideboard():
     assert custom.to_rust_villain().sideboard == {}
 
 
-def test_reset_replacement_preserves_sideboard_on_auto_reset():
+def test_reset_after_terminal_reuses_replacement_sideboards():
     from manabot.env.env import Env
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import MatchConfig
@@ -188,14 +188,14 @@ def test_reset_replacement_preserves_sideboard_on_auto_reset():
             villain_sideboard={"Island": 1},
         )
     ).swapped()
-    env = Env(
-        first, ObservationSpace(), Reward(RewardConfig()), seed=0, auto_reset=True
-    )
+    env = Env(first, ObservationSpace(), Reward(RewardConfig()), seed=0)
     env.reset(options={"match": replacement})
     witness = env._engine.search_witness_json()
     for _ in range(100):
-        _, _, _, _, info = env.step(0)
-        if info["true_terminated"]:
+        _, _, terminated, truncated, _ = env.step(0)
+        if terminated or truncated:
+            assert env._engine.is_game_over()
+            env.reset()
             assert env._engine.search_witness_json() == witness
             return
     pytest.fail("bounded land-only match did not finish")
