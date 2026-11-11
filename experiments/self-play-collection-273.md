@@ -207,14 +207,43 @@ Use ordinary TrainingJob execution and its stop/export controls, retain every
 attempt and failure, and stop rather than extend an incomplete arm. This is a
 budget envelope, not a fresh quote or a guarantee of completing 500 updates.
 
+The original `comparison-plan.json` remains the retained budget envelope.
+`prepared/` now contains two executable Etude Run declarations, each with its
+full TrainingJob and source hash bundle, both compressed source archives, local
+admission evidence and the frozen analysis code. Preparation verifies the recipe
+hash in both commits, equal native/content/dependency/worker sources, the native
+world and deck population, and every declared observation shape. It plays no
+games. Remote CUDA numerics and runtime admission still run inside each arm.
+
+The dedicated `mtg281-l4` supply is configured for one slot and one machine,
+900-second startup, 600-second delivery and **zero added setup seconds**.
+Each job requests 42,900 seconds (11 h 55 m), leaving five minutes for deletion
+inside the 12-hour cost envelope. A setup timeout derives the original
+900-second cutoff from the worker deadline, so boot time cannot buy another
+setup allowance. The command requires 41,100 seconds remaining before entry:
+39,600 for the ordinary training watchdog, 600 for finalization, 300 for
+numerics and 600 for admission/slack. The watchdog includes its own 600-second
+stop/export reserve. Etude subtracts delivery time from the worker deadline;
+its independent guardian and controller request deletion at the rental deadline.
+Provider deletion remains best effort, so the reserve and later billing check
+are necessary; these settings are not a provider-guaranteed dollar cap.
+
+Launch **one arm at a time as separate allocations**, with no cohort combining
+their lifetimes, retries or continuation. Reconcile fresh individual quotes and
+ancillary charges for both arms inside $15 before the first launch. Recheck
+availability before the second; a quote reserves no machine. The ordinary
+worker retains paused exports if it cannot reach 500 updates. Only the delivered
+scientific receipt and complete metric coordinates establish completion.
+
 A 600-update pair already projects $14.46 before setup/teardown; 650 projects
 $15.76 and 900 $23.88. Spending on those longer paired windows is not justified
 under $15 without new measured evidence. No speedup of the repaired arm is
 assumed to fund admission.
 
-At 2026-11-11 22:42:24 UTC, the fresh configured L4 availability request failed
-with `ProviderUnavailable: GET catalog/gpus: no reply`. No current price,
-capacity, quote, new run or rental was obtained. The paid comparison therefore
+At 2026-11-11 22:42:24 UTC, and again at 23:15:36 UTC on the configured
+Task supply, the fresh L4 availability request failed with `ProviderUnavailable: GET catalog/gpus: no reply`. No current price,
+capacity, quote, new run or rental was obtained. `comparison-preflight.json`
+retains the latest refusal and zero new rental spending. The paid comparison therefore
 remains blocked, and there is **no verdict of flat, partly flat or not flat**
 after the repair. A remaining-cause follow-up depends on that comparison; this
 historical evidence cannot rank `_slice_obs_tensors`, allocator/native memory
@@ -248,3 +277,54 @@ complete error/recovery and host receipts, whole-rental accounting and confirmed
 teardown. The historical attribution is associative, and the unretained exact
 manifest/fold history remains unavailable. The software checks and retrospective
 plots do not complete the scientific Task.
+
+### Frozen paired analysis
+
+`scripts/report_collection_comparison.py` reads newly captured `before.json`
+and `after.json` plus each delivered `training/run.json`, saved locally as
+`before-training.json` and `after-training.json`. It checks capture, scientific
+run, source, seed and prepared-recipe bindings. Its output retains runtime,
+host, error/recovery and completed-work facts beside all phase statistics.
+It never interprets launcher success as reaching the scientific target.
+
+Updates **51–500** are the fixed analysis window, with endpoint windows 51–100
+and 451–500. Report OLS slopes per 100 updates and per million cumulative
+learner rows, plus whole-window means/p90 and endpoint means/medians/p90.
+Every collection subtimer and learning time also has seconds-per-1,000-row
+statistics. RSS is a stock: its work normalization is slope against cumulative
+rows, not RSS divided by the latest batch size.
+
+The three primary growth scores are raw collection, collection per 1,000 rows
+and RSS. For each timing series, practical flatness requires both its fitted
+window rise and its late-minus-early p90 to be at most **10% of the early
+mean**. RSS requires both its fitted rise and its late-minus-early median to
+be at most **1 decimal GB**. A score is the larger positive rise divided by
+that limit. These are prospective engineering tolerances, not statistical
+confidence limits. Both completed arms and baseline scores above one for all
+three primaries are required. Repaired scores all at most one mean “flattens
+through 500 updates”; otherwise a reduction of at least 50% in every score
+means “partly flattens”; other outcomes fail the declared flattening criteria.
+
+Missing measurements, paused/incomplete targets, differing host CPU/quota/memory
+facts or runtime identities, more than 10% differences in mean learner rows,
+games or decisions/game, or more than one percentage point difference in
+crashed games per attempted game withhold the overall verdict. Descriptive
+statistics remain available. One seed on separate hosts still cannot isolate
+causality. No result at 500 establishes behavior at 850–1700 updates.
+
+Prepare new reviewable inputs with a built native extension, or read the
+manifest-published preparation. These commands do not submit work:
+
+```sh
+PYTHONPATH=. uv run --no-sync python scripts/prepare_collection_comparison.py \
+  --out .runs/collection-growth/new-preparation
+PYTHONPATH=. uv run --no-sync python scripts/report_collection_comparison.py \
+  --prepared experiments/data/collection-growth-281/prepared \
+  --data .runs/collection-growth/paired-captures \
+  --out .runs/collection-growth/paired-report
+```
+
+The second command requires the four newly retained files described above;
+there are no measured paired inputs yet. All destinations must be new. The
+prepared directory includes the exact analysis sources and their digests,
+so later edits cannot silently redefine the pre-execution interpretation.

@@ -19,3 +19,18 @@ No fresh provider quote was available; paid execution remains unlaunched.
 Reversible CLI choice: capture is the script's only operation; drop its redundant
 subcommand. Reproduction requires a new `--out` directory, keeping the published
 input directory read-only. Updated examples name the new destination explicitly.
+
+Prospective engineering choices before any paired execution: analyze updates
+51–500 with endpoint windows 51–100 / 451–500; practical-flatness bounds are
+10% timing rise and 1 GB RSS rise, with >=50% reduction in every primary for a
+partial verdict. All baseline primaries must grow; missing or materially
+mismatched evidence withholds the overall verdict. These are descriptive
+single-seed tolerances, not uncertainty bounds. Retain the frozen algorithm.
+
+The 42,900-second requested rental leaves 300 seconds for best-effort teardown
+inside 12 hours. Zero extra setup on the dedicated supply prevents the SDK
+from adding time outside that envelope. Arms launch separately, not as a cohort.
+
+Compression assumption: preserve published preparation/analysis snapshots as
+evidence; simplify only maintained scripts and verify equivalent calculations
+and identical job declarations without regenerating those snapshots.

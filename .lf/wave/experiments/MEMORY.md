@@ -6,7 +6,7 @@ reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context
 not an active scope or new campaign authorization. Filesystem inspection of
 experiments on 2026-11-11 found no immediate child directories or child memories.
 
-## Self-play metric indexing (MTG-273, 2026-11-11)
+## Self-play metric indexing (MTG-273 / MTG-281, 2026-11-11)
 
 The reported width-64 frontier run's collection time rose from about 41 to 107
 seconds/update and RSS from 12.5 to 26 GB with roughly constant completed work.
@@ -39,6 +39,34 @@ measurements and remaining acceptance live in
 close the full slowdown Task or change a frozen run. Performance comparisons must
 pin the device explicitly after the merged MPS change altered fresh recipe
 selection; that change does not establish anything about historical CUDA pace.
+
+MTG-281's blockwise retrospective retained 1,744 w64 and 932 w160 updates.
+The apparent w160 counterexample does not hold for memory: both runs accumulate
+RSS and show collection spikes immediately after permanent-block endpoints.
+At equal update 900 both have 81 permanent blocks and about 454 MB of raw
+headers. Over updates 51–932, collection slopes normalized by learner rows are
+similar (+0.119 / +0.116 seconds per 1,000 rows per 100 updates), despite different
+absolute collection slopes. Width/depth, damping horizons, game lengths and
+separate hosts differ. Game lengths do not systematically increase with the
+slowdown. This supports index refresh as a contributor, not causal isolation.
+
+Surviving block headers reconstruct an index-size lower bound, not exact past
+manifest sizes or fold times. Collection subtimers measure elapsed time and can
+include background-writer pauses; they do not isolate neural compute. Final
+CPU quotas/models and game-error counts were unavailable at capture. A single
+launcher attempt does not establish zero recovered game failures. The seven
+published artifacts under `experiments/data/collection-growth-281/` retain
+provenance and the report; the projection avoids cumulative manifest expansion.
+
+Jack Heart's MTG-281 directive, 2026-11-11: "do 1 and 2. You have $15".
+The prospective matched CUDA/L4 comparison remains unexecuted: the 22:42:24 UTC
+provider read failed before any new rental or spending. Its 500-update horizon
+can test early growth, not the later 850–1700-update regime; historical duration
+is no fresh quote or completion guarantee. Source/runtime admission, execution,
+equal-work comparison, error receipts and whole-rental accounting remain with
+the Task plan. Neither these retrospective plots nor software shipment supplies
+a repaired-arm verdict. Residual-cause profiling is outside this Task; a causal
+follow-up depends on what the repaired arm actually shows.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
