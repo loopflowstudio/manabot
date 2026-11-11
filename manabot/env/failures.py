@@ -112,6 +112,7 @@ class FailureEvidence(BaseModel):
     operation: Literal["reset", "step"]
     games: list[GameInputs]
     skip_trivial: bool = True
+    # Retain historical names verbatim; native construction admits replay policies.
     opponent_policy: str = "none"
     seed_stride: int = 1
     identities: dict[str, object]
@@ -517,10 +518,28 @@ class ScalarCapture(_Capture):
         return result
 
 
+# Native vector reads CapturedVector delegates; everything else it owns or rejects.
+_VECTOR_READS = frozenset(
+    {
+        "buffered_call_timings",
+        "current_action_summaries",
+        "current_agent_indices",
+        "current_exposure",
+        "current_game_generations",
+        "current_game_seeds",
+        "current_matchup_indices",
+        "current_player_configs",
+        "get_last_info",
+        "semantic_decision_frames_json",
+        "skip_trivial_counts",
+    }
+)
+
+
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
-    On batch failure every active row retains its pre-call prefix. Native parallel
+    On batch failure every active row retains its pre-call prefix. Native batch
     execution may already have advanced other rows; their outcome is unknown,
     not a crashed/completed count. Replay tests each retained row independently.
     Other native APIs, including opt-in isolation, retain their existing owner.
@@ -562,13 +581,25 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
+        self._generations = self.native.current_game_generations()
         # Sampled roots pick setups natively at reset; evidence reads them back.
         self._sampled_roots = False
         self._action_cutoff: int | None = None
 
     def __getattr__(self, name: str) -> Any:
-        # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
-        return getattr(self.native, name)
+        # Only reads delegate: an undelegated mutation would leave the retained
+        # replay prefixes behind the native games.
+        if name in _VECTOR_READS:
+            return getattr(self.__dict__["native"], name)
+        raise AttributeError(
+            f"CapturedVector does not expose {name}; use its read methods or "
+            "reset_*_into_buffers / step_*_into_buffers calls so replay "
+            "evidence stays aligned with the games"
+        )
+
+    def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
+        """Read privileged current hands without adding them to failure evidence."""
+        return self.native.hand_snapshots(players)
 
     def set_buffers(
         self, buffers: dict[str, Any], action_overflow: str = "error"
@@ -672,7 +703,7 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
-        self._synchronize(reset=True)
+        self._synchronize()
 
     def reassign_roots_into_buffers(
         self, players: list[list[managym.PlayerConfig] | None]
@@ -696,16 +727,22 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
-        self._synchronize(reset=True)
+        self._synchronize()
 
-    def _synchronize(self, *, reset: bool = False) -> None:
+    def _synchronize(self) -> None:
         self._retain_exposure()
         seeds = self.native.current_game_seeds()
+        # Generations, not seeds, mark a new game: saturated seed succession and
+        # same-seed resets repeat a seed. They are process-local, never evidence.
+        generations = self.native.current_game_generations()
         restarted = [
             index
-            for index, (game, seed) in enumerate(zip(self.games, seeds, strict=True))
-            if reset or game.seed != seed
+            for index, (old, new) in enumerate(
+                zip(self._generations, generations, strict=True)
+            )
+            if old != new
         ]
+        self._generations = generations
         if self._sampled_roots and restarted:
             # Sampled roots record the native setup actually created.
             players = self.native.current_player_configs()
@@ -713,9 +750,8 @@ class CapturedVector(_Capture):
                 self.games[index].players = [
                     PlayerSetup.retain(player) for player in players[index]
                 ]
-        for game, seed in zip(self.games, seeds, strict=True):
-            if game.seed != seed:
-                game.restart(seed)
+        for index in restarted:
+            self.games[index].restart(seeds[index])
         self.next_seeds = [
             min(game.seed + self.stride, 2**64 - 1) for game in self.games
         ]
