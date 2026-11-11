@@ -41,20 +41,53 @@ ranking and symmetric fight scoring; let `Board::creatures` yield observation
 order directly, collecting only for sorting/reuse. The bounded benchmark derives
 receipt counts from its actual slots/steps/seed. These do not change strategy.
 
-## Remaining acceptance
+## Current alignment and remaining acceptance
 
-On 2026-11-11, realign read MTG-272's direction and PR #458's published diff.
-PR #458 was OPEN with no merge commit, also at the packaging pass. It removes
-Passive and changes HandSnapshot, capture-generation bookkeeping, explicit-seed
-reset and Gym auto_reset. Its description retained the older hand-target name;
-Task comments and published code carried the newer contract. Remote main
-ac601834d was already an ancestor here; MPS changes were integrated.
+Concept review (2026-11-11): **no design change and no open product choice**.
+Keep one `heuristic` strategy across evaluation and collection. Its memory is
+part of a player's game lifecycle, not a second policy or a persisted game
+record: batch resets clear it, forks copy it, and scalar games get fresh players.
+The direct selector's explicit reset remains useful because it does not own a
+game. A snapshot alone cannot replace decision history: canonical viewer JSON
+also omits target/cost focus. Keep live observations as the selector boundary.
+
+Reviewed normal batch stepping, opponent terminal reward/reset, closed-view and
+controlled-chooser decisions, and installed registration failure/recovery against
+the implementation and existing fixtures; no runtime checks were rerun. Preserve
+errors on unsupported policies, capacity overflow and source drift. Recovery uses
+a matching install or a new truthful registration, never relabeled old evidence.
+The existing usage docs already describe that experience; no new skill workflow
+is needed. `scratch/concept-review.html` shows the before/after and counterexamples.
+Next show the integrated MTG-272 lifecycle and required gate evidence below;
+conceptual alignment does not complete that acceptance work.
+
+The earlier iteration's packaging defect and instant-timing mismatch are fixed:
+`pyproject.toml` includes the Rust sources at their original paths,
+`scripts/release/smoke.py::check_heuristic_registration` checks installed
+registration and drift rejection, and the adapter header agrees with
+`Heuristic::timely`. The post-compress standalone-venv proof below covers the
+current heuristic sources. These are completed work, not another implementation
+pass. Bounded collection evidence is retained below with its limits.
+
+Rechecked 2026-11-11 against GitHub and both Tasks: [PR #458](https://github.com/loopflowstudio/manabot/pull/458)
+was OPEN at `dfba956ac0c0824a6ebfb05b11335c293242ddea`, with no merge commit.
+Its title/body now describe HandSnapshot and the reset contracts correctly.
+The published diff removes Passive and the Python policy allowlist, adds
+process-wide reset generations and privileged hand snapshots, reproduces every
+explicit reset seed, and removes Gym auto_reset. Remote main was
+`3c169916e2d642b5ead16aa303b979232635a63f`, already an ancestor of this checkout
+through `04f601491`; the throughput closeout adds no heuristic requirement.
 
 1. Integrate MTG-272 after landing, before publication. Preserve live-observation
    selection and lazy memory while reconciling Env constructors/forks, vector
    reset/capture, bindings, stub, wrapper and docs. Verify reset/reward/chooser
-   behavior. Final policies are none/random/heuristic; Passive remains here,
-   so the docs' three-value API is prospective until integration.
+   behavior, including repeated explicit seeds and terminal replacement at the
+   maximum seed. Preserve upstream's single native policy validation owner;
+   do not restore `VALID_OPPONENT_POLICIES` while resolving the wrapper conflict.
+   Final policies are none/random/heuristic; Passive remains here until that
+   integration. The guide no longer claims the three documented choices are
+   exhaustive before the removal lands. HandSnapshot stays outside selector
+   inputs, observations and captures.
 2. Gate: full debug Rust suite, fmt, all-target/all-feature clippy; affected
    Python simulation/evaluation, package-boundary and vector suites, plus
    `tests/env/test_observation.py`, `tests/training/test_action_cutoff.py` and
@@ -63,6 +96,13 @@ ac601834d was already an ancestor here; MPS changes were integrated.
 3. Normal same-runner Engine Budget must establish unchanged unused-policy
    cost/digests. Bounded collection below establishes neither a training-speed
    threshold nor strength. No artificial load or paid execution.
+
+PR #458 reports three retained-encoding replay failures (`binding_mismatch`)
+also reproduced on base `402dfd5b2`, and an intermittent Etude `seal_logs`
+missing-file failure that passed alone. These are upstream reports, not checks
+run on this branch or waivers of its gate. Compare any matching integration
+failures with that evidence; keep frozen receipts unchanged. No product decision
+is open for this port. Full release training smoke also remains unrun.
 
 ## Retained checks (2026-11-11)
 
@@ -91,7 +131,7 @@ agrees. Earlier detail and retired scripts are recoverable at
 cac743f9e:scratch/questions.md and 757bb6257 respectively. Unrelated b015d5 study
 notes remain at 757bb6257:scratch/questions.md and its linked evidence.
 
-## Packaged identity proof (2026-11-11, before this compress)
+## Packaged identity proof (2026-11-11, before iterator simplification)
 
 The release wheel contained all 91 Rust sources byte-for-byte. Outside the
 checkout, in a fresh isolated environment with PYTHONPATH unset,
@@ -108,7 +148,7 @@ subprocess deadline. Release wheel build and atomic extension replacement passed
 — 2 passed; focused Ruff lint/format passed. Full release training smoke was not
 rerun; its entry point includes the registration/drift check.
 
-## Bounded collection evidence (2026-11-11, before this compress)
+## Bounded collection evidence (2026-11-11, before iterator simplification)
 
 Command: `uv run --no-sync python scripts/bench_heuristic.py --setup <basic|elemental> --opponent <random|heuristic>`.
 Four fresh processes, each with a 60-second deadline, finished in 0.788–0.857
@@ -132,7 +172,7 @@ different terminal counts: ratios do not measure selector speedup. These rates
 show bounded native-opponent collection, not sustained training throughput,
 strength, unchanged unused-policy cost or Engine Budget acceptance.
 
-## This compress verification (2026-11-11)
+## Post-compress verification (2026-11-11, retained)
 
 `Board::creatures` now returns an iterator; ranking/reuse callers alone collect.
 The benchmark declares slots/steps/seed once and derives its receipt counts.
@@ -154,6 +194,12 @@ registered, validated, rejected drift in all four bound files and restored them.
 Installed and checkout digest:
 `925efebbdbea044a9b7144d337d98fe2285725b52f0afa788914440f18bd5fce`.
 Each subprocess had a 60-second deadline; the temporary venv was removed.
+
+Realign rechecked `source_bundle_sha256(heuristic_source_paths())` on 2026-11-11:
+it still matches that installed-wheel digest. Only the plan and the guide's
+premature exhaustive policy list changed in this pass; no runtime tests or
+benchmarks were rerun. `git diff --check` passed and `lf context` reports scratch
+within both configured limits.
 
 `uv run --no-sync python scripts/bench_heuristic.py --setup elemental --opponent heuristic`
 — completed under a 60-second deadline: 256 transitions, 7 terminals,
@@ -215,3 +261,12 @@ Historical step-1/2/3 design, implementation, reviews and execution notes are at
 run projections, bills and cleanup receipts remain published in
 `experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
 run IDs and dated direction; no historical result is being rewritten.
+
+## QA pass (2026-11-11)
+
+Installed-API QA passed without fixes; see `scratch/qa.html`. Batched wrapper,
+scalar adapter, reseed/max seed and `manabot.eval.local --opponent heuristic`
+(replay passed, native-v2 / heuristic-cpu-v2) all worked. Assumption
+(reversible): the QA skill's launch notes went into a new repository
+`.lf/skills/qa.md` via `lf skill customize qa`; drop it from this PR if it
+should land separately.

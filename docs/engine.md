@@ -276,7 +276,7 @@ Finished slots reset automatically, as with `random`.
 The default `opponent_policy="none"` leaves both seats' decisions to the caller.
 `"random"` selects uniformly from legal actions; `"heuristic"` uses the rules
 below. The Python `manabot.env.vector_env.VectorEnv` wrapper accepts the same
-option. Unsupported names raise `ValueError`; select one of these three values.
+option. Unsupported names raise `ValueError`.
 If an older installed extension rejects `"heuristic"`, install the matching
 package or [rebuild the extension](development.md#environment-and-commands).
 Encoding capacity failures remain errors under the configured overflow policy;

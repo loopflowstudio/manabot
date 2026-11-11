@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-277 QA — native heuristic opponent</title>
+<style>
+body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:860px;margin:2rem auto;padding:0 1rem;color:#2b2622;background:#fbf8f2}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #d8cfc0}
+pre{background:#f1ebe0;padding:.6rem .8rem;overflow-x:auto;font-size:13px}
+table{border-collapse:collapse}td,th{border:1px solid #d8cfc0;padding:.25rem .6rem;text-align:left}
+.ok{color:#2f6b2f;font-weight:600}.warn{color:#8a5a00;font-weight:600}
+</style></head><body>
+<h1>QA: native heuristic opponent (MTG-272 not integrated yet)</h1>
+<p>2026-11-11. Checkout HEAD <code>04f601491</code> plus the uncommitted one-line edit to <code>docs/engine.md</code>.
+Release extension built at 13:43; no Rust source under <code>managym/</code> is newer. macOS arm64, CPU, world w17.
+Every scenario used the installed public APIs and CLIs from scripts outside the checkout. I used no test fixtures, made no code fixes, and found nothing to repair.</p>
+
+<h2>1. The batched example in the engine guide</h2>
+<p>I ran the <code>docs/engine.md</code> snippet verbatim. <span class="ok">Works</span>: <code>reset_all</code> returns one pair per slot and <code>step</code> returns 5-tuples.</p>
+<p>Unsupported names: <code>"Heuristic"</code>, <code>"greedy"</code> and <code>""</code> raise
+<code>ValueError: unsupported opponent_policy: …</code>. <code>"passive"</code> is still accepted. That is expected until MTG-272 (PR #458, still OPEN) lands.</p>
+
+<h2>2. Training wrapper, full Elemental games</h2>
+<p>I used <code>manabot.env.vector_env.VectorEnv</code> with 4 slots, seed 7, v6/512 facts and default rewards. The learner picked a uniformly random legal action each step. Each run stopped after 60 finished games.</p>
+<table><tr><th>Learner deck</th><th>Opponent</th><th>Learner W–L</th><th>Batch steps</th><th>Wall</th></tr>
+<tr><td>UR</td><td>heuristic</td><td>3–57</td><td>721</td><td>0.6 s</td></tr>
+<tr><td>UR</td><td>random</td><td>23–37</td><td>1326</td><td>1.4 s</td></tr>
+<tr><td>GW</td><td>heuristic</td><td>1–59</td><td>534</td><td>0.6 s</td></tr>
+<tr><td>GW</td><td>random</td><td>34–26</td><td>1658</td><td>1.6 s</td></tr></table>
+<p><span class="ok">Works</span>. Rewards were exactly ±1 and appeared only on terminal transitions. That holds even when the opponent's own action ends the game, which happens in most heuristic losses. Finished slots reset automatically and no game was truncated. The heuristic is clearly a non-trivial opponent with either deck. These are single short samples, not strength or speed measurements.</p>
+
+<h2>3. Reseeding and the maximum seed</h2>
+<p>Raw <code>managym.VectorEnv(opponent_policy="heuristic")</code> with Mountain/Ogre/Bolt mirrors and a seeded random learner:
+6 games at <code>seed=2**64-1</code> completed. Two separate runs at seed 5 produced identical reward traces. <span class="ok">Deterministic.</span>
+The MTG-272 reset-generation semantics are not on this branch, so they could not be checked.</p>
+
+<h2>4. Scalar adapter through <code>Env</code></h2>
+<p>20 Elemental games per pairing (UR seat 0, GW seat 1, seeds 100–119). The chooser was read from <code>last_raw_obs.agent.player_index</code>.</p>
+<pre>Heuristic   vs Heuristic       UR 18 – GW 2   4164 decisions 2.5 s
+Heuristic   vs ScriptedGreedy  H  18 – SG 2   4389 decisions 3.4 s
+ScriptedGreedy vs Heuristic    SG 3 – H  17   3519 decisions 2.6 s</pre>
+<p><span class="ok">Works</span>: every game finished and nothing errored. The heuristic beats the frozen v1 fallback 35–5 across seats.</p>
+
+<h2>5. Local evaluation CLI with <code>--opponent heuristic</code></h2>
+<p>The checkpoints from sibling worktrees are from older worlds. They are rejected clearly with
+<code>checkpoint world/setup/input binding differs from this runtime</code> and an <code>admission-failure.json</code>.
+To get a current-world checkpoint I trained one with <code>uv run manabot train --out /tmp/qa277/train --seconds 500</code> (local smoke recipe, 4.5 min on CPU). Then I ran the documented command:</p>
+<pre>uv run python -m manabot.eval.local --checkpoint …/self-play-raw.pt --opponent heuristic \
+  --deal-seed 101 --out /tmp/qa277/local2 --seconds 300 --workers 2
+completed: 1/1 complete deals; 4/4 games; evidence: /tmp/qa277/local2/panel
+score: 0.000 (1 deal block; …); local-check-not-admission</pre>
+<p><span class="ok">Works</span>. <code>replay.json</code> passed: 483 decisions, 0 mismatches, 0 private exposures. The opponent registration reads
+<code>{"kind":"heuristic","version":"native-v2"}</code>, compute class <code>heuristic-cpu-v2</code>, information boundary <code>acting-viewer</code>.
+The same checkpoint scored 0.250 against <code>--opponent random</code>, so the heuristic is the harder anchor, as it should be.</p>
+
+<h2>What works now</h2>
+<ul><li>Batched native heuristic opponent on both the raw and training-wrapper paths, with correct terminal rewards and auto-reset.</li>
+<li>Scalar arena adapter and local evaluation, with the new v2 identity and clean replay.</li>
+<li>Deterministic under repeated seeds, including the maximum seed.</li></ul>
+
+<h2>Not reached</h2>
+<ul><li>Integration with MTG-272 (PR #458 still OPEN): Passive removal, reset generations, and the single validation owner. This is plan step 1.</li>
+<li>Full debug Rust suite, clippy, the full Python suites and same-runner Engine Budget (plan steps 2–3). QA does not substitute for them.</li>
+<li>Control-effect and closed-decklist play were not driven by hand. They are covered only by existing tests (<code>tests/semantic/test_player_control.py</code>).</li></ul>
+
+<h2>Still wrong or rough (worst first)</h2>
+<ol><li><span class="warn">Minor, owned by MTG-272:</span> the raw native error doesn't list the valid names. The Python wrapper's message lists <code>passive</code>, which is about to be removed. Resolve this during the MTG-272 integration, not here.</li></ol>
+</body></html>
