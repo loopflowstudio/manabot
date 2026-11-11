@@ -12,7 +12,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.recipes.baseline import baseline
+from manabot.recipes.baseline import baseline_test
 from manabot.training.records import TrainingCoordinates, TrainingRun
 from manabot.verify.action_cases import decision_case
 from manabot.verify.choice_corpus import Case
@@ -105,7 +105,7 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
     torch.set_num_threads(1)
     try:
         with torch.random.fork_rng():
-            plan = baseline(1)
+            plan = baseline_test(1)
             agent = ActorCritic(ObservationSpace(), plan.regime.agent)
             path = tmp_path / "initial.pt"
             save_checkpoint(

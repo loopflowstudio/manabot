@@ -14,6 +14,7 @@ import torch
 from torch import Tensor, nn
 
 from manabot.infra.profiler import Profiler
+from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import NumericalError, require
 from manabot.training.rollout.actions import PackedActions
 
@@ -30,7 +31,11 @@ def _norm(tensors: list[Tensor]) -> float:
     if not tensors:
         return 0.0
     return float(
-        torch.stack([t.detach().double().square().sum() for t in tensors]).sum().sqrt()
+        torch.stack(
+            [float64_operand(t.detach()).double().square().sum() for t in tensors]
+        )
+        .sum()
+        .sqrt()
     )
 
 
@@ -220,7 +225,12 @@ class OptimizerHealth:
             delta = (
                 torch.stack(
                     [
-                        (p.detach().double() - b.double()).square().sum()
+                        (
+                            float64_operand(p.detach()).double()
+                            - float64_operand(b).double()
+                        )
+                        .square()
+                        .sum()
                         for p, b in zip(parameters, before, strict=True)
                     ]
                 )
@@ -228,7 +238,11 @@ class OptimizerHealth:
                 .sqrt()
             )
             scale = (
-                torch.stack([b.double().square().sum() for b in before]).sum().sqrt()
+                torch.stack(
+                    [float64_operand(b).double().square().sum() for b in before]
+                )
+                .sum()
+                .sqrt()
             )
             self.health["parameter_delta_l2"] = float(delta)
             self.health["parameter_relative_delta"] = (
