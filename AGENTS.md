@@ -458,6 +458,15 @@ produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana ability, not multiple fixed mana abilities. Verify each
 choice by paying a real cost and checking the remaining mana.
 
+### Etude training records
+
+Training row tables belong under the metric run's `artifacts/`, named by their
+content digest, with `.partial` staging before atomic rename. Etude's tracker
+and launcher courier carry these immutable author artifacts before metric
+references; they are never checkpoints. Resolve a reference through its selected
+metric block's Storage and run prefix, after attempt/update supersession, so
+relocated evidence and resumed runs keep the same meaning.
+
 ### Etude card evaluation
 
 Etude discovers experiment files with `runpy`; pass evaluation callbacks from

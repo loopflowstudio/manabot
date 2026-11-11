@@ -123,4 +123,5 @@ jobs:
             tests/training/test_monitor_evaluation.py \
             tests/training/test_batch_closure.py tests/training/test_credit_assignment.py \
             tests/training/test_frozen_opponent.py tests/training/test_rl_runtime.py \
+            tests/training/test_outcome_tables.py \
             tests/training/test_recovery.py tests/training/test_elemental_uniform.py
