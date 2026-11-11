@@ -36,21 +36,20 @@ impl<'a> Board<'a> {
                 .collect(),
         }
     }
-    fn creatures(&self, own: bool) -> Vec<&'a PermanentData> {
+    /// Keep observation order; callers collect only when ranking or reusing a side.
+    fn creatures(&self, own: bool) -> impl Iterator<Item = &'a PermanentData> + '_ {
         let side = if own {
             &self.raw.agent_permanents
         } else {
             &self.raw.opponent_permanents
         };
-        side.iter()
-            .filter(|p| {
-                p.is_animated
-                    || self
-                        .by_key
-                        .get(&p.registry_key)
-                        .map_or(p.toughness > 0, |c| c.card_types.is_creature)
-            })
-            .collect()
+        side.iter().filter(|p| {
+            p.is_animated
+                || self
+                    .by_key
+                    .get(&p.registry_key)
+                    .map_or(p.toughness > 0, |c| c.card_types.is_creature)
+        })
     }
     fn own(&self, p: &PermanentData) -> bool {
         p.controller_id == self.raw.agent.id
@@ -337,7 +336,6 @@ impl Heuristic {
         damage <= 0
             || (s.selector == "AnyTarget" && damage >= b.raw.opponent.life)
             || b.creatures(false)
-                .iter()
                 .any(|p| Body::of(p, (0, 0)).dies(damage, false))
     }
     fn pay(&mut self, b: &Board<'_>) -> Option<usize> {
@@ -359,7 +357,7 @@ impl Heuristic {
         b.first(Action::PayCost)
     }
     fn learn(&self, b: &Board<'_>) -> Option<usize> {
-        let removal_wanted = !b.creatures(false).is_empty();
+        let removal_wanted = b.creatures(false).next().is_some();
         let mut best = None;
         for (i, a) in b
             .actions
@@ -525,22 +523,16 @@ impl Heuristic {
         if self.attack_pool.is_none() {
             self.attack_pool = Some(
                 b.creatures(true)
-                    .iter()
                     .filter(|p| !p.tapped && (!p.is_summoning_sick || p.keywords.haste))
                     .map(|p| p.id)
                     .collect(),
             );
             self.held = self.defenders_to_hold(b);
         }
-        let blockers: Vec<_> = b
-            .creatures(false)
-            .into_iter()
-            .filter(|p| !p.tapped)
-            .collect();
+        let blockers: Vec<_> = b.creatures(false).filter(|p| !p.tapped).collect();
         let pool = self.attack_pool.as_ref().unwrap();
         let unblockable: i32 = b
             .creatures(true)
-            .iter()
             .filter(|p| pool.contains(&p.id) && !blockers.iter().any(|bl| can_block(bl, p)))
             .map(|p| p.power)
             .sum();
@@ -574,19 +566,11 @@ impl Heuristic {
         b.declared(dominators.is_empty())
     }
     fn defenders_to_hold(&self, b: &Board<'_>) -> BTreeSet<i32> {
-        let mut incoming: Vec<_> = b.creatures(false).iter().map(|p| p.power).collect();
+        let mut incoming: Vec<_> = b.creatures(false).map(|p| p.power).collect();
         incoming.sort_by(|a, b| b.cmp(a));
         let pool = self.attack_pool.as_ref().unwrap();
-        let mut defenders = b
-            .creatures(true)
-            .iter()
-            .filter(|p| !pool.contains(&p.id))
-            .count();
-        let mut candidates: Vec<_> = b
-            .creatures(true)
-            .into_iter()
-            .filter(|p| pool.contains(&p.id))
-            .collect();
+        let mut defenders = b.creatures(true).filter(|p| !pool.contains(&p.id)).count();
+        let mut candidates: Vec<_> = b.creatures(true).filter(|p| pool.contains(&p.id)).collect();
         candidates.sort_by_key(|p| (-p.toughness, p.power));
         let mut held = BTreeSet::new();
         for p in candidates {
@@ -618,15 +602,10 @@ impl Heuristic {
             .collect();
         let mut attackers: Vec<_> = b
             .creatures(false)
-            .into_iter()
             .filter(|p| offered.contains(&p.id) || (self.blocks.contains_key(&p.id) && p.tapped))
             .collect();
         attackers.sort_by_key(|p| -p.power);
-        let blockers: Vec<_> = b
-            .creatures(true)
-            .into_iter()
-            .filter(|p| !p.tapped)
-            .collect();
+        let blockers: Vec<_> = b.creatures(true).filter(|p| !p.tapped).collect();
         let mut pairs = vec![];
         for a in &attackers {
             for bl in &blockers {

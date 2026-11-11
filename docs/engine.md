@@ -306,7 +306,7 @@ Its rules are deliberately approximate:
 - Play lands and activate fetch lands, then cast the highest-mana-value useful
   spell, letting its own spell resolve before casting another. Estimate mana
   from untapped lands; pay kicker when that estimate covers spell plus kicker.
-- Pass in its own upkeep and draw step. Save untargeted draw/selection spells
+- Delay instants in its own upkeep and draw step. Save untargeted instants
   and draw/life abilities for the opponent's end step.
 - Derive target polarity from card definitions: harmful effects target the
   opponent's side, beneficial effects its own. Hold removal for a kill, burn

@@ -12,7 +12,7 @@ a target side by seat: from seat 0 it burns itself with Igneous Inspiration.
   spell resolves before the next). The engine only offers affordable casts, so
   repeated highest-first casting spends as much mana as the offers allow.
   Kicker is paid when untapped lands cover spell plus kicker.
-- Instant timing: nothing in its own upkeep or draw step. Instants without a
+- Instant timing: delay instants in its own upkeep or draw step. Instants without a
   target that matters now (card draw, selection) and draw or life abilities
   wait for the opponent's end step, so the turn's mana goes to permanents first.
 - Targets: effect polarity is derived from the engine's card definitions

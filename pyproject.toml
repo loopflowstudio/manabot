@@ -124,6 +124,7 @@ features = ["python"]
 manifest-path = "managym/Cargo.toml"
 module-name = "manabot.managym._managym"
 python-source = "."
+# Keep managym/src at its original paths for arena source-byte identity.
 python-packages = ["manabot", "academy", "managym"]
 zip64 = true
 include = [
@@ -141,7 +142,6 @@ exclude = [
     "academy/ui/build/**",
     "academy/ui/e2e/**",
     "academy/ui/static/**",
-    { path = "managym/src/**", format = "wheel" },
     { path = "managym/state/**", format = "wheel" },
     { path = "managym/cards/**", format = "wheel" },
     { path = "managym/tests/**", format = "wheel" },
