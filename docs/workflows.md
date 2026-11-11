@@ -49,6 +49,9 @@ reference; the current per-recipe benchmark below remains usable today.
 Start with retained receipts and the **Update time** Perf series. Read collection's
 native stepping, encoding and policy inference beside learner time; retain
 inference calls and rows per call so batching changes remain interpretable.
+Distinguish one seed's progress from aggregate throughput or cost: packing can
+improve the latter while slowing every seed. Compare overlapping post-warmup
+packed samples to matched solo ordinals, keeping both latency and throughput.
 `TrainingRun.host` supplies CPU and quota facts; keep GPU, source, world, input,
 precision, model size and workload identities with each comparison. Read
 evaluation's `performance.json` alongside training to show its share of the
@@ -66,13 +69,17 @@ uv run python scripts/bench_training_update.py --streams 256 --updates 3 \
 
 This prints seconds, decisions and games per update, host facts and phase timings
 in microseconds per decision. It retains checkpoints and per-update metrics under
-`--out`; without that option the run directory is temporary. The default device
-is CPU. `--recipe` selects a regime JSON or `module:function` declaration;
-`--device cuda` selects CUDA. The benchmark pins its in-memory recipe to the
-current world, so it is not a reproduction of frozen experiment evidence. Keep
-the recipe and input capacities matched across baseline and candidate; a capacity
-failure requires a compatible declared workload, not truncation or edits to a
-frozen recipe.
+`--out`; without that option the run directory is temporary. Keep baseline and
+candidate in separate `--out` and `--json` paths, with matching input capacities
+and matching, explicit `--recipe`, `--seed` and `--device` settings. `--recipe` accepts a
+regime JSON or `module:function`; the device defaults to CPU (`--device cuda`
+selects CUDA). The benchmark pins its in-memory recipe to the current world, so
+it cannot reproduce frozen experiments. Capacity failure requires a compatible
+declared workload, not truncation or edits to a frozen recipe.
+
+After an interrupted run, read the retained per-update rows: receipt timers can
+cover only the last attempt while counts span attempts. Keep failed attempts and
+missing measurements visible.
 
 Use `--cuda-counts PATH` in a separate diagnostic run for kernel launches and
 synchronizations. It requires real CUDA and changes timing; its whole-run counts
@@ -87,6 +94,10 @@ behavior digests. A GPU label alone does not identify a comparable host; the
 substantial host variation. Never induce artificial load. If required hardware is
 unavailable, record the exact command and missing hardware as a deferred check;
 do not rent automatically, substitute CPU timing for CUDA evidence or claim a gain.
+
+If behavior digests diverge unexpectedly or the workloads do not match, the
+comparison cannot support a speed claim. Revise the comparison plan, repair any
+behavior regression and repeat the affected measurements within existing authority.
 
 Fewer seconds per update does not establish faster learning. Changes to precision,
 policy lag or batch composition need separate learning evidence. This software

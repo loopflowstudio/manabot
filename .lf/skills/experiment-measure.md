@@ -18,6 +18,9 @@ Measure what training and evaluation spend time on, then select a worthwhile sof
    included update ordinals, repetitions, memory and time limits explicit. Use
    interleaved comparisons to expose shared-host drift. Do not compare wall time
    across machines or pool different sizes into one gain.
+   State whether the objective is one seed's progress or aggregate throughput/cost.
+   For packed runs, retain per-seed latency and aggregate throughput separately,
+   using overlapping post-warmup samples and matched solo ordinals.
 3. Start with the **Update time** Perf series and its retained per-update rows.
    Separate collection's native stepping, observation encoding, preparation,
    policy inference/action selection, recording and assembly from learner targets

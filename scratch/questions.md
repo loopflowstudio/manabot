@@ -2,115 +2,77 @@
 
 ## Direction and design
 
-Task 4ceb1d adds `experiment-performance` for training/evaluation speed. The
-Task brief quotes Jack Heart's focus as "how fast can we get learning to happen"
+The Task brief quotes Jack Heart's focus as "how fast can we get learning to happen"
 and "inference during training time: basically training speed, inference speed,
-per size of model". The shipping guide is `docs/workflows.md`, “Training and
-evaluation performance”; its documentation handoff was preserved during implementation.
+per size of model". `docs/workflows.md`, “Training and evaluation performance”,
+is the shipping guide; `experiment-measure` and `experiment-performance-review`
+own measurement and review. Software delivery grants no scientific execution or
+spending authority and cannot complete a parent experiment.
 
-The graph uses measurement → implement → compress → builtin refresh → concept
-review → performance review → implementation loop, followed by the same
-publish/demo/deliver/verify boundaries as `engine-performance`. Two repository
-skills own measurement and review. Existing workflow validation checks the new
-compiled loop, reference resolution and delivery boundaries without execution.
-
-Reversible choice: keep this single consumer's optimization steps in
-`experiment-performance.yaml`, composing builtin refresh and deliver directly.
-No second optimization subgraph is needed; the engine's shared subgraph remains
-unchanged because Coverage consumes it. Task 855bff owns the future standing
-size-ladder benchmark. Its 2026-11-11 status read showed no PR or Graph process;
-the current benchmark remains the reference until its documented command ships.
-No guessed CLI or duplicate benchmark is added.
+Reversible choice: keep this single consumer's optimization loop in
+`.lf/graphs/experiment-performance.yaml`, composing builtin refresh and deliver.
+Coverage still consumes the engine's shared `engine-optimization`; no second
+optimization subgraph is needed. Task 855bff owns the standing size-ladder
+benchmark. Its 2026-11-11 status read showed no PR or Graph process. Use the
+current benchmark until its documented command ships; add no guessed CLI or
+second ladder.
 
 ## Delete — do not maintain
 
-No production deletion targets: this is a new workflow with a distinct domain.
-Preserve `engine-performance`, `engine-optimization`, Coverage composition,
-scientific experiment boundaries, frozen recipes/worlds/inputs and retained data.
-Inherited b015d5 execution notes were removed from active scratch; their complete text
-is retained at `3c169916e2d642b5ead16aa303b979232635a63f:scratch/questions.md`.
-They grant no execution authority to this Task. Its report remains at
-`experiments/data/training-throughput-b015d5-v1/report.md`, with maintained
-interpretation in `experiments/training-update-time.md`.
+No production deletion targets: this is an additive workflow. Preserve the engine
+graphs, Coverage composition, scientific boundaries and frozen evidence/configs.
+Inherited b015d5 execution notes are retained at
+`3c169916e2d642b5ead16aa303b979232635a63f:scratch/questions.md`; they grant this
+Task no execution authority. Earlier workflow review notes were checkpointed at
+`bacd71935f527bfe24278bc60ea2a50a13243e13:scratch/questions.md` before compression.
 
-## Evidence and limits
+## Evidence and limits — 2026-11-11
 
-The documentation step restored the b015d5 report from the local artifact cache
-(one file, zero network bytes); its SHA-256 matched the manifest. The report's
-C1/C2 analyses support same-host controls, matched post-warmup ordinals and
-separate per-seed latency/aggregate throughput. Its earlier “two-seed ceiling”
-wording is qualified by the maintained summary: three seeds were not tested.
-Precision health did not establish learning equivalence. These observations
-inform the skill boundaries; no training, evaluation, rental or campaign is
-needed to implement or validate the workflow.
+The documentation step restored
+`experiments/data/training-throughput-b015d5-v1/report.md` from the local artifact
+cache (one file, zero network bytes); SHA-256 matched the manifest. C1/C2 support
+same-host controls, overlapping packed samples and matched solo ordinals, with
+per-seed latency separate from aggregate throughput. Three seeds were not tested,
+so the report's earlier “two-seed ceiling” is qualified by
+`experiments/training-update-time.md`. Precision health is not learning equivalence.
 
-Reconciliation found Infrastructure memory still describing full CUDA admission
-as unproved. The retained report's repaired C1 section records successful
-regression/worker/checkpoint admission on 2026-11-10; C2 adds large-model packing
-with 6–7 matched updates per seed. Memory now distinguishes those later results
-from the original failed/short attempts, preserves precision and one-host limits,
-and carries the selector's unknown-state retry lesson. No child Infrastructure
-memories exist in this checkout. The Wave objective still fits.
+Reconciliation found Infrastructure memory's CUDA admission status stale. Repaired
+C1 passed regression/worker/checkpoint admission on 2026-11-10; C2 supplied 6–7
+matched large-model updates per packed seed. The reconciled memory preserves the
+original failed/short attempts, one-host limits and unknown-acquisition retry
+lesson. No immediate Infrastructure child memories were found; the Wave objective
+still fits. Related Experiments memory coverage is recorded in Infrastructure
+memory, not claimed as a full review here.
 
-The measurement and review skills now explicitly separate per-seed latency from
-aggregate throughput/cost and require overlapping packed samples with matched
-solo ordinals. This follows the existing C1/C2 evidence; it adds no campaign.
-Upstream's fresh-device selection does not change this workflow's CPU example:
-`scripts/bench_training_update.py:main` still explicitly defaults `--device` to
-`cpu`. No executable mismatch was found.
+Concept review walked a slow policy-inference update through evidence and delivery
+and found no open product choice. Existing runs, update rows, evaluation plans and
+receipts suffice. Guard against treating faster updates as faster learning,
+packing as faster per-seed progress, and last-attempt timers as cumulative timers.
+Capacity failure or a behavior mismatch invalidates the comparison; retain failed
+evidence and revise the plan. Missing CUDA stays an exact deferred check.
 
 ## Implementation and remaining work
 
-Documentation handoff (2026-11-11): `docs/workflows.md` remains the shipping
-guide. The write-docs pass preserved the existing examples and added separate
-baseline/candidate output paths, interrupted-receipt interpretation and recovery
-from invalid comparisons. No open product question or new implementation scope.
+Compression keeps runnable commands in `docs/workflows.md` and evaluation plan
+requirements in `docs/evaluation.md`, with links from the measurement skill.
+Benchmark settings and output retention now sit together in the guide; repeated
+review history is reduced here. The compiled-loop check names its return target
+directly. No further code simplification was warranted.
+
+QA's repository guidance distinguishes actual-workload measurements from forbidden
+artificial contention (`TESTING.md`); workflow-only QA needs neither. The CPU
+example still matches `scripts/bench_training_update.py:main`'s explicit default.
+The installed compiler exposed 13 nodes, an implementation return edge and
+interactive demo/verify returns to measurement. After realignment,
+`uv run python scripts/check_loopflow_workflows.py` passed all eight graphs and
+loop/delivery/scientific boundaries; focused Ruff check/format also passed.
+
+Implementation and concept review found no outstanding runtime repair or product
+question. Gate and delivery remain with the selected Task graph. Presentation:
+`scratch/concept-review.html` and `scratch/qa.html`.
 `lf open --host desktop --file docs/workflows.md` returned “No Desktop Files view
-attached; nothing opened.” The next step should read the guide in this checkout.
+attached; nothing opened.” Human presentation remains for demo. No benchmark,
+training/evaluation job, rental or server was started.
 
-Compression keeps runnable benchmark examples and evaluation plan requirements
-in `docs/workflows.md` and `docs/evaluation.md`; the measurement skill links to
-those owners instead of repeating commands and the plan schema. The compiled
-loop check names its return target directly rather than relying on list offsets.
-No further deletion targets were found.
-
-The implementation recheck corrected QA guidance that conflated actual-workload
-benchmarks with forbidden artificial contention. `TESTING.md` permits the former;
-workflow-only QA needs neither. The QA transcript now uses uv for Python commands.
-No executable behavior or graph changed, so the passing compiler and Ruff results
-below remain applicable.
-
-Implementation and concept review are complete; gate and delivery remain with the
-selected Task graph. No outstanding product decision, runtime repair or additional
-scope was found. No benchmark, training/evaluation job, rental or server was started.
-The documentation preview previously returned “No Desktop Files view attached;
-nothing opened.” Human presentation remains for demo; it does not block headless
-workflow validation.
-
-After realignment: `uv run python scripts/check_loopflow_workflows.py` — all eight graphs
-compile and resolve, including the new 13-node workflow; loop/delivery/scientific
-boundaries pass. `git diff --check` passes. Compression's focused Ruff check/format
-results remain applicable: realignment changes only Markdown. `lf context` reports
-memory and scratch below both configured limits.
-
-## Concept review — 2026-11-11
-
-Outcome for loop-or-next: nothing to change and no open product choice. The
-headless walkthrough checked a slow policy-inference update from graph selection
-through retained comparison, behavior review and software delivery. Existing
-`TrainingRun`, update rows, evaluation plans and receipts carry the evidence;
-the graph adds orchestration without a second experiment or persistence model.
-
-The principal conceptual risk is treating faster updates as faster learning.
-The implemented guide and skills already keep precision/sampling adoption
-dependent on separate learning evidence. Counterexamples also remain explicit:
-packing can slow each seed, an interrupted receipt can mix attempt-local timers
-with cumulative counts, and capacity failure cannot justify a smaller workload.
-Recovery retains failed evidence, revises invalid comparisons before further
-implementation, and leaves unavailable CUDA as an exact deferred check. These
-paths require no additional product decision within this Task's stated scope.
-
-The installed compiler exposed the expected 13 nodes, implementation return
-edge and interactive demo/verify returns to measurement during this review.
-Next presentation: `scratch/concept-review.html`, showing routing, evidence
-ownership and failure/recovery. No benchmark or execution was started.
+Compression check: `git diff --check` — passed; `lf context` — memory and scratch
+below both limits. Only Markdown changed in this pass; no behavior checks rerun.

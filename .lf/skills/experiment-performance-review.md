@@ -19,6 +19,9 @@ Judge training and evaluation speed gains against preserved behavior and what th
    declared cadence. Do not sum nested/overlapping clocks, mistake cache reuse for
    a measurement or label elapsed time/steady rates as an inclusive rental bill.
    Keep negative results, failed attempts, sample limits and timing spread visible.
+   Judge packing against the declared objective: higher aggregate throughput can
+   slow each seed. Require overlapping packed samples and matched solo ordinals;
+   a missing overlap is no packing measurement.
 3. Check behavior/decision digests, sampled-game or matched-trace evidence and
    affected correctness checks. Training state comparisons include raw/EMA weights
    and optimizer state where deterministic; nondeterministic runs need the

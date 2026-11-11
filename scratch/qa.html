@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>QA — experiment-performance workflow</title>
+<style>body{font:15px/1.5 system-ui;max-width:52rem;margin:2rem auto;padding:0 1rem}pre{background:#f4f1ea;padding:.6rem;overflow:auto}h2{margin-top:2rem}</style></head><body>
+<h1>QA: <code>experiment-performance</code> (Task 4ceb1d), 2026-11-11</h1>
+<p>Who uses this: a person, or an agent that a person starts, picking a workflow for a training or evaluation speed question. What they touch: <code>lf graph list/show</code>, <code>lf graph experiment-performance</code>, the text of the two skills, and the commands and doc sections those skills point to.</p>
+
+<h2>1. Finding and inspecting the graph</h2>
+<p><code>lf graph list</code> lists <code>experiment-performance</code> next to <code>engine-performance</code>. <code>lf graph show experiment-performance</code> gives 13 nodes:</p>
+<pre>experiment-measure → implement → compress → sync → realign → concept-review
+→ experiment-performance-review → loop-or-next (returns_to 1: implement)
+→ pr-publish → demo [interactive, returns_to 0] → gate → land --wait-and-fix
+→ verify [interactive, returns_to 0]</pre>
+<p><code>lf graph experiment-performance</code> is valid syntax according to <code>lf help</code> ("lf graph &lt;name&gt; [message] select a graph explicitly"), which is how <code>docs/workflows.md</code> says to start it. <code>lf help experiment-measure</code> prints the skill text an agent would get.</p>
+
+<h2>2. Validation</h2>
+<pre>$ uv run python scripts/check_loopflow_workflows.py
+experiment-performance: compiled; 13 nodes; all skills resolve
+engine-performance: compiled; 13 nodes; ... engine-optimization: compiled; 8 nodes
+Coverage/performance loops, single delivery, optional software and experiment review boundaries: valid</pre>
+<p><code>git diff --check</code> passes. The branch already includes everything on <code>origin/main</code>.</p>
+
+<h2>3. Does each named tool and reference exist?</h2>
+<ul>
+<li><code>uv run python scripts/bench_training_update.py --help</code> shows <code>--recipe --device --streams --updates --seed --json --out --cuda-counts</code>, the flags the docs example and the skill use. The default device is <code>cpu</code>, and <code>--recipe</code> takes a JSON file or <code>module:function</code>, as the docs say.</li>
+<li><code>uv run python scripts/diagnose_training_transfers.py --help</code> has the <code>recording|transfers</code> probes, run with <code>--fixture --out</code>.</li>
+<li><code>uv run python -m manabot.eval.serving_benchmark --help</code> takes <code>--plan --out</code>, matching <code>docs/evaluation.md</code> section "Performance evidence and calibration" (that anchor exists).</li>
+<li><code>TrainingRun.host</code> (<code>manabot/training/records.py:153</code>), the "Update time" Perf series (<code>manabot/training/panels.py</code>), <code>performance.json</code> receipts (<code>manabot/eval/</code>), <code>experiments/training-update-time.md</code> and <code>docs/development.md#environment-and-commands</code> all exist.</li>
+<li>Task 855bff (standing size-ladder benchmark) is still in planning with no Graph run, so the skill's "until it lands, use the current benchmark" wording still applies.</li>
+</ul>
+
+<h2>4. Routing for someone who already uses engine-performance</h2>
+<p><code>docs/workflows.md</code> sends native-engine bottlenecks (state copying, search) to <code>engine-performance</code>, and collection, inference, learner and evaluation questions to the new graph. It says Coverage keeps <code>engine-optimization</code>. Both engine graphs still compile unchanged.</p>
+
+<h2>Fixed</h2>
+<p>No defects in the change. I added a "This repository" section to <code>.lf/skills/qa.md</code> (a new repository customization) recording how to QA workflow-only changes and how to launch Academy.</p>
+
+<h2>Could not reach</h2>
+<ul>
+<li>A full <code>lf graph experiment-performance</code> run was not started: it launches agent steps and may execute measurements beyond this workflow-installation Task. The route was inspected through the installed compiler. <code>TESTING.md</code> permits actual-workload measurements and forbids artificial contention; workflow installation itself grants no resource authority.</li>
+<li>The <code>bench_training_update.py</code> example was not executed because this Task validates workflow installation, not a speed claim. Only its flags were checked. CUDA paths (<code>--device cuda</code>, <code>--cuda-counts</code>) require a separately available, authorized CUDA device.</li>
+</ul>
+
+<h2>Still wrong</h2>
+<p>Nothing found.</p>
+</body></html>
