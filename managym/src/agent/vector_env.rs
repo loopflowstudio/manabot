@@ -815,7 +815,7 @@ impl VectorEnv {
         }
 
         while Self::is_opponent_turn(&obs) {
-            let opponent_action = opponent_policy.select_action(env)?;
+            let opponent_action = opponent_policy.select_action(env, &obs)?;
             let (next_obs, opponent_reward, opp_terminated, opp_truncated, opp_info) =
                 env.step(opponent_action).map_err(|error| {
                     AgentError(format!(
@@ -863,7 +863,7 @@ impl VectorEnv {
                     "exceeded max opponent steps without reaching hero turn".to_string(),
                 ));
             }
-            let opponent_action = opponent_policy.select_action(env)?;
+            let opponent_action = opponent_policy.select_action(env, &obs)?;
             let (next_obs, _, terminated, truncated, _) =
                 env.step(opponent_action).map_err(|error| {
                     AgentError(format!(

@@ -5,7 +5,7 @@ once, decides what is legal at every point, shows each seat only what that seat
 may see, and can copy, replay or re-deal a game exactly. It never chooses among
 a learner's legal actions. Forced single actions are played automatically, and
 every other choice comes from outside, whether from a policy, a search player,
-a script or a person; a native scripted opponent (`passive`, `random`) is an
+a script or a person; a native opponent (`random`, `heuristic`) is an
 explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
@@ -16,6 +16,7 @@ cross-package contract is in the
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
+- [Built-in heuristic opponent](#built-in-heuristic-opponent)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
 - [What we know](#what-we-know)
@@ -244,6 +245,92 @@ throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
 search/decision digest, fails.
+
+### Built-in heuristic opponent
+
+Use `opponent_policy="heuristic"` to step a batch against the rule-based opponent:
+
+```python
+from manabot import managym
+
+games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="heuristic")
+players = [
+    managym.PlayerConfig(name, {"Forest": 20, "Llanowar Elves": 20})
+    for name in ("learner", "heuristic")
+]
+observations = games.reset_all(players)
+# Illustrate the action-index interface with the first legal action in each slot.
+transitions = games.step([0, 0])
+```
+
+The supplied lists are small development decks, with the learner in seat 0
+and the heuristic in seat 1. Each reset returns an
+`(observation, info)` pair; each step returns an
+`(observation, reward, terminated, truncated, info)` tuple per slot. Replace the
+zero indices with choices from your learner. The engine advances the heuristic's
+decisions internally until the learner can choose again or the game ends; no
+per-slot Python opponent callback is needed. Terminal rewards are from the
+learner's perspective, including when the heuristic's action ends the game.
+Finished slots reset automatically, as with `random`.
+
+The default `opponent_policy="none"` leaves both seats' decisions to the caller.
+`"random"` selects uniformly from legal actions; `"heuristic"` uses the rules
+below. The Python `manabot.env.vector_env.VectorEnv` wrapper accepts the same
+option. Unsupported names raise `ValueError`; select one of these three values.
+If an older installed extension rejects `"heuristic"`, install the matching
+package or [rebuild the extension](development.md#environment-and-commands).
+Encoding capacity failures remain errors under the configured overflow policy;
+they do not switch the opponent to random play.
+
+The scalar `HeuristicPlayer` adapter and arena `heuristic` anchor use the same
+native rules. Direct native callers can create `managym.Heuristic()`, call
+`select_action(observation)` for each decision, and call `reset()` between
+independent games. Keep one selector per seat. Selection returns an original
+legal action index and rejects an empty action space. The optional
+`max_actions` constructor argument restricts selection to that legal prefix;
+it must be positive and is used only by explicitly bounded policies.
+
+To evaluate an existing compatible checkpoint, use the
+[local evaluation command](evaluation.md#quick-local-evaluation) with
+`--opponent heuristic`. Native trivial-decision skipping stays on.
+
+The heuristic reads only information available to its chooser: visible cards,
+legal offers and public combat history. It respects closed decklists and native
+information sharing under control effects. The chooser may differ from whose
+turn it is or whose resources pay for an action; control effects do not give it
+private sideboard access. Hidden hands and library order are never strategic
+inputs.
+
+Its rules are deliberately approximate:
+
+- Play lands and activate fetch lands, then cast the highest-mana-value useful
+  spell, letting its own spell resolve before casting another. Estimate mana
+  from untapped lands; pay kicker when that estimate covers spell plus kicker.
+- Pass in its own upkeep and draw step. Save untargeted draw/selection spells
+  and draw/life abilities for the opponent's end step.
+- Derive target polarity from card definitions: harmful effects target the
+  opponent's side, beneficial effects its own. Hold removal for a kill, burn
+  for lethal damage to a creature or player, and counters for opposing spells.
+- Learn a Lesson, preferring removal while opposing creatures remain. Discard
+  spare lands once five are in play, otherwise the costliest card; decline an
+  optional discard without a spare land. Look-and-select favors a land while
+  fewer than four are available across hand and battlefield.
+- Keep enough tough defenders to avoid a lethal swing back. Avoid attacks
+  where a blocker kills the attacker and survives, unless an available trick
+  rescues it; attack for lethal unblockable damage. Plan one blocker per
+  attacker, preferring kills that survive, trades up and free absorption, then
+  chump to prevent lethal damage.
+- Use its own pumps when they change a fight or make unblocked damage lethal;
+  ignore hypothetical opposing combat tricks. Pay offered optional ward and
+  “unless pays” costs.
+
+Choices are deterministic for the same visible state and decision history.
+Equal-value casts use the first legal offer; equal-ranked discard and
+look-and-select choices use the last. Combat rankings use visible permanent
+IDs or observation order to resolve ties. Unhandled prompts use the scripted
+greedy fallback: prefer land, spell, then pass at priority; attack or block
+when offered; otherwise take the first non-decline choice. These rules are a
+baseline, not a claim of optimal play or exact combat search.
 
 ## Cards as programs
 

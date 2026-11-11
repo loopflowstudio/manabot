@@ -949,6 +949,7 @@ fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
         "none" => Ok(OpponentPolicy::None),
         "passive" => Ok(OpponentPolicy::Passive),
         "random" => Ok(OpponentPolicy::Random),
+        "heuristic" => Ok(OpponentPolicy::Heuristic),
         _ => Err(PyValueError::new_err(format!(
             "unsupported opponent_policy: {value}"
         ))),

@@ -14,7 +14,7 @@ import managym
 from .match import Match, Reward
 from .observation import ObservationSpace
 
-VALID_OPPONENT_POLICIES = ("none", "passive", "random")
+VALID_OPPONENT_POLICIES = ("none", "passive", "random", "heuristic")
 
 
 class VectorEnv:

@@ -96,11 +96,14 @@ def register_anchor(
     candidate: PlayerRegistration, kind: AnchorKind, *, player_id: str
 ) -> PlayerRegistration:
     """Keep frozen scripted/random source identities and the heuristic bundle."""
-    source = (
-        source_bundle_sha256([Path(path) for path in heuristic_source_paths()])
-        if kind == "heuristic"
-        else file_sha256(Path(anchors.__file__))
-    )
+    player_spec: dict[str, str] = {"kind": kind}
+    if kind == "heuristic":
+        source = source_bundle_sha256(heuristic_source_paths())
+        player_spec["version"] = "native-v2"
+        compute_class_id = "heuristic-cpu-v2"
+    else:
+        source = file_sha256(Path(anchors.__file__))
+        compute_class_id = kind.replace("_", "-") + "-cpu-v1"
     common = candidate.model_dump(
         include={
             "information_boundary",
@@ -118,7 +121,7 @@ def register_anchor(
         display_name=OPPONENT_NAMES[kind],
         role="anchor",
         runner_kind="code",
-        player_spec={"kind": kind},
-        compute_class_id=kind.replace("_", "-") + "-cpu-v1",
+        player_spec=player_spec,
+        compute_class_id=compute_class_id,
         source_sha256=source,
     )

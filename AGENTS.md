@@ -230,6 +230,11 @@ Env dispatch, observations and Command/offer actors read that chooser directly;
 never remap it again. Player control grants in-game inspection through native
 `shares_information`, never private sideboard access or outside-game selection.
 
+Native heuristic selection consumes the live viewer `Observation`, including
+`action_space.focus` (source identity for target/cost decisions). Canonical viewer
+JSON omits that focus; a `toJSON`/`from_json` round trip is not an equivalent
+selector input. Parity fixtures replay decisions to retain the live projection.
+
 ## Forced decisions
 
 Every game runner, benchmark and Academy session uses native trivial-decision

@@ -110,6 +110,7 @@ struct NativeActionTrace {
 #[derive(Debug)]
 pub struct Env {
     game: Option<Game>,
+    pub(crate) heuristic: Option<Box<crate::agent::heuristic::Heuristic>>,
     action_trace: Option<NativeActionTrace>,
     capture_cards: bool,
     capture_exposure: bool,
@@ -197,6 +198,7 @@ impl Env {
     ) -> Self {
         Self {
             game: None,
+            heuristic: None,
             action_trace: None,
             capture_cards: false,
             capture_exposure: false,
@@ -225,6 +227,7 @@ impl Env {
     fn branch_from_game(&self, game: Game) -> Env {
         Env {
             game: Some(game),
+            heuristic: self.heuristic.clone(),
             action_trace: None,
             capture_cards: false,
             capture_exposure: false,
@@ -276,6 +279,7 @@ impl Env {
         let observation = Observation::new(&game, &events);
         self.capture_generation += 1;
         self.game = Some(game);
+        self.heuristic = None;
         Ok((observation, empty_info_dict()))
     }
 
@@ -963,6 +967,7 @@ impl Env {
             .clone();
         Ok(Env {
             game: Some(game),
+            heuristic: self.heuristic.clone(),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
             capture_exposure: false,
@@ -986,6 +991,7 @@ impl Env {
         let game = source.clone();
         Ok(Env {
             game: Some(game),
+            heuristic: self.heuristic.clone(),
             action_trace: self.action_trace.clone(),
             capture_cards: false,
             capture_exposure: false,
