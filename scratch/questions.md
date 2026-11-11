@@ -216,3 +216,142 @@ delivery blocker remains. No paid execution occurred, no background process was
 left running, and the parent experiment remains open. Full CUDA admission is
 deferred to the authorized execution Graph after landing and prospective freeze;
 local tests and green Linux CI do not claim that proof.
+
+## Repaired-source freeze — 2026-11-10
+
+Recorded in the protocol's "C1 repaired-source freeze receipt" at merged PR #455
+source `b5e8f404adf55a2315a2810906cbb81c49465781`. Identities were recomputed with a
+temporary read-only script (not retained). It reproduced every 2026-11-09
+world, content, binding, setup, observation, input-schema, learning-schema and
+regime digest exactly. This validated the method and showed that no identity moved.
+The stale local extension (built 2026-11-08, before Rust changes in `cb75f2166`)
+was rebuilt from this source before computing them.
+
+Discovery ran `uv run --locked --extra dev --with <Etude a7718f5>` under the
+isolated home, without Doppler, because discovery reads no secrets. The client
+SDK reports 0.2.14, the same as at the first freeze.
+No quote, bill or rental was touched. Execution review comes next.
+
+## C1 repaired-source execution, 2026-11-10
+
+- Preflight (18:24 UTC): no runs, cohorts or rentals of the repaired source existed in
+  the isolated home. Posted bills for the seven earlier pods are unchanged
+  ($3.803594); C1's first A40 posted $0.120043 (bound $0.133502 kept). Quotes:
+  A40 and L4 at $0.59/h available, A4000 unavailable.
+- Reversible choice: the new cohort's evidence goes in
+  `experiments/data/training-throughput-b015d5-v1/c1-repaired/step-3-c1/` (the
+  reader requires a directory named `step-3-c1`), so the old failed attempt's
+  `step-3-c1/` files and their manifest paths stay as they are.
+- Reversible choice: each non-admission rental runs a setup-only identity job that
+  also runs the fixed-input CUDA regression (`identity_job.py cuda_test=1`), which
+  is the per-GPU admission before BF16 legs without another training smoke.
+- Other pods on the RunPod account (`etude-8a95fe6d04e9`, `etude-ecca7abeb4df`,
+  `etude-61d222a90653`) and the 0.2.15 controller under the default Etude home do
+  not belong to this home; they were left alone.
+- Rentals (all inside the C1 line windows): A40 `b015d5-a40-ca270fabef30` 18:33–≤23:18 UTC
+  ($0.59/h, rent max $3.00); L4 `b015d5-l4x4-63b721717acc` 18:56–≤22:47 ($0.59/h,
+  max $2.30); A4000 `b015d5-a4000x4-75457219a81c` 19:07–≤01:07 ($0.25/h, max $1.55).
+  Several A40 creates were refused by stock before the A40 rent succeeded (no machine
+  records). Admission `537b2f764bba` (A40, seed 26400) passed the whole chain:
+  CUDA regression 2 passed, 2 BF16 updates on cuda:0, verified checkpoint reload.
+  Identity jobs `1d4183bcd812` / `60470ec08b59` / `c82420726c04` matched every frozen hash
+  (Linux extension 1b29bf48…); L4 and A4000 also passed the CUDA regression.
+- Driver: `c1-repaired/step-3-c1/campaign.py` (state in `campaign-<gpu>.json`, logs in
+  `execution/`), launched via `run_campaign.sh`. Controller for the isolated home runs
+  under caffeinate (log `~/.etude-b015d5-step2/logs/c1r-controller.log`).
+- A4000: `etude rent b015d5-a4000x4` exited 0 and printed "rented until 01:07" for
+  `75457219a81c` although the provider refused the create (machine log: "Refused: no
+  NVIDIA RTX A4000 available in any data center"). Queuing with `--rent` then made Etude
+  rent a real pod `b9dee825076c` (identity/CUDA job `c82420726c04` passed; deleted
+  19:17:04) and later a second refused record `79384dd06468`, losing cell run
+  `9c669820d400` (no game played). The driver correctly stopped on "run placed outside
+  the named rental". A4000 is unmeasured in this pass (30-minute window expired).
+  Etude defect for its owner: refused creates must not report a rental (exit 0),
+  and phantom records survive `etude terminate`.
+- Operations: the isolated controller's loop hung on a storage read at 19:45 (runs
+  waited ~15 min) and was restarted; `etude queue` spends ~4–6 min per seed in a full
+  `git fetch` of the repository for source preparation, so K=4 queues idle the rental
+  ~20–25 min and K seeds start staggered. A 600 s queue timeout killed the L4 driver
+  once after the runs were created; the driver resumed from the existing cohort.
+- The maintained C1 reader (`load_run`) rejects real `_updates()` projections, which
+  carry constant string labels (gradient, value_kind, …); its fixtures were all-float.
+  Runs retain `updates-raw.json` (full) and `updates.json` (numeric fields only); no
+  measured value is dropped. Reader defect for its owner.
+- L4 ladder ended 21:14 by rule (remaining window < next watchdog + cleanup; a384l8
+  K=2 exceeds 85% of L4 memory; w64 not needed). `etude terminate` was refused
+  ("busy") until both of this home's controllers were stopped and the lease expired;
+  Etude deletion 21:24:22 UTC, provider pod `i0p0guzl2a84m0` confirmed absent.
+- Execution complete 22:24 UTC. Evidence published (281 manifest entries), report and
+  protocol receipt written. All rentals deleted; no controller, driver, selector or
+  watchdog left running. Phantom A4000 records `75457219a81c` / `79384dd06468`
+  remain in the isolated database with no provider pod. Evidence review is next;
+  the parent experiment stays open.
+
+## C1 repaired-source analysis, 2026-11-10
+
+- Frozen reader reproduced `c1-repaired/step-3-c1/readings.json` exactly; 280 evidence
+  files match the manifest. Report section "Analysis against the frozen criteria —
+  2026-11-10" appended and republished (R2 credentials from Doppler `manabot/prd`).
+- Health scan of `updates-raw.json` (23 runs, 186 updates): 0 nonfinite, 0 rejected,
+  4 empty-filter minibatch skips (benign).
+- Open for evidence review: whether to spend the remaining ~$4.09 C1 envelope on
+  w160l8/a384l8 packing (crossover still unknown), the A4000, or stop.
+
+## C2 design, 2026-11-11
+
+- Reversible choice: `b015d5-a40` in the isolated home is now `max 0` (was 1), so
+  queued work cannot rent automatically. Restore with `etude ondemand max b015d5-a40 1`.
+- Reversible choice: C2 reuses the frozen C1 source and its existing declarations
+  instead of adding C2-named regimes. Distinct identity comes from the
+  `b015d5-c2-*` cohorts, new run IDs, the clone `repo` and the separate `c2/`
+  evidence directory.
+- Reversible choice: a384l8 runs before w160l8, so the largest missing contrast is
+  secured first. A low a384l8 K=2 gain does not skip w160l8 K=2.
+- Validation residue: the cancelled probe cohort `b015d5-c2-validation-queue-k4`
+  (4 runs, zero attempts) stays in the isolated database.
+- The billing refresh showed other account pods (`awcdavrycv1gvy`, `k39bmw5981u6sv`,
+  about 25 h each) that are not this home's. They were left alone.
+
+## C2 driver, 2026-11-11
+
+Built and checked without a machine; the protocol's "Driver status — 2026-11-11"
+owns the rules and the check list. Reversible choices made here:
+
+- Cleanup reserve is 15 minutes inside the 4.0 h window (the design said 6), sized to
+  the worst teardown: stop a controller, wait a killed loop's 5-minute lease, 5
+  minutes of `etude terminate`, then provider deletion.
+- Optional cells (overlap reruns, K=4) run after all four base cells, w160l8's
+  before a384l8's.
+- A failed cell is retried whole and its sibling runs are cancelled. C1 retried
+  only the failed seeds, which would have run a packed seed alone.
+- Out of memory is recognized by "out of memory" in the failed run's log.
+- Memory capacities come from the fresh solo's receipt, not the design's planning
+  figures; pod falls back to the 48 GB on-demand minimum.
+- Any exit after a pod is known deletes the machine, Ctrl-C included. A stop on a
+  driver defect therefore costs the rental, and a new rental needs fresh controls.
+- The driver has no check that no update ever arrives; a run with zero updates is
+  bounded by its own job watchdog and the work deadline, as in C1.
+- Provider inventory showed three account pods that are not this home's
+  (`j9u64p6d0nvwo2`, `k39bmw5981u6sv`, `awcdavrycv1gvy`). Left alone.
+
+Not done here: the freeze of the protocol and driver hashes, quote, rental and
+execution. Hashes at this implementation are in `scratch/c2-design.md`.
+
+## Main sync resolution — 2026-11-10
+
+Assumption (reversible): retain this branch’s later C1 evidence, C2 design and
+artifact references over main `0e4f8a935acb1da3e21105e4fb2c1c729677e3c7`’s
+pre-freeze status. Main has no unique manifest entries; the branch adds 292
+entries and advances the report reference. The local report matches the retained
+SHA-256 and byte count. Frozen source and execution boundaries are unchanged.
+
+## Gate, 2026-11-11 (C2 driver, PR 456)
+
+Diff against main `b5e8f404a` is the protocol's C2 section, 292 manifest entries and
+scratch. No source, test or doc outside those changed, so nothing was edited.
+
+- `uv run --locked --extra dev --extra artifacts pytest experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/test_c2_campaign.py tests/infra/test_experiment_data_untracked.py -q` — 41 passed (40 driver + 1 untracked-data).
+- All 292 new manifest entries match the local file bytes (0 missing, 0 mismatched); the six driver hashes equal `scratch/c2-design.md`.
+- `ruff check` / `ruff format --check` on `c2/step-3-c1/`: driver, identity job and test clean. `preflight/discover.py` has 4 style findings; it is a published preflight receipt, so its bytes were left alone.
+- `bash -n run_campaign.sh` passes. PR 456 CI is green at `5485c3f90`; main has not moved.
+- Identifiers that live only in scratch (phantom A4000 records, other-account pods) are also in the published C1/C2 evidence files, so clearing scratch at landing loses nothing.
