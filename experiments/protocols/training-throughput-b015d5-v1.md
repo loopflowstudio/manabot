@@ -1970,10 +1970,15 @@ C2 uses only supported operations, with the worker source and Etude client uncha
    job's own watchdog whatever the controller does. The driver bounds its own
    Etude storage reads by running them in reaped subprocesses with a 120-second
    timeout.
-5. **Independent teardown.** At the last cell or the deadline, the driver stops this
-   home's controllers, then runs `etude terminate`. If deletion is not confirmed
-   within 5 minutes, it deletes the pod through the provider CLI (`runpodctl`) and
-   verifies the pod is absent. Time is charged until provider deletion.
+5. **Independent teardown.** At the last cell, the work deadline or any stop, the
+   driver stops this home's controllers, then runs `etude terminate`. If deletion is
+   not confirmed within 5 minutes, it deletes the pod through the provider CLI
+   (`runpodctl`) and verifies the pod is absent. Time is charged until provider
+   deletion. The 4.0-hour window ends at provider deletion, so work stops 15
+   minutes before it (the cleanup reserve): 70 s to stop a controller, a 5-minute
+   lease after a kill, 5 minutes of `terminate`, then provider deletion. A cell is
+   admitted only if its watchdog plus that reserve fits, and a run still unfinished
+   when the reserve falls due is cancelled.
 
 **No-rental validation (done 2026-11-11, no machine, no training; receipts in
 `c2/step-3-c1/preflight/`).**
@@ -2008,6 +2013,59 @@ reads, the rental-reality check, independent teardown, and the numeric `updates.
 projection. The projection works around the reader's float-only `load_run`; no
 measured value is dropped and `updates-raw.json` is retained. The driver is not
 admitted worker source. The execution receipt records its hash.
+
+**Driver status — 2026-11-11.** Written and checked locally; nothing was rented,
+queued or trained. Files are in `c2/step-3-c1/`: `campaign.py`, `identity_job.py`
+(C1's remote script unchanged, job name `b015d5-c2-remote-identity-cuda`),
+`run_campaign.sh`, `budget.json` and `test_c2_campaign.py`. Rules the driver fixes
+that the sections above left open:
+
+- **Before renting.** `run_campaign.sh preflight` runs every check that needs no
+  machine: clone state, imports resolving from the clone, identity-job discovery,
+  `b015d5-a40` held at max 0, no run waiting on it, provider inventory readable. A
+  failure there costs nothing; the same failure after renting would idle a machine.
+- **Rental reality.** The driver takes the hand-rented machine's name. It requires
+  the on-demand `b015d5-a40`, a provider receipt, a rate of at most $0.60, "machine
+  confirmed" in the machine log and the pod in the provider inventory. Once a pod
+  is known, every exit path deletes it, a failed verification included.
+- **Capacities.** The memory rule reads the fresh solo's own receipt: the CUDA
+  device total (`identities.cuda.memory_bytes`; 47,699,722,240 on C1's A40, below
+  the 48,305,799,168 planning figure above) and the pod's cgroup limit
+  (`host.memory_limit.bytes`), with the on-demand minimum of 48 GB when no limit is
+  reported. It applies before K=2 as well as K=4. A missing measurement skips the
+  packed cells.
+- **Order of optional cells.** Cells 1–4 run first. Then w160l8's follow-up (K=2
+  overlap rerun if needed, K=4 if admitted, its rerun), then a384l8's. An optional
+  cell never delays a base cell.
+- **Retry.** A failed cell is retried whole, with all K seeds, because a packed
+  reading needs its K runs together; the failed cell's other runs are cancelled.
+  A failure whose log reports CUDA out of memory is not retried: it is evidence,
+  and larger K at that size is skipped.
+- **Updates.** The 400-update bound counts the runs recorded in `b015d5-c2-c1-*`
+  cohorts in the launcher database, so a restart cannot lose or double a count.
+- **Controllers.** A controller is this home's only when its process environment
+  carries this `ETUDE_HOME`; any other is never signalled. A replacement starts
+  only after the old loop is gone and its leases are released or expired. A loop
+  that will not stop ends the work, and teardown still deletes the pod.
+- **Recovery.** State is `campaign.json`; one driver holds `campaign.lock`. A
+  restart adopts cohorts already recorded and never queues one twice. State from
+  another machine is refused: a new rental is a new host.
+
+Checks, all without a machine (`pytest c2/step-3-c1/test_c2_campaign.py`, 40
+passed): cell order and one-cell-at-a-time queueing, the memory, gain, overlap,
+retry, OOM and numeric-stop rules, watchdog and update admission, the deadline
+with the slow teardown landing inside 4.0 h, refused rentals, restart adoption,
+the supervisor against foreign, hung, unkillable and overlapping loops, bounded
+reads, teardown fallbacks and the clone check. Real-process checks used sleeping
+stand-ins only. Three checks ran against real services, read-only: `preflight`
+(receipt `preflight/driver-preflight-20261111.json`), the storage child copying
+C1 run `003b496b1a5f` in 5 s with `updates.json`, `updates-raw.json`, `run.json`
+and `gpu-samples.csv` byte-identical to C1's retained files, and `gain`
+reproducing C1's retained A40 w128l4 K=2 reading. Still unproved without a rental:
+a real controller restart, `etude terminate`, and provider deletion by the driver.
+
+The driver does not write `cells.json` or `rentals.json`. Those need the posted
+bill and are written at reconciliation, as in C1.
 
 Launcher-owner repairs are **not required** for C2. They are recorded for Etude's
 owner, as defects at `a7718f5` that are still present on `origin/main`:
@@ -2044,7 +2102,7 @@ owner, as defects at `a7718f5` that are still present on `origin/main`:
 
 **C2 line.** One A40, a window of at most **4.0 h** from claim to provider deletion,
 and an all-in ceiling of **$2.50**. The ceiling covers boot, identity, idle,
-failures, the supervisor's restarts and 6 minutes of cleanup. Rent only at a quote
+failures, the supervisor's restarts and the 15-minute cleanup reserve. Rent only at a quote
 of at most $0.60/hour. The deadline is the lesser of 4.0 h and $2.50 / rate minus
 0.1 h. Each cell is admitted with the existing `admit_cost` rule: its declared
 watchdog plus cleanup must fit the remaining window and line. This is a ceiling,
@@ -2076,10 +2134,10 @@ spending target. Do not rent while unresolved liability could breach a cap.
 | ~2:02 | teardown |
 | ~2:10 | provider deletion verified |
 
-Cell 2's admission check (1.75 h watchdog plus cleanup) needs the window to have
-more than 2.3 h left at about 0:27. Cell 5's check (1.25 h plus cleanup) needs at
-least 1.35 h left at about 1:35. A 4-hour window passes both with about an hour of
-margin for a slow boot or one controller restart. Cell 6 and the a384l8 overlap
+Cell 2's admission check (1.75 h watchdog plus the 0.25 h reserve) needs the window
+to have at least 2.0 h left at about 0:27. Cell 5's check (1.25 h plus the reserve)
+needs at least 1.5 h left at about 1:35. A 4-hour window passes both with about an
+hour of margin for a slow boot or one controller restart. Cell 6 and the a384l8 overlap
 rerun fit only if their larger watchdogs still fit. Otherwise they are disposed as
 `budget_skip`, never as measurements.
 

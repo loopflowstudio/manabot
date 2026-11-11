@@ -311,3 +311,28 @@ No quote, bill or rental was touched. Execution review comes next.
   (4 runs, zero attempts) stays in the isolated database.
 - The billing refresh showed other account pods (`awcdavrycv1gvy`, `k39bmw5981u6sv`,
   about 25 h each) that are not this home's. They were left alone.
+
+## C2 driver, 2026-11-11
+
+Built and checked without a machine; the protocol's "Driver status — 2026-11-11"
+owns the rules and the check list. Reversible choices made here:
+
+- Cleanup reserve is 15 minutes inside the 4.0 h window (the design said 6), sized to
+  the worst teardown: stop a controller, wait a killed loop's 5-minute lease, 5
+  minutes of `etude terminate`, then provider deletion.
+- Optional cells (overlap reruns, K=4) run after all four base cells, w160l8's
+  before a384l8's.
+- A failed cell is retried whole and its sibling runs are cancelled. C1 retried
+  only the failed seeds, which would have run a packed seed alone.
+- Out of memory is recognized by "out of memory" in the failed run's log.
+- Memory capacities come from the fresh solo's receipt, not the design's planning
+  figures; pod falls back to the 48 GB on-demand minimum.
+- Any exit after a pod is known deletes the machine, Ctrl-C included. A stop on a
+  driver defect therefore costs the rental, and a new rental needs fresh controls.
+- The driver has no check that no update ever arrives; a run with zero updates is
+  bounded by its own job watchdog and the work deadline, as in C1.
+- Provider inventory showed three account pods that are not this home's
+  (`j9u64p6d0nvwo2`, `k39bmw5981u6sv`, `awcdavrycv1gvy`). Left alone.
+
+Not done here: the freeze of the protocol and driver hashes, quote, rental and
+execution. Hashes at this implementation are in `scratch/c2-design.md`.
