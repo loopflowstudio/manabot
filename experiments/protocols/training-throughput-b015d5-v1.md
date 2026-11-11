@@ -1,4 +1,22 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C2 executed and analysed; evidence review pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (bounded measurement concluded)
+
+## Final disposition — 2026-11-11
+
+C2 evidence review is complete. The frozen reader reproduced its readings exactly,
+and all 128 C2 artifacts matched the manifest. All required C2 base comparisons
+were measured on one A40; conditional cells retain their recorded dispositions.
+The final operating recommendation is one seed per GPU by default, with two as
+an option for aggregate throughput and cost. Findings and limits are maintained
+in `experiments/training-update-time.md`. No further rental is planned.
+
+This closes the bounded throughput measurement, not the deferred strength or
+generalization questions. The marginal w160l8 four-seed admission remains
+provisional, and no universal GPU ranking or reduced-precision learning
+equivalence is claimed. The selector's three extra idle rentals violated the
+planned one-rental procedure; their cost is included in C2's $1.929936 bound.
+Provider deletion is retained for all four acquired pods. Total experiment cost
+is bounded at $9.849497 pending settled billing. Historical receipts below remain
+as recorded and do not authorize another campaign.
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
