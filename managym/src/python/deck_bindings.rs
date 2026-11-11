@@ -23,6 +23,7 @@ use crate::{
             DeckImport, Decklist, DecklistError,
         },
     },
+    format::limited::{basic_lands, LimitedChoices, LimitedRules, DEFAULT_PICK_CAP},
     state::deck::Deck,
 };
 
@@ -314,12 +315,38 @@ fn admit_decklists(
     native_admit_decklists(&decklists).map_err(|e| decklist_error(py, e))
 }
 
+#[pymethods]
+impl LimitedRules {
+    #[new]
+    #[pyo3(signature = (pool, max_cards=DEFAULT_PICK_CAP))]
+    fn py_new(pool: &Bound<'_, PyAny>, max_cards: usize) -> PyResult<Self> {
+        Self::new(from_python(pool)?, max_cards).map_err(value_error)
+    }
+
+    #[pyo3(name = "choices")]
+    fn py_choices(&self, picks: &Bound<'_, PyAny>) -> PyResult<LimitedChoices> {
+        self.choices(&from_python(picks)?).map_err(value_error)
+    }
+
+    #[pyo3(name = "check")]
+    fn py_check(&self, picks: &Bound<'_, PyAny>) -> PyResult<Vec<DeckIssue>> {
+        Ok(self.check(&from_python(picks)?))
+    }
+
+    #[staticmethod]
+    fn basic_cards() -> Vec<String> {
+        basic_lands().into_iter().collect()
+    }
+}
+
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DeckImportError", py.get_type_bound::<DeckImportError>())?;
     m.add(
         "MAX_DECKLIST_BYTES",
         crate::cards::decklist::MAX_SOURCE_BYTES,
     )?;
+    m.add_class::<LimitedRules>()?;
+    m.add_class::<LimitedChoices>()?;
     m.add_class::<Deck>()?;
     m.add_class::<DeckIssue>()?;
     m.add_class::<DeckEntry>()?;

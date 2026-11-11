@@ -51,6 +51,7 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
+from manabot.training.game_results import CompletedGame, GameSeat
 from manabot.training.precision import forward_precision
 from manabot.training.regime import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
@@ -370,6 +371,7 @@ class SeatRoutedCollector:
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
+        record_result: Callable[[CompletedGame], None] | None = None,
         precision: Precision = "float32",
         adaptive: AdaptiveConfig | None = None,
     ) -> None:
@@ -384,6 +386,14 @@ class SeatRoutedCollector:
             raise ValueError(
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
+        self._record_result = record_result
+        self._build_episodes = (
+            dict(zip(deck_source.entry_ids, deck_source.build_episodes, strict=True))
+            if deck_source is not None
+            and deck_source.entry_ids is not None
+            and deck_source.build_episodes is not None
+            else {}
+        )
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
             [self._sampler.draw() for _ in range(num_envs)] if self._sampler else []
@@ -1270,6 +1280,25 @@ class SeatRoutedCollector:
                 )
             if self.opponent_mode in ("self", "learning"):
                 self.stats.self_play.record(self._self_play_decks[int(row)], winner)
+            if self._record_result is not None:
+                match = self.stream_matches[int(row)]
+                self._record_result(
+                    CompletedGame(
+                        stream=int(row),
+                        game=self.stats.games_by_stream[int(row)],
+                        seats=(
+                            GameSeat(
+                                entry_id=match.hero,
+                                build_episode=self._build_episodes.get(match.hero),
+                            ),
+                            GameSeat(
+                                entry_id=match.villain,
+                                build_episode=self._build_episodes.get(match.villain),
+                            ),
+                        ),
+                        winner=winner,
+                    )
+                )
             if winner is None:
                 reward = 0.0
             elif winner == int(self.learner_seat[row]):

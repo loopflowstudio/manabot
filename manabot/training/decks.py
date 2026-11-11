@@ -44,9 +44,20 @@ class UniformDecks(StrictModel):
         default=None,
         exclude_if=lambda value: value is None,
     )
+    build_episodes: tuple[str | None, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def valid_population(self) -> UniformDecks:
+        if self.build_episodes is not None and (
+            self.entry_ids is None
+            or len(self.build_episodes) != len(self.decks)
+            or any(
+                value is not None and not value.strip() for value in self.build_episodes
+            )
+        ):
+            raise ValueError("build episodes require aligned population entry IDs")
         if self.sampling == "uniform-distinct-v1" and (
             len(self.decks) < 2
             or len({deck.identity for deck in self.decks}) != len(self.decks)

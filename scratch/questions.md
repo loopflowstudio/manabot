@@ -1,19 +1,39 @@
-# MTG-271 direction and implementation choices
+# MTG-282 choices
 
-The Task brief preserves the originating direction: "we should make etude-sdk a >=" and "can wem akea torch 2.10 a >= also?" Public requirements remain minimums without speculative upper bounds.
+Inherited MTG-271 notes are unrelated background, recoverable at
+`1659b0e290f55daa632ec8f869adff4a3059d79f:scratch/questions.md`.
 
-Jack Heart, comment 3a7bd499 (2026-11-11): "i dont actually want this to do 2.1, i will do that in a future task". Correction in comment 068206ea: "i am fine with putting this stuff in here though -- prepping for us to 2.1 well and soon is still good". Current scope keeps version 0.2.0 and version-generic docs, and includes GitHub completion plus digest-checked retries. No tagging, publication or backfill.
+The documentation step chose the reversible public API
+`managym.LimitedRules(pool=..., max_cards=60).choices(picks=...)`, returning
+`cards` and `can_stop`. Keep the cap separate from Limited's 40-card minimum.
 
-- Preserve nbformat in core: ExperimentExecution.report creates a notebook during ordinary execution. Remove unused direct pandas; no source consumers were found. Notebook execution stays in its existing extra.
-- Preserve frozen experiment/setup scripts, historical receipts and notebook metadata. Fresh shared machine setup and active development/CI use 3.13. Deployed 3.12 images remain supported consumers.
-- uv 0.9.22: an unconditional core Torch requirement conflicts with the existing per-group indexes. Removing the non-Linux source let lock succeed but selected CUDA on macOS. Splitting identical public minimums into Linux/non-Linux markers resolves and installs correctly. Compression keeps this split in core; `llm` inherits it, verified by isolated locked syncs.
-- Inherited b015d5/C2 notes remain in 757bb6257ef07cf2536ad7f7ec24f0f7309628c6:scratch/questions.md; they do not authorize experiments here.
+Headless implementation assumption (2026-11-11): freeze 100 of the 1,000
+source events for evaluation, selected by ascending SHA256 of
+`mtg-282-held-out-v1:<event_id>`, ties by event ID. Save explicit membership,
+selection rule and source provenance with the derived corpus before any
+training. The Task did not specify a fraction or seed. Historical pilot
+corpora and regimes remain untouched.
 
-## Main sync — 2026-11-11
+## Native format placement
 
-Assumption (reversible): keep MTG-271 direction as this branch's active context.
-Main's experiment closeout quotes and C1/C2 evidence notes remain at
-`53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`; they do not
-authorize experiments here. Main's manifest, protocol and throughput report
-merge unchanged. Version stays 0.2.0; GitHub Release completion and digest-checked
-retries remain in scope, with no tagging, publication or backfill.
+Jack Heart, comment c17bdb50 (2026-11-11): "This probably needs a /format/
+instead of cards?" Applied the full steer: `format/mod.rs` and
+`format/limited.rs`, declared from `lib.rs`; bindings use `format::limited`.
+No re-export from `cards`, which keeps definitions, packs, decklists and
+world admission.
+
+## Corpus admission counterexample — 2026-11-11
+
+Re-admitting the retained source corpus (SHA256
+`22f9b2b9411a69a85ff1270605dd68fba5941601859b752d2a4a0ecf5e4a6043`)
+against this checkout's rebuilt w17 rejects 78/1,000 events, with 41 distinct
+unsupported names. Examples: Scout's Warning (7 occurrences), Volcanic Torrent
+(5), Blasphemous Act (5), Agent of Treachery (3), Noxious Gearhulk (3).
+Historical Decklist issues must be removed by reparsing the unchanged source
+text before explicit re-admission; the counts above use that path.
+
+This contradicts the Task's premise that the current world admits all 1,000.
+Corpus publication is stopped: no smaller population, replacement events,
+removed cards, or new card mechanics are authorized by this implementation.
+Resolve card support or revise the population contract before deriving and
+publishing the corpus. No split has been published or used for training.

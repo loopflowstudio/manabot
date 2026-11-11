@@ -10,6 +10,7 @@ in [experiments.md](experiments.md); metric definitions live in
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
+- [Deck-building pools, game results and named models](deck-building.md)
 - [Experiments](#experiments)
 - [Remote training](#remote-training)
 - [Monitoring](#monitoring)
@@ -75,6 +76,9 @@ regime runs.
 
 ## Regimes and stages
 
+For Limited pool/reference pairs, public per-game attribution and stages with
+separate trainable and frozen models, see [deck building](deck-building.md).
+
 A `TrainingRegime` (`manabot.training.regime`) is an ordered recipe; a
 `TrainingRun` (`manabot.training.records`) is one bounded execution with
 resolved settings, named seed streams, artifacts, measured costs and status.
@@ -84,10 +88,10 @@ state. Files are atomically published before their SHA-256 identities enter
 stage records, and every checkpoint uses the ordinary writer and world/setup-
 bound reload path.
 
-The regime binds `ModelConfig`, `ObservationConfig`, `MatchConfig` (including
+Single-agent regimes bind `ModelConfig`, `ObservationConfig`, `MatchConfig` (including
 sideboards) and the world once. Unsupported operations, forward references and
 a world that differs from the installed native runtime fail validation.
-New regimes use schema 2; saved schema-1 recipes keep their one-seat
+Single-agent regimes use schema 2; saved schema-1 recipes keep their one-seat
 interpretation and serialized identity.
 
 ### Stage operations

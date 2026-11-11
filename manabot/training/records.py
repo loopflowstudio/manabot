@@ -176,6 +176,9 @@ class RunRecord[RegimeT](Strict):
     watchdog_seconds: float = 0
     prior_watchdog_seconds: float = 0
     selected_artifact: dict | None = None
+    selected_models: dict[str, ArtifactReference] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
     error: str | None = None
     monitoring_checkpoints: list[MonitoringCheckpoint] = []
     monitoring_export_seconds: float = 0

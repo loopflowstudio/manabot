@@ -355,6 +355,10 @@ mechanic a directed test there. Static and cost rows name a real card and its
 behavior test in `tests/cards/<set>.rs`, which the guard checks.
 
 Support is definition: the world pool is every defined card from every set.
+Retained `Decklist` records include the diagnostics of their original admission.
+For explicit current-world re-admission, parse `Decklist(record.source,
+record.filename)` before admitting; passing the retained record keeps its old
+issues. Preserve the original record and source bytes as evidence.
 Defined non-token cards are supported for deck entry; tokens, rules fixtures
 and unknown cards are rejected. Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify

@@ -6,6 +6,11 @@ and `academy` (the optional play UI). The Python API is `manabot.managym`,
 bundled with the `manabot` distribution; `import managym` remains a compatibility
 alias. Rust sources stay in this directory.
 
+For building a deck before play, see [Limited deck building](../docs/deck-building.md):
+pool counts, unlimited basics, legal next picks and when stopping is legal.
+Format rules live in `src/format/` (`format::limited`); they build on the
+definitions, decklists and world admission in `src/cards/`.
+
 [Engine development principles](PRINCIPLES.md) records the lessons from
 Allies–Lessons, Elemental and TLA: shared rule ownership, preserved choices and
 timing, trustworthy learning evidence, and measured runtime/search performance.
