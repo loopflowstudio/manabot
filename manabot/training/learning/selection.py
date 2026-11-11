@@ -11,6 +11,7 @@ from typing import Literal, TypedDict
 import torch
 from torch import Tensor
 
+from manabot.model.numerics import float64_operand
 from manabot.training.learning.health import NumericalHealth
 from manabot.training.learning.returns import terminal_distances
 from manabot.training.rollout.adaptive import AdaptiveDiagnostics
@@ -70,7 +71,8 @@ def selection_mask(
 
 
 def selected_mean(values: Tensor, selected: Tensor) -> Tensor:
-    """Mean over selected rows; empty support yields zero with zero gradient."""
+    """Selected mean, on the host for MPS; empty support has zero gradient."""
+    values, selected = float64_operand(values), float64_operand(selected)
     return values[selected].sum() / selected.sum().clamp_min(1)
 
 
@@ -161,8 +163,8 @@ def value_scale(
     minimum: float,
 ) -> ValueScale:
     """Summarize critic/advantage scale; see ValueScale for target semantics."""
-    predictions = predictions.double()
-    targets = targets.double()
+    predictions = float64_operand(predictions).double()
+    targets = float64_operand(targets).double()
     target_variance = float(targets.var(correction=0))
     threshold: float | None = None
     floor_binds: bool | None = None
@@ -180,7 +182,7 @@ def value_scale(
             if target_variance > 0
             else None
         ),
-        advantage_std=float(advantages.double().std(correction=0)),
+        advantage_std=float(float64_operand(advantages).double().std(correction=0)),
         selection_threshold=threshold,
         floor_binds=floor_binds,
     )

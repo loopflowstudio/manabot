@@ -11,7 +11,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.recipes.baseline import baseline
+from manabot.recipes.baseline import baseline_test
 from manabot.recipes.local import local_smoke
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
 
@@ -31,8 +31,8 @@ def test_disabled_film_preserves_serialized_spec() -> None:
 
 
 def test_new_runs_train_film_and_omitted_fields_stay_additive() -> None:
-    assert local_smoke().agent.policy_film
-    recipe = baseline(1)
+    assert local_smoke(device="cpu").agent.policy_film
+    recipe = baseline_test(1)
     assert recipe.version == "baseline-v3" and recipe.regime.agent.policy_film
     assert not ModelConfig.model_validate({"hidden_dim": 64}).policy_film
 

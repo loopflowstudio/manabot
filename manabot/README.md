@@ -10,22 +10,28 @@ explains it, and [training.md](../docs/training.md) covers running it.
 ## Quickstart
 
 ```bash
-uv run manabot train              # bounded CPU production-path smoke
+uv run manabot train              # bounded local production-path smoke
 uv run manabot train --recipe baseline  # ordinary self-play + evaluation
 uv run manabot train --regime-name batched_baseline --out .runs/batched/run  # batched GPU baseline
-uv run manabot train --learning-seats one  # explicit exact-quota control
+uv run manabot train --learning-seats one  # explicit one-seat control
 uv run manabot sim --preset sim --set sim.hero=random --set sim.villain=default
 uv run manabot belief-demo        # engine-derived belief/intervention proof
 uv run manabot belief-learn-demo  # held-out frozen-population belief proof
 ```
 
-The default `local-smoke-v1` recipe runs two CPU collection/update iterations
+The default `local-smoke-v1` recipe runs two collection/update iterations
 through the production regime executor: two streams, 16 decisions per stream as
 a floor, both seats and complete games, with a 120-second failure deadline.
 It uses the baseline model and horizon-scaled damped policy objective, records
 actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
+
+The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
+`--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
+the local device; baseline rejects CPU. MPS self-play uses float32; evaluation
+and search run on CPU. MPS process recovery, belief inputs and frozen opponents
+are unsupported. This makes no speed or strength claim.
 
 Self-play TrainingRegime execution logs cumulative update/transition clocks and
 retains admitted initialization, exact monitoring milestones, and raw stage
@@ -44,7 +50,7 @@ layer: current-world Allies/Lessons self-play (128 updates by default), its hori
 checkpoint exports, and paired outcome evaluation. `--steps N` counts completed
 collection/update iterations (four streams, at least 64 combined seat decisions
 each, finishing current games before updating), not optimizer
-calls. The same recipe drives the [nightly learning check](../.github/workflows/baseline.yml).
+calls. Its CPU test variant drives the [nightly learning check](../.github/workflows/baseline.yml).
 The bare command remains the small `local` smoke run. Use `--out` for a new output
 directory; otherwise the recipe creates a timestamped directory under `.runs/`.
 `--seconds` sets a failure deadline without changing the step schedule. Saved `--regime` inputs retain their meanings and cannot be combined with

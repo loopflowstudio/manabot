@@ -36,7 +36,16 @@ def main() -> None:
     subprocess.run([*command, "train", "--help"], check=True)
     output = Path.cwd() / "release-smoke"
     subprocess.run(
-        [*command, "train", "--recipe", "local", "--out", str(output)],
+        [
+            *command,
+            "train",
+            "--recipe",
+            "local",
+            "--device",
+            "cpu",
+            "--out",
+            str(output),
+        ],
         check=True,
         timeout=180,
     )
