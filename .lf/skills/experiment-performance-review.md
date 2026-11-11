@@ -32,7 +32,8 @@ Judge training and evaluation speed gains against preserved behavior and what th
 4. Inspect whether precision, policy lag, batch composition or other numerics or
    sampling changed. Fewer seconds per update, finite losses and a short health
    check do not prove faster or equivalent learning. Name the separate learning
-   evidence needed and leave adoption unresolved; this graph neither produces
+   evidence needed and leave adoption unresolved for the person to decide at
+   demo, without filing follow-up work yourself; this graph neither produces
    that evidence nor launches a scientific campaign. Do not change frozen worlds,
    observation versions or recipes to make the comparison pass.
 5. Update existing findings for the next navigation decision: supported gains and

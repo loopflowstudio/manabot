@@ -103,3 +103,12 @@ Main's MTG-271 direction, exact comments and dependency/release findings remain 
 `9f69a96a1ca5f0c03a9df5af7217138390d415d9:scratch/questions.md`. They do not
 select work here. QA combines the workflow guidance with main's Academy launch,
 clean-machine and library-consumer checks, using its detailed Academy procedure.
+
+## Demo review — 2026-11-11
+
+Asked whether review should file an Experiments Task when a speed change alters
+numerics, Jack Heart said "dunno -- i think probably mostly this can be decided as
+part of the conversation with the human". The review skill now leaves adoption for
+the person at demo and files nothing itself. On the repository-wide QA change he
+said "its fine"; on the Wave memory edits, "fine"; on skill density (~40 rules,
+untested on a real speed question), "ok to start".
