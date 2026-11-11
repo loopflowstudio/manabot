@@ -67,6 +67,6 @@ uv run --extra dev --extra notebook --extra artifacts --extra reports --extra ll
 
 <h2>Summary</h2>
 <p><b>Works now:</b> wheels built from the current source on 3.12 and 3.13; consumer installs at the minimums and at the latest resolution (Torch 2.15) with every extra; clear errors for a wheel/interpreter mismatch and an old Torch pin; the 3.13 developer table; the cold first-clone proof within budget; the stale-extension refusal.</p>
-<p><b>Not reached:</b> Linux x86_64 wheels and runtime, and CUDA execution. Both are left to the release workflow matrix in CI. The clean proof ran on this laptop with warm shared uv/Cargo/npm download caches, so 70.5 s is not the Ubuntu reference timing. No newer Etude SDK than 0.2.15 was available to test.</p>
+<p><b>Not reached:</b> Linux x86_64 wheels and runtime are left to the release workflow matrix in CI. CUDA execution remains untested; that matrix exercises CPU execution. The clean proof ran on this laptop with warm shared uv/Cargo/npm download caches, so 70.5 s is not the Ubuntu reference timing. No newer Etude SDK than 0.2.15 was available to test.</p>
 <p><b>Still wrong, worst first:</b> nothing in this change's scope. The minor point is that uv builds a sdist given by path on 3.14 before rejecting it; that is uv's behavior.</p>
 </body></html>

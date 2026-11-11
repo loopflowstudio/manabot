@@ -579,11 +579,12 @@ runs `academy/ui/e2e/clean-machine.spec.ts` against it, writes
 
 ### Reference profile
 
-The historical reference profile used GitHub-hosted `ubuntu-24.04` x86_64 with
-uv 0.9.22 and CPython 3.12, Node 22,
-stable Rust and native build tools, and Playwright 1.61.1's Chromium. The receipt
-records the observed OS, CPU, memory and tool versions. Before timing, the
-checkout must not contain `.venv`, `.cache`, `academy/ui/node_modules`, generated
+The current reference profile is GitHub-hosted `ubuntu-24.04` x86_64 with
+uv 0.9.22 and CPython 3.13, Node 22, stable Rust and native build tools, and
+Playwright 1.61.1's Chromium. Historical receipts retain CPython 3.12; they do
+not certify the updated profile. Each receipt records the observed OS, CPU,
+memory and tool versions. Before timing, the checkout must not contain `.venv`,
+`.cache`, `academy/ui/node_modules`, generated
 Svelte/Vite/build/test output, `managym/target`, a built `_managym*.so`, GUI trace
 JSON or a prior proof browser profile; no uv, npm or Cargo cache is restored.
 
