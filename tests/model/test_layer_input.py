@@ -43,7 +43,7 @@ import managym
 def test_v8_recipe_collector_and_evaluation_select_saved_input(tmp_path: Path) -> None:
     """Exercise production selection/admission without launching an experiment."""
     torch.set_num_threads(1)
-    recipe = local_smoke(steps=1)
+    recipe = local_smoke(steps=1, device="cpu")
     recipe.observation = ObservationConfig(policy_input_version=8)
     recipe = TrainingRegime.model_validate_json(recipe.model_dump_json())
     space = ObservationSpace(recipe.observation)

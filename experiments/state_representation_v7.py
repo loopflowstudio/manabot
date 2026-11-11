@@ -47,7 +47,9 @@ def recipe(arm: Arm, *, smoke: bool = False) -> TrainingRegime:
     """Same v7 inputs; jointly compare effect and continuation token reducers."""
     if arm not in ARMS:
         raise ValueError("arm is outside the v7 cohort")
-    regime = local_smoke(steps=1, seconds=120) if smoke else batched_baseline()
+    regime = (
+        local_smoke(steps=1, seconds=120, device="cpu") if smoke else batched_baseline()
+    )
     regime.id = f"state-representation-v7-{arm}" + ("-smoke" if smoke else "")
     regime.agent.state_encoder = arm
     regime.agent.policy_film = True
