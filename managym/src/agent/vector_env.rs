@@ -14,6 +14,19 @@ use crate::{
 
 const HERO_PLAYER_INDEX: i32 = 0;
 
+/// Detached privileged label for one native seat at the current batch boundary.
+/// Never attach this to viewer observations, decision captures or policy inputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
+pub struct HandTarget {
+    pub slot: usize,
+    pub player: usize,
+    pub game_id: u64,
+    pub seed: u64,
+    pub revision: u64,
+    pub cards: std::collections::BTreeMap<String, usize>,
+}
+
 /// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
 /// faults and malformed observation payloads are never disposable game outcomes.
 #[derive(Debug)]
@@ -290,6 +303,37 @@ impl VectorEnv {
     /// Exact current-game seeds; auto-reset succession remains native authority.
     pub fn current_game_seeds(&self) -> Vec<u64> {
         self.envs.iter().map(Env::seed).collect()
+    }
+
+    /// Read all requested seats in slot order. After autoreset these label the
+    /// replacement games; no terminal hands are cached and no capacities apply.
+    pub fn hand_targets(&self, players: &[usize]) -> Result<Vec<HandTarget>, AgentError> {
+        if players.len() != self.len() {
+            return Err(AgentError(format!(
+                "expected {} hand target players, got {}",
+                self.len(),
+                players.len()
+            )));
+        }
+        if players.iter().any(|&player| player > 1) {
+            return Err(AgentError("hand target player must be 0 or 1".into()));
+        }
+        self.validate_ready_for_step()?;
+        self.envs
+            .iter()
+            .zip(players)
+            .enumerate()
+            .map(|(slot, (env, &player))| {
+                Ok(HandTarget {
+                    slot,
+                    player,
+                    game_id: env.capture_generation,
+                    seed: env.seed(),
+                    revision: env.selected_revision()?,
+                    cards: env.hand_counts(player)?,
+                })
+            })
+            .collect()
     }
 
     /// Retain the exact surfaced offers before a strict batch can mutate any row.
@@ -950,6 +994,66 @@ mod tests {
         infra::profiler::InfoValue,
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn hand_targets_are_complete_detached_native_seat_snapshots() {
+        let players: Vec<_> = ["a", "b"]
+            .into_iter()
+            .map(|name| PlayerConfig::new(name, BTreeMap::from([("Mountain".into(), 100)])))
+            .collect();
+        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        assert!(vector.hand_targets(&[0, 1]).is_err());
+        vector.reset_all(players).unwrap();
+        assert!(vector.hand_targets(&[0]).is_err());
+        assert!(vector.hand_targets(&[0, 2]).is_err());
+        vector.envs[0].scenario_clear_hand(1).unwrap();
+        for _ in 0..70 {
+            vector.envs[1]
+                .scenario_force_card_in_hand(0, "Mountain")
+                .unwrap();
+        }
+        let labels = vector.hand_targets(&[1, 0]).unwrap();
+        assert!(labels[0].cards.is_empty());
+        assert!(labels[1].cards["Mountain"] >= 70);
+        assert_eq!(labels[1].slot, 1);
+        assert_eq!(labels[1].player, 0);
+        vector.envs[1].scenario_clear_hand(0).unwrap();
+        assert!(vector.hand_targets(&[1, 0]).unwrap()[1].cards.is_empty());
+        assert!(labels[1].cards["Mountain"] >= 70);
+    }
+
+    #[test]
+    fn hand_targets_distinguish_same_seed_resets_reassignment_and_replacement() {
+        let mut vector = VectorEnv::new(2, 42, true, OpponentPolicy::None);
+        vector.reset_all(sample_player_configs()).unwrap();
+        let original = vector.hand_targets(&[0, 1]).unwrap();
+        vector
+            .reset_seeds_into(vec![42, 43], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        let reset = vector.hand_targets(&[0, 1]).unwrap();
+        for (before, after) in original.iter().zip(&reset) {
+            assert_ne!(before.game_id, after.game_id);
+            assert_eq!(before.seed, after.seed);
+            assert_eq!(before.cards, after.cards);
+        }
+        vector
+            .reassign_roots_into(
+                vec![Some(sample_player_configs()), None],
+                |_, _| Ok(()),
+                |_, _, _, _, _| Ok(()),
+            )
+            .unwrap();
+        let reassigned = vector.hand_targets(&[0, 1]).unwrap();
+        assert_ne!(reset[0].game_id, reassigned[0].game_id);
+        assert_eq!(reset[0].seed, reassigned[0].seed);
+        assert_eq!(reset[1], reassigned[1]);
+        vector
+            .replace_failed_into(&[true, false], |_, _, _, _, _| Ok(()))
+            .unwrap();
+        let replaced = vector.hand_targets(&[0, 1]).unwrap();
+        assert_ne!(reassigned[0].game_id, replaced[0].game_id);
+        assert_eq!(reassigned[1], replaced[1]);
+    }
 
     #[test]
     fn exposure_capture_retains_old_seed_before_reset() {

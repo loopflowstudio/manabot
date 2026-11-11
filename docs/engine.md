@@ -16,6 +16,7 @@ cross-package contract is in the
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
+- [Belief hand targets](#belief-hand-targets)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
 - [What we know](#what-we-know)
@@ -244,6 +245,118 @@ throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
 search/decision digest, fails.
+
+### Choosing a Python API
+
+The native API is available through `from manabot import managym` in the
+installed `manabot` distribution. `import managym` is a compatibility alias.
+The Torch wrapper and the capture wrapper are separate Python classes:
+
+| Need | API |
+|---|---|
+| One game, explicit reset, readable observations | `managym.Env` |
+| A fixed viewer's observation | `Env.observation_for_player(player_index)` |
+| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
+| Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
+| Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
+
+Scalar native `Env.step` returns the terminal state and leaves resetting to the
+caller. Native vector steps reset finished slots before returning: reward and
+`terminated` / `truncated` describe the completed game, while its returned
+observation describes the replacement game. The Torch wrapper keeps this
+behavior. Its observation tensors are reused; clone anything retained across
+steps. The Gymnasium scalar wrapper has its own `auto_reset` option.
+
+Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+`active` boolean per slot. Inactive slots are not advanced or written; their
+buffered rewards and done flags may still describe an earlier call. Apply the
+same mask when collecting transitions. The Torch wrapper's `step` advances
+every slot and does not accept an active mask.
+
+Strict batch errors can occur after other slots have advanced. Do not retry
+the same batch assuming nothing changed. `CapturedVector` retains private
+pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
+individual game failures for replacement. Buffer-integrity failures remain
+fatal, and capacity recovery requires its separate opt-in. See
+[game failures](training.md#game-failures).
+
+### Belief hand targets
+
+Read the actual hands immediately before choosing actions to pair supervision
+with the observations that produced those choices:
+
+```python
+from manabot import managym
+from manabot.env.match import Match
+
+games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
+observations = games.reset_all(Match().to_rust())
+actors = games.current_agent_indices()
+targets = games.hand_targets([1 - actor for actor in actors])
+
+for target in targets:
+    print(target.slot, target.player, sum(target.cards.values()))
+    # target.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
+
+# Retain observations and targets together before advancing these games.
+```
+
+This returns one `HandTarget` per batch slot, in slot order. The required
+`players: list[int]` argument contains exactly one native seat (`0` or `1`)
+per slot; `[1, 0]` reads seat 1 in slot 0 and seat 0 in slot 1. There is no
+implicit "opponent" default. In the example, `current_agent_indices()` names
+the chooser. Under player-control effects that can differ from whose turn or
+rules decision it is; choose the seat whose hand the belief model predicts.
+
+Each target contains:
+
+| Field | Meaning |
+|---|---|
+| `slot: int` | Zero-based batch position |
+| `player: int` | Requested native seat, unchanged by control effects |
+| `game_id: int` | Opaque game generation; changes on every reset or replacement, including a reset to the same seed |
+| `seed: int` | The current game's native reset seed |
+| `revision: int` | The current game's decision revision at the read |
+| `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
+
+Keep your collection/run identity with `(slot, game_id, revision, player)`
+when saving labels. Game IDs are local to this vector instance, not global
+replay identifiers; recreating the instance starts a new identity scope. Do not
+expect consecutive values or reproducibility across runs. A Torch reset that
+rebuilds its native vector also changes the generation.
+A seed alone cannot distinguish repeated resets to the same deal. Retain the
+match configuration and runtime identity separately when replay is needed.
+
+`hand_targets` is an opt-in synchronous read of authoritative hand zones in
+one native batch call. It does not step, reset, consume randomness or construct
+per-player observations. Returned counts are detached snapshots: subsequent
+steps or edits to the returned dictionaries do not change the other. The same
+method and record contract are available on `CapturedVector` and the Torch
+`VectorEnv`; targets remain CPU Python records regardless of the tensor device.
+Ordinary reset/step calls do not collect them.
+
+Read **before** the step for a decision's supervision. A read after a successful
+step describes the returned observations, including the new game in any slot
+whose done flag is true. The accessor does not retain the completed game's
+terminal hand. After partial stepping, inactive slots keep their existing game
+and state; `hand_targets` still reads every slot, so apply your collection mask
+to the returned list. Copy reused observation buffers alongside the targets.
+
+A wrong-length seat list or a seat outside `0..1` is an error, as is reading
+before reset. Correct the list or initialize the games and retry. After a
+failed step, discard that call's training rows and use the existing failure
+recovery/reset path before collecting further targets. A failure is never
+represented by an empty hand, and targets are never truncated to an
+observation capacity.
+
+These are privileged training labels, including with closed decklists. Keep
+them in the supervision/loss path, separate from policy inputs, viewer-safe
+observations, shared decision captures and viewer trace exports. Public
+`known_hand` counts describe only revealed knowledge; they are not these
+targets. Reading labels does not change deck disclosure or what a player may
+observe, and requires no policy-input version or checkpoint migration.
 
 ## Cards as programs
 

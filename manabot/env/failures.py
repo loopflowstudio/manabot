@@ -570,6 +570,10 @@ class CapturedVector(_Capture):
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
         return getattr(self.native, name)
 
+    def hand_targets(self, players: list[int]) -> list[managym.HandTarget]:
+        """Read privileged current hands without adding them to failure evidence."""
+        return self.native.hand_targets(players)
+
     def set_buffers(
         self, buffers: dict[str, Any], action_overflow: str = "error"
     ) -> None:

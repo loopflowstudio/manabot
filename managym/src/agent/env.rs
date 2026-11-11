@@ -31,6 +31,10 @@ use std::sync::{
     Arc,
 };
 
+// A reset's lifetime token is private and never enters replay or world hashes.
+// Process-wide allocation also distinguishes replacement Envs in vector slots.
+static RESET_GENERATION: AtomicU64 = AtomicU64::new(1);
+
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
         .ok_or_else(|| AgentError("no active action space".to_string()))?
@@ -274,7 +278,7 @@ impl Env {
         }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
-        self.capture_generation += 1;
+        self.capture_generation = RESET_GENERATION.fetch_add(1, Ordering::Relaxed);
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
     }
@@ -1059,6 +1063,32 @@ impl Env {
             .as_ref()
             .map(|game| game.decision_epoch)
             .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
+    }
+
+    /// Privileged supervision only: read the native seat's complete hand zone,
+    /// without constructing a viewer observation or applying disclosure rules.
+    pub(crate) fn hand_counts(
+        &self,
+        player: usize,
+    ) -> Result<std::collections::BTreeMap<String, usize>, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("hand targets require reset".into()))?;
+        if player >= game.state.players.len() {
+            return Err(AgentError("hand target player must be 0 or 1".into()));
+        }
+        let mut counts = std::collections::BTreeMap::new();
+        for card in game
+            .state
+            .zones
+            .zone_cards(crate::state::zone::ZoneType::Hand, PlayerId(player))
+        {
+            *counts
+                .entry(game.state.cards[*card].name.clone())
+                .or_insert(0) += 1;
+        }
+        Ok(counts)
     }
 
     /// Kind of the current action space, if any.

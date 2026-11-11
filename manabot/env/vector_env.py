@@ -333,6 +333,10 @@ class VectorEnv:
         infos = [dict(info) for info in self._rust_env.get_last_info()]
         return self._stack_infos(infos)
 
+    def hand_targets(self, players: list[int]) -> list[managym.HandTarget]:
+        """Detached CPU labels for the current observations, including autoresets."""
+        return self._rust_env.hand_targets(players)
+
     def skip_trivial_counts(self) -> np.ndarray:
         """Per-env trivial-decision collapse counters for the current games."""
         return np.asarray(self._rust_env.skip_trivial_counts(), dtype=np.int64)
