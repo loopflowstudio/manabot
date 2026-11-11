@@ -159,7 +159,13 @@ replaces this with a measurement.
 
 ## Machine recommendation
 
-- **At w64, pack four seeds per machine, one producer each,** through Etude `--slots 4`.
+- **Default to one seed per GPU.** This gives an individual model the fastest
+  progress. Packing is an explicit choice when running several independent seeds
+  and optimizing aggregate throughput or cost. Two seeds per A40 is a measured
+  option at w160l8 and a384l8; the continuation findings below quantify its cost
+  and latency trade-off. This is operating guidance, not a change to frozen runs.
+- **For aggregate w64 throughput, four seeds per machine, one producer each,**
+  can be selected through Etude `--slots 4`.
   On one A4000 (16 vCPUs, $.25/hour) four seeds gave 2.3x the learner decisions of
   one, at $.023 against $.053 per million. Packed and solo runs of a seed learn
   identically on CPU (training digests equal). On CUDA they stay within run-to-run
@@ -206,7 +212,68 @@ rows per update, which rewards fewer launches. Packing is measured above.
 
 Reproduce: `uv run python scripts/bench_training_update.py --streams 256 --updates 3`.
 
-## Step 3: measured size ladder (2026-11-08)
+## Step 3: continuation findings reviewed (2026-11-11)
+
+C1 and C2 use frozen source `b5e8f404`, float32 unless stated, and effective
+hashed v6 / 512 facts. Each packing comparison uses its own host's solo control;
+the cohorts are not pooled. The original-source results below remain historical.
+
+| Cohort / GPU | Size | Two-seed aggregate gain | Four-seed aggregate gain |
+|---|---|---:|---:|
+| C1 / A40 | w128l4 | 1.50× | 1.78× |
+| C1 / L4 | w128l4 | 1.34× | 1.42× |
+| C2 / A40 | w160l8 | 1.30× | 1.39× |
+| C2 / A40 | a384l8 | 1.32× | excluded by memory rule |
+
+Gains use matched post-warmup update ordinals; C2 packed seeds each supplied 6–7
+usable updates. These are short measurements on one host per contrast, without
+population intervals. No two-seed gain fell below the declared 1.10 crossover.
+The w160l8 two-seed gain only narrowly cleared the 1.30 four-seed admission rule
+and fell to 1.20 in the late window, so its four-seed admission remains provisional.
+Three seeds were not tested; rejecting four at a384l8 does not establish a
+two-seed physical limit.
+
+One seed per GPU is the default recommendation. For multiple independent
+large-model seeds on the measured A40, two per machine is an optional way to
+reduce aggregate cost, with slower progress for each seed. At w160l8, four delivered only about 7% more
+learner decisions per hour than two (4.10M versus 3.83M), while each seed's update
+took 187.7 instead of 99.7 seconds. Its steady cost was $0.144 versus $0.154 per
+million decisions. Solo was 64.5 seconds/update and $0.207/M. At a384l8, solo was
+100.6 seconds/update and $0.312/M; two seeds were 152.1 seconds/update/seed and
+$0.233/M. Packing serves aggregate throughput and cost; solo remains faster for
+one seed. These steady rates exclude rental setup and idle time.
+
+C1's A40 w160l8 precision check established neither a clear speed advantage nor
+learning equivalence for TF32/BF16; keep float32 for this recommendation. BF16
+execution and checkpoint admission now work. No strength evaluation was run.
+
+The phase measurements support investigating how the host drives inference and
+learning before further native-engine optimization: stepping plus encoding stayed
+near eight seconds/update in C2, while inference/learning grew with packing and
+the GPU reached 96–98% busy at four w160l8 seeds. This is attribution, not a causal
+proof of a particular avoidable cost. The separate TLA catalog slowdown is not
+a multiplier for this hashed-input experiment.
+
+C2's 84 updates cover 21,625 games and 4,448,590 learner transitions, with no
+nonfinite values or rejected steps. Operator review reproduced the frozen-reader
+output exactly and verified all 128 C2 manifest artifacts. Every declared cell
+has a disposition and provider deletion is retained for the four acquired pods.
+The selector erroneously acquired three extra idle pods after a failed database
+read; their $0.504125 posted cost is included, not excluded as setup noise. This
+violated the planned one-rental procedure even though the dollar cap held.
+Unknown rental state must stop acquisition, never be treated as a refusal.
+
+Retained bounds rounded upward are C2 ≤ $1.93, step 3 ≤ $7.76 and the whole experiment ≤ $9.85;
+these remain upper bounds pending settled billing. The measured C2 question is
+answered for this host. A second host could test robustness, but is not needed
+to report these scoped findings and is not launched by this review.
+
+Evidence: `experiments/data/training-throughput-b015d5-v1/report.md`, C1 repaired
+source and C2 sections; `c2/step-3-c1/readings.json`, window sensitivity, rental
+accounting and execution receipts. The review does not claim a universal hardware
+ranking, a strength gain or equivalence of reduced precision.
+
+## Step 3: original measured size ladder (2026-11-08)
 
 Frozen `cb722dc8c`, Elemental w17, input v6 / 512 facts, **effective hashed
 records**, 256 streams, two seats and one producer. These are short solo runs on

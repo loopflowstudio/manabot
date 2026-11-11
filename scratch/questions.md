@@ -266,3 +266,12 @@ Reuse final QA's 424 passing affected Python cases, three base-reproduced TLA
 receipt failures, 16 passing conditional-search cases and installed-wheel proof.
 No runtime source changed in this publication pass. No auto-merge, release or
 Task completion is authorized by this step.
+
+## Main sync resolution — 2026-11-11
+
+Assumption (reversible): keep MTG-272's API direction and validation as this
+branch's active notes. Main's unrelated throughput closeout, exact replies and
+C2 execution evidence remain at
+`53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`.
+Its experiment manifest, protocol and maintained report merge unchanged.
+The conflict changes no runtime source.
