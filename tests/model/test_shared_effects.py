@@ -120,7 +120,7 @@ def test_v7_policy_routes_shared_effects_and_reloads(
 def test_shared_effect_policy_uses_ordinary_learner_and_export(
     tmp_path: Path, card_capacity: int
 ) -> None:
-    regime = local_smoke(steps=1, seconds=120)
+    regime = local_smoke(steps=1, seconds=120, device="cpu")
     regime.id = "shared-effects-v7-engineering-smoke"
     regime.observation = ObservationConfig(
         policy_input_version=7, max_cards_per_player=card_capacity
@@ -227,9 +227,7 @@ def test_batched_effect_routing_matches_independent_gradients(
         # Batched GEMM and separate float32 gradient sums accumulate in different
         # orders on CUDA. Bound that error against double precision below too,
         # so agreement between two float32 paths cannot mask a routing defect.
-        torch.testing.assert_close(
-            parameter.grad, reference.grad, rtol=2e-5, atol=2e-5
-        )
+        torch.testing.assert_close(parameter.grad, reference.grad, rtol=2e-5, atol=2e-5)
 
     oracle = deepcopy(encoder).cpu().double()
     oracle.zero_grad(set_to_none=True)
