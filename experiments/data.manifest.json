@@ -2638,6 +2638,34 @@
    "sha256": "273593df144647f702e3f9f64d2ec8063c533d7f83c1842b68f1455f7298d1c5",
    "bytes": 245661
   },
+  "experiments/data/collection-growth-281/comparison-plan.json": {
+   "sha256": "43ff56c4bf1564f58d94aecab3ff3b42bd06bc51fd167d52afcb18beaac43d30",
+   "bytes": 1733
+  },
+  "experiments/data/collection-growth-281/growth.png": {
+   "sha256": "a648d09749b3420297b00911a261c3c2b6d920f6f227774a1fde833bb3ceb0d7",
+   "bytes": 601677
+  },
+  "experiments/data/collection-growth-281/phases.png": {
+   "sha256": "c6171649d2e1431f715af28e5190089872007e10cd92fb433c88b67a96ac22e4",
+   "bytes": 434949
+  },
+  "experiments/data/collection-growth-281/provenance.json": {
+   "sha256": "d332571ae84f4fd54e7684c77eac27e5e5f8c0c086a3d9067b0d39f0552a8d9a",
+   "bytes": 4808
+  },
+  "experiments/data/collection-growth-281/summary.json": {
+   "sha256": "897635c218637c312f27d2039373cb50af59706829a356a25c44b668352d3168",
+   "bytes": 16381
+  },
+  "experiments/data/collection-growth-281/w160.json": {
+   "sha256": "c71e2bc7e5698985eb63382ef500ec053031c1db099eecc6828832a5217a8b42",
+   "bytes": 2334622
+  },
+  "experiments/data/collection-growth-281/w64.json": {
+   "sha256": "6b9c18bfb88352cbfddce8f7466abfd66c20251fee5e845811e8224aab195621",
+   "bytes": 4243561
+  },
   "experiments/data/cuda-capacity/calibration-amendment.json": {
    "sha256": "4f855afa28d4c7381acc8a62b37e1853283c9c3e6eb7d551f674880bc8f4d87a",
    "bytes": 587
