@@ -373,7 +373,6 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             ObservationSpace(),
             Reward(RewardConfig()),
             seed=24,
-            auto_reset=False,
             enable_profiler=False,
             enable_behavior_tracking=False,
         )

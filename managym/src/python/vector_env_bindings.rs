@@ -339,6 +339,10 @@ impl PyVectorEnv {
         self.inner.current_game_seeds()
     }
 
+    fn current_game_generations(&self) -> Vec<u64> {
+        self.inner.current_game_generations()
+    }
+
     fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
         self.inner.hand_snapshots(&players).map_err(map_agent_err)
     }
@@ -849,6 +853,22 @@ impl PyRolloutPool {
         });
         self.buffers = Some(buffers);
         result
+    }
+}
+
+#[pymethods]
+impl HandSnapshot {
+    fn __repr__(&self) -> String {
+        let cards = self
+            .cards
+            .iter()
+            .map(|(name, count)| format!("{name:?}: {count}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "HandSnapshot(slot={}, player={}, game_id={}, seed={}, revision={}, cards={{{cards}}})",
+            self.slot, self.player, self.game_id, self.seed, self.revision
+        )
     }
 }
 

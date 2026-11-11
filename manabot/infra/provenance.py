@@ -97,7 +97,6 @@ def runtime_fingerprints(
         obs_space,
         Reward(RewardConfig()),
         seed=seed,
-        auto_reset=False,
     )
     env.reset(seed=seed)
     content = env.content_pack_manifest()

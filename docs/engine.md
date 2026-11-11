@@ -270,7 +270,23 @@ caller. Native vector steps reset finished slots before returning: reward and
 `terminated` / `truncated` describe the completed game, while its returned
 observation describes the replacement game. The Torch wrapper keeps this
 behavior. Its observation tensors are reused; clone anything retained across
-steps. The Gymnasium scalar wrapper has its own `auto_reset` option.
+steps. The Gymnasium wrapper `manabot.env.env.Env` never resets on its own:
+a terminal `step` returns the terminal observation and true done flags, and the
+caller calls `reset`. Its former `auto_reset` argument is removed; passing it
+raises `TypeError`, and step info no longer carries `true_terminated` /
+`true_truncated`. Vector autoreset is the only automatic-reset contract.
+
+Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
+explicit seed, including the current one, so equal seeds reproduce deals.
+`reset()` without a seed continues native seed succession. Its
+`current_agent_indices()` names each slot's chooser.
+
+`CapturedVector` delegates only native reads (seeds, generations, choosers,
+frames, setups, diagnostics). Readable `reset_all` / `step` and other native
+mutators raise `AttributeError`; use its `reset_*_into_buffers` and
+`step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
+new prefix whenever the native game generation changes, so a same-seed reset
+or a replacement at the saturated maximum seed never extends the old game.
 
 Native buffered stepping and `CapturedVector.step_into_buffers` accept an
 `active` boolean per slot. Inactive games and observation rows stay unchanged;

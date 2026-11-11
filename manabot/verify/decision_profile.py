@@ -165,7 +165,6 @@ def play_profile_games(
         observation_space,
         reward,
         seed=seed,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

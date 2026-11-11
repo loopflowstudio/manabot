@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-272 QA</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:860px;margin:2em auto;padding:0 1em;color:#222}
+pre{background:#f5f2ea;padding:.8em;overflow:auto;font-size:13px}h2{margin-top:1.6em;border-bottom:1px solid #ddd}
+.ok{color:#2a6b2a}.bad{color:#9b2a1a}</style></head><body>
+<h1>MTG-272 QA: hand snapshots, CapturedVector, Torch/Gym resets</h1>
+<p>QA pass on 2026-11-11 against the installed extension (release wheel rebuilt and swapped in atomically), driven
+the way a client library user would drive it. Two of Jack Heart's steers arrived during the pass and were implemented: 1A/2A/3bA, then 3a ("ok, remove auto reset").</p>
+
+<h2>1. Guide example (fresh user)</h2>
+<p>Ran the <code>docs/engine.md#hand-snapshots</code> snippet verbatim.</p>
+<pre>0 1 {'Gray Ogre': 2, 'Llanowar Elves': 2, 'Mountain': 3}
+1 0 {'Forest': 1, 'Gray Ogre': 4, 'Llanowar Elves': 2}</pre>
+<p class="bad">Found: <code>print(snapshot)</code> showed <code>&lt;builtins.HandSnapshot object at 0x…&gt;</code>.</p>
+<p class="ok">Fixed: native <code>__repr__</code>:</p>
+<pre>HandSnapshot(slot=0, player=1, game_id=1, seed=42, revision=1, cards={"Gray Ogre": 2, "Llanowar Elves": 2, "Mountain": 3})</pre>
+
+<h2>2. Collector loop on the Torch wrapper</h2>
+<p>An 8-slot Torch <code>VectorEnv</code> with the default Match ran 400 steps of random legal actions, reading the chooser's opponent hand before every step.</p>
+<pre>rows=3200 dones=17 distinct games=25 snap ms/call=0.002–0.04</pre>
+<p class="bad">Found: the guide says to pick seats from <code>current_agent_indices()</code>, but the Torch wrapper didn't expose it. Users had to reach into <code>_rust_env</code>.</p>
+<p class="ok">Fixed: <code>VectorEnv.current_agent_indices()</code> on the Torch wrapper, plus a test.</p>
+
+<h2>3. Steer 1A: CapturedVector rejects undelegated mutation</h2>
+<pre>step -> CapturedVector does not expose native step; use the captured reset_*_into_buffers / step_*_into_buffers calls so replay evidence stays aligned with the games
+reset_all -> (same)</pre>
+<p>Reads (seeds, generations, choosers, frames, setups, timings, diagnostics) still delegate. Unknown names raise a plain AttributeError.</p>
+
+<h2>4. Steer 2A: generation-based prefix rollover</h2>
+<p>New native <code>current_game_generations()</code>. Tests: terminal replacement at seed 2<sup>64</sup>−1 leaves <code>actions == []</code> and the same seed; a same-seed <code>reset_seeds_into_buffers</code> starts a new prefix.</p>
+
+<h2>5. Steer 3bA: Torch explicit-seed reset</h2>
+<p><code>reset(seed=42)</code> on a base-42 env, then a step, then <code>reset(seed=42)</code> again reproduces identical observation tensors at seeds [42, 43]. A plain <code>reset()</code> continues to [44, 45].</p>
+
+<h2>6. Steer 3a: Gym auto_reset removed</h2>
+<pre>gym auto_reset: Env.__init__() got an unexpected keyword argument 'auto_reset'
+gym terminal at 2 reward 2.0 keys has true_terminated: False
+step after end: PyAgentError match is over
+explicit reset ok</pre>
+<p>Removed the argument, the step-time reset and the unread <code>true_terminated</code>/<code>true_truncated</code> keys from <code>manabot/env/env.py</code>, and updated 15 callers. <code>tests/env/test_match.py</code> now resets explicitly after the terminal step.</p>
+
+<h2>Checks run</h2>
+<ul>
+<li>Python suites <code>tests/env tests/sim tests/belief tests/verify</code>, capture/exposure/error-recovery/action-cutoff/game-errors, package boundaries, text observation: 695 passed, 4 failed (listed below, all predating this branch).</li>
+<li>Rust debug <code>cargo nextest --profile ci</code> filtered to hand_snapshot/generation/vector_env: 21 passed. Clippy with <code>--features python</code> and <code>cargo fmt --check</code> are clean. Ruff is clean.</li>
+</ul>
+
+<h2>Still wrong (worst first), not caused by this change</h2>
+<ol>
+<li><code>tests/training/test_game_errors.py::test_resource_limit_receipt_replays_its_retained_encoding_boundary[*]</code> returns <code>binding_mismatch</code> at action 370. It reproduces on unmodified <code>main</code> (61a51a3ff), built in a temporary worktree. The frozen TLA fixture diverges from the current engine.</li>
+<li><code>test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure</code> fails with <code>'RolloutBatch' object has no attribute 'obs'</code>, in training code this branch doesn't touch.</li>
+<li><code>tests/sim/test_conditional_search.py::test_frozen_fixture_payload…</code> failed once because the local artifact <code>experiments/data/int-13-conditional-strategy-fixture-v1.json</code> is missing. It is environmental.</li>
+</ol>
+<h2>Not reached</h2>
+<p>The full debug Rust suite (gate's job), GPU devices, a clean isolated dependency install (MTG-271), and release notes (there is no <code>docs/releases.md</code> on main; the breaking changes are listed in <code>scratch/questions.md</code> for the 0.2.1 notes).</p>
+</body></html>

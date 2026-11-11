@@ -196,8 +196,13 @@ def test_torch_hand_snapshots_track_native_rebuilds() -> None:
     try:
         observations, _ = vector.reset()
         before = {key: value.clone() for key, value in observations.items()}
+        assert vector.current_agent_indices() == [0, 0]
         first = vector.hand_snapshots([1, 0])
         assert first[0].cards == {"Island": 7}
+        assert repr(first[0]) == (
+            f"HandSnapshot(slot=0, player=1, game_id={first[0].game_id}, "
+            f'seed=42, revision={first[0].revision}, cards={{"Island": 7}})'
+        )
         for key in observations:
             assert torch.equal(observations[key], before[key])
         assert "hand_snapshots" not in observations

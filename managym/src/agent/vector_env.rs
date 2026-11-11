@@ -307,6 +307,12 @@ impl VectorEnv {
         self.envs.iter().map(Env::seed).collect()
     }
 
+    /// Opaque process-local game generations, changed by every reset or slot
+    /// replacement (including a repeated seed). Never a replay or world identity.
+    pub fn current_game_generations(&self) -> Vec<u64> {
+        self.envs.iter().map(|env| env.capture_generation).collect()
+    }
+
     /// Read all requested seats in slot order. After autoreset these describe the
     /// replacement games; no terminal hands are cached and no capacities apply.
     pub fn hand_snapshots(&self, players: &[usize]) -> Result<Vec<HandSnapshot>, AgentError> {

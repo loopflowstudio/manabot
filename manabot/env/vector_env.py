@@ -292,7 +292,9 @@ class VectorEnv:
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict] = None
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, Any]]:
-        if seed is not None and seed != self._base_seed:
+        """Restart every slot at ``seed + slot`` when a seed is given, so equal
+        seeds reproduce deals; without one, continue native seed succession."""
+        if seed is not None:
             self._rust_env.close()
             self._base_seed = seed
             self._rust_env = self._build_rust_env(seed=seed)
@@ -336,6 +338,10 @@ class VectorEnv:
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Privileged CPU hand snapshots of the current games, including autoresets."""
         return self._rust_env.hand_snapshots(players)
+
+    def current_agent_indices(self) -> list[int]:
+        """Native seat choosing in each slot, including under control effects."""
+        return self._rust_env.current_agent_indices()
 
     def skip_trivial_counts(self) -> np.ndarray:
         """Per-env trivial-decision collapse counters for the current games."""

@@ -51,7 +51,7 @@ def reward() -> Reward:
 @pytest.fixture
 def env(sample_match, observation_space, reward) -> Env:
     """Create a fresh environment instance for each test."""
-    return Env(sample_match, observation_space, reward, auto_reset=False)
+    return Env(sample_match, observation_space, reward)
 
 
 @pytest.fixture
@@ -263,8 +263,8 @@ class TestResetSeed:
         assert deal_a != deal_b, "different reset seeds must produce different deals"
 
     def test_reset_seed_reproducible(self, sample_match, observation_space, reward):
-        env_a = Env(sample_match, observation_space, reward, seed=1, auto_reset=False)
-        env_b = Env(sample_match, observation_space, reward, seed=2, auto_reset=False)
+        env_a = Env(sample_match, observation_space, reward, seed=1)
+        env_b = Env(sample_match, observation_space, reward, seed=2)
         env_a.reset(seed=300)
         env_b.reset(seed=300)
         assert self._deal(env_a) == self._deal(env_b), (

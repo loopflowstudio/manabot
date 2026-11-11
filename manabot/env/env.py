@@ -55,16 +55,13 @@ class Env(gym.Env):
         obs_space: ObservationSpace,
         reward: Reward,
         seed: int = 0,
-        auto_reset: bool = False,
         enable_profiler: bool = False,
         enable_behavior_tracking: bool = False,
     ):
-        """
-        Gymnasium-compatible Env wrapper around the managym Rust engine.
+        """Gymnasium-compatible wrapper around one native game.
 
-        Args:
-            observation_space: The ObservationSpace we use to encode raw observations.
-            render_mode: Gymnasium render mode, e.g. "human" or None.
+        A finished game stays finished: ``step`` returns the terminal
+        observation and true done flags, and the caller resets explicitly.
         """
         super().__init__()
         self.seed = seed
@@ -95,7 +92,6 @@ class Env(gym.Env):
 
         self.match = match
         self.reward = reward
-        self.auto_reset = auto_reset
 
     def reset(
         self, *, seed: Optional[int] = None, options: Optional[dict[str, Any]] = None
@@ -105,7 +101,7 @@ class Env(gym.Env):
 
         Args:
             seed: Optional seed for environment’s RNG.
-            options: Optional `match` replaces the setup, including future auto-resets.
+            options: Optional `match` replaces the setup, including later resets.
 
         Returns:
             observation: A dictionary of numpy arrays (encoded from managym.Observation).
@@ -138,8 +134,8 @@ class Env(gym.Env):
 
     def step(self, action: int) -> tuple[dict, float, bool, bool, dict]:
         """
-        Step the environment by applying `action` (int).
-        Automatically
+        Step the environment by applying `action` (int). A terminal step returns
+        the terminal observation; the caller resets.
 
         Args:
             action: Chosen action index (within our placeholder discrete space).
@@ -157,8 +153,6 @@ class Env(gym.Env):
             self._engine, action
         )
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
-        info["true_terminated"] = terminated
-        info["true_truncated"] = truncated
         add_truncation_flags(raw_obs, info, self.obs_space.encoder)
 
         log.debug(
@@ -166,10 +160,6 @@ class Env(gym.Env):
         )
         if terminated or truncated:
             log.info(f"Episode terminated: {terminated}, truncated: {truncated}")
-            if self.auto_reset:
-                raw_obs, _ = self._capture.reset(self._engine, self.match.to_rust())
-                terminated = False
-                truncated = False
 
         py_obs = self.obs_space.encode(raw_obs)
         self._last_obs = raw_obs
@@ -199,8 +189,6 @@ class Env(gym.Env):
 
         transition = SemanticTransition.from_json(transition_json)
         reward = self.reward.compute(raw_reward, self._last_obs, raw_obs)
-        info["true_terminated"] = terminated
-        info["true_truncated"] = truncated
         winner = self._engine.winner_index()
         if winner is not None:
             info["winner_index"] = int(winner)

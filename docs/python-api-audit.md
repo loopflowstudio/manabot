@@ -11,7 +11,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 | Legal choices | Complete action list, positional steps, revision-bound Commands and captured-command submission | Positional indices; readable results have complete actions; buffered observations may select explicit `first-legal` prefix | No vector Command execution or capture-origin authorization. Intentional collection API difference; use scalar for external interactive submissions. Neither snapshot reads nor tensor cutoffs change native legality. |
 | Observation encoding | Allocating native encode or caller-owned buffers, plus Python reference encoder | Bound NumPy buffers derive capacities/version from supplied arrays; readable mode bypasses tensor capacities | Both use the native encoder; Python `ObservationSpace` supplies allocations. No new observation fields or schema versions for snapshots. |
 | Step and reward | One surfaced decision, terminal observation, reward from decision chooser | Same with opponent policy none; built-in policy plays opponent decisions and negates an opponent terminal reward for seat 0 | Gym and Torch can apply reward shaping. Torch returns reused tensors and empty step info; `get_last_info` reads native diagnostics separately. |
-| End/reset | No implicit native reset; further step fails after game over | Terminal reward/flags/info, but replacement-game observation; seeds advance by stride | Gym `auto_reset` clears returned done flags and retains `info.true_terminated/true_truncated`; semantic stepping does not auto-reset. Torch keeps native done flags. These contracts are not interchangeable. |
+| End/reset | No implicit native reset; further step fails after game over | Terminal reward/flags/info, but replacement-game observation; seeds advance by stride | Gym `Env` never auto-resets: terminal steps return true done flags and the caller resets (its `auto_reset` argument is removed). Torch keeps native vector autoreset with true done flags, the only automatic-reset contract. |
 | Partial execution | Caller chooses whether to step | Buffered active masks; inactive observations unchanged, reward/done cleared by Python bindings | CapturedVector records only active attempted steps; Torch step has no mask. Hand snapshots always return all slots; collector applies its mask. |
 | Seeds and identity | `set_seed` affects the next reset; state digest and decision revision are distinct identities | Current seeds, seed restoration, root reassignment and failed-slot replacement | HandSnapshot adds opaque reset generation with seed/revision. A repeated seed or a Torch native-vector rebuild cannot reuse its game generation. Generations are not frozen replay identities. |
 | Errors and capacities | Invalid action rejects; later rules/encoder failure need not be transactional | Strict calls may advance a prefix before failing; isolated gameplay/capacity outcomes are opt-in; malformed buffers remain fatal | CapturedVector retains private replay inputs around buffered calls. Discard failed-call rows and recover/reset; neither an old buffer nor an empty snapshot denotes a successful transition. |
@@ -38,7 +38,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
   [`vector_env.py`](../manabot/env/vector_env.py), and
   [`failures.py`](../manabot/env/failures.py): wrapper rewards, reset policies,
   tensor reuse and private failure evidence. `CapturedVector.__getattr__`
-  delegates unwrapped methods; its instrumentation is specifically buffered.
+  delegates an explicit read-only allowlist; its instrumentation is buffered.
 - [`belief/audit.py`](../manabot/belief/audit.py): `authority_hand` establishes
   the existing name-count representation used by a belief-model client. It
   remains scalar.
@@ -48,25 +48,25 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 Implemented: complete batched hand snapshots, typed wrapper access, identity across
 reset/replacement, missing vector method stubs, and corrected the guide's claim
 that inactive Python reward/done buffers retain old values. The actual bindings
-clear those fields; only observations remain untouched.
+clear those fields; only observations remain untouched. Four audit findings
+are also fixed:
 
-Larger independent follow-ups, not new parity requirements:
+- **CapturedVector readable calls bypassed capture bookkeeping.** Its
+  `__getattr__` now delegates only native reads; `reset_all`, `step` and other
+  native mutators raise `AttributeError` naming the buffered calls.
+- **Same-seed capture rollover.** Native `current_game_generations()` exposes
+  the reset generation; `CapturedVector._synchronize` starts a new prefix when
+  it changes, covering terminal replacement at `u64::MAX` and same-seed resets.
+  Generations stay process-local bookkeeping, never serialized evidence.
+- **Torch explicit-seed reset.** `reset(seed=s)` now restarts at `s` for every
+  explicit seed, including the current base; previously a reset to the current
+  base advanced succession. `reset()` without a seed still advances.
 
-- **CapturedVector readable calls bypass capture bookkeeping.** Its inherited
-  `reset_all`/`step` delegate directly to native; mixing them with instrumented
-  buffered calls leaves `games` replay prefixes stale. Either explicitly reject
-  readable mutation on this wrapper or instrument it end to end. Acceptance:
-  a mixed-mode failure replays the exact native seed/setup/action prefix.
-- **Same-seed capture rollover.** `CapturedVector._synchronize` detects automatic
-  replacement through seed inequality; native seed succession saturates at
-  `u64::MAX`. A completed game at that boundary can leave the old action prefix
-  in private evidence. Use reset-generation rollover for capture bookkeeping or
-  reject exhausted seed succession; acceptance must cover terminal replacement
-  at the maximum seed. HandSnapshot already distinguishes these games.
-- **Gym/Torch reset contract alignment.** Gym auto-reset suppresses done flags,
-  while vector preserves them; Torch `reset(seed=current_base)` advances native
-  succession rather than returning to that seed. Decide compatibility before
-  changing either public behavior. Pin the selected behavior in wrapper tests.
+- **Gym/vector done-flag contract.** Gym auto-reset suppressed done flags
+  while vector preserved them. The Gym `auto_reset` argument and its step-time
+  reset are removed (breaking: passing it raises `TypeError`), along with the
+  `true_terminated` / `true_truncated` info keys nothing read. Vector autoreset
+  with true done flags is the only automatic-reset contract.
 
 No claims of throughput improvement, terminal-hand retention, GPU validation or
 full scalar-helper parity follow from this change. Hand reads perform work only
@@ -81,4 +81,7 @@ outside the checkout: scalar parity with open/closed decklists, detached snapsho
 invalid requests, masks, failure replacement, autoreset, Torch rebuilds and an
 empty hand. The guide's example runs against that installation; both import
 paths and the packaged stubs expose HandSnapshot. The existing same-seed stale
-capture regression also passes. Full affected suites remain gate's work.
+capture regression also passes. `tests/env/test_captured_vector_bookkeeping.py`
+covers rejected mutators, delegated reads, terminal replacement at the maximum
+seed, same-seed resets and both Torch reset forms. Full affected suites remain
+gate's work.
