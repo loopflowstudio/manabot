@@ -9,7 +9,7 @@ on:
       - 'content/**'
       - 'scripts/release/**'
       - 'tests/infra/test_release.py'
-      - 'docs/release-notes.md'
+      - 'release/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/release.yml'

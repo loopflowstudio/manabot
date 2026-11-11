@@ -20,8 +20,9 @@ def check(tag: str | None) -> None:
         raise ValueError("managym must be bundled, not a separate dependency")
     if tag is not None and tag != f"v{version}":
         raise ValueError(f"expected tag v{version}, got {tag}")
-    if not (ROOT / "docs/release-notes.md").read_text().strip():
-        raise ValueError("release notes are empty")
+    notes = ROOT / "release" / f"v{version}" / "NOTES.md"
+    if not notes.is_file() or not notes.read_text().strip():
+        raise ValueError(f"release notes missing or empty: {notes.relative_to(ROOT)}")
     print(f"validated release v{version}")
 
 

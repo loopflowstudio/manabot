@@ -79,6 +79,27 @@ def test_release_versions_and_tags_agree() -> None:
         module.check("v9.9.9")
 
 
+def test_release_requires_that_versions_notes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = _load("check")
+    (tmp_path / "managym").mkdir()
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nversion = "9.9.9"\ndependencies = []\n'
+    )
+    (tmp_path / "managym/Cargo.toml").write_text('[package]\nversion = "9.9.9"\n')
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    with pytest.raises(ValueError, match="release/v9.9.9/NOTES.md"):
+        module.check(None)
+    notes = tmp_path / "release/v9.9.9/NOTES.md"
+    notes.parent.mkdir(parents=True)
+    notes.write_text("\n")
+    with pytest.raises(ValueError, match="missing or empty"):
+        module.check(None)
+    notes.write_text("# v9.9.9\n")
+    module.check("v9.9.9")
+
+
 def _artifacts(directory: Path) -> None:
     """Small archives exercise the same inventory/metadata checks as real wheels."""
     metadata = (

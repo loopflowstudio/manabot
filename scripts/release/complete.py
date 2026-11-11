@@ -130,7 +130,8 @@ def main() -> None:
     if args.github:
         if upload:
             raise ValueError("PyPI publication is missing; release is incomplete")
-        notes = Path("docs/release-notes.md").read_text()
+        root = Path(__file__).resolve().parents[2]
+        notes = (root / "release" / args.tag / "NOTES.md").read_text()
         print(
             complete_github(
                 os.environ["GITHUB_REPOSITORY"],

@@ -532,8 +532,8 @@ check.
 `release.yml` builds and validates relevant PRs, manual runs and `v*` tags; only
 tags publish. Tag builds reject inconsistent versions and commits not on main.
 A release is complete only when its PyPI artifacts and matching GitHub Release
-both exist. The GitHub entry uses the same `vX.Y.Z` tag and the checked-in
-[`release-notes.md`](release-notes.md), with a link to that version on PyPI.
+both exist. The GitHub entry uses the same `vX.Y.Z` tag and that version's
+checked-in `release/vX.Y.Z/NOTES.md`, with a link to that version on PyPI.
 Only the PyPI job gets OIDC `id-token: write`; only the GitHub Release job gets
 `contents: write`. No PyPI token is stored, and uploads carry attestations.
 The trusted publisher is project `manabot`, owner `loopflowstudio`, repository
@@ -543,7 +543,7 @@ tags to `v*`. Recheck its required reviewers and trusted publisher settings befo
 tagging.
 
 Per release: update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`, examples
-and `docs/release-notes.md`; merge the reviewed release PR; confirm the workflow
+and write `release/vX.Y.Z/NOTES.md`; merge the reviewed release PR; confirm the workflow
 is green; push `vX.Y.Z` at that main commit; review the `pypi` job's artifacts
 and approve it. A PR alone does not authorize a tag or upload.
 
