@@ -4,7 +4,41 @@ The Training Wave was renamed experiments in `9f42e4e58` on 2026-11-04.
 The removed Eval memory (hosted LLM comparisons, inference receipts and evidence
 reuse) remains at `19bdee944^:.lf/wave/eval/MEMORY.md`; it is historical context,
 not an active scope or new campaign authorization. Filesystem inspection of
-experiments on 2026-11-05 found no immediate child directories or child memories.
+experiments on 2026-11-11 found no immediate child directories or child memories.
+
+## Self-play metric indexing (MTG-273, 2026-11-11)
+
+The reported width-64 frontier run's collection time rose from about 41 to 107
+seconds/update and RSS from 12.5 to 26 GB with roughly constant completed work.
+These retained observations do not isolate a cause. The collector drains its
+matchup counter after each update; its recovery journal was disabled. Etude
+0.2.15's background manifest refresh nevertheless reloads accumulated permanent
+block headers, including scalar deck-pair metric names. A bounded eight-block,
+16-matchup fixture reproduced this history-dependent cost without games or load
+generation. At eight blocks, table references reduced peak traced Python
+allocation from 2,160,340 to 49,433 bytes. This measures manifest refresh, not
+process RSS, a CUDA speedup or long-run flatness. The separately retained report
+reader's 1.303 GB manifest / about 14 GB RSS observation is not a trainer profile.
+
+The implementation stores each update's exact deck/opponent/position/count rows
+as a digest-named immutable author artifact, with one metric reference. Existing
+Etude carriers ship these under `artifacts/`; `.partial` staging prevents partial
+delivery. Readers select the winning update/attempt before resolving references
+through that metric block's Storage and prefix. Empty resumed attempts also cut
+off stale updates. Unreferenced tables supply no results; missing or corrupt
+selected evidence fails. Historical scalar metrics remain unchanged, and the
+offline projection consumes the reference before exposing the old count names.
+Neither report expansion nor the SDK's remaining scalar/reference index is
+constant-memory history processing.
+
+Retained shipment/relocation, resume selection, historical-report and ordinary
+both-seat executor/checkpoint checks support this repair. Broader integration,
+original-run attribution and long-run time/RSS acceptance remain open in
+`scratch/mtg-273.md`; measurements live in
+`experiments/self-play-collection-273.md`. A smaller manifest is insufficient to
+close the full slowdown Task or change a frozen run. Performance comparisons must
+pin the device explicitly after the merged MPS change altered fresh recipe
+selection; that change does not establish anything about historical CUDA pace.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 

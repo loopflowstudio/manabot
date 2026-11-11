@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-273 · Outcome evidence concept review</title>
+<style>
+  :root { color-scheme: light dark; --paper:#faf9f6; --ink:#252923; --muted:#586052; --line:#b6bcae; --accent:#405d37; }
+  @media (prefers-color-scheme:dark) { :root { --paper:#181c18; --ink:#e7ebe2; --muted:#b2beab; --line:#535f4d; --accent:#b9d3a8; } }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:24px 20px 40px; background:var(--paper); color:var(--ink); font:16px/1.45 system-ui,sans-serif; }
+  main { max-width:820px; margin:auto; }
+  header { color:var(--muted); font-size:13px; }
+  h1 { font-size:clamp(24px,4vw,32px); line-height:1.15; margin:14px 0 10px; }
+  h2 { font-size:18px; margin:20px 0 8px; }
+  p { margin:8px 0; }
+  .decision { border-left:3px solid var(--accent); padding-left:14px; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; font-size:14px; }
+  th,td { text-align:left; vertical-align:top; padding:9px 8px; border-bottom:1px solid var(--line); }
+  th:first-child,td:first-child { padding-left:0; }
+  code { font:0.87em ui-monospace,monospace; overflow-wrap:anywhere; }
+  small { color:var(--muted); }
+  summary { cursor:pointer; color:var(--accent); padding:6px 0; }
+  details p { font-size:14px; }
+  li { margin:6px 0; }
+  a { color:var(--accent); }
+  @media (max-width:560px) { body { padding:18px 14px; } table { font-size:13px; } th,td { padding:8px 5px; } }
+</style>
+<main>
+  <header>MTG-273 · concept-review · 2026-11-11
+    <details><summary>Files behind this review</summary>
+      <p><code>scratch/mtg-273.md</code>, <code>scratch/questions.md</code>,
+      <code>docs/training.md</code>, <code>AGENTS.md</code>,
+      <code>experiments/self-play-collection-273.md</code>,
+      <code>manabot/training/{execution,outcome_tables,update_metrics}.py</code>,
+      <code>manabot/training/rollout/self_play.py</code>,
+      <code>tests/training/test_outcome_tables.py</code>.</p>
+    </details>
+  </header>
+  <h1>Keep one update’s outcomes as evidence.</h1>
+  <p class="decision"><strong>Review decision: advance; no design change or open product choice.</strong>
+    The table model is already implemented. The full slowdown Task still needs causal attribution and long-run time/RSS evidence.</p>
+  <table>
+    <caption>Actions → concepts → APIs · before and after</caption>
+    <thead><tr><th>Action</th><th>Before</th><th>Implemented on this branch</th></tr></thead>
+    <tbody>
+      <tr><td>Train an update</td><td>Each deck pair becomes metric columns.<br><code>drain → metric_row → log_update</code></td><td>Exact counts become one immutable table; the update selects its digest.<br><code>drain → write_outcomes → log_update</code></td></tr>
+      <tr><td>Move the evidence</td><td>Copy the metric run.</td><td>Keep its <code>artifacts/</code> too. Existing Etude carriers deliver tables before references.</td></tr>
+      <tr><td>Resume and inspect</td><td>Selected scalar rows supply counts.</td><td><code>read_updates</code> selects attempt/update, verifies the selected table, then projects the same count names.</td></tr>
+    </tbody>
+  </table>
+  <p><strong>Biggest mismatch:</strong> smaller indexing allocations are not proof of stable training.
+    The eight-block fixture reduced peak traced Python allocation from 2,160,340 to 49,433 bytes.
+    It measured neither trainer RSS nor the reported 41 → 107 seconds/update slowdown.</p>
+  <details>
+    <summary>Walk through normal use, failure and recovery</summary>
+    <p><strong>Illustrative update 12:</strong> A beats B on the play. The table has
+      <code>A / B / play / wins=1</code> and <code>B / A / draw / losses=1</code>.
+      Shipment and relocation preserve those counts. Both seat rows count one game, not two games.</p>
+    <p><strong>Failure:</strong> a sealed table without a logged reference supplies no result.
+      A failed seal propagates; no new learner retry or crash-recovery behavior is promised.
+      Missing or corrupt selected evidence raises an error.</p>
+    <p><strong>Recovery:</strong> an attempt resumed at update 11 removes the former update 12
+      before reading tables, even if that attempt logs nothing. A replacement update 12 selects
+      its own table. The metric row owns selection; a digest owns content, not update identity.</p>
+    <p><strong>Counterexamples:</strong> scanning tables resurrects stale results; loading all
+      references first fails on superseded missing files; copying metrics alone loses required
+      evidence. Keep selection first and carry the complete run.</p>
+  </details>
+  <details>
+    <summary>Usage and implementation direction</summary>
+    <p>Existing monitoring docs already say to retain artifacts and use <code>read_updates</code>.
+      Existing training-record instructions already place tables under the metric run.
+      Leave both unchanged. <strong>Proposed behavior: none.</strong> No table registry,
+      second uploader, checkpoint coupling or live scalar compatibility writer is needed.</p>
+    <p>Next: integrated validation and the outstanding causal/long-run evidence from the working
+      design. The offline projection and remaining SDK index still grow with history.
+      This review starts no execution and grants no campaign approval.</p>
+  </details>
+  <h2>Review questions · resolved from the design</h2>
+  <ol>
+    <li>Must readers manage two result lifecycles? <strong>No.</strong> A selected update owns an immutable evidence reference.</li>
+    <li>Does this establish the complete performance outcome? <strong>No.</strong> Keep the Task’s remaining acceptance open.</li>
+    <li>Is a new product decision needed? <strong>No.</strong> Advance concept review; later execution bounds belong to demo.</li>
+  </ol>
+</main>
+</html>

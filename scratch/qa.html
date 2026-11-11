@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>MTG-273 QA — self-play outcome tables</title>
+<style>body{font:15px/1.5 system-ui;max-width:880px;margin:2em auto;padding:0 1em;color:#222}code,pre{background:#f4f1ea;border-radius:3px}pre{padding:.6em;overflow:auto;font-size:13px}h2{margin-top:1.6em;border-bottom:1px solid #ddd}td,th{padding:.2em .6em;border-bottom:1px solid #eee;text-align:left}img{max-width:100%;border:1px solid #ddd}.ok{color:#2a6a2a}.bad{color:#a33}</style>
+<h1>QA: self-play outcomes as immutable row tables</h1>
+<p>Product path exercised: <code>uv run manabot train</code> on CPU (the local recipe and a CPU process-recovery regime), then the offline reader <code>read_updates</code> and the notebook report's <code>self_play_figures</code>, the way someone inspects training. All runs were small (2 streams, 16 transitions, ≤15 updates), under <code>/tmp/qa273</code>, and are stopped. No frozen runs or other Tasks' processes were touched.</p>
+
+<h2>1. Fresh training run (local recipe)</h2>
+<pre>uv run manabot train --device cpu --steps 3 --seed 197 --out /tmp/qa273/run1
+local: completed; run: cc7717c9…   (16 s wall)</pre>
+<p>The Etude run contains <code>artifacts/self-play-outcomes/&lt;sha256&gt;.json</code>. Each file's SHA-256 equals its name. The only outcome name in the metric manifest is <code>self_play_outcomes/table</code>; no deck-hash names appear. Updates 1 and 3 had identical counts and share one digest, while staying separate updates.</p>
+<pre>{"format":"self-play-outcomes-v1","rows":[{"deck":"7d663f…","opponent_deck":"fc9481…","position":"draw","wins":2,"losses":0,"draws":0},
+ {"deck":"fc9481…","opponent_deck":"7d663f…","position":"play","wins":0,"losses":2,"draws":0}]}</pre>
+<p class="ok">The two seat rows agree: 2 games, both won by the deck on the draw.</p>
+
+<h2>2. Reading it back, also after copying the run</h2>
+<p><code>read_updates</code> returns updates [1, 2, 3] and projects the familiar <code>self_play_outcomes/&lt;deck&gt;/&lt;opp&gt;/&lt;play|draw&gt;/wins|losses|draws</code> counts. A <code>cp -R</code> of the run to a new directory read identically. The report figure, rendered from the copied run:</p>
+<img src="qa-selfplay-new.png" alt="Self-play play/draw and deck win rates for new table-backed run">
+
+<h2>3. Historical run plus new run in one report</h2>
+<p>I copied a retained local run from before this change (scalar outcome columns, from another worktree's <code>.runs/</code>) next to the new run and loaded both with <code>load_evidence</code>. Both produce points, and the report draws one figure per run. Historical metrics are read unchanged.</p>
+<img src="qa-selfplay-mixed-1.png" alt="Historical scalar-metric run rendered by the same report">
+
+<h2>4. Copying it wrong or damaging it</h2>
+<table><tr><th>Scenario</th><th>Result</th></tr>
+<tr><td>Copy without <code>artifacts/</code></td><td class="ok">Fails with <code>FileNotFoundError: …/artifacts/self-play-outcomes/744dd9….json</code>. It does not silently report zero games. The path in the error tells you what is missing.</td></tr>
+<tr><td>Edit one count in a referenced table</td><td class="ok"><code>ValueError: self-play outcome table digest mismatch</code></td></tr>
+</table>
+
+<h2>5. Interrupted runs and resume</h2>
+<ul>
+<li>A local run that hit its wall deadline (<code>--seconds 12</code>, status <code>interrupted</code>) kept the tables for its 5 completed updates. The reader returns [1..5], and there are no <code>.partial</code> leftovers.</li>
+<li>CPU process recovery: the regime was the local recipe plus <code>schedule_clock=iteration_fraction</code> and <code>recovery_max_microsteps</code>. I killed the first attempt after update 7. A second attempt ran with <code>--resume-from</code> into the same Etude run, resuming at <code>updates=7</code>, and was killed after update 15's checkpoint. The reader selects updates 1–14 across both attempts, each with 4 seat outcomes (2 games), and learner transitions increase monotonically.</li>
+</ul>
+
+<h2>Fixed during QA</h2>
+<p><b>Outcome tables were published with mode 0600.</b> Every other file in the run (metric blocks, manifests, checkpoints) is 0644. The tables were staged with <code>NamedTemporaryFile</code>, which is owner-only, and renamed as-is. That would break a reader, syncer or teammate account that can read the rest of the run. The tables now get <code>0666 &amp; ~umask</code> before the rename (<code>manabot/training/outcome_tables.py</code>). This was confirmed live: tables from the resumed run are <code>-rw-r--r--</code>. I added <code>test_outcome_table_mode_follows_umask_like_metric_files</code>. <code>test_outcome_tables.py</code>, <code>test_self_play.py</code>, <code>test_etude_sdk.py</code> and the both-seat <code>test_rl_runtime</code> raw/EMA check pass, and Ruff is clean.</p>
+
+<h2>What works now</h2>
+<ul><li>Fresh training writes one verified table per update and one digest metric. Nothing about deck pairs enters the metric index.</li>
+<li>Reading, relocation, historical/new mixing, the report figure, interruption and two-attempt resume all behave as documented in <code>docs/training.md</code>.</li>
+<li><code>scripts/diagnose_outcome_index.py</code> reproduces the numbers in <code>experiments/self-play-collection-273.md</code> exactly. At 8 blocks, the scalar representation's peak traced Python allocation is 2,160,340 bytes and the table representation's is 49,433 bytes.</li></ul>
+
+<h2>Not reached, and why</h2>
+<ul>
+<li><b>The Task's actual outcome is still open.</b> Nobody has attributed the width-64 run's collection slowdown and RSS growth to a cause. Nothing shows flat time and RSS per update over a long run. A ≤15-update CPU smoke cannot show either, and a long or CUDA run would be a new execution that needs its own bound and placement (the open demo decision in <code>scratch/mtg-273.md</code>).</li>
+<li>The launched-job path (<code>etude launch</code>, shipping to r2) was not exercised. That needs a rental. Shipment ordering and relocation are covered by <code>test_outcome_tables_ship_and_read_from_relocated_run</code> against the real SDK carrier.</li>
+<li>I did not open the generated notebook's <code>comparison.html</code> end to end. I called <code>self_play_figures</code> directly on <code>load_evidence</code>, which is the function the notebook calls.</li>
+</ul>
+
+<h2>Still wrong or rough (worst first)</h2>
+<ol>
+<li>The causal and long-run acceptance above is missing. The software repair alone does not complete MTG-273.</li>
+<li>This is pre-existing and outside this change: <code>manabot train</code> ignored two SIGINTs (one via <code>uv run</code>, one sent directly to the Python process) for several updates, and only SIGTERM stopped it. Someone pressing Ctrl-C on a long run may see the same thing.</li>
+<li>Pre-existing: two different runs with the same recipe and seed get identical report titles ("local-smoke-v1 · seed 197"), so a mixed historical/new report doesn't tell them apart.</li>
+</ol>
+</html>

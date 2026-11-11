@@ -39,13 +39,8 @@ Historical scalar outcome metrics remain readable without rewriting evidence.
 
 ## Open acceptance
 
-Gate: affected SDK/outcome/report/runtime suites, recovery selection and courier
-shipment checks. Original-run causal profile and full post-repair long-run flat
-RSS/time remain unestablished; do not turn the bounded fixture into those claims.
-
-Implementation and focused results are in `scratch/mtg-273.md`; the retained
-before/after fixture measurements are in `experiments/self-play-collection-273.md`.
-At eight blocks the table-reference representation used 49,433 peak traced
-Python bytes versus 2,160,340 for scalar matchup columns. The historical-report
-and actual both-seat executor/checkpoint checks passed. Nothing was rented,
-published or left running; the Task remains open for its remaining acceptance.
+`scratch/mtg-273.md` owns the implemented approach, retained checks and remaining
+acceptance. The original-run causal profile and post-repair long-run RSS/time
+evidence remain missing. If retained evidence cannot settle them, the exact
+bound and placement of further ordinary execution remain for demo; the small
+index fixture does not authorize or substitute for a campaign.
