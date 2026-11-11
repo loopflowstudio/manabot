@@ -7,7 +7,7 @@ This module is responsible for:
 2. Structuring tensors in a natural way for the agent to build a policy, and
 3. Defining the observation space as a Gymnasium space.
 
-Additional updates in this version:
+Encoding contracts:
 - Focus object indices are naturally gathered when encoding actions.
 - Validity masks (if provided) are passed to the GameObject Encoder, Action Encoder,
   Policy head, and multi-head attention.
@@ -15,6 +15,7 @@ Additional updates in this version:
   is_valid flag.
 """
 
+from collections.abc import Callable
 from typing import Dict, ItemsView, KeysView, List, Tuple, ValuesView
 
 import gymnasium as gym
@@ -30,6 +31,7 @@ from managym.enums import (  # noqa: F401
     ZoneEnum,
 )
 import numpy as np
+from numpy.typing import NDArray
 
 # Local imports
 from manabot.infra.config import ObservationConfig
@@ -287,17 +289,25 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(self, cards: List[managym.Card], is_mine: float) -> np.ndarray:
+    def _encode_cards(
+        self, cards: list[managym.Card], is_mine: float
+    ) -> NDArray[np.float32]:
         return self._encode_objects(
             items=cards,
             max_items=self.cards_per_player,
             dim=self.card_dim,
             label="Card list",
-            encode_item=lambda card: self._encode_card_features(card, is_mine),
+            is_mine=is_mine,
+            encode_item=self._encode_card_features,
         )
 
-    def _encode_card_features(self, card: managym.Card, is_mine: float) -> np.ndarray:
-        arr = np.zeros(self.card_dim, dtype=np.float32)
+    def _encode_card_features(
+        self, card: managym.Card, is_mine: float, arr: NDArray[np.float32]
+    ) -> None:
+        """Write into a zeroed row; absent zone bits and reserved columns stay zero."""
+        # PyO3 sub-object getters create wrappers; share one per object row.
+        keywords = card.keywords
+        card_types = card.card_types
         i = 0
         zone_val = int(card.zone) & 0xFF
         if 0 <= zone_val < self.num_zones:
@@ -311,41 +321,41 @@ class ObservationEncoder:
         i += 1
         arr[i] = float(card.mana_cost.mana_value) / 10.0
         i += 1
-        arr[i] = float(card.card_types.is_land)
+        arr[i] = float(card_types.is_land)
         i += 1
-        arr[i] = float(card.card_types.is_creature)
+        arr[i] = float(card_types.is_creature)
         i += 1
-        arr[i] = float(card.card_types.is_artifact)
+        arr[i] = float(card_types.is_artifact)
         i += 1
-        arr[i] = float(card.card_types.is_enchantment)
+        arr[i] = float(card_types.is_enchantment)
         i += 1
-        arr[i] = float(card.card_types.is_planeswalker)
+        arr[i] = float(card_types.is_planeswalker)
         i += 1
-        arr[i] = float(card.card_types.is_battle)
+        arr[i] = float(card_types.is_battle)
         i += 1
-        arr[i] = float(card.keywords.flying)
+        arr[i] = float(keywords.flying)
         i += 1
-        arr[i] = float(card.keywords.reach)
+        arr[i] = float(keywords.reach)
         i += 1
-        arr[i] = float(card.keywords.haste)
+        arr[i] = float(keywords.haste)
         i += 1
-        arr[i] = float(card.keywords.vigilance)
+        arr[i] = float(keywords.vigilance)
         i += 1
-        arr[i] = float(card.keywords.trample)
+        arr[i] = float(keywords.trample)
         i += 1
-        arr[i] = float(card.keywords.first_strike)
+        arr[i] = float(keywords.first_strike)
         i += 1
-        arr[i] = float(card.keywords.double_strike)
+        arr[i] = float(keywords.double_strike)
         i += 1
-        arr[i] = float(card.keywords.deathtouch)
+        arr[i] = float(keywords.deathtouch)
         i += 1
-        arr[i] = float(card.keywords.lifelink)
+        arr[i] = float(keywords.lifelink)
         i += 1
-        arr[i] = float(card.keywords.defender)
+        arr[i] = float(keywords.defender)
         i += 1
-        arr[i] = float(card.keywords.menace)
+        arr[i] = float(keywords.menace)
         i += 1
-        arr[i] = float(card.keywords.flash)
+        arr[i] = float(keywords.flash)
         i += 1
         arr[i] = float(card.is_token)
         i += 1
@@ -361,31 +371,32 @@ class ObservationEncoder:
         i += 1
         arr[i] = float(card.kicker_cost) / 10.0
         i += 1
-        arr[i] = float(card.keywords.hexproof)
-        arr[38] = float(card.keywords.indestructible)
+        arr[i] = float(keywords.hexproof)
+        arr[38] = float(keywords.indestructible)
         arr[39] = float(card.is_legendary)
         # Set validity flag (card exists)
         arr[-1] = 1.0
-        return arr
 
     # -------------------------------------------------------------------------
     # Permanents (with validity mask support)
     # -------------------------------------------------------------------------
     def _encode_perms(
-        self, perms: List[managym.Permanent], is_mine: float
-    ) -> np.ndarray:
+        self, perms: list[managym.Permanent], is_mine: float
+    ) -> NDArray[np.float32]:
         return self._encode_objects(
             items=perms,
             max_items=self.perms_per_player,
             dim=self.permanent_dim,
             label="Permanent list",
-            encode_item=lambda perm: self._encode_permanent_features(perm, is_mine),
+            is_mine=is_mine,
+            encode_item=self._encode_permanent_features,
         )
 
     def _encode_permanent_features(
-        self, perm: managym.Permanent, is_mine: float
-    ) -> np.ndarray:
-        arr = np.zeros(self.permanent_dim, dtype=np.float32)
+        self, perm: managym.Permanent, is_mine: float, arr: NDArray[np.float32]
+    ) -> None:
+        """Write effective permanent features into a zeroed padded-array row."""
+        keywords = perm.keywords
         arr[0] = is_mine
         arr[1] = float(perm.tapped)
         arr[2] = float(perm.damage) / 10.0
@@ -398,26 +409,25 @@ class ObservationEncoder:
         arr[9] = float(perm.has_exile_link)
         # Effective keywords (printed + until-EOT grants) — mirrors the Rust
         # encoder's permanent keyword block exactly.
-        arr[10] = float(perm.keywords.flying)
-        arr[11] = float(perm.keywords.reach)
-        arr[12] = float(perm.keywords.haste)
-        arr[13] = float(perm.keywords.flash)
-        arr[14] = float(perm.keywords.vigilance)
-        arr[15] = float(perm.keywords.trample)
-        arr[16] = float(perm.keywords.first_strike)
-        arr[17] = float(perm.keywords.double_strike)
-        arr[18] = float(perm.keywords.deathtouch)
-        arr[19] = float(perm.keywords.lifelink)
-        arr[20] = float(perm.keywords.defender)
-        arr[21] = float(perm.keywords.menace)
-        arr[22] = float(perm.keywords.hexproof)
+        arr[10] = float(keywords.flying)
+        arr[11] = float(keywords.reach)
+        arr[12] = float(keywords.haste)
+        arr[13] = float(keywords.flash)
+        arr[14] = float(keywords.vigilance)
+        arr[15] = float(keywords.trample)
+        arr[16] = float(keywords.first_strike)
+        arr[17] = float(keywords.double_strike)
+        arr[18] = float(keywords.deathtouch)
+        arr[19] = float(keywords.lifelink)
+        arr[20] = float(keywords.defender)
+        arr[21] = float(keywords.menace)
+        arr[22] = float(keywords.hexproof)
         arr[23] = float(perm.exile_if_dies_this_turn)
-        arr[25] = float(perm.keywords.indestructible)
+        arr[25] = float(keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
-        return arr
 
     # -------------------------------------------------------------------------
     # Actions (with focus object indices and validity masking)
@@ -499,14 +509,15 @@ class ObservationEncoder:
             valid[i] = 1.0
         return arr, valid
 
-    def _encode_objects(
+    def _encode_objects[T: (managym.Card, managym.Permanent)](
         self,
-        items: List,
+        items: list[T],
         max_items: int,
         dim: int,
         label: str,
-        encode_item,
-    ) -> np.ndarray:
+        is_mine: float,
+        encode_item: Callable[[T, float, NDArray[np.float32]], None],
+    ) -> NDArray[np.float32]:
         feat = np.zeros((max_items, dim), dtype=np.float32)
         if len(items) > max_items:
             raise ValueError(
@@ -514,7 +525,7 @@ class ObservationEncoder:
             )
 
         for i, item in enumerate(items):
-            feat[i] = encode_item(item)
+            encode_item(item, is_mine, feat[i])
             self.object_to_index[item.id] = self.current_object_index
             self.current_object_index += 1
 

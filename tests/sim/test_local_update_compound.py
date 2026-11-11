@@ -4,6 +4,7 @@ from dataclasses import replace
 from itertools import product
 import json
 from pathlib import Path
+from typing import Literal
 
 from managym.decision import Observation
 import numpy as np
@@ -108,8 +109,9 @@ def test_payment_joint_parity(lands: int) -> None:
 
 @pytest.mark.parametrize("compound", [False, True])
 @pytest.mark.parametrize("learned", [False, True])
+@pytest.mark.parametrize("evidence", ["full", "compact"])
 def test_supported_root_rollout_reaching_payment_replays(
-    tmp_path: Path, learned: bool, compound: bool
+    tmp_path: Path, learned: bool, compound: bool, evidence: Literal["full", "compact"]
 ) -> None:
     """An admitted priority root can roll through payment on either sampler."""
     torch.set_num_threads(1)
@@ -138,7 +140,7 @@ def test_supported_root_rollout_reaching_payment_replays(
         player_configs=configs,
         extra={"value_semantic": "signed_outcome"},
     )
-    config = LocalSearchConfig(depth=2, decision_seconds=20)
+    config = LocalSearchConfig(depth=2, decision_seconds=20, rollout_evidence=evidence)
     teacher = LocalUpdateTeacher(path, file_sha256(path), config)
     if learned:
         artifact = saved_sampler(teacher, tmp_path / "sampler.pt")
@@ -172,12 +174,9 @@ def test_supported_root_rollout_reaching_payment_replays(
     receipt = teacher.search(env, history, seed=19)
     teacher.verify_replay(env, history, receipt)
     LocalUpdateReceipt.from_json(receipt.to_json())
-    assert (
-        LocalUpdateReceipt.from_json(
-            replace(receipt, schema="regularized-local-update/v2").to_json()
-        ).target
-        == receipt.target
-    )
+    if evidence == "full":
+        legacy = replace(receipt, schema="regularized-local-update/v2")
+        assert LocalUpdateReceipt.from_json(legacy.to_json()).target == receipt.target
     assert env.state_digest() == before
     assert env.possible_world_space_construction_count() == constructions
     if not compound:
@@ -207,7 +206,7 @@ def test_supported_root_rollout_reaching_payment_replays(
     with pytest.raises(TimeoutError):
         teacher.search(branch, history, seed=23, compound_cursor=cursor, deadline=1)
     for schema in ("regularized-local-update/v1", "regularized-local-update/v2"):
-        with pytest.raises(ValueError, match="historical"):
+        with pytest.raises(ValueError, match="historical|compact rollout evidence"):
             LocalUpdateReceipt.from_json(replace(receipt, schema=schema).to_json())
     bad_values = tuple(0.0 if v is None else v for v in receipt.values)
     with pytest.raises(ValueError, match="exactly on policy support"):
@@ -219,7 +218,7 @@ def test_supported_root_rollout_reaching_payment_replays(
             replace(receipt, target=tuple(bad_target)).to_json()
         )
 
-    evidence = local_update_scenario(
+    advice = local_update_scenario(
         receipt,
         BeliefNormalizationReceipt(
             scenario_id="baseline",
@@ -234,11 +233,11 @@ def test_supported_root_rollout_reaching_payment_replays(
         ),
         labels=["payment"] * len(receipt.target),
     )
-    assert evidence.sampled_worlds == 1
-    for action, zero in zip(evidence.actions, inactive):
+    assert advice.sampled_worlds == 1
+    for action, zero in zip(advice.actions, inactive):
         assert (action.q.status == "unavailable") == zero
-    assert evidence.root_value.status == "available"
-    assert np.isfinite(evidence.root_value.value)
+    assert advice.root_value.status == "available"
+    assert np.isfinite(advice.root_value.value)
     # Direct count materialization changes hidden truth, never the viewer policy.
     constraints = branch.hidden_hand_constraints_json(viewer)
     hand = receipt.rollouts[0].sampled_hand

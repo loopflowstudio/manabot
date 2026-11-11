@@ -11,13 +11,17 @@ This test suite verifies:
 6. Focus indices validity
 """
 
+import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Set, Tuple
 
+from managym.decision import Command
 import numpy as np
 import pytest
 
 # Local imports
+from manabot.env import Env, Match, Reward
 from manabot.env.observation import (
     EventEntityKindEnum,
     EventTypeEnum,
@@ -28,6 +32,8 @@ from manabot.env.observation import (
     StepEnum,
     ZoneEnum,
 )
+from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.infra.identity import file_sha256
 import managym
 
 # ─────────────────────────── Fixtures ───────────────────────────
@@ -89,6 +95,96 @@ def two_observations(
 
 
 # ─────────────────────────── Tests ───────────────────────────
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_sealed_smoke_encodings_are_bit_identical(native: bool) -> None:
+    """All actor views and the terminal view retain the pre-allocation-change bytes.
+
+    The fixture contains only sealed Commands and golden tensors, so this check
+    needs neither a trained checkpoint nor the private search receipt archive.
+    """
+    fixture = Path(__file__).parents[1] / "fixtures" / "observation-smoke"
+    replay = json.loads((fixture / "replay.json").read_text())
+    assert file_sha256(fixture / "encoded.npz") == replay["encoded_sha256"]
+    space = ObservationSpace(
+        ObservationConfig.model_validate(replay["observation_config"])
+    )
+    if native and not hasattr(managym, "encode_observations_into"):
+        pytest.skip("requires separately selected native batch encoder")
+    buffers = space.encoder.allocate(3)
+    env = Env(
+        Match(MatchConfig.model_validate(replay["match_config"])),
+        space,
+        Reward(RewardConfig()),
+        seed=replay["seed"],
+    )
+    try:
+        env.reset(seed=replay["seed"])
+        with np.load(fixture / "encoded.npz", allow_pickle=False) as golden:
+            assert set(golden.files) == set(space.encoder.shapes)
+            commands = [Command(**row) for row in replay["commands"]]
+            assert len(commands) == len(replay["actors"]) == 303
+
+            def compare_view(obs: managym.Observation, step: int) -> None:
+                encoded = space.encoder.encode(obs)
+                if native:
+                    projected = space.encoder.encode(
+                        env._engine.observation_for_player(int(obs.agent.player_index))
+                    )
+                    # Exercise a multi-row batch, then a shrinking frontier with
+                    # dirty padding. The unused capacity must remain untouched.
+                    for array in buffers.values():
+                        array.fill(37)
+                    viewers = (
+                        [int(obs.agent.player_index)] * 2
+                        if step == len(commands)
+                        else None
+                    )
+                    counts = managym.encode_observations_into(
+                        [env._engine, env._engine],
+                        buffers,
+                        3,
+                        viewers=viewers,
+                    )
+                    assert counts == [int(projected["actions_valid"].sum())] * 2
+                    for key in space.encoder.shapes:
+                        np.testing.assert_array_equal(
+                            buffers[key][0], projected[key], strict=True
+                        )
+                        np.testing.assert_array_equal(
+                            buffers[key][1], projected[key], strict=True
+                        )
+                        assert (buffers[key][2] == 37).all()
+                    managym.encode_observations_into(
+                        [env._engine],
+                        buffers,
+                        3,
+                        viewers=viewers[:1] if viewers is not None else None,
+                    )
+                    encoded = {key: buffers[key][0] for key in space.encoder.shapes}
+                    if step == len(commands):
+                        # A Command's terminal return retains transition events;
+                        # re-projecting state has none. Encode that exact snapshot
+                        # through the native snapshot API, never alter the golden.
+                        env._engine.encode_observation_into(obs, encoded)
+                for key, actual in encoded.items():
+                    expected = golden[key][step]
+                    np.testing.assert_array_equal(
+                        actual, expected, strict=True, err_msg=f"step={step} key={key}"
+                    )
+                    assert actual.tobytes() == expected.tobytes(), (step, key)
+
+            for step, command in enumerate(commands):
+                actor = int(env._engine.current_agent_index())
+                assert actor == replay["actors"][step]
+                compare_view(env._engine.observation_for_player(actor), step)
+                env.step_semantic(command)
+            assert env._engine.is_game_over()
+            compare_view(env._last_obs, len(commands))
+            assert all(len(golden[key]) == len(commands) + 1 for key in golden.files)
+    finally:
+        env.close()
 
 
 class TestEnumParity:
@@ -456,6 +552,36 @@ class TestObservationEncoder:
         )
         with pytest.raises(ValueError, match="capacity exceeded: action focus"):
             encoder._encode_actions(obs)
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["shape", "dtype", "readonly", "strided", "overlap", "capacity", "viewers"],
+)
+def test_native_branch_encoder_rejects_invalid_buffers(invalid: str) -> None:
+    if not hasattr(managym, "encode_observations_into"):
+        pytest.skip("requires separately selected native batch encoder")
+    encoder = ObservationEncoder(ObservationConfig())
+    buffers = encoder.allocate(2)
+    branches = [managym.Env()]
+    viewers = None
+    if invalid == "shape":
+        buffers["actions"] = buffers["actions"][:, :1]
+    elif invalid == "dtype":
+        buffers["actions"] = buffers["actions"].astype(np.float64)
+    elif invalid == "readonly":
+        buffers["actions"].flags.writeable = False
+    elif invalid == "strided":
+        buffers["actions"] = buffers["actions"][::-1]
+    elif invalid == "overlap":
+        buffers["opponent_player"] = buffers["agent_player"]
+    elif invalid == "capacity":
+        branches *= 3
+    elif invalid == "viewers":
+        viewers = []
+    with pytest.raises((ValueError, TypeError)):
+        managym.encode_observations_into(branches, buffers, 2, viewers=viewers)
+    assert (buffers["agent_cards"] == 0).all()
 
 
 if __name__ == "__main__":

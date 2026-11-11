@@ -1,9 +1,26 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import IntEnum
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
+
+def encode_observations_into(
+    envs: Sequence[Env],
+    buffers: dict[str, NDArray[np.generic]],
+    capacity: int,
+    viewers: list[int] | None = None,
+) -> list[int]:
+    """Write actor views (or explicit replay viewers), returning legal counts.
+
+    Buffers come from ObservationEncoder.allocate(capacity) and remain exclusively
+    caller-owned during the call. Step-state arrays are unnecessary; rows beyond
+    envs are untouched.
+    Shape, dtype, writability and observation capacity failures raise.
+    """
+    ...
 
 class PreparedPossibleWorldMaterializer:
     @property

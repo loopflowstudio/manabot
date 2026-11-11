@@ -46,13 +46,55 @@ whether the actual hidden hand satisfies a query. A zero-mass reference query fa
 
 ## Evidence and budgets
 
+For fixed-root native encoding experiments, select a separately built extension
+at process startup with `MANABOT_MANAGYM_EXTENSION=/absolute/path/_managym.cpython-312-darwin.so`
+and construct `LocalUpdateTeacher(..., native_encoder=True)`. Python encoding
+remains the default. The native option batches flat-policy actor views into reusable
+frontier NumPy arrays from `ObservationEncoder.allocate(capacity)`, without
+reward or termination arrays, using the checkpoint's unchanged tensor layout.
+Unsupported buffer shapes or missing native capability fail explicitly. It does not change
+thread settings, rollout depth, legal support, or the campaign configuration.
+Native teachers own reusable buffers and require one caller at a time; use
+separate teacher instances for concurrent searches.
+The selected binary's actual hash remains in receipts. Never replace a frozen
+campaign binary to select this experiment; extract the wheel's extension to a
+separate directory. Set the selector before importing manabot/managym.
+
+Inference threads are a process-startup choice, never a search configuration or
+a per-decision mutation of torch globals. The fixed-position harness
+`scratch/measure_mirror_compact.py` accepts `--inference-threads` (default 1)
+before loading the model and records requested/effective intra-op threads and
+the unchanged inter-op count. Its default remains five paired full/compact
+repeats with separate profiles. `--modes compact --control <directory>` admits
+against completed one-thread compact receipts and external Command/final-view
+captures, at unchanged numerical tolerances, before timing each root. This
+single-process calibration does not change the campaign runner's one-thread
+setting or establish throughput with several contending workers.
+
 `LocalUpdateReceipt` records semantic offer IDs, base/Q/reference/target,
 coefficients, exact sampling weights, query/mass, world/belief/policy/native/source
-identities, seeds, per-action counts, signed rollout values and exact branch
-Command/witness tapes. `verify_replay` re-executes from an exact source root and
+identities, seeds, per-action counts and signed rollout values. Full evidence
+also retains exact branch Command/witness tapes and actor viewer hashes.
+`verify_replay` re-executes from an exact source root and
 tracked belief, comparing all retained evidence except elapsed times. Hidden-world
 swap tests verify root information invariance. Receipts alone are not a source
 trajectory or a policy-free historical reconstruction system.
+
+`LocalSearchConfig(rollout_evidence="compact")` opts into
+`regularized-local-update/v4` receipts. It skips per-Command native audit
+witnesses and actor viewer hashes during rollouts. Root viewer checks, sampled
+world validation, structured Command preconditions, policy inputs and rollout
+budgets remain unchanged. Each successful apply increments an independent
+Command count, reconciled with native session counters. Compact receipts declare
+their mode in `config_json` and retain native metadata with `audit: false` and
+empty tapes; they cannot prove the omitted per-step witness equivalence.
+Replay compares only retained evidence. Registrations must declare
+`search_semantics.branch_audit: false` for this mode.
+
+The default is `rollout_evidence="full"`, preserving v3 receipt configuration
+bytes and full audit/hash evidence. Historical v1–v3 readers keep their existing
+contracts. Changing evidence mode changes implementation/receipt identity; it
+does not authorize replacing or relabeling an existing experiment's receipts.
 
 Decision deadlines charge prior construction/history filtering since the previous
 decision as well as search. Stage/run budgets also charge setup, export and failed
@@ -230,10 +272,11 @@ minima before drawing unknown slots and handles the unique empty-pool deal.
 Sequential draws preserve cheap/full sample prefixes. Deadlines include both
 preparation and sampling, with checks between draws and after injected calls.
 
-New receipts use `regularized-local-update/v2`, retaining direct physical samples
-without fabricated support indexes or learned artifact identities. Learned
+Direct physical samples, introduced in `regularized-local-update/v2`, retain
+sampled hands without fabricated support indexes or learned artifact identities.
+Current receipts use v3 for full evidence and v4 for compact evidence. Learned
 receipts retain their existing artifact-bound evidence. The reader still admits
-historical v1 receipts without rewriting their bytes. Arena source admission now
+historical v1/v2 receipts without rewriting their bytes. Arena source admission
 uses `local_search_source_sha256()` to bind search plus sampling implementation
 owners; historical single-file fingerprints fail current admission.
 

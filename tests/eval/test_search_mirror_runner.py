@@ -7,6 +7,8 @@ import hashlib
 import json
 from pathlib import Path
 import signal
+import subprocess
+import sys
 import time
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -78,6 +80,7 @@ def test_uniform_teacher_never_constructs_oracle_sampler(
         20,
     )
     assert config.sampling == "compatible_prior"
+    assert config.rollout_evidence == "full"
 
 
 def test_uniform_samples_physical_copies_and_preserves_known_cards() -> None:
@@ -263,3 +266,67 @@ def test_interruption_retains_private_attempt_without_a_game_score(
         events = [json.loads(line) for line in stream]
     assert [event["event"] for event in events] == ["start", "interrupted"]
     assert "CampaignInterrupted: deadline" in events[-1]["error"]
+
+
+def test_compact_measurement_defaults_and_invalid_options() -> None:
+    from scratch.measure_mirror_compact import arguments
+
+    required = ["--attempt", "unused.gz", "--out", "unused-output"]
+    args = arguments(required)
+    assert (args.inference_threads, args.modes, args.repeats, args.skip_profiles) == (
+        1,
+        "paired",
+        5,
+        False,
+    )
+    for options in (
+        ["--inference-threads", "0"],
+        ["--inference-threads", "-2"],
+        ["--inference-threads", "1.5"],
+        ["--repeats", "0"],
+        ["--modes", "compact"],
+    ):
+        with pytest.raises(SystemExit) as error:
+            arguments(required + options)
+        assert error.value.code == 2
+
+
+@pytest.mark.parametrize("threads", [1, 4])
+def test_compact_measurement_sets_threads_before_model(
+    tmp_path: Path,
+    threads: int,
+) -> None:
+    # A fresh interpreter observes startup settings at the model-loading boundary.
+    # Exit there: no checkpoint, search, trajectory replay or game is executed.
+    program = """
+import json
+import torch
+from scratch import measure_mirror_compact as harness
+before = torch.get_num_interop_threads()
+def inspect_startup(*args: object, **kwargs: object) -> None:
+    print(json.dumps({"threads": torch.get_num_threads(),
+                      "interop_before": before,
+                      "interop_after": torch.get_num_interop_threads()}))
+    raise SystemExit(0)
+harness.LocalUpdateTeacher = inspect_startup
+harness.main()
+"""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            program,
+            "--attempt",
+            "unused.gz",
+            "--out",
+            str(tmp_path / "measurement"),
+            "--inference-threads",
+            str(threads),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    observed = json.loads(completed.stdout)
+    assert observed["threads"] == threads
+    assert observed["interop_before"] == observed["interop_after"]

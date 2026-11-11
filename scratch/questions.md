@@ -1,5 +1,9 @@
 # Inherited notes
 
+Current latency scope and remaining work are in `mirror-rollout-evidence-plan.md`.
+The dated choices below are historical; earlier launch/review boundaries do not
+reopen the approved study or override the current no-games/no-mini slice.
+
 ## MTG-269 analysis choices — 2026-11-09
 
 - Keep the owning v1 report/summary paths and add a distinct extension section.
@@ -59,112 +63,7 @@ engine rebuild, launcher DB migration or new execution is needed.
   and unresolved w13 admission remain dependency limits; this step does not
   restart it or choose a relaxed performance acceptance threshold.
 
-# MTG-183 assumptions (2026-10-23)
-
-- A RunPod job cannot exceed twelve hours, so "one long seed" is one cohort of
-  chained `last-complete` learner-state continuations (MTG-165's $50 ladder
-  pattern). Collector/RNG streams restart at each of six boundaries.
-- Controller is this laptop; the Mac mini (`mini-heart.local`) did not resolve.
-  Guardians bound every rental, so controller downtime only delays successors.
-- MTG-182 not merged: deadline-abandoned games at each window cutoff are read as
-  deadline pauses (protocol), not game errors.
-- Rated spacing, references (200, 2,000), held-out skip-one pairs, 10 games per
-  cell for pairs/subset grids and the saturation rule are this session's choices,
-  not Jack Heart's numbers.
-- Local evaluation yields while MTG-181's follower runs (Task: do not disturb it).
-- The 0.03 practical saturation margin (amendment) is this session's choice.
-
-# MTG-183 Etude continuation (2026-10-24)
-
-- Merged #362's branch instead of rebasing (the steer said rebase): rebasing
-  rewrote `8e7df92e4`, the published commit w1/w2 ran from. At landing, tag or
-  otherwise keep `8e7df92e4` reachable if the PR is squashed.
-- Etude's 43,000 s rental cap forces a chain of one-rental segments (amendment
-  02:06 UTC), restoring the frozen w1–w7 shape. Segment hours subtract Etude's
-  0.25 h setup allowance (its dollar check), not in the 19:00 formula.
-- Sizing w2's rate by its stage wall seconds (103.55/h), not active seconds
-  (108/h): conservative, matches the watchdog's clock.
-- The evaluator reads several segment runs; `--continues` (operator-declared)
-  rather than a budget rule decides whether the last run's end settles the seed,
-  since the successor's run id only exists after its launch.
-- Follower reads w3's checkpoints with `etude.train.read.read(source, "self-play", run)`:
-  the tracked experiment is the stage id (`RunContext` name). The tracking
-  storage URI is an explicit CLI argument; not verified against a live run.
-- Staged-object reuse compares digests by downloading the object (simple, small files).
-
-# MTG-183 Etude eval and R2 (2026-10-25)
-
-- #362 and heuristic v2 are on main and merged here (merge, so `8e7df92e4`
-  stays an ancestor).
-- Explicit `evaluate` matches, not a `Benchmark`: the design is non-uniform
-  (full vs subset grids, a pairing graph over w1/w2 checkpoints Etude never
-  tracked), and `curves` cannot place non-Etude checkpoints on training axes.
-- One Etude match per grid row (20 groups, ~500 or ~100 games): 10 R2 match
-  deliveries per unit instead of 200; a restart loses at most the in-flight rows.
-- Eval tables at `r2://manabot/evaluations/` (run folder `mtg183-eval/`): my
-  choice of prefix. `state.json` (checkpoints, endpoint) stays local beside the
-  run and is published with the report.
-- Checkpoint agent code identity = `manabot/model`, `manabot/env`,
-  `manabot/arena/match.py`, `experiments/elemental_grid.py`; editing those in
-  the evaluator's pinned checkout would start new agents, so pin it.
-- Stopped the old follower at 2026-10-25 00:15 UTC instead of after w2 ends:
-  it was playing heuristic v1 (not the anchor) against MTG-181's live process
-  and no longer admitting exports. w2's tail is admitted by a one-shot `_admit` call.
-
-# MTG-183 launcher and w3 source (2026-10-25)
-
-- Moved the empty schema-1 `~/.etude/launcher.db` aside rather than deleting it.
-  Etude storage `r2` = `r2://manabot/jobs` (cannot be changed later): prefix `jobs`
-  matches the S3 cleanup's `manabot/jobs/mtg183-*` → R2 `jobs/mtg183-*` mapping.
-  On-demand `l4` boots w1/w2's image digest, not Etude's default, so w3's
-  machine matches the lineage.
-- The amendment says w3's source is "a published commit on main", but main
-  squash-merges, so no branch commit reaches main. w3's revision is this
-  branch's pushed code commit, tagged `mtg183-w3-source`; the squash lands the
-  same code on main. Recorded in `elemental-183-w3.json`.
-
-# MTG-183 sync onto #360 (2026-10-24)
-
-- #360 split `arena/` into `sim/` and `eval/`. The branch's `legs` subset moved
-  onto `manabot.eval.match.play_cell`. The evaluator's `INFERENCE_CODE` now names
-  `manabot/sim/match.py` and `manabot/eval/match.py` in place of the removed
-  `manabot/arena/match.py`, so its checkpoint agent identities change. The
-  evaluator had played no rows, so at 2026-10-25 ~01:30 UTC its pinned checkout
-  moved from `d9fc58df2` to `9871e3545` (etude-sdk 0.2.2, the merged worktree's
-  `_managym` build with #360's card-capture bindings) before any row existed. The frozen
-  `experiments/protocols/elemental-183*` files keep the old paths as evidence.
-- `etude-sdk` follows main's 0.2.2 (the steer asked for 0.2.1, which is older than main's).
-
-# Card evaluation (#360, landed)
-
-The 17Lands/GIH design, investigation and implementation defaults landed with #360;
-they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evidence,questions}.md`.
-
-# MTG-183 w3 relaunch (2026-10-25 03:51 UTC)
-
-- Read "No segment is retried" as covering segments that learned; launches that
-  never took a learning step are relaunched (amendment 03:51 UTC). The literal
-  reading would have ended the seed at 2,534 on infrastructure bugs, against
-  Jack Heart's direction to continue it within the cap.
-- Took MTG-186's three Etude worker fixes verbatim; whichever of MTG-183/MTG-186
-  lands second resolves the identical hunks.
-- Deleted stuck pod `ublorrai3gb3ea` through RunPod's API: `etude terminate`
-  refuses a machine with a run, and the worker would never pick up the attempt
-  (Etude `Courier.bring_in` records the new inbox before fetching inputs, so a
-  failed fetch never retries). Worth an Etude PR.
-
-# MTG-183 evaluation on the Mac mini (2026-10-25)
-
-- Segment end is the tracking bucket's `state.json` (Etude's controller DB is on
-  the laptop). A segment killed without finishing tracking never ends there;
-  the operator then names its successor or drops `--continues` by relaunch.
-- Doppler service token on the mini (read-only, manabot/prd) is this session's
-  choice for R2 keys; Etude gives jobs no storage keys. Revoke `mtg183-eval-mini`
-  when evaluation ends.
-- No yield to MTG-181 on the mini (Jack Heart: the laptop-only yield no longer
-  applies), though MTG-181's evaluation shares the mini's 8 cores; games have a
-  600 s bound and take seconds.
-- The eval job's `max_attempts=1`, `max_hours=190` (to `--until`).
+Inherited MTG-183 training assumptions are retained at `7fd6c202f163bc7dd0d507c7eab121086af84a68:scratch/questions.md`.
 
 # MTG-269 analysis assumptions (2026-11-09)
 
@@ -208,3 +107,99 @@ from the already sealed oracle-four-world smoke, both physical samplers and all
 4/8/16 allocations, with MTG-268's unchanged atol 1e-6 / rtol 1e-5. These are
 fixed-position checks on the laptop, not new games or a campaign speed claim.
 Retain all diagnostics, including harness errors, in the existing artifact store.
+
+## Fixed-root latency baseline — 2026-11-10
+
+The current request is a measurement of the existing batched checkout, not a
+new sequential-versus-batched comparison or implementation. Use the retained
+sealed smoke f38ccc9074d39356… and seeds at steps 0/100/286, depth 20, alpha
+0.02, beta 0.01, 16 worlds, CPU with one torch intra-op thread as the runner
+uses. Warm each cell once, alternate oracle/uniform for five measured calls,
+and profile separate calls. Keep the original profiling script intact.
+Store local diagnostic receipts under scratch; no campaign source, game,
+allocation, or scientific report changes. The heavily loaded laptop limits
+absolute latency and any projection to mini. Next work is a plan for flags,
+not implementing them during this baseline.
+
+## Compact rollout implementation choices — 2026-11-10
+
+Use a single opt-in `rollout_evidence="compact"` flag for both approved omissions;
+keep `full` as the default and emit v4 only for compact. The retained alternating
+single-Command audit measurement already isolates the audit switch, so there is
+no additional publicly exposed or mislabeled audit-only receipt mode. Full v3
+receipts omit the new config field to preserve prior bytes; registration accepts
+an omitted field as historical full evidence without rewriting the stored spec.
+The fixed-position comparison captures actual native Commands and both final
+viewer observations externally during untimed admission. No trained-policy game,
+campaign transition, remote mutation, engine rebuild or model change is included.
+
+## Inference thread measurement — 2026-11-10
+
+Choose threads only at fixed-root process startup; default remains one, inter-op
+unchanged. Leave the campaign runner's one-thread/full-evidence defaults and
+remote source untouched. Compact-only measurement requires a completed one-thread
+control with matching runtime/source/config and actual Command/final-observation
+captures. Alternate separate 1/2/4/8-thread processes across five rounds; each
+round supplies fresh one-thread timings. Historical control timings alone cannot
+establish a gain on this contended host. The sweep is prepared for measure; no
+new games or sweep execution is part of this implementation check.
+
+## Thread measurement choices — 2026-11-10
+
+Use the prepared compact harness without edits and the specified retained
+one-thread behavior; compare fresh startup-thread settings on that same source.
+After the frozen five-round sweep, profile all four counts sequentially with
+one companion timing each. Those 24 extra timings stay diagnostic and are not
+added to the five-repeat sweep medians. Preserve every load spike and use
+nonoverlapping ranges to call improvement. Leave existing source changes and
+production defaults intact; the current request ends with a measured decision,
+not implementation or deployment of the next encoding hypothesis.
+
+## Encoding iteration 3 choices — 2026-11-10
+
+Use a small golden-tensor/Command fixture extracted from every sealed smoke actor
+view instead of retaining a second Python encoder in tests. Capture before edits,
+check each pending frame/observation against the original attempt, and include the
+terminal view. Measurement selects archived control/candidate encoders only in
+isolated diagnostic processes; the production tree has one encoding path. Keep
+all existing compact and thread changes as the control, rather than reverting
+them to HEAD's full-evidence search. This isolates the requested encoder change.
+
+## Native encoding iteration 4 — 2026-11-11
+
+Use an explicit teacher constructor opt-in and process-start extension selector;
+keep campaign defaults and binary unchanged. Replay terminal state projections through an explicit viewer; the sealed terminal
+Command snapshot additionally uses the existing native snapshot encoder to retain
+its transition events. Live search always uses the native acting player.
+The initial implementation used the VectorEnv buffer layout including unused
+step-state arrays; compression removed those arrays from observation-only calls.
+Root .venv was absent: build with UV_NO_SYNC=1 after installing maturin into a
+fresh Python 3.12 venv; execute checks in the retained search environment.
+
+## Native thread sweep iteration 5 — 2026-11-11
+
+Reuse the unchanged compact measurement harness and iteration-4 native binary.
+For all 2/3/4-thread processes, admit against the original one-thread compact
+Commands/final observations with explicit runtime-identity projection; fresh
+two-thread samples, not historical timings, are the latency controls. Alternate
+2/3/4 and 4/3/2 over five rounds; each count gets a separate startup process.
+Use the retained uv search environment, CPU, inter-op 16 and warm-cache policy.
+Run one separate profile process per count across all six roots; its companion
+timings remain excluded. Require both step-100 samplers' five samples below 1 s
+to advance the fixed-root target; report median-only success separately if any
+sample crosses it. Keep every host-load spike. No campaign changes or games.
+Expected claim: "Three or four startup intra-op threads bring both step-100
+samplers below one second without changing Commands or final observations."
+This is a configuration sweep of the last kept uncommitted implementation,
+not a source change against HEAD's older full-evidence implementation. No rebuild
+or production thread-default change is needed or included.
+
+## Final local measurement — 2026-11-11
+
+The requested fresh full/Python controls and compact/native candidates use the
+same separately selected post-compression binary (`3f086259…`) to isolate the
+flags. Historical full and compact receipts remain behavioral references, not
+timing controls. This simpler reversible measurement choice leaves the frozen
+binary untouched. Five rounds alternate both mode order and 1/3-thread process
+order. Equal-root latency sums describe this fixed workload only; campaign root
+frequencies and seven-worker M1 contention are not inferred.

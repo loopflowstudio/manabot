@@ -77,6 +77,7 @@ class LocalSearchConfig(BaseModel):
     decision_seconds: float = Field(default=1, gt=0)
     max_support: int = Field(default=20000, ge=1)
     sampling: Literal["belief", "compatible_prior", "learned"] = "compatible_prior"
+    rollout_evidence: Literal["full", "compact"] = "full"
 
 
 class SamplerArtifact(BaseModel):
@@ -205,9 +206,13 @@ class LocalUpdateReceipt:
             "regularized-local-update/v1",
             "regularized-local-update/v2",
             "regularized-local-update/v3",
+            "regularized-local-update/v4",
         ):
             raise ValueError("unsupported local update receipt")
         config = LocalSearchConfig.model_validate_json(receipt.config_json)
+        compact = config.rollout_evidence == "compact"
+        if compact != (receipt.schema == "regularized-local-update/v4"):
+            raise ValueError("compact rollout evidence requires the v4 receipt schema")
         target = regularized_update(
             np.asarray(receipt.base),
             np.asarray(receipt.values, dtype=np.float64),
@@ -216,9 +221,10 @@ class LocalUpdateReceipt:
             beta=config.beta,
         )
         support = np.asarray(receipt.base) > 0
-        if receipt.schema != "regularized-local-update/v3" and (
-            not support.all() or any(value is None for value in receipt.values)
-        ):
+        if receipt.schema in (
+            "regularized-local-update/v1",
+            "regularized-local-update/v2",
+        ) and (not support.all() or any(value is None for value in receipt.values)):
             raise ValueError("historical receipts require complete positive support")
         if any(
             (value is None) == bool(active)
@@ -259,11 +265,23 @@ class LocalUpdateReceipt:
         ):
             raise ValueError("local values differ from retained rollouts")
         if receipt.schema != "regularized-local-update/v1" and any(
-            row.canonical_commands != len(row.actor_observation_hashes)
+            (
+                not compact
+                and row.canonical_commands != len(row.actor_observation_hashes)
+            )
             or not 1 <= row.canonical_commands <= config.depth
             for row in receipt.rollouts
         ):
             raise ValueError("local receipt canonical Command count differs")
+        if compact:
+            for row in receipt.rollouts:
+                if row.actor_observation_hashes:
+                    raise ValueError(
+                        "compact rollout must omit actor observation hashes"
+                    )
+                _validate_rollout_audit(
+                    row.branch_audit_json, row.canonical_commands, full=False
+                )
         prefix = receipt.compound_prefix
         if any(row.decoder_factors < 0 for row in receipt.rollouts):
             raise ValueError("negative compound decoder-factor count")
@@ -406,6 +424,36 @@ class LocalUpdateReceipt:
 _RECEIPT_ADAPTER = TypeAdapter(LocalUpdateReceipt)
 
 
+class _RolloutCounters(BaseModel):
+    model_config = ConfigDict(strict=True)
+    applies: dict[str, int]
+
+
+class _RolloutAudit(BaseModel):
+    """Narrow the native snapshot boundary without reinterpreting its tapes."""
+
+    model_config = ConfigDict(strict=True)
+    audit: bool
+    counters: _RolloutCounters
+    tape_lengths: dict[str, int]
+    tapes: dict[str, list[dict[str, object]]]
+
+
+def _validate_rollout_audit(encoded: str, commands: int, *, full: bool) -> None:
+    audit = _RolloutAudit.model_validate_json(encoded)
+    expected = {"world": 0, "child": commands, "leaf": 0}
+    lengths = expected if full else dict.fromkeys(expected, 0)
+    if (
+        audit.audit != full
+        or audit.counters.applies != expected
+        or audit.tape_lengths != lengths
+        or {site: len(tape) for site, tape in audit.tapes.items()} != lengths
+    ):
+        raise ValueError(
+            "rollout evidence differs from native Command counters or tapes"
+        )
+
+
 def local_search_source_sha256() -> str:
     """Bind the search and sampling implementation owners for arena admission."""
     root = Path(__file__).resolve().parents[3]
@@ -436,6 +484,7 @@ class Rollout:
     probabilities: FloatArray
     policy_rng: np.random.Generator = field(init=False)
     hashes: list[str] = field(default_factory=list)
+    canonical_commands: int = 0
     value: float = 0.0
     compound: CompoundRollout | None = None
     projection: CompoundProjection | None = None
@@ -452,7 +501,7 @@ class Rollout:
         elif int(self.branch.current_agent_index()) != viewer:
             value = -value
         return RolloutReceipt(
-            canonical_commands=len(self.hashes),
+            canonical_commands=self.canonical_commands,
             decoder_factors=self.compound.factors if self.compound else 0,
             world_index=self.world_index,
             sampled_hand=self.sampled_hand,
@@ -477,6 +526,7 @@ class LocalUpdateTeacher:
         *,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
+        native_encoder: bool = False,
     ) -> None:
         self.likelihood = FrozenPolicyLikelihood(checkpoint, expected_sha256=sha256)
         self.agent = self.likelihood.agent
@@ -497,6 +547,11 @@ class LocalUpdateTeacher:
             )
         self.agent.requires_grad_(False)
         self.space = self.likelihood.obs_space
+        if native_encoder and not hasattr(managym, "encode_observations_into"):
+            raise ValueError("selected managym binary lacks the native batch encoder")
+        self.native_encoder = native_encoder
+        self._frontier_capacity = 0
+        self._frontier_buffers: dict[str, NDArray[np.generic]] = {}
         self.config = config
         if file_sha256(checkpoint) != sha256:
             raise ValueError("checkpoint changed during local-search admission")
@@ -544,27 +599,41 @@ class LocalUpdateTeacher:
         """Batch actor views using the frozen encoder and complete legal support.
 
         Float32 kernels may round differently from singleton inference; legal-row
-        normalization stays float64. No native writer or input schema is changed.
+        normalization stays float64. The opt-in native writer uses the same
+        tensor layout in reusable, teacher-owned buffers; inference is synchronous.
         """
         if self.agent.config.compound_decisions:
             raise ValueError("compound inference requires a retained prefix projection")
         if not engines:
             return []
-        encodings = []
-        counts: list[int] = []
-        for engine in engines:
-            actor = int(engine.current_agent_index())
-            raw = engine.observation_for_player(actor)
-            encoded = self.space.encode(raw)
-            count = len(raw.action_space.actions)
-            if int(encoded["actions_valid"].sum()) != count or count == 0:
-                raise ValueError("policy cannot represent complete legal offers")
-            encodings.append(encoded)
-            counts.append(count)
-        tensors = {
-            key: torch.as_tensor(np.stack([row[key] for row in encodings]))
-            for key in encodings[0]
-        }
+        if self.native_encoder:
+            if len(engines) > self._frontier_capacity:
+                self._frontier_capacity = len(engines)
+                self._frontier_buffers = self.space.encoder.allocate(len(engines))
+            counts = managym.encode_observations_into(
+                engines, self._frontier_buffers, self._frontier_capacity
+            )
+            batch = {
+                key: array[: len(engines)]
+                for key, array in self._frontier_buffers.items()
+            }
+        else:
+            encodings = []
+            counts = []
+            for engine in engines:
+                actor = int(engine.current_agent_index())
+                raw = engine.observation_for_player(actor)
+                encodings.append(self.space.encode(raw))
+                counts.append(len(raw.action_space.actions))
+            batch = {
+                key: np.stack([row[key] for row in encodings]) for key in encodings[0]
+            }
+        if any(
+            count == 0 or int(batch["actions_valid"][i].sum()) != count
+            for i, count in enumerate(counts)
+        ):
+            raise ValueError("policy cannot represent complete legal offers")
+        tensors = {key: torch.as_tensor(value) for key, value in batch.items()}
         with torch.inference_mode():
             logits, values = self.agent(tensors)
             predictions = [
@@ -589,11 +658,12 @@ class LocalUpdateTeacher:
             for row in live:
                 check()
                 actor = int(row.branch.current_agent_index())
-                row.hashes.append(
-                    Observation.from_json(
-                        row.branch.semantic_observation_json(actor)
-                    ).viewer_state_hash
-                )
+                if self.config.rollout_evidence == "full":
+                    row.hashes.append(
+                        Observation.from_json(
+                            row.branch.semantic_observation_json(actor)
+                        ).viewer_state_hash
+                    )
                 if row.compound is not None:
                     assert row.projection is not None
                     choice = (
@@ -615,6 +685,7 @@ class LocalUpdateTeacher:
                 _, _, _, truncated, _ = row.session.apply_policy_choice(
                     row.branch, site="child", policy_index=choice
                 )
+                row.canonical_commands += 1
                 if truncated:
                     raise RuntimeError(
                         "local rollout truncated before an authoritative outcome"
@@ -650,11 +721,12 @@ class LocalUpdateTeacher:
         query: WorldQuery | None = None,
         compound_cursor: CompoundCursor | None = None,
     ) -> None:
-        """Re-execute the sampled branches and compare every retained witness.
+        """Re-execute branches and compare the evidence retained by their mode.
 
         The caller supplies the exact historical root and its tracked belief;
         receipts are not a substitute for the canonical source trajectory.
-        Elapsed time is the only excluded field.
+        Elapsed time is the only excluded field. Compact receipts check retained
+        values and counters, not omitted per-Command witnesses or actor hashes.
         """
         if (
             receipt.compound_prefix is not None
@@ -851,7 +923,8 @@ class LocalUpdateTeacher:
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
                 session = SelectedFullCloneBackend().open_session(
-                    match_id=f"local-{seed}-{len(rollouts)}", audit=True
+                    match_id=f"local-{seed}-{len(rollouts)}",
+                    audit=self.config.rollout_evidence == "full",
                 )
                 rollouts.append(
                     Rollout(
@@ -878,6 +951,11 @@ class LocalUpdateTeacher:
         for row in rollouts:
             check()
             rollout_receipt = row.receipt(viewer)
+            _validate_rollout_audit(
+                rollout_receipt.branch_audit_json,
+                rollout_receipt.canonical_commands,
+                full=self.config.rollout_evidence == "full",
+            )
             sums[row.action_index] += rollout_receipt.signed_value
             counts[row.action_index] += 1
             receipts.append(rollout_receipt)
@@ -889,7 +967,11 @@ class LocalUpdateTeacher:
             base, values, reference, alpha=self.config.alpha, beta=self.config.beta
         )
         receipt = LocalUpdateReceipt(
-            schema="regularized-local-update/v3",
+            schema=(
+                "regularized-local-update/v4"
+                if self.config.rollout_evidence == "compact"
+                else "regularized-local-update/v3"
+            ),
             policy_sha256=self.likelihood.checkpoint_sha256,
             runtime_sha256=self.runtime_sha256,
             teacher_source_sha256=self.source_sha256,
@@ -911,7 +993,12 @@ class LocalUpdateTeacher:
             reference=tuple(reference),
             target=tuple(target),
             allocation_counts=tuple(int(n) for n in counts),
-            config_json=self.config.model_dump_json(),
+            # Keep default full receipts' historical config bytes unchanged.
+            config_json=self.config.model_dump_json(
+                exclude={"rollout_evidence"}
+                if self.config.rollout_evidence == "full"
+                else set()
+            ),
             seed=seed,
             seconds=time.perf_counter() - started,
             rollouts=tuple(receipts),

@@ -2,7 +2,7 @@
 
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 from managym.decision import (
     PUBLIC_COMMITMENT_KINDS,
@@ -69,8 +69,12 @@ def saved_sampler(teacher: LocalUpdateTeacher, path: Path) -> SamplerArtifact:
 
 
 @pytest.mark.parametrize("learned", [False, True])
+@pytest.mark.parametrize("evidence", ["full", "compact"])
 def test_direct_search_lifecycle_and_receipt(
-    tmp_path: Path, learned: bool, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    learned: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    evidence: Literal["full", "compact"],
 ) -> None:
     original, env = make_teacher(tmp_path)
     artifact = saved_sampler(original, tmp_path / "sampler.pt") if learned else None
@@ -78,7 +82,10 @@ def test_direct_search_lifecycle_and_receipt(
         original.likelihood.checkpoint,
         original.likelihood.checkpoint_sha256,
         original.config.model_copy(
-            update={"sampling": "learned" if learned else "compatible_prior"}
+            update={
+                "sampling": "learned" if learned else "compatible_prior",
+                "rollout_evidence": evidence,
+            }
         ),
         sampler=artifact,
         hand_sampler=None if learned else PhysicalHandSampler(),
@@ -146,12 +153,17 @@ class InvalidSampler(PhysicalHandSampler):
         )
 
 
-def test_injected_sampler_is_checked_before_execution(tmp_path: Path) -> None:
+@pytest.mark.parametrize("evidence", ["full", "compact"])
+def test_injected_sampler_is_checked_before_execution(
+    tmp_path: Path, evidence: Literal["full", "compact"]
+) -> None:
     original, env = make_teacher(tmp_path)
     teacher = LocalUpdateTeacher(
         original.likelihood.checkpoint,
         original.likelihood.checkpoint_sha256,
-        original.config.model_copy(update={"sampling": "compatible_prior"}),
+        original.config.model_copy(
+            update={"sampling": "compatible_prior", "rollout_evidence": evidence}
+        ),
         hand_sampler=InvalidSampler(),
     )
     history = ViewerHistory.from_observation(

@@ -1,10 +1,11 @@
 """Analytic mixing, exact branch replay and current-world collection proofs."""
 
 from dataclasses import replace
+import json
 from pathlib import Path
 
-from managym._managym import AgentError
-from managym.decision import Observation
+from managym._managym import AgentError, SelectedBranchRuntime
+from managym.decision import DecisionFrame, Observation
 from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
@@ -144,6 +145,186 @@ def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
             seed=7,
             query=WorldQuery.has("Lightning Bolt"),
         )
+
+
+def test_compact_evidence_preserves_work_and_legacy_bytes(tmp_path: Path) -> None:
+    teacher, env = make_teacher(tmp_path)
+    tracker = BeliefTracker.from_engine(
+        env._engine,
+        viewer=env._engine.current_agent_index(),
+        likelihood=teacher.likelihood,
+        epsilon=0,
+    )
+    before = env._engine.search_witness_json()
+    full = teacher.search(env._engine, tracker.posterior, seed=7)
+    assert "rollout_evidence" not in json.loads(full.config_json)
+    for version in (1, 2, 3):
+        legacy = replace(full, schema=f"regularized-local-update/v{version}")
+        assert (
+            LocalUpdateReceipt.from_json(legacy.to_json()).to_json() == legacy.to_json()
+        )
+    teacher.config = teacher.config.model_copy(update={"rollout_evidence": "compact"})
+    compact = teacher.search(env._engine, tracker.posterior, seed=7)
+    assert compact.schema == "regularized-local-update/v4"
+    assert json.loads(compact.config_json)["rollout_evidence"] == "compact"
+    assert LocalUpdateReceipt.from_json(compact.to_json()) == compact
+    teacher.verify_replay(env._engine, tracker.posterior, compact)
+    assert env._engine.search_witness_json() == before
+    assert (
+        compact.base,
+        compact.values,
+        compact.target,
+        compact.allocation_counts,
+    ) == (full.base, full.values, full.target, full.allocation_counts)
+    for old, new in zip(full.rollouts, compact.rollouts, strict=True):
+        assert old.canonical_commands == new.canonical_commands > 0
+        assert not new.actor_observation_hashes
+        assert (
+            replace(
+                new,
+                actor_observation_hashes=old.actor_observation_hashes,
+                branch_audit_json=old.branch_audit_json,
+            )
+            == old
+        )
+        audit = json.loads(new.branch_audit_json)
+        assert audit["audit"] is False
+        assert audit["counters"]["applies"]["child"] == new.canonical_commands
+        assert audit["tapes"] == {"world": [], "child": [], "leaf": []}
+
+    row = compact.rollouts[0]
+    bad_audit = json.loads(row.branch_audit_json)
+    bad_audit["counters"]["applies"]["child"] += 1
+    for bad in (
+        replace(compact, schema="regularized-local-update/v3"),
+        replace(compact, config_json=full.config_json),
+        replace(
+            compact,
+            rollouts=(replace(row, canonical_commands=0), *compact.rollouts[1:]),
+        ),
+        replace(
+            compact,
+            rollouts=(
+                replace(row, canonical_commands=row.canonical_commands + 1),
+                *compact.rollouts[1:],
+            ),
+        ),
+        replace(
+            compact,
+            rollouts=(
+                replace(row, actor_observation_hashes=("invented",)),
+                *compact.rollouts[1:],
+            ),
+        ),
+        replace(
+            compact,
+            rollouts=(
+                replace(row, branch_audit_json=full.rollouts[0].branch_audit_json),
+                *compact.rollouts[1:],
+            ),
+        ),
+        replace(
+            compact,
+            rollouts=(
+                replace(row, branch_audit_json=json.dumps(bad_audit)),
+                *compact.rollouts[1:],
+            ),
+        ),
+        replace(
+            full,
+            rollouts=(
+                replace(full.rollouts[0], actor_observation_hashes=()),
+                *full.rollouts[1:],
+            ),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            LocalUpdateReceipt.from_json(bad.to_json())
+    with pytest.raises(ValueError):
+        LocalSearchConfig.model_validate({"rollout_evidence": "unknown"})
+    env.close()
+
+
+@pytest.mark.parametrize("mode", [None, "full", "compact"])
+def test_registration_declares_rollout_evidence(mode: str | None) -> None:
+    config = LocalSearchConfig().model_dump()
+    if mode is None:
+        config.pop("rollout_evidence")
+    else:
+        config["rollout_evidence"] = mode
+    identity = "0" * 64
+    registration = PlayerRegistration(
+        player_id="evidence-fixture",
+        display_name="Evidence fixture",
+        role="challenger",
+        runner_kind="checkpoint",
+        evidence_class="fixture",
+        checkpoint_sha256=identity,
+        checkpoint_bytes=1,
+        parameter_count=1,
+        training_seed=1,
+        artifact_id="fixture",
+        compute_class_id="fixture",
+        information_boundary="acting-viewer-history-only-v1",
+        world="w13",
+        content_suite="fixture",
+        observation_abi_sha256=identity,
+        action_abi_sha256=identity,
+        matchup_sha256=identity,
+        player_seed_derivation_id="fixture",
+        search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
+        player_spec={
+            "kind": "local_update",
+            "config": config,
+            "implementation_source_sha256": identity,
+        },
+        search_semantics=SearchSemantics(
+            branch_audit=mode != "compact",
+            root_prior="two-kl-local-update/v1",
+            leaf_evaluator="frozen-viewer-policy-signed-value/v1",
+        ),
+    )
+    encoded = registration.model_dump_json()
+    assert PlayerRegistration.model_validate_json(encoded).model_dump_json() == encoded
+    assert registration.search_semantics is not None
+    wrong = registration.model_copy(
+        update={
+            "search_semantics": registration.search_semantics.model_copy(
+                update={"branch_audit": mode == "compact"}
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="semantics"):
+        PlayerRegistration.model_validate_json(wrong.model_dump_json())
+
+
+def test_compact_native_commands_keep_preconditions(tmp_path: Path) -> None:
+    _, env = make_teacher(tmp_path)
+    runtime = SelectedBranchRuntime("compact-preconditions", False)
+    branch = runtime.fork_exact(env._engine, "world")
+    before = branch.search_witness_json()
+    revision = Observation.from_json(branch.semantic_observation_json(0)).revision
+    frame = DecisionFrame.from_json(branch.semantic_decision_frame_json())
+    invalid: list[dict[str, int | str]] = [
+        {"expected_revision": revision + 1},
+        {"prompt_id": revision + 1},
+        {"offer_id": int(frame.offers[0]["id"]) ^ 1},
+        {"authority_hash": "invalid"},
+        {"legal_surface_hash": "invalid"},
+    ]
+    for preconditions in invalid:
+        with pytest.raises(AgentError, match="precondition mismatch"):
+            runtime.apply_policy_choice(branch, "child", 0, json.dumps(preconditions))
+        assert branch.search_witness_json() == before
+        assert json.loads(runtime.snapshot_json())["counters"]["applies"]["child"] == 0
+    *_, encoded = runtime.apply_policy_choice(branch, "child", 0)
+    assert json.loads(encoded)["native_receipt"]["native_apply_count"] == 1
+    with pytest.raises(AgentError, match="revision precondition mismatch"):
+        runtime.apply_policy_choice(
+            branch, "child", 0, json.dumps({"expected_revision": revision})
+        )
+    assert json.loads(runtime.snapshot_json())["counters"]["applies"]["child"] == 1
+    env.close()
 
 
 def test_advice_projection_is_schema_compatible_and_private(tmp_path: Path) -> None:

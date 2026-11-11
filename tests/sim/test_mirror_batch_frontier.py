@@ -81,10 +81,21 @@ def teacher(monkeypatch: pytest.MonkeyPatch) -> LocalUpdateTeacher:
     return instance
 
 
+@pytest.mark.parametrize("compact", [False, True])
 def test_frontier_removes_terminal_and_preserves_rng(
     monkeypatch: pytest.MonkeyPatch,
+    compact: bool,
 ) -> None:
     instance = teacher(monkeypatch)
+    if compact:
+        instance.config = instance.config.model_copy(
+            update={"rollout_evidence": "compact"}
+        )
+
+        def forbidden(raw: str) -> None:
+            raise AssertionError("compact rollout requested viewer JSON")
+
+        monkeypatch.setattr(local_update.Observation, "from_json", forbidden)
     branches = [Branch(1, 0), Branch()]
     sessions = [Session(), Session()]
     rows = [row(b, s) for b, s in zip(branches, sessions)]
@@ -107,6 +118,8 @@ def test_frontier_removes_terminal_and_preserves_rng(
     assert rows[0].receipt(0).signed_value == 1
     assert rows[1].receipt(0).signed_value == -0.25
     assert rows[1].receipt(1).signed_value == 0.25
+    assert [r.canonical_commands for r in rows] == [1, 3]
+    assert [len(r.hashes) for r in rows] == ([0, 0] if compact else [1, 3])
 
 
 @pytest.mark.parametrize("winner,expected", [(None, 0), (0, 1), (1, -1)])
