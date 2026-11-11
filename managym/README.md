@@ -143,9 +143,14 @@ without rewriting earlier receipts. The current corpus is
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
 ```bash
-uv run --python 3.12 --extra play maturin develop --release \
+uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 ```
+
+Run this from the repository root with its CPython 3.13 development environment.
+For a 3.12 compatibility check, use a separate environment and rebuild for that
+interpreter; a `cp313` extension cannot be reused by `cp312`. Follow
+[AGENTS.md](../AGENTS.md#commands) when replacing an already loaded extension.
 
 The [pinned Comprehensive Rules audit](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/audit-2026-10/README.md)
 inventories every numbered entry, with explicit unknowns and scoped evidence.

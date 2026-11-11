@@ -91,3 +91,11 @@ docstring's cross-machine timing claim was corrected to match same-machine contr
 These are guidance changes, not collector changes or new speed measurements.
 The workflow compiler passed all eight graphs after these corrections;
 `git diff --check` passed and `lf context` remained within both budgets.
+
+## Main sync — 2026-11-11
+
+Reversible resolution: keep this branch's experiment-performance context active.
+Main's MTG-271 direction, exact comments and dependency/release findings remain at
+`9f69a96a1ca5f0c03a9df5af7217138390d415d9:scratch/questions.md`. They do not
+select work here. QA combines the workflow guidance with main's Academy launch,
+clean-machine and library-consumer checks, using its detailed Academy procedure.

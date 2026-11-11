@@ -70,4 +70,19 @@ publish, land or choose the next Graph step from here.
   receipt fields the skills name. Actual-workload measurements
   require the Task's scope and resource authority; never create artificial
   contention to test them (see `TESTING.md`).
-- Academy: `./scripts/play` starts backend and frontend; drive it in a browser.
+- Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
+  for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
+  path), open the frontend URL, press New Game, play a land and Pass Turn.
+  Stop with SIGINT to the `scripts/play.py` process; it stops both servers.
+- First-time clone: copy tracked plus untracked non-ignored files
+  (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
+  `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
+  there; it builds cold, runs the browser proof and writes
+  `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
+  uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Library consumers: `uv run --no-project python scripts/release/prepare.py <staging>`, `uv build --sdist
+  --no-sources <staging>`, then `uv build --wheel --python 3.12|3.13 <sdist>`
+  (reuse a `CARGO_TARGET_DIR`). In a fresh `/tmp` venv with PYTHONPATH unset,
+  install the wheel with `--torch-backend cpu` at the minimum pins and run a
+  copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
+  "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
