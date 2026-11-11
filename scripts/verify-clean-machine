@@ -38,9 +38,9 @@ log=$ROOT/.cache/clean-machine/launch.log
 receipt=$ROOT/.cache/clean-machine/proof.json
 api_port=${ACADEMY_CLEAN_API_PORT:-18011}
 frontend_port=${ACADEMY_CLEAN_FRONTEND_PORT:-15183}
-start_ms=$(uv run --no-project --python 3.12 python -c \
+start_ms=$(uv run --no-project --python 3.13 python -c \
   'import time; print(time.time_ns() // 1_000_000)') || \
-  proof_error prerequisite.uv "uv could not run the provisioned CPython 3.12"
+  proof_error prerequisite.uv "uv could not run the provisioned CPython 3.13"
 
 # A hang guard, not the 90-second budget: a cold Cargo/npm build's duration
 # depends on the hosted runner, so the browser proof records the budget in its
