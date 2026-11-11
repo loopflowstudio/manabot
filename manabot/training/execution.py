@@ -44,6 +44,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.outcome_tables import OUTCOME_TABLE_METRIC, write_outcomes
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
@@ -1476,9 +1477,10 @@ def _execute_regime(
                         record.learning_timings = _phase_timings(
                             learner.profiler, "Learning"
                         )
+                    outcome_metrics: dict[str, str] = {}
                     if collector.opponent_mode == "self":
-                        diagnostic["self_play_outcomes"] = (
-                            collector.stats.self_play.drain()
+                        outcome_metrics[OUTCOME_TABLE_METRIC] = write_outcomes(
+                            experiment.run.files.root, collector.stats.self_play.drain()
                         )
                     record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
@@ -1501,6 +1503,7 @@ def _execute_regime(
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
                         metric_row(diagnostic)
+                        | outcome_metrics
                         | time_since(timed, spent)
                         | cuda_peak_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),

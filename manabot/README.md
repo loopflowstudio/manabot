@@ -435,8 +435,8 @@ The learned compound-decision decoder has been removed; checkpoints and
 regimes that select it fail validation. See
 [compound decisions](../docs/training.md#compound-decisions-removed).
 
-Self-play update diagnostics live only in the run's Etude metrics;
-TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
+Self-play update diagnostics live in the run's Etude metrics and referenced
+outcome tables; TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
 Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing
