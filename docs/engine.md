@@ -346,8 +346,8 @@ Each snapshot contains:
 | Field | Meaning |
 |---|---|
 | `player: int` | Requested native seat, unchanged by control effects |
-| `game_id: int` | Opaque game generation; changes on every reset or replacement, including a reset to the same seed |
-| `seed: int` | The current game's native reset seed |
+| `game_id: int` | Opaque game generation; fresh for every reset, replacement, fork or materialized world, including identical deals |
+| `seed: int` | The originating native reset seed; unchanged by scheduling a reset or reseeding a branch's RNG |
 | `revision: int` | The current game's decision revision at the read |
 | `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
 
@@ -357,6 +357,13 @@ Game IDs are allocated process-wide, including across Torch native-vector
 rebuilds; they are not portable replay identifiers, consecutive counters or
 reproducible values. A seed alone cannot distinguish repeated resets to the same
 deal. For replay, retain the match configuration and runtime identity separately.
+
+`set_seed(s)` schedules the next reset; existing snapshots and subsequent reads
+of the live game retain its original reset seed until reset succeeds. Forks and
+materialized worlds inherit that originating reset seed and receive distinct
+game IDs. The seed passed to possible-world materialization controls that
+branch's randomness; it does not replace the snapshot's reset seed. Capture
+origin and stale checks still apply independently of these snapshot fields.
 
 Both methods synchronously read authoritative hand zones, with one native call
 for the whole batch, without stepping, resetting, consuming randomness or

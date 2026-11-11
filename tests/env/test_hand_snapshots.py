@@ -1,6 +1,7 @@
 """Privileged hand snapshots stay aligned with native seats and game boundaries."""
 
 from collections import Counter
+import json
 from typing import Literal
 
 import numpy as np
@@ -14,6 +15,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv as TorchVectorEnv
 from manabot.infra.config import MatchConfig, RewardConfig
+from manabot.managym.decision import Command, DecisionFrame
 
 
 def _players(
@@ -278,3 +280,79 @@ def test_scalar_hand_snapshot_errors_reset_identity_and_terminal_hand() -> None:
         assert reset.seed == first.seed
     finally:
         env.close()
+
+
+def test_hand_snapshot_seed_changes_only_on_reset() -> None:
+    env = managym.Env(seed=42)
+    players = _players()
+    env.reset(players)
+    original = env.hand_snapshot(1)
+    state = env.state_digest()
+    env.set_seed(99)
+    assert _identity(env.hand_snapshot(1)) == _identity(original)
+    assert env.hand_snapshot(1).cards == original.cards
+    assert env.state_digest() == state
+    env.reset(players)
+    reset = env.hand_snapshot(1)
+    assert reset.seed == 99
+    assert reset.game_id != original.game_id
+    reference = managym.Env(seed=99)
+    reference.reset(players)
+    assert reset.cards == reference.hand_snapshot(1).cards
+    assert env.state_digest() == reference.state_digest()
+
+
+@pytest.mark.parametrize("kind", ["clone", "sampled", "indexed", "prepared"])
+def test_hand_snapshot_branch_identities_and_capture_guards(
+    kind: Literal["clone", "sampled", "indexed", "prepared"],
+) -> None:
+    env = managym.Env(seed=42)
+    players = _players("open")
+    env.reset(players)
+    original = env.hand_snapshot(1)
+    state = env.state_digest()
+    capture = env.capture_decision(0)
+    frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+    command = Command("snapshot-test", frame.revision, frame.offers[0]["id"]).to_json()
+    space = json.loads(env.possible_world_space_json(0))
+    env.set_seed(99)
+    if kind == "clone":
+        branches = [env.clone_env(), env.clone_env()]
+    elif kind == "sampled":
+        constraints = env.hidden_hand_constraints_json(0)
+        branches = [
+            env.materialize_sampled_hand(0, constraints, original.cards, 123)
+            for _ in range(2)
+        ]
+    elif kind == "indexed":
+        branches = [
+            env.materialize_possible_world(0, space["identity"], 0, 123)
+            for _ in range(2)
+        ]
+    else:
+        prepared = env.prepare_possible_world_materializer(0, space["identity"], 2)
+        branches = prepared.materialize_indexes([0, 0], [123, 123])
+
+    snapshots = [branch.hand_snapshot(1) for branch in branches]
+    assert len({original.game_id, *(snapshot.game_id for snapshot in snapshots)}) == 3
+    assert branches[0].state_digest() == branches[1].state_digest()
+    for branch, snapshot in zip(branches, snapshots, strict=True):
+        assert snapshot.seed == 42
+        assert snapshot.cards == _hand(branch, 1)
+        assert sum(snapshot.cards.values()) == 7
+        with pytest.raises(managym.AgentError, match="wrong_origin"):
+            branch.execute_captured_command_json(capture, command)
+    branches[0].step(0)
+    assert branches[0].hand_snapshot(1).game_id == snapshots[0].game_id
+    assert _identity(branches[1].hand_snapshot(1)) == _identity(snapshots[1])
+    assert env.state_digest() == state
+    assert _identity(env.hand_snapshot(1)) == _identity(original)
+    assert json.loads(env.possible_world_space_json(0))["identity"] == space["identity"]
+    # Scheduling a seed leaves the current capture valid; reset invalidates it
+    # even when the deal and portable state identity are reproduced exactly.
+    env.execute_captured_command_json(capture, command)
+    env.set_seed(42)
+    env.reset(players)
+    assert env.state_digest() == state
+    with pytest.raises(managym.AgentError, match="stale_capture"):
+        env.execute_captured_command_json(capture, command)

@@ -28,7 +28,7 @@ release workflow; no release or isolated dependency-resolution proof here.
   PyO3, installed stubs, Gym, CapturedVector and Torch carry that one contract.
   Belief `audit.py`, `sampling_data.py` and `population.py` consume its counts;
   viewer observation reads remain for input/provenance checks and test oracles.
-- `Env::reset` allocates process-wide capture generations. Repeated seeds,
+- `Env::reset` and branch construction allocate process-wide capture generations. Repeated seeds,
   replacement slots and Torch rebuilds get fresh identities. Capture origin and
   stale checks remain; generations are neither portable replay IDs nor serialized
   into public captures. `CapturedVector._synchronize` uses generations exclusively
@@ -47,6 +47,10 @@ HandSnapshot.slot and vector-specific construction; observation-materializing
 hand counters in the three clients; Gym auto_reset and unread true-done info;
 PassivePolicy/OpponentPolicy::Passive, parser arm, exclusive fixtures and tests,
 passive decision-profile CLI branch and Env::pass_priority_action_index.
+Duplicate scalar branch constructors with zero generations are also removed;
+the shared constructor preserves trace ownership, reset seeds and fork settings.
+It inherits disabled instrumentation from `Env::new`; `selected_fork` delegates
+the exact clone to `fork`, which alone restores the replay prefix.
 No deletion targets remain. Historical receipts retain policy strings; replay
 of passive needs the original source. Academy's scalar debugging policy is
 outside this cut. No heuristic, fixed-view batch or search feature is added.
@@ -56,12 +60,56 @@ Torch reset seed reproduces the deal; CapturedVector rejects unbuffered native
 mutations; built-in passive and its decision-profile CLI branch removed.
 There is no docs/releases.md; the engine guide describes the changes.
 
-No open product question. Gate must refresh affected suites after scalar
-unification; earlier publication and QA results below predate it. Publication,
-landing and Task movement belong to delivery. No throughput, CUDA/MPS,
-vector terminal-hand retention or full scalar-helper parity claim.
+## Remaining work
 
-## Latest scalar unification proof
+No open product question. The two identity corrections are implemented:
+`Env` keeps the live reset seed separate from its pending reset seed, and one
+branch constructor allocates process-local identities for exact/selected forks
+and all materialization paths. Materialization RNG seeds never replace the
+originating reset seed. Capture guards and portable identities stay unchanged.
+
+The deletion cut also removes the duplicate fork constructors with zero
+identities; fork replay traces remain shared through their existing clones.
+Focused lifecycle regressions cover pending and failed resets, repeated branches,
+materialization, independent mutation and capture-origin/reset rejection.
+
+Gate must refresh affected suites after scalar unification and these repairs;
+earlier publication and QA results below predate them. The main merge at
+`dc5ae2ff7` includes MTG-271's Python/dependency/release work, with no changes to
+the snapshot implementations or their three belief consumers. Validate the
+current development/consumer contract from `docs/development.md`; the old
+installed-wheel results do not certify the merged dependency configuration.
+Return the shared scalar/batch contract to demo as requested in 8507f1b8.
+Publication, landing and Task movement remain separate. No throughput,
+CUDA/MPS, vector terminal-hand retention or full scalar-helper parity claim.
+
+### Realign observations — 2026-11-11
+
+Two bounded `uv run --no-sync python` probes of the existing extension confirmed
+the source findings without replaying games or rerunning suites:
+
+- Reset at 42, read, then `set_seed(99)`, read: snapshot seed changed 42 → 99;
+  game ID, revision and cards stayed equal.
+- Reset at 42, then call `clone_env()` twice: root game ID 1, clone IDs `[0, 0]`,
+  clone revisions `[1, 1]`. The zero-generation materialization paths above were
+  inspected in source, not executed in this pass.
+
+The probes used the retained CPython 3.12 environment; uv warned that it did
+not satisfy the newly merged 3.13 development request. These are bounded
+behavioral reproductions, not current development-environment validation.
+No tests were rerun solely for realign, and no native code changed.
+
+## Identity repair validation — 2026-11-11
+
+- `uv sync --locked --python 3.13 --extra play --extra dev --extra artifacts` — passed with CPython 3.13.7 and locked dependencies in this checkout.
+- `cargo test --manifest-path managym/Cargo.toml -p managym --lib hand_snapshot -j 2 -- --test-threads 2` — five passed; the new failed-reset fixture bypassed admission and panicked. Marked it submitted; `cargo test --manifest-path managym/Cargo.toml -p managym --lib hand_snapshot_retains_live_seed -j 2 -- --test-threads 2` passed. All six focused debug cases now pass across these runs.
+
+- `CARGO_BUILD_JOBS=2 uv run --locked --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 extension extracted from the wheel and atomically renamed into `manabot/managym/`.
+- `uv run --locked --extra dev --extra artifacts pytest tests/env/test_hand_snapshots.py -k 'seed_changes_only_on_reset or branch_identities_and_capture_guards' -q` — 5 passed, 9 deselected in 14.84 s.
+- `uv pip install --no-deps --target <temporary>/installed <cp313 wheel>`, then outside the checkout `uv run --no-project --python <root>/.venv/bin/python -m pytest --confcutdir=. test_hand_snapshots.py -q` with the installed tree on PYTHONPATH — 14 passed in 1.18 s. Installed extension paths, both import aliases, packaged stub and guide example passed. Path proof normalizes macOS `/var` and `/private/var` aliases after the initial literal-prefix assertion failed. Reuses development dependencies; isolated 3.12/3.13 consumer checks remain for gate.
+- Changed-file Ruff check/format, Rust formatting and diff whitespace passed. No publication or Task movement.
+
+## Earlier scalar unification proof
 
 The release extension was rebuilt and replaced atomically before compression.
 
@@ -117,7 +165,7 @@ at `53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`;
 earlier b015d5/C2 notes at `757bb6257ef07cf2536ad7f7ec24f0f7309628c6:scratch/questions.md`.
 Pre-rename implementation proof is at `64779909e75041ffa9f35b4bc532a9240b688c55:scratch/questions.md`;
 pre-opponent concept review at `36d9451ef844fe23d59743f32dbdfaa121ab501e:scratch/`.
-No Wave memory exists. Context was 4,612/12,000 tokens and 20,299/98,304 bytes.
+This Task has no Wave; there is no selected Wave memory to curate.
 
 Compression reuses `_score_belief_truth` for both single and paired audit scores,
 so the same hand metrics have one implementation. The parity test reads each
@@ -136,3 +184,19 @@ Main's MTG-271 direction, exact replies and dependency findings remain at
 Use main's QA instructions: they reflect its CPython 3.13 development setup
 and wheel dependencies, superseding this branch's cp312-only and separate-Torch
 instructions. Main's release and dependency changes merge unchanged.
+
+## Lifecycle compression — 2026-11-11
+
+The identity repairs and their recorded validation were already present when
+this pass started. Removed repeated branch defaults and the second exact-fork
+implementation; materializations still have no replay prefix, while exact forks
+retain it. Reversible choice: `selected_fork` uses `fork`'s before-reset error
+message as well as its implementation. Removed the materialization test's
+comparison against the same counting helper used by its subject; independent
+Python observation parity and native complete-count assertions remain.
+The audit now states coverage and unresolved findings without duplicating the
+run history retained above. No remaining deletion targets or product questions.
+
+- `cargo test --manifest-path managym/Cargo.toml -p managym --lib hand_snapshot -j 2 -- --test-threads 2` — all 6 passed in debug; Rust formatting passed.
+- `CARGO_BUILD_JOBS=2 uv run --locked --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 extension replaced atomically.
+- `uv pip install --no-deps --target <temporary>/installed <cp313 wheel>`, then outside the checkout `uv run --no-project --python <root>/.venv/bin/python -m pytest --confcutdir=. test_hand_snapshots.py test_search_command_evidence.py -q` — 17 passed in 1.43 s. Installed extension origin, both imports, packaged stub and guide example passed; development dependencies reused, temporary files removed. Formatting and diff whitespace passed. No publication or Task movement.
