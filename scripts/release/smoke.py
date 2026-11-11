@@ -52,7 +52,8 @@ def main() -> None:
     policy, _ = load_checkpoint(str(output / "self-play-raw.pt"))
     assert not policy.training
     print(
-        f"release smoke passed: manabot {version('manabot')}, torch {torch.__version__}"
+        f"release smoke passed: Python {sys.version.split()[0]}, manabot {version('manabot')}, "
+        f"torch {torch.__version__}, etude-sdk {version('etude-sdk')}"
     )
 
 

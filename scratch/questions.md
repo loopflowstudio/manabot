@@ -127,3 +127,12 @@ transcripts retain the API they actually ran. No native source changed in this p
 
 - Compression check: `uv run --extra dev --extra artifacts pytest tests/env/test_hand_snapshots.py tests/belief/test_audit.py tests/belief/test_sampling_data.py::test_real_frozen_collection_keeps_both_viewers_and_three_game_splits tests/belief/test_learning.py::test_supervision_matches_hand_and_rejects_another_revision -q` — 16 passed in 5.59 s. Ruff check/format on the two changed Python files and `git diff --check` passed.
 - Pre-curation uncommitted notes were moved intact to `/var/folders/m6/r3tllnrs1yq7yfbwm680tss40000gn/T/mtg272-before-compress-5cs77nw1/questions.md`; live direction and latest proof remain above. No publication or Task movement.
+
+## Main sync — 2026-11-11
+
+Assumption (reversible): retain MTG-272 direction as this branch's active context.
+Main's MTG-271 direction, exact replies and dependency findings remain at
+`89d19398fc580176b6101669821fc870e988c8e4:scratch/questions.md`.
+Use main's QA instructions: they reflect its CPython 3.13 development setup
+and wheel dependencies, superseding this branch's cp312-only and separate-Torch
+instructions. Main's release and dependency changes merge unchanged.

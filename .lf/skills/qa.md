@@ -55,18 +55,21 @@ with screenshots or transcripts, and what you fixed. Finish with what works now,
 what you could not reach and why, and what is still wrong, worst first. Do not
 publish, land or choose the next Graph step from here.
 
-## Driving manabot's Python library
+## Driving Manabot
 
-- Use it as a downstream user: build the wheel
-  (`uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`),
-  `uv venv --python 3.12` a fresh venv under `/tmp`, `uv pip install` the wheel there,
-  and run scripts with `uv run --no-project --python <venv>/bin/python python -I`
-  from a directory outside the checkout.
-  Torch is a dependency group, not a wheel dependency: install `torch==2.10.0`
-  separately to exercise `manabot.env.vector_env`.
-- To tell a regression from a pre-existing failure, `git worktree add --detach /tmp/<name> <base>`,
-  build it with a separate `CARGO_TARGET_DIR`, copy the cp312 `.so` into that tree's
-  `manabot/managym/`, and run pytest with `PYTHONPATH=/tmp/<name>` and this checkout's
-  `.venv/bin/python`. Remove the worktree and target dir afterwards.
-- Many test files run in no CI workflow (check `.github/workflows/manabot-integration.yml`),
-  so a green PR doesn't prove they pass.
+- Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
+  for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
+  path), open the frontend URL, press New Game, play a land and Pass Turn.
+  Stop with SIGINT to the `scripts/play.py` process; it stops both servers.
+- First-time clone: copy tracked plus untracked non-ignored files
+  (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
+  `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
+  there; it builds cold, runs the browser proof and writes
+  `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
+  uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Library consumers: `uv run --no-project python scripts/release/prepare.py <staging>`, `uv build --sdist
+  --no-sources <staging>`, then `uv build --wheel --python 3.12|3.13 <sdist>`
+  (reuse a `CARGO_TARGET_DIR`). In a fresh `/tmp` venv with PYTHONPATH unset,
+  install the wheel with `--torch-backend cpu` at the minimum pins and run a
+  copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
+  "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
