@@ -2,6 +2,7 @@
 
 from collections import Counter
 from dataclasses import asdict, replace
+import fcntl
 import gzip
 import hashlib
 import json
@@ -15,7 +16,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from experiments import search_mirror as mirror
+from experiments import mirror_segment as segment, search_mirror as mirror
 from manabot.belief.sampling import SamplerInput
 from manabot.sim.search import local_update
 from manabot.sim.search.sampling import PhysicalHandSampler, PreparedHands
@@ -81,6 +82,184 @@ def test_uniform_teacher_never_constructs_oracle_sampler(
     )
     assert config.sampling == "compatible_prior"
     assert config.rollout_evidence == "full"
+
+
+def test_native_segment_selects_compact_evidence_and_native_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    constructor = Mock()
+    monkeypatch.setattr(local_update, "LocalUpdateTeacher", constructor)
+    mirror._teacher(
+        mirror.extension_arms("uniform")[0], Path("unused"), compact_native=True
+    )
+    assert constructor.call_args.args[2].rollout_evidence == "compact"
+    assert constructor.call_args.kwargs["native_encoder"] is True
+
+
+def _predecessor_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, str]:
+    root = tmp_path / "original"
+    root.mkdir()
+    (root / "attempts").mkdir()
+    for worker in range(7):
+        (root / f"worker-{worker}.lock").touch()
+    deadline = time.time() + 60
+    (root / "identity.json").write_text(
+        json.dumps(
+            {
+                "deadline": deadline,
+                "workers": 7,
+                "checkpoint_sha256": mirror.CHECKPOINT_SHA256,
+            }
+        )
+    )
+    oracle = _row()
+    uniform_arm = mirror.extension_arms("uniform")[0]
+    uniform = replace(
+        oracle,
+        key=f"{uniform_arm.key}/{oracle.deal}",
+        condition=uniform_arm.key,
+        sampler="uniform",
+    )
+    interrupted_arm = mirror.extension_arms("uniform")[1]
+    interrupted_key = f"{interrupted_arm.key}/{oracle.deal}"
+    rows = [oracle, uniform]
+    (root / "games-test-0.jsonl").write_text(
+        "".join(json.dumps(asdict(row)) + "\n" for row in rows)
+    )
+    for key, last in [
+        *((row.key, {"event": "outcome", "row": asdict(row)}) for row in rows),
+        (
+            interrupted_key,
+            {
+                "event": "interrupted",
+                "error": "CampaignInterrupted: campaign stop signal 15",
+            },
+        ),
+    ]:
+        path = (
+            root / "attempts" / (hashlib.sha256(key.encode()).hexdigest() + ".jsonl.gz")
+        )
+        with gzip.open(path, "wt") as stream:
+            stream.write(
+                json.dumps(
+                    {
+                        "event": "start",
+                        "key": key,
+                        "checkpoint_sha256": mirror.CHECKPOINT_SHA256,
+                        "deadline": deadline,
+                    }
+                )
+                + "\n"
+            )
+            stream.write(json.dumps(last) + "\n")
+    status = tmp_path / "etude.json"
+    status.write_text(
+        json.dumps(
+            {
+                "status": {
+                    "run": "mtg269-mirror-v2",
+                    "phase": "done",
+                    "outcome": "cancelled",
+                },
+                "attempts": [{"id": "3a2b62144b9a", "finished_at": "retained"}],
+            }
+        )
+    )
+    original_plan = segment.planned_units
+    # A single oracle outcome is enough for this fixture, with real schedule keys.
+    monkeypatch.setattr(
+        segment,
+        "planned_units",
+        lambda arms: (
+            original_plan(arms)[:1]
+            if arms[0].sampler == "oracle"
+            else original_plan(arms)
+        ),
+    )
+    return root, status, interrupted_key
+
+
+def test_segment_seal_preserves_failures_and_excludes_interrupted_keys(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, status, interrupted = _predecessor_fixture(tmp_path, monkeypatch)
+    receipt = tmp_path / "predecessor.json"
+    prior = segment.seal_predecessor(root, status, receipt)
+    assert len(prior.completed_keys) == 2  # Includes the scored uniform failure.
+    assert list(prior.interrupted_attempts) == [interrupted]
+    assert len(prior.attempt_sha256) == 3
+    assert interrupted not in segment.read_predecessor(receipt, prior.deadline)
+    with segment.hold_predecessor(receipt):
+        with (root / "worker-6.lock").open("r") as lock:
+            with pytest.raises(BlockingIOError):
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    with pytest.raises(ValueError, match="deadline"):
+        segment.read_predecessor(receipt, prior.deadline + 1)
+    with (root / "games-test-0.jsonl").open("a") as stream:
+        stream.write("\n")
+    with pytest.raises(ValueError, match="bytes changed"):
+        segment.read_predecessor(receipt, prior.deadline)
+
+
+def test_segment_seal_rejects_live_etude_or_unsealed_attempt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, status, interrupted = _predecessor_fixture(tmp_path, monkeypatch)
+    original = status.read_text()
+    status.write_text(original.replace('"done"', '"running"'))
+    with pytest.raises(ValueError, match="not stopped"):
+        segment.seal_predecessor(root, status, tmp_path / "no.json")
+    status.write_text(original)
+    path = (
+        root
+        / "attempts"
+        / (hashlib.sha256(interrupted.encode()).hexdigest() + ".jsonl.gz")
+    )
+    with gzip.open(path, "rt") as stream:
+        start = next(stream)
+    with gzip.open(path, "wt") as stream:
+        stream.write(start)
+    with pytest.raises(ValueError, match="unreconciled attempt"):
+        segment.seal_predecessor(root, status, tmp_path / "no.json")
+    assert not (tmp_path / "no.json").exists()
+
+
+def test_continuation_never_replays_a_predecessor_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.infra import identity
+
+    root, status, _ = _predecessor_fixture(tmp_path, monkeypatch)
+    receipt = tmp_path / "predecessor.json"
+    prior = segment.seal_predecessor(root, status, receipt)
+    original_plan = mirror.planned_units
+    monkeypatch.setattr(
+        mirror,
+        "planned_units",
+        lambda arms: original_plan(arms) if len(arms) > 3 else original_plan(arms)[:1],
+    )
+    monkeypatch.setattr(mirror, "bind_extension", Mock())
+    monkeypatch.setattr(identity, "file_sha256", lambda path: mirror.CHECKPOINT_SHA256)
+    teacher = Mock(side_effect=AssertionError("replayed a predecessor failure"))
+    monkeypatch.setattr(mirror, "_teacher", teacher)
+    # read_predecessor verifies real file digests using its independently imported helper.
+    mirror.play(
+        Path("unused"),
+        tmp_path / "next",
+        0,
+        7,
+        None,
+        mirror.extension_arms("uniform"),
+        prior.deadline,
+        native_sha256="admitted",
+        predecessor=receipt,
+    )
+    teacher.assert_not_called()
 
 
 def test_uniform_samples_physical_copies_and_preserves_known_cards() -> None:
@@ -269,7 +448,7 @@ def test_interruption_retains_private_attempt_without_a_game_score(
 
 
 def test_compact_measurement_defaults_and_invalid_options() -> None:
-    from scratch.measure_mirror_compact import arguments
+    from experiments.bench_mirror_compact import arguments
 
     required = ["--attempt", "unused.gz", "--out", "unused-output"]
     args = arguments(required)
@@ -301,7 +480,7 @@ def test_compact_measurement_sets_threads_before_model(
     program = """
 import json
 import torch
-from scratch import measure_mirror_compact as harness
+from experiments import bench_mirror_compact as harness
 before = torch.get_num_interop_threads()
 def inspect_startup(*args: object, **kwargs: object) -> None:
     print(json.dumps({"threads": torch.get_num_threads(),

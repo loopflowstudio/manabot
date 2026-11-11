@@ -203,3 +203,18 @@ timing controls. This simpler reversible measurement choice leaves the frozen
 binary untouched. Five rounds alternate both mode order and 1/3-thread process
 order. Equal-root latency sums describe this fixed workload only; campaign root
 frequencies and seven-worker M1 contention are not inferred.
+
+## Uniform implementation transition — 2026-11-11
+
+Jack Heart selected “Switch at oracle barrier (Recommended)”: finish oracle,
+then use compact evidence and the native batch encoder with one thread per
+worker, a separate implementation identity, and the existing deadline.
+
+Use the six retained fixed roots and the 304-view golden tensor replay as the
+short native smoke on the mini. These use the actual checkpoint and observed
+Commands without adding scientific game slots. Run this before stopping the
+original Etude job so a failed admission leaves its uniform path available.
+The original shell has no barrier pause: if uniform starts before cancellation
+settles, preserve completed outcomes and explicit interrupted attempts. Resume
+only missing keys in the new segment; never replay a scored failure. A truncated
+or unsealed attempt blocks the transition rather than being called a failure.

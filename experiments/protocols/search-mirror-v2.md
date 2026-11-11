@@ -1,5 +1,52 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Authorized uniform transition — 2026-11-11 preparation
+
+Jack Heart chose “Switch at oracle barrier (Recommended)”, then directed:
+“Switch the uniform stage to compact+native at the oracle barrier per the
+conversation decision, then continue toward report and PR”. This supersedes
+the earlier instruction to keep the sequential implementation for both stages.
+Scientific settings, raw sampled MTG-183 opponent, 3,000 slots, seven one-thread
+workers, zero rentals and deadline **1794852989** remain fixed.
+
+At 10:44:31 UTC the original Etude run `mtg269-mirror-v2`, attempt
+`3a2b62144b9a`, remains running: **1,465 sealed outcomes**, all oracle
+(488/489/488 at 4/8/16 worlds), zero recorded failures and two live oracle
+workers. All 349 source bindings and the frozen `7c22a1e1…` native bytes match.
+This is a ledger inventory, not a new scientific audit or deterministic replay.
+The prior report snapshot remains separately dated.
+
+The native encoder from implementation commit
+`69c76f87fd4f0e649d4c38a5717ac801a0456b9d` was built separately on the M1 mini:
+SHA-256 `8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`.
+Source archive SHA-256
+`3430be3428ff3609e1988ecfc7bde4c4685fd4dab66f8889e8438937cb9624ef`.
+The frozen environment lacked the maturin command; an isolated uv tool overlay
+built the wheel without replacing the environment or its mapped extension.
+Build logs and identity remain at mini `~/search-scaling/mirror-native-build/`.
+
+Before cancellation, admit the separate mini build against all 304 golden
+actor/terminal views and the six retained checkpoint roots. Cross-host metadata
+is recorded explicitly; Commands, final observations, allocation, terminal signs
+and numerical tolerances are unchanged. A failed admission leaves the original
+job running; no new game smoke is needed merely to repeat these observations.
+
+After all 1,500 oracle outcomes exist, stop the original job through Etude and
+seal its ledger and every attempt. If its automatic uniform stage has started,
+retain those scored outcomes and any explicit interrupted attempts separately.
+Scored failures are completed keys and cannot be retried. Only missing uniform
+keys enter a separate output directory with `mirror-execution/v3`, compact v4
+receipts, actual native/source digests, one inference thread and the sealed
+predecessor digest. Shared locks on all predecessor shards prevent the original
+runner restarting during continuation. Truncated or unsealed evidence blocks
+admission and requires recovery, never an invented score.
+
+The implementation change is an explicit scientific limitation: fixed-position
+parity supports this transition but is not full-grid equivalence. Preserve
+oracle/full and uniform/compact costs under their respective identities; do not
+attribute their latency difference solely to hand sampling. The original
+8,000 outcomes, v2 oracle evidence and existing report inputs remain unchanged.
+
 ## Analysis snapshot — 2026-11-09 22:32 UTC
 
 The existing report now uses **78/3,000 sealed valid outcomes**, with 2,922

@@ -26,7 +26,7 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 from collections.abc import Callable
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, dataclass
 import fcntl
 import gzip
@@ -213,7 +213,7 @@ class MirrorDecision:
     seconds: float
 
 
-def _teacher(arm: Arm, checkpoint: Path) -> Any:
+def _teacher(arm: Arm, checkpoint: Path, *, compact_native: bool = False) -> Any:
     from manabot.sim.search.local_update import LocalSearchConfig, LocalUpdateTeacher
 
     teacher = LocalUpdateTeacher(
@@ -225,7 +225,9 @@ def _teacher(arm: Arm, checkpoint: Path) -> Any:
             beta=arm.beta,
             decision_seconds=DECISION_SECONDS,
             sampling="compatible_prior",
+            rollout_evidence="compact" if compact_native else "full",
         ),
+        native_encoder=compact_native,
     )
     # The constructor admits only declared distributions; this one is deliberately
     # outside them, so it replaces the sampler under its own identity.
@@ -402,6 +404,9 @@ def play(
     limit: int | None,
     arms: tuple[Arm, ...] = ARMS,
     deadline: float | None = None,
+    *,
+    native_sha256: str | None = None,
+    predecessor: Path | None = None,
 ) -> None:
     """Play this worker's share, deals leading so a stopped run stays balanced."""
     import torch
@@ -416,14 +421,38 @@ def play(
     if not 0 <= worker < workers <= 7:
         raise ValueError("use at most seven workers with distinct indexes")
     extension = any(a.study != "v1" for a in arms)
+    if (native_sha256 or predecessor) and not extension:
+        raise ValueError("implementation segments require the v2 study")
+    if native_sha256 and any(a.study == "v2" and a.sampler != "uniform" for a in arms):
+        raise ValueError("compact/native campaign segments are uniform only")
+    if predecessor is not None and (
+        native_sha256 is None or arms != extension_arms("uniform")
+    ):
+        raise ValueError("a predecessor is only valid for compact/native uniform")
+    if (
+        native_sha256 is not None
+        and arms == extension_arms("uniform")
+        and predecessor is None
+    ):
+        raise ValueError("compact/native uniform requires a sealed predecessor")
     units = planned_units(arms)
     if extension:
         if deadline is None or not math.isfinite(deadline) or deadline <= time.time():
             raise ValueError(
                 "extension requires an unexpired absolute campaign deadline"
             )
+        prior: set[str] = set()
+        if predecessor is not None:
+            from experiments.mirror_segment import read_predecessor
+
+            prior = read_predecessor(predecessor, deadline)
         bind_extension(
-            out, workers, deadline, smoke=all(a.study == "v2-smoke" for a in arms)
+            out,
+            workers,
+            deadline,
+            smoke=all(a.study == "v2-smoke" for a in arms),
+            native_sha256=native_sha256,
+            predecessor=predecessor,
         )
         owned = {
             f"{a.key}/{g.deal}"
@@ -436,12 +465,15 @@ def play(
             owned_keys=owned,
             game_file=f"games-{host}-{worker}.jsonl",
         )
+        if done & prior:
+            raise ValueError("continuation duplicated a predecessor outcome")
+        done |= prior
         if arms == extension_arms("uniform"):
             required = {
                 f"{a.key}/{g.deal}" for g, a in planned_units(extension_arms("oracle"))
             }
             # No oracle workers may remain when the owning job advances stages.
-            if not required <= _done(out):
+            if not required <= (_done(out) | prior):
                 raise ValueError(
                     "uniform stage requires reconciled oracle outcomes first"
                 )
@@ -459,7 +491,9 @@ def play(
         setting = (arm.depth, arm.beta, arm.worlds, arm.sampler)
         teacher = teachers.get(setting)
         if teacher is None:
-            teacher = teachers[setting] = _teacher(arm, checkpoint)
+            teacher = teachers[setting] = _teacher(
+                arm, checkpoint, compact_native=native_sha256 is not None
+            )
         if extension:
             assert deadline is not None
             row, log = retained_game(
@@ -481,7 +515,15 @@ class CampaignInterrupted(BaseException):
     """An allocation stop is an interrupted attempt, never a failed game score."""
 
 
-def bind_extension(out: Path, workers: int, deadline: float, *, smoke: bool) -> None:
+def bind_extension(
+    out: Path,
+    workers: int,
+    deadline: float,
+    *,
+    smoke: bool,
+    native_sha256: str | None = None,
+    predecessor: Path | None = None,
+) -> None:
     """Freeze source, plan, worker assignment and deadline without racing other workers.
 
     The owning Etude allocation must already be admitted. This receipt does not
@@ -510,8 +552,14 @@ def bind_extension(out: Path, workers: int, deadline: float, *, smoke: bool) -> 
         )
     )
     native_sha = file_sha256(Path(native.__file__))
-    if native_sha != "7c22a1e101874ae4818ba8250326277b2fb3b0a55260edcb9da0c162080baf25":
+    expected_native = (
+        native_sha256
+        or "7c22a1e101874ae4818ba8250326277b2fb3b0a55260edcb9da0c162080baf25"
+    )
+    if native_sha != expected_native:
         raise ValueError("extension requires the retained mini w13 native build")
+    if native_sha256 is not None and not hasattr(native, "encode_observations_into"):
+        raise ValueError("selected native build lacks the admitted batch encoder")
     arms = extension_arms("oracle", smoke=smoke) + extension_arms(
         "uniform", smoke=smoke
     )
@@ -536,6 +584,15 @@ def bind_extension(out: Path, workers: int, deadline: float, *, smoke: bool) -> 
         "planned_games": len(plan),
         "training_updates": 0,
     }
+    if native_sha256 is not None:
+        identity.update(
+            {
+                "schema": "mirror-execution/v3",
+                "implementation": "compact-native",
+                "inference_threads": 1,
+                "predecessor_sha256": file_sha256(predecessor) if predecessor else None,
+            }
+        )
     path = out / "identity.json"
     encoded = json.dumps(identity, sort_keys=True, indent=2) + "\n"
     if deadline > time.time() + 168 * 3600:
@@ -721,6 +778,12 @@ def main() -> None:
     run.add_argument("--study", choices=("v1", "v2", "v2-smoke"), default="v1")
     run.add_argument("--stage", choices=("oracle", "uniform"))
     run.add_argument(
+        "--native-sha256", help="Admitted separate compact/native build digest"
+    )
+    run.add_argument(
+        "--predecessor", type=Path, help="Sealed prior Etude segment receipt"
+    )
+    run.add_argument(
         "--deadline", type=float, help="absolute campaign stop, Unix seconds"
     )
     args = parser.parse_args()
@@ -734,7 +797,12 @@ def main() -> None:
     # The OS releases the lock on interruption. This does not authorize replaying
     # an incomplete attempt: reconciliation above still requires explicit recovery.
     args.out.mkdir(parents=True, exist_ok=True)
-    with (args.out / f"worker-{args.worker}.lock").open("a") as lock:
+    with ExitStack() as stack:
+        if args.predecessor is not None:
+            from experiments.mirror_segment import hold_predecessor
+
+            stack.enter_context(hold_predecessor(args.predecessor))
+        lock = stack.enter_context((args.out / f"worker-{args.worker}.lock").open("a"))
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         if args.study == "v1":
             play(args.checkpoint, args.out, args.worker, args.workers, args.limit)
@@ -750,6 +818,8 @@ def main() -> None:
                     args.limit,
                     arms,
                     args.deadline,
+                    native_sha256=args.native_sha256,
+                    predecessor=args.predecessor,
                 )
 
 
