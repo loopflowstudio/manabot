@@ -79,8 +79,12 @@ Implementation and concept review found no outstanding runtime repair or product
 question. Gate and delivery remain with the selected Task graph. Presentation:
 `scratch/concept-review.html` and `scratch/qa.html`.
 `lf open --host desktop --file docs/workflows.md` returned “No Desktop Files view
-attached; nothing opened.” Human presentation remains for demo. No benchmark,
-training/evaluation job, rental or server was started.
+attached; nothing opened.” Human presentation remains for demo. That review
+started no benchmark, training/evaluation job, rental or server. The later QA
+transcript in `scratch/qa.html` records a successful three-update CPU benchmark
+(798.46 seconds, about 8 GB peak RSS). Publication review found its referenced
+`.runs/update-baseline/receipt.json` absent in this checkout, so that transcript
+is prior-run evidence, not a freshly audited receipt or a speed comparison.
 
 Realignment found fetched `origin/main` at `3c169916e`, already included here.
 Task 855bff's new collection finding was checked against
