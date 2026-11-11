@@ -143,10 +143,11 @@ class Cost:
         return self.moves * arm.depth * arm.worlds
 
 
-def _costs(directory: Path) -> dict[str, Cost]:
+def _costs(directory: Path, *, recursive: bool = True) -> dict[str, Cost]:
     sums: dict[str, list[float]] = defaultdict(lambda: [0, 0.0, 0.0, 0.0])
     times: dict[str, list[float]] = defaultdict(list)
-    for path in sorted(directory.rglob("decisions-*.jsonl.gz")):
+    paths = directory.rglob("decisions-*.jsonl.gz") if recursive else directory.glob("decisions-*.jsonl.gz")
+    for path in sorted(paths):
         # Unlike the live-snapshot reader, final analysis must reject truncated tails.
         with gzip.open(path, "rt") as stream:
             for line in stream:
@@ -306,7 +307,21 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
     receipts = {name: json.loads((receipt_dir / f"{name}.json").read_text())
                 for name in ("remote-inventory", "launcher-inventory", "validation")}
     records = _outcomes([directory / "games"], mirror=True, arms=V2_ARMS)
-    reconcile_extension(directory / "games")
+    segments = []
+    for identity_path in sorted((directory / "games").rglob("identity.json")):
+        segment = identity_path.parent
+        identity = json.loads(identity_path.read_text())
+        keys = reconcile_extension(segment)
+        segments.append({
+            "path": str(segment.relative_to(directory)),
+            "identity_sha256": hashlib.sha256(identity_path.read_bytes()).hexdigest(),
+            "implementation": identity.get("implementation", "sequential/full/Python"),
+            "native_sha256": identity["native_sha256"],
+            "completed_outcomes": len(keys),
+            "costs": {key: asdict(cost) for key, cost in _costs(segment, recursive=False).items()},
+        })
+    if not segments:
+        reconcile_extension(directory / "games")
     remote = receipts["remote-inventory"]
     validation = receipts["validation"]
     # A prelaunch receipt cannot certify later outcomes or their provenance.
@@ -328,6 +343,9 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         }
     valid = sum(a["coverage"]["valid"] for a in arms.values())
     return {
+        "implementation_segments": segments,
+        "transition": (json.loads((directory / "transition/summary.json").read_text())
+                       if (directory / "transition/summary.json").exists() else None),
         "batching": (json.loads((directory / "batching/summary.json").read_text())
                      if (directory / "batching/summary.json").exists() else None),
         "latest_inventory": (json.loads((receipt_dir / "batching-inventory.json").read_text())
@@ -419,11 +437,35 @@ def _extension_section(extension: dict[str, Any]) -> str:
         contrasts.append(f'<tr><td>{escape(c["label"])}</td><td>{c["paired"]}/{c["planned"]}</td>'
                          f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
                          f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
+    transition = extension.get("transition")
+    transition_html = (
+        '<p class="note"><strong>Implementation transition:</strong> '
+        f'{escape(transition["status"])}. {escape(transition["admission"])}. '
+        f'{escape(transition["limits"])}.</p>' if transition else ''
+    )
+    segment_rows = []
+    for segment in extension.get("implementation_segments", []):
+        for key, cost in segment["costs"].items():
+            segment_rows.append(
+                f'<tr><td>{escape(segment["implementation"])}</td><td>{escape(key)}</td>'
+                f'<td>{cost["decisions"]:,}</td><td>{cost["seconds"]:.3f}</td></tr>'
+            )
+    segment_html = (
+        '<details><summary>Cost by retained implementation segment</summary>'
+        '<table><tr><th>Implementation</th><th>Condition</th><th>Search decisions</th>'
+        '<th>Mean s/decision</th></tr>' + ''.join(segment_rows) + '</table>'
+        '<p class="note">The arm totals combine retained segments. Oracle/full and '
+        'uniform/compact use different implementations: their cost difference cannot '
+        'be attributed solely to hidden-hand sampling. Sampler strength contrasts also '
+        'cross that implementation boundary. Fixed-root parity does not '
+        'establish full-grid equivalence.</p></details>' if segment_rows else ''
+    )
     return (
         _batching_section(extension) + '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
         f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
         f'{escape(extension["execution"])}.</strong> Snapshot: {escape(extension["observed_utc"])}. '
         f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'
+        + transition_html +
         '<p class="note">All six cells fix depth 20, α 0.02 and β 0.01 against the raw sampled MTG-183 '
         'checkpoint policy. The opponent has no search, mirror update, greedy or EMA substitution. '
         'Uniform samples physical unseen copies subject to public information; oracle retains the true hand. '
@@ -452,6 +494,7 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'interrupted attempts are excluded. Game wall time includes opponent play; hero search time '
         'does not. Game length and concurrent load confound these timings; this is not an equal-compute '
         'strength comparison or inclusive worker-hour accounting.</p></details>'
+        + segment_html +
         f'<p class="note">Health: {escape(extension["health"])}. '
         f'Native support: {escape(extension["native_support"])}. '
         f'Replay identity: {escape(extension["replay_identity"])}. '

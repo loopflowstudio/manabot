@@ -1,5 +1,57 @@
 # Mirror search continuation
 
+## Uniform transition in progress — 2026-11-11 11:06 UTC
+
+The current direction is the authorized oracle-barrier transition, superseding
+the earlier measurement-only snapshots below. Runner/continuation preparation is
+committed at `17b2ed956b384aecef940e6b8a722a527a8ca25d`; the publication-catalog
+binding correction is `67cc9429a9cd442254c763c049792943efd5b3e7`, with all 351
+executable source/protocol/input bindings verified on the mini. The original mini source,
+Etude run `mtg269-mirror-v2` / attempt `3a2b62144b9a`, checkpoint, frozen binary,
+3,000 slots and deadline 1794852989 remain intact. At 11:05 UTC: 1,471 oracle
+outcomes, no uniform outcomes or scored failures; two original workers remain.
+
+The separately built mini binary is `8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`,
+from native implementation `69c76f87…`. It passes all six retained checkpoint
+roots: actual Commands, final views and leaf signs match; maximum target error
+1.86e-7, rollout error 1.79e-7 at unchanged atol=1e-6/rtol=1e-5. One intra-op
+thread, actual mini inter-op 8 (laptop reference 16), no new games. The 304-view
+native tensor/buffer proof passes 9 checks. An earlier pytest invocation imported
+the installed frozen source and skipped eight native checks; the explicit
+PYTHONPATH invocation above is the actual proof, and both logs remain retained.
+Mini step-100 oracle/uniform single-call times are 3.148/3.205 seconds with two
+oracle workers active. This is not seven-worker throughput or a sub-second claim.
+
+Evidence is in `experiments/data/search-mirror-v2/transition/`, published through
+manabot.data before the manifest is committed. Three older worker warnings are
+retained: two missing focus references and one 36-to-32 event-history window.
+Python/native encoders share those behaviors; no game failure was recorded.
+The new report machinery labels implementation costs separately. Focused
+runner/report/data checks: 27 pass (including catalog isolation). The required recovery tests: 26 pass using
+their own small fixtures, not MTG-183 or the study schedule.
+
+The active execution step has a foreground observer
+`scratch/mirror-transition-20261111/oracle_barrier.py`: it checks original source
+bindings and all 1,500 oracle keys, then asks Etude to cancel the old segment.
+Do not duplicate it or launch a new campaign while that step is running. After
+Etude settles, `experiments.mirror_segment` seals all original outcomes and
+explicit uniform interruptions; the prepared `uniform_job.py` starts only missing
+uniform keys under a new Etude identity, with seven one-thread workers, compact
+receipts, the admitted native binary and the same absolute deadline. All prior
+scored failures remain completed. Shared old-shard locks exclude original-job
+restarts. Unsealed/truncated traces stop admission and require recovery.
+
+A separate read-only collector is publishing a 1,469-outcome, 17.9 GB sealed
+snapshot from the mini. It uses the existing artifact owner; credentials exist
+only in the SSH child process, never source or evidence. Its new manifest must
+be merged by the selected snapshot paths, not replace newer local entries.
+The new v3 identity excludes the mutable publication catalog, while preserving
+actual checkpoint/world inputs and every executable source/protocol hash. This
+avoids coupling uploads to live execution. The original v2 identity remains
+byte-compatible, including its historical catalog binding; its checkout is
+never used for publication. The prelaunch source receipt must match the final
+committed runner and protocol, not a guessed or historical source digest.
+
 ## Current state — 2026-11-11 final measurement
 
 **Better: keep compact/native.** Current post-compression binary `3f086259…`,

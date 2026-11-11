@@ -8,10 +8,11 @@ from pathlib import Path
 import pytest
 
 from experiments.elemental_grid import Game, schedule
-from experiments.search_mirror import ARMS, V2_ARMS, MirrorRow
+from experiments.search_mirror import ARMS, V2_ARMS, MirrorDecision, MirrorRow
 from experiments.search_mirror_noise import Position, analyze
 from experiments.search_mirror_report import (
     _bootstrap,
+    _costs,
     _coverage,
     _extension_report,
     _extension_section,
@@ -40,6 +41,20 @@ def test_missing_scores_keep_full_denominator() -> None:
     coverage = _coverage(rows, games)
     assert (coverage["planned"], coverage["valid"], coverage["invalid"], coverage["missing"]) == (3, 1, 1, 1)
     assert coverage["failures"][0]["failure"] == "timeout"
+
+
+def test_implementation_costs_do_not_absorb_a_nested_segment(tmp_path: Path) -> None:
+    native = tmp_path / "native"
+    native.mkdir()
+    key = V2_ARMS[-1].key
+    for directory, seconds in ((tmp_path, 10.0), (native, 2.0)):
+        decision = MirrorDecision(f"{key}/1", 0, 0, 0, 0, 0, 0,
+                                  [1.0], [0.0], [1.0], 0, seconds)
+        with gzip.open(directory / "decisions-test.jsonl.gz", "wt") as stream:
+            stream.write(json.dumps(asdict(decision)) + "\n")
+    assert _costs(tmp_path)[key].seconds == 6.0
+    assert _costs(tmp_path, recursive=False)[key].seconds == 10.0
+    assert _costs(native, recursive=False)[key].seconds == 2.0
 
 
 def test_joint_bootstrap_preserves_pairing_and_fixed_cells() -> None:
@@ -160,6 +175,15 @@ def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
     html = _extension_section(diagnostics)
     assert "77/3,000 completed rows" in html and "0/3,000 valid games" in html
     assert "not admitted" in html and "separately dated closed-evidence snapshot" in html
+    (tmp_path / "transition").mkdir()
+    (tmp_path / "transition/summary.json").write_text(json.dumps({
+        "status": "native admitted; waiting for oracle barrier",
+        "admission": "six retained roots; no new games",
+        "limits": "not full-grid equivalence",
+    }))
+    transitioned = _extension_report(tmp_path, {})
+    assert transitioned["valid_games"] == 0
+    assert "waiting for oracle barrier" in _extension_section(transitioned)
     # A typo in the input path must not manufacture a no-games receipt.
     with pytest.raises(FileNotFoundError):
         _extension_report(tmp_path / "missing", {})
