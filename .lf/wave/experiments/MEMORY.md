@@ -33,8 +33,8 @@ constant-memory history processing.
 
 Retained shipment/relocation, resume selection, historical-report and ordinary
 both-seat executor/checkpoint checks support this repair. Broader integration,
-original-run attribution and long-run time/RSS acceptance remain open in
-`scratch/mtg-273.md`; measurements live in
+original-run attribution and long-run time/RSS acceptance remain open;
+measurements and remaining acceptance live in
 `experiments/self-play-collection-273.md`. A smaller manifest is insufficient to
 close the full slowdown Task or change a frozen run. Performance comparisons must
 pin the device explicitly after the merged MPS change altered fresh recipe
