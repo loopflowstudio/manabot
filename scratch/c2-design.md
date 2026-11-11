@@ -14,7 +14,9 @@ been rented. Next: freeze the protocol and driver hashes, then execution review.
   `run_campaign.sh MACHINE`. It deletes the machine on every exit.
 - Check: `uv run --locked --extra dev --extra artifacts pytest
   experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/test_c2_campaign.py -q`
-  — 40 passed (2026-11-11).
+  — 40 passed (2026-11-11; again after the main sync at `fbdba9122`, 2026-11-10).
+- Realign (2026-11-10): protocol, driver status and the hashes above match the
+  files on disk; the main sync changed none of the C2 files.
 - Reservation: one A40, ≤4.0 h claim to provider deletion, ≤$2.50 all-in, quote
   ≤$0.60/h, ≤400 queued updates. Work stops 15 minutes before the deadline.
 - SHA-256 at implementation (the freeze records the final ones):
@@ -22,5 +24,5 @@ been rented. Next: freeze the protocol and driver hashes, then execution review.
   - `identity_job.py` 5ebee6b10581cfdbb680b8d749c8bbeca039aef776b853b6638c469737e3d5ac
   - `run_campaign.sh` 8aab44cabaeaa3f9e349bc9e44f4f9d944e999300fc86aa4697cbe5ff6dd669d
   - `budget.json` fe62eee84e879ca0ec18b97f4dec8474a8dcae3ad3815bea23125e0ea39ed10c
-  - C1 `preflight/remote_identity.py` e21eb933dd0c906a53c2176cba83d98463a9078c4bbffb5723c37a27be1f8374
+  - C1 `c1-repaired/step-3-c1/preflight/remote_identity.py` e21eb933dd0c906a53c2176cba83d98463a9078c4bbffb5723c37a27be1f8374
   - `test_c2_campaign.py` eccdac6411b0701f0ce09cd2fa561fa71b0d08899400e66ec59e924c7c6e874f
