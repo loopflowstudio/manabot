@@ -1,6 +1,6 @@
 # Infrastructure Wave memory
 
-## Training throughput and experiment delivery (b015d5, 2026-11-08)
+## Training throughput and experiment delivery (b015d5, 2026-11-09)
 
 Jack Heart said "keep going" after "I recommend repairing BF16, lengthening the
 packed cells, and completing the missing measurements." The bounded continuation
@@ -11,7 +11,15 @@ The live plan and spending/admission limits belong there, not in this memory.
   before training on A4000/L4/A40 at a Float/Half semantic-card join, despite CPU
   checks. Normalize destination/source dtypes without detaching gradients, prove
   float32 parity, and admit the actual CUDA worker plus checkpoint reload before
-  multiplying rentals. C1's local repair/tests do not yet establish CUDA success.
+  multiplying rentals. C1's A40 regression and two-update BF16 worker passed,
+  but its post-worker validator rejected `cuda:0` before checkpoint reload.
+  Offline reload after repair passed; full admission on the repaired source
+  remains unproved. Neither partial execution nor local reload admits expansion.
+- **Admission fixtures must reflect worker receipts.** A synthetic `cuda` string
+  missed the worker's indexed `cuda:0`. Parse device type and test real-shaped
+  receipts plus the ordinary checkpoint loader, retaining malformed/non-CUDA,
+  unhealthy-run and corrupt-byte rejection. Audit retained bytes without
+  changing their failed execution status; freeze repairs prospectively.
 - **Completed packed jobs can yield no valid packing measurement.** All seven
   original packed cells lacked three overlapping post-warmup updates per seed.
   Budget for startup/finish skew, retain exact included ordinals and use matched
@@ -35,6 +43,6 @@ not establish learning equivalence. Related 5da5f4 v7 batching traces are scoped
 in Experiments memory and do not establish a hashed-v6 speedup.
 
 Coverage: this Graph's reconciliation found no immediate Infrastructure child
-directories or child memories on 2026-11-08. Related Experiments memory was read
+directories or child memories on 2026-11-09. Related Experiments memory was read
 only in its shared-effect performance/delivery section; other sections were not
 curated here.

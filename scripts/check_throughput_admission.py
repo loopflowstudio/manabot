@@ -21,6 +21,12 @@ def check(output: Path) -> dict[str, object]:
         raise ValueError("C1 admission requires one completed training stage")
     stage = receipt.stages[0]
     recipe = receipt.regime.stages[0]
+    try:
+        if stage.actual_device is None:
+            raise ValueError("missing device")
+        device = torch.device(stage.actual_device)
+    except (TypeError, RuntimeError, ValueError) as error:
+        raise ValueError("C1 admission worker recorded an invalid device") from error
     if not (
         receipt.status == "completed"
         and receipt.seed == 26400
@@ -28,7 +34,7 @@ def check(output: Path) -> dict[str, object]:
         and recipe.streams == 256
         and recipe.execution.precision == "bf16"
         and stage.updates == 2
-        and stage.actual_device == "cuda"
+        and device.type == "cuda"
         and stage.optimizer_updates is not None
         and stage.optimizer_updates > 0
         and stage.numerical_failure is None
