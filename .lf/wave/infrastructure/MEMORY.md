@@ -42,7 +42,28 @@ no a384l8 result or admissible packed comparison; TF32's short health check did
 not establish learning equivalence. Related 5da5f4 v7 batching traces are scoped
 in Experiments memory and do not establish a hashed-v6 speedup.
 
-Coverage: this Graph's reconciliation found no immediate Infrastructure child
-directories or child memories on 2026-11-09. Related Experiments memory was read
-only in its shared-effect performance/delivery section; other sections were not
-curated here.
+## Standing pipeline measurements (855bff, 2026-11-11)
+
+Jack Heart: "The benchmark should report mean rows per inference call
+(environment_decisions / policy-inference calls from collection_timings)
+and the idle fraction (idle_stream_steps / (calls x streams)) per size."
+Complete-game collection retires streams after their quota and terminal game;
+policy batches shrink toward the longest tail. A larger serving batch limit does
+not remove this cost. Current batching counters include warmup, while update-time
+series can exclude it; preserve that distinction in reported rates.
+
+The bounded CPU proofs retained 1.743 rows/call and 0.1285 idle fraction for two
+streams/two w64 updates, then four replayed evaluation games after correcting the
+authored deck keys. These dirty-source subset runs preceded the Python/dependency
+and MTG-273 sync; they establish neither a full-ladder reference nor a speedup.
+Comparison admission now includes Python as well as Torch version, host, workload
+and behavior. Reference-host designation, complete measurements and real
+interleaving remain open in the Task plan. Short ladders cannot establish MTG-273
+long-run flatness; its separate evidence is in
+`experiments/self-play-collection-273.md`.
+
+Coverage: filesystem inspection on 2026-11-11 found no immediate Infrastructure
+child directories or child memories. Infrastructure memory was read in full;
+related Experiments memory was read only in its self-play metric-indexing section
+this pass (shared-effect performance/delivery was read in the earlier pass).
+Other Experiments sections were not read or curated here.

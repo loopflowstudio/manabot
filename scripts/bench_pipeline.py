@@ -73,6 +73,7 @@ class Source(StrictModel):
 class Host(StrictModel):
     machine_sha256: str
     platform: str
+    python_version: str
     torch_version: str
     device_name: str
     facts: HostFacts
@@ -179,6 +180,7 @@ def host_identity(device: str, facts: HostFacts | None = None) -> Host:
     return Host(
         machine_sha256=hashlib.sha256(identity).hexdigest(),
         platform=platform.platform(),
+        python_version=platform.python_version(),
         torch_version=str(torch.__version__),
         device_name=device_name,
         facts=facts or host_facts(),
@@ -663,8 +665,21 @@ def compare(attempts: list[Attempt], baseline: Report) -> list[Comparison]:
     return results
 
 
+def _require_full_ladder(config: SuiteConfig) -> None:
+    """References use the canonical ladder; subsets remain diagnostic readings."""
+    if config.sizes != tuple(SIZES) or config.workloads != tuple(
+        name
+        for name, workload in WORKLOADS.items()
+        if config.device in workload.devices
+    ):
+        raise ValueError(
+            "a reference requires the full ladder and every supported workload"
+        )
+
+
 def admit_reference(baseline: Report, host: Host) -> None:
     """A completion label alone cannot admit missing or mixed-source samples."""
+    _require_full_ladder(baseline.config)
     expected = {
         (w, s) for w in baseline.config.workloads for s in baseline.config.sizes
     }
@@ -747,16 +762,8 @@ def run_suite(
             raise ValueError("--reference-root requires --compare")
         if record_reference and (baseline or source.dirty):
             raise ValueError("record a reference only from a clean standalone reading")
-        if record_reference and (
-            config.sizes != tuple(SIZES)
-            or config.workloads
-            != tuple(
-                name for name, w in WORKLOADS.items() if config.device in w.devices
-            )
-        ):
-            raise ValueError(
-                "a reference requires the full ladder and every supported workload"
-            )
+        if record_reference:
+            _require_full_ladder(config)
         repetitions = REPETITIONS if baseline else 1
         for repetition in range(repetitions):
             sides = ("reference", "candidate") if baseline else ("candidate",)

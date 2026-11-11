@@ -44,14 +44,21 @@ def _source() -> Source:
     return Source(commit="a" * 40, dirty=False, diff_sha256="b" * 64)
 
 
-def _sample(seconds: float = 10) -> Sample:
+def _sample(
+    seconds: float = 10,
+    *,
+    workload: str = "training",
+    size: str = "w64",
+    device: str = "cpu",
+) -> Sample:
     return Sample(
-        workload="training",
-        size="w64",
+        workload=workload,
+        size=size,
         source=_source(),
         host=Host(
             machine_sha256="host",
             platform="test",
+            python_version="3.13.0",
             torch_version="test",
             device_name="cpu",
             facts=HostFacts(
@@ -61,7 +68,7 @@ def _sample(seconds: float = 10) -> Sample:
                 cpu_quota=None,
             ),
         ),
-        device="cpu",
+        device=device,
         world="test-world",
         input={"policy_input_version": 6},
         workload_sha256="work",
@@ -76,24 +83,36 @@ def _sample(seconds: float = 10) -> Sample:
 
 
 def _attempt(
-    side: Literal["candidate", "reference"], repetition: int, seconds: float = 10
+    side: Literal["candidate", "reference"],
+    repetition: int,
+    sample: Sample | None = None,
 ) -> Attempt:
+    sample = sample or _sample()
     return Attempt(
         side=side,
         repetition=repetition,
-        workload="training",
-        size="w64",
+        workload=sample.workload,
+        size=sample.size,
         directory=f"{side}/{repetition}",
-        sample=_sample(seconds),
+        sample=sample,
     )
 
 
-def _baseline() -> Report:
+def _baseline(config: SuiteConfig | None = None) -> Report:
+    config = config or SuiteConfig(sizes=("w64",), workloads=("training",))
     return Report(
-        config=SuiteConfig(sizes=("w64",), workloads=("training",)),
+        config=config,
         source=_source(),
         status="completed",
-        attempts=[_attempt("candidate", 0)],
+        attempts=[
+            _attempt(
+                "candidate",
+                0,
+                _sample(workload=workload, size=size, device=config.device),
+            )
+            for size in config.sizes
+            for workload in config.workloads
+        ],
     )
 
 
@@ -157,8 +176,10 @@ def test_training_reading_rejects_missing_updates() -> None:
 
 
 def test_comparison_selects_whole_minimum_samples() -> None:
-    attempts = [_attempt("reference", n, s) for n, s in enumerate((12, 10, 11))]
-    attempts += [_attempt("candidate", n, s) for n, s in enumerate((6, 7, 8))]
+    attempts = [
+        _attempt("reference", n, _sample(s)) for n, s in enumerate((12, 10, 11))
+    ]
+    attempts += [_attempt("candidate", n, _sample(s)) for n, s in enumerate((6, 7, 8))]
     (result,) = compare(attempts, _baseline())
     assert result.status == "comparable"
     assert result.reference_sample == "reference/1"
@@ -191,14 +212,20 @@ def test_comparison_rejects_mismatched_evidence(field: str, value: JsonValue) ->
     assert result.speedup is None
 
 
-def test_comparison_rejects_different_host_even_with_same_cpu_label() -> None:
+@pytest.mark.parametrize(
+    "field,value",
+    [("machine_sha256", "another"), ("python_version", "3.12.0")],
+)
+def test_comparison_rejects_different_host_even_with_same_cpu_label(
+    field: str, value: str
+) -> None:
     attempts = [
         _attempt(side, n) for n in range(3) for side in ("reference", "candidate")
     ]
     sample = attempts[-1].sample
     assert sample is not None
     changed = sample.model_copy(
-        update={"host": sample.host.model_copy(update={"machine_sha256": "another"})}
+        update={"host": sample.host.model_copy(update={field: value})}
     )
     attempts[-1] = attempts[-1].model_copy(update={"sample": changed})
     assert compare(attempts, _baseline())[0].reason == "host mismatch"
@@ -298,11 +325,72 @@ def test_failed_reference_admission_keeps_receipt_and_baseline(tmp_path: Path) -
     assert target.read_text() == "previous reference"
 
 
+@pytest.mark.parametrize("mode", ["record", "compare"])
+@pytest.mark.parametrize(
+    "config",
+    [
+        SuiteConfig(sizes=("w64",)),
+        SuiteConfig(workloads=("training",)),
+        SuiteConfig(device="cuda", sizes=("w64",)),
+        SuiteConfig(device="cuda", workloads=("training",)),
+        SuiteConfig(device="mps", sizes=("w64",), workloads=("training",)),
+    ],
+)
+def test_subset_reference_rejected_before_workers_with_retained_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    config: SuiteConfig,
+) -> None:
+    baseline = _baseline(config)
+    target = tmp_path / "baseline.json"
+    retained = baseline.model_dump_json()
+    target.write_text(retained)
+    monkeypatch.setattr(pipeline, "source_identity", lambda root: _source())
+    monkeypatch.setattr(pipeline, "host_identity", lambda device: _sample().host)
+
+    def unexpected_worker(*args: object, **kwargs: object) -> ProcessOutcome:
+        pytest.fail("reference admission must finish before starting a worker")
+
+    monkeypatch.setattr(pipeline, "bounded_call", unexpected_worker)
+    report = run_suite(
+        config,
+        tmp_path / "reading",
+        seconds=30,
+        hourly_price=None,
+        baseline_path=target if mode == "compare" else None,
+        reference_root=None,
+        record_reference=target if mode == "record" else None,
+    )
+    assert report.status == "incomplete"
+    assert report.error == (
+        "ValueError: a reference requires the full ladder and every supported workload"
+    )
+    assert report.attempts == []
+    assert (
+        Report.model_validate_json((tmp_path / "reading/report.json").read_bytes())
+        == report
+    )
+    assert target.read_text() == retained
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        SuiteConfig(),
+        SuiteConfig(device="cuda"),
+        SuiteConfig(device="mps", workloads=("training",)),
+    ],
+)
+def test_reference_admits_full_device_ladder(config: SuiteConfig) -> None:
+    admit_reference(_baseline(config), _sample().host)
+
+
 def test_suite_interleaves_sources_under_one_deadline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
 
-    baseline = _baseline()
+    baseline = _baseline(SuiteConfig())
     reference = tmp_path / "reference"
     (reference / "scripts").mkdir(parents=True)
     (reference / "scripts/bench_pipeline.py").touch()
@@ -324,9 +412,17 @@ def test_suite_interleaves_sources_under_one_deadline(
         order.append("reference" if root == reference else "candidate")
         deadlines.append(deadline_unix)
         assert worker_deadline < deadline_unix
+        request = SuiteConfig.model_validate_json(
+            (directory / "request.json").read_bytes()
+        )
         atomic_json(
             directory / "sample.json",
-            _sample(10 if root == reference else 5).model_dump(mode="json"),
+            _sample(
+                10 if root == reference else 5,
+                workload=request.workloads[0],
+                size=request.sizes[0],
+                device=request.device,
+            ).model_dump(mode="json"),
         )
         return ProcessOutcome({"returncode": 0}, None, 0.1, 0.01, 100, 0, True)
 
@@ -341,16 +437,14 @@ def test_suite_interleaves_sources_under_one_deadline(
         record_reference=None,
     )
     assert report.status == "completed", report.error
-    assert order == [
-        "reference",
-        "candidate",
-        "candidate",
-        "reference",
-        "reference",
-        "candidate",
-    ]
+    assert order == (
+        ["reference", "candidate"] * 8
+        + ["candidate", "reference"] * 8
+        + ["reference", "candidate"] * 8
+    )
     assert len(set(deadlines)) == 1
-    assert report.comparisons[0].speedup == 2
+    assert len(report.comparisons) == 8
+    assert all(result.speedup == 2 for result in report.comparisons)
     assert baseline_path.read_text() == baseline.model_dump_json()
 
 
@@ -397,16 +491,19 @@ def test_evaluation_panel_admits_actual_elemental_deck_keys() -> None:
 
 
 def test_reference_rejects_missing_or_mixed_source_samples() -> None:
-    baseline = _baseline()
+    baseline = _baseline(SuiteConfig())
     host = _sample().host
     with pytest.raises(ValueError, match="complete"):
         admit_reference(baseline.model_copy(update={"attempts": []}), host)
     sample = _sample().model_copy(
         update={"source": _source().model_copy(update={"commit": "changed"})}
     )
-    attempt = _attempt("candidate", 0).model_copy(update={"sample": sample})
+    attempt = _attempt("candidate", 0, sample)
     with pytest.raises(ValueError, match="mixed-source"):
-        admit_reference(baseline.model_copy(update={"attempts": [attempt]}), host)
+        admit_reference(
+            baseline.model_copy(update={"attempts": [attempt, *baseline.attempts[1:]]}),
+            host,
+        )
 
 
 def test_supplied_price_converts_rates_without_printing_invalid_samples(

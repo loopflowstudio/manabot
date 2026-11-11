@@ -348,6 +348,11 @@ On the designated reference host, retain a complete reading with
 `--record-reference manabot/perf/baseline.json` added to the suite command.
 The source checkout must be clean: commit the implementation first, measure it,
 then review and commit the baseline. A partial or failed run cannot replace it.
+A successful subset report is a diagnostic reading, not a reference. Both
+recording and comparison require all four sizes and every workload supported by
+the selected device. Comparison rejects a subset reference before starting any
+workers and retains the admission error in an incomplete report. Correct the
+reference and retry with a new output directory.
 Keep CPU and MPS references in separate files. Keep the reference source in a
 separate, clean checkout with its locked environment and native extension built
 from that source. The checkout must contain this suite interface and match the
@@ -360,8 +365,9 @@ uv run --locked --extra evaluation python scripts/bench_training_update.py \
 ```
 
 The baseline retains the source commit, world, policy-input configuration,
-`TrainingRun.host` facts plus a machine-identity hash, device, precision,
-workload and behavior digests, and the samples from which its reading was made. Comparison reruns the reference
+`TrainingRun.host` facts plus a machine-identity hash, Python and Torch versions,
+device, precision, workload and behavior digests, and the samples from which its
+reading was made. Comparison reruns the reference
 and candidate on the same host in interleaved order, with three repetitions,
 and reports minimum durations on a shared machine. Each minimum names its
 sample; phase timings come from that sample rather than independently selected

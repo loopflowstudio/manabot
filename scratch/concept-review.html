@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>855bff — Pipeline benchmark concept review</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
+  body { max-width: 58rem; margin: 2rem auto; padding: 0 1.2rem 2rem; }
+  header, footer { font-size: .85rem; }
+  h1 { font-size: 1.65rem; line-height: 1.2; margin-bottom: .6rem; }
+  h2 { font-size: 1.1rem; margin: 1.2rem 0 .4rem; }
+  p { margin: .55rem 0; }
+  .decision { border-left: .25rem solid #957333; padding-left: 1rem; }
+  table { width: 100%; border-collapse: collapse; margin: .6rem 0; }
+  th, td { text-align: left; vertical-align: top; padding: .55rem; border-bottom: 1px solid #8886; }
+  code { font-size: .9em; overflow-wrap: anywhere; }
+  .scroll { overflow-x: auto; }
+  a { color: light-dark(#254f91, #a4c7ff); }
+  li { margin: .45rem 0; }
+  @media (max-width: 36rem) { body { margin-top: 1rem; } th, td { padding: .4rem; } }
+</style>
+<header>Task 855bff · concept-review · 2026-11-11<br>
+Built from <code>scratch/plan.md</code>, <code>scratch/questions.md</code>, the Task brief,
+<code>scripts/bench_pipeline.py</code>, <code>scripts/bench_training_update.py</code>,
+<code>manabot/training/rollout/collection.py</code> and <code>docs/development.md</code>.</header>
+<main>
+<h1>Which host anchors the standing speed reading?</h1>
+<div class="decision">
+<p><strong>Open choice → Blocked.</strong> The mini is recommended; no host has been
+designated. Local CPU is a candidate. No full ladder or committed reference exists yet.</p>
+<p>The biggest mismatch: the reference workflow is built, but its standing reading
+is still missing. Narrow CPU proofs cannot supply it.</p>
+</div>
+<h2>Actions → concepts → APIs</h2>
+<div class="scroll"><table>
+<thead><tr><th>Action</th><th>Concept that survives</th><th>Existing API / state</th></tr></thead>
+<tbody>
+<tr><td>Measure this machine</td><td>Reading: attempts, including failures</td><td><code>--suite</code> → <code>run_suite</code> → <code>Report</code></td></tr>
+<tr><td>Retain a reviewed reading</td><td>Reference: complete clean reading for this device</td><td><code>--record-reference</code> → baseline JSON</td></tr>
+<tr><td>Check an optimization</td><td>Comparison: matching real runs, whole-sample minima</td><td><code>--compare</code> + <code>--reference-root</code> → <code>Comparison</code></td></tr>
+</tbody></table></div>
+<h2>One clarification to implement</h2>
+<p><strong>Existing:</strong> recording requires every size and supported workload.
+Admission checks only the rows declared by the supplied file, so a successful
+one-size report can pass as a reference.</p>
+<p><strong>Proposed:</strong> one completeness rule for recording and admission.
+A subset stays a diagnostic reading. CPU/CUDA require eight rows; MPS requires
+four training rows. Reject an incomplete reference before launching workers.</p>
+<h2>Normal use and recovery</h2>
+<p>Designate host → measure clean source → review and retain the complete reading
+→ rerun reference and candidate in alternating order. Historical timings never
+stand in for a fresh control.</p>
+<p>A timeout keeps earlier rows and failure receipts, leaves the reference intact,
+and exits nonzero. Fix the cause and rerun into a new directory. A different host
+or behavior digest means incomparable; it does not mean slower.</p>
+<p><strong>Keep:</strong> existing batching counters, visibly including warmup.
+Streams idle after their quota and terminal game; a larger serving batch limit
+does not remove that tail. No collector redesign follows from this review.</p>
+<h2>Decision for the next conversation</h2>
+<ol><li>Which reference host/device? <strong>1a.</strong> Designate the owned mini's CPU
+for the complete suite, with MPS training separate if wanted. <strong>1b.</strong>
+Name another owned host/device. A rental alternative needs explicit execution
+authority and fresh same-host controls; this review grants neither.</li></ol>
+</main>
+<footer>Working decision: <a href="plan.md">scratch/plan.md</a>. No code changed or workloads launched.</footer>
+</html>
