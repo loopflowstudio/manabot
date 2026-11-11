@@ -32,11 +32,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           enable-cache: false
       - name: Install matched CPU dependencies
         run: |
-          uv venv --python 3.12
+          uv venv --python 3.13
           uv export --frozen --extra dev --extra play --no-emit-project --prune torch --output-file /tmp/layer-requirements.txt
           uv pip install --requirements /tmp/layer-requirements.txt
           uv pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0

@@ -14,9 +14,20 @@ are in [AGENTS.md](../AGENTS.md); test-resource rules in [TESTING.md](../TESTING
 
 ## Environment and commands
 
-The root project is both the development environment and the single `manabot`
-distribution. Python is CPython 3.12; every Python command runs through uv
-(`uv run ...`). `uv sync` builds the bundled extension; CI and existing scripts
+From the repository root:
+
+```bash
+uv sync --locked --python 3.13 --extra dev --extra artifacts
+uv run manabot --help
+```
+
+This prepares the development environment and displays the CLI commands. The
+root project is both that environment and the single `manabot` distribution.
+Development uses ordinary CPython 3.13; consumer compatibility includes 3.12.
+Keep shared Python source compatible with 3.12. Free-threaded builds and newer
+interpreters are outside the supported contract.
+
+Every Python command runs through uv (`uv run ...`). `uv sync` builds the bundled extension; CI and existing scripts
 also use `uv run --extra play maturin develop --manifest-path managym/Cargo.toml`
 (add `--features python`, and `--release` for timing-sensitive use). After
 changing Rust, rebuild as described in AGENTS.md and replace the `.so`
@@ -29,17 +40,23 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-Etude is pinned to release 0.2.15 in `pyproject.toml` and `uv.lock` for the
-launcher, extras and remote workers. This includes the checkpoint wall-time
-API and current launcher database compatibility. To update it, change all SDK
-requirements together, regenerate the lock, then use the locked environment:
+Public dependency requirements are `etude-sdk>=0.2.15` (also for its `eval` and
+`s3` extras) and `torch>=2.10.0`. All extras, including `llm`, inherit the core
+requirements. A downstream project resolves those with its own dependencies. The repository's
+`uv.lock` records exact versions, and its dedicated training and play runtime
+groups retain exact Torch/backend choices. Those development pins are not
+constraints exported to consumers.
+
+To update the locked Etude version without raising the public minimum:
 
 ```bash
 uv lock --upgrade-package etude-sdk
-uv sync --locked --python 3.12 --extra dev --extra artifacts
+uv sync --locked --python 3.13 --extra dev --extra artifacts
 ```
 
-Commit both `pyproject.toml` and `uv.lock` before preparing a new experiment.
+Commit the lock change before preparing a new experiment. When raising a public
+minimum, update every requirement for that dependency and commit the metadata
+with the lock.
 Training setup uses `uv sync --locked`; it never resolves a fresh branch head.
 Retained experiments keep their original source and lock, including the v7
 representation study's historical Git source pin. Never downgrade the current
@@ -76,7 +93,7 @@ setup, not engine correctness. Record unavailable tooling in the gate summary.
 **Authored rules, worlds and setups.** Run the complete debug Rust suite,
 including semantic-kernel conformance, and focused browser interactions. Also:
 
-- `uv run --python 3.12 --extra dev pytest tests/semantic/test_elemental_world.py -q`
+- `uv run --extra dev pytest tests/semantic/test_elemental_world.py -q`
   for Elemental roster or training-admission changes; its PPO smoke reloads the
   final checkpoint written by the recipe's `execute_regime` after tracking closes.
 - `uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
@@ -177,7 +194,7 @@ advice evidence as gate blockers; never regenerate fixtures or relax historical
 checkpoint validation to pass.
 
 **Website** (`website/**`): from `website/`, run
-`uv run --python 3.12 --extra test pytest tests/ -q`. Keep coverage for
+`uv run --extra test pytest tests/ -q`. Keep coverage for
 parseable blog-only sitemap XML, the root redirect, and the plain-text
 `/healthz` Fly probe.
 
@@ -550,16 +567,29 @@ certification of playing strength or rules coverage.
 
 ### Install
 
+Install a locally built compatibility wheel in a fresh directory outside this checkout:
+
 ```bash
-uv venv --python 3.12
-uv pip install --python .venv/bin/python --torch-backend cpu 'manabot==0.2.0'
-uv run --no-project manabot --help
+mkdir manabot-example
+cd manabot-example
+uv venv --python 3.13
+uv pip install --python .venv/bin/python --torch-backend cpu "/path/to/manabot-<version>-cp313-cp313-<platform>.whl"
+uv run --no-project --python .venv/bin/python manabot --help
 ```
+
+Replace `<version>` and `<platform>` with the values in the built wheel filename.
+This installs the library and bundled engine into `.venv`; the last command
+lists CLI commands without starting training. No repository dependency groups
+are installed. For CPython 3.12, create the environment with
+`--python 3.12` and use the matching `cp312` wheel. These examples use local
+artifacts because the compatibility changes have not been published. The
+published 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
+environment when reproducing that release.
 
 For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
 explicitly. CI validates CPU, not GPU, execution.
 
-Supported: CPython 3.12 (no free-threaded ABI) on Linux x86-64 with glibc
+Supported: ordinary CPython 3.12 and 3.13 (no free-threaded ABI) on Linux x86-64 with glibc
 2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
 MPS is admitted for float32 self-play training with Torch 2.10. Baseline requires
 CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
@@ -569,9 +599,36 @@ No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
 Wheels contain the compiled engine; the sdist needs Rust and a C linker
-(`--only-binary :all:` refuses source builds). Extras: `academy` (backend only;
-use `./scripts/play` for the browser), `evaluation`, `reports`, `artifacts`,
-`notebook`. `--regime-name`, experiment drivers and data-ledger tools need a
+(`--only-binary :all:` refuses source builds). Both forms declare the same
+runtime requirements, including `torch>=2.10.0` and `etude-sdk>=0.2.15`.
+These minimums allow newer versions to resolve; they do not certify every future
+dependency release. Keep your project's lockfile for reproducibility. If
+resolution fails, check for an incompatible Python version, an older exact
+Torch/Etude pin in your project, or a missing wheel on the selected backend.
+Do not bypass dependency checks with `--no-deps`.
+
+Notebook file generation remains a core dependency because ordinary experiment
+reporting creates an editable notebook. Pandas is no longer a direct requirement;
+no library entry point consumes it.
+
+Choose extras for the features you use:
+
+| Extra | Use |
+|---|---|
+| `academy` | Academy backend; use `./scripts/play` from a checkout for the browser |
+| `evaluation` | Etude evaluation and plots |
+| `reports` | Reports and Etude S3 report sources |
+| `artifacts` | Artifact-store access |
+| `notebook` | Jupyter and notebook execution |
+| `llm` | Local transformer inference |
+| `openrouter` | OpenRouter inference |
+
+For notebook work, append `[notebook]` to the quoted wheel path in the install
+command. In a checkout, use `uv sync --locked --extra notebook`. If a command reports
+a missing optional dependency, install its named extra in the same environment
+and retry. Development groups are not installed as part of a downstream package.
+
+`--regime-name`, experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 
@@ -588,15 +645,19 @@ uv run --no-project --with twine twine check --strict dist/*
 uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
 ```
 
-Staging copies tracked files, refuses to overwrite a prior build, excludes
-experiment drivers and build products, and adds the runtime requirement from
-`[tool.manabot.release]`; published artifacts must use it. Wheels are built from
-the sdist, so checkout files cannot hide missing content. Clean-install proof:
+Staging copies tracked files, refuses to overwrite a prior build and excludes
+experiment drivers and build products; published artifacts must use it. Staged
+metadata must preserve the source project's public minimum requirements rather
+than replacing them with development pins. CI builds one source archive for all
+four wheels, so checkout files cannot hide missing content. The complete release inventory is
+four wheels (3.12 and 3.13 on each supported platform) and one source archive.
+
+Clean-install proof, using only the wheel matching this interpreter and host:
 
 ```bash
-uv venv --python 3.12 /tmp/manabot-release-venv
+uv venv --python 3.13 /tmp/manabot-release-venv
 uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
-  --torch-backend cpu "$PWD"/dist/manabot-*.whl
+  --torch-backend cpu "$PWD/dist/manabot-<version>-cp313-cp313-<platform>.whl"
 cp scripts/release/smoke.py /tmp/manabot-release-smoke.py
 cd /tmp
 export PATH="/tmp/manabot-release-venv/bin:$PATH"
@@ -605,40 +666,59 @@ uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-releas
 ```
 
 The smoke checks one shared engine behind both import paths, catalog binding,
-gradients and a tiny CPU training update. `release.yml` repeats it on Linux and
-macOS, then installs and imports the optional extras.
+gradients and a tiny CPU training update. Repeat in a separate environment with
+3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
+then installs and imports the optional extras. Consumer checks run outside the
+checkout with default dependency groups disabled, including the minimum
+Torch/Etude versions and available newer versions where practical. Record exact
+versions tested; successful resolution alone is not a runtime compatibility
+check.
 
 ### Publish
 
 `release.yml` builds and validates relevant PRs, manual runs and `v*` tags; only
-tags publish. Tag builds reject inconsistent versions, commits not on main and
-already-published versions. Only the publish job gets OIDC `id-token: write`;
-no PyPI token is stored, and uploads carry attestations. The trusted publisher
-is project `manabot`, owner `loopflowstudio`, repository `manabot`, workflow
-`release.yml`, environment `pypi`. The pending publisher
+tags publish. Tag builds reject inconsistent versions and commits not on main.
+A release is complete only when its PyPI artifacts and matching GitHub Release
+both exist. The GitHub entry uses the same `vX.Y.Z` tag and that version's
+checked-in `release/vX.Y.Z/NOTES.md`, with a link to that version on PyPI.
+Only the PyPI job gets OIDC `id-token: write`; only the GitHub Release job gets
+`contents: write`. No PyPI token is stored, and uploads carry attestations.
+The trusted publisher is project `manabot`, owner `loopflowstudio`, repository
+`manabot`, workflow `release.yml`, environment `pypi`. The pending publisher
 was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
-deployment to `v*` tags and requires review. Verify these settings before
+tags to `v*`. Recheck its required reviewers and trusted publisher settings before
 tagging.
 
 Per release: update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`, examples
-and notes; merge the reviewed release PR; confirm the workflow is green; push
-`vX.Y.Z` at that main commit; review the `pypi` job's artifacts and approve it.
-A PR alone does not authorize a tag or upload. `skip-existing` is disabled: after
-an interrupted upload, inspect what reached PyPI and prepare a new patch version
-if needed; never retry blindly, delete a release or move a used tag. Afterwards,
-install from PyPI on both targets and confirm version and attestations.
+and write `release/vX.Y.Z/NOTES.md`; merge the reviewed release PR; confirm the workflow
+is green; push `vX.Y.Z` at that main commit; review the `pypi` job's artifacts
+and approve it. A PR alone does not authorize a tag or upload.
+
+If PyPI succeeds but GitHub completion fails, retry the failed completion job
+for the same tag. It creates or verifies the matching entry without uploading
+again. An entry with matching tag and notes makes the retry a no-op. Retrying
+the PyPI job checks the complete inventory and SHA-256 digests against retained
+build artifacts and skips upload only when they match. Rebuilding can change
+archive bytes; retry failed jobs with the original artifacts instead of rebuilding
+a published version. Partial or different publication fails for inspection.
+Never overwrite PyPI files, delete a release or move a used tag to repair it.
+Afterwards, install from PyPI on both supported platforms and interpreters and
+confirm the version, attestations and GitHub Release link.
 
 0.2.0 was published on 2026-10-22 from `v0.2.0` at
 `29ab4fa0ddcc759ddb2b699ce3d08ccfe51ad757`
-([PR #351](https://github.com/loopflowstudio/manabot/pull/351)); attestations
+([successful workflow run](https://github.com/loopflowstudio/manabot/actions/runs/39790120844)).
+Its installed-wheel smoke and optional API/report dependency checks passed on
+Linux and macOS with CPython 3.12. The PyPI trusted-publisher identity was
 verified against the repository; PyPI holds two wheels and the sdist. The full
 record, with SHA-256 digests, is in the
 [pinned release notes](https://github.com/loopflowstudio/manabot/blob/a74f31828/docs/releases.md#020-publication-record).
+That workflow published only to PyPI and did not create a GitHub Release.
 
 ## Clean-machine play proof
 
 From a fresh checkout, `./scripts/play` syncs the locked play runtime, builds the
-CPython 3.12 extension, runs `npm ci`, starts FastAPI and Vite, validates the
+CPython 3.13 extension, runs `npm ci`, starts FastAPI and Vite, validates the
 installed curated pack and prints an `ACADEMY_PLAY_READY` JSON record and the
 URL. `./scripts/verify-clean-machine` proves this once: it runs the launcher,
 runs `academy/ui/e2e/clean-machine.spec.ts` against it, writes
@@ -646,10 +726,12 @@ runs `academy/ui/e2e/clean-machine.spec.ts` against it, writes
 
 ### Reference profile
 
-GitHub-hosted `ubuntu-24.04` x86_64 with uv 0.9.22 and CPython 3.12, Node 22,
-stable Rust and native build tools, and Playwright 1.61.1's Chromium. The receipt
-records the observed OS, CPU, memory and tool versions. Before timing, the
-checkout must not contain `.venv`, `.cache`, `academy/ui/node_modules`, generated
+The current reference profile is GitHub-hosted `ubuntu-24.04` x86_64 with
+uv 0.9.22 and CPython 3.13, Node 22, stable Rust and native build tools, and
+Playwright 1.61.1's Chromium. Historical receipts retain CPython 3.12; they do
+not certify the updated profile. Each receipt records the observed OS, CPU,
+memory and tool versions. Before timing, the checkout must not contain `.venv`,
+`.cache`, `academy/ui/node_modules`, generated
 Svelte/Vite/build/test output, `managym/target`, a built `_managym*.so`, GUI trace
 JSON or a prior proof browser profile; no uv, npm or Cargo cache is restored.
 

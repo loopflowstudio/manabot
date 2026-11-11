@@ -332,9 +332,21 @@ Rows use flat names: `loss`, `numerical/...`, `coordinates/learner_transitions`,
 phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
-`selection_groups/<action type>/<terminal distance>/rows` and
-`self_play_outcomes/<deck>/<opponent deck>/<play|draw>/wins`. Offline readers use
-`manabot.training.update_metrics.read_updates`. Selection and belief
+`selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
+outcomes are rows with `deck`, `opponent_deck`, `position` (`play` or `draw`),
+`wins`, `losses` and `draws` in an immutable JSON table under the metric run's
+`artifacts/self-play-outcomes/`. The update's `self_play_outcomes/table` metric
+names its SHA-256 digest. Etude carries these files alongside metrics, including
+for launched jobs; keep the artifacts when copying a run for offline analysis.
+Deck pairs no longer create metric columns, which made background index refreshes
+repeatedly load large matchup histories.
+
+`manabot.training.update_metrics.read_updates` verifies the selected tables and
+projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
+(and `losses`/`draws`) for existing reports. It selects resumed and duplicate
+updates before reading their tables; unreferenced tables supply no results.
+Missing or corrupt referenced tables raise an error. Historical scalar outcome
+metrics remain readable unchanged. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:

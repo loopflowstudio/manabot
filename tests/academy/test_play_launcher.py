@@ -73,12 +73,12 @@ def completed(
     return subprocess.CompletedProcess(argv, returncode, stdout, stderr)
 
 
-def test_python_version_is_exactly_cp312():
+def test_python_version_is_exactly_cp313() -> None:
     assert (
-        play.validate_python_version(SimpleNamespace(major=3, minor=12, micro=11))
-        == "3.12.11"
+        play.validate_python_version(SimpleNamespace(major=3, minor=13, micro=11))
+        == "3.13.11"
     )
-    with pytest.raises(play.PlayError, match="CPython 3.12") as raised:
+    with pytest.raises(play.PlayError, match="CPython 3.13") as raised:
         play.validate_python_version(SimpleNamespace(major=3, minor=14, micro=0))
     assert raised.value.code == "python.version"
 
@@ -226,18 +226,18 @@ def test_failed_native_build_and_import_are_distinct():
     assert raised.value.code == "native.import"
 
 
-def test_native_import_reports_the_extension_abi_and_path():
-    def runner(argv, **_kwargs):
+def test_native_import_reports_the_extension_abi_and_path() -> None:
+    def runner(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
         assert argv[: len(play.UV_RUNTIME)] == play.UV_RUNTIME
         assert "import managym._managym as native" in argv[-1]
         return completed(
             argv,
-            stdout='{"abi": "cp312", "module": "/tmp/_managym.cpython-312.so"}\n',
+            stdout='{"abi": "cp313", "module": "/tmp/_managym.cpython-313.so"}\n',
         )
 
     assert play.native_import(runner=runner) == {
-        "abi": "cp312",
-        "module": "/tmp/_managym.cpython-312.so",
+        "abi": "cp313",
+        "module": "/tmp/_managym.cpython-313.so",
     }
 
 
@@ -360,7 +360,9 @@ class FakeProcess:
         return self.returncode
 
 
-def test_frontend_spawn_failure_cleans_up_backend(monkeypatch):
+def test_frontend_spawn_failure_cleans_up_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     backend = FakeProcess()
     cleaned = []
 
@@ -370,7 +372,7 @@ def test_frontend_spawn_failure_cleans_up_backend(monkeypatch):
         raise OSError("frontend unavailable")
 
     monkeypatch.setattr(play, "assert_port_available", lambda *_args: None)
-    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp312"})
+    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp313"})
     monkeypatch.setattr(play, "ensure_runtime_imports", lambda: None)
     monkeypatch.setattr(play, "ensure_frontend", lambda _npm: None)
     monkeypatch.setattr(play.subprocess, "Popen", popen)
@@ -390,18 +392,18 @@ def test_frontend_spawn_failure_cleans_up_backend(monkeypatch):
     "failure", [None, "native.build", "runtime.import", "ready.timeout"]
 )
 def test_frontend_warms_during_native_build_and_failures_reap_services(
-    monkeypatch, failure
-):
+    monkeypatch: pytest.MonkeyPatch, failure: str | None
+) -> None:
     frontend_warmed = Event()
     backend = FakeProcess()
     frontend = FakeProcess()
     cleaned = []
 
-    def ensure_native():
+    def ensure_native() -> dict[str, str]:
         assert frontend_warmed.wait(2), "frontend waited for native build"
         if failure == "native.build":
             raise play.PlayError(failure, "build failed")
-        return {"abi": "cp312"}
+        return {"abi": "cp313"}
 
     def runtime_imports():
         if failure == "runtime.import":
@@ -436,15 +438,17 @@ def test_frontend_warms_during_native_build_and_failures_reap_services(
         assert (("backend", backend) in cleaned) == (failure == "ready.timeout")
     else:
         native, processes = play.start_processes(8000, 5173, "npm")
-        assert native == {"abi": "cp312"}
+        assert native == {"abi": "cp313"}
         assert set(processes) == {("backend", backend), ("frontend", frontend)}
         assert not cleaned
 
 
-def test_backend_only_startup_does_not_prepare_frontend(monkeypatch):
+def test_backend_only_startup_does_not_prepare_frontend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     backend = FakeProcess()
     monkeypatch.setattr(play, "assert_port_available", lambda *_args: None)
-    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp312"})
+    monkeypatch.setattr(play, "ensure_native", lambda: {"abi": "cp313"})
     monkeypatch.setattr(play, "ensure_runtime_imports", lambda: None)
     monkeypatch.setattr(play.subprocess, "Popen", lambda *_args, **_kwargs: backend)
 
@@ -454,23 +458,23 @@ def test_backend_only_startup_does_not_prepare_frontend(monkeypatch):
     monkeypatch.setattr(play, "ensure_frontend", unexpected_frontend)
     monkeypatch.setattr(play, "wait_for_readiness", unexpected_frontend)
     assert play.start_processes(8000, 5173, None) == (
-        {"abi": "cp312"},
+        {"abi": "cp313"},
         [("backend", backend)],
     )
 
 
 def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     backend = FakeProcess()
     processes = [("backend", backend)]
     cleaned = []
     previous_handler = play.signal.getsignal(play.signal.SIGTERM)
 
-    def prepare(*_args):
+    def prepare(*_args: object) -> tuple[dict[str, str], list[tuple[str, FakeProcess]]]:
         handler = play.signal.getsignal(play.signal.SIGTERM)
         handler(play.signal.SIGTERM, None)
-        return {"abi": "cp312"}, processes
+        return {"abi": "cp313"}, processes
 
     def unexpected_readiness(*_args):
         pytest.fail("shutdown requested before readiness")
@@ -488,17 +492,17 @@ def test_shutdown_during_preparation_cleans_up_without_waiting_for_readiness(
 
 
 def test_pack_validation_waits_for_native_preparation_and_failure_reaps_services(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     backend = FakeProcess()
     processes = [("backend", backend)]
     prepared = False
     cleaned = []
 
-    def prepare(*_args):
+    def prepare(*_args: object) -> tuple[dict[str, str], list[tuple[str, FakeProcess]]]:
         nonlocal prepared
         prepared = True
-        return {"abi": "cp312"}, processes
+        return {"abi": "cp313"}, processes
 
     def validate_pack():
         assert prepared, "compiled pack validation ran before the native build"
@@ -537,16 +541,16 @@ def test_child_exit_and_readiness_timeout_are_distinct(monkeypatch):
     assert raised.value.code == "ready.timeout"
 
 
-def test_ready_record_pins_pack_and_local_urls():
+def test_ready_record_pins_pack_and_local_urls() -> None:
     payload = play.build_ready_payload(
         started_at=10.0,
         now=10.25,
         backend_port=8011,
         frontend_port=5183,
-        python_version="3.12.11",
+        python_version="3.13.11",
         node_version="22.12.0",
         npm_version="10.9.0",
-        native={"abi": "cp312", "module": "/tmp/managym.so"},
+        native={"abi": "cp313", "module": "/tmp/managym.so"},
         asset_pack={"id": "pack", "version": "1", "manifest_sha256": "abc"},
     )
     assert payload["schema_version"] == 1

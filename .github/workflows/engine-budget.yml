@@ -83,7 +83,7 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
           enable-cache: false
 
       # Build both before timing. A broken reference still leaves a candidate
@@ -105,7 +105,7 @@ jobs:
           if [ -z "$MEASURE" ] && [ "$REFERENCE_BUILD" = success ]; then
             reference=(--reference other/managym/target/release/examples)
           fi
-          uv run --no-project --python 3.12 python scripts/engine_budget.py sample \
+          uv run --no-project --python 3.13 python scripts/engine_budget.py sample \
             --candidate "$CANDIDATE/target/release/examples" "${reference[@]}"
 
       # measurement.json names what `record` adopts: the candidate commit,
@@ -143,7 +143,7 @@ jobs:
       # The script's defaults are the two run directories written above.
       - name: Compare the candidate with the reference
         if: env.MEASURE == ''
-        run: uv run --no-project --python 3.12 python scripts/engine_budget.py compare | tee -a "$GITHUB_STEP_SUMMARY"
+        run: uv run --no-project --python 3.13 python scripts/engine_budget.py compare | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the measurement
         if: always()

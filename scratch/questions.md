@@ -37,3 +37,11 @@ Bounded real CPU proofs (local receipts under `.runs/`, not experiment evidence)
 
 Both supervisors completed cleanup; no started process remains. Frozen experiment
 files, native rules, training semantics and existing evidence were unchanged.
+
+## Main sync — 2026-11-11
+
+Assumption (reversible): keep the pipeline-speed decisions and remaining work
+active in this checkout. Main's MTG-271 dependency and release notes remain at
+`9f69a96a1ca5f0c03a9df5af7217138390d415d9:scratch/questions.md`; their task scope
+does not select work here. Main's code, dependency and evidence changes merge
+unchanged.
