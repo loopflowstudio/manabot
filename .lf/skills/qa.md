@@ -67,7 +67,7 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
-- Library consumers: `scripts/release/prepare.py <staging>`, `uv build --sdist
+- Library consumers: `uv run --no-project python scripts/release/prepare.py <staging>`, `uv build --sdist
   --no-sources <staging>`, then `uv build --wheel --python 3.12|3.13 <sdist>`
   (reuse a `CARGO_TARGET_DIR`). In a fresh `/tmp` venv with PYTHONPATH unset,
   install the wheel with `--torch-backend cpu` at the minimum pins and run a
