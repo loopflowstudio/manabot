@@ -54,9 +54,19 @@ def write_outcomes(root: Path, rows: Sequence[SelfPlayOutcome]) -> str:
         f.write(body)
         f.flush()
         os.fsync(f.fileno())
+        # Staging files are owner-only; publish with the run's ordinary
+        # umask-derived mode so other readers and carriers see it like metrics.
+        os.fchmod(f.fileno(), 0o666 & ~_umask())
         f.close()
         Path(f.name).replace(target)
     return digest
+
+
+def _umask() -> int:
+    # Reading the umask requires setting it; restore immediately.
+    mask = os.umask(0o022)
+    os.umask(mask)
+    return mask
 
 
 def read_outcomes(storage: Storage, prefix: str, digest: str) -> list[SelfPlayOutcome]:

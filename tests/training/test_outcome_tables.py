@@ -1,7 +1,9 @@
 """Outcome evidence survives shipping and resume without matchup metric columns."""
 
+import os
 from pathlib import Path
 import shutil
+import stat
 
 from etude.run.block_file import block_key
 from etude.run.delivery import StorageDestination, ship
@@ -65,6 +67,16 @@ def test_outcome_tables_ship_and_read_from_relocated_run(tmp_path: Path) -> None
         "loss": 0.25,
         **metric_row({"self_play_outcomes": outcomes}),
     }
+
+
+def test_outcome_table_mode_follows_umask_like_metric_files(tmp_path: Path) -> None:
+    previous = os.umask(0o022)
+    try:
+        digest = write_outcomes(tmp_path, _outcomes())
+    finally:
+        os.umask(previous)
+    path = tmp_path / f"artifacts/self-play-outcomes/{digest}.json"
+    assert stat.S_IMODE(path.stat().st_mode) == 0o644
 
 
 def test_outcome_table_missing_corrupt_and_invalid_references_fail(
