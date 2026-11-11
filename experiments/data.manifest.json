@@ -83119,8 +83119,8 @@
    "bytes": 636
   },
   "experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/campaign.py": {
-   "sha256": "7309ee528ae4e6f40001065a2a017b79c135267336163ad2c42c2afb7bf13ff8",
-   "bytes": 47388
+   "sha256": "c5359b0186731e5d3e88e5f2f3a2ea8c86b60ad1c5528e5fa64f6cc576b28c8d",
+   "bytes": 47857
   },
   "experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/identity_job.py": {
    "sha256": "5ebee6b10581cfdbb680b8d749c8bbeca039aef776b853b6638c469737e3d5ac",

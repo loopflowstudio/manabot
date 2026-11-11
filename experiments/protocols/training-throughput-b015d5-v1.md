@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 evidence reviewed; C2 designed, awaiting design review)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 evidence reviewed; C2 design reviewed, driver built, awaiting freeze)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -2005,14 +2005,11 @@ by the job watchdogs and the independent teardown.
 ### Software decision
 
 **No manabot source change, no new freeze of worker source, no Etude upgrade and no
-change to shared controllers is needed.** Before execution, the evidence-directory
-driver (`c2/step-3-c1/campaign.py`, adapted from the retained C1 driver) is written
-and checked locally, without renting. It covers: the clone-based queue path with
-its clean-tree check, C2 cohort names and order, the supervisor and the bounded
-reads, the rental-reality check, independent teardown, and the numeric `updates.json`
-projection. The projection works around the reader's float-only `load_run`; no
-measured value is dropped and `updates-raw.json` is retained. The driver is not
-admitted worker source. The execution receipt records its hash.
+change to shared controllers is needed.** The only new code is the evidence-directory
+driver, adapted from the retained C1 driver. It is not admitted worker source; the
+execution receipt records its hash. Its `updates.json` is the numeric projection the
+reader's float-only `load_run` needs; no measured value is dropped and
+`updates-raw.json` is retained.
 
 **Driver status — 2026-11-11.** Written and checked locally; nothing was rented,
 queued or trained. Files are in `c2/step-3-c1/`: `campaign.py`, `identity_job.py`
