@@ -20,7 +20,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.recipes.baseline import baseline
+from manabot.recipes.baseline import baseline_test
 from manabot.training.learning.damped_policy import _targets
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
@@ -84,7 +84,7 @@ def main() -> None:
     args = _arguments()
     torch.manual_seed(args.seed)
     torch.set_num_threads(1)
-    regime = baseline(steps=2).regime
+    regime = baseline_test(steps=2).regime
     space = ObservationSpace(regime.observation)
     agent = ActorCritic(space, regime.agent)
     learning = DampedPolicyLearning(

@@ -15,6 +15,7 @@ from torch.nn import functional as F
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import (
     NumericalError,
     check_logs,
@@ -57,6 +58,7 @@ def damped_policy_loss(
     Ratios use the actual action likelihood at collection, even after earlier
     minibatches change the learner. The reverse KLs sum all legal actions.
     This is per-action reuse correction, not trajectory importance weighting.
+    MPS combines these terms on the host to retain float64 surrogate range.
     """
     valid = valid.bool()
     if logits.ndim != 2 or logits.shape != valid.shape:
@@ -85,8 +87,8 @@ def damped_policy_loss(
     surrogate = clipped_surrogate(ratio_logs, advantages, clip)
     return (
         surrogate
-        + collection_kl * reverse_kl(logs, behavior_logs, valid)
-        + tau * reverse_kl(logs, reference_logs, valid)
+        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
+        + tau * float64_operand(reverse_kl(logs, reference_logs, valid))
     )
 
 
@@ -371,7 +373,7 @@ def update_damped_iteration(
                         .square()
                         .mean()
                     )
-                loss = policy_loss + value_loss
+                loss = policy_loss + float64_operand(value_loss)
 
                 def _failure_tensors() -> dict[str, torch.Tensor]:
                     return {
@@ -427,7 +429,10 @@ def update_damped_iteration(
                         .squeeze(-1)
                     )
                     health["clip_fraction"] = float(
-                        ((ratio_logs.double().exp() - 1).abs() > learning.clip)
+                        (
+                            (float64_operand(ratio_logs).double().exp() - 1).abs()
+                            > learning.clip
+                        )
                         .float()
                         .mean()
                     )

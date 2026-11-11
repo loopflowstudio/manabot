@@ -90,10 +90,7 @@ def run_experiment(
         schedule.admit_regime(regime)
     if any(
         getattr(stage, "execution", None) is not None
-        and (
-            stage.execution.device != "cpu"
-            or stage.execution.threads > selected.cpu_threads - 1
-        )
+        and stage.execution.threads > selected.cpu_threads - 1
         for regime in regimes.values()
         for stage in regime.stages
     ):
