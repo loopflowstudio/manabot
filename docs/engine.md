@@ -16,7 +16,7 @@ cross-package contract is in the
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
-- [Belief hand targets](#belief-hand-targets)
+- [Hand snapshots](#hand-snapshots)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
 - [What we know](#what-we-know)
@@ -248,6 +248,9 @@ search/decision digest, fails.
 
 ### Choosing a Python API
 
+The [scalar/batch API audit](python-api-audit.md) records the capability
+comparison, source evidence and independent follow-ups.
+
 The native API is available through `from manabot import managym` in the
 installed `manabot` distribution. `import managym` is a compatibility alias.
 The Torch wrapper and the capture wrapper are separate Python classes:
@@ -270,10 +273,10 @@ behavior. Its observation tensors are reused; clone anything retained across
 steps. The Gymnasium scalar wrapper has its own `auto_reset` option.
 
 Native buffered stepping and `CapturedVector.step_into_buffers` accept an
-`active` boolean per slot. Inactive slots are not advanced or written; their
-buffered rewards and done flags may still describe an earlier call. Apply the
-same mask when collecting transitions. The Torch wrapper's `step` advances
-every slot and does not accept an active mask.
+`active` boolean per slot. Inactive games and observation rows stay unchanged;
+the Python buffer bindings clear their rewards and done flags to zero/false.
+Apply the same mask when collecting transitions. The Torch wrapper's `step`
+advances every slot and does not accept an active mask.
 
 Strict batch errors can occur after other slots have advanced. Do not retry
 the same batch assuming nothing changed. `CapturedVector` retains private
@@ -282,10 +285,10 @@ individual game failures for replacement. Buffer-integrity failures remain
 fatal, and capacity recovery requires its separate opt-in. See
 [game failures](training.md#game-failures).
 
-### Belief hand targets
+### Hand snapshots
 
-Read the actual hands immediately before choosing actions to pair supervision
-with the observations that produced those choices:
+Read authoritative hand contents for explicit native seats at the current
+batch boundary. This is an opt-in hidden-information API:
 
 ```python
 from manabot import managym
@@ -293,24 +296,22 @@ from manabot.env.match import Match
 
 games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
 observations = games.reset_all(Match().to_rust())
-actors = games.current_agent_indices()
-targets = games.hand_targets([1 - actor for actor in actors])
+snapshots = games.hand_snapshots([1, 0])
 
-for target in targets:
-    print(target.slot, target.player, sum(target.cards.values()))
-    # target.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
+for snapshot in snapshots:
+    print(snapshot.slot, snapshot.player, snapshot.cards)
+    # snapshot.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
 
-# Retain observations and targets together before advancing these games.
+# These snapshots remain unchanged when the games advance.
 ```
 
-This returns one `HandTarget` per batch slot, in slot order. The required
-`players: list[int]` argument contains exactly one native seat (`0` or `1`)
-per slot; `[1, 0]` reads seat 1 in slot 0 and seat 0 in slot 1. There is no
-implicit "opponent" default. In the example, `current_agent_indices()` names
-the chooser. Under player-control effects that can differ from whose turn or
-rules decision it is; choose the seat whose hand the belief model predicts.
+`hand_snapshots(players: list[int])` returns one `HandSnapshot` per slot, in slot
+order. Supply exactly one native seat (`0` or `1`) per slot: `[1, 0]` reads seat
+1 in slot 0 and seat 0 in slot 1. There is no implicit opponent. Seats are not
+remapped under player-control effects: `current_agent_indices()` names the
+chooser, which can differ from the turn or rules-decision owner.
 
-Each target contains:
+Each snapshot contains:
 
 | Field | Meaning |
 |---|---|
@@ -321,42 +322,34 @@ Each target contains:
 | `revision: int` | The current game's decision revision at the read |
 | `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
 
-Keep your collection/run identity with `(slot, game_id, revision, player)`
-when saving labels. Game IDs are local to this vector instance, not global
-replay identifiers; recreating the instance starts a new identity scope. Do not
-expect consecutive values or reproducibility across runs. A Torch reset that
-rebuilds its native vector also changes the generation.
-A seed alone cannot distinguish repeated resets to the same deal. Retain the
-match configuration and runtime identity separately when replay is needed.
+Save your collection/run identity with `(slot, game_id, revision, player)`.
+Game IDs are allocated process-wide, including across Torch native-vector
+rebuilds; they are not portable replay identifiers, consecutive counters or
+reproducible values. A seed alone cannot distinguish repeated resets to the same
+deal. For replay, retain the match configuration and runtime identity separately.
 
-`hand_targets` is an opt-in synchronous read of authoritative hand zones in
-one native batch call. It does not step, reset, consume randomness or construct
-per-player observations. Returned counts are detached snapshots: subsequent
-steps or edits to the returned dictionaries do not change the other. The same
-method and record contract are available on `CapturedVector` and the Torch
-`VectorEnv`; targets remain CPU Python records regardless of the tensor device.
-Ordinary reset/step calls do not collect them.
+The method synchronously reads authoritative hand zones in one native batch
+call, without stepping, resetting, consuming randomness or building viewer
+observations. Counts are detached snapshots; dictionary edits cannot affect the
+game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+method and CPU records. Ordinary reset/step calls do not collect snapshots.
 
-Read **before** the step for a decision's supervision. A read after a successful
-step describes the returned observations, including the new game in any slot
-whose done flag is true. The accessor does not retain the completed game's
-terminal hand. After partial stepping, inactive slots keep their existing game
-and state; `hand_targets` still reads every slot, so apply your collection mask
-to the returned list. Copy reused observation buffers alongside the targets.
+Read before stepping to capture the current hands; copy reused observation
+buffers too if retaining both. After a successful step, snapshots describe the
+returned game states, including replacement games in done slots; terminal hands
+are not retained. Partial stepping leaves inactive games unchanged, but snapshots
+still include every slot: apply the same active mask when selecting results.
 
-A wrong-length seat list or a seat outside `0..1` is an error, as is reading
-before reset. Correct the list or initialize the games and retry. After a
-failed step, discard that call's training rows and use the existing failure
-recovery/reset path before collecting further targets. A failure is never
-represented by an empty hand, and targets are never truncated to an
-observation capacity.
+A wrong-length seat list, a seat outside `0..1` or reading before reset raises
+an error. After a failed step, discard that call's results and recover or reset
+before reading further snapshots. An empty hand never denotes a failure;
+observation capacities never truncate snapshots.
 
-These are privileged training labels, including with closed decklists. Keep
-them in the supervision/loss path, separate from policy inputs, viewer-safe
-observations, shared decision captures and viewer trace exports. Public
-`known_hand` counts describe only revealed knowledge; they are not these
-targets. Reading labels does not change deck disclosure or what a player may
-observe, and requires no policy-input version or checkpoint migration.
+Snapshots contain hidden information, including with closed decklists. They
+remain separate from policy inputs, viewer-safe observations, shared decision
+captures and viewer trace exports. Public `known_hand` counts describe only
+revealed knowledge. Reading snapshots does not change deck disclosure or what a
+player may observe, and requires no policy-input version or checkpoint migration.
 
 ## Cards as programs
 

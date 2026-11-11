@@ -22,7 +22,7 @@ use crate::{
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
-        vector_env::{HandTarget, ObservationWriteError, VectorEnv},
+        vector_env::{HandSnapshot, ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -339,8 +339,8 @@ impl PyVectorEnv {
         self.inner.current_game_seeds()
     }
 
-    fn hand_targets(&self, players: Vec<usize>) -> PyResult<Vec<HandTarget>> {
-        self.inner.hand_targets(&players).map_err(map_agent_err)
+    fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
+        self.inner.hand_snapshots(&players).map_err(map_agent_err)
     }
 
     fn current_action_summaries(&self) -> Vec<(usize, String)> {
@@ -943,7 +943,7 @@ impl PyRolloutPool {
 
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<HandTarget>()?;
+    m.add_class::<HandSnapshot>()?;
     m.add_class::<PyVectorEnv>()?;
     m.add_class::<PyRolloutPool>()
 }

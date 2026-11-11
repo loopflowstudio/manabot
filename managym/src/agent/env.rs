@@ -23,12 +23,15 @@ use crate::{
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
-    state::{game_object::PlayerId, player::PlayerConfig},
+    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
 };
 use rand::Rng;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 // A reset's lifetime token is private and never enters replay or world hashes.
@@ -1065,24 +1068,21 @@ impl Env {
             .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
     }
 
-    /// Privileged supervision only: read the native seat's complete hand zone,
+    /// Privileged read of the native seat's complete hand zone,
     /// without constructing a viewer observation or applying disclosure rules.
-    pub(crate) fn hand_counts(
-        &self,
-        player: usize,
-    ) -> Result<std::collections::BTreeMap<String, usize>, AgentError> {
+    pub(crate) fn hand_counts(&self, player: usize) -> Result<BTreeMap<String, usize>, AgentError> {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("hand targets require reset".into()))?;
+            .ok_or_else(|| AgentError("hand snapshots require reset".into()))?;
         if player >= game.state.players.len() {
-            return Err(AgentError("hand target player must be 0 or 1".into()));
+            return Err(AgentError("hand snapshot player must be 0 or 1".into()));
         }
-        let mut counts = std::collections::BTreeMap::new();
+        let mut counts = BTreeMap::new();
         for card in game
             .state
             .zones
-            .zone_cards(crate::state::zone::ZoneType::Hand, PlayerId(player))
+            .zone_cards(ZoneType::Hand, PlayerId(player))
         {
             *counts
                 .entry(game.state.cards[*card].name.clone())
@@ -1589,6 +1589,34 @@ mod content_pack_contract_tests {
                 assert!(root_card.shares_definition_with(branch_card));
             }
         }
+    }
+
+    #[test]
+    fn hand_snapshots_keep_native_seats_when_another_player_chooses() {
+        use crate::{
+            flow::turn::PlayerControl,
+            state::{ability::PlayerControlDuration, game_object::PlayerId},
+        };
+        let mut env = Env::new(42, true, false, false);
+        env.reset(vec![
+            PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
+            PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
+        ])
+        .unwrap();
+        let before = [env.hand_counts(0).unwrap(), env.hand_counts(1).unwrap()];
+        let game = env.game.as_mut().unwrap();
+        game.state.turn.player_controls.push(PlayerControl {
+            player: PlayerId(0),
+            controller: PlayerId(1),
+            duration: PlayerControlDuration::NextTurn,
+            active: true,
+        });
+        game.scenario_refresh_priority().unwrap();
+        assert_eq!(env.current_agent_index(), Some(1));
+        assert_eq!(env.hand_counts(0).unwrap(), before[0]);
+        assert_eq!(env.hand_counts(1).unwrap(), before[1]);
+        assert_eq!(before[0], BTreeMap::from([("Mountain".into(), 7)]));
+        assert_eq!(before[1], BTreeMap::from([("Island".into(), 7)]));
     }
 
     #[test]

@@ -520,7 +520,7 @@ class ScalarCapture(_Capture):
 class CapturedVector(_Capture):
     """Instrument the strict native vector API without isolating or retrying rows.
 
-    On batch failure every active row retains its pre-call prefix. Native parallel
+    On batch failure every active row retains its pre-call prefix. Native batch
     execution may already have advanced other rows; their outcome is unknown,
     not a crashed/completed count. Replay tests each retained row independently.
     Other native APIs, including opt-in isolation, retain their existing owner.
@@ -570,9 +570,9 @@ class CapturedVector(_Capture):
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
         return getattr(self.native, name)
 
-    def hand_targets(self, players: list[int]) -> list[managym.HandTarget]:
+    def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
-        return self.native.hand_targets(players)
+        return self.native.hand_snapshots(players)
 
     def set_buffers(
         self, buffers: dict[str, Any], action_overflow: str = "error"
