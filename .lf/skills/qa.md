@@ -55,8 +55,22 @@ with screenshots or transcripts, and what you fixed. Finish with what works now,
 what you could not reach and why, and what is still wrong, worst first. Do not
 publish, land or choose the next Graph step from here.
 
-## Driving Manabot
+## This repository
 
+- Loopflow workflow changes (`.lf/graphs/`, `.lf/skills/`): the user surface is
+  `lf graph list`, `lf graph show <name>` (and `--json` for nodes and
+  `returns_to` edges), `lf help <skill>` for the text an agent receives, and
+  `uv run python scripts/check_loopflow_workflows.py`. Check every command,
+  flag and doc anchor a skill names against the real tool (`--help`, `rg`).
+  Launching the graph starts agents and possibly benchmarks; inspecting and
+  compiling it is sufficient for workflow-only QA. When the Task authorizes an
+  actual-workload measurement, run the guide's benchmark example as written into
+  an ignored `.runs/` path, then read the receipt fields the skills name. The
+  default CPU `bench_training_update.py` took about 13 minutes and 8 GB resident
+  in one 16-CPU Mac reading; budget for the workload before starting it. Keep its
+  process supervised through completion or cleanup. Measurements require the
+  Task's scope and resource authority; never create artificial contention to
+  test them (see `TESTING.md`).
 - Academy table: `./scripts/play --port <unused> --frontend-port <unused>`; wait
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.

@@ -20,9 +20,9 @@ rate; divided by one phase's `calls` it is only an upper bound for that phase,
 because every phase's launches are in the sum. The instrumentation slows the run,
 so its timings are not comparable with uninstrumented rows.
 
-Host-side phases are comparable across machines; model phases on CPU are not,
-because rented GPUs spend them on launch latency. On a shared machine, alternate
-the checkouts being compared and read minimum, not mean, durations.
+Compare phase and whole-update timings on the same machine with matched workloads.
+CPU model timings do not establish CUDA throughput. On a shared machine, alternate
+the checkouts being compared and retain the timing spread.
 
     uv run python scripts/bench_training_update.py --streams 256 --updates 3
 """
