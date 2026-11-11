@@ -8,3 +8,12 @@ Jack Heart, comment 3a7bd499 (2026-11-11): "i dont actually want this to do 2.1,
 - Preserve frozen experiment/setup scripts, historical receipts and notebook metadata. Fresh shared machine setup and active development/CI use 3.13. Deployed 3.12 images remain supported consumers.
 - uv 0.9.22: an unconditional core Torch requirement conflicts with the existing per-group indexes. Removing the non-Linux source let lock succeed but selected CUDA on macOS. Splitting identical public minimums into Linux/non-Linux markers resolves and installs correctly. Compression keeps this split in core; `llm` inherits it, verified by isolated locked syncs.
 - Inherited b015d5/C2 notes remain in 757bb6257ef07cf2536ad7f7ec24f0f7309628c6:scratch/questions.md; they do not authorize experiments here.
+
+## Main sync — 2026-11-11
+
+Assumption (reversible): keep MTG-271 direction as this branch's active context.
+Main's experiment closeout quotes and C1/C2 evidence notes remain at
+`53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`; they do not
+authorize experiments here. Main's manifest, protocol and throughput report
+merge unchanged. Version stays 0.2.0; GitHub Release completion and digest-checked
+retries remain in scope, with no tagging, publication or backfill.
