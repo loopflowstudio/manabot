@@ -218,3 +218,33 @@ The original shell has no barrier pause: if uniform starts before cancellation
 settles, preserve completed outcomes and explicit interrupted attempts. Resume
 only missing keys in the new segment; never replay a scored failure. A truncated
 or unsealed attempt blocks the transition rather than being called a failure.
+
+## Artifact reconciliation — 2026-11-11
+
+Hydrate the published 17.9 GB snapshot with four disjoint digest batches through
+`manabot.data.fetch_data`; this changes local transfer concurrency, not mini game
+workers or experimental bounds. A later collector may reuse a prior published
+seal only after verifying its inventory hash, identical ledger prefix and exact
+trace bytes on both mini paths. Newly completed attempts still receive the full
+start/outcome scan. Keep the previous inventory digest in the new receipt.
+
+Near the oracle barrier, shorten only the foreground observer's delay from
+30 seconds to one second (plus each read-only SSH probe). Stop and reap the old
+observer first. This reduces the original automatic uniform stage's cancellation
+window; it changes no game source, schedule, worker assignment or deadline.
+
+## Confirmed cancellation with missing callbacks — 2026-11-11
+
+The original Etude attempt stopped after all 1,500 oracle outcomes. Seven uniform
+attempts began; three wrote interruption footers and four ended at readable
+pending decisions. No uniform outcome or failure event exists. Worker 0's log
+shows repeated SIGTERM interrupting traceback formatting and gzip cleanup; the
+other missing-callback logs are partial. Preserve all seven raw streams unchanged.
+
+Treat the four missing callbacks as externally reconciled interruptions only
+through an explicit receipt binding the actual Etude cancellation, exact trace
+hashes and all seven worker logs. Reject corrupt/truncated data, failures,
+uncommitted outcomes, changed hashes, traces outside the attempt's time window
+and unused recovery entries. This uses the authorized missing-key continuation;
+it does not synthesize a footer/score or replay a scored game. Make the runner's
+stop handler idempotent to prevent the reproduced cleanup defect from recurring.

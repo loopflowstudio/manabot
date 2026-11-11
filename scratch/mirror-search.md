@@ -1,6 +1,39 @@
 # Mirror search continuation
 
-## Uniform transition in progress — 2026-11-11 11:06 UTC
+## Oracle barrier reached; recovery in progress — 2026-11-11 13:07 UTC
+
+All 1,500 oracle outcomes completed without a scored failure. Etude cancelled
+`mtg269-mirror-v2` / `3a2b62144b9a` at 13:07:38 UTC, and no original game worker
+remains. Both barrier observers are stopped and reaped. The native continuation
+has NOT launched. The first predecessor seal failed closed on four missing
+terminal callbacks among seven original uniform attempts; three have explicit
+interruption footers. All seven gzip/JSON streams are readable, with zero
+uniform outcomes or failure events. Raw bytes and all original logs are retained
+under `experiments/data/search-mirror-v2/transition/recovery/`.
+
+Worker 0's log confirms repeated SIGTERM interrupted its own interruption
+formatting/cleanup. The current source makes stop handling idempotent and admits
+only an explicit, exact-hash Etude cancellation recovery for readable pending
+uniform traces. Truncated data and unknown/scored outcomes remain blocked.
+The original files are never rewritten. All 62 focused and required recovery
+checks pass (`scratch/mirror-transition-20261111/recovery-tests.log`).
+
+The final original 1,500-outcome snapshot is published remotely. Its manifest is
+`scratch/mirror-transition-20261111/remote-published-manifest-final.json`; use the
+prepared `merge_snapshot.py`, then existing manabot.data fetch, to add only new
+bytes while preserving prior prefixes. The 1,469-outcome local snapshot passed
+its full trace audit and all 1,492 artifact hashes. Preserve that dated audit's
+scope; the final 31 outcomes have separate sealed evidence.
+
+Next: commit the recovery source/protocol; stage its 351 bound files without
+replacing the mini's mutable data catalog, regenerate source-admission, and run
+the control-flow checks on the mini. Keep native 8addfe10 and all policy/search/
+encoder bytes unchanged. Then run the sealer with the explicit recovery receipt,
+recheck all source/native/checkpoint identities and Etude capacity, and use
+`launch_uniform.py` once. Deadline 1794852989, seven one-thread workers, zero
+rentals, 3,000 fixed slots. No game allocation is currently active for this study.
+
+## Uniform transition in progress — 2026-11-11 12:25 UTC
 
 The current direction is the authorized oracle-barrier transition, superseding
 the earlier measurement-only snapshots below. Runner/continuation preparation is
@@ -8,8 +41,8 @@ committed at `17b2ed956b384aecef940e6b8a722a527a8ca25d`; the publication-catalog
 binding correction is `67cc9429a9cd442254c763c049792943efd5b3e7`, with all 351
 executable source/protocol/input bindings verified on the mini. The original mini source,
 Etude run `mtg269-mirror-v2` / attempt `3a2b62144b9a`, checkpoint, frozen binary,
-3,000 slots and deadline 1794852989 remain intact. At 11:05 UTC: 1,471 oracle
-outcomes, no uniform outcomes or scored failures; two original workers remain.
+3,000 slots and deadline 1794852989 remain intact. At 12:25 UTC: 1,492 oracle
+outcomes, no uniform outcomes or scored failures; original worker 3 remains.
 
 The separately built mini binary is `8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`,
 from native implementation `69c76f87…`. It passes all six retained checkpoint
@@ -31,9 +64,11 @@ runner/report/data checks: 27 pass (including catalog isolation). The required r
 their own small fixtures, not MTG-183 or the study schedule.
 
 The active execution step has a foreground observer
-`scratch/mirror-transition-20261111/oracle_barrier.py`: it checks original source
+`scratch/mirror-transition-20261111/oracle_barrier_fast.py`: it checks original source
 bindings and all 1,500 oracle keys, then asks Etude to cancel the old segment.
-Do not duplicate it or launch a new campaign while that step is running. After
+The original 30-second observer was stopped and reaped at 1,497 oracle outcomes;
+the current observer waits one second between probes. Do not duplicate it or
+launch a new campaign while that step is running. After
 Etude settles, `experiments.mirror_segment` seals all original outcomes and
 explicit uniform interruptions; the prepared `uniform_job.py` starts only missing
 uniform keys under a new Etude identity, with seven one-thread workers, compact
@@ -41,10 +76,18 @@ receipts, the admitted native binary and the same absolute deadline. All prior
 scored failures remain completed. Shared old-shard locks exclude original-job
 restarts. Unsealed/truncated traces stop admission and require recovery.
 
-A separate read-only collector is publishing a 1,469-outcome, 17.9 GB sealed
-snapshot from the mini. It uses the existing artifact owner; credentials exist
-only in the SSH child process, never source or evidence. Its new manifest must
-be merged by the selected snapshot paths, not replace newer local entries.
+The read-only collector published a 1,469-outcome, 17.9 GB sealed snapshot.
+All 1,492 snapshot artifacts are hydrated locally and match published hashes;
+all 100 earlier files are unchanged or exact prefixes. The full trace audit passed: 292,767 Commands and 138,025 search receipts
+reconcile; maximum |Q| is 1.15808, with no scored failures. Its receipt is
+`reconciliation/campaign-validation-20261111.json`; do not repeat this completed
+audit for unchanged bytes.
+The prepared `launch_uniform.py` rechecks the stopped original attempt, absence
+of another mini run, source/native admission and zero-cost Etude quote before
+launching the single named continuation. It has not run yet.
+The collector uses the existing artifact owner; credentials exist only in the
+SSH child process, never source or evidence. Later manifests must be merged by
+selected snapshot paths, preserving newer local entries.
 The new v3 identity excludes the mutable publication catalog, while preserving
 actual checkpoint/world inputs and every executable source/protocol hash. This
 avoids coupling uploads to live execution. The original v2 identity remains

@@ -623,8 +623,15 @@ def bind_extension(
 @contextmanager
 def campaign_deadline(deadline: float) -> Iterator[None]:
     """Bound this foreground worker even during a slow search; Etude owns the job."""
+    stopping = False
 
     def stop(signum: int, frame: object) -> None:
+        nonlocal stopping
+        # Both the job process group and its launcher can forward termination.
+        # A repeated signal must not interrupt writing the first stop's receipt.
+        if stopping:
+            return
+        stopping = True
         raise CampaignInterrupted(f"campaign stop signal {signum}")
 
     previous = {s: signal.signal(s, stop) for s in (signal.SIGALRM, signal.SIGTERM)}

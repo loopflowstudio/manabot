@@ -2,6 +2,7 @@
 
 from collections import Counter
 from dataclasses import asdict, replace
+from datetime import UTC, datetime
 import fcntl
 import gzip
 import hashlib
@@ -262,6 +263,116 @@ def test_continuation_never_replays_a_predecessor_failure(
     teacher.assert_not_called()
 
 
+def _pending_recovery_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, str, Path]:
+    root, status, key = _predecessor_fixture(tmp_path, monkeypatch)
+    trace = root / "attempts" / f"{hashlib.sha256(key.encode()).hexdigest()}.jsonl.gz"
+    with gzip.open(trace, "rt") as stream:
+        start = json.loads(next(stream))
+    now = time.time()
+    start["started"] = now
+    with gzip.open(trace, "wt") as stream:
+        stream.write(json.dumps(start) + "\n")
+        stream.write(
+            json.dumps(
+                {
+                    "event": "pending",
+                    "step": 0,
+                    "frame": {"revision": 0},
+                    "observation": {"revision": 0},
+                }
+            )
+            + "\n"
+        )
+    stopped = json.loads(status.read_text())
+    stopped["attempts"][0].update(
+        outcome="cancelled",
+        started_at=datetime.fromtimestamp(now - 10, UTC).isoformat(),
+        finished_at=datetime.fromtimestamp(now + 10, UTC).isoformat(),
+    )
+    status.write_text(json.dumps(stopped))
+    (root / "logs").mkdir()
+    logs: dict[str, str] = {}
+    for worker in range(7):
+        name = f"logs/uniform-{worker}.log"
+        (root / name).write_text("retained cancellation diagnostics\n")
+        logs[name] = segment.file_sha256(root / name)
+    recovery = segment.InterruptionRecovery(
+        etude_receipt_sha256=segment.file_sha256(status),
+        pending_attempts={key: segment.file_sha256(trace)},
+        worker_logs=logs,
+    )
+    path = tmp_path / "recovery.json"
+    path.write_text(recovery.model_dump_json())
+    return root, status, key, path
+
+
+def test_pending_callback_needs_exact_external_cancellation_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, status, key, recovery = _pending_recovery_fixture(tmp_path, monkeypatch)
+    trace = root / "attempts" / f"{hashlib.sha256(key.encode()).hexdigest()}.jsonl.gz"
+    original = trace.read_bytes()
+    destination = tmp_path / "predecessor.json"
+    with pytest.raises(ValueError, match="unreconciled attempt"):
+        segment.seal_predecessor(root, status, destination)
+    prior = segment.seal_predecessor(
+        root, status, destination, interruption_recovery=recovery
+    )
+    assert prior.schema_name == "mirror-predecessor/v2"
+    assert len(prior.completed_keys) == 2
+    assert key not in segment.read_predecessor(destination, prior.deadline)
+    assert trace.read_bytes() == original
+    (root / "logs/uniform-0.log").write_text("changed diagnostics")
+    with pytest.raises(ValueError, match="log bytes changed"):
+        segment.read_predecessor(destination, prior.deadline)
+
+
+@pytest.mark.parametrize(
+    "invalid", ["hash", "status", "window", "failure", "truncated", "unused"]
+)
+def test_cancellation_recovery_rejects_missing_or_conflicting_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
+) -> None:
+    root, status, key, recovery_path = _pending_recovery_fixture(tmp_path, monkeypatch)
+    trace = root / "attempts" / f"{hashlib.sha256(key.encode()).hexdigest()}.jsonl.gz"
+    recovery = segment.InterruptionRecovery.model_validate_json(
+        recovery_path.read_text()
+    )
+    if invalid == "hash":
+        recovery.pending_attempts[key] = "0" * 64
+    elif invalid == "status":
+        status.write_text(status.read_text().replace('"cancelled"', '"succeeded"'))
+        recovery = recovery.model_copy(
+            update={"etude_receipt_sha256": segment.file_sha256(status)}
+        )
+    elif invalid in ("window", "failure"):
+        with gzip.open(trace, "rt") as stream:
+            events = [json.loads(line) for line in stream]
+        if invalid == "window":
+            events[0]["started"] = 0
+        else:
+            events.insert(1, {"event": "failure", "error": "retained error"})
+        with gzip.open(trace, "wt") as stream:
+            stream.write("".join(json.dumps(event) + "\n" for event in events))
+        recovery.pending_attempts[key] = segment.file_sha256(trace)
+    elif invalid == "truncated":
+        trace.write_bytes(trace.read_bytes()[:-5])
+        recovery.pending_attempts[key] = segment.file_sha256(trace)
+    else:
+        recovery.pending_attempts[_row().key] = "0" * 64
+    recovery_path.write_text(recovery.model_dump_json())
+    with pytest.raises((ValueError, EOFError)):
+        segment.seal_predecessor(
+            root,
+            status,
+            tmp_path / "rejected.json",
+            interruption_recovery=recovery_path,
+        )
+    assert not (tmp_path / "rejected.json").exists()
+
+
 def test_uniform_samples_physical_copies_and_preserves_known_cards() -> None:
     # One known A, then one unknown copy out of one A and eight B: P(B)=8/9.
     sampler = PhysicalHandSampler()
@@ -478,6 +589,51 @@ def test_interruption_retains_private_attempt_without_a_game_score(
         events = [json.loads(line) for line in stream]
     assert [event["event"] for event in events] == ["start", "interrupted"]
     assert "CampaignInterrupted: deadline" in events[-1]["error"]
+
+
+@pytest.mark.parametrize("repeated", [signal.SIGTERM, signal.SIGALRM])
+def test_repeated_stop_does_not_interrupt_terminal_callback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, repeated: signal.Signals
+) -> None:
+    game, arm = mirror.planned_units(mirror.V2_ARMS)[0]
+    config = SimpleNamespace(model_dump=lambda **kwargs: {})
+    teacher = SimpleNamespace(
+        runtime_sha256="native",
+        source_sha256="source",
+        config=config,
+        agent=SimpleNamespace(world_binding={"world": "w13"}),
+        space=SimpleNamespace(encoder=SimpleNamespace(config=config)),
+    )
+    format_error = mirror.traceback.format_exc
+
+    def interrupted_game(*args: object, **kwargs: object) -> None:
+        signal.raise_signal(signal.SIGTERM)
+        raise AssertionError("first stop signal was ignored")
+
+    def interrupted_cleanup() -> str:
+        # The retained mini log shows a second SIGTERM inside format_exc().
+        signal.raise_signal(repeated)
+        return format_error()
+
+    monkeypatch.setattr(mirror, "play_game", interrupted_game)
+    monkeypatch.setattr(mirror.traceback, "format_exc", interrupted_cleanup)
+    with pytest.raises(mirror.CampaignInterrupted):
+        with mirror.campaign_deadline(time.time() + 60):
+            mirror.retained_game(
+                arm,
+                game,
+                teacher,
+                Path("unused.pt"),
+                "test",
+                tmp_path,
+                time.time() + 60,
+            )
+    (path,) = (tmp_path / "attempts").glob("*.jsonl.gz")
+    with gzip.open(path, "rt") as stream:
+        events = [json.loads(line) for line in stream]
+    assert [event["event"] for event in events] == ["start", "interrupted"]
+    assert "campaign stop signal 15" in events[-1]["error"]
+    assert not list(tmp_path.glob("games-*.jsonl"))
 
 
 def test_compact_measurement_defaults_and_invalid_options() -> None:

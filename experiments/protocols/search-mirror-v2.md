@@ -1,5 +1,48 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Oracle barrier and cancellation recovery — 2026-11-11
+
+The original segment completed all **1,500 oracle outcomes**, with no scored
+failures. The barrier was observed at 13:07:35 UTC after rechecking all 349
+original source/protocol bindings. Etude records attempt `3a2b62144b9a` cancelled
+at 13:07:38 UTC; no original game worker remains. Its automatic uniform stage
+started seven attempts and committed no outcomes before cancellation.
+
+Three attempts contain explicit interruption footers. Four readable, CRC-valid
+gzip streams end at a retained pending decision without a terminal callback.
+The first sealing attempt rejected those four streams. Worker 0's original log
+shows repeated SIGTERM interrupting `traceback.format_exc()` and gzip cleanup;
+the other missing-callback logs are partial and do not establish their exact
+exception. These are unscored attempts, not ordinary failed games. Original
+source, streams, pending states, seeds, Commands and logs remain unchanged.
+
+The runner now handles repeated stop signals idempotently so the first stop can
+write its interruption receipt. Recovery of the four existing missing callbacks
+is separate from that fix: `mirror-interruption-recovery/v1` binds their exact
+trace hashes, all seven worker-log hashes and Etude's confirmed cancellation
+receipt. Only readable uniform traces ending at a pending decision, started
+within that cancelled attempt, with no failure/outcome event, may use this
+explicit recovery. Wrong receipts, changed bytes, unused recovery entries,
+uncommitted outcomes and truncated/unreadable streams still block admission.
+No synthetic footer or score is written into the original evidence.
+
+The resulting predecessor uses v2 to distinguish external cancellation recovery
+from in-stream interruption callbacks. It retains all seven interrupted attempts
+and every completed key. The continuation may execute only missing uniform keys;
+scored failures remain completed. All 62 runner/report/data/recovery checks pass,
+including real repeated signals during interruption formatting and negative
+recovery cases. This control-flow repair changes no checkpoint, native encoding,
+search estimator, world, action contract, worker ceiling or absolute deadline.
+
+The final original snapshot contains all 1,500 sealed oracle outcomes. The
+independent algebra/Command audit covers the earlier 1,469-outcome snapshot:
+292,767 Commands, 138,025 search receipts, finite values and maximum |Q| 1.15808.
+The remaining 31 outcomes retain their source-generated finite-value checks and
+sealed traces; they are not silently added to that dated offline audit's scope.
+Recovery evidence is in `search-mirror-v2/transition/recovery/`, with the official
+stop receipt alongside it. Uniform continuation remains pending the recovered
+seal, renewed source admission and Etude allocation.
+
 ## Authorized uniform transition — 2026-11-11 preparation
 
 Jack Heart chose “Switch at oracle barrier (Recommended)”, then directed:
