@@ -470,7 +470,6 @@ def play_games(
         obs_space,
         Reward(RewardConfig()),
         seed=seed,
-        auto_reset=False,
         enable_profiler=False,
         enable_behavior_tracking=False,
     )

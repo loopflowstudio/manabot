@@ -34,3 +34,10 @@ from adding time outside that envelope. Arms launch separately, not as a cohort.
 Compression assumption: preserve published preparation/analysis snapshots as
 evidence; simplify only maintained scripts and verify equivalent calculations
 and identical job declarations without regenerating those snapshots.
+
+Sync resolution (2026-11-11): retain MTG-281's measurement decisions as this
+branch's active context. Main's unrelated MTG-272 hand-snapshot direction and
+validation remain at
+`37ffe26657f394b10f69256555ff45b3c58e82e4:scratch/questions.md`.
+Main's implementation and conventions merge unchanged; the pinned experiment
+sources and published preparation remain frozen.

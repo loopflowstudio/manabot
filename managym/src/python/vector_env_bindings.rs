@@ -16,6 +16,7 @@ use pyo3::{
 use crate::{
     agent::{
         action::AgentError,
+        env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
@@ -337,6 +338,14 @@ impl PyVectorEnv {
 
     fn current_game_seeds(&self) -> Vec<u64> {
         self.inner.current_game_seeds()
+    }
+
+    fn current_game_generations(&self) -> Vec<u64> {
+        self.inner.current_game_generations()
+    }
+
+    fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
+        self.inner.hand_snapshots(&players).map_err(map_agent_err)
     }
 
     fn current_action_summaries(&self) -> Vec<(usize, String)> {
@@ -947,7 +956,6 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
     match value {
         "none" => Ok(OpponentPolicy::None),
-        "passive" => Ok(OpponentPolicy::Passive),
         "random" => Ok(OpponentPolicy::Random),
         _ => Err(PyValueError::new_err(format!(
             "unsupported opponent_policy: {value}"

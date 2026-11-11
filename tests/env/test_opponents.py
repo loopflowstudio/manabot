@@ -1,49 +1,64 @@
-"""Tests for fixed opponent policies."""
+"""Supported opponent policies and rejection at public API boundaries."""
 
 import numpy as np
+import pytest
 
-from manabot.env.opponents import (
-    PassivePolicy,
-    RandomPolicy,
-    build_opponent_policy,
-)
-
-
-def make_obs(
-    player_index: int,
-    actions_valid: list[float] | None = None,
-    pass_priority_slots: list[int] | None = None,
-):
-    actions_valid = actions_valid or [1.0, 1.0, 0.0, 0.0]
-    pass_priority_slots = pass_priority_slots or []
-
-    actions = np.zeros((len(actions_valid), 6), dtype=np.float32)
-    for slot in pass_priority_slots:
-        actions[slot, 2] = 1.0  # PRIORITY_PASS_PRIORITY
-
-    agent_player = np.zeros((1, 26), dtype=np.float32)
-    agent_player[0, 0] = 1.0
-    return {
-        "agent_player": agent_player,
-        "actions": actions,
-        "actions_valid": np.array(actions_valid, dtype=np.float32),
-        "_player_index": player_index,
-    }
+from manabot.env.failures import CapturedVector, FailureEvidence, GameInputs
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
+from manabot.env.opponents import RandomPolicy, build_opponent_policy
+from manabot.env.replay import replay_failure_inputs
+from manabot.env.vector_env import VectorEnv
+from manabot.infra.config import RewardConfig
+import managym
 
 
-def test_passive_policy_picks_pass_priority():
-    obs = make_obs(player_index=1, actions_valid=[1, 1, 0, 0], pass_priority_slots=[1])
-    action = PassivePolicy()(obs)
-    assert action == 1
-
-
-def test_random_policy_picks_only_valid_actions():
-    obs = make_obs(player_index=1, actions_valid=[1, 0, 1, 0], pass_priority_slots=[])
+def test_random_policy_picks_only_valid_actions() -> None:
+    obs = {"actions_valid": np.array([1, 0, 1, 0], dtype=np.float32)}
     policy = RandomPolicy()
     chosen = {policy(obs) for _ in range(100)}
     assert chosen.issubset({0, 2})
     assert chosen
 
 
-def test_build_opponent_policy_none():
+def test_build_opponent_policy_none() -> None:
     assert build_opponent_policy("none") is None
+
+
+@pytest.mark.parametrize("name", ["passive", "unknown"])
+@pytest.mark.parametrize("api", ["factory", "native", "captured", "torch"])
+def test_unsupported_opponent_policy(name: str, api: str) -> None:
+    with pytest.raises(ValueError, match=f"[Uu]nsupported opponent_policy:.*{name}"):
+        if api == "factory":
+            build_opponent_policy(name)
+        elif api == "native":
+            managym.VectorEnv(num_envs=1, opponent_policy=name)
+        elif api == "captured":
+            CapturedVector(num_envs=1, opponent_policy=name)
+        else:
+            VectorEnv(
+                1,
+                Match(),
+                ObservationSpace(),
+                Reward(RewardConfig()),
+                "cpu",
+                opponent_policy=name,
+            )
+
+
+def test_retained_passive_evidence_is_readable_but_cannot_replay() -> None:
+    evidence = FailureEvidence(
+        mode="vector",
+        operation="reset",
+        games=[GameInputs(seed=42, players=[])],
+        opponent_policy="passive",
+        identities={},
+        context={},
+        seconds=0,
+    )
+    retained = evidence.model_dump_json(by_alias=True)
+    restored = FailureEvidence.model_validate_json(retained)
+    assert restored.opponent_policy == "passive"
+    with pytest.raises(ValueError, match="unsupported opponent_policy: passive"):
+        replay_failure_inputs(restored)
+    assert restored.model_dump_json(by_alias=True) == retained
