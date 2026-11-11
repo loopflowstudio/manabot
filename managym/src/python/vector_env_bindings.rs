@@ -16,13 +16,14 @@ use pyo3::{
 use crate::{
     agent::{
         action::AgentError,
+        env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
             encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
-        vector_env::{HandSnapshot, ObservationWriteError, VectorEnv},
+        vector_env::{ObservationWriteError, VectorEnv},
     },
     infra::profiler::InfoDict,
     python::{
@@ -856,16 +857,6 @@ impl PyRolloutPool {
     }
 }
 
-#[pymethods]
-impl HandSnapshot {
-    fn __repr__(&self) -> String {
-        format!(
-            "HandSnapshot(slot={}, player={}, game_id={}, seed={}, revision={}, cards={:?})",
-            self.slot, self.player, self.game_id, self.seed, self.revision, self.cards
-        )
-    }
-}
-
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyRolloutPool {
@@ -957,7 +948,6 @@ impl PyRolloutPool {
 
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<HandSnapshot>()?;
     m.add_class::<PyVectorEnv>()?;
     m.add_class::<PyRolloutPool>()
 }

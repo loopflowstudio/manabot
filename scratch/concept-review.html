@@ -41,7 +41,7 @@ Built from <code>scratch/questions.md</code>, <code>docs/{engine,python-api-audi
 <table aria-label="Actions, concepts and APIs before and after">
 <thead><tr><th>Action</th><th>Before</th><th>Implemented: concept → API</th></tr></thead>
 <tbody>
-<tr><td>Read actual hands</td><td>Scalar access only; the initial batch name implied a consumer.</td><td>Detached native-seat contents → <code>HandSnapshot</code>, <code>hand_snapshots([1, 0])</code>.</td></tr>
+<tr><td>Read actual hands</td><td>Scalar access only; the initial batch name implied a consumer.</td><td>Detached native-seat contents → <code>HandSnapshot</code>, scalar <code>hand_snapshot(1)</code> and batched <code>hand_snapshots([1, 0])</code>.</td></tr>
 <tr><td>Keep replay inputs aligned</td><td>Readable mutations bypassed capture; seed comparison missed repeated-seed resets.</td><td>Owned buffered mutations + game lifetime → <code>*_into_buffers</code>, <code>current_game_generations()</code>.</td></tr>
 <tr><td>Finish or restart a game</td><td>Gym auto-reset hid done flags; Torch reseeding at the current base advanced succession.</td><td>Gym terminal state → explicit <code>reset()</code>. Torch repeatable deal → <code>reset(seed=s)</code>; no seed continues succession.</td></tr>
 <tr><td>Choose who acts</td><td>None, Random or Passive built-in opponent.</td><td>Caller-driven decisions or native random opponent → <code>opponent_policy="none" | "random"</code>; Passive rejects.</td></tr>
@@ -51,14 +51,14 @@ Built from <code>scratch/questions.md</code>, <code>docs/{engine,python-api-audi
 <strong>The remaining distinction to learn: vector done belongs to the completed game; its returned observation belongs to the replacement.</strong>
 <pre><code>read hands A → step finishes A, resets B → read hands B
                reward/done: A            observation: B</code></pre>
-<p>Each read keeps its own <code>(slot, game_id, revision, player)</code>. Save the run identity too. Terminal-hand retention is outside this change, not a proposed feature.</p>
+<p>Each snapshot keeps <code>(game_id, revision, player)</code>; batch position comes from the list index. Save the run identity too. Scalar terminal hands remain readable until reset; vector terminal-hand retention is outside this change.</p>
 </div>
 <h2>One interaction, through the layers</h2>
 <pre><code># games is an initialized two-slot native or wrapped VectorEnv.
 before = games.hand_snapshots([1, 0])
 hand = before[0]  # native seat 1 in slot 0, even under player control
 counts = hand.cards  # complete name counts; {} is a successful empty hand
-boundary = (hand.slot, hand.game_id, hand.revision, hand.player)
+boundary = (0, hand.game_id, hand.revision, hand.player)  # list index is the slot
 # Retain copies of reused observation buffers alongside these records.</code></pre>
 <p>Native zones own the contents. Bindings, CapturedVector and Torch return the same CPU record. Clients own interpretation and storage. Hidden hands stay outside viewer observations, policy inputs and shared captures. Generations are process-local bookkeeping, never portable replay identity; no persisted schema or frozen input layout changes.</p>
 <h2>Failure, recovery and counterexamples</h2>
@@ -69,7 +69,7 @@ boundary = (hand.slot, hand.game_id, hand.revision, hand.player)
 <ol>
 <li>Does the engine name its data independently of its consumer? <strong>Yes:</strong> HandSnapshot and its guide describe authoritative contents at the read.</li>
 <li>Is another design iteration required? <strong>No:</strong> reset ownership, capture mutation boundaries, generations and opponent scope follow the recorded direction. No new API is proposed.</li>
-<li>What must happen before delivery? <strong>Gate:</strong> resolve or document the two retained replay mismatches and missing conditional-search artifact; complete required debug Rust and affected Python checks. Prior focused proofs remain recorded in the working notes; this review ran no runtime tests.</li>
+<li>What must happen before delivery? <strong>Gate:</strong> refresh affected suites after scalar unification. Earlier QA reproduced all three retained replay failures on base, restored the conditional-search artifact and passed its tests; publication subsequently passed the full debug Rust suite. The working notes distinguish these earlier results from the latest focused proofs.</li>
 </ol>
 <small>Outcome for loop-or-next: advance. Concept review does not establish gate success. Only the working notes and this page changed.</small>
 </main>

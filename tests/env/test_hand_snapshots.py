@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from manabot import managym
+from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -48,9 +49,8 @@ def _hand(env: managym.Env, player: int) -> dict[str, int]:
     )
 
 
-def _identity(snapshot: managym.HandSnapshot) -> tuple[int, int, int, int, int]:
+def _identity(snapshot: managym.HandSnapshot) -> tuple[int, int, int, int]:
     return (
-        snapshot.slot,
         snapshot.player,
         snapshot.game_id,
         snapshot.seed,
@@ -76,12 +76,14 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
         zip(snapshots, scalars, results, strict=True)
     ):
         assert isinstance(snapshot, managym.HandSnapshot)
-        assert (snapshot.slot, snapshot.player, snapshot.seed) == (
-            slot,
-            1 - slot,
-            42 + slot,
-        )
-        assert snapshot.cards == _hand(scalar, snapshot.player)
+        assert (snapshot.player, snapshot.seed) == (1 - slot, 42 + slot)
+        scalar_snapshot = scalar.hand_snapshot(snapshot.player)
+        assert isinstance(scalar_snapshot, managym.HandSnapshot)
+        assert not hasattr(snapshot, "slot")
+        assert snapshot.cards == scalar_snapshot.cards == _hand(scalar, snapshot.player)
+        assert snapshot.revision == scalar_snapshot.revision
+        assert snapshot.seed == scalar_snapshot.seed
+        assert snapshot.game_id != scalar_snapshot.game_id
         assert sum(snapshot.cards.values()) == 7
         assert max(snapshot.cards.values()) > 1
         assert not any(
@@ -102,7 +104,9 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
         for scalar in scalars:
             scalar.step(0)
         for slot, snapshot in enumerate(vector.hand_snapshots([0, 1])):
-            assert snapshot.cards == _hand(scalars[slot], slot)
+            scalar_snapshot = scalars[slot].hand_snapshot(slot)
+            assert snapshot.cards == scalar_snapshot.cards
+            assert snapshot.revision == scalar_snapshot.revision
             assert snapshot.game_id == snapshots[slot].game_id
     assert [snapshot.cards for snapshot in snapshots] == old
 
@@ -185,7 +189,7 @@ def test_hand_snapshots_after_done_describe_the_returned_replacement() -> None:
     assert not obs.game_over
     scalar = managym.Env(seed=after.seed)
     scalar.reset(players)
-    assert after.cards == _hand(scalar, 1)
+    assert after.cards == scalar.hand_snapshot(1).cards == _hand(scalar, 1)
 
 
 def test_torch_hand_snapshots_track_native_rebuilds() -> None:
@@ -200,7 +204,7 @@ def test_torch_hand_snapshots_track_native_rebuilds() -> None:
         first = vector.hand_snapshots([1, 0])
         assert first[0].cards == {"Island": 7}
         assert repr(first[0]) == (
-            f"HandSnapshot(slot=0, player=1, game_id={first[0].game_id}, "
+            f"HandSnapshot(player=1, game_id={first[0].game_id}, "
             f'seed=42, revision={first[0].revision}, cards={{"Island": 7}})'
         )
         for key in observations:
@@ -225,6 +229,8 @@ def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> 
     ]
     vector = managym.VectorEnv(1, seed=42)
     [(obs, _)] = vector.reset_all(players)
+    scalar = managym.Env(seed=42)
+    scalar.reset(players)
     action = next(
         index
         for index, choice in enumerate(obs.action_space.actions)
@@ -232,5 +238,43 @@ def test_hand_snapshots_return_an_empty_hand_after_its_last_card_is_played() -> 
     )
     [(obs, _, terminated, truncated, _)] = vector.step([action])
     assert not terminated and not truncated
-    assert vector.hand_snapshots([0])[0].cards == {}
-    assert vector.hand_snapshots([1])[0].cards == {"Island": 8}
+    scalar.step(action)
+    assert vector.hand_snapshots([0])[0].cards == scalar.hand_snapshot(0).cards == {}
+    assert (
+        vector.hand_snapshots([1])[0].cards
+        == scalar.hand_snapshot(1).cards
+        == {"Island": 8}
+    )
+
+
+def test_scalar_hand_snapshot_errors_reset_identity_and_terminal_hand() -> None:
+    match = Match(MatchConfig(hero_deck={"Mountain": 8}, villain_deck={"Island": 8}))
+    env = Env(match, ObservationSpace(), Reward(RewardConfig()), seed=42)
+    try:
+        with pytest.raises(managym.AgentError, match="reset"):
+            env.hand_snapshot(0)
+        env.reset()
+        first = env.hand_snapshot(0)
+        assert first.cards == {"Mountain": 7}
+        for player in (-1, 2):
+            with pytest.raises((managym.AgentError, OverflowError)):
+                env.hand_snapshot(player)
+            assert _identity(env.hand_snapshot(0)) == _identity(first)
+        for _ in range(120):
+            _, _, terminated, truncated, _ = env.step(0)
+            if terminated or truncated:
+                break
+        else:
+            pytest.fail("bounded tiny-deck fixture did not terminate")
+        terminal = env.hand_snapshot(0)
+        assert terminal.game_id == first.game_id
+        assert terminal.cards == _hand(env._engine, 0)
+        assert terminal.revision > first.revision
+        assert first.cards == {"Mountain": 7}
+        env.reset(seed=42)
+        reset = env.hand_snapshot(0)
+        assert reset.game_id != first.game_id
+        assert reset.cards == first.cards
+        assert reset.seed == first.seed
+    finally:
+        env.close()

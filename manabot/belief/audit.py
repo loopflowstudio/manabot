@@ -138,11 +138,7 @@ def authority_hand(engine: Any, tracker: BeliefTracker) -> dict[str, int]:
     """Read truth for audit only; player/tracker never receive this value."""
 
     opponent = (tracker.viewer + 1) % 2
-    authority_view = engine.observation_for_player(opponent)
-    counts: dict[str, int] = {}
-    for card in authority_view.agent_cards:
-        if int(card.zone) == _HAND_ZONE:
-            counts[str(card.name)] = counts.get(str(card.name), 0) + 1
+    counts = engine.hand_snapshot(opponent).cards
     if sum(counts.values()) != tracker.posterior.space.hand_size:
         raise BeliefError(
             "authority hand size does not match the canonical public hand size"
@@ -184,36 +180,23 @@ def score_known_truth(
     game_index: int,
     step: int,
 ) -> KnownTruthPoint:
-    posterior = tracker.posterior
     hand = authority_hand(engine, tracker)
-    world_index = posterior.index_for_hand(hand)
-    probability = (
-        posterior.probability_at(world_index) if world_index is not None else 0.0
-    )
-    inclusions = posterior.inclusion_probabilities()
-    cards = tuple(
-        CardCalibrationPoint(
-            card=card,
-            predicted_inclusion=inclusion,
-            present=hand.get(card, 0) > 0,
-        )
-        for card, inclusion in inclusions.items()
-    )
+    truth = _score_belief_truth(tracker.posterior, hand)
     return KnownTruthPoint(
         game_index=game_index,
         step=step,
         viewer=tracker.viewer,
         transition_sequence=len(tracker.records),
-        true_world_index=world_index,
+        true_world_index=truth.true_world_index,
         true_hand=tuple(sorted(hand.items())),
-        true_hand_probability=probability,
-        true_hand_log_loss=(-math.log(probability) if probability > 0.0 else math.inf),
-        true_hand_rank=posterior.rank(world_index) if world_index is not None else None,
-        top_hand_mass=float(np.max(posterior.probabilities)),
-        effective_range_size=posterior.effective_range_size,
-        posterior_digest=posterior.digest,
-        space_id=posterior.space.identity,
-        cards=cards,
+        true_hand_probability=truth.true_hand_probability,
+        true_hand_log_loss=truth.true_hand_log_loss,
+        true_hand_rank=truth.true_hand_rank,
+        top_hand_mass=truth.top_hand_mass,
+        effective_range_size=truth.effective_range_size,
+        posterior_digest=truth.belief_digest,
+        space_id=truth.space_id,
+        cards=truth.cards,
     )
 
 

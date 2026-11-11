@@ -235,6 +235,10 @@ class Env(gym.Env):
         self._last_obs = raw_obs
         return self.obs_space.encode(raw_obs), raw_obs
 
+    def hand_snapshot(self, player: int) -> managym.HandSnapshot:
+        """Read a native seat's authoritative hand, separate from policy inputs."""
+        return self._engine.hand_snapshot(player)
+
     def render(self):
         pass
 

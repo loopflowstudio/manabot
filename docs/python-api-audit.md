@@ -7,7 +7,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 | Capability | Scalar native `managym.Env` | Native `managym.VectorEnv` | Python wrappers and disposition |
 |---|---|---|---|
 | Construction and setup | Seed, trivial skipping, optional profiling/behavior tracking; explicit two-player reset | Fixed slot count, seed stride, built-in none/random opponent; uniform or distinct deck sampling; per-slot buffered setups | Gym `Env` takes Match/ObservationSpace/Reward. Torch vector takes those plus device; uses CapturedVector. Different orchestration, same native rules. |
-| Perspective | Reset/step return chooser view; `observation_for_player` reads a fixed native seat | Reset/step return each chooser view; built-in opponents advance to seat 0 | `current_agent_indices` reports choosers, including control effects. No general fixed-view vector API; hand snapshots supply authoritative contents without materializing observations. |
+| Perspective | Reset/step return chooser view; `observation_for_player` reads a fixed native seat; `hand_snapshot` reads authoritative hand counts | Reset/step return each chooser view; built-in opponents advance to seat 0 | `current_agent_indices` reports choosers, including control effects. No general fixed-view vector API; hand snapshots supply authoritative contents without materializing observations. |
 | Legal choices | Complete action list, positional steps, revision-bound Commands and captured-command submission | Positional indices; readable results have complete actions; buffered observations may select explicit `first-legal` prefix | No vector Command execution or capture-origin authorization. Intentional collection API difference; use scalar for external interactive submissions. Neither snapshot reads nor tensor cutoffs change native legality. |
 | Observation encoding | Allocating native encode or caller-owned buffers, plus Python reference encoder | Bound NumPy buffers derive capacities/version from supplied arrays; readable mode bypasses tensor capacities | Both use the native encoder; Python `ObservationSpace` supplies allocations. No new observation fields or schema versions for snapshots. |
 | Step and reward | One surfaced decision, terminal observation, reward from decision chooser | Same with opponent policy none; built-in policy plays opponent decisions and negates an opponent terminal reward for seat 0 | Gym and Torch can apply reward shaping. Torch returns reused tensors and empty step info; `get_last_info` reads native diagnostics separately. |
@@ -22,7 +22,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 ## Code evidence
 
 - [`agent/env.rs`](../managym/src/agent/env.rs): `reset`, `step`,
-  `observation_for_player`, `capture_decision`, `selected_revision`, `hand_counts`,
+  `observation_for_player`, `capture_decision`, `selected_revision`, `hand_snapshot`, `hand_counts`,
   `fork` and possible-world/search methods own single-game semantics.
 - [`agent/vector_env.rs`](../managym/src/agent/vector_env.rs): `reset_each_into`,
   `reassign_roots_into`, `step_with_autoreset_on_env`, `step_one_on_env`,
@@ -41,11 +41,13 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
   delegates an explicit read-only allowlist; its instrumentation is buffered.
 - [`belief/audit.py`](../manabot/belief/audit.py): `authority_hand` establishes
   the existing name-count representation used by a belief-model client. It
-  remains scalar.
+  now reads the shared scalar snapshot contract, as do sampler collection and
+  materialized-world supervision.
 
 ## Bounded corrections and follow-ups
 
-Implemented: complete batched hand snapshots, typed wrapper access, identity across
+Implemented: complete scalar and batched hand snapshots with one record (batch
+position comes from the list index), typed wrapper access, identity across
 reset/replacement, missing vector method stubs, and corrected the guide's claim
 that inactive Python reward/done buffers retain old values. The actual bindings
 clear those fields; only observations remain untouched. Five audit findings
@@ -86,24 +88,21 @@ on request; ordinary steps do not count or export hands.
 
 ## Focused verification
 
-Three native debug tests cover complete/empty hands, unchanged native-seat
-ownership under player control, and identity across repeated-seed resets,
-reassignment and replacement. Eight Python cases pass against a wheel installed
-outside the checkout: scalar parity with open/closed decklists, detached snapshots,
-invalid requests, masks, failure replacement, autoreset, Torch rebuilds and an
-empty hand. The guide's example runs against that installation; both import
-paths and the packaged stubs expose HandSnapshot. The existing same-seed stale
-capture regression also passes. `tests/env/test_captured_vector_bookkeeping.py`
-covers rejected mutators, delegated reads, terminal replacement at the maximum
-seed, same-seed resets and both Torch reset forms.
+After scalar unification, three focused native debug tests pass, including
+scalar/batch parity under control effects and complete/empty hand counts. Sixteen
+focused Python cases pass across snapshots and the three belief clients. A wheel
+installed outside the checkout passes all nine snapshot cases and the guide
+example; both import paths and the packaged stub expose the shared contract.
+This reuses development dependencies, not isolated dependency resolution.
+The broader validation below predates that final cut and awaits gate refresh.
 
-After removing Passive, 20 native vector tests pass in debug. Focused Python
-checks cover unsupported-policy rejection at the factory/native/capture/Torch
-boundaries, readable historical evidence with rejected passive replay, Random
-buffer parity, supported-policy failure replay after autoreset, and a model
-forward pass (17 cases). The extension was rebuilt and replaced atomically.
+The capture bookkeeping tests cover rejected mutators, delegated reads,
+terminal replacement at the maximum seed, same-seed resets and both Torch reset
+forms. Opponent tests cover unsupported-policy rejection at the factory,
+native, capture and Torch boundaries, plus readable historical evidence whose
+passive replay rejects.
 
-Publication validation: the full debug Rust workspace passes (1,054 tests,
+Earlier publication validation: the full debug Rust workspace passes (1,054 tests,
 two skipped), as do all-target/all-feature Clippy, Rust formatting, changed-file
 Ruff and workflow validation. The affected Python suite has 424 passes and three
 retained TLA replay failures (`binding_mismatch`); all three also fail with the

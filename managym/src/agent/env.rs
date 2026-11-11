@@ -34,6 +34,18 @@ use std::{
     },
 };
 
+/// Detached authoritative hand for one native seat at the read boundary.
+/// Never attach this to viewer observations, decision captures or policy inputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
+pub struct HandSnapshot {
+    pub player: usize,
+    pub game_id: u64,
+    pub seed: u64,
+    pub revision: u64,
+    pub cards: BTreeMap<String, usize>,
+}
+
 // A reset's lifetime token is private and never enters replay or world hashes.
 // Process-wide allocation also distinguishes replacement Envs in vector slots.
 static RESET_GENERATION: AtomicU64 = AtomicU64::new(1);
@@ -1051,9 +1063,22 @@ impl Env {
             .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
     }
 
+    /// Detached authoritative hand contents for a native seat at this read.
+    /// Hidden information, separate from observations, captures and policy inputs.
+    pub fn hand_snapshot(&self, player: usize) -> Result<HandSnapshot, AgentError> {
+        let cards = self.hand_counts(player)?;
+        Ok(HandSnapshot {
+            player,
+            game_id: self.capture_generation,
+            seed: self.seed(),
+            revision: self.selected_revision()?,
+            cards,
+        })
+    }
+
     /// Privileged read of the native seat's complete hand zone,
     /// without constructing a viewer observation or applying disclosure rules.
-    pub(crate) fn hand_counts(&self, player: usize) -> Result<BTreeMap<String, usize>, AgentError> {
+    fn hand_counts(&self, player: usize) -> Result<BTreeMap<String, usize>, AgentError> {
         let game = self
             .game
             .as_ref()
@@ -1072,6 +1097,20 @@ impl Env {
                 .or_insert(0) += 1;
         }
         Ok(counts)
+    }
+
+    #[cfg(test)]
+    pub(super) fn scenario_control_player(&mut self, player: usize, controller: usize) {
+        use crate::{flow::turn::PlayerControl, state::ability::PlayerControlDuration};
+
+        let game = self.game.as_mut().expect("reset fixture");
+        game.state.turn.player_controls.push(PlayerControl {
+            player: PlayerId(player),
+            controller: PlayerId(controller),
+            duration: PlayerControlDuration::NextTurn,
+            active: true,
+        });
+        game.scenario_refresh_priority().unwrap();
     }
 
     /// Kind of the current action space, if any.
@@ -1572,34 +1611,6 @@ mod content_pack_contract_tests {
                 assert!(root_card.shares_definition_with(branch_card));
             }
         }
-    }
-
-    #[test]
-    fn hand_snapshots_keep_native_seats_when_another_player_chooses() {
-        use crate::{
-            flow::turn::PlayerControl,
-            state::{ability::PlayerControlDuration, game_object::PlayerId},
-        };
-        let mut env = Env::new(42, true, false, false);
-        env.reset(vec![
-            PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
-            PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
-        ])
-        .unwrap();
-        let before = [env.hand_counts(0).unwrap(), env.hand_counts(1).unwrap()];
-        let game = env.game.as_mut().unwrap();
-        game.state.turn.player_controls.push(PlayerControl {
-            player: PlayerId(0),
-            controller: PlayerId(1),
-            duration: PlayerControlDuration::NextTurn,
-            active: true,
-        });
-        game.scenario_refresh_priority().unwrap();
-        assert_eq!(env.current_agent_index(), Some(1));
-        assert_eq!(env.hand_counts(0).unwrap(), before[0]);
-        assert_eq!(env.hand_counts(1).unwrap(), before[1]);
-        assert_eq!(before[0], BTreeMap::from([("Mountain".into(), 7)]));
-        assert_eq!(before[1], BTreeMap::from([("Island".into(), 7)]));
     }
 
     #[test]

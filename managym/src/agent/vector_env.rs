@@ -1,33 +1,21 @@
 //! Batched games with native reset-seed ownership and admitted per-game roster sampling.
 
-use std::collections::BTreeMap;
-
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{
-        action::AgentError, env::Env, observation::Observation,
-        observation_encoder::ObservationEncodeError, opponent::OpponentPolicy,
+        action::AgentError,
+        env::{Env, HandSnapshot},
+        observation::Observation,
+        observation_encoder::ObservationEncodeError,
+        opponent::OpponentPolicy,
     },
     infra::profiler::{InfoDict, InfoValue},
     state::player::PlayerConfig,
 };
 
 const HERO_PLAYER_INDEX: i32 = 0;
-
-/// Detached authoritative hand for one native seat at the current batch boundary.
-/// Never attach this to viewer observations, decision captures or policy inputs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
-pub struct HandSnapshot {
-    pub slot: usize,
-    pub player: usize,
-    pub game_id: u64,
-    pub seed: u64,
-    pub revision: u64,
-    pub cards: BTreeMap<String, usize>,
-}
 
 /// Preserve encoder capacity errors across the buffer boundary. Pointer/shape
 /// faults and malformed observation payloads are never disposable game outcomes.
@@ -329,17 +317,7 @@ impl VectorEnv {
         self.envs
             .iter()
             .zip(players)
-            .enumerate()
-            .map(|(slot, (env, &player))| {
-                Ok(HandSnapshot {
-                    slot,
-                    player,
-                    game_id: env.capture_generation,
-                    seed: env.seed(),
-                    revision: env.selected_revision()?,
-                    cards: env.hand_counts(player)?,
-                })
-            })
+            .map(|(env, &player)| env.hand_snapshot(player))
             .collect()
     }
 
@@ -1003,6 +981,29 @@ mod tests {
     };
 
     #[test]
+    fn hand_snapshots_keep_native_seats_when_another_player_chooses() {
+        let mut vector = VectorEnv::new(1, 42, true, OpponentPolicy::None);
+        vector
+            .reset_all(vec![
+                PlayerConfig::new("a", BTreeMap::from([("Mountain".into(), 20)])),
+                PlayerConfig::new("b", BTreeMap::from([("Island".into(), 20)])),
+            ])
+            .unwrap();
+        let env = &mut vector.envs[0];
+        let before = [env.hand_snapshot(0).unwrap(), env.hand_snapshot(1).unwrap()];
+        env.scenario_control_player(0, 1);
+        assert_eq!(env.current_agent_index(), Some(1));
+        for (player, previous) in before.iter().enumerate() {
+            let scalar = vector.envs[0].hand_snapshot(player).unwrap();
+            let batch = vector.hand_snapshots(&[player]).unwrap();
+            assert_eq!(batch[0], scalar);
+            assert_eq!(scalar.cards, previous.cards);
+        }
+        assert_eq!(before[0].cards, BTreeMap::from([("Mountain".into(), 7)]));
+        assert_eq!(before[1].cards, BTreeMap::from([("Island".into(), 7)]));
+    }
+
+    #[test]
     fn hand_snapshots_are_complete_detached_native_seat_snapshots() {
         let players: Vec<_> = ["a", "b"]
             .into_iter()
@@ -1021,12 +1022,17 @@ mod tests {
                 .unwrap();
         }
         let snapshots = vector.hand_snapshots(&[1, 0]).unwrap();
+        for (slot, player) in [1, 0].into_iter().enumerate() {
+            assert_eq!(
+                snapshots[slot],
+                vector.envs[slot].hand_snapshot(player).unwrap()
+            );
+        }
         assert!(snapshots[0].cards.is_empty());
         assert_eq!(
             snapshots[1].cards,
             BTreeMap::from([("Mountain".into(), 70)])
         );
-        assert_eq!(snapshots[1].slot, 1);
         assert_eq!(snapshots[1].player, 0);
         vector.envs[1].scenario_clear_hand(0).unwrap();
         assert!(vector.hand_snapshots(&[1, 0]).unwrap()[1].cards.is_empty());

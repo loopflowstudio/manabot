@@ -310,7 +310,7 @@ fatal, and capacity recovery requires its separate opt-in. See
 ### Hand snapshots
 
 Read authoritative hand contents for explicit native seats at the current
-batch boundary. This is an opt-in hidden-information API:
+read boundary in scalar or batched games. This is an opt-in hidden-information API:
 
 ```python
 from manabot import managym
@@ -320,47 +320,56 @@ games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
 observations = games.reset_all(Match().to_rust())
 snapshots = games.hand_snapshots([1, 0])
 
-for snapshot in snapshots:
-    print(snapshot.slot, snapshot.player, snapshot.cards)
+for slot, snapshot in enumerate(snapshots):
+    print(slot, snapshot.player, snapshot.cards)
     # snapshot.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
+
+game = managym.Env(seed=42)
+game.reset(Match().to_rust())
+hand = game.hand_snapshot(1)  # The same HandSnapshot contract for one game.
+print(hand.player, hand.cards)
 
 # These snapshots remain unchanged when the games advance.
 ```
 
 `hand_snapshots(players: list[int])` returns one `HandSnapshot` per slot, in slot
-order. Supply exactly one native seat (`0` or `1`) per slot: `[1, 0]` reads seat
-1 in slot 0 and seat 0 in slot 1. There is no implicit opponent. Seats are not
+order; the list index is the slot. Supply exactly one native seat (`0` or `1`)
+per slot: `[1, 0]` reads seat 1 in slot 0 and seat 0 in slot 1. There is no implicit opponent. Seats are not
 remapped under player-control effects: `current_agent_indices()` names the
 chooser, which can differ from the turn or rules-decision owner.
+
+Scalar `Env.hand_snapshot(player: int)` returns the same `HandSnapshot` record
+for one native seat. The Gym `manabot.env.env.Env` wrapper exposes it directly.
 
 Each snapshot contains:
 
 | Field | Meaning |
 |---|---|
-| `slot: int` | Zero-based batch position |
 | `player: int` | Requested native seat, unchanged by control effects |
 | `game_id: int` | Opaque game generation; changes on every reset or replacement, including a reset to the same seed |
 | `seed: int` | The current game's native reset seed |
 | `revision: int` | The current game's decision revision at the read |
 | `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
 
-Save your collection/run identity with `(slot, game_id, revision, player)`.
+Save your collection/run identity with `(game_id, revision, player)` and, for
+batches, the list index identifying the slot.
 Game IDs are allocated process-wide, including across Torch native-vector
 rebuilds; they are not portable replay identifiers, consecutive counters or
 reproducible values. A seed alone cannot distinguish repeated resets to the same
 deal. For replay, retain the match configuration and runtime identity separately.
 
-The method synchronously reads authoritative hand zones in one native batch
-call, without stepping, resetting, consuming randomness or building viewer
-observations. Counts are detached snapshots; dictionary edits cannot affect the
+Both methods synchronously read authoritative hand zones, with one native call
+for the whole batch, without stepping, resetting, consuming randomness or
+building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
 game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
 method and CPU records. Ordinary reset/step calls do not collect snapshots.
 
 Read before stepping to capture the current hands; copy reused observation
 buffers too if retaining both. After a successful step, snapshots describe the
-returned game states, including replacement games in done slots; terminal hands
-are not retained. Partial stepping leaves inactive games unchanged, but snapshots
-still include every slot: apply the same active mask when selecting results.
+returned game states. Scalar games retain their terminal hands until explicit
+reset. Vector done slots describe replacement games; terminal hands are not
+retained by vectors. Partial stepping leaves inactive games unchanged, but
+snapshots still include every slot: apply the same active mask when selecting results.
 
 A wrong-length seat list, a seat outside `0..1` or reading before reset raises
 an error. After a failed step, discard that call's results and recover or reset
