@@ -296,3 +296,18 @@ No quote, bill or rental was touched. Execution review comes next.
   4 empty-filter minibatch skips (benign).
 - Open for evidence review: whether to spend the remaining ~$4.09 C1 envelope on
   w160l8/a384l8 packing (crossover still unknown), the A4000, or stop.
+
+## C2 design, 2026-11-11
+
+- Reversible choice: `b015d5-a40` in the isolated home is now `max 0` (was 1), so
+  queued work cannot rent automatically. Restore with `etude ondemand max b015d5-a40 1`.
+- Reversible choice: C2 reuses the frozen C1 source and its existing declarations
+  instead of adding C2-named regimes. Distinct identity comes from the
+  `b015d5-c2-*` cohorts, new run IDs, the clone `repo` and the separate `c2/`
+  evidence directory.
+- Reversible choice: a384l8 runs before w160l8, so the largest missing contrast is
+  secured first. A low a384l8 K=2 gain does not skip w160l8 K=2.
+- Validation residue: the cancelled probe cohort `b015d5-c2-validation-queue-k4`
+  (4 runs, zero attempts) stays in the isolated database.
+- The billing refresh showed other account pods (`awcdavrycv1gvy`, `k39bmw5981u6sv`,
+  about 25 h each) that are not this home's. They were left alone.
