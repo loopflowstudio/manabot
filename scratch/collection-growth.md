@@ -1,135 +1,119 @@
 # MTG-281 collection growth
 
 Jack Heart, Task directive dated 2026-11-11: "do 1 and 2. You have $15".
-The outcome is retained historical attribution followed by a matched CUDA
-before/after measurement of the outcome-table repair. The $15 covers every
-rental cost, including setup, failures and teardown. Frozen frontier runs,
-the arena disk and EXP-46 remain outside the change.
+Retained historical attribution precedes a matched CUDA before/after measurement
+of the outcome-table repair. The $15 covers all rental costs, including setup,
+failures and teardown. Frozen frontier runs, the arena disk and EXP-46 are outside
+this change. Scientific acceptance remains open independently of software delivery.
 
-## What exists
+## Evidence and approach
 
-`experiments/self-play-collection-273.md` and seven manifest-published artifacts
-retain 1,744 w64 (`59718fe34945`) and 932 w160 (`5b7d8fa7b38c`) updates.
-Both show RSS growth and collection spikes after permanent-block endpoints.
-At update 900, each has 81 permanent blocks and about 454 MB of headers; the
-larger w64 final index reflects its longer history. The w160 flat-memory
-counterexample fails, but different models, damping schedules, game lengths
-and hosts still limit attribution. Exact historical manifest sizes/fold times,
-CPU quotas/models and final game-error counts were unavailable at capture.
-No Python-allocation trace isolates index memory from native/tensor memory.
+`experiments/self-play-collection-273.md` owns reproduction, thresholds, paired
+input mapping and failure recovery. Seven manifest-published historical artifacts
+retain 1,744 w64 (`59718fe34945`) and 932 w160 (`5b7d8fa7b38c`) updates. Both show
+RSS growth and collection spikes after permanent-block endpoints. At update 900,
+each has 81 permanent blocks and about 454 MB of headers. The w160 flat-memory
+counterexample fails; models, damping schedules, game lengths and hosts still
+limit attribution. Exact historical manifest sizes/fold times, CPU quotas/models,
+final game-error counts and Python-allocation traces were unavailable at capture.
 
-`scripts/measure_collection_growth.py::capture` projects one block at a time
-and rejects multiple writers/attempts; `_arrays` batches ranges to avoid a
-remote request per metric. The normal SDK reader materializes omitted matchup
-columns. `scripts/report_collection_growth.py::reading` reconstructs cumulative
-header bytes; `fold_alignment` associates updates with endpoints, not measured
-fold times. Exclusive snapshot creation and new report directories preserve
-retained inputs. No production training implementation is replaced here.
+`scripts/measure_collection_growth.py::capture` projects one block at a time,
+rejects multiple writers/attempts and batches remote array ranges. The normal
+SDK reader expands omitted matchup columns. `report_collection_growth.py::reading`
+reconstructs header-byte totals; `fold_alignment` associates updates with block
+endpoints, not measured fold times. New snapshot/report destinations protect
+retained inputs. No production training path is replaced.
 
-The upstream read on 2026-11-11 (`git ls-remote origin refs/heads/main`) returned
-`1659b0e290f55daa632ec8f869adff4a3059d79f`, already integrated. Its parent is
-`b7c102f2c4266dab4be91b8b54901861745b9a3c`; those remain the comparison sources.
-The pair's diff does not change native sources or dependency locks. That code
-inspection does not replace admission of the prepared runtime bundles.
+Both 500-update jobs, source bundles/archives, local world/shape admission and
+pre-execution analysis are published under
+`experiments/data/collection-growth-281/prepared/`. Before source is
+`b7c102f2c4266dab4be91b8b54901861745b9a3c`; after is
+`1659b0e290f55daa632ec8f869adff4a3059d79f`. Native sources and dependency locks
+agree. Seed 21501, explicit CUDA/L4, declared capacities and damping horizon 2474
+are frozen. Remote CUDA numerics and runtime admission remain per-arm gates.
+
+`scripts/collection_comparison.py::Analysis` and
+`scripts/report_collection_comparison.py::compare` own the frozen descriptive
+criteria recorded in `scratch/questions.md`. All three baseline primaries must
+grow; incomplete or materially mismatched evidence withholds the verdict. The
+500-update horizon cannot certify the later 850–1700-update regime.
+
+The 2026-11-11 reconciliation read (`git ls-remote origin refs/heads/main`)
+returned `830161795f3ae65563ae07128f14e90dfaf90235`, already integrated. Its
+`docs/workflows.md` adds same-machine comparison guidance and separates software
+delivery from scientific completion. Accepted separate serial L4 allocations
+remain descriptive: matching `HostFacts` cannot establish identical physical
+hosts or isolate contention. Material host differences withhold the verdict.
 
 ## Delete — do not maintain
 
-No production implementation is replaced. Preserve the historical captures,
-original recipe, original comparison envelope and MTG-273 reproduction. The
-new preparation and paired reader extend the measurement; neither changes the
-pinned workers. No predecessor code or data needs deletion.
+No remaining code deletion targets. Preserve frozen sources, published snapshots
+and historical scalar evidence. This compression removes duplicated guide and
+implementation detail from the plan; further code cuts were not warranted.
+Pre-compression uncommitted notes were moved to
+`.runs/collection-growth/compress-context-20261111/collection-growth.before.md`.
+Earlier committed detail is at
+`6bed293656358ac36582fe54f3decfba0b1a1cc6:scratch/collection-growth.md`.
 
-Completed reductions: the paired reader's `_validate_arm`, `_pair_limitations`
-and `_analyze` separate evidence admission from numerical interpretation.
-`ArmAnalysis` keeps each arm's statistics, scores and limitations together;
-consecutive update slices replace repeated masks, and standard `asdict`
-replaces the custom statistics serializer. The preparation test reads the gzip
-archive directly. No remaining deletion targets; published analysis bytes stay
-frozen while the maintained reader preserves their calculations.
+## Execution blocker and remaining work
 
-## Prepared comparison and remaining execution
+Provider reads at 2026-11-11 22:42:24 and 23:15:36 UTC failed with
+`ProviderUnavailable: GET catalog/gpus: no reply`. Published
+`comparison-preflight.json` retains no run, rental or quote; new rental spend is $0.
 
-Both 500-update TrainingJobs, their source hash bundles and compressed git
-archives are frozen in `experiments/data/collection-growth-281/prepared/`.
-Seed 21501, CUDA/L4, all declared capacities and damping horizon 2474 remain.
-Native world, deck source and shape admission passed locally; remote CUDA
-numerics and runtime admission remain per-arm gates. Exact source/analysis
-bytes and the local admission receipt are retained with hashes.
+At 23:36:06 UTC,
+`doppler run --project manabot --config prd -- doppler run --project etude --config prd -- uv run --no-sync etude availability mtg281-l4 --timeout 30`
+exited 1 with `etude: GET catalog/gpus: no reply`. An earlier invocation with only
+`etude/prd` stopped at missing `R2_ACCESS_KEY_ID`; nested injection reached the
+provider. Neither command requested a rental. No launch, quote or additional
+spend occurred; published preflight stayed unchanged. Preparation is complete
+and needs no repetition while availability and fresh quotes remain missing.
 
-Registered Task supply `mtg281-l4` binds startup 900s, delivery 600s, no added
-setup seconds and one slot/machine. Each job requests 42,900s, leaving 300s
-for teardown in the 12-hour cost envelope; watchdog 39,600s, finalization 600s,
-with numerics/admission allowances outside the watchdog. Setup derives its
-cutoff from the original rental deadline. The worker's existing stop/export
-path and max_attempts=1 remain. Launch arms separately, serially; combining
-both in a cohort would extend one rental and invalidate this deadline contract.
-Provider deletion is best effort, not a guaranteed invoice bound.
+1. Obtain fresh capacity and individual whole-rental quotes for both arms.
+   Reserve at most $7.20 each plus $0.60 ancillary, cumulatively $15 including
+   disk, storage/transfer and teardown. Quotes reserve no capacity; recheck before
+   the second launch. Historical duration is no completion guarantee.
+2. Publish/admit the pinned bundles and execute each once, serially as separate
+   allocations. The registered `mtg281-l4` supply binds startup 900s, delivery
+   600s, zero added setup and one slot/machine. Each job requests 42,900s with
+   300s teardown allowance inside 12 hours; watchdog 39,600s, finalization 600s,
+   numerics/admission allowances outside the watchdog and max_attempts=1.
+   Setup derives its cutoff from the original deadline. Do not combine arms in
+   a cohort that extends a rental. Stop a dud/slow arm without extending bounds.
+3. Reconcile uncertain acquisition state before another acquisition; a failed
+   status read is not a refused create. Retain every attempt, TrainingRun status,
+   all 500 updates, delivered output inventory, host/device/provider machine
+   identity, errors/recovery, billing and confirmed teardown. Deletion is best
+   effort. Release ended reservations only against retained accounting; keep
+   unknown/live liability reserved within the cumulative cap.
+4. Capture each new metric run and analyze the four paired inputs with
+   `scripts/report_collection_comparison.py`; publish measured evidence and
+   extend the report. No repaired-arm verdict exists. Missing baseline growth,
+   incomplete targets or attribution limits must remain explicit. If residual
+   growth remains, name the best-supported candidate and file a follow-up;
+   further profiling is outside this Task.
 
-The pre-execution reader freezes updates 51–500, endpoint windows 51–100 and
-451–500, <=10% timing growth and <=1 GB RSS growth as practical flatness.
-All three primaries must reproduce growth before an overall verdict; >=50%
-reduction in every score qualifies partial flattening. Incomplete targets,
-missing metrics and material host/work/error differences withhold verdict.
-The report defines units and exact thresholds; the prepared artifacts retain
-the implementation. These thresholds are engineering choices, not confidence
-bounds or a later-regime claim.
+## Retained checks (2026-11-11)
 
-At 2026-11-11 23:15:36 UTC, fresh availability for the configured Task supply
-failed with `ProviderUnavailable: GET catalog/gpus: no reply`. The retained
-`comparison-preflight.json` contains no run, rental or quote; new rental spend
-remains $0. The earlier 22:42 refusal remains historical. This blocks spending,
-not preparation, which is now complete.
+- Focused compression check:
+  `PYTHONPATH=. uv run --no-sync pytest tests/infra/test_collection_comparison_report.py tests/training/test_collection_comparison_preparation.py tests/infra/test_collection_growth_capture.py tests/infra/test_experiment_data_untracked.py -q`
+  — 18 passed; Ruff and `git diff --check` passed. Eight reports matched prior
+  values/limitations (ignoring metric-set issue order); both prepared job
+  declarations were byte-identical. Evidence:
+  `.runs/collection-growth/compress-{before,after}-tests/`.
+- Historical regeneration in `.runs/collection-growth/compress-report/` and
+  `.runs/collection-growth/docs-check-20261111/report/` matched published
+  `summary.json`, `phases.png` and `growth.png` byte-for-byte. Existing output
+  was refused. All 19 published files matched the manifest. CLI help matched
+  documentation; paired-reader import passed with Torch/native imports blocked.
+- The CPython 3.13 native release wheel built and its matching extension was
+  installed atomically. Gate collection initially found 161 tests then failed
+  for missing native extension. After rebuild,
+  `PYTHONPATH=. uv run --no-sync pytest --collect-only tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/ -q`
+  collected 172 tests in 1.56s. This closes collection only; gate/CI still owns
+  broader suite execution. No games, training or rentals ran in those checks.
+- `lf open --host desktop` reported "No Desktop Files view attached; nothing opened."
 
-Remaining:
-1. Obtain fresh individual whole-rental quotes and capacity; account for disk,
-   storage/transfer and teardown within both $7.20 reservations plus $0.60
-   ancillary, cumulatively $15. Quotes reserve no capacity. Keep both arms'
-   allocation reserved before the first launch; recheck before the second.
-2. Execute each pinned job once, retaining every attempt. Stop a dud/slow arm
-   without extending its bound. Confirm TrainingRun status and all 500 updates,
-   not just launcher success. Verify the delivered output inventory and retain
-   host, device, errors/recovery, billing and confirmed teardown.
-3. Capture each new run, read the four paired inputs with
-   `scripts/report_collection_comparison.py`, then publish measured evidence
-   and extend the report. A residual-cause follow-up depends on this result;
-   no further profiling belongs here.
-
-No repaired-arm verdict exists. If growth fails to recur before the repair,
-measurements are incomplete, or host/work differences prevent attribution,
-report that limit. Even a flat repaired arm through 500 cannot certify the later
-regime. If residual growth is observed, name the best-supported candidate and
-file a follow-up; further profiling is outside this Task. Scientific acceptance
-remains open independently of software publication or verification.
-
-## Retained checks
-
-`PYTHONPATH=. uv run --no-sync pytest tests/infra/test_collection_growth_capture.py tests/infra/test_experiment_data_untracked.py -q`
-— 7 passed; Ruff passed. Offline regeneration in
-`.runs/collection-growth/compress-report/` produced byte-identical `summary.json`,
-`phases.png` and `growth.png`; existing evidence-directory output was refused.
-All seven retained files matched the manifest. No rental or training ran.
-
-Gate collection of `tests/infra/`, `tests/academy/test_clean_machine_verifier.py`
-and `deploy/play/tests/` collected 161 tests, then failed on
-`test_runtime_config.py` because the native extension was unavailable. Gate/CI
-still owes collection with the built runtime; this diagnostic needs no native
-imports. These checks are retained results, not rerun by reconciliation.
-
-Implementation checks (2026-11-11):
-`PYTHONPATH=. uv run --no-sync pytest tests/infra/test_collection_comparison_report.py -q`
-— 10 passed; `tests/training/test_collection_comparison_preparation.py` — 1
-passed; `tests/infra/test_experiment_data_untracked.py` — 1 passed. Ruff and
-`git diff --check` passed; the paired reader imported with Torch/native imports
-blocked. Twelve new preparation/preflight artifacts were published; all 19
-historical and new files verified against the manifest. The CPython 3.13
-native release wheel built and its matching extension was installed atomically.
-The earlier missing-native gate collection is now runnable, but remains a gate
-obligation; no broad suite, training or rented execution was run in this step.
-
-Compression check (2026-11-11):
-`PYTHONPATH=. uv run --no-sync pytest tests/infra/test_collection_comparison_report.py tests/training/test_collection_comparison_preparation.py tests/infra/test_collection_growth_capture.py tests/infra/test_experiment_data_untracked.py -q`
-— 18 passed; Ruff and `git diff --check` passed. Eight generated comparison
-reports match all pre-refactor values and limitations (ignoring issue order
-from metric-set iteration); both prepared job declarations remain byte-identical.
-All 19 published files still match the manifest. Evidence is under
-`.runs/collection-growth/compress-{before,after}-tests/`; no paid execution ran.
+Current compression changes context only; no tests rerun. `git diff --check`
+— passed. `lf context` — memory and scratch below both token and byte targets;
+scratch reduced from 12,863 to about 9,800 bytes. No execution was launched.

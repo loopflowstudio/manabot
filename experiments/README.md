@@ -53,6 +53,11 @@ history holds them at the commit each report names.
 
 ## Data
 
+To reproduce the retained collection-time and RSS plots, or analyze the bounded
+before/after measurement, follow the
+[self-play collection guide](self-play-collection-273.md#reproduction-and-remaining-acceptance).
+It covers blockwise capture, offline reports and the paired evidence inputs.
+
 ```bash
 uv run --extra artifacts python -m manabot.data fetch                # everything
 uv run --extra artifacts python -m manabot.data fetch experiments/data/etu126

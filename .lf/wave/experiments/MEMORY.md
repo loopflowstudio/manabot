@@ -59,14 +59,24 @@ published artifacts under `experiments/data/collection-growth-281/` retain
 provenance and the report; the projection avoids cumulative manifest expansion.
 
 Jack Heart's MTG-281 directive, 2026-11-11: "do 1 and 2. You have $15".
-The prospective matched CUDA/L4 comparison remains unexecuted: the 22:42:24 UTC
-provider read failed before any new rental or spending. Its 500-update horizon
-can test early growth, not the later 850–1700-update regime; historical duration
-is no fresh quote or completion guarantee. Source/runtime admission, execution,
-equal-work comparison, error receipts and whole-rental accounting remain with
-the Task plan. Neither these retrospective plots nor software shipment supplies
-a repaired-arm verdict. Residual-cause profiling is outside this Task; a causal
-follow-up depends on what the repaired arm actually shows.
+Both pinned 500-update TrainingJobs, source bundles/archives, local world/shape
+admission and pre-execution paired analysis are now manifest-published. This
+closes preparation, not execution: provider reads at 22:42:24 and 23:15:36 UTC
+failed before any new rental or spending. The prepared bounds include startup,
+training, delivery and teardown within each whole-rental envelope; deletion is
+best effort and billing still requires reconciliation. Separate serial allocations
+must not be combined into a cohort that extends a rental's deadline.
+
+The horizon can test early growth, not the later 850–1700-update regime;
+historical duration is no fresh quote or completion guarantee. The frozen reader
+checks completed work, host/runtime identities and errors before applying its
+prospective descriptive thresholds. Matching CPU/quota/memory facts across two
+L4 rentals does not establish the same physical host or isolate contention;
+the newer same-machine performance guidance reinforces that attribution limit.
+Remote CUDA admission, execution, measured analysis, receipts and whole-rental
+accounting remain with the Task plan. Neither retrospective plots nor software
+shipment supplies a repaired-arm verdict. Residual-cause profiling is outside
+this Task; a follow-up depends on what the repaired arm actually shows.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 

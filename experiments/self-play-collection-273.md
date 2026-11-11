@@ -251,10 +251,8 @@ and `game_errors` as residual causes after an unexecuted fix.
 
 ### Reproduction and remaining acceptance
 
-Evidence is under `experiments/data/collection-growth-281/`: `w64.json`,
-`w160.json`, `provenance.json`, `summary.json`, `comparison-plan.json` and the two
-figures. Fetch it through the manifest, then reproduce the figures without
-network access or native/game imports:
+From the repository root, fetch the retained evidence and reproduce the
+historical figures in a new directory:
 
 ```sh
 uv sync --locked --no-install-project --extra artifacts --extra reports --extra dev
@@ -263,14 +261,35 @@ PYTHONPATH=. uv run --no-sync python scripts/report_collection_growth.py \
   --data experiments/data/collection-growth-281 --out .runs/collection-growth/report
 ```
 
-The output directory must be new. A fresh capture (with artifact credentials)
-also refuses to overwrite an existing snapshot:
+Open `.runs/collection-growth/report/phases.png` and `growth.png`; the same
+directory contains `summary.json` with window statistics, slopes and historical
+cost projections. `--data` selects the directory containing `w64.json` and
+`w160.json`; `--out` is required and must name a new directory. To repeat the
+report, choose another output path. The report step works offline and needs no
+native extension or game imports.
+
+The fetch step needs the [artifact credentials](README.md#data) unless the
+bytes are already cached. It restores the manifest-published captures,
+provenance, figures, comparison plan and `prepared/` inputs. Preserve those
+files as evidence; generated reports belong in a separate directory.
+
+A fresh capture reads the selected metric run without loading its cumulative
+manifest. For example, to take another snapshot of the historical w64 run:
 
 ```sh
-uv run --no-sync python scripts/measure_collection_growth.py \
+PYTHONPATH=. uv run --no-sync python scripts/measure_collection_growth.py \
   --source r2://manabot/jobs --run 59718fe34945 \
   --cache .runs/collection-growth/cache --out .runs/collection-growth/w64.json
 ```
+
+All four capture options are required: `--source` is the jobs storage URI,
+`--run` is the metric run ID, `--cache` holds downloaded objects and `--out`
+names a new JSON snapshot. Capture needs storage access and prints the retained
+update count on success. It rejects multiple writers/attempts, block-sequence
+gaps and damaged metric arrays. If delivery is incomplete, wait for the same
+run's evidence and capture to a new path; retain failed inputs and diagnostics.
+For suspected cache corruption, use a new cache directory. Do not fill gaps or
+edit identities to make the report accept an input.
 
 Remaining acceptance is the bounded matched execution, equal-work slopes,
 complete error/recovery and host receipts, whole-rental accounting and confirmed
@@ -280,12 +299,39 @@ plots do not complete the scientific Task.
 
 ### Frozen paired analysis
 
-`scripts/report_collection_comparison.py` reads newly captured `before.json`
-and `after.json` plus each delivered `training/run.json`, saved locally as
-`before-training.json` and `after-training.json`. It checks capture, scientific
-run, source, seed and prepared-recipe bindings. Its output retains runtime,
-host, error/recovery and completed-work facts beside all phase statistics.
-It never interprets launcher success as reaching the scientific target.
+After both bounded arms deliver their evidence, place these four files in
+`.runs/collection-growth/paired-captures/`:
+
+| File | Input |
+| --- | --- |
+| `before.json` | Capture of the before arm's metric run |
+| `after.json` | Capture of the after arm's metric run |
+| `before-training.json` | Unchanged before arm's delivered `training/run.json` |
+| `after-training.json` | Unchanged after arm's delivered `training/run.json` |
+
+Use each training receipt's `metrics_run` as the capture command's `--run`;
+the launcher Run ID and the scientific training ID are different identities.
+Then run:
+
+```sh
+PYTHONPATH=. uv run --no-sync python scripts/report_collection_comparison.py \
+  --prepared experiments/data/collection-growth-281/prepared \
+  --data .runs/collection-growth/paired-captures \
+  --out .runs/collection-growth/paired-report
+```
+
+The command prints the verdict and writes `paired-report/comparison.json`,
+including `limitations`, primary `growth_scores` and per-arm statistics and
+receipts. All three options are required; `--out` must be new. Read the
+limitations alongside the verdict. No measured paired inputs are currently
+published; the historical w64/w160 captures cannot substitute for these arms.
+
+The reader checks capture, scientific run, source, seed and prepared-recipe
+bindings. An identity mismatch stops analysis: check that each capture and
+receipt belongs to the corresponding prepared arm, then rerun with the correct
+files. Missing comparability evidence instead produces an `inconclusive`
+verdict with limitations. Launcher success does not establish that the
+scientific target was reached.
 
 Updates **51–500** are the fixed analysis window, with endpoint windows 51–100
 and 451–500. Report OLS slopes per 100 updates and per million cumulative
@@ -309,22 +355,28 @@ Missing measurements, paused/incomplete targets, differing host CPU/quota/memory
 facts or runtime identities, more than 10% differences in mean learner rows,
 games or decisions/game, or more than one percentage point difference in
 crashed games per attempted game withhold the overall verdict. Descriptive
-statistics remain available. One seed on separate hosts still cannot isolate
-causality. No result at 500 establishes behavior at 850–1700 updates.
+statistics remain available. Matching CPU/quota/memory facts does not establish
+identical physical hosts or contention; retain provider machine identities too.
+One seed on separate hosts still cannot isolate causality or supply the
+same-machine speed evidence described in `docs/workflows.md`. No result at 500
+establishes behavior at 850–1700 updates.
 
-Prepare new reviewable inputs with a built native extension, or read the
-manifest-published preparation. These commands do not submit work:
+For preparation review, use the manifest-published `prepared/` directory.
+To reproduce preparation separately, first follow the
+[development setup](../docs/development.md) to install the project and build
+its native extension; the reporting-only environment above is insufficient.
+Both pinned source commits must be available in local Git history. Run:
 
 ```sh
 PYTHONPATH=. uv run --no-sync python scripts/prepare_collection_comparison.py \
   --out .runs/collection-growth/new-preparation
-PYTHONPATH=. uv run --no-sync python scripts/report_collection_comparison.py \
-  --prepared experiments/data/collection-growth-281/prepared \
-  --data .runs/collection-growth/paired-captures \
-  --out .runs/collection-growth/paired-report
 ```
 
-The second command requires the four newly retained files described above;
-there are no measured paired inputs yet. All destinations must be new. The
-prepared directory includes the exact analysis sources and their digests,
-so later edits cannot silently redefine the pre-execution interpretation.
+This writes both job declarations, source archives, local admission evidence
+and `preparation.json` to a new directory. It submits no work and obtains no
+quote. Preparation rejects changed recipe bytes, incompatible native world or
+observation shapes, and differences in protected runtime sources. Preserve a
+failed directory for diagnosis and use a new destination after correcting the
+environment; do not replace the pinned sources with current defaults.
+The published preparation includes the exact analysis sources and their
+digests, so later edits cannot silently redefine the pre-execution interpretation.
