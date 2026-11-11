@@ -345,7 +345,13 @@ preparation, inference, `stream_bookkeeping`, assembly and learning.
 (`execution.workers` 1) training occupies one CPU thread, so host single-thread
 speed sets its pace, not vCPU count or GPU size; see
 [training update time](../experiments/training-update-time.md) before choosing a
-machine. `scripts/bench_training_update.py` prints the same split for one machine.
+machine. The [standing training and evaluation benchmark](development.md#training-and-evaluation-speed)
+uses `scripts/bench_training_update.py --suite` to report the real update split
+across four model sizes, alongside shared-evaluation throughput. It also reports
+inference calls, mean rows per call and the idle stream fraction: complete-game
+closure can leave most streams waiting for the longest games, so 256 configured
+streams need not mean 256 rows per call. Use its same-machine comparison before
+claiming a speedup; a throughput gain alone does not establish learning quality.
 
 Reading the curves: RL policy loss is the clipped objective, **not log loss**.
 PPO value loss is half the squared lambda-target residual; categorical move

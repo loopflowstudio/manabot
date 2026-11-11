@@ -285,6 +285,13 @@ benchmark or Duel continues a failed match; a cached success adds no sample.
 
 ## Performance evidence and calibration
 
+For a standing speed reading across model sizes, run the
+[training and evaluation benchmark](development.md#training-and-evaluation-speed).
+Its evaluation rows measure checkpoint-versus-checkpoint games through shared
+inference beside the corresponding training rows. Initialized policies measure
+execution speed, not strength. Compare on the same host, device and precision
+with matching behavior digests; CPU results do not establish CUDA performance.
+
 Cells write `performance.json`, `rows.json`, journals and traces; allocations
 write `execution.json`, `allocation.json` and `serving.json`.
 `diagnostic_batches` adds profiler traces, never mixed with ordinary

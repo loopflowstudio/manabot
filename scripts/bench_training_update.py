@@ -36,6 +36,8 @@ from pathlib import Path
 import tempfile
 import warnings
 
+import psutil
+
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -104,7 +106,92 @@ def main() -> None:
     parser.add_argument("--json", type=Path, help="write the TrainingRun receipt")
     parser.add_argument("--out", type=Path, help="keep the run folder here")
     parser.add_argument("--cuda-counts", type=Path, help="write CUDA launch counts")
+    parser.add_argument(
+        "--suite", action="store_true", help="measure the fixed model ladder"
+    )
+    parser.add_argument(
+        "--size", action="append", help="suite subset; repeat for multiple sizes"
+    )
+    parser.add_argument(
+        "--workload", action="append", help="training or evaluation; default both"
+    )
+    parser.add_argument(
+        "--seconds",
+        type=float,
+        default=3600,
+        help="suite lifetime, including worker cleanup",
+    )
+    parser.add_argument(
+        "--memory-mib", type=int, default=16384, help="suite process-tree RSS ceiling"
+    )
+    parser.add_argument(
+        "--hourly-price", type=float, help="supplied USD/hour; never a rental bill"
+    )
+    parser.add_argument("--compare", type=Path, help="retained suite reference")
+    parser.add_argument(
+        "--reference-root", type=Path, help="clean checkout of the reference source"
+    )
+    parser.add_argument(
+        "--record-reference", type=Path, help="retain a complete clean-source reference"
+    )
+    parser.add_argument("--suite-request", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument("--deadline", type=float, help=argparse.SUPPRESS)
     args = parser.parse_args()
+
+    # Keep evaluation dependencies off the original single-recipe path.
+    if args.suite or args.suite_request:
+        import scripts.bench_pipeline as pipeline
+
+    if args.suite_request:
+        if args.out is None or args.deadline is None:
+            parser.error("suite worker needs output and deadline")
+        pipeline.run_worker(args.suite_request, args.out, args.deadline, _execute)
+        return
+    if args.suite:
+        if args.out is None:
+            parser.error("--suite requires a new --out directory")
+        if (
+            args.recipe != str(RECIPE)
+            or args.max_facts is not None
+            or args.cuda_counts
+            or args.json
+        ):
+            parser.error(
+                "suite fixes the recipe/input and retains its own receipts; profiler mode is separate"
+            )
+        defaults = pipeline.SuiteConfig()
+        config = pipeline.SuiteConfig(
+            device=args.device,
+            streams=args.streams,
+            updates=args.updates,
+            seed=args.seed,
+            sizes=tuple(args.size) if args.size else defaults.sizes,
+            workloads=tuple(args.workload) if args.workload else defaults.workloads,
+            process_tree_bytes=args.memory_mib * 2**20,
+        )
+        report = pipeline.run_suite(
+            config,
+            args.out,
+            seconds=args.seconds,
+            hourly_price=args.hourly_price,
+            baseline_path=args.compare,
+            reference_root=args.reference_root,
+            record_reference=args.record_reference,
+            started_at=psutil.Process().create_time(),
+        )
+        pipeline.describe(report)
+        if report.status != "completed":
+            raise SystemExit(1)
+        return
+    if (
+        args.size
+        or args.workload
+        or args.compare
+        or args.reference_root
+        or args.record_reference
+        or args.hourly_price is not None
+    ):
+        parser.error("suite options require --suite")
 
     saved = load_recipe(args.recipe, args.updates)
     regime = validate_regime(

@@ -7,6 +7,7 @@ are in [AGENTS.md](../AGENTS.md); test-resource rules in [TESTING.md](../TESTING
 - [Environment and commands](#environment-and-commands)
 - [Validation by change area](#validation-by-change-area)
 - [CI](#ci)
+- [Training and evaluation speed](#training-and-evaluation-speed)
 - [Releases](#releases)
 - [Clean-machine play proof](#clean-machine-play-proof)
 - [Retained evidence and archived corpora](#retained-evidence-and-archived-corpora)
@@ -253,6 +254,147 @@ seeds 197, 281 and 419 and combines them with `manabot.verify.learning_regressio
 `card-evaluation.yml` (manual) verifies 1024 native games with
 `manabot.eval.cards verify` (see [evaluation](evaluation.md)).
 `release.yml` is described next.
+
+## Training and evaluation speed
+
+Measure the training and evaluation pipelines on this machine, across the fixed
+`w64`, `w128l4`, `w160l8` and `a384l8` model ladder:
+
+```sh
+uv run --locked --extra evaluation python scripts/bench_training_update.py \
+  --suite --device cpu --out .runs/pipeline-speed-001
+```
+
+Run from the repository root with the pinned Python environment and a release
+native extension built from the same source (see [environment setup](#environment-and-commands)).
+The command prints one training row and one evaluation row per size and retains
+the underlying receipts in the new output directory. It runs locally without
+cloud credentials, a queue or a rental. Use it when changing collection,
+encoding, model inference, learning or shared evaluation serving; it is not a
+CI timing gate.
+
+The suite uses the current-world Elemental recipe with its own benchmark regime
+identity, explicit v6 input (512 local facts), 256 streams and float32 precision.
+Training goes through the real
+`execute_regime` stage. Evaluation plays checkpoint against checkpoint through
+shared inference, using two reproducibly initialized policies, deal seed 101 and
+four BG/GR deck-and-seat legs (`elemental_bg` / `elemental_gr`). The allocation
+admits four active games and at most 32 inference rows. This measures serving
+and gameplay throughput, not playing strength. World, observation configuration,
+model shapes, seeds, checkpoint identities and execution limits stay in the
+receipt. Historical experiment declarations and evidence are unchanged.
+
+The default is three training updates per size, with the first excluded from
+the steady-state reading. Evaluation uses the suite's fixed deal set. The whole
+invocation has a 3,600-second deadline, including startup and cleanup; this is a
+limit, not an expected duration. The report records actual elapsed time and
+completed rows. `--seconds` changes that limit, and `--updates` changes the
+training count. A slow machine may need a larger explicit budget to complete
+the ladder. A partial ladder is not a complete reference. The process tree has a
+16 GiB RSS ceiling; `--memory-mib` changes it explicitly. Subset checks use
+`--size w64` and/or `--workload training` (repeat either flag for multiple rows);
+`--streams` remains available. Subsets cannot replace a full reference.
+
+`report.json` retains every attempted row, its source/diff identity, measured
+host, elapsed time, cleanup time and any failure. Each row directory retains
+`worker.log` and its ordinary pipeline receipts. Training adds `training.json`
+and `updates.json`; evaluation keeps `panel/evaluation.json`, shared-serving
+performance, Commands and replay evidence. Failed runs stop the ladder and
+retain completed rows without assigning rates to missing rows.
+
+Read the rows as follows:
+
+| Reading | Meaning |
+| --- | --- |
+| Learner decisions/s; seconds/update | Training work over collection plus learning time, excluding the warmup update. Setup, export and total invocation time remain separate. |
+| Native stepping; encoding; inference; learning | The real stage's timing breakdown. Parent and child clocks overlap; do not sum both. Other collection work remains visible. |
+| Inference calls/update; mean rows/call | Whole-stage policy calls divided by updates, and `environment_decisions / inference_calls`, including warmup, for both-seat self-play. |
+| Idle stream fraction | `idle_stream_steps / (inference_calls × streams)` over the whole stage, including warmup. |
+| Evaluation games/s | Completed, replay-verified games over the evaluation interval, including serving startup and replay. Checkpoint preparation is separate; replay seconds and serving startup remain in the underlying receipts. |
+
+Complete-game batch closure explains why training calls often contain fewer
+rows than the configured stream count. Once a stream satisfies its collection
+quota and finishes its game, it idles until the remaining streams finish. The
+policy sees only active streams, so batches shrink toward the longest game's
+tail. Mean batch size and idle fraction expose this cost; increasing a serving
+batch limit does not remove it.
+
+Add `--hourly-price 0.59` to express learner decisions and evaluation games per
+dollar at that supplied USD/hour rate: `rate_per_second × 3600 / hourly_price`.
+Training is a steady-state estimate; evaluation uses its measured allocation
+interval including startup and replay. Both omit rental setup, idle rental time,
+failed attempts and billing adjustments and are never a rental bill.
+
+### Compare with a retained reference
+
+On the designated reference host, retain a complete reading with
+`--record-reference manabot/perf/baseline.json` added to the suite command.
+The source checkout must be clean: commit the implementation first, measure it,
+then review and commit the baseline. A partial or failed run cannot replace it.
+Keep CPU and MPS references in separate files. Keep the reference source in a
+separate, clean checkout with its locked environment and native extension built
+from that source. The checkout must contain this suite interface and match the
+baseline's source commit; the command creates no worktrees. To compare a candidate:
+
+```sh
+uv run --locked --extra evaluation python scripts/bench_training_update.py \
+  --suite --device cpu --compare manabot/perf/baseline.json \
+  --reference-root /path/to/reference-checkout --out .runs/pipeline-compare-001
+```
+
+The baseline retains the source commit, world, policy-input configuration,
+`TrainingRun.host` facts plus a machine-identity hash, device, precision,
+workload and behavior digests, and the samples from which its reading was made. Comparison reruns the reference
+and candidate on the same host in interleaved order, with three repetitions,
+and reports minimum durations on a shared machine. Each minimum names its
+sample; phase timings come from that sample rather than independently selected
+minima. Use the same suite options as the reference, including updates, streams
+and memory allowance. Comparison has the same total lifetime limit; six
+interleaved readings may need a larger explicit `--seconds` budget. Stored
+historical wall times alone cannot establish a speedup.
+
+Training behavior hashes the final policy tensor contents and work counters;
+evaluation hashes initialized tensor contents, retained Commands, state transitions
+and outcomes, excluding clocks and arrival order. A digest match is a conservative
+comparison check, not a proof of learning equivalence.
+
+Compare only matching workloads, host identities, devices and precision with
+matching behavior digests. An identity or behavior mismatch is reported as
+incomparable, not a performance regression or improvement. A changed world or
+recipe needs a new reference; retain the previous evidence. Adopting a reference
+is an explicit reviewed change to the baseline, never an automatic effect of
+`--compare`. Timing agreement does not establish learning equivalence for a
+change to numerical computation.
+
+CPU, MPS and CUDA are separate readings. Training on an available Apple GPU
+uses `--device mps --workload training`. Shared evaluation currently admits only
+CPU and CUDA; a full MPS suite fails explicitly without substituting CPU. On an
+already provisioned CUDA host, the named CUDA check is:
+
+```sh
+uv run --locked --extra evaluation python scripts/bench_training_update.py \
+  --suite --device cuda --out .runs/pipeline-cuda-001
+```
+
+CPU model timings are not GPU evidence, and matching GPU labels on different
+rentals do not establish a same-host comparison. These commands provision
+nothing. Do not introduce artificial contention to test a shared host.
+
+An unavailable device, admission failure, capacity overflow, timeout or failed
+replay retains a failed or incomplete receipt and exits nonzero; missing rows
+never become zero-speed measurements. Resolve the reported cause and rerun into
+a fresh directory. Do not silently reduce capacities, change precision or
+substitute another device to complete a reference.
+
+For attribution of a single recipe, omit `--suite`: the existing
+`--recipe`, `--streams`, `--updates`, `--json` and `--out` workflow remains
+available. CUDA profiler counts (`--cuda-counts`) perturb timing and do not
+belong in an ordinary suite comparison.
+
+Workload rows are registered in `scripts/bench_pipeline.py`. A runner returns a
+measured population and interval, workload/behavior identities and receipt paths;
+the shared coordinator owns bounds, repetition, comparison and price conversion.
+Belief or deck-building training can add a runner to that registry.
 
 ## Engine performance budget
 
