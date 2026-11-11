@@ -216,3 +216,28 @@ Assumption: publish with the three documented baseline replay failures, as in
 the earlier publication, while making the current failures explicit. The
 requested API, debug suite, recovery paths and isolated consumers pass. Linux,
 accelerators and hosted CI results are not certified by these local runs.
+
+## Gate review — 2026-11-11
+
+Reviewed the complete branch diff at `6bbc8ccc7` against the seven retained
+steers, including native branch/reset identity, PyO3/stubs, capture bookkeeping,
+Gym/Torch lifecycle, migrated belief clients, removed passive callers and docs.
+No additional product changes or unresolved design questions were found.
+
+Validation plan follows those paths: native debug covers hand ownership and
+branch identity; env/belief tests cover public reads and unchanged supervision;
+capture/recovery/search tests cover replay prefixes and explicit reset callers;
+isolated consumers cover both supported interpreters, installed stubs and the
+guide example. Reuse the publication results above because their source and
+test inputs are unchanged. No second build or suite run is needed.
+
+- `git diff --name-only 76728c86b HEAD` — only `docs/python-api-audit.md` and `scratch/questions.md`; all implementation, test, dependency and build inputs match the publication check tree.
+- `git diff --no-renames --name-only -z origin/main...HEAD | bash .github/ci/select-tests.sh` — selects all nine CI jobs through the native-source filter; the broader browser, clean-machine, Linux and Engine Budget matrix remains with CI.
+- Inspected `/tmp/mtg272-final-{rust,python,clippy}.log` — confirms 1,057 debug passes/two skips, 343 Python passes/three previously reproduced baseline replay failures, and successful all-target/all-feature Clippy; reused, not rerun.
+- Inspected final consumer, contract and release-smoke logs for 3.12/3.13 — confirms 26 passes per interpreter, guide/import/stub/identity proofs and both installed training smokes; reused, not rerun.
+- Searched live code/tests/scripts for removed hand-target, Gym auto-reset and passive APIs — no stale callers; docs retain intentional removal notices.
+- `git diff --check` — passed; existing Rust/Ruff formatting results remain applicable to unchanged source.
+
+The three retained TLA `binding_mismatch` cases remain failures, not passes.
+No hosted CI status or performance result was inferred from local evidence.
+No PR copy exists in scratch to refresh; lasting API and audit docs are current.
