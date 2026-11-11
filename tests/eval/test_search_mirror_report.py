@@ -184,6 +184,15 @@ def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
     transitioned = _extension_report(tmp_path, {})
     assert transitioned["valid_games"] == 0
     assert "waiting for oracle barrier" in _extension_section(transitioned)
+    # A continuation's later cutoff must not be labeled with its predecessor's date.
+    receipts["validation"]["snapshot_cutoffs"] = {
+        "original": {"observed_utc": "2026-11-11T13:09:53Z", "finished_utc": "2026-11-11T13:10:27Z"},
+        "uniform-native": {"observed_utc": "2026-11-11T13:51:36Z", "finished_utc": "2026-11-11T13:51:38Z"},
+    }
+    (receipt_dir / "validation.json").write_text(json.dumps(receipts["validation"]))
+    html = _extension_section(_extension_report(tmp_path, {}))
+    assert "original: 2026-11-11T13:09:53Z to 2026-11-11T13:10:27Z" in html
+    assert "uniform-native: 2026-11-11T13:51:36Z to 2026-11-11T13:51:38Z" in html
     # A typo in the input path must not manufacture a no-games receipt.
     with pytest.raises(FileNotFoundError):
         _extension_report(tmp_path / "missing", {})

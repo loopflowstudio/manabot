@@ -356,6 +356,7 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "invalid_games": sum(a["coverage"]["invalid"] for a in arms.values()),
         "execution": remote.get("execution", "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness"),
         "observed_utc": remote["observed_utc"],
+        "snapshot_cutoffs": validation.get("snapshot_cutoffs", {}),
         "capacity_reason": receipts["launcher-inventory"].get("status_note") or receipts["launcher-inventory"].get("quote_error") or "no capacity error",
         "arms": arms, "control": _coverage(baselines.get("policy/policy", {}), games),
         "contrasts": [_linear_contrast(c, scores, games) for c in _factorial_contrasts()],
@@ -438,6 +439,12 @@ def _extension_section(extension: dict[str, Any]) -> str:
                          f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
                          f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
     transition = extension.get("transition")
+    cutoffs = extension.get("snapshot_cutoffs", {})
+    snapshot_text = (
+        "; ".join(f'{name}: {receipt["observed_utc"]} to {receipt["finished_utc"]}'
+                  for name, receipt in cutoffs.items())
+        if cutoffs else extension["observed_utc"]
+    )
     transition_html = (
         '<p class="note"><strong>Implementation transition:</strong> '
         f'{escape(transition["status"])}. {escape(transition["admission"])}. '
@@ -463,7 +470,7 @@ def _extension_section(extension: dict[str, Any]) -> str:
     return (
         _batching_section(extension) + '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
         f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
-        f'{escape(extension["execution"])}.</strong> Snapshot: {escape(extension["observed_utc"])}. '
+        f'{escape(extension["execution"])}.</strong> Per-shard snapshot cutoffs: {escape(snapshot_text)}. '
         f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'
         + transition_html +
         '<p class="note">All six cells fix depth 20, α 0.02 and β 0.01 against the raw sampled MTG-183 '

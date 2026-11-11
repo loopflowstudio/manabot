@@ -1,5 +1,53 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Native uniform continuation running — 2026-11-11
+
+Etude run **`mtg269-mirror-v2-uniform-native`**, attempt **`b9b50aa247df`**,
+session `c0e8be79ff4c`, started at **13:45:05 UTC** on the owned mini. Seven
+actual uniform workers and their compact start records were verified. The
+continuation uses source `f845b02ef4a26377abad4e1c54bf6443ad3fab0e`, native binary
+`8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`, one inference
+thread per worker, and the original checkpoint and deadline **1794852989**.
+The zero-cost Etude quote and launch/attempt receipts are retained; no rental,
+training update or checkpoint export was introduced.
+
+Before allocation, all 351 candidate and 349 original source bindings, both
+native binaries and the checkpoint were rechecked. The admitted native/search/
+encoder files are unchanged. The runner AST differs only in its idempotent
+stop handler; the recovery and report owners have separately identified changes.
+All 62 local runner/report/data/recovery checks and nine mini recovery checks
+pass. The existing 304-view and six-root native admission remains applicable to
+those unchanged components; it is not a new full-grid equivalence claim.
+
+The recovered predecessor seals all 1,500 oracle outcomes and seven original
+uniform interruptions, including four explicitly reconciled missing callbacks.
+Original source and evidence bytes remain unchanged. Shared predecessor locks
+exclude an original-job restart; the new segment executes only missing keys.
+
+The native snapshot collected at **13:51:36–13:51:38 UTC** contains **10 valid
+outcomes** (4/8/16 worlds: **3/5/2**), with zero scored failures. Its audit reconciles **2,088 Commands** and
+**953 compact receipts**, including the frozen world/observation contracts,
+physical hand sampler and native/checkpoint identities. Values are finite;
+maximum |Q| is 1.05719. This is early, uneven coverage, not a strength result or
+a reliable seven-worker throughput/sub-second claim. The report retains all six
+500-slot cells: **1,510/3,000** outcomes in this snapshot, **1,490 missing**.
+
+Completed original game wall time sums to 931,110.94 seconds; the native snapshot
+sums to 1,713.33 seconds. These are separate implementation costs, excluding
+ongoing games and some setup/interruption costs. The seven interrupted attempts
+retain 10 Commands and two completed search receipts (4.68 seconds), plus
+unfinished work whose complete timing is unavailable. Full Etude attempt windows,
+the inclusive operational clock and missing CPU/cost measurements are recorded in
+`search-mirror-v2/transition/execution-accounting.json`. The original seven-day
+ceiling is unchanged; elapsed recovery time was not replenished.
+
+The original snapshot was collected at **13:09:53–13:10:27 UTC**. All its
+bytes are published and verified; displaced earlier game
+files remain identical prefixes. The native snapshot and private interruption
+blobs use the same content-addressed store. The owning HTML/summary remain at
+`search-mirror-v1/{report.html,summary.json}`, with implementation costs and
+recovery limits labeled separately. The 8,000-outcome v1 study is unchanged.
+
 ## Oracle barrier and cancellation recovery — 2026-11-11
 
 The original segment completed all **1,500 oracle outcomes**, with no scored
@@ -40,8 +88,8 @@ independent algebra/Command audit covers the earlier 1,469-outcome snapshot:
 The remaining 31 outcomes retain their source-generated finite-value checks and
 sealed traces; they are not silently added to that dated offline audit's scope.
 Recovery evidence is in `search-mirror-v2/transition/recovery/`, with the official
-stop receipt alongside it. Uniform continuation remains pending the recovered
-seal, renewed source admission and Etude allocation.
+stop receipt alongside it. This recovery completed before the separately recorded
+native continuation above; the original job must not be resumed.
 
 ## Authorized uniform transition — 2026-11-11 preparation
 
