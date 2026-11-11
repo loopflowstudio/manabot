@@ -364,3 +364,21 @@ scratch. No source, test or doc outside those changed, so nothing was edited.
   30-minute selection window.
 - Billing: only foreign account pods moved; this Task's bounds unchanged.
 - Next: execution review, then hand rental and `run_campaign.sh MACHINE`.
+
+## C2 execution, 2026-11-11
+
+- Selection window 15:38:47–16:08:47 UTC. A hand rent at 15:39:43 was refused by the
+  provider (exit 0; no pod, no cost).
+- **Over-rental (my error).** The poll-and-rent loop judged success by a `sqlite3` CLI
+  read that failed ("unable to open database file") and printed nothing, so it read
+  every attempt as refused and rented again: 12 attempts, 4 real pods. Kept the first,
+  `b015d5-a40-79af318d770b` (pod `jylvfcg28e3erv`, claimed 15:43:07). Terminated the
+  other three at 16:09–16:10 and confirmed them absent at the provider
+  (`l1cdpfp8xa4r3e`, `n5qyb1htrkq2qm`, `djn2mld7kxlugg`). Together about 0.855 h, about
+  $0.505, charged to the C2 line. The rest were refused with no pod.
+- Because the frozen driver's deadline (19:43, 4 h) does not see that spend, an
+  outside guard (`/tmp/c2-scripts/guard.sh`, log `execution/guard.log`) SIGINTs the
+  driver at 18:42:02 UTC. Its `finally` teardown deletes the pod by 18:57:02, which
+  keeps C2 ≤ $2.50 including one late-posting minute per pod. The driver bytes are unchanged.
+- Lesson: when a rent loop's success check fails, it must stop, not retry. Allow one
+  rent per verified provider refusal.

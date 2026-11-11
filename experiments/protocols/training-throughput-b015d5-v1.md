@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 evidence reviewed; C2 design reviewed, driver built, awaiting freeze)
+# Training throughput on the ten-deck Elemental recipe, v1 (C2 executed; evidence review pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -2226,6 +2226,40 @@ controls; and the K=2/K=4 memory and gain rules. Launch is
 `run_campaign.sh MACHINE` after the rental, and only after the machine log shows
 "machine confirmed" and the provider lists the pod. The parent experiment
 remains open.
+
+### C2 execution record — 2026-11-11 UTC
+
+Executed under the operator execution review of this freeze (comment 36813570),
+which rests on the authority above. The driver and identity job ran with their
+frozen hashes, rechecked before launch. Results, readings and full accounting are in
+the report's "Step 3 continuation C2" section. Evidence is in `c2/step-3-c1/`.
+
+- **Before launch.** No C2 state, run or controller existed in the isolated home.
+  `run_campaign.sh preflight` exited 0 (`execution/preflight-20261111T153841Z.json`).
+  Billing was unchanged for every C1 pod (`execution/billing-podid-20261111T1539Z.json`).
+- **Selection window.** It ran 15:38:47–16:08:47 UTC at $0.59/hour
+  (`execution/availability-window.log`). The first hand rent was refused by the
+  provider; it had no pod and exited 0. An operator poll-and-rent loop outside the
+  driver then made 11 more attempts, because its success check was a database read
+  that failed silently. Four creates succeeded. The first,
+  `b015d5-a40-79af318d770b` (pod `jylvfcg28e3erv`, claimed 15:43:07), was kept. The
+  other three ran no work. They were terminated at 16:09–16:10, confirmed absent at
+  the provider, and posted $0.504125 over 0.855 h, charged to the C2 line.
+- **Guard.** The frozen deadline (4.0 h from claim) does not include that spend. An
+  outside guard was therefore set to SIGINT the driver at 18:42:02 UTC, so the kept
+  pod would be deleted by 18:57:02 and C2 would stay under $2.50. It did not fire.
+- **Cells.** The identity job and CUDA regression passed. Cells 1–5 completed, with
+  no failure, retry, stall or controller restart. Cell 5 (w160l8 K=4) was admitted
+  provisionally: the K=2 whole-window gain was 1.3025, with a late window of 1.20.
+  Cell 6 (a384l8 K=4) was a memory `conditional_skip`. No overlap rerun was needed.
+- **Teardown.** The driver deleted the kept pod at 18:03:40 and confirmed it absent at
+  18:03:44.
+- **Totals.** C2 ≤ $1.929936 of $2.50 over 3.205 GPU-hours and 84 queued updates.
+  Cumulative bounds: C1 + C2 ≤ $5.837652 / $8; step 3 ≤ $7.754625 / $10;
+  experiment ≤ $9.849497 / $50; 9.81 / 15 GPU-hours; 280 / 1,600 updates.
+- **Analysis script.** `reconcile.py` (new, adapted from C1's) wrote `cells.json`,
+  `rentals.json` and the inventory. The frozen reader wrote `readings.json` with
+  `--source b5e8f404…`.
 
 ## Stop waiting for the slowest game (deferred candidate)
 
