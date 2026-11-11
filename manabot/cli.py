@@ -75,6 +75,10 @@ def train_command(
     learning_seats: Literal["one", "both"] | None = typer.Option(
         None, help="Learning seats for local/baseline recipes (default: both)"
     ),
+    device: Literal["cpu", "mps", "cuda"] | None = typer.Option(
+        None,
+        help="Training device (default: CUDA, then MPS; local alone falls back to CPU)",
+    ),
     steps: int | None = typer.Option(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
@@ -141,6 +145,7 @@ def train_command(
                 out=Path(out) if out else None,
                 seconds=LOCAL_SECONDS if seconds is None else seconds,
                 learning_seats=learning_seats or "both",
+                device=device,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -155,6 +160,7 @@ def train_command(
                 out=Path(out) if out else None,
                 seconds=seconds,
                 learning_seats=learning_seats or "both",
+                device=device,
             )
             status = baseline_result.status
             typer.echo(
@@ -163,9 +169,9 @@ def train_command(
         if status != "completed":
             raise typer.Exit(1)
         return
-    if steps is not None or seconds is not None or learning_seats is not None:
+    if any(value is not None for value in (steps, seconds, learning_seats, device)):
         raise typer.BadParameter(
-            "--steps, --seconds and --learning-seats require a recipe"
+            "--steps, --seconds, --learning-seats and --device require a recipe"
         )
     if regime is not None and regime_name is not None:
         raise typer.BadParameter("select --regime or --regime-name, not both")

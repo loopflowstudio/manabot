@@ -7,6 +7,7 @@ import torch
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import (
     NumericalError,
     clipped_surrogate,
@@ -213,7 +214,7 @@ def update_iteration(
                     )
                     loss = (
                         policy
-                        + learning.value_weight * value_loss
+                        + learning.value_weight * float64_operand(value_loss)
                         + diagnostics["tau"] * kl_ref
                         + learning.collection_kl * kl_behavior
                     )
@@ -248,7 +249,12 @@ def update_iteration(
                     raise
                 with track("Minibatch diagnostics"):
                     health["clip_fraction"] = float(
-                        ((log_ratio.detach().double().exp() - 1).abs() > learning.clip)
+                        (
+                            (
+                                float64_operand(log_ratio.detach()).double().exp() - 1
+                            ).abs()
+                            > learning.clip
+                        )
                         .float()
                         .mean()
                     )
