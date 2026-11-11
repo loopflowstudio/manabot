@@ -62,6 +62,14 @@ There is no docs/releases.md; the engine guide describes the changes.
 
 ## Remaining work
 
+Concept review, 2026-11-11: no design change and no open product choice;
+loop-or-next can advance. The shared record removes the consumer-specific and
+scalar/batch distinctions without merging their reset policies. Keep the
+documented distinction between a vector's completed transition and its
+replacement observation. The requested demo should show scalar and batch reads,
+a pending seed, and independent branches, then failure recovery with a fresh read.
+This review ran no behavioral checks; the gate work below remains pending.
+
 No open product question. The two identity corrections are implemented:
 `Env` keeps the live reset seed separate from its pending reset seed, and one
 branch constructor allocates process-local identities for exact/selected forks
@@ -71,7 +79,12 @@ originating reset seed. Capture guards and portable identities stay unchanged.
 The deletion cut also removes the duplicate fork constructors with zero
 identities; fork replay traces remain shared through their existing clones.
 Focused lifecycle regressions cover pending and failed resets, repeated branches,
-materialization, independent mutation and capture-origin/reset rejection.
+materialization, independent mutation and capture-origin/reset rejection. The
+latest lifecycle proof below records all six native debug cases and 17 installed
+snapshot/search-command cases passing after compression and atomic rebuild.
+The earlier iteration direction to implement these repairs is superseded by
+that implementation and proof; `docs/engine.md#hand-snapshots` already describes
+the repaired seed and branch semantics.
 
 Gate must refresh affected suites after scalar unification and these repairs;
 earlier publication and QA results below predate them. The main merge at
@@ -79,11 +92,16 @@ earlier publication and QA results below predate them. The main merge at
 the snapshot implementations or their three belief consumers. Validate the
 current development/consumer contract from `docs/development.md`; the old
 installed-wheel results do not certify the merged dependency configuration.
+The later merge at `75796f92a` brings in #461's immutable self-play outcome tables
+and metric reader. It changes neither snapshot APIs nor the three migrated
+belief clients. Recovery validation must now exercise the merged
+`training/execution.py` / `training/update_metrics.py` outcome-table path, rather
+than treating earlier recovery results as proof of the current branch.
 Return the shared scalar/batch contract to demo as requested in 8507f1b8.
 Publication, landing and Task movement remain separate. No throughput,
 CUDA/MPS, vector terminal-hand retention or full scalar-helper parity claim.
 
-### Realign observations — 2026-11-11
+### Pre-repair reproduction — 2026-11-11 (historical)
 
 Two bounded `uv run --no-sync python` probes of the existing extension confirmed
 the source findings without replaying games or rerunning suites:
@@ -97,7 +115,8 @@ the source findings without replaying games or rerunning suites:
 The probes used the retained CPython 3.12 environment; uv warned that it did
 not satisfy the newly merged 3.13 development request. These are bounded
 behavioral reproductions, not current development-environment validation.
-No tests were rerun solely for realign, and no native code changed.
+That realign pass changed no native code and reran no tests. The identity repair
+and lifecycle compression proofs below supersede these reproduced defects.
 
 ## Identity repair validation — 2026-11-11
 
@@ -184,6 +203,14 @@ Main's MTG-271 direction, exact replies and dependency findings remain at
 Use main's QA instructions: they reflect its CPython 3.13 development setup
 and wheel dependencies, superseding this branch's cp312-only and separate-Torch
 instructions. Main's release and dependency changes merge unchanged.
+
+Realign rechecked the `75796f92a` merge against its first parent and the live
+snapshot implementations, bindings, stubs and lifecycle tests. The merge adds
+training-record guidance and self-play metrics work, with no new snapshot
+mechanism or product choice. The current plan and engine guide agree with the
+implemented reset seed and shared branch constructor. No selected Wave exists;
+upstream experiment memory is outside this Task's scope. Existing focused
+results are reused; broader gate checks and the requested demo remain pending.
 
 ## Lifecycle compression — 2026-11-11
 

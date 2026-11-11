@@ -115,7 +115,9 @@ def test_hand_snapshots_match_scalar_without_changing_observations(
 
 def test_hand_snapshots_reject_invalid_requests_without_advancing() -> None:
     vector = managym.VectorEnv(2, seed=42)
-    with pytest.raises(managym.AgentError, match="reset"):
+    with pytest.raises(
+        managym.AgentError, match="must be reset before reading hand snapshots"
+    ):
         vector.hand_snapshots([0, 1])
     vector.reset_all(_players())
     expected = [_identity(snapshot) for snapshot in vector.hand_snapshots([0, 1])]
@@ -253,7 +255,9 @@ def test_scalar_hand_snapshot_errors_reset_identity_and_terminal_hand() -> None:
     match = Match(MatchConfig(hero_deck={"Mountain": 8}, villain_deck={"Island": 8}))
     env = Env(match, ObservationSpace(), Reward(RewardConfig()), seed=42)
     try:
-        with pytest.raises(managym.AgentError, match="reset"):
+        with pytest.raises(
+            managym.AgentError, match="must be reset before reading hand snapshots"
+        ):
             env.hand_snapshot(0)
         env.reset()
         first = env.hand_snapshot(0)

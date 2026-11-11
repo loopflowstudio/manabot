@@ -1051,7 +1051,7 @@ impl Env {
         let game = self
             .game
             .as_ref()
-            .ok_or_else(|| AgentError("hand snapshots require reset".into()))?;
+            .ok_or_else(|| AgentError("env must be reset before reading hand snapshots".into()))?;
         if player >= game.state.players.len() {
             return Err(AgentError("hand snapshot player must be 0 or 1".into()));
         }
