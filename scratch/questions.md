@@ -51,14 +51,41 @@ Unrelated b015d5/C2 experiment notes remain in
 
 ## Remaining work and limits
 
-Gate still needs the complete debug Rust suite, Clippy and affected Python
+All accepted implementation cuts are present, including Passive removal. The
+earlier iteration feedback saying Passive remains predates commit `4dc9574bf`.
+Gate still needs the complete debug Rust suite and affected Python
 environment/capture/package checks under `docs/development.md#validation-by-change-area`.
+All-target/all-feature Clippy passed after the opponent cut and compression;
+no native changes since then invalidate that result.
 Relevant Python coverage includes `tests/env/`,
 `tests/semantic/test_text_observation.py`,
 `tests/training/test_automatic_game_capture.py`,
 `tests/training/test_game_errors.py`, `tests/training/test_game_error_recovery.py`
 and `tests/test_package_boundaries.py`. No world or observation shape changed.
 Publication and Task movement belong to delivery, after validation.
+
+The merge at `7de8b87dc` incorporates upstream `402dfd5b`, including MPS training
+support from #457. It leaves the native snapshot/opponent code unchanged.
+`manabot/env/vector_env.py::hand_snapshots` still returns CPU records, independent
+of the tensor device. Existing CPU proof does not establish CUDA/MPS validation;
+no training-device support is added by this Task.
+
+Resolve the recorded QA failures before claiming gate success:
+
+- Two retained TLA resource-limit replay cases returned `binding_mismatch` at
+  action 370, also reproduced on `61a51a3ff` in the earlier QA pass. Preserve the
+  frozen evidence and determine its disposition; do not rewrite it to pass.
+- The exact-quota recovery test used removed `RolloutBatch.obs`; the current
+  interface is `observations().observation` in
+  `manabot/training/rollout/collection.py`. Its two assertions are corrected and
+  the focused fixture passed on 2026-11-11 (command below).
+- The conditional-search fixture lacked
+  `experiments/data/int-13-conditional-strategy-fixture-v1.json`; obtain the
+  retained artifact for gate or record the unavailable check explicitly.
+
+`scratch/qa.html` records the earlier run (695 passed, four failures), not the
+current gate status. Only the replay mismatch has recorded baseline reproduction;
+the other diagnoses come from source inspection or the missing artifact.
 
 Audit follow-ups, decided by Jack Heart (steer 14d5db38, exact reply:
 "1 A / 2 A / 3a - lets discuss further / 3b A"; then steer 3437c194 on 3a:
@@ -78,8 +105,9 @@ Audit follow-ups, decided by Jack Heart (steer 14d5db38, exact reply:
 
 Release-notes items (breaking, for the 0.2.1 notes MTG-271's workflow writes):
 Gym `auto_reset` removed; Torch `reset(seed=current_base)` now reproduces the
-deal; CapturedVector rejects readable `reset_all`/`step`. There is no
-`docs/releases.md` on main; the guide (`docs/engine.md`) documents all three.
+deal; CapturedVector rejects readable `reset_all`/`step`; built-in `passive`
+opponents and the passive decision-profile CLI branch are removed. There is no
+`docs/releases.md` on main; the guide (`docs/engine.md`) documents these changes.
 
 No unresolved product decision blocks the hand snapshot contract. There is no
 claim of throughput improvement, GPU validation, terminal-hand retention or full
@@ -89,10 +117,46 @@ or edited. This Task has no Wave memory to curate.
 
 The pre-opponent-cut concept review and its rationale are retained at
 `36d9451ef844fe23d59743f32dbdfaa121ab501e:scratch/questions.md` and
-`scratch/concept-review.html`. The accepted opponent cut below supersedes its
-statement that no further implementation is needed.
+`36d9451ef844fe23d59743f32dbdfaa121ab501e:scratch/concept-review.html`.
+The current review page includes the subsequent reset, capture and opponent cuts.
+
+## Concept review after realignment — 2026-11-11
+
+Outcome for loop-or-next: **advance**. No design change or open product choice.
+The implementation and usage guide express the recorded direction above;
+this review changes only the working notes and `scratch/concept-review.html`.
+It does not establish gate success or rerun the retained runtime proofs.
+
+The experience remains: request native seats, read detached `HandSnapshot`
+records, and let clients decide their use and storage. A snapshot captures one
+read boundary; the game generation distinguishes resets, while revision identifies
+the decision boundary. Native zones own the contents, bindings and wrappers
+carry the same record, and no observation or persisted replay schema changes.
+CapturedVector owns its buffered mutations and restarts evidence prefixes from
+native generations. Gym callers reset explicitly; vector collectors retain true
+done flags with replacement-game observations. Vector opponents are caller-driven
+(None) or native Random. No further lifecycle abstraction is needed for this scope.
+
+Counterexamples retained: an equal seed (including saturated succession) does
+not identify the same game; a chooser is not necessarily the requested hand's
+native seat; inactive rows still appear in an all-slot read; and a post-done
+read cannot recover terminal hands. On strict-call failure, discard that call's
+transition results and recover/reset before another read; isolated failures
+require failed-slot replacement. Earlier detached snapshots remain historical
+reads, not proof that a failed transition succeeded. Terminal retention stays
+outside this design; MTG-275/276/277 remain separate work.
+
+Next show gate's disposition of the two retained replay mismatches and missing
+conditional-search artifact, plus the required debug Rust and affected Python
+checks. These are validation obligations, not unanswered product questions.
 
 ## Retained validation
+
+After realignment, `uv run --extra dev --extra artifacts pytest
+tests/training/test_game_errors.py::test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure
+-q` — 1 passed in 2.56 s. Ruff check/format and `git diff --check` passed.
+This repairs one of the four earlier QA failures; the other three and full gate
+remain outstanding. Existing native and installed-package results were reused.
 
 Post-rename proof from the preceding implementation pass:
 
@@ -109,10 +173,6 @@ Post-rename proof from the preceding implementation pass:
 - The existing same-seed stale-capture regression passed before the rename.
   Ruff, Rust formatting and diff whitespace checks passed after the rename.
   Temporary installation files were removed.
-
-Realign changed only this working plan. Existing results were reused; no runtime
-tests were repeated. Source inspection confirmed the rename, hidden-information
-boundary and the three follow-ups; no additional code correction was needed.
 
 ## Accepted opponent cut — 2026-11-11
 
@@ -148,9 +208,7 @@ The release wheel was rebuilt and the cp312 extension installed atomically.
 - Rust formatting, Ruff check/format on all changed Python files, diff whitespace
   and decision-profile CLI with both game counts zero — passed.
 
-Remaining: full gate (including Clippy) and disposition of the earlier QA
-failures in `scratch/qa.html`. No heuristic, fixed-seat observations or search
-follow-up has been implemented. No server or watcher was started.
+No heuristic, fixed-seat observations or search follow-up has been implemented.
 
 ## Compression — 2026-11-11
 
@@ -164,3 +222,19 @@ the map's formatter directly. The README's obsolete Gym auto-reset claim is fixe
 - `cargo test --manifest-path managym/Cargo.toml -p managym --lib agent::vector_env::tests -j 2 -- --test-threads 2` — 20 debug tests passed; release wheel rebuilt and extension replaced atomically.
 - `uv run --extra dev --extra artifacts pytest tests/env/test_captured_vector_bookkeeping.py tests/env/test_hand_snapshots.py tests/env/test_opponents.py tests/training/test_automatic_game_capture.py tests/training/test_training_exposure.py -q` — 64 passed; one exposure substitute lacked the new generation read. Added that method; its focused rerun passed (65 cases total).
 - `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml -p managym --all-targets --all-features -j 2 -- -D warnings`, Rust formatting, changed-file Ruff check/format and `git diff --check` — passed. Full gate and the retained QA failure dispositions remain outstanding.
+
+## QA pass — 2026-11-11 (see scratch/qa.html)
+
+Fresh /tmp venv install of the rebuilt wheel ran the guide example, a native
+belief-style collector (1600 cross-checks against own-view hands and public hand
+counts) and a Torch loop with seeded reset. All passed. Fixed: reading snapshots
+before reset now says "must be reset before reading hand snapshots" (was "...before
+step"); debug `hand_snapshots` Rust tests passed, extension replaced atomically.
+
+Dispositions: exact-quota test passes; conditional-search fixture is now present
+locally and passes (16). The TLA receipt replay `binding_mismatch` fails all 3
+parametrizations identically on base 402dfd5b2 (built in a temp worktree), so it
+is pre-existing. Neither test file runs in any CI workflow. Affected suite: 424
+passed, 3 failed (that pre-existing failure). Full debug Rust suite was not rerun
+after the one-line error-message change. Torch is not a wheel dependency
+(dependency group only); MTG-271 owns that.

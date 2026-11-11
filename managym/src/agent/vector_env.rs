@@ -323,7 +323,9 @@ impl VectorEnv {
                 players.len()
             )));
         }
-        self.validate_ready_for_step()?;
+        self.validate_ready_for_step().map_err(|_| {
+            AgentError("vector env must be reset before reading hand snapshots".to_string())
+        })?;
         self.envs
             .iter()
             .zip(players)
