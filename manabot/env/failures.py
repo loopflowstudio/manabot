@@ -112,6 +112,7 @@ class FailureEvidence(BaseModel):
     operation: Literal["reset", "step"]
     games: list[GameInputs]
     skip_trivial: bool = True
+    # Retain historical names verbatim; native construction admits replay policies.
     opponent_policy: str = "none"
     seed_stride: int = 1
     identities: dict[str, object]
@@ -533,15 +534,6 @@ _VECTOR_READS = frozenset(
         "skip_trivial_counts",
     }
 )
-_VECTOR_MUTATIONS = frozenset(
-    {
-        "enable_exposure_capture",
-        "reset_all",
-        "scenario_naming_vocabulary_into_buffers",
-        "step",
-        "take_exposure",
-    }
-)
 
 
 class CapturedVector(_Capture):
@@ -589,7 +581,7 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
-        self._generations: list[int] = []
+        self._generations = self.native.current_game_generations()
         # Sampled roots pick setups natively at reset; evidence reads them back.
         self._sampled_roots = False
         self._action_cutoff: int | None = None
@@ -599,13 +591,11 @@ class CapturedVector(_Capture):
         # replay prefixes behind the native games.
         if name in _VECTOR_READS:
             return getattr(self.__dict__["native"], name)
-        if name in _VECTOR_MUTATIONS:
-            raise AttributeError(
-                f"CapturedVector does not expose native {name}; use the captured "
-                "reset_*_into_buffers / step_*_into_buffers calls so replay "
-                "evidence stays aligned with the games"
-            )
-        raise AttributeError(name)
+        raise AttributeError(
+            f"CapturedVector does not expose {name}; use its read methods or "
+            "reset_*_into_buffers / step_*_into_buffers calls so replay "
+            "evidence stays aligned with the games"
+        )
 
     def hand_snapshots(self, players: list[int]) -> list[managym.HandSnapshot]:
         """Read privileged current hands without adding them to failure evidence."""
@@ -713,7 +703,7 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
-        self._synchronize(reset=True)
+        self._synchronize()
 
     def reassign_roots_into_buffers(
         self, players: list[list[managym.PlayerConfig] | None]
@@ -737,19 +727,20 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
-        self._synchronize(reset=True)
+        self._synchronize()
 
-    def _synchronize(self, *, reset: bool = False) -> None:
+    def _synchronize(self) -> None:
         self._retain_exposure()
         seeds = self.native.current_game_seeds()
         # Generations, not seeds, mark a new game: saturated seed succession and
         # same-seed resets repeat a seed. They are process-local, never evidence.
         generations = self.native.current_game_generations()
-        known: list[int | None] = list(self._generations) or [None] * len(generations)
         restarted = [
             index
-            for index, (old, new) in enumerate(zip(known, generations, strict=True))
-            if reset or old != new
+            for index, (old, new) in enumerate(
+                zip(self._generations, generations, strict=True)
+            )
+            if old != new
         ]
         self._generations = generations
         if self._sampled_roots and restarted:

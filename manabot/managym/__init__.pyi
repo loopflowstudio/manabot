@@ -256,7 +256,7 @@ class VectorEnv:
         num_envs: int,
         seed: int = 0,
         skip_trivial: bool = True,
-        opponent_policy: str = "none",
+        opponent_policy: Literal["none", "random"] = "none",
         seed_stride: int | None = None,
     ) -> None: ...
     def reset_all(

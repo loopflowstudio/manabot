@@ -68,7 +68,8 @@ Audit follow-ups, decided by Jack Heart (steer 14d5db38, exact reply:
 - 1A: `CapturedVector.__getattr__` delegates only `_VECTOR_READS`; `reset_all`,
   `step`, `take_exposure`, `enable_exposure_capture` and
   `scenario_naming_vocabulary_into_buffers` raise `AttributeError` naming the
-  buffered calls. Unknown names raise a plain `AttributeError`.
+  buffered calls. Every undelegated name gets the same guidance; there is no
+  separate mutation denylist to maintain.
 - 2A: native `VectorEnv.current_game_generations()` (binding + stub);
   `_synchronize` restarts prefixes on generation change, not seed inequality.
 - 3bA: Torch `reset(seed=s)` rebuilds at `s` for every explicit seed.
@@ -86,39 +87,10 @@ scalar-helper parity. On 2026-11-11, `lf task status MTG-271 --json` reported it
 Python/dependency work at realign with no PR; its implementation was not imported
 or edited. This Task has no Wave memory to curate.
 
-## Concept review — 2026-11-11
-
-Outcome for loop-or-next: **nothing to change and no open product choice for
-MTG-272; advance.** This is a design review, not gate completion. The naming and
-consumer boundary in Jack Heart's two quoted directions above are already built.
-Keep the current working design; no next implement direction is needed.
-
-The experience is one explicit read: choose a native seat for each batch slot,
-call `hand_snapshots`, and retain detached name counts with their game/revision
-identity. Native zones own the contents; bindings and both wrappers expose the
-same record. The client owns interpretation and persistence. No new observation,
-capture, replay schema or automatic collection lifecycle is needed. The current
-engine usage example already expresses this experience and needs no rewrite.
-
-The principal trap is associating terminal reward/done with a hand read after
-autoreset. That read belongs to the replacement observation. Preserve the
-documented before-step read for current hands; retaining terminal hands would be
-a separate capability. Same-seed reset is the counterexample to seed-only
-identity; process-wide generation distinguishes it, while run identity remains
-necessary across processes. Player control is the counterexample to treating a
-seat as the chooser; explicit native seats preserve the intended ownership.
-
-For failure/recovery, a strict call can advance a prefix: discard its transition
-results, recover/reset, then read the new boundary. An isolated failed slot is
-replaced before another read; inactive slots retain their game/revision. Earlier
-detached records survive as records of earlier states, never proof of a failed
-transition. This is a caller contract, not a promise that snapshot reads reject
-every unrecovered failure. The three audit follow-ups above remain separate;
-their compatibility choices do not block this read-only API.
-
-Next show `scratch/concept-review.html`, then the gate results already listed
-above. This pass inspected source and existing fixtures; it ran no runtime
-tests and makes no additional validation claim.
+The pre-opponent-cut concept review and its rationale are retained at
+`36d9451ef844fe23d59743f32dbdfaa121ab501e:scratch/questions.md` and
+`scratch/concept-review.html`. The accepted opponent cut below supersedes its
+statement that no further implementation is needed.
 
 ## Retained validation
 
@@ -141,3 +113,54 @@ Post-rename proof from the preceding implementation pass:
 Realign changed only this working plan. Existing results were reused; no runtime
 tests were repeated. Source inspection confirmed the rename, hidden-information
 boundary and the three follow-ups; no additional code correction was needed.
+
+## Accepted opponent cut — 2026-11-11
+
+Jack Heart (5fde3453): "do C in this chagne, A in a nother diff";
+"not worried about outside users yet". Native built-in opponents become
+None/Random. MTG-277 owns the native heuristic opponent; MTG-276 owns fixed-seat
+batched observations; MTG-275 owns batched fork/search. None is implemented here.
+
+Delete — do not maintain: OpponentPolicy::Passive, its binding parser arm,
+PassivePolicy and its exclusive tests, passive vector fixtures, and the
+untrained-vs-passive decision-profile CLI branch that consumes PassivePolicy;
+also its exclusive native `Env::pass_priority_action_index` helper. All are
+removed. No deletion targets remain.
+Preserve random automated turns, caller-driven None, masks/autoreset, exact
+capture/replay inputs and historical evidence. Retained policy strings remain
+readable; attempting to replay passive rejects through native admission.
+Academy's independent scalar debugging opponent is outside this batched cut.
+The decision-profile CLI already offers untrained-vs-random; remove its passive
+branch rather than relabeling the historical baseline or duplicating random.
+
+The cut is implemented, including the stub's None/Random literal values, native
+admission through capture/replay and purpose-matched fixture replacements.
+The release wheel was rebuilt and the cp312 extension installed atomically.
+
+- `cargo test --manifest-path managym/Cargo.toml -p managym --lib agent::vector_env::tests -j 2 -- --test-threads 2` — 20 passed in debug.
+- Focused `uv run --extra dev --extra artifacts pytest` nodes in
+  `tests/env/test_opponents.py`, `test_env.py::TestEnvironment::test_vectorenv_single_agent_mode`,
+  `tests/verify/test_observation_parity.py::{test_vector_env_buffer_hot_path_matches_compatibility_step_path,test_vector_env_set_buffers_validates_contract}`,
+  `tests/training/test_automatic_game_capture.py::test_ordinary_vector_replays_current_game_after_autoreset`
+  and `tests/model/test_agent.py::test_forward_pass_shapes` — 16 passed;
+  the new retained-evidence fixture needed `by_alias=True` to match persisted
+  JSON, then its focused rerun passed (17 cases total).
+- Rust formatting, Ruff check/format on all changed Python files, diff whitespace
+  and decision-profile CLI with both game counts zero — passed.
+
+Remaining: full gate (including Clippy) and disposition of the earlier QA
+failures in `scratch/qa.html`. No heuristic, fixed-seat observations or search
+follow-up has been implemented. No server or watcher was started.
+
+## Compression — 2026-11-11
+
+Native generations now own all prefix rollover: initialize the retained list
+from native construction and compare it after each call, without a second reset
+flag or first-call sentinel. Pre-reset evidence still retains attempted inputs
+before entering native code. Torch no longer stores the unread `_base_seed`, and
+native construction owns its supported-policy validation. HandSnapshot repr uses
+the map's formatter directly. The README's obsolete Gym auto-reset claim is fixed.
+
+- `cargo test --manifest-path managym/Cargo.toml -p managym --lib agent::vector_env::tests -j 2 -- --test-threads 2` — 20 debug tests passed; release wheel rebuilt and extension replaced atomically.
+- `uv run --extra dev --extra artifacts pytest tests/env/test_captured_vector_bookkeeping.py tests/env/test_hand_snapshots.py tests/env/test_opponents.py tests/training/test_automatic_game_capture.py tests/training/test_training_exposure.py -q` — 64 passed; one exposure substitute lacked the new generation read. Added that method; its focused rerun passed (65 cases total).
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml -p managym --all-targets --all-features -j 2 -- -D warnings`, Rust formatting, changed-file Ruff check/format and `git diff --check` — passed. Full gate and the retained QA failure dispositions remain outstanding.

@@ -55,7 +55,9 @@ def env(sample_match, observation_space, reward) -> Env:
 
 
 @pytest.fixture
-def vector_env(sample_match, observation_space, reward) -> VectorEnv:
+def vector_env(
+    sample_match: Match, observation_space: ObservationSpace, reward: Reward
+) -> VectorEnv:
     """Create a vectorized environment for testing."""
     return VectorEnv(
         num_envs=7,
@@ -63,7 +65,7 @@ def vector_env(sample_match, observation_space, reward) -> VectorEnv:
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="passive",
+        opponent_policy="random",
     )
 
 
@@ -186,14 +188,16 @@ class TestEnvironment:
 
         vector_env.close()
 
-    def test_vectorenv_single_agent_mode(self, sample_match, observation_space, reward):
+    def test_vectorenv_single_agent_mode(
+        self, sample_match: Match, observation_space: ObservationSpace, reward: Reward
+    ) -> None:
         vector_env = VectorEnv(
             num_envs=3,
             match=sample_match,
             observation_space=observation_space,
             reward=reward,
             device="cpu",
-            opponent_policy="passive",
+            opponent_policy="random",
         )
 
         obs, _ = vector_env.reset()

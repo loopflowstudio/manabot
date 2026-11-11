@@ -5,8 +5,7 @@ once, decides what is legal at every point, shows each seat only what that seat
 may see, and can copy, replay or re-deal a game exactly. It never chooses among
 a learner's legal actions. Forced single actions are played automatically, and
 every other choice comes from outside, whether from a policy, a search player,
-a script or a person; a native scripted opponent (`passive`, `random`) is an
-explicit opt-in.
+a script or a person; a native random opponent is an explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
 Building and testing it is in [managym/README.md](../managym/README.md); the
@@ -238,6 +237,13 @@ owns the games and their reset seeds; the Python wrapper is
 is scored and reset in place. By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
+
+`opponent_policy="none"` (the default) surfaces both seats' decisions to the
+caller. `opponent_policy="random"` plays the opponent's decisions natively and
+returns seat 0's next decision. These are the only built-in vector policies;
+`"passive"` is removed and raises an unsupported-policy `ValueError`, including
+through CapturedVector and Torch. Retained failure evidence keeps its original
+policy name, but replaying a passive-policy receipt requires its original source.
 
 Collection was 75–83% of active time across the profiled training runs
 ([training time](../experiments/training-time.md)), so engine and inference

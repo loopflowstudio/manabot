@@ -65,7 +65,7 @@ catalog. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `MatchConfig.decklists` is `"open"` (default:
 both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
-`Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
+`Env.reset(options={"match": match})` also replaces the setup used by later resets.
 
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).

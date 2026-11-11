@@ -2,7 +2,7 @@
 use crate::search_state::{identity, SearchStateIdentity};
 use crate::{
     agent::{
-        action::{Action, AgentError},
+        action::AgentError,
         behavior_tracker::BehaviorTracker,
         observation::Observation,
         observation_encoder::{
@@ -939,23 +939,6 @@ impl Env {
         } else {
             "Profiler not enabled".to_string()
         }
-    }
-
-    pub fn pass_priority_action_index(&self) -> Result<usize, AgentError> {
-        let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.pass_priority_action_index called before reset".to_string())
-        })?;
-        let action_space = game
-            .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        if action_space.actions.is_empty() {
-            return Err(AgentError("no valid actions available".to_string()));
-        }
-        Ok(action_space
-            .actions
-            .iter()
-            .position(|action| matches!(action, Action::PassPriority { .. }))
-            .unwrap_or(0))
     }
 
     /// Independent copy of this env's game for search rollouts.

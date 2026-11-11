@@ -6,7 +6,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 
 | Capability | Scalar native `managym.Env` | Native `managym.VectorEnv` | Python wrappers and disposition |
 |---|---|---|---|
-| Construction and setup | Seed, trivial skipping, optional profiling/behavior tracking; explicit two-player reset | Fixed slot count, seed stride, built-in none/passive/random opponent; uniform or distinct deck sampling; per-slot buffered setups | Gym `Env` takes Match/ObservationSpace/Reward. Torch vector takes those plus device; uses CapturedVector. Different orchestration, same native rules. |
+| Construction and setup | Seed, trivial skipping, optional profiling/behavior tracking; explicit two-player reset | Fixed slot count, seed stride, built-in none/random opponent; uniform or distinct deck sampling; per-slot buffered setups | Gym `Env` takes Match/ObservationSpace/Reward. Torch vector takes those plus device; uses CapturedVector. Different orchestration, same native rules. |
 | Perspective | Reset/step return chooser view; `observation_for_player` reads a fixed native seat | Reset/step return each chooser view; built-in opponents advance to seat 0 | `current_agent_indices` reports choosers, including control effects. No general fixed-view vector API; hand snapshots supply authoritative contents without materializing observations. |
 | Legal choices | Complete action list, positional steps, revision-bound Commands and captured-command submission | Positional indices; readable results have complete actions; buffered observations may select explicit `first-legal` prefix | No vector Command execution or capture-origin authorization. Intentional collection API difference; use scalar for external interactive submissions. Neither snapshot reads nor tensor cutoffs change native legality. |
 | Observation encoding | Allocating native encode or caller-owned buffers, plus Python reference encoder | Bound NumPy buffers derive capacities/version from supplied arrays; readable mode bypasses tensor capacities | Both use the native encoder; Python `ObservationSpace` supplies allocations. No new observation fields or schema versions for snapshots. |
@@ -48,7 +48,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 Implemented: complete batched hand snapshots, typed wrapper access, identity across
 reset/replacement, missing vector method stubs, and corrected the guide's claim
 that inactive Python reward/done buffers retain old values. The actual bindings
-clear those fields; only observations remain untouched. Four audit findings
+clear those fields; only observations remain untouched. Five audit findings
 are also fixed:
 
 - **CapturedVector readable calls bypassed capture bookkeeping.** Its
@@ -68,6 +68,18 @@ are also fixed:
   `true_terminated` / `true_truncated` info keys nothing read. Vector autoreset
   with true done flags is the only automatic-reset contract.
 
+- **Built-in opponents.** Removed native `Passive`, its Python policy and the
+  passive decision-profile CLI branch. Vector construction (native, capture and
+  Torch) now accepts only `none` or `random`; `passive` raises an unsupported-policy
+  error. Capture retains the selected supported policy and replay uses the same
+  native admission. Historical receipts keep their original policy strings;
+  passive receipts require the original source to execute. Academy's independent
+  scalar debugging opponent remains outside this vector API change.
+
+Separate follow-ups: **MTG-277** adds a native heuristic opponent; **MTG-276**
+adds fixed-seat batched observations; **MTG-275** covers batched fork/search.
+None is implemented in this PR.
+
 No claims of throughput improvement, terminal-hand retention, GPU validation or
 full scalar-helper parity follow from this change. Hand reads perform work only
 on request; ordinary steps do not count or export hands.
@@ -85,3 +97,9 @@ capture regression also passes. `tests/env/test_captured_vector_bookkeeping.py`
 covers rejected mutators, delegated reads, terminal replacement at the maximum
 seed, same-seed resets and both Torch reset forms. Full affected suites remain
 gate's work.
+
+After removing Passive, 20 native vector tests pass in debug. Focused Python
+checks cover unsupported-policy rejection at the factory/native/capture/Torch
+boundaries, readable historical evidence with rejected passive replay, Random
+buffer parity, supported-policy failure replay after autoreset, and a model
+forward pass (17 cases). The extension was rebuilt and replaced atomically.

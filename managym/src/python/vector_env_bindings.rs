@@ -859,15 +859,9 @@ impl PyRolloutPool {
 #[pymethods]
 impl HandSnapshot {
     fn __repr__(&self) -> String {
-        let cards = self
-            .cards
-            .iter()
-            .map(|(name, count)| format!("{name:?}: {count}"))
-            .collect::<Vec<_>>()
-            .join(", ");
         format!(
-            "HandSnapshot(slot={}, player={}, game_id={}, seed={}, revision={}, cards={{{cards}}})",
-            self.slot, self.player, self.game_id, self.seed, self.revision
+            "HandSnapshot(slot={}, player={}, game_id={}, seed={}, revision={}, cards={:?})",
+            self.slot, self.player, self.game_id, self.seed, self.revision, self.cards
         )
     }
 }
@@ -972,7 +966,6 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
     match value {
         "none" => Ok(OpponentPolicy::None),
-        "passive" => Ok(OpponentPolicy::Passive),
         "random" => Ok(OpponentPolicy::Random),
         _ => Err(PyValueError::new_err(format!(
             "unsupported opponent_policy: {value}"

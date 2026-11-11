@@ -9,12 +9,9 @@ import numpy as np
 import torch
 
 from manabot.env.failures import CapturedVector
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 import managym
-
-from .match import Match, Reward
-from .observation import ObservationSpace
-
-VALID_OPPONENT_POLICIES = ("none", "passive", "random")
 
 
 class VectorEnv:
@@ -27,13 +24,7 @@ class VectorEnv:
         device: str,
         seed: int = 0,
         opponent_policy: str = "none",
-    ):
-        if opponent_policy not in VALID_OPPONENT_POLICIES:
-            raise ValueError(
-                f"Unsupported opponent_policy: {opponent_policy!r}. "
-                f"Must be one of {VALID_OPPONENT_POLICIES}"
-            )
-        self._base_seed = seed
+    ) -> None:
         self._skip_trivial = True
         self._policy_name = opponent_policy
         self._player_configs = match.to_rust()
@@ -296,7 +287,6 @@ class VectorEnv:
         seeds reproduce deals; without one, continue native seed succession."""
         if seed is not None:
             self._rust_env.close()
-            self._base_seed = seed
             self._rust_env = self._build_rust_env(seed=seed)
             self._rust_env.set_buffers(
                 self._buffers, self.observation_space.encoder.config.action_overflow

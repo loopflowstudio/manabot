@@ -1526,8 +1526,8 @@ mod tests {
     }
 
     #[test]
-    fn reset_skips_to_hero_turn_with_passive_policy() {
-        let mut env = VectorEnv::new(1, 11, true, OpponentPolicy::Passive);
+    fn reset_skips_to_hero_turn_with_random_policy() {
+        let mut env = VectorEnv::new(1, 11, true, OpponentPolicy::Random);
         let reset = env
             .reset_all(sample_player_configs())
             .expect("reset_all should succeed");
@@ -1536,7 +1536,7 @@ mod tests {
 
     #[test]
     fn terminal_step_returns_post_reset_observation() {
-        let mut env = VectorEnv::new(1, 23, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(1, 23, true, OpponentPolicy::Random);
         env.reset_all(sample_player_configs())
             .expect("reset_all should succeed");
 
@@ -1557,7 +1557,7 @@ mod tests {
 
     #[test]
     fn step_into_and_reset_all_into() {
-        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(3, 31, true, OpponentPolicy::Random);
 
         let reset_infos = env
             .reset_all_into(
@@ -1581,8 +1581,8 @@ mod tests {
 
     #[test]
     fn masked_step_preserves_paused_stream_and_ignores_its_action() {
-        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
-        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::Passive);
+        let mut paused = VectorEnv::new(2, 99, true, OpponentPolicy::None);
+        let mut control = VectorEnv::new(2, 99, true, OpponentPolicy::None);
         paused.reset_all(sample_player_configs()).unwrap();
         control.reset_all(sample_player_configs()).unwrap();
         paused
@@ -1663,7 +1663,7 @@ mod tests {
 
     #[test]
     fn step_into_errors_are_returned_in_index_order() {
-        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::Passive);
+        let mut env = VectorEnv::new(3, 99, true, OpponentPolicy::None);
         env.reset_all_into(sample_player_configs(), |_, _, _, _, _| Ok(()))
             .expect("reset_all_into should succeed");
 

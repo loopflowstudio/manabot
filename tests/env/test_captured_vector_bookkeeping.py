@@ -34,7 +34,16 @@ def _seeds(vector: TorchVectorEnv) -> list[int]:
     return [snapshot.seed for snapshot in vector.hand_snapshots([0, 0])]
 
 
-@pytest.mark.parametrize("name", ["reset_all", "step", "take_exposure"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "reset_all",
+        "step",
+        "take_exposure",
+        "enable_exposure_capture",
+        "scenario_naming_vocabulary_into_buffers",
+    ],
+)
 def test_native_mutators_are_not_delegated(name: str) -> None:
     vector, _ = _captured(42)
     try:
