@@ -160,3 +160,58 @@ Each subprocess had a 60-second deadline; the temporary venv was removed.
 0.027512 s construct/reset, 0.041456 s stepping, 6175 transitions/s. Same declared
 settings as the prior table; this single smoke sample is not a speed comparison.
 Full release training smoke, full suites and Engine Budget were not rerun.
+
+## Main sync resolution — 2026-11-11
+
+Assumption (reversible): keep MTG-277's design, acceptance work and verification
+as this branch's active context. Retain main's b015d5 closeout and operator
+review below as background. Its full notes remain at
+`53c2cb2f987f9768af7fd2360bb8c5f77c7113a5:scratch/questions.md`;
+they do not select new work for this branch. Main's experiment protocol,
+throughput summary and artifact manifest merged without manual changes.
+
+## b015d5 closeout direction, 2026-11-11 (background)
+
+
+After the evidence review and recommendation to stop this measurement phase,
+Jack Heart said "sounds reasonable." He added "but i will say its probably
+reasonable to still do 1x seed sometimes", then "i think that should be the
+default ,but not e taht we can do 2 seeds".
+
+Final operating guidance: default to one seed per GPU for individual-model
+progress; two seeds is an option for aggregate throughput/cost. This supersedes
+the operator review's suggestion of two as a starting point, not the measured
+results. Existing four-seed w64 evidence remains an optional aggregate recipe.
+No frozen run or training configuration changes. Close the bounded measurement
+with its stated uncertainty; do not launch another campaign.
+
+## Operator evidence review, 2026-11-11
+
+Jack Heart said "ok, do it" after the completed C2 execution/analysis notifications.
+Reviewed C2 here, without a new rental: the frozen reader reproduced readings.json
+exactly, all 128 C2 artifacts matched manifest sizes/hashes, and retained rental
+and teardown receipts account for all four acquired pods. No live Graph was
+observed. C2 measured all four required base cells and the conditional w160l8 K4;
+a384l8 K4 was excluded by memory. The scoped throughput conclusions are supported.
+
+The selector's three extra idle rentals were a procedural failure, not authorized
+scope: a failed database read was treated as a refusal. Keep their posted
+$0.504125 cost in C2's ≤$1.929936 and the total ≤$9.849497. A future selector must
+stop on unknown acquisition state and reconcile with the provider before any
+retry. All four pods have deletion evidence. No further rental is launched here.
+
+Recommendation: conclude this bounded measurement with its one-host limits,
+rather than spend on a second host merely to resolve the marginal 1.30 admission
+threshold. Two seeds is a useful large-model starting point for aggregate work;
+four w160l8 seeds buy only ~7% more decisions/hour while slowing each seed 1.88×.
+Four a384l8 seeds failed the admission memory rule; three was never tested, so
+do not call two a physical ceiling. Keep float32. The maintained throughput
+summary now carries the C1/C2 findings and supersedes its older status prose.
+No claim of task-wide completion, strength improvement, universal GPU ranking,
+or new user approval is made by this review.
+
+Historical step-1/2/3 design, implementation, reviews and execution notes are at
+`c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
+run projections, bills and cleanup receipts remain published in
+`experiments/data/training-throughput-b015d5-v1/`. Those sources retain exact
+run IDs and dated direction; no historical result is being rewritten.
