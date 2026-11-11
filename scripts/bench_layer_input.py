@@ -23,7 +23,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 import manabot.managym._managym as native_engine
 from manabot.model.actor_critic import ActorCritic
-from manabot.recipes.baseline import baseline
+from manabot.recipes.baseline import baseline_test
 from manabot.verify.representation import kellan_trigger_root, shared_effect_root
 from manabot.verify.text_observation import priority_root
 
@@ -99,7 +99,7 @@ def main() -> None:
     native = sample(lambda: env.encode_observation_into(obs, buffers))
     python = sample(lambda: space.encode(obs))
     observation = sample(lambda: env.observation_for_player(env.current_agent_index()))
-    config = baseline(1).regime.agent
+    config = baseline_test(1).regime.agent
     model = ActorCritic(space, config)
     values = {
         name: torch.from_numpy(value)

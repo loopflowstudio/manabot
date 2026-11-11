@@ -14,6 +14,7 @@ from enum import IntEnum
 import torch
 from torch import nn
 
+from manabot.model.numerics import embedding_rows
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -252,7 +253,7 @@ class SemanticCardEncoder(nn.Module):
             record_key(torch.as_tensor(namespace), words).reshape(-1),
             "policy received an id outside the record vocabulary",
         )
-        return self.token_embedding(rows).reshape(
+        return embedding_rows(self.token_embedding, rows).reshape(
             *words.shape, self.token_embedding.embedding_dim
         )
 
@@ -270,7 +271,7 @@ class SemanticCardEncoder(nn.Module):
             record_key(kinds[~number], words[~number]),
             "policy received a program token outside the vocabulary",
         )
-        return self.token_embedding(rows)
+        return embedding_rows(self.token_embedding, rows)
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return admit_definition_ids(

@@ -4,6 +4,7 @@ from dataclasses import replace
 import json
 from pathlib import Path
 import socket
+from typing import Literal
 
 from nbclient import NotebookClient
 import nbformat
@@ -191,9 +192,11 @@ def test_tiny_comparison_evaluates_live_and_notebook_refresh_preserves_edits(
     assert notebook_path.read_bytes() == before
 
 
+@pytest.mark.parametrize("device", ["cpu", "cuda", "mps"])
 def test_failed_learner_restart_retains_attempts_without_retraining(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    device: Literal["cpu", "cuda", "mps"],
 ) -> None:
     from manabot.experiment import runner as runner
     from manabot.infra.files import atomic_json
@@ -214,6 +217,7 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
 
     def launch(arguments: list[str], **kwargs: object) -> Finished:
         payload = json.loads(Path(arguments[-1]).read_text())
+        assert payload["regime"]["stages"][0]["execution"]["device"] == device
         directory = Path(payload["out"])
         directory.mkdir(parents=True)
         run = TrainingRun(
@@ -238,6 +242,9 @@ def test_failed_learner_restart_retains_attempts_without_retraining(
     monkeypatch.setattr(runner.subprocess, "Popen", launch)
     monkeypatch.setattr(runner, "_stop", stop)
     experiment = demo_declaration()
+    regime = experiment.baseline.regime()
+    regime.stages[0].execution.device = device
+    experiment = replace(experiment, baseline=Baseline.capture("fixture", regime))
     out = tmp_path / "failed"
     record = run_experiment(experiment, hardware(), out)
     assert record.status == "incomplete" and len(launched) == 4
@@ -336,3 +343,17 @@ def test_live_diagnostics_and_requested_exports_remain_separate(tmp_path: Path) 
         (Path(record.attempts[0].path) / "run.json").read_text()
     )
     assert [c.updates for c in saved.monitoring_checkpoints] == [1]
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda", "mps"])
+def test_accelerator_still_reserves_cpu_evaluator_thread(
+    device: Literal["cpu", "cuda", "mps"], tmp_path: Path
+) -> None:
+    experiment = demo_declaration()
+    regime = experiment.baseline.regime()
+    regime.stages[0].execution.device = device
+    regime.stages[0].execution.threads = 2
+    experiment = replace(experiment, baseline=Baseline.capture("fixture", regime))
+    with pytest.raises(ValueError, match="reserve one evaluator thread"):
+        run_experiment(experiment, hardware(), tmp_path / "over-budget")
+    assert not (tmp_path / "over-budget").exists()
