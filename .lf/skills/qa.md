@@ -60,7 +60,8 @@ publish, land or choose the next Graph step from here.
 - Use it as a downstream user: build the wheel
   (`uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`),
   `uv venv --python 3.12` a fresh venv under `/tmp`, `uv pip install` the wheel there,
-  and run scripts with `<venv>/bin/python -I` from a directory outside the checkout.
+  and run scripts with `uv run --no-project --python <venv>/bin/python python -I`
+  from a directory outside the checkout.
   Torch is a dependency group, not a wheel dependency: install `torch==2.10.0`
   separately to exercise `manabot.env.vector_env`.
 - To tell a regression from a pre-existing failure, `git worktree add --detach /tmp/<name> <base>`,

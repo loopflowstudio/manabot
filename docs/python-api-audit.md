@@ -95,11 +95,20 @@ empty hand. The guide's example runs against that installation; both import
 paths and the packaged stubs expose HandSnapshot. The existing same-seed stale
 capture regression also passes. `tests/env/test_captured_vector_bookkeeping.py`
 covers rejected mutators, delegated reads, terminal replacement at the maximum
-seed, same-seed resets and both Torch reset forms. Full affected suites remain
-gate's work.
+seed, same-seed resets and both Torch reset forms.
 
 After removing Passive, 20 native vector tests pass in debug. Focused Python
 checks cover unsupported-policy rejection at the factory/native/capture/Torch
 boundaries, readable historical evidence with rejected passive replay, Random
 buffer parity, supported-policy failure replay after autoreset, and a model
 forward pass (17 cases). The extension was rebuilt and replaced atomically.
+
+Publication validation: the full debug Rust workspace passes (1,054 tests,
+two skipped), as do all-target/all-feature Clippy, Rust formatting, changed-file
+Ruff and workflow validation. The affected Python suite has 424 passes and three
+retained TLA replay failures (`binding_mismatch`); all three also fail with the
+rebuilt base `402dfd5b2`. The conditional-search fixture passes all 16 cases.
+Additional recovery and search-evidence coverage has 58 passes and one Etude
+`seal_logs` missing-file failure; that case passes alone in an isolated temporary
+directory. This rerun does not establish that the intermittent SDK failure is
+fixed. Frozen evidence remains unchanged.

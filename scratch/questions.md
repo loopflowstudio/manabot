@@ -53,10 +53,10 @@ Unrelated b015d5/C2 experiment notes remain in
 
 All accepted implementation cuts are present, including Passive removal. The
 earlier iteration feedback saying Passive remains predates commit `4dc9574bf`.
-Gate still needs the complete debug Rust suite and affected Python
-environment/capture/package checks under `docs/development.md#validation-by-change-area`.
-All-target/all-feature Clippy passed after the opponent cut and compression;
-no native changes since then invalidate that result.
+Publication validation below records the complete debug Rust suite and affected
+Python environment/capture/package checks under
+`docs/development.md#validation-by-change-area`, including known failures.
+All-target/all-feature Clippy passed again on the final native source.
 Relevant Python coverage includes `tests/env/`,
 `tests/semantic/test_text_observation.py`,
 `tests/training/test_automatic_game_capture.py`,
@@ -70,22 +70,22 @@ support from #457. It leaves the native snapshot/opponent code unchanged.
 of the tensor device. Existing CPU proof does not establish CUDA/MPS validation;
 no training-device support is added by this Task.
 
-Resolve the recorded QA failures before claiming gate success:
+Earlier QA failures and their dispositions (see the latest validation below):
 
 - Two retained TLA resource-limit replay cases returned `binding_mismatch` at
   action 370, also reproduced on `61a51a3ff` in the earlier QA pass. Preserve the
-  frozen evidence and determine its disposition; do not rewrite it to pass.
+  frozen evidence was preserved; final QA reproduced all three cases on base.
 - The exact-quota recovery test used removed `RolloutBatch.obs`; the current
   interface is `observations().observation` in
   `manabot/training/rollout/collection.py`. Its two assertions are corrected and
   the focused fixture passed on 2026-11-11 (command below).
 - The conditional-search fixture lacked
-  `experiments/data/int-13-conditional-strategy-fixture-v1.json`; obtain the
-  retained artifact for gate or record the unavailable check explicitly.
+  `experiments/data/int-13-conditional-strategy-fixture-v1.json`; final QA restored
+  the retained artifact and all 16 conditional-search tests passed.
 
-`scratch/qa.html` records the earlier run (695 passed, four failures), not the
-current gate status. Only the replay mismatch has recorded baseline reproduction;
-the other diagnoses come from source inspection or the missing artifact.
+`scratch/qa.html` records the final installed-wheel QA and affected-suite run
+(424 passed, three baseline-reproduced replay failures). Publication validation
+below adds the full debug suite and additional recovery/search checks.
 
 Audit follow-ups, decided by Jack Heart (steer 14d5db38, exact reply:
 "1 A / 2 A / 3a - lets discuss further / 3b A"; then steer 3437c194 on 3a:
@@ -238,3 +238,31 @@ is pre-existing. Neither test file runs in any CI workflow. Affected suite: 424
 passed, 3 failed (that pre-existing failure). Full debug Rust suite was not rerun
 after the one-line error-message change. Torch is not a wheel dependency
 (dependency group only); MTG-271 owns that.
+
+## Publication validation — 2026-11-11
+
+`lf sync` merged main cleanly; actual PR base is main at `402dfd5b2`.
+Reviewed the complete code/documentation diff and the six current steers.
+No implementation gap was found. Fixed the QA skill's downstream invocation
+so it uses uv. Prepared PR copy uses HandSnapshot and documents all accepted
+breaking changes, limits and failure dispositions.
+
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test-threads 2`: 1,054 passed, two skipped in 190.888 s.
+  Log: `/tmp/mtg272-publish-rust.log`.
+- `PYO3_PYTHON="$PWD/.venv/bin/python" cargo clippy --manifest-path managym/Cargo.toml --all-targets --all-features -j 2 -- -D warnings`: passed.
+  Rust formatting, changed-file Ruff check/format (28 files), workflow validator
+  and diff whitespace also passed.
+- Additional `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_recovery.py tests/sim/test_local_update_sampling.py tests/sim/test_search_command_evidence.py -q`:
+  58 passed, one failed in 265.97 s. The failure was
+  `test_multistage_boundaries_preserve_state_and_completed_work[True-start]`:
+  Etude `train/run.py::seal_logs` raised FileNotFoundError unlinking a metrics
+  `.open` file; an Etude writer also reported a missing file. The recovery and
+  SDK code are unchanged by this branch. Log: `/tmp/mtg272-publish-python.log`.
+- The same node, rerun with `--basetemp=/tmp/mtg272-publish-recovery-recheck`,
+  passed in 32.68 s. This is an intermittent SDK failure, not a demonstrated
+  fix; retain it in the PR checks. Log: `/tmp/mtg272-publish-recovery-recheck.log`.
+
+Reuse final QA's 424 passing affected Python cases, three base-reproduced TLA
+receipt failures, 16 passing conditional-search cases and installed-wheel proof.
+No runtime source changed in this publication pass. No auto-merge, release or
+Task completion is authorized by this step.
