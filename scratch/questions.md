@@ -1,5 +1,19 @@
 # b015d5 — remaining decisions and evidence
 
+## Closeout direction, 2026-11-11
+
+After the evidence review and recommendation to stop this measurement phase,
+Jack Heart said "sounds reasonable." He added "but i will say its probably
+reasonable to still do 1x seed sometimes", then "i think that should be the
+default ,but not e taht we can do 2 seeds".
+
+Final operating guidance: default to one seed per GPU for individual-model
+progress; two seeds is an option for aggregate throughput/cost. This supersedes
+the operator review's suggestion of two as a starting point, not the measured
+results. Existing four-seed w64 evidence remains an optional aggregate recipe.
+No frozen run or training configuration changes. Close the bounded measurement
+with its stated uncertainty; do not launch another campaign.
+
 ## Operator evidence review, 2026-11-11
 
 Jack Heart said "ok, do it" after the completed C2 execution/analysis notifications.

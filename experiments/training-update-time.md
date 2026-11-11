@@ -159,7 +159,13 @@ replaces this with a measurement.
 
 ## Machine recommendation
 
-- **At w64, pack four seeds per machine, one producer each,** through Etude `--slots 4`.
+- **Default to one seed per GPU.** This gives an individual model the fastest
+  progress. Packing is an explicit choice when running several independent seeds
+  and optimizing aggregate throughput or cost. Two seeds per A40 is a measured
+  option at w160l8 and a384l8; the continuation findings below quantify its cost
+  and latency trade-off. This is operating guidance, not a change to frozen runs.
+- **For aggregate w64 throughput, four seeds per machine, one producer each,**
+  can be selected through Etude `--slots 4`.
   On one A4000 (16 vCPUs, $.25/hour) four seeds gave 2.3x the learner decisions of
   one, at $.023 against $.053 per million. Packed and solo runs of a seed learn
   identically on CPU (training digests equal). On CUDA they stay within run-to-run
@@ -227,8 +233,9 @@ and fell to 1.20 in the late window, so its four-seed admission remains provisio
 Three seeds were not tested; rejecting four at a384l8 does not establish a
 two-seed physical limit.
 
-For multiple independent large-model seeds on the measured A40, two per machine
-is the practical starting point. At w160l8, four delivered only about 7% more
+One seed per GPU is the default recommendation. For multiple independent
+large-model seeds on the measured A40, two per machine is an optional way to
+reduce aggregate cost, with slower progress for each seed. At w160l8, four delivered only about 7% more
 learner decisions per hour than two (4.10M versus 3.83M), while each seed's update
 took 187.7 instead of 99.7 seconds. Its steady cost was $0.144 versus $0.154 per
 million decisions. Solo was 64.5 seconds/update and $0.207/M. At a384l8, solo was
