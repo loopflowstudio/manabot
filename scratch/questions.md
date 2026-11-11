@@ -1,5 +1,30 @@
 # b015d5 — remaining decisions and evidence
 
+## Operator evidence review, 2026-11-11
+
+Jack Heart said "ok, do it" after the completed C2 execution/analysis notifications.
+Reviewed C2 here, without a new rental: the frozen reader reproduced readings.json
+exactly, all 128 C2 artifacts matched manifest sizes/hashes, and retained rental
+and teardown receipts account for all four acquired pods. No live Graph was
+observed. C2 measured all four required base cells and the conditional w160l8 K4;
+a384l8 K4 was excluded by memory. The scoped throughput conclusions are supported.
+
+The selector's three extra idle rentals were a procedural failure, not authorized
+scope: a failed database read was treated as a refusal. Keep their posted
+$0.504125 cost in C2's ≤$1.929936 and the total ≤$9.849497. A future selector must
+stop on unknown acquisition state and reconcile with the provider before any
+retry. All four pods have deletion evidence. No further rental is launched here.
+
+Recommendation: conclude this bounded measurement with its one-host limits,
+rather than spend on a second host merely to resolve the marginal 1.30 admission
+threshold. Two seeds is a useful large-model starting point for aggregate work;
+four w160l8 seeds buy only ~7% more decisions/hour while slowing each seed 1.88×.
+Four a384l8 seeds failed the admission memory rule; three was never tested, so
+do not call two a physical ceiling. Keep float32. The maintained throughput
+summary now carries the C1/C2 findings and supersedes its older status prose.
+No claim of task-wide completion, strength improvement, universal GPU ranking,
+or new user approval is made by this review.
+
 Historical step-1/2/3 design, implementation, reviews and execution notes are at
 `c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
 run projections, bills and cleanup receipts remain published in
