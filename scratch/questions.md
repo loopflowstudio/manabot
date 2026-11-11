@@ -1,5 +1,44 @@
 # b015d5 — remaining decisions and evidence
 
+## Closeout direction, 2026-11-11
+
+After the evidence review and recommendation to stop this measurement phase,
+Jack Heart said "sounds reasonable." He added "but i will say its probably
+reasonable to still do 1x seed sometimes", then "i think that should be the
+default ,but not e taht we can do 2 seeds".
+
+Final operating guidance: default to one seed per GPU for individual-model
+progress; two seeds is an option for aggregate throughput/cost. This supersedes
+the operator review's suggestion of two as a starting point, not the measured
+results. Existing four-seed w64 evidence remains an optional aggregate recipe.
+No frozen run or training configuration changes. Close the bounded measurement
+with its stated uncertainty; do not launch another campaign.
+
+## Operator evidence review, 2026-11-11
+
+Jack Heart said "ok, do it" after the completed C2 execution/analysis notifications.
+Reviewed C2 here, without a new rental: the frozen reader reproduced readings.json
+exactly, all 128 C2 artifacts matched manifest sizes/hashes, and retained rental
+and teardown receipts account for all four acquired pods. No live Graph was
+observed. C2 measured all four required base cells and the conditional w160l8 K4;
+a384l8 K4 was excluded by memory. The scoped throughput conclusions are supported.
+
+The selector's three extra idle rentals were a procedural failure, not authorized
+scope: a failed database read was treated as a refusal. Keep their posted
+$0.504125 cost in C2's ≤$1.929936 and the total ≤$9.849497. A future selector must
+stop on unknown acquisition state and reconcile with the provider before any
+retry. All four pods have deletion evidence. No further rental is launched here.
+
+Recommendation: conclude this bounded measurement with its one-host limits,
+rather than spend on a second host merely to resolve the marginal 1.30 admission
+threshold. Two seeds is a useful large-model starting point for aggregate work;
+four w160l8 seeds buy only ~7% more decisions/hour while slowing each seed 1.88×.
+Four a384l8 seeds failed the admission memory rule; three was never tested, so
+do not call two a physical ceiling. Keep float32. The maintained throughput
+summary now carries the C1/C2 findings and supersedes its older status prose.
+No claim of task-wide completion, strength improvement, universal GPU ranking,
+or new user approval is made by this review.
+
 Historical step-1/2/3 design, implementation, reviews and execution notes are at
 `c2c813a475ef012bd0391e510dd7f0cb41859e83:scratch/questions.md`. Original reports,
 run projections, bills and cleanup receipts remain published in
@@ -355,3 +394,42 @@ scratch. No source, test or doc outside those changed, so nothing was edited.
 - `ruff check` / `ruff format --check` on `c2/step-3-c1/`: driver, identity job and test clean. `preflight/discover.py` has 4 style findings; it is a published preflight receipt, so its bytes were left alone.
 - `bash -n run_campaign.sh` passes. PR 456 CI is green at `5485c3f90`; main has not moved.
 - Identifiers that live only in scratch (phantom A4000 records, other-account pods) are also in the published C1/C2 evidence files, so clearing scratch at landing loses nothing.
+
+## C2 freeze, 2026-11-11
+
+- Frozen at main `757bb6257` (worker source `b5e8f404`, unchanged); receipt in the
+  protocol's "C2 freeze receipt", evidence in `c2/step-3-c1/freeze/`.
+- A40 quoted $0.59/h at 12:04 UTC with none available; launch will need the
+  30-minute selection window.
+- Billing: only foreign account pods moved; this Task's bounds unchanged.
+- Next: execution review, then hand rental and `run_campaign.sh MACHINE`.
+
+## C2 execution, 2026-11-11
+
+- Selection window 15:38:47–16:08:47 UTC. A hand rent at 15:39:43 was refused by the
+  provider (exit 0; no pod, no cost).
+- **Over-rental (my error).** The poll-and-rent loop judged success by a `sqlite3` CLI
+  read that failed ("unable to open database file") and printed nothing, so it read
+  every attempt as refused and rented again: 12 attempts, 4 real pods. Kept the first,
+  `b015d5-a40-79af318d770b` (pod `jylvfcg28e3erv`, claimed 15:43:07). Terminated the
+  other three at 16:09–16:10 and confirmed them absent at the provider
+  (`l1cdpfp8xa4r3e`, `n5qyb1htrkq2qm`, `djn2mld7kxlugg`). Together about 0.855 h, about
+  $0.505, charged to the C2 line. The rest were refused with no pod.
+- Because the frozen driver's deadline (19:43, 4 h) does not see that spend, an
+  outside guard (`/tmp/c2-scripts/guard.sh`, log `execution/guard.log`) SIGINTs the
+  driver at 18:42:02 UTC. Its `finally` teardown deletes the pod by 18:57:02, which
+  keeps C2 ≤ $2.50 including one late-posting minute per pod. The driver bytes are unchanged.
+- Lesson: when a rent loop's success check fails, it must stop, not retry. Allow one
+  rent per verified provider refusal.
+
+## C2 analysis, 2026-11-11
+
+- Frozen reader reproduces `c2/.../readings.json` exactly; 946 manifest entries match.
+- Added to the report: 8 empty-filter minibatch skips in `a745e57c284c` (a384l8 K=2
+  seed 26402), and the four phantom Etude records from attempts 9–12 (no provider pod;
+  teardown terminated three at $0.00).
+- Reading choice (reversible): w160l8 K=4 vs K=2 is framed as a dollars-vs-hours
+  trade-off for the planner (6% throughput, 1.88× per-seed latency), not a change
+  to the step-2 four-seed rule.
+- Next decision belongs to evidence review: second host for the marginal w160l8
+  crossing, or close step 3.

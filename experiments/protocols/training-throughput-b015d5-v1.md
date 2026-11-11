@@ -1,4 +1,22 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 evidence reviewed; C2 design reviewed, driver built, awaiting freeze)
+# Training throughput on the ten-deck Elemental recipe, v1 (bounded measurement concluded)
+
+## Final disposition — 2026-11-11
+
+C2 evidence review is complete. The frozen reader reproduced its readings exactly,
+and all 128 C2 artifacts matched the manifest. All required C2 base comparisons
+were measured on one A40; conditional cells retain their recorded dispositions.
+The final operating recommendation is one seed per GPU by default, with two as
+an option for aggregate throughput and cost. Findings and limits are maintained
+in `experiments/training-update-time.md`. No further rental is planned.
+
+This closes the bounded throughput measurement, not the deferred strength or
+generalization questions. The marginal w160l8 four-seed admission remains
+provisional, and no universal GPU ranking or reduced-precision learning
+equivalence is claimed. The selector's three extra idle rentals violated the
+planned one-rental procedure; their cost is included in C2's $1.929936 bound.
+Provider deletion is retained for all four acquired pods. Total experiment cost
+is bounded at $9.849497 pending settled billing. Historical receipts below remain
+as recorded and do not authorize another campaign.
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -2149,6 +2167,117 @@ rerun fit only if their larger watchdogs still fit. Otherwise they are disposed 
   advantage. Strength, learning equivalence and generalization are out of scope.
   A different host or source would need fresh controls and a new prospective
   admission.
+
+### C2 freeze receipt — 2026-11-11 UTC
+
+This receipt binds C2 execution and its offline analysis. Nothing was rented,
+queued or trained for it. Evidence is in `c2/step-3-c1/freeze/`.
+
+**Admission result: source, discovery, driver and preflight pass. CUDA admission
+is cell 0 on the rental.** PR #456 is merged on main as
+`757bb6257ef07cf2536ad7f7ec24f0f7309628c6`; this checkout's tree is identical
+(`45edc43dde8109d94e16d923b05a336dd04f0835`). Since the worker source
+`b5e8f404adf55a2315a2810906cbb81c49465781`, main changed only this protocol,
+scratch and artifact data, so the C1 repaired-source freeze receipt still binds
+every worker, world, input, recipe and declaration identity. Launches use
+`--revision b5e8f404adf55a2315a2810906cbb81c49465781`, and the reader uses
+`--source` with the same commit.
+
+**Source.** In the clone `~/.etude-b015d5-step2/src/manabot-c2` (HEAD at the
+frozen commit, only remote `upstream`, no tracked changes), `bundle_at` again
+binds 1,544 files with canonical digest
+`54954d248f102e510190935f2c4d14ad55b9a4ff6516e3693b7ed4e8bc36a231`. Rerunning
+`preflight/discover.py` from the clone resolved `manabot` and `experiments` from
+the clone with `origin = None` in 2.9 s. All 14 seed jobs across the six C2 legs
+are identical to the published `preflight/discover-clone.json`.
+
+**Frozen protocol and driver (SHA-256).** The protocol hash covers its bytes at
+`757bb6257`; this receipt is outside them.
+
+| File | SHA-256 |
+|---|---|
+| this protocol at `757bb6257` | `c739bdc087869d20cdb36c45e12b32a2f179ccb1b33198823190618a05b807d0` |
+| `c2/step-3-c1/campaign.py` | `c5359b0186731e5d3e88e5f2f3a2ea8c86b60ad1c5528e5fa64f6cc576b28c8d` |
+| `c2/step-3-c1/identity_job.py` | `5ebee6b10581cfdbb680b8d749c8bbeca039aef776b853b6638c469737e3d5ac` |
+| `c2/step-3-c1/run_campaign.sh` | `8aab44cabaeaa3f9e349bc9e44f4f9d944e999300fc86aa4697cbe5ff6dd669d` |
+| `c2/step-3-c1/budget.json` | `fe62eee84e879ca0ec18b97f4dec8474a8dcae3ad3815bea23125e0ea39ed10c` |
+| `c2/step-3-c1/test_c2_campaign.py` | `eccdac6411b0701f0ce09cd2fa561fa71b0d08899400e66ec59e924c7c6e874f` |
+| `c1-repaired/step-3-c1/preflight/remote_identity.py` | `e21eb933dd0c906a53c2176cba83d98463a9078c4bbffb5723c37a27be1f8374` |
+
+These equal the hashes recorded at implementation and the manifest entries. A
+change to any of them before execution needs another prospective freeze.
+
+**Evidence integrity.** All 830 manifest entries under
+`training-throughput-b015d5-v1/` (12 of them C2's) match the local bytes and sizes,
+with none missing. None is tracked in git.
+
+**Validation.** `pytest c2/step-3-c1/test_c2_campaign.py
+tests/infra/test_experiment_data_untracked.py`: 41 passed. `run_campaign.sh
+preflight` exited 0 (`freeze/driver-preflight-20261111T1200Z.json`). It found
+the clone admitted, identity job `b015d5-c2-remote-identity-cuda` seed 26400 with
+command hash `445fee72…22ab`, `b015d5-a40` held at max 0, no run waiting, no
+controller of this home and 0 C2 queued updates. Apart from the provider pod
+list, it is identical to the published preflight receipt. The provider listed
+two pods, `k39bmw5981u6sv` and `awcdavrycv1gvy`, which are not this home's and
+were left alone. The launcher database still holds the two phantom A4000
+records, which have no provider pod.
+
+**Quote and billing (read-only).** At 12:04:46 UTC `b015d5-a40` quoted
+**$0.59/hour** (within the $0.60 C2 ceiling) but reported **none available**. The
+30-minute selection window at launch therefore governs; an unavailable A40 stops
+C2 as `unavailable`. A fresh per-pod billing read
+(`freeze/billing-podid-20261111T1205Z.json`) shows all four C1 pods unchanged at
+$3.867716 posted. Every row of the 02:25 UTC receipt is present, and the only
+amounts that moved belong to the three account pods outside this home. The
+bounds stay **C1 ≤ $3.907716 / $8, step 3 ≤ $5.824689 / $10 and experiment
+≤ $7.919561 / $50**, with 6.60 of 15 GPU-hours and 196 of 1,600 queued updates
+used. `budget.json` needs no refresh.
+
+**Authority and bounds for execution review.** Execution rests on Jack Heart's
+"ok" / "lets keep going" (comment 29962da6), as continued by operator comments
+6788204b, fbea710f and 86eb6e88. None of those comments claims a new approval.
+The bounds are those of the C2 accounting section: one A40 from `b015d5-a40`,
+rented by hand at no more than $0.60/hour; no more than 4.0 h from claim to
+verified provider deletion; work stopping 15 minutes before that point; no
+more than $2.50 all-in; no more than 400 queued updates; fresh same-host
+controls; and the K=2/K=4 memory and gain rules. Launch is
+`run_campaign.sh MACHINE` after the rental, and only after the machine log shows
+"machine confirmed" and the provider lists the pod. The parent experiment
+remains open.
+
+### C2 execution record — 2026-11-11 UTC
+
+Executed under the operator execution review of this freeze (comment 36813570),
+which rests on the authority above. The driver and identity job ran with their
+frozen hashes, rechecked before launch. Results, readings and full accounting are in
+the report's "Step 3 continuation C2" section. Evidence is in `c2/step-3-c1/`.
+
+- **Before launch.** No C2 state, run or controller existed in the isolated home.
+  `run_campaign.sh preflight` exited 0 (`execution/preflight-20261111T153841Z.json`).
+  Billing was unchanged for every C1 pod (`execution/billing-podid-20261111T1539Z.json`).
+- **Selection window.** It ran 15:38:47–16:08:47 UTC at $0.59/hour
+  (`execution/availability-window.log`). The first hand rent was refused by the
+  provider; it had no pod and exited 0. An operator poll-and-rent loop outside the
+  driver then made 11 more attempts, because its success check was a database read
+  that failed silently. Four creates succeeded. The first,
+  `b015d5-a40-79af318d770b` (pod `jylvfcg28e3erv`, claimed 15:43:07), was kept. The
+  other three ran no work. They were terminated at 16:09–16:10, confirmed absent at
+  the provider, and posted $0.504125 over 0.855 h, charged to the C2 line.
+- **Guard.** The frozen deadline (4.0 h from claim) does not include that spend. An
+  outside guard was therefore set to SIGINT the driver at 18:42:02 UTC, so the kept
+  pod would be deleted by 18:57:02 and C2 would stay under $2.50. It did not fire.
+- **Cells.** The identity job and CUDA regression passed. Cells 1–5 completed, with
+  no failure, retry, stall or controller restart. Cell 5 (w160l8 K=4) was admitted
+  provisionally: the K=2 whole-window gain was 1.3025, with a late window of 1.20.
+  Cell 6 (a384l8 K=4) was a memory `conditional_skip`. No overlap rerun was needed.
+- **Teardown.** The driver deleted the kept pod at 18:03:40 and confirmed it absent at
+  18:03:44.
+- **Totals.** C2 ≤ $1.929936 of $2.50 over 3.205 GPU-hours and 84 queued updates.
+  Cumulative bounds: C1 + C2 ≤ $5.837652 / $8; step 3 ≤ $7.754625 / $10;
+  experiment ≤ $9.849497 / $50; 9.81 / 15 GPU-hours; 280 / 1,600 updates.
+- **Analysis script.** `reconcile.py` (new, adapted from C1's) wrote `cells.json`,
+  `rentals.json` and the inventory. The frozen reader wrote `readings.json` with
+  `--source b5e8f404…`.
 
 ## Stop waiting for the slowest game (deferred candidate)
 
