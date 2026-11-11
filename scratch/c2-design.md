@@ -26,3 +26,12 @@ been rented. Next: freeze the protocol and driver hashes, then execution review.
   - `budget.json` fe62eee84e879ca0ec18b97f4dec8474a8dcae3ad3815bea23125e0ea39ed10c
   - C1 `c1-repaired/step-3-c1/preflight/remote_identity.py` e21eb933dd0c906a53c2176cba83d98463a9078c4bbffb5723c37a27be1f8374
   - `test_c2_campaign.py` eccdac6411b0701f0ce09cd2fa561fa71b0d08899400e66ec59e924c7c6e874f
+
+Concept review (2026-11-10, Graph step, no person): the protocol's C2 section and the
+driver express one model — sequential cells of existing `C1_LEGS` on one hand-rented
+A40, fresh same-host solos, K=2 then conditional K=4, a supervisor that owns only this
+home's controllers, and teardown that ends at provider deletion. It matches every
+point in comment 6788204b. On-disk driver hashes equal the manifest entries above; the
+preflight receipts are published. The `b015d5-c2-c1-*` cohort names read awkwardly
+but follow from the frozen leg keys, which C2 must not change. Nothing to change and
+no open product choice; next is the freeze.
