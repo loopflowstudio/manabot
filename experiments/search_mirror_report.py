@@ -294,7 +294,21 @@ def _linear_contrast(
         "normal": nominal.to_json() if nominal else None,
         "cell_stratified_bootstrap": interval.to_json() if interval else None,
         "failure_sensitivity": [v / len(planned) for v in bounds],
+        "interpretation": _contrast_interpretation(len(common), len(planned), interval),
     }
+
+
+def _contrast_interpretation(paired_deals: int, planned: int, interval: Estimate | None) -> str:
+    """Describe coverage and interval direction without turning them into acceptance."""
+    if paired_deals < planned:
+        return "Unresolved full-schedule comparison: paired outcomes are missing."
+    if interval is None:
+        return "Unresolved uncertainty: stratified interval unavailable."
+    if interval.low > 0:
+        return "Positive exploratory difference; interval above zero."
+    if interval.high < 0:
+        return "Negative exploratory difference; interval below zero."
+    return "Inconclusive direction: interval includes zero; this does not establish equivalence."
 
 
 def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow | GameRow]]) -> dict[str, Any]:
@@ -346,6 +360,8 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "implementation_segments": segments,
         "transition": (json.loads((directory / "transition/summary.json").read_text())
                        if (directory / "transition/summary.json").exists() else None),
+        "execution_accounting": (json.loads((directory / "transition/execution-accounting.json").read_text())
+                                 if (directory / "transition/execution-accounting.json").exists() else None),
         "batching": (json.loads((directory / "batching/summary.json").read_text())
                      if (directory / "batching/summary.json").exists() else None),
         "latest_inventory": (json.loads((receipt_dir / "batching-inventory.json").read_text())
@@ -365,7 +381,7 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "health": validation.get("health", "unassessed: no native smoke or games" if not records else "requires execution evidence review"),
         "native_support": validation.get("native_support", "unresolved; accounting and sampler fixtures do not admit the mini runtime"),
         "replay_identity": validation.get("replay_identity", "absent: no game attempts" if not records else "retained attempts are not replay proof"),
-        "learning": "inference-only; no new training, exports or callbacks expected",
+        "learning": "inference-only; no new training, checkpoint exports or training callbacks expected",
         "training_card_exposure": None, "generalization": "untested; reused decks, deals and one training seed",
         "acceptance": "unresolved; missing outcomes establish neither gains nor equivalence",
         "measured_eta_seconds": validation.get("measured_eta_seconds"),
@@ -433,11 +449,44 @@ def _extension_section(extension: dict[str, Any]) -> str:
         costs.append(f'<tr><td>{setting["sampler"]}</td><td>{setting["worlds"]}</td>'
                      f'{timing}<td>{game_timing}</td><td>{hero_time}</td></tr>')
     contrasts = []
+    complete_findings = []
     for c in extension["contrasts"]:
         lo, hi = c["failure_sensitivity"]
         contrasts.append(f'<tr><td>{escape(c["label"])}</td><td>{c["paired"]}/{c["planned"]}</td>'
                          f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
                          f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
+        if c["paired"] == c["planned"]:
+            complete_findings.append(
+                f'<li>{escape(c["label"])}: <strong>{_interval(c["cell_stratified_bootstrap"])}</strong> '
+                f'points, {c["paired"]} paired deals. {escape(c["interpretation"])}</li>'
+            )
+    findings_html = (
+        '<h3>Completed paired comparisons</h3><ul>' + ''.join(complete_findings) + '</ul>'
+        '<p class="note">Intervals are the declared cell-stratified 95% bootstrap intervals. '
+        'Repeated inspection and previously inspected deals make these exploratory, not confirmatory. '
+        'These within-deal interventions keep decks, rules and the trained checkpoint fixed; '
+        'they measure test-time search effects, not newly learned skill. '
+        'Completed comparisons do not complete the six-cell study or resolve its missing comparisons.</p>'
+        if complete_findings else ''
+    )
+    accounting = extension.get("execution_accounting")
+    accounting_html = (
+        '<details><summary>Inclusive execution accounting at the retained snapshot</summary>'
+        f'<p>Operational elapsed time, including setup and recovery: '
+        f'{accounting["inclusive_operational_elapsed_seconds"] / 3600:.2f} hours of the unchanged '
+        '168-hour ceiling. Etude attempt wall windows: ' + '; '.join(
+            f'{escape(run["run"])}: {attempt["recorded_wall_seconds"] / 3600:.2f} hours'
+            + (' (still open at snapshot)' if attempt['wall_end_is_snapshot_cutoff'] else '')
+            for run in accounting['runs'] for attempt in run['attempts']
+        ) + '.</p>'
+        f'<p>{accounting["original_interrupted_uniform_attempts"]} interrupted attempts remain unscored; '
+        f'{accounting["recovered_missing_callbacks"]} missing game callbacks were reconciled from '
+        'Etude cancellation and exact evidence hashes. No new checkpoint exports or training callbacks '
+        'are expected in this inference-only study.</p>'
+        f'<p class="note">{escape(accounting["unmeasured_cost"])} '
+        f'{escape(accounting["cost_scope"])}</p></details>'
+        if accounting else ''
+    )
     transition = extension.get("transition")
     cutoffs = extension.get("snapshot_cutoffs", {})
     snapshot_text = (
@@ -485,6 +534,7 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'represent the full grid. Sparse nominal intervals cannot establish strength or shuffle effects. '
         'A one-deal nominal interval is degenerate by convention, not an uncertainty estimate; zero-width '
         'intervals from a few identical observed differences do not demonstrate equivalence.</p>'
+        + findings_html +
         '<details><summary>All planned paired contrasts and missing-evidence bounds</summary>'
         '<table><tr><th>Contrast</th><th>Paired/planned</th><th>Nominal 95%, points</th>'
         '<th>Stratified 95%, points</th><th>Sensitivity, points</th></tr>' + ''.join(contrasts) + '</table></details>'
@@ -501,18 +551,19 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'interrupted attempts are excluded. Game wall time includes opponent play; hero search time '
         'does not. Game length and concurrent load confound these timings; this is not an equal-compute '
         'strength comparison or inclusive worker-hour accounting.</p></details>'
-        + segment_html +
+        + segment_html + accounting_html +
         f'<p class="note">Health: {escape(extension["health"])}. '
         f'Native support: {escape(extension["native_support"])}. '
         f'Replay identity: {escape(extension["replay_identity"])}. '
         'Smoke outcomes are separate from the 3,000 planned games and establish no strength result. '
         'Policy-only timing stays in its separate historical table. No new rental spend is recorded. '
         f'{escape(extension["timing_note"])} '
-        'Inclusive setup/worker time and a reliable full-grid ETA require execution accounting. '
+        'Complete worker CPU time, inclusive monetary cost and a reliable full-grid ETA remain unavailable. '
         'The shared execution deadline remains November 16, 2026, 18:16:29 UTC. Missing games are neither '
         'failed games nor evidence of no benefit. Training card '
         'exposure remains absent independently of evaluation coverage; no new learning or generalization is '
-        'established. Evidence review must retain these limits. This analysis starts no execution.</p>'
+        f'established. Acceptance: {escape(extension["acceptance"])}. '
+        'Evidence review must retain these limits. This analysis starts no execution.</p>'
     )
 
 

@@ -1,5 +1,24 @@
 # Mirror search continuation
 
+## Analysis handoff — 2026-11-11
+
+Analysis uses the unchanged 13:09–13:10 original and 13:51 native snapshots,
+not a fresh collection. Etude read at 14:22:52 UTC still reports original attempt
+`3a2b62144b9a` cancelled and continuation `b9b50aa247df` running on mini, $0
+rental spend. No execution was started, stopped or changed by analysis.
+
+The owning report now surfaces completed whole-deal contrasts and the existing
+inclusive execution accounting. Scientific acceptance remains unresolved; the
+uniform cells contain only 3/5/2 games. Continue to evidence review with this
+dated limitation rather than treating an incomplete campaign as delivered.
+
+Verification at 14:30:15 UTC: all v1 science and v2 numerical results/inputs
+unchanged, 1,510 per-game seed headers checked, 3,414 published extension
+evidence hashes matched. Nine report/data checks and Ruff pass. The published
+verification receipt and runnable check are in v1 `reconciliation/analysis-20261111.json`
+and `verify-analysis-20261111.py`; the prior summary is retained there for regression.
+This header check does not extend the dated Command/algebra audit or claim replay.
+
 ## Native uniform running — 2026-11-11
 
 The oracle-barrier transition is complete. Etude run

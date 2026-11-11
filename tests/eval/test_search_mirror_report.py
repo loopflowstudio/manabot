@@ -114,15 +114,27 @@ def test_factorial_interaction_pairs_four_arms_and_retains_missing_slots() -> No
     assert result["cell_stratified_bootstrap"]["low"] == -1
     assert result["cell_stratified_bootstrap"]["high"] == 1
     assert result["failure_sensitivity"] == [0, 0]
+    assert "does not establish equivalence" in result["interpretation"]
     # Four cell means would hide the missing oracle result and invent equivalence.
     oracle8 = next(a.key for a in V2_ARMS if a.sampler == "oracle" and a.worlds == 8)
     del scores[oracle8][1]
     result = _linear_contrast(interaction, scores, games)
     assert (result["paired"], result["planned"], result["missing_deals"]) == (1, 2, [1])
     assert result["failure_sensitivity"] == [-0.5, 0]
+    assert "paired outcomes are missing" in result["interpretation"]
     empty = _linear_contrast(interaction, {}, games)
     assert empty["normal"] is None and empty["cell_stratified_bootstrap"] is None
     assert empty["failure_sensitivity"] == [-2, 2]
+    # A full, consistently positive contrast can be described as exploratory;
+    # the same observed difference on a partial schedule remains unresolved.
+    for key, weight in interaction.terms.items():
+        scores[key] = {g.deal: float(weight > 0) for g in games}
+    positive = _linear_contrast(interaction, scores, games)
+    assert "Positive exploratory difference" in positive["interpretation"]
+    del scores[oracle8][1]
+    partial = _linear_contrast(interaction, scores, games)
+    assert partial["normal"]["mean"] > 0
+    assert "paired outcomes are missing" in partial["interpretation"]
 
 
 def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
