@@ -79,12 +79,16 @@ declared workload, not truncation or edits to a frozen recipe. The default CPU
 reading plays three full updates (about 160,000 decisions); on a laptop expect
 minutes per update and several GB of memory.
 
-The printout omits batching. In the receipt's stage, the `calls` of
+The printout omits batching. For the default recipe's both-seat self-play, read
+the receipt's stage: the `calls` of
 `collection_timings["Policy inference and action selection"]` are inference
 calls; inferred rows are its `environment_decisions` (streams × calls −
 `idle_stream_steps`), so rows per call is decisions / calls. Idle steps are
 complete-game streams waiting for the remaining games; they lower rows per call
 without indicating a serving limit.
+For other recipes, inspect learner and opponent inference separately before using
+environment decisions as inferred rows; scripted opponents make decisions without
+model inference, and one-seat self-play records opponent inference separately.
 
 After an interrupted run, read the retained per-update rows: receipt timers can
 cover only the last attempt while counts span attempts. Keep failed attempts and
