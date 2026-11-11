@@ -1,5 +1,7 @@
 # MTG-271 direction and implementation choices
 
+The Task brief preserves the originating direction: "we should make etude-sdk a >=" and "can wem akea torch 2.10 a >= also?" Public requirements remain minimums without speculative upper bounds.
+
 Jack Heart, comment 3a7bd499 (2026-11-11): "i dont actually want this to do 2.1, i will do that in a future task". Correction in comment 068206ea: "i am fine with putting this stuff in here though -- prepping for us to 2.1 well and soon is still good". Current scope keeps version 0.2.0 and version-generic docs, and includes GitHub completion plus digest-checked retries. No tagging, publication or backfill.
 
 - Preserve nbformat in core: ExperimentExecution.report creates a notebook during ordinary execution. Remove unused direct pandas; no source consumers were found. Notebook execution stays in its existing extra.

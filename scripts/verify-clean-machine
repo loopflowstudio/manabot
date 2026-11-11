@@ -26,9 +26,10 @@ proof_error() {
   proof_error proof.dirty "academy/ui/test-results exists before the clean proof"
 [ ! -e .cache ] || proof_error proof.dirty ".cache exists before the clean proof"
 [ ! -e managym/target ] || proof_error proof.dirty "managym/target exists before the clean proof"
-if find managym -maxdepth 1 -name '_managym*.so' -print -quit | grep -q .; then
-  proof_error proof.dirty "a managym native extension exists before the clean proof"
-fi
+for extension in managym/_managym*.so manabot/managym/_managym*.so; do
+  [ ! -e "$extension" ] || \
+    proof_error proof.dirty "a managym native extension exists before the clean proof"
+done
 if find gui/traces -name '*.json' -print -quit 2>/dev/null | grep -q .; then
   proof_error proof.dirty "GUI traces exist before the clean proof"
 fi

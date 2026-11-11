@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-271 — Concept review</title>
+<style>
+  :root { color-scheme: light dark; font: 17px/1.5 system-ui, sans-serif; }
+  body { max-width: 49rem; margin: 2.5rem auto; padding: 0 1.2rem 2rem; }
+  h1 { font-size: 1.7rem; line-height: 1.2; }
+  h2 { font-size: 1.15rem; margin-top: 1.7rem; }
+  p, li { max-width: 70ch; }
+  header { font-size: .85rem; color: light-dark(#555, #bbb); }
+  code { font-size: .85em; overflow-wrap: anywhere; }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: left; vertical-align: top; padding: .7rem .45rem;
+    border-bottom: 1px solid light-dark(#ccc, #555); }
+  .decision { border-left: .25rem solid light-dark(#72532c, #d7b483); padding-left: 1rem; }
+  @media (max-width: 580px) {
+    body { margin-top: 1rem; }
+    table, tbody, tr, td { display: block; }
+    thead { display: none; }
+    tr { margin-bottom: 1rem; }
+    td { padding: .35rem 0; }
+    td::before { content: attr(data-label) " · "; font-weight: 650; }
+  }
+</style>
+<header>
+  MTG-271 · concept-review · 2026-11-11<br>
+  Built from <code>scratch/mtg-271.md</code>, <code>scratch/questions.md</code>,
+  <code>pyproject.toml</code>, <code>docs/development.md</code>,
+  <code>AGENTS.md</code>, <code>.github/workflows/release.yml</code>,
+  <code>scripts/release/{prepare,validate,complete}.py</code> and
+  <code>tests/infra/test_release.py</code>.
+</header>
+<h1>Advance the existing design</h1>
+<p class="decision"><strong>No product decision remains open.</strong>
+  No design change is proposed. Keep version 0.2.0 and finish the recorded
+  validation before delivery. Tagging, publication and backfill remain outside
+  this change.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+  <thead><tr><th>Person's action</th><th>Concept</th><th>State-changing interface</th></tr></thead>
+  <tbody>
+    <tr><td data-label="Action">Install a local wheel on 3.12 or 3.13</td>
+      <td data-label="Concept">One Manabot package, bundled engine</td>
+      <td data-label="API"><code>uv pip install</code> resolves public minimums;
+        the matching wheel supplies the native ABI.</td></tr>
+    <tr><td data-label="Action">Add reports or notebook execution</td>
+      <td data-label="Concept">Feature extras</td>
+      <td data-label="API">Install <code>[reports]</code> or <code>[notebook]</code>
+        in the same environment.</td></tr>
+    <tr><td data-label="Action">Develop or launch a fresh job</td>
+      <td data-label="Concept">Reproducible repository environment</td>
+      <td data-label="API"><code>uv sync --locked --python 3.13</code> selects
+        locked runtime groups. Frozen experiments keep their pins.</td></tr>
+    <tr><td data-label="Action">Publish a future tagged version</td>
+      <td data-label="Concept">Release complete on both services</td>
+      <td data-label="API"><code>needs_upload</code> gates PyPI upload;
+        <code>complete_github</code> creates or verifies the GitHub entry.</td></tr>
+  </tbody>
+</table>
+
+<h2>The largest mismatch: two dependency contracts</h2>
+<p><strong>Before this branch:</strong> source and release staging had different
+  owners for Torch requirements; staging injected an exact pin. Downstream
+  users had to accommodate packaging choices beyond their feature needs.</p>
+<p><strong>Implemented in this branch:</strong> <code>pyproject.toml</code> owns
+  public minimums. Staging preserves it, all four wheels inherit one sdist's
+  metadata, and validation rejects disagreement. Exact runtime pins stay in
+  repository groups and the lock. No second engine distribution is introduced.</p>
+
+<h2>Normal path, failure, recovery</h2>
+<p><strong>Install:</strong> choose the matching local wheel and backend → run
+  the CLI → add a feature extra if needed. An older incompatible dependency pin
+  requires resolving that environment's conflict. Bypassing dependencies would
+  hide the contract. Published 0.2.0 remains 3.12-only; this local build has not
+  been published.</p>
+<p><strong>Future release:</strong> validated artifacts → PyPI upload → matching
+  public GitHub Release. A GitHub failure leaves the release incomplete. Retry
+  the failed job with retained artifacts; a matching entry is a no-op.</p>
+<p><strong>Counterexample:</strong> rebuilding the same version can change its
+  bytes. A retry must compare the complete inventory and SHA-256 digests, not
+  just the version. Partial or different publication stops for inspection;
+  retain the tag, artifacts and notes. No overwrite or automatic repair.</p>
+
+<h2>Direction already stated</h2>
+<p>Jack Heart: “i dont actually want this to do 2.1, i will do that in a future
+  task”. Later correction: “i am fine with putting this stuff in here though --
+  prepping for us to 2.1 well and soon is still good”.</p>
+<p>Applied scope: retain completion and digest checks, keep the version at 0.2.0,
+  and write release instructions without naming an unpublished version.</p>
+
+<h2>Review questions — resolved from existing direction</h2>
+<ol>
+  <li>Must consumers adopt repository runtime pins? <strong>No.</strong>
+    Public minimums and their own lock govern their environment.</li>
+  <li>Does PyPI success alone complete a release? <strong>No.</strong>
+    A matching public GitHub Release is required.</li>
+  <li>Does this change publish or bump the version? <strong>No.</strong>
+    That is future work. Remaining checks are recorded in the working design.</li>
+</ol>
+</html>
