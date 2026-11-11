@@ -1,0 +1,13 @@
+- step: {name: experiment-measure, id: experiment-performance}
+- step: {name: implement, id: implement-performance}
+- compress
+- graph: refresh
+- concept-review
+- experiment-performance-review
+- loop: implement-performance
+- pr-publish
+- loop: experiment-performance
+  interactive: demo
+- graph: deliver
+- loop: experiment-performance
+  interactive: verify
