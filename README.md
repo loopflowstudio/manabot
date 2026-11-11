@@ -343,12 +343,17 @@ uv sync --python 3.12 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
-uv run manabot train                       # two-update CPU smoke, capped at two minutes
+uv run manabot train                       # two-update local smoke, capped at two minutes
 uv run python scripts/inspect_batch.py     # one real batch and how credit reaches each decision
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. Training recipes are typed *regimes* composed in Python, one module per
+`.runs/`. The local recipe uses CUDA, then Apple MPS, when available and CPU
+otherwise. `--recipe baseline` requires CUDA or Apple MPS and trains on that
+accelerator; its evaluation and search run on CPU. `--device cpu|mps|cuda`
+overrides local selection; baseline accepts only CUDA or MPS. MPS training uses
+float32. This makes no speed or strength claim.
+Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
 [manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
 baseline is
