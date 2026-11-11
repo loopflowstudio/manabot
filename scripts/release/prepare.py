@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-import tomllib
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -64,19 +63,6 @@ def prepare(destination: Path) -> None:
         },
     }
     (destination / ".manabot-source.json").write_text(json.dumps(source, indent=2))
-    config = tomllib.loads((ROOT / "pyproject.toml").read_text())
-    dependencies = config["tool"]["manabot"]["release"]["runtime-dependencies"]
-    metadata = (
-        (ROOT / "pyproject.toml")
-        .read_text()
-        .replace(
-            "dependencies = [\n",
-            "dependencies = [\n"
-            + "".join(f"    {json.dumps(dep)},\n" for dep in dependencies),
-            1,
-        )
-    )
-    (destination / "pyproject.toml").write_text(metadata)
 
 
 if __name__ == "__main__":

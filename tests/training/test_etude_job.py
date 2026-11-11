@@ -98,7 +98,7 @@ def test_job_freezes_recipe_without_submission(tmp_path: Path) -> None:
     # locked sync builds the engine, and the command keeps it on PATH.
     assert job.setup is not None and job.setup.startswith("set -eu\n")
     assert "--default-toolchain 1.98.1" in job.setup
-    assert "uv sync --locked --python 3.12\n" in job.setup
+    assert "uv sync --locked --python 3.13\n" in job.setup
     assert "RUSTUP_TOOLCHAIN=1.98.1" in job.command
     assert job.command.endswith("uv run --locked python -m manabot.experiment.job")
     gated = TrainingJob(

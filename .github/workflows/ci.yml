@@ -113,19 +113,19 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Install dependencies
-        run: uv sync --python 3.12 --extra dev
+        run: uv sync --python 3.13 --extra dev
 
       - name: Run unit tests
         run: |
-          uv run --python 3.12 --extra dev pytest tests/infra/ \
+          uv run --python 3.13 --extra dev pytest tests/infra/ \
             tests/academy/test_clean_machine_verifier.py deploy/play/tests/
 
       - name: Website routing tests
         working-directory: website
-        run: uv run --python 3.12 --extra test pytest -q
+        run: uv run --python 3.13 --extra test pytest -q
 
   # PRs and pushes require Linux integration; the same suites run on macOS nightly.
   integration:
@@ -158,7 +158,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
@@ -172,11 +172,11 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv venv .venv --python 3.12
+          uv venv .venv --python 3.13
           uv sync --extra dev
 
       - name: Build Python extension
-        run: uv run --python 3.12 --extra play maturin develop --release --manifest-path managym/Cargo.toml --features python
+        run: uv run --python 3.13 --extra play maturin develop --release --manifest-path managym/Cargo.toml --features python
 
       - name: Certify Rust and Python
         run: |
@@ -247,9 +247,9 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          uv venv .venv --python 3.12
+          uv venv .venv --python 3.13
           uv export --quiet --frozen --extra dev --no-emit-project \
-            --prune torch --prune pandas --prune typer --prune psutil \
+            --prune torch --prune typer --prune psutil \
             --prune httpx --prune jsonschema --prune ruff \
             --output-file /tmp/visual-requirements.txt
           uv pip install --python .venv/bin/python \
@@ -289,11 +289,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup uv and CPython 3.12
+      - name: Setup uv and CPython 3.13
         uses: astral-sh/setup-uv@v6
         with:
           version: '0.9.22'
-          python-version: '3.12'
+          python-version: '3.13'
           enable-cache: false
 
       - name: Setup Node 22

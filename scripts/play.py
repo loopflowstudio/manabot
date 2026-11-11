@@ -1,9 +1,9 @@
-#!/usr/bin/env -S uv run --python 3.12 --locked --only-group play-runtime
+#!/usr/bin/env -S uv run --python 3.13 --locked --only-group play-runtime
 """Install and launch the human-vs-bot table through the supported wrapper.
 
     ./scripts/play [--demo learn] [--port 8000] [--frontend-port 5173] [--no-frontend]
 
-The wrapper pins CPython 3.12 and locked Python dependencies. This module
+The wrapper pins CPython 3.13 and locked Python dependencies. This module
 validates the installed curated pack, builds the native extension when needed,
 installs locked frontend dependencies, starts uvicorn and Vite, waits for both
 to answer on loopback, and shuts the process group down together.
@@ -44,14 +44,14 @@ PACK_NOTICE = PACK_DIR / "NOTICE.md"
 ERROR_MARKER_ENV = "ACADEMY_PLAY_ERROR_MARKER"
 READY_PREFIX = "ACADEMY_PLAY_READY "
 ERROR_PREFIX = "ACADEMY_PLAY_ERROR "
-PYTHON_VERSION = (3, 12)
+PYTHON_VERSION = "3.13"
 DEFAULT_READY_TIMEOUT = 30.0
 NODE_VERSION_PATTERN = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)")
 UV_RUNTIME = [
     "uv",
     "run",
     "--python",
-    "3.12",
+    PYTHON_VERSION,
     "--locked",
     "--only-group",
     "play-runtime",
@@ -158,14 +158,14 @@ def _phase_record(
 
 
 def validate_python_version(version_info: Any = sys.version_info) -> str:
-    actual = (int(version_info.major), int(version_info.minor))
+    actual = f"{int(version_info.major)}.{int(version_info.minor)}"
     if actual != PYTHON_VERSION:
         raise PlayError(
             "python.version",
-            "academy play requires CPython 3.12",
-            f"running {actual[0]}.{actual[1]}",
+            f"academy play requires CPython {PYTHON_VERSION}",
+            f"running {actual}",
         )
-    return f"{actual[0]}.{actual[1]}.{int(version_info.micro)}"
+    return f"{actual}.{int(version_info.micro)}"
 
 
 def node_version_is_supported(major: int, minor: int) -> bool:
@@ -303,7 +303,9 @@ def native_import(*, runner: Runner = subprocess.run) -> dict[str, str] | None:
         payload = json.loads(result.stdout.strip().splitlines()[-1])
     except (IndexError, json.JSONDecodeError):
         return None
-    if payload.get("abi") != "cp312" or not payload.get("module"):
+    if payload.get("abi") != f"cp{PYTHON_VERSION.replace('.', '')}" or not payload.get(
+        "module"
+    ):
         return None
     return {"abi": payload["abi"], "module": payload["module"]}
 
@@ -313,7 +315,10 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
     if imported is not None:
         return imported
 
-    print("academy play: building the CPython 3.12 managym extension", flush=True)
+    print(
+        f"academy play: building the CPython {PYTHON_VERSION} managym extension",
+        flush=True,
+    )
     result = run_text(
         [
             *UV_RUNTIME,
@@ -331,7 +336,7 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
     if result.returncode != 0:
         raise PlayError(
             "native.build",
-            "the CPython 3.12 managym extension build failed",
+            f"the CPython {PYTHON_VERSION} managym extension build failed",
             (
                 result.stderr or result.stdout or "see preceding native build output"
             ).strip(),
@@ -340,7 +345,7 @@ def ensure_native(*, runner: Runner = subprocess.run) -> dict[str, str]:
     if imported is None:
         raise PlayError(
             "native.import",
-            "the built managym extension does not import under CPython 3.12",
+            f"the built managym extension does not import under CPython {PYTHON_VERSION}",
         )
     return imported
 

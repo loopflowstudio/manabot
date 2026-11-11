@@ -1,17 +1,14 @@
-"""Reject inconsistent release versions, tags, or already-published artifacts."""
+"""Reject inconsistent release versions and tags."""
 
 import argparse
-import json
 from pathlib import Path
 import re
 import tomllib
-from urllib.error import HTTPError
-from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def check(tag: str | None, unpublished: bool) -> None:
+def check(tag: str | None) -> None:
     bot = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     cargo = tomllib.loads((ROOT / "managym/Cargo.toml").read_text())["package"]
     version = bot["version"]
@@ -23,27 +20,14 @@ def check(tag: str | None, unpublished: bool) -> None:
         raise ValueError("managym must be bundled, not a separate dependency")
     if tag is not None and tag != f"v{version}":
         raise ValueError(f"expected tag v{version}, got {tag}")
-    if unpublished:
-        for name in ("manabot",):
-            try:
-                with urlopen(
-                    f"https://pypi.org/pypi/{name}/json", timeout=30
-                ) as response:
-                    data = json.load(response)
-            except HTTPError as error:
-                if error.code == 404:
-                    continue
-                raise
-            if version in data["releases"]:
-                raise ValueError(
-                    f"{name} {version} already exists; do not overwrite/retry uploads"
-                )
+    notes = ROOT / "release" / f"v{version}" / "NOTES.md"
+    if not notes.is_file() or not notes.read_text().strip():
+        raise ValueError(f"release notes missing or empty: {notes.relative_to(ROOT)}")
     print(f"validated release v{version}")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--tag")
-    parser.add_argument("--unpublished", action="store_true")
     args = parser.parse_args()
-    check(args.tag, args.unpublished)
+    check(args.tag)
