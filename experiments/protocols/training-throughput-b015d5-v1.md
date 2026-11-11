@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C1 admission repair implemented; delivery and new freeze pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (C1 evidence reviewed; C2 design reviewed, driver built, awaiting freeze)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The
@@ -37,6 +37,10 @@ implemented and its retained-checkpoint audit passed offline (2026-11-09);
 delivery, a prospective source freeze and full CUDA worker/reload admission
 remain before comparative measurements. The C1 repair status below owns the
 remaining work; the original freeze and failed attempt are not replaced.
+C1 then executed at the repaired source and its evidence was reviewed: Jack Heart
+replied "ok", then "lets keep going", to finishing the missing w160l8/a384l8 packing
+comparisons on one A40 (comment 29962da6). Continuation C2 below is that prospective
+amendment; it launches nothing before design and execution review.
 Acceptance confers no spending authority beyond that review. Each step freezes after
 the previous step's readings have been discussed and that step chosen, before any of
 its runs.
@@ -1538,6 +1542,136 @@ cost/exposure. CPU execution, corrupt bytes or failed reload still invalidate
 admission. The implemented repair follows this contract; the next proof remains
 the full one-rental chain after delivery and prospective freeze.
 
+### C1 repaired-source freeze receipt — 2026-11-10 UTC
+
+This receipt binds every subsequent C1 execution and offline analysis. It
+replaces the 2026-11-09 binding for new work only: that receipt, its failed
+admission `3a1380d94b69`, its exports and all 87 dispositions remain historical
+evidence and are never relabelled.
+
+**Admission result: source, discovery and local world/input admission pass.**
+Real CUDA admission has not run. No games, training, rentals or paid work ran
+for this freeze; checkpoint-binding inspection initialized one native match
+without playing it. PR #455 is merged on main at
+`b5e8f404adf55a2315a2810906cbb81c49465781` (GitHub merge time
+2026-11-10T01:40:32Z), and the checkout tree is identical
+(`14866182e992c9e914bb936310f77a0e29f75928`). Comment 257d99bc records the integrated
+software review. Every C1 launch uses this full commit
+(`--revision b5e8f404adf55a2315a2810906cbb81c49465781`) and the reader uses
+`--source b5e8f404adf55a2315a2810906cbb81c49465781`, never a moving `HEAD`.
+
+**Source.** `bundle_at` binds all 1,544 archived regular files. The digest of the
+canonical source bundle (commit plus files) is
+`54954d248f102e510190935f2c4d14ad55b9a4ff6516e3693b7ed4e8bc36a231`.
+The protocol's bytes at the revision have SHA-256
+`34f3ba86a81e0cfc1fdd08acae3461f6e41b0fd893fc36f5bf6ac18f8b7aa89c`; this
+receipt is outside them. Compared with the 2026-11-09 table, only these
+frozen files changed; the other nine are byte-identical:
+
+| Frozen file | SHA-256 |
+|---|---|
+| `scripts/check_throughput_admission.py` | `e3127bd7f39db305d8bab46b4795fe67444cdca13889109faec3dab071b1bd33` |
+| `experiments/learning_signal.py` | `dbed3ca0da67a78c32a115209e654cd218385255c6b0a01f314f5d2cf46e1ba6` |
+
+`learning_signal.py` adds a head-to-head evaluation path that C1 never calls.
+The shared training runtime from main also changed after the first freeze
+(`6933edd0d`, `cb75f2166`, `6cd54d349`, `93a2e30ef`): critic-readout and value-scale
+diagnostics, an opt-in `attention_readout` value aggregation, CPU-only
+no-grad inference compaction and native observation JSON/search-state changes.
+None changes a C1 recipe or input. They can change timing, so C1 compares only
+fresh controls from this source and host. No earlier speed figure is a control.
+
+**World, roster, input and recipes: unchanged identities.** Recomputed at this
+revision with the rebuilt local extension, every identity in the 2026-11-09
+receipt reproduces exactly: native world **w17**, card/content digest
+`0798b2c7c7f54b7329043b13cb1742d74fe21b35373820580b76f979e6b7eb5f`, content manifest
+`a6df2e46ea733e3998c8b3303412c943bee4575c020bbb4383a11a41f9c98770`, checkpoint binding
+`44f5228f96ed1874cae7fc2502b41fb0cde1bf0cb2dd129ea772b2949b03d7a8`, ten-deck setups
+`68d04d4bd40b52b103a9efea613c52c280e1e143975efbf1ea1f5bad5af578bd`, resolved observation configuration
+`d2452a5262468a83ac6e3f9a0548caa456cddbed22dc439f870b68fec4d03c8f`, input schema
+`d8b744ee345230295ffd4728308f07804eae22be22bf3197bfb8cea4356991ab` and learning schema
+`1ae4b9e56e5b50172ec88b5c78a38c11705252287eb5fa73df3a2b085057d920`. Input stays v6 with 512 facts, 60 cards, 40 permanents,
+64 actions, 2 focus objects, 32 events and 64 × 49 relations, with effective
+hashed records. All 15 regime digests and their canonical ID map
+`5fdd3ee6558663f1068ccbe5fd4dc3f0becd668853139b0d79e5e3c9cb5499d4` are unchanged.
+`validate_regime` admitted every declaration against the current world.
+The local Darwin CPython 3.12 extension rebuilt from this source has SHA-256
+`bff695ea265d07924bdf4f4bc205b7585e0b92e248ab7f4bf1d0b1a793179ad0`. Remote setup
+must again retain its Linux build hash and verify these identities before
+training; a mismatch stops admission.
+
+**Discovery.** The isolated Etude client at
+`a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11` (SDK 0.2.14),
+`ETUDE_HOME=$HOME/.etude-b015d5-step2`, ran `read_job_file` for all **87 C1
+legs** at this revision without executing anything: 3 two-update admission,
+45 eight-update and 39 twelve-update declarations, 183 seed jobs if every
+declaration were selected (not authority to run them). Every job validates as
+`TrainingJob` under `training-throughput-sizes-c1` with the declared seeds,
+and carries the source bundle above. Its regime equals the declared control
+outside ID and `wall_seconds`. Seeds, schedule, readings, stop rules and
+isolation are unchanged from the C1 sections above. Admission seed 26400 is
+reused: the failed attempt left no checkpoint or game that the new run reads.
+
+**Validation.** In the locked environment, 40 targeted size, limit, reader,
+cost, admission and precision tests passed. Two CUDA-required precision cases
+were skipped and belong to the rental. Both real-worker CPU smoke cases
+(w128l4, a384l8; 8 streams, 1 update) passed. These include the
+indexed-device checkpoint reload and the non-CUDA, malformed, unhealthy and
+corrupt-byte rejections. None of these checks admits CUDA.
+
+**Carried-forward accounting and authority.** Jack Heart's existing "keep
+going" direction (comment 079b3f46) remains the only execution authority.
+Comments 257d99bc and 72b37622 continue it and claim no new approval. C1
+consumption carries forward without reset: about 0.206 GPU-hours, two updates,
+and at most $0.133502 pending billing. The inclusive bounds stay at $2.050474
+for step 3 and $4.145347 overall, against the $10 / $50 caps. The 15 GPU-hour,
+1,600-update and $8 C1 ceilings, the line ceilings and the rate ceilings are
+unchanged and count the failed attempt. No quote or bill was refreshed in this
+offline freeze.
+
+Before any paid work: reconcile billing, or hold a defensible upper bound;
+re-quote; admit watchdog and cleanup liability. On one rental, run the full
+CUDA regression, then the two-update BF16 worker, then the verified checkpoint
+reload. Expansion requires that whole chain to pass. The offline reload of
+`3a1380d94b69` is supporting evidence only. A failed identity or CUDA check
+requires repair and another prospective freeze. The parent experiment remains
+open.
+
+### C1 repaired-source execution receipt — 2026-11-10 UTC
+
+Executed under the existing "keep going" authority (079b3f46) and operator execution
+review ebf759be, at the frozen source `b5e8f404adf55a2315a2810906cbb81c49465781`.
+No budget, window or ceiling was reset. Before renting: no repaired-source runs or
+rentals existed in the isolated home; posted bills for all earlier pods were
+unchanged ($3.803594), and the first C1 A40 had posted $0.120043 (its $0.133502
+bound is kept).
+
+- **Admission passed on the first rental** (A40 `b015d5-a40-ca270fabef30`,
+  run `537b2f764bba`, seed 26400): CUDA regression, two healthy BF16 updates on
+  `cuda:0`, verified checkpoint reload. Remote identity jobs on every rental
+  reproduced all frozen hashes; L4 and A4000 also passed the CUDA regression.
+- **Measured:** 13 speed cells (A40: w128l4 K=1/2/4, a384l8 K=1, the four-leg
+  w160l8 precision block; L4: w128l4 K=1/2/4, w160l8 K=1, a384l8 K=1). w128l4
+  packing gains: A40 1.50 (K=2) / 1.78 (K=4); L4 1.34 / 1.42. The L4 K=2 late
+  window (1.29) crosses 1.30, so its K=4 admission was provisional.
+- **Not measured:** A4000 (no stock within the selection window; Etude reported a
+  refused create as a rental), w160l8/a384l8 packing, a384l8 precision and
+  non-A40 precision (watchdog-plus-cleanup no longer fit the windows), and L4
+  a384l8 K=2 (memory rule). No crossover is established.
+- **Accounting:** this cohort $3.775008 inclusive bound (posted $3.141916);
+  C1 ≤ $3.908510 / $8 and 6.60 / 15 GPU-hours; step 3 ≤ $5.825483 / $10;
+  experiment ≤ $7.920355 / $50. 196 of 1,600 updates queued (8 never ran).
+  All three provider pods were confirmed deleted; no execution process remains.
+
+Results, dispositions and operational defects (controller hangs, per-seed
+source-preparation fetches, phantom rentals and the reader's float-only update
+schema) are in `experiments/data/training-throughput-b015d5-v1/report.md`
+("Step 3 continuation C1 at the repaired source") with evidence under
+`c1-repaired/step-3-c1/`. Its "Analysis against the frozen criteria — 2026-11-10"
+reproduces `readings.json` exactly with the frozen reader, checks every requirement
+and leaves the packing crossover unknown. The parent experiment remains open for
+evidence review.
+
 ### C1 software interface
 
 `experiments/training_throughput_sizes.py` retains the original `LEGS` and
@@ -1676,6 +1810,345 @@ bills and a speed table keyed by source/world/input/host/seed/precision/K.
 Publish bytes through the artifact store and commit its manifest. Extend the
 report with a separately labelled C1 result; preserve the first pass. Return
 remaining unknowns and the measured packing recommendation for evidence review.
+
+## Step 3 continuation C2: large-model packing on one A40 (prospective amendment, 2026-11-11)
+
+### Question, authority and retained evidence
+
+On one A40 at the frozen C1 source, does packing still buy machine throughput at
+w160l8 and a384l8? C2 measures fresh same-host solo controls and K=2 for both sizes,
+and K=4 only under the existing gain and memory rules. It is a speed experiment with
+the same gross numeric health checks as C1. It makes no strength,
+generalization or hardware-ranking claim.
+
+Authority: Jack Heart replied "ok", then "lets keep going", to the evidence-review
+recommendation. That recommendation was to finish the missing w160l8 and a384l8
+packing comparisons on A40 within the remaining continuation budget, and to address
+launch delays before renting (comment 29962da6). This amendment draws on that
+authority and on the C1 ceilings. It confers no new spending authority. Execution
+review comes before any rental.
+
+The C1 repaired-source cohort (`c1-repaired/step-3-c1/`) stays as partial valid
+findings: w128l4 packing on A40 and L4, large-model solo on A40 and L4, and the A40
+w160l8 precision block. C2 never pools those runs. A new rental is a new host, so
+every C2 contrast uses C2's own solo controls. The C1 A40 figures are used only for
+pacing and memory planning (w160l8 60.3 s/update with 7.68 GB reserved and 6.79 GB
+RSS; a384l8 104.4 s/update with 11.73 GB reserved and 7.30 GB RSS). Out of scope:
+the broad three-GPU ladder, the A4000/L4 cells, every TF32/BF16 cell, w64 and w128l4.
+
+### Identities and fixed factors
+
+- **Source.** The frozen C1 source is reused unchanged: commit
+  `b5e8f404adf55a2315a2810906cbb81c49465781`, bundle
+  `54954d248f102e510190935f2c4d14ad55b9a4ff6516e3693b7ed4e8bc36a231`, every identity in
+  the C1 repaired-source freeze receipt and its 87 declarations. C2 adds no
+  declaration and changes no worker, launch-file, reader or recipe byte. The
+  existing legs below already declare every C2 cell, its endpoint and its seeds.
+- **Fixed.** Float32; effective hashed records at input v6 with 512 facts and all
+  frozen capacities; world w17 with the unchanged ten-deck roster; the
+  `elemental_recipe` control. Also fixed: 256 streams, two learning seats, complete
+  games, at least 64 decisions per stream, one producer, damped schedules, capacity
+  recovery and trivial skipping. Each run starts with fresh weights. Seeds are
+  26401–26404, with K taking the first K; seed 26401 pairs solo with packed.
+  Evaluation games, draws and actions are zero.
+- **Distinct identities.** Cohorts are named `b015d5-c2-<leg>`, and retries
+  `-retry1`. Etude assigns new run IDs. The job's `repo` is the clone path below, so
+  job digests differ from C1's, while every other job byte is identical (see
+  validation). Evidence goes under
+  `experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/`, because the reader
+  requires that directory name. C1 files are never moved or relabelled.
+- **Host.** One A40 rental from on-demand `b015d5-a40`, which requires at least 8
+  vCPUs and 48 GB. The setup-only identity job (`identity_job.py cuda_test=1`, as in
+  C1) must reproduce every frozen hash and pass the fixed-input CUDA regression
+  before any cell. A mismatch stops C2 with no cell run. C2 needs no BF16 worker
+  admission, because it runs no reduced-precision cell.
+
+### Cells, order and decision rules
+
+These are the existing `C1_LEGS` keys, run in this order on the one rental. Pace is
+the C1 A40 solo measurement for that size, which sets the existing watchdog and
+stall formulas.
+
+| # | Leg | Seeds | Pace | Watchdog ceiling | Expected wall |
+|---|---|---:|---:|---:|---:|
+| 0 | identity + CUDA regression (setup only) | — | — | — | ~8 min after boot |
+| 1 | `c1-fast-a384l8-k1-float32-u8` | 26401 | 104.388 | 1.75 h | ~17 min |
+| 2 | `c1-fast-a384l8-k2-float32-u8` | 26401–2 | 104.388 | 1.75 h | 25–32 min |
+| 3 | `c1-fast-w160l8-k1-float32-u12` | 26401 | 60.347 | 1.25 h | ~15 min |
+| 4 | `c1-fast-w160l8-k2-float32-u8` | 26401–2 | 60.347 | 1.25 h | 15–19 min |
+| 5 | `c1-fast-w160l8-k4-float32-u8` (conditional) | 26401–4 | 60.347 | 1.25 h | 22–29 min |
+| 6 | `c1-fast-a384l8-k4-float32-u8` (conditional) | 26401–4 | 104.388 | 1.75 h | — |
+
+Expected wall assumes K=2 gains of 1.0–1.3 at a384l8, 1.1–1.5 at w160l8 and 1.3–1.8
+for w160l8 K=4, plus about 3.5 minutes of attempt setup per cell. These are planning
+priors, not readings.
+
+- **Why largest first.** a384l8 is the largest missing comparison, and its K=2
+  watchdog is the longest. Running it first means a late failure or provider loss
+  cannot leave it unmeasured again. It also replaces the ascending ladder's
+  monotonicity skip with a direct measurement: a K=2 gain below 1.10 at a384l8 does
+  **not** skip w160l8 K=2, which brackets the crossover from below.
+- **K=4** runs only after that size's own valid K=2 cell reads a whole-window gain
+  of at least 1.30, and K times the fresh C2 solo's peak reserved CUDA and RSS fit
+  85% of the device (48,305,799,168 bytes) and pod (48,000,000,000 bytes). On the C1
+  figures, a384l8 K=4 (4 × 11.73 GB = 46.9 GB > 41.06 GB) is expected to be a
+  `conditional_skip` by the memory rule, and w160l8 K=4 (30.7 GB CUDA, 27.2 GB RSS)
+  fits. The fresh solo peaks decide. A K=2 window sensitivity crossing 1.30 makes
+  the K=4 admission provisional, as in C1.
+- **Readings** are unchanged from C1: `K × solo / packed` at matched update
+  ordinals, the decision gain alongside it, at least three complete post-warmup
+  updates per seed, exact included ordinals, early and late windows, phase trees,
+  GPU busy share, CPU cores, CUDA/RSS peaks and $/M learner decisions. The w160l8
+  solo is the declared 12-update A40 control. The reader matches the K=2/K=4 u8
+  ordinals inside it. Updates are dependent and there is one host, so C2 reports
+  no population interval.
+- **Overlap rerun.** As in C1: one twelve-update rerun of a whole packed cell that
+  fails only overlap sufficiency (`…-u12-overlap`), with the a384l8 solo extended by
+  `c1-fast-a384l8-k1-float32-u12-overlap` if needed. Admit it only if its watchdog
+  plus cleanup fits. Retain both attempts, select the first admissible scheduled
+  attempt, and mark a second shortfall inconclusive.
+- **Failures.** A failed cell gets at most one same-rental retry. A second failure,
+  any nonfinite or rejected learning step, or a deterministic setup or identity
+  failure ends C2. An admitted OOM is evidence and skips larger K at that size.
+- **Start skew** for packed cells is reported: the maximum difference between the
+  K first-update times. It is a launch-path reading, not a validity criterion; the
+  overlap rule still governs.
+- **Dispositions.** `cells.json` disposes of all 87 declarations. Every key outside
+  C2's scope is `not_needed`, with the reason "outside C2 scope; C1 repaired cohort".
+  Any C2 cell that cannot run gets its frozen status and reason.
+
+### Launch path: preparation outside rental time, packed starts together, bounded hangs
+
+C1 lost more than an hour of rental time on the launch path. An offline read of the
+pinned Etude client `a7718f59a706fdb1e4cac7c28b2a13e5b7afbd11` located the causes.
+
+- **Source preparation.** Each run's freeze calls `_publish` (`source.py:152-217`).
+  When the repository has an `origin`, `_publish` makes a full fetch into a new
+  temporary bare repository (`_history`, `source.py:135-149`). It does this once per
+  seed, serially, with no reuse. A repository without `origin` skips that whole
+  block (`source.py:89-92`, `:178`). The launcher documentation supports this case
+  and labels it **local-only**: "Workers receive tars and never need git keys." The
+  source archive is uploaded once per digest, before renting.
+- **Packed starts.** A file's K runs are recorded in one transaction. A machine that
+  is up places every waiting run in a single 1-second loop pass, up to its slots
+  (`scheduler.py:1495-1516`). The pinned client has no gang-start option.
+- **Hangs.** The controller loop sets no deadline. S3/R2 and provider HTTP calls
+  pass `timeout=None`, and the loop catches no exception (`controller.py:643-648`,
+  `transport.py:144-159`). SQLite waits are bounded at 30 s. The heartbeat is written
+  only after a completed pass. A hung process stops renewing its 5-minute supply
+  lease.
+- **Rent.** `etude rent` exits 0 even when the provider refuses the create
+  (`scheduler.py:1863-1880`). Refused machines stay listed as rented, and `terminate`
+  fails at once ("busy") while a loop holds the lease.
+
+C2 uses only supported operations, with the worker source and Etude client unchanged:
+
+1. **Persistent clone without `origin`.** The clone is at
+   `~/.etude-b015d5-step2/src/manabot-c2`: detached at the frozen commit, with only
+   remote `upstream` pointing at the local repository and a clean tree. The ignored
+   local extension (`bff695ea…`) is used only for discovery; the archive excludes
+   it. Queue from that checkout, with `PYTHONPATH` set to the clone and the worktree's
+   locked environment plus the pinned Etude overlay. Recovery (`etude source RUN`)
+   needs the clone, so it is kept until the C2 analysis is published.
+2. **No automatic rental.** `b015d5-a40` is held at `etude ondemand max b015d5-a40 0`
+   (set 2026-11-11), so queued work can never rent a machine. The machine is rented
+   by hand. Before any work is queued for it, `etude logs --machine NAME` must show
+   "machine confirmed" and the provider inventory must show the pod. This guards
+   against the refused-create false success. A class unavailable after the
+   30-minute selection window stops C2 as `unavailable`. No other GPU is
+   substituted.
+3. **Sequential cells, each queued in one invocation.** Cells share one 4-slot
+   machine, so a cell is queued only after the previous one finishes. Queueing
+   ahead would fill free slots and contaminate a solo control. With the clone, a
+   queue costs seconds, so the per-cell gap is attempt setup, not preparation.
+4. **Supervisor for hangs.** The execution driver checks the home's
+   `controller-heartbeat` every 30 s. If the heartbeat is more than 120 s old while
+   any C2 run is queued or active, the driver sends SIGINT, which releases leases.
+   It waits 30 s, then escalates to SIGTERM; after a SIGKILL it waits out the
+   5-minute lease. It then restarts `etude controller run` under caffeinate and
+   logs each restart with its timestamps. The machine-side work is bounded by each
+   job's own watchdog whatever the controller does. The driver bounds its own
+   Etude storage reads by running them in reaped subprocesses with a 120-second
+   timeout.
+5. **Independent teardown.** At the last cell, the work deadline or any stop, the
+   driver stops this home's controllers, then runs `etude terminate`. If deletion is
+   not confirmed within 5 minutes, it deletes the pod through the provider CLI
+   (`runpodctl`) and verifies the pod is absent. Time is charged until provider
+   deletion. The 4.0-hour window ends at provider deletion, so work stops 15
+   minutes before it (the cleanup reserve): 70 s to stop a controller, a 5-minute
+   lease after a kill, 5 minutes of `terminate`, then provider deletion. A cell is
+   admitted only if its watchdog plus that reserve fits, and a run still unfinished
+   when the reserve falls due is cancelled.
+
+**No-rental validation (done 2026-11-11, no machine, no training; receipts in
+`c2/step-3-c1/preflight/`).**
+
+- **Discovery from the clone.** It resolved `manabot` and `experiments` from the
+  clone with `origin = None`. Every C2 leg (including the a384l8 K=4 candidate)
+  produced jobs byte-identical to worktree discovery apart from `repo`, and
+  `bundle_at` gave the frozen 1,544-file bundle.
+- **Queue probe.** `etude queue` from the clone recorded the worst-case K=4 cell
+  (cohort `b015d5-c2-validation-queue-k4`, runs `0475738d8c9f`, `ad5a6594e0d1`,
+  `a1d074a9f93b`, `72949c9de508`). It took **4 seconds**, against 20–25 minutes for
+  C1's K=4 queue. It recorded all four in one invocation, each with source
+  `b5e8f404adf5 … local-only`, "queued (waiting for b015d5-a40)". The probe runs were
+  cancelled at once. They have zero attempts, and the machine, session and rental
+  counts are unchanged (11 / 10 / 10). They are retained as validation evidence,
+  never as C2 cells.
+
+Still unproved without a rental: archive upload and worker start from a local-only
+source on a real machine, and the supervisor's restart against a real hang. The
+first gap is covered by cell 0: the identity job is the first work on the rental,
+and a failure there costs only boot plus identity time. The second gap is bounded
+by the job watchdogs and the independent teardown.
+
+### Software decision
+
+**No manabot source change, no new freeze of worker source, no Etude upgrade and no
+change to shared controllers is needed.** The only new code is the evidence-directory
+driver, adapted from the retained C1 driver. It is not admitted worker source; the
+execution receipt records its hash. Its `updates.json` is the numeric projection the
+reader's float-only `load_run` needs; no measured value is dropped and
+`updates-raw.json` is retained.
+
+**Driver status — 2026-11-11.** Written and checked locally; nothing was rented,
+queued or trained. Files are in `c2/step-3-c1/`: `campaign.py`, `identity_job.py`
+(C1's remote script unchanged, job name `b015d5-c2-remote-identity-cuda`),
+`run_campaign.sh`, `budget.json` and `test_c2_campaign.py`. Rules the driver fixes
+that the sections above left open:
+
+- **Before renting.** `run_campaign.sh preflight` runs every check that needs no
+  machine: clone state, imports resolving from the clone, identity-job discovery,
+  `b015d5-a40` held at max 0, no run waiting on it, provider inventory readable. A
+  failure there costs nothing; the same failure after renting would idle a machine.
+- **Rental reality.** The driver takes the hand-rented machine's name. It requires
+  the on-demand `b015d5-a40`, a provider receipt, a rate of at most $0.60, "machine
+  confirmed" in the machine log and the pod in the provider inventory. Once a pod
+  is known, every exit path deletes it, a failed verification included.
+- **Capacities.** The memory rule reads the fresh solo's own receipt: the CUDA
+  device total (`identities.cuda.memory_bytes`; 47,699,722,240 on C1's A40, below
+  the 48,305,799,168 planning figure above) and the pod's cgroup limit
+  (`host.memory_limit.bytes`), with the on-demand minimum of 48 GB when no limit is
+  reported. It applies before K=2 as well as K=4. A missing measurement skips the
+  packed cells.
+- **Order of optional cells.** Cells 1–4 run first. Then w160l8's follow-up (K=2
+  overlap rerun if needed, K=4 if admitted, its rerun), then a384l8's. An optional
+  cell never delays a base cell.
+- **Retry.** A failed cell is retried whole, with all K seeds, because a packed
+  reading needs its K runs together; the failed cell's other runs are cancelled.
+  A failure whose log reports CUDA out of memory is not retried: it is evidence,
+  and larger K at that size is skipped.
+- **Updates.** The 400-update bound counts the runs recorded in `b015d5-c2-c1-*`
+  cohorts in the launcher database, so a restart cannot lose or double a count.
+- **Controllers.** A controller is this home's only when its process environment
+  carries this `ETUDE_HOME`; any other is never signalled. A replacement starts
+  only after the old loop is gone and its leases are released or expired. A loop
+  that will not stop ends the work, and teardown still deletes the pod.
+- **Recovery.** State is `campaign.json`; one driver holds `campaign.lock`. A
+  restart adopts cohorts already recorded and never queues one twice. State from
+  another machine is refused: a new rental is a new host.
+
+Checks, all without a machine (`pytest c2/step-3-c1/test_c2_campaign.py`, 40
+passed): cell order and one-cell-at-a-time queueing, the memory, gain, overlap,
+retry, OOM and numeric-stop rules, watchdog and update admission, the deadline
+with the slow teardown landing inside 4.0 h, refused rentals, restart adoption,
+the supervisor against foreign, hung, unkillable and overlapping loops, bounded
+reads, teardown fallbacks and the clone check. Real-process checks used sleeping
+stand-ins only. Three checks ran against real services, read-only: `preflight`
+(receipt `preflight/driver-preflight-20261111.json`), the storage child copying
+C1 run `003b496b1a5f` in 5 s with `updates.json`, `updates-raw.json`, `run.json`
+and `gpu-samples.csv` byte-identical to C1's retained files, and `gain`
+reproducing C1's retained A40 w128l4 K=2 reading. Still unproved without a rental:
+a real controller restart, `etude terminate`, and provider deletion by the driver.
+
+The driver does not write `cells.json` or `rentals.json`. Those need the posted
+bill and are written at reconciliation, as in C1.
+
+Launcher-owner repairs are **not required** for C2. They are recorded for Etude's
+owner, as defects at `a7718f5` that are still present on `origin/main`:
+
+- publish once per (repo, commit), or keep a persistent incremental mirror;
+- an optional gang start for a cohort;
+- per-pass deadlines and socket timeouts in the loop, with exception handling;
+- `rent` exiting non-zero on a refused or unknown create;
+- refused machines listed as never acquired;
+- `terminate` waiting for a lease.
+
+### Accounting and inclusive reservation
+
+**Reconciled first (provider billing read 2026-11-11 02:25 UTC, read-only).**
+
+- **Earlier pods.** The seven earlier pods are unchanged at $3.803594 posted
+  ($1.736957 for step 3).
+- **C1 pods.** All four C1 pods are now posted and match their claim-to-deletion
+  times to within seconds:
+
+  | Pod | Posted | Hours |
+  |---|---:|---:|
+  | first A40 `iaimonawexhw5a` | $0.120043 | 0.2045 h |
+  | A40 `7s22b315jo48lp` | $2.274572 | 3.860 h |
+  | L4 `i0p0guzl2a84m0` | $1.455567 | 2.470 h |
+  | A4000 `jx4kseudwb6yya` | $0.017535 | 0.068 h |
+
+  That is $3.867716 posted for C1. Holding one minute per pod at $0.59/hour against
+  late posting gives **C1 ≤ $3.907716**.
+- **Earlier conservative bounds kept.** The earlier pods' bounds stay as before,
+  $1.916973 for step 3 and $4.011845 for the experiment, until invoices settle them.
+- **Inclusive bounds now.** **Step 3 ≤ $5.824689 / $10; experiment ≤ $7.919561 /
+  $50.** C1 counters: 6.60 of 15 GPU-hours, 196 of 1,600 queued updates.
+
+**C2 line.** One A40, a window of at most **4.0 h** from claim to provider deletion,
+and an all-in ceiling of **$2.50**. The ceiling covers boot, identity, idle,
+failures, the supervisor's restarts and the 15-minute cleanup reserve. Rent only at a quote
+of at most $0.60/hour. The deadline is the lesser of 4.0 h and $2.50 / rate minus
+0.1 h. Each cell is admitted with the existing `admit_cost` rule: its declared
+watchdog plus cleanup must fit the remaining window and line. This is a ceiling,
+not a target. The expected cost is about 2.0–2.4 h, $1.20–$1.45.
+
+| Bound | Before C2 | C2 maximum | After C2, worst case | Ceiling |
+|---|---:|---:|---:|---:|
+| C1 dollars (C1 + C2) | $3.907716 | $2.50 | $6.407716 | $8.00 |
+| Step 3 dollars | $5.824689 | $2.50 | $8.324689 | $10.00 |
+| Experiment dollars | $7.919561 | $2.50 | $10.419561 | $50.00 |
+| GPU rental hours | 6.60 | 4.0 | 10.60 | 15 |
+| Queued updates | 196 | ≤ 400 | ≤ 596 | 1,600 |
+
+C1's per-GPU lines are closed. Their unused windows are not carried forward, and
+C2 does not borrow from the rest of the $50 cap. The ≤ 400-update bound counts every
+C2 base, conditional, overlap and retry leg. Remaining money is a ceiling, not a
+spending target. Do not rent while unresolved liability could breach a cap.
+
+**Planned schedule.** Times are from claim, at a quote of $0.59, with expected walls.
+
+| Elapsed | Event |
+|---|---|
+| 0:00 | rent confirmed; identity job queued |
+| ~0:10 | cell 1 |
+| ~0:27 | cell 2 |
+| ~0:59 | cell 3 |
+| ~1:14 | cell 4 |
+| ~1:33 | cell 5 if admitted |
+| ~2:02 | teardown |
+| ~2:10 | provider deletion verified |
+
+Cell 2's admission check (1.75 h watchdog plus the 0.25 h reserve) needs the window
+to have at least 2.0 h left at about 0:27. Cell 5's check (1.25 h plus the reserve)
+needs at least 1.5 h left at about 1:35. A 4-hour window passes both with about an
+hour of margin for a slow boot or one controller restart. Cell 6 and the a384l8 overlap
+rerun fit only if their larger watchdogs still fit. Otherwise they are disposed as
+`budget_skip`, never as measurements.
+
+### What C2 can and cannot settle
+
+- **Can settle.** With valid cells, C2 gives the K=2 gain at w160l8 and a384l8 on one
+  A40 host, and K=4 at w160l8 where admitted. That places the packing crossover
+  between sizes or beyond a384l8 for this host and recipe.
+- **Inconclusive.** Insufficient overlap after the one rerun, a lost rental, or an
+  unavailable A40.
+- **Cannot settle.** L4/A4000 behaviour, hardware-only ranking, and precision
+  advantage. Strength, learning equivalence and generalization are out of scope.
+  A different host or source would need fresh controls and a new prospective
+  admission.
 
 ## Stop waiting for the slowest game (deferred candidate)
 
