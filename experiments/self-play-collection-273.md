@@ -12,6 +12,56 @@ entire reported width-64 CUDA slowdown or establish that every other allocation
 is bounded. The Task's reported collection increase from about 41 to 107 seconds
 and RSS increase from about 12.5 to 26 GB remain historical observations.
 
+## Reproduction and remaining acceptance
+
+From the repository root, fetch the retained evidence and reproduce the
+historical figures in a new directory. For newly measured before/after arms,
+use the [frozen paired analysis](#frozen-paired-analysis) and its four required
+inputs instead.
+
+```sh
+uv sync --locked --no-install-project --extra artifacts --extra reports --extra dev
+PYTHONPATH=. uv run --no-sync python -m manabot.data fetch experiments/data/collection-growth-281
+PYTHONPATH=. uv run --no-sync python scripts/report_collection_growth.py \
+  --data experiments/data/collection-growth-281 --out .runs/collection-growth/report
+```
+
+Open `.runs/collection-growth/report/phases.png` and `growth.png`; the same
+directory contains `summary.json` with window statistics, slopes and historical
+cost projections. `--data` selects the directory containing `w64.json` and
+`w160.json`; `--out` is required and must name a new directory. To repeat the
+report, choose another output path. The report step works offline and needs no
+native extension or game imports.
+
+The fetch step needs the [artifact credentials](README.md#data) unless the
+bytes are already cached. It restores the manifest-published captures,
+provenance, figures, comparison plan and `prepared/` inputs. Preserve those
+files as evidence; generated reports belong in a separate directory.
+
+A fresh capture reads the selected metric run without loading its cumulative
+manifest. For example, to take another snapshot of the historical w64 run:
+
+```sh
+PYTHONPATH=. uv run --no-sync python scripts/measure_collection_growth.py \
+  --source r2://manabot/jobs --run 59718fe34945 \
+  --cache .runs/collection-growth/cache --out .runs/collection-growth/w64.json
+```
+
+All four capture options are required: `--source` is the jobs storage URI,
+`--run` is the metric run ID, `--cache` holds downloaded objects and `--out`
+names a new JSON snapshot. Capture needs storage access and prints the retained
+update count on success. It rejects multiple writers/attempts, block-sequence
+gaps and damaged metric arrays. If delivery is incomplete, wait for the same
+run's evidence and capture to a new path; retain failed inputs and diagnostics.
+For suspected cache corruption, use a new cache directory. Do not fill gaps or
+edit identities to make the report accept an input.
+
+Remaining acceptance is the bounded matched execution, equal-work slopes,
+complete error/recovery and host receipts, whole-rental accounting and confirmed
+teardown. The historical attribution is associative, and the unretained exact
+manifest/fold history remains unavailable. The software checks and retrospective
+plots do not complete the scientific Task.
+
 ## Mechanism
 
 `execution.py` passed `SelfPlayCounter.drain()` through `metric_row`, producing
@@ -243,59 +293,15 @@ assumed to fund admission.
 At 2026-11-11 22:42:24 UTC, and again at 23:15:36 UTC on the configured
 Task supply, the fresh L4 availability request failed with `ProviderUnavailable: GET catalog/gpus: no reply`. No current price,
 capacity, quote, new run or rental was obtained. `comparison-preflight.json`
-retains the latest refusal and zero new rental spending. The paid comparison therefore
-remains blocked, and there is **no verdict of flat, partly flat or not flat**
+retains that 23:15 read failure and zero new rental spending. A further CLI read
+at 23:36:06 UTC, recorded in `scratch/collection-growth.md`, exited 1 with
+`etude: GET catalog/gpus: no reply`; it requested no rental and left the published
+preflight unchanged. These failures establish neither unavailable capacity nor
+an unaffordable quote. The paid comparison remains blocked on a successful
+provider read and fresh quotes, and there is **no verdict of flat, partly flat or not flat**
 after the repair. A remaining-cause follow-up depends on that comparison; this
 historical evidence cannot rank `_slice_obs_tensors`, allocator/native memory
 and `game_errors` as residual causes after an unexecuted fix.
-
-### Reproduction and remaining acceptance
-
-From the repository root, fetch the retained evidence and reproduce the
-historical figures in a new directory:
-
-```sh
-uv sync --locked --no-install-project --extra artifacts --extra reports --extra dev
-PYTHONPATH=. uv run --no-sync python -m manabot.data fetch experiments/data/collection-growth-281
-PYTHONPATH=. uv run --no-sync python scripts/report_collection_growth.py \
-  --data experiments/data/collection-growth-281 --out .runs/collection-growth/report
-```
-
-Open `.runs/collection-growth/report/phases.png` and `growth.png`; the same
-directory contains `summary.json` with window statistics, slopes and historical
-cost projections. `--data` selects the directory containing `w64.json` and
-`w160.json`; `--out` is required and must name a new directory. To repeat the
-report, choose another output path. The report step works offline and needs no
-native extension or game imports.
-
-The fetch step needs the [artifact credentials](README.md#data) unless the
-bytes are already cached. It restores the manifest-published captures,
-provenance, figures, comparison plan and `prepared/` inputs. Preserve those
-files as evidence; generated reports belong in a separate directory.
-
-A fresh capture reads the selected metric run without loading its cumulative
-manifest. For example, to take another snapshot of the historical w64 run:
-
-```sh
-PYTHONPATH=. uv run --no-sync python scripts/measure_collection_growth.py \
-  --source r2://manabot/jobs --run 59718fe34945 \
-  --cache .runs/collection-growth/cache --out .runs/collection-growth/w64.json
-```
-
-All four capture options are required: `--source` is the jobs storage URI,
-`--run` is the metric run ID, `--cache` holds downloaded objects and `--out`
-names a new JSON snapshot. Capture needs storage access and prints the retained
-update count on success. It rejects multiple writers/attempts, block-sequence
-gaps and damaged metric arrays. If delivery is incomplete, wait for the same
-run's evidence and capture to a new path; retain failed inputs and diagnostics.
-For suspected cache corruption, use a new cache directory. Do not fill gaps or
-edit identities to make the report accept an input.
-
-Remaining acceptance is the bounded matched execution, equal-work slopes,
-complete error/recovery and host receipts, whole-rental accounting and confirmed
-teardown. The historical attribution is associative, and the unretained exact
-manifest/fold history remains unavailable. The software checks and retrospective
-plots do not complete the scientific Task.
 
 ### Frozen paired analysis
 

@@ -61,8 +61,12 @@ provenance and the report; the projection avoids cumulative manifest expansion.
 Jack Heart's MTG-281 directive, 2026-11-11: "do 1 and 2. You have $15".
 Both pinned 500-update TrainingJobs, source bundles/archives, local world/shape
 admission and pre-execution paired analysis are now manifest-published. This
-closes preparation, not execution: provider reads at 22:42:24 and 23:15:36 UTC
-failed before any new rental or spending. The prepared bounds include startup,
+closes preparation, not execution: provider reads at 22:42:24, 23:15:36 and
+23:36:06 UTC failed with `GET catalog/gpus: no reply` before any new rental or
+spending. The published preflight retains the 23:15 failure; the later CLI
+failure is recorded in the Task plan. Failed reads establish neither a capacity
+nor a price refusal. Prepared sources need no repetition to recover provider
+visibility; fresh quotes remain required. The prepared bounds include startup,
 training, delivery and teardown within each whole-rental envelope; deletion is
 best effort and billing still requires reconciliation. Separate serial allocations
 must not be combined into a cohort that extends a rental's deadline.

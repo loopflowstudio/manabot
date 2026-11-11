@@ -39,21 +39,11 @@ grow; incomplete or materially mismatched evidence withholds the verdict. The
 500-update horizon cannot certify the later 850–1700-update regime.
 
 The 2026-11-11 reconciliation read (`git ls-remote origin refs/heads/main`)
-returned `830161795f3ae65563ae07128f14e90dfaf90235`, already integrated. Its
+again returned `830161795f3ae65563ae07128f14e90dfaf90235`, already integrated. Its
 `docs/workflows.md` adds same-machine comparison guidance and separates software
-delivery from scientific completion. Accepted separate serial L4 allocations
+delivery from scientific completion. The prepared separate serial L4 allocations
 remain descriptive: matching `HostFacts` cannot establish identical physical
 hosts or isolate contention. Material host differences withhold the verdict.
-
-## Delete — do not maintain
-
-No remaining code deletion targets. Preserve frozen sources, published snapshots
-and historical scalar evidence. This compression removes duplicated guide and
-implementation detail from the plan; further code cuts were not warranted.
-Pre-compression uncommitted notes were moved to
-`.runs/collection-growth/compress-context-20261111/collection-growth.before.md`.
-Earlier committed detail is at
-`6bed293656358ac36582fe54f3decfba0b1a1cc6:scratch/collection-growth.md`.
 
 ## Execution blocker and remaining work
 
@@ -68,6 +58,15 @@ exited 1 with `etude: GET catalog/gpus: no reply`. An earlier invocation with on
 provider. Neither command requested a rental. No launch, quote or additional
 spend occurred; published preflight stayed unchanged. Preparation is complete
 and needs no repetition while availability and fresh quotes remain missing.
+The provider read failed; it did not establish a capacity or price refusal.
+The next missing input is a successful provider read and affordable quotes,
+not another software change or preparation run.
+
+The same bounded availability command at 2026-11-11 23:47:57 UTC exited 1
+with `etude: GET catalog/gpus: no reply`. It requested no rental; no quote,
+run or spending resulted. Published preparation and preflight bytes remain
+unchanged. Implementation has no remaining code change; execution still needs
+provider visibility and fresh affordable quotes.
 
 1. Obtain fresh capacity and individual whole-rental quotes for both arms.
    Reserve at most $7.20 each plus $0.60 ancillary, cumulatively $15 including
@@ -95,6 +94,14 @@ and needs no repetition while availability and fresh quotes remain missing.
 
 ## Retained checks (2026-11-11)
 
+- Latest blocker-note check: `git diff --check` passed; `lf context` reports
+  scratch and Wave memory within both token and byte limits. No code changed.
+- Shipping docs: `experiments/self-play-collection-273.md` now leads with
+  retained-plot reproduction; `experiments/README.md` links directly to the
+  distinct paired inputs. Existing commands, criteria and evidence are preserved.
+  Both report CLIs' `--help` matched the documented options; `git diff --check`
+  passed. No product question was exposed. `lf open --host desktop --file` for
+  both docs reported "No Desktop Files view attached; nothing opened."
 - Focused compression check:
   `PYTHONPATH=. uv run --no-sync pytest tests/infra/test_collection_comparison_report.py tests/training/test_collection_comparison_preparation.py tests/infra/test_collection_growth_capture.py tests/infra/test_experiment_data_untracked.py -q`
   — 18 passed; Ruff and `git diff --check` passed. Eight reports matched prior
@@ -112,8 +119,15 @@ and needs no repetition while availability and fresh quotes remain missing.
   `PYTHONPATH=. uv run --no-sync pytest --collect-only tests/infra/ tests/academy/test_clean_machine_verifier.py deploy/play/tests/ -q`
   collected 172 tests in 1.56s. This closes collection only; gate/CI still owns
   broader suite execution. No games, training or rentals ran in those checks.
-- `lf open --host desktop` reported "No Desktop Files view attached; nothing opened."
 
-Current compression changes context only; no tests rerun. `git diff --check`
-— passed. `lf context` — memory and scratch below both token and byte targets;
-scratch reduced from 12,863 to about 9,800 bytes. No execution was launched.
+Reconciliation and the latest blocker note change documentation only; existing
+checks remain applicable. No paired execution occurred. Earlier preparation
+and compression detail remains at
+`c995c00e719398a0f328ee4f9b3cf1050acb6625:scratch/collection-growth.md`.
+
+## Delete — do not maintain
+
+No production path is replaced by these measurement tools. The redundant
+capture subcommand was removed; do not restore a parallel CLI. Keep published
+snapshots, frozen analysis, source archives and historical metric compatibility.
+No further deletion is needed for the remaining execution work.

@@ -56,7 +56,10 @@ history holds them at the commit each report names.
 To reproduce the retained collection-time and RSS plots, or analyze the bounded
 before/after measurement, follow the
 [self-play collection guide](self-play-collection-273.md#reproduction-and-remaining-acceptance).
-It covers blockwise capture, offline reports and the paired evidence inputs.
+It starts with offline plot reproduction from retained captures, then covers
+blockwise capture. The [paired analysis](self-play-collection-273.md#frozen-paired-analysis)
+uses two new arm captures and their delivered training receipts; historical
+w64/w160 captures cannot substitute for those inputs.
 
 ```bash
 uv run --extra artifacts python -m manabot.data fetch                # everything
