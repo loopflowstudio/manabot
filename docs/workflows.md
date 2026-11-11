@@ -75,7 +75,16 @@ and matching, explicit `--recipe`, `--seed` and `--device` settings. `--recipe` 
 regime JSON or `module:function`; the device defaults to CPU (`--device cuda`
 selects CUDA). The benchmark pins its in-memory recipe to the current world, so
 it cannot reproduce frozen experiments. Capacity failure requires a compatible
-declared workload, not truncation or edits to a frozen recipe.
+declared workload, not truncation or edits to a frozen recipe. The default CPU
+reading plays three full updates (about 160,000 decisions); on a laptop expect
+minutes per update and several GB of memory.
+
+The printout omits batching. In the receipt's stage, the `calls` of
+`collection_timings["Policy inference and action selection"]` are inference
+calls; inferred rows are its `environment_decisions` (streams × calls −
+`idle_stream_steps`), so rows per call is decisions / calls. Idle steps are
+complete-game streams waiting for the remaining games; they lower rows per call
+without indicating a serving limit.
 
 After an interrupted run, read the retained per-update rows: receipt timers can
 cover only the last attempt while counts span attempts. Keep failed attempts and

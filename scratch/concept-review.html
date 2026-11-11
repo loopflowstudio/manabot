@@ -21,7 +21,10 @@ dd { margin: .15rem 0 0; }
 Sources: <code>scratch/questions.md</code>, <code>docs/workflows.md</code>,
 <code>docs/evaluation.md</code>, <code>.lf/graphs/experiment-performance.yaml</code>,
 <code>.lf/skills/experiment-measure.md</code> and
-<code>.lf/skills/experiment-performance-review.md</code>.</header>
+<code>.lf/skills/experiment-performance-review.md</code>;
+<code>manabot/training/rollout/collection.py</code>,
+<code>manabot/training/records.py</code> and
+<code>manabot/training/execution.py</code>.</header>
 <main>
 <h1>Advance: no design change or open product choice</h1>
 <p>Headless review of the implemented branch. The next graph decision belongs to
@@ -38,7 +41,9 @@ scientific comparisons keep <code>experiment</code>.</p>
 <dl>
 <dt>Locate a slow policy-inference update</dt>
 <dd>Declare a workload and comparison → <code>experiment-measure</code> reads
-<strong>Update time</strong>, inference calls/rows and <code>TrainingRun.host</code>.</dd>
+<strong>Update time</strong>, inference calls/rows and <code>TrainingRun.host</code>.
+Read <code>StageRecord.idle_stream_steps</code> before calling small batches a
+serving limit: complete-game streams wait after reaching their closure target.</dd>
 <dt>Measure and improve it on the same machine</dt>
 <dd>Baseline/candidate evidence → <code>scripts/bench_training_update.py</code>
 retains run data with <code>--out</code> and a receipt with <code>--json</code>.
@@ -54,9 +59,16 @@ comparison plan before implementing; truncating choices cannot create a valid ga
 <strong>Interrupted run:</strong> read update rows rather than dividing last-attempt
 timers by cumulative counts. <strong>Missing CUDA:</strong> retain the exact deferred
 command and device requirement; the workflow provides no rental authority.</p>
+<p><strong>Interrupted evaluation:</strong> continue missing deals under the same
+request identity, keeping prior attempts and completed evidence. A cached success
+adds no timing sample.</p>
 <p><strong>Counterexample:</strong> packed seeds can improve aggregate throughput
 while slowing every seed. The objective, overlapping samples and matched solo
 ordinals must survive review. A numerical change leaves learning adoption unresolved.</p>
+<p><strong>Closure counterexample:</strong> filling idle streams by changing when
+batches close also changes sampling. Higher rows per call alone cannot establish
+faster learning. Older receipts default the idle counter to zero; that is not proof
+of no waiting. Existing records and the measurement skill already cover this case.</p>
 <h2>Next presentation</h2>
 <p>Show the compiled 13-node loop and one comparison's evidence trail at demo.
 No new schema, campaign lifecycle or benchmark is proposed. The future standing

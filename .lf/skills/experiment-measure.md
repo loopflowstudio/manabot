@@ -28,6 +28,10 @@ Measure what training and evaluation spend time on, then select a worthwhile sof
    seconds/update, decisions/update and games/update. Missing older series stay
    missing; nested clocks are not additive. Across recovery, read per-update rows:
    receipt timers can cover only the last attempt while counts span attempts.
+   Inspect complete-game closure and `StageRecord.idle_stream_steps` before
+   attributing small inference batches to a serving limit: streams that reach
+   their closure target wait for the remaining games. Older receipts default
+   this counter to zero, which does not establish that no streams idled.
 4. Use the maintained tools on available, authorized hardware:
    - Training: use `scripts/bench_training_update.py` through the retained-output
      command in [Training and evaluation performance](../../docs/workflows.md#training-and-evaluation-performance).

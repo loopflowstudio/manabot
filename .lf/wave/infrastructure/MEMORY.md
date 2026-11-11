@@ -79,8 +79,15 @@ Separate scientific evidence is needed when precision, policy lag or batch
 composition changes. Task 855bff owns the standing size-ladder benchmark;
 use its shipped command once available rather than duplicating it in this workflow.
 
+Small inference batches need not indicate a serving limit: complete-game
+collection idles streams that reach their closure target while other games finish.
+Read `StageRecord.idle_stream_steps` alongside inference rows/calls; older receipts
+default that counter to zero and cannot establish absence of idle slots. Changing
+closure to improve batching also changes sampling and needs learning evidence.
+
 Coverage: this Graph's reconciliation found no immediate Infrastructure child
 directories or child memories on 2026-11-11. Related Experiments memory was read
-in the shared-effect introduction and performance/delivery/recovery sections;
-the intervening admission/accounting detail and other sections were not read in
-this pass or curated. Its v7 batching traces do not establish a hashed-v6 speedup.
+through the shared-effect section (including performance, delivery and accounting)
+and the training failure recovery discussion. Other sections were not read in this
+pass, and that memory was not curated. Its v7 batching traces do not establish a
+hashed-v6 speedup.

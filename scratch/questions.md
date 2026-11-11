@@ -13,9 +13,9 @@ Reversible choice: keep this single consumer's optimization loop in
 `.lf/graphs/experiment-performance.yaml`, composing builtin refresh and deliver.
 Coverage still consumes the engine's shared `engine-optimization`; no second
 optimization subgraph is needed. Task 855bff owns the standing size-ladder
-benchmark. Its 2026-11-11 status read showed no PR or Graph process. Use the
-current benchmark until its documented command ships; add no guessed CLI or
-second ladder.
+benchmark. Its 2026-11-11 22:04 UTC status showed an active `code` Graph at
+`write-docs`, with no PR. Use the current benchmark until its documented command
+ships; add no guessed CLI or second ladder.
 
 ## Delete — do not maintain
 
@@ -51,6 +51,14 @@ packing as faster per-seed progress, and last-attempt timers as cumulative timer
 Capacity failure or a behavior mismatch invalidates the comparison; retain failed
 evidence and revise the plan. Missing CUDA stays an exact deferred check.
 
+The post-realignment concept review reaches the same outcome: no design change
+and no open product choice. Its concrete counterexample is a small inference batch
+caused by complete-game closure, not a serving limit. The implemented measurement
+guidance already handles this; changing closure would cross the existing sampling
+boundary and require separate learning evidence. Evaluation recovery retains the
+request identity and completed evidence; a cached success adds no timing sample.
+Next: show that evidence trail at demo, without starting a benchmark in this review.
+
 ## Implementation and remaining work
 
 Compression keeps runnable commands in `docs/workflows.md` and evaluation plan
@@ -74,5 +82,12 @@ question. Gate and delivery remain with the selected Task graph. Presentation:
 attached; nothing opened.” Human presentation remains for demo. No benchmark,
 training/evaluation job, rental or server was started.
 
-Compression check: `git diff --check` — passed; `lf context` — memory and scratch
-below both limits. Only Markdown changed in this pass; no behavior checks rerun.
+Realignment found fetched `origin/main` at `3c169916e`, already included here.
+Task 855bff's new collection finding was checked against
+`manabot/training/rollout/collection.py`: complete-game streams idle after reaching
+their closure target. Measurement now reads `StageRecord.idle_stream_steps`
+without treating a legacy default zero as evidence of no idle slots. The benchmark
+docstring's cross-machine timing claim was corrected to match same-machine controls.
+These are guidance changes, not collector changes or new speed measurements.
+The workflow compiler passed all eight graphs after these corrections;
+`git diff --check` passed and `lf context` remained within both budgets.
