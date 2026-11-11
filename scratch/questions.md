@@ -344,3 +344,14 @@ artifact references over main `0e4f8a935acb1da3e21105e4fb2c1c729677e3c7`’s
 pre-freeze status. Main has no unique manifest entries; the branch adds 292
 entries and advances the report reference. The local report matches the retained
 SHA-256 and byte count. Frozen source and execution boundaries are unchanged.
+
+## Gate, 2026-11-11 (C2 driver, PR 456)
+
+Diff against main `b5e8f404a` is the protocol's C2 section, 292 manifest entries and
+scratch. No source, test or doc outside those changed, so nothing was edited.
+
+- `uv run --locked --extra dev --extra artifacts pytest experiments/data/training-throughput-b015d5-v1/c2/step-3-c1/test_c2_campaign.py tests/infra/test_experiment_data_untracked.py -q` — 41 passed (40 driver + 1 untracked-data).
+- All 292 new manifest entries match the local file bytes (0 missing, 0 mismatched); the six driver hashes equal `scratch/c2-design.md`.
+- `ruff check` / `ruff format --check` on `c2/step-3-c1/`: driver, identity job and test clean. `preflight/discover.py` has 4 style findings; it is a published preflight receipt, so its bytes were left alone.
+- `bash -n run_campaign.sh` passes. PR 456 CI is green at `5485c3f90`; main has not moved.
+- Identifiers that live only in scratch (phantom A4000 records, other-account pods) are also in the published C1/C2 evidence files, so clearing scratch at landing loses nothing.
