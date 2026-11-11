@@ -336,3 +336,11 @@ owns the rules and the check list. Reversible choices made here:
 
 Not done here: the freeze of the protocol and driver hashes, quote, rental and
 execution. Hashes at this implementation are in `scratch/c2-design.md`.
+
+## Main sync resolution — 2026-11-10
+
+Assumption (reversible): retain this branch’s later C1 evidence, C2 design and
+artifact references over main `0e4f8a935acb1da3e21105e4fb2c1c729677e3c7`’s
+pre-freeze status. Main has no unique manifest entries; the branch adds 292
+entries and advances the report reference. The local report matches the retained
+SHA-256 and byte count. Frozen source and execution boundaries are unchanged.
