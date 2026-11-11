@@ -60,46 +60,17 @@ Torch reset seed reproduces the deal; CapturedVector rejects unbuffered native
 mutations; built-in passive and its decision-profile CLI branch removed.
 There is no docs/releases.md; the engine guide describes the changes.
 
-## Remaining work
+## Current publication state
 
-Concept review, 2026-11-11: no design change and no open product choice;
-loop-or-next can advance. The shared record removes the consumer-specific and
-scalar/batch distinctions without merging their reset policies. Keep the
-documented distinction between a vector's completed transition and its
-replacement observation. The requested demo should show scalar and batch reads,
-a pending seed, and independent branches, then failure recovery with a fresh read.
-This review ran no behavioral checks; the gate work below remains pending.
-
-No open product question. The two identity corrections are implemented:
-`Env` keeps the live reset seed separate from its pending reset seed, and one
-branch constructor allocates process-local identities for exact/selected forks
-and all materialization paths. Materialization RNG seeds never replace the
-originating reset seed. Capture guards and portable identities stay unchanged.
-
-The deletion cut also removes the duplicate fork constructors with zero
-identities; fork replay traces remain shared through their existing clones.
-Focused lifecycle regressions cover pending and failed resets, repeated branches,
-materialization, independent mutation and capture-origin/reset rejection. The
-latest lifecycle proof below records all six native debug cases and 17 installed
-snapshot/search-command cases passing after compression and atomic rebuild.
-The earlier iteration direction to implement these repairs is superseded by
-that implementation and proof; `docs/engine.md#hand-snapshots` already describes
-the repaired seed and branch semantics.
-
-Gate must refresh affected suites after scalar unification and these repairs;
-earlier publication and QA results below predate them. The main merge at
-`dc5ae2ff7` includes MTG-271's Python/dependency/release work, with no changes to
-the snapshot implementations or their three belief consumers. Validate the
-current development/consumer contract from `docs/development.md`; the old
-installed-wheel results do not certify the merged dependency configuration.
-The later merge at `75796f92a` brings in #461's immutable self-play outcome tables
-and metric reader. It changes neither snapshot APIs nor the three migrated
-belief clients. Recovery validation must now exercise the merged
-`training/execution.py` / `training/update_metrics.py` outcome-table path, rather
-than treating earlier recovery results as proof of the current branch.
-Return the shared scalar/batch contract to demo as requested in 8507f1b8.
-Publication, landing and Task movement remain separate. No throughput,
-CUDA/MPS, vector terminal-hand retention or full scalar-helper parity claim.
+The scalar/batch implementation, seed and branch identity repairs, and deletion
+cut are complete. No product choice remains open. The publication pass refreshed
+the full debug suite, affected Python suites, and isolated 3.12/3.13 consumers
+against merged main `9f69a96a1`, including the outcome-table recovery path.
+The guide example, pending seed and independent-branch demonstration ran from
+both installed wheels. Detailed results are below; earlier results remain dated
+evidence rather than claims about the final branch. Publication leaves merging
+and Task completion separate. No throughput, CUDA/MPS, vector terminal-hand
+retention or full scalar-helper parity claim.
 
 ### Pre-repair reproduction — 2026-11-11 (historical)
 
@@ -227,3 +198,21 @@ run history retained above. No remaining deletion targets or product questions.
 - `cargo test --manifest-path managym/Cargo.toml -p managym --lib hand_snapshot -j 2 -- --test-threads 2` — all 6 passed in debug; Rust formatting passed.
 - `CARGO_BUILD_JOBS=2 uv run --locked --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 extension replaced atomically.
 - `uv pip install --no-deps --target <temporary>/installed <cp313 wheel>`, then outside the checkout `uv run --no-project --python <root>/.venv/bin/python -m pytest --confcutdir=. test_hand_snapshots.py test_search_command_evidence.py -q` — 17 passed in 1.43 s. Installed extension origin, both imports, packaged stub and guide example passed; development dependencies reused, temporary files removed. Formatting and diff whitespace passed. No publication or Task movement.
+
+## Publication verification — 2026-11-11
+
+`lf sync` completed cleanly against main `9f69a96a1`; code under test is
+`76728c86b`. This pass changes only audit/working notes and prepared PR copy.
+
+- `CARGO_BUILD_JOBS=2 cargo nextest run --manifest-path managym/Cargo.toml --profile ci --test-threads 2`: 1,057 passed, two skipped in 259.852 s; `/tmp/mtg272-final-rust.log`.
+- Affected Python suite (all `tests/env`, belief audit/sampling/learning, changed training tests, both recovery suites, local-update/search-command suites, model agent, rollout/value and parity/seat-balance): 343 passed, three failed in 698.34 s; `/tmp/mtg272-final-python.log`. Failures are exactly the three retained `test_resource_limit_receipt_replays_its_retained_encoding_boundary` cases returning `binding_mismatch`, already reproduced on base `402dfd5b2` in the earlier record. Recovery through merged outcome tables passes; the earlier Etude missing-file failure did not recur and is not claimed fixed.
+- All-target/all-feature Clippy with `PYO3_PYTHON` set to the root 3.13 interpreter passed; `/tmp/mtg272-final-clippy.log`. Rust format, Ruff check/format on all 33 changed Python/stub files, release metadata check and diff whitespace passed.
+- `uv run --no-sync python scripts/release/prepare.py /tmp/mtg272-final-release-source`, then root `uv run --locked --extra play maturin build --release` for isolated 3.12 and 3.13 interpreters: both release wheels built; `/tmp/mtg272-final-release-build.log`. Root development environment remains CPython 3.13.7 / Torch 2.10.0 / Etude 0.2.15; no extension source changed in this pass.
+- Fresh independent macOS arm64 installs, outside the checkout with PYTHONPATH unset and Python isolated mode: 26 snapshot, bookkeeping and Command tests passed on each interpreter. CPython 3.12.12 / Torch 2.10.0 / Etude 0.2.15: 17.58 s; CPython 3.13.7 / Torch 2.15.0 / Etude 0.2.15: 4.02 s. Logs `/tmp/mtg272-final-consumer312.log` and `/tmp/mtg272-final-consumer313-release.log`.
+- Both installed consumers passed the unchanged guide example, import-origin/alias and packaged-stub checks, pending-seed/independent-branch demonstration, and `scripts/release/smoke.py` (CLI, gradients, CPU training, checkpoint reload). Logs `/tmp/mtg272-final-contract{312,313}.log` and `/tmp/mtg272-final-smoke{312,313-release}.log`.
+- The first training-smoke attempt used a development wheel and failed because it lacked `.manabot-source.json`. Using the documented release-preparation path supplied that manifest; both fresh release consumers then passed. No product code workaround or fabricated source identity was used.
+
+Assumption: publish with the three documented baseline replay failures, as in
+the earlier publication, while making the current failures explicit. The
+requested API, debug suite, recovery paths and isolated consumers pass. Linux,
+accelerators and hosted CI results are not certified by these local runs.

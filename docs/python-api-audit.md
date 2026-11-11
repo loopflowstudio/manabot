@@ -104,9 +104,17 @@ have focused coverage. Capture bookkeeping tests cover rejected mutations,
 delegated reads, maximum-seed replacement and both Torch reset forms. Opponent
 tests cover rejection at each public boundary and retained passive receipts.
 
-Gate must refresh the broader suites after scalar unification and identity
-repairs, including isolated consumers on CPython 3.12 and 3.13; the focused wheel
-checks reuse development dependencies. Earlier broader runs found three retained
-TLA replay `binding_mismatch` failures, also reproduced with base `402dfd5b2`,
-and an intermittent Etude `seal_logs` missing-file failure that passed alone.
-Neither is established as fixed. Frozen evidence remains unchanged.
+The full debug Rust suite passes after scalar unification and identity repairs
+(1,057 passed, two skipped). Fresh macOS arm64 consumers pass 26 snapshot,
+capture-bookkeeping and Command cases each, the guide example, packaged-stub
+checks, and the installed training/checkpoint smoke: CPython 3.12.12 with Torch
+2.10.0, and CPython 3.13.7 with Torch 2.15.0, both with Etude 0.2.15. These use
+release-prepared wheels with their source manifests and independently installed
+dependencies, outside the checkout.
+
+The affected Python suite reports 343 passed and three retained TLA replay
+`binding_mismatch` failures, previously reproduced with base `402dfd5b2`.
+Recovery and search checks pass against the merged outcome-table path. The
+earlier intermittent Etude `seal_logs` missing-file failure did not recur;
+this does not establish a fix. Frozen evidence remains unchanged. Linux and
+accelerator execution remain outside these local checks.
