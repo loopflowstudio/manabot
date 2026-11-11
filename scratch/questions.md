@@ -355,3 +355,12 @@ scratch. No source, test or doc outside those changed, so nothing was edited.
 - `ruff check` / `ruff format --check` on `c2/step-3-c1/`: driver, identity job and test clean. `preflight/discover.py` has 4 style findings; it is a published preflight receipt, so its bytes were left alone.
 - `bash -n run_campaign.sh` passes. PR 456 CI is green at `5485c3f90`; main has not moved.
 - Identifiers that live only in scratch (phantom A4000 records, other-account pods) are also in the published C1/C2 evidence files, so clearing scratch at landing loses nothing.
+
+## C2 freeze, 2026-11-11
+
+- Frozen at main `757bb6257` (worker source `b5e8f404`, unchanged); receipt in the
+  protocol's "C2 freeze receipt", evidence in `c2/step-3-c1/freeze/`.
+- A40 quoted $0.59/h at 12:04 UTC with none available; launch will need the
+  30-minute selection window.
+- Billing: only foreign account pods moved; this Task's bounds unchanged.
+- Next: execution review, then hand rental and `run_campaign.sh MACHINE`.
