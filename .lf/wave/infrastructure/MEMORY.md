@@ -57,7 +57,12 @@ streams/two w64 updates, then four replayed evaluation games after correcting th
 authored deck keys. These dirty-source subset runs preceded the Python/dependency
 and MTG-273 sync; they establish neither a full-ladder reference nor a speedup.
 Comparison admission now includes Python as well as Torch version, host, workload
-and behavior. Reference-host designation, complete measurements and real
+and behavior. A report completed for a subset is still not a standing reference:
+recording and comparison share one completeness rule (all four sizes and every
+workload supported by the device), checked before workers start with the error
+retained. Controlled tests cover that rule for CPU/CUDA and training-only MPS;
+they do not establish device performance or real-source repeatability.
+Reference-host designation, complete measurements and real
 interleaving remain open in the Task plan. Short ladders cannot establish MTG-273
 long-run flatness; its separate evidence is in
 `experiments/self-play-collection-273.md`.

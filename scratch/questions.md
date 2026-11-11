@@ -9,7 +9,7 @@ call (environment_decisions / policy-inference calls from collection_timings)
 and the idle fraction (idle_stream_steps / (calls x streams)) per size."
 About `experiments/training_throughput_sizes.py`: "prefer not to edit that file".
 
-Reversible headless choices:
+## Earlier headless choices (host choice superseded below)
 - Local CPU is the initial reference candidate; recording is explicit and requires
   a complete clean-source run. No machine has been designated/adopted by this step.
   The reference-host question remains for review before committing measurements.
@@ -24,7 +24,7 @@ Reversible headless choices:
   modifying the training hot path just for this harness.
 
 The harness exists; acceptance is incomplete. `scratch/plan.md` owns the remaining
-full-ladder measurement, host decision, committed reference and real-source
+full-ladder measurement, committed reference and real-source
 comparison. No baseline JSON or speedup claim has been fabricated. MPS/CUDA were
 not exercised.
 
@@ -68,8 +68,9 @@ both limits; no child Infrastructure memories were present.
 Open product choice: which owned machine and device anchors the standing
 reference? The mini is a recommendation in the Task brief, not a designation.
 Do not turn the local CPU candidate assumption into reference adoption.
-The working design records the question and the full-reference admission
-clarification; loop-or-next should return Blocked for the host choice.
+The working design records the question for demo and the full-reference admission
+clarification. The host choice does not prevent the admission repair or its
+controlled validation.
 
 Reversible presentation choice: keep the existing command and receipt model,
 and show the review in `scratch/concept-review.html`. No new CLI mode, service,
@@ -90,3 +91,43 @@ an attempt derives its workload and size from its sample. No further deletion
 targets remain; the three receipt types preserve failed attempts without samples.
 
 Validation: `uv run --locked --extra dev --extra evaluation pytest tests/training/test_pipeline_speed.py -q` — 34 passed in 8.56 s. Focused Ruff lint/format and `git diff --check` passed after formatting. `lf context` remains under both token and byte limits. No workload measurements were run.
+
+Realign after the repair: the shared completeness check, early rejection and
+persisted errors agree with the tests and development docs. Reused the 34-test
+result above; no code or workload changed. Removed the stale deletion section
+and routing verdict from the active plan. The reference-host choice remains for
+demo, with all measurement obligations intact.
+
+## Reference decision and shipping docs — 2026-11-11
+
+Jack Heart, comment `262b941c-2188-4426-8ff0-35f7e52eaa10`, on the offered
+standing hosts: "i dont really thin kany of these options are acceptable tbh".
+On the reference-commit alternative: "no i think you have it right. this is a
+strong reason to have at least one more stable gpu. maybe aws gpu perf is more
+consistent?"
+
+The supplied direction specifies no reference host: commit plus suite interface,
+fresh interleaved reference/candidate measurements in one job on one machine,
+and the same pod for a rented GPU. Per-run absolute rates remain history. Local
+CPU runs prove the harness and its runtime, never GPU performance or a speed
+claim. This supersedes every earlier host-choice question/candidate above.
+Provider selection is undecided and outside this Task; no spending is authorized.
+
+Reversible documentation choice: keep the existing `--record-reference`,
+`--compare` and `--reference-root` flags and full-ladder recording prerequisite;
+change the described baseline content to commit-and-interface metadata. This
+uses the existing interaction without inventing a new command or file schema.
+The implementation below now supplies that change. No new product question is required.
+
+
+## Reference metadata implementation — 2026-11-11
+
+Reversible choice: the baseline has exactly `commit` (full SHA) and
+`suite_interface: 1`. A literal `SUITE_INTERFACE` declaration in the reference
+module admits the worker protocol without importing or running that checkout.
+No baseline was committed under the old Report representation, so it is removed
+without a compatibility reader or migration. Historical run reports remain
+readable evidence. The current comparison job supplies both sides' configuration;
+recording on CPU does not restrict later jobs to that host, device or options.
+
+Validation: `uv run --locked --extra dev --extra evaluation pytest tests/training/test_pipeline_speed.py -k 'comparison or reference or suite_interleaves or missing_or_failed' -q` — 39 passed, 9 deselected in 2.88 s. Focused Ruff, Python compilation, CLI help and diff checks passed. No benchmark workers, servers or watchers were launched; full-ladder runtime, baseline adoption and real-source interleaving remain for gate/measurement in `scratch/plan.md`. The fixtures do not establish device performance.

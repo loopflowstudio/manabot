@@ -23,7 +23,8 @@
 <header>Task 855bff · concept-review · 2026-11-11<br>
 Built from <code>scratch/plan.md</code>, <code>scratch/questions.md</code>, the Task brief,
 <code>scripts/bench_pipeline.py</code>, <code>scripts/bench_training_update.py</code>,
-<code>manabot/training/rollout/collection.py</code> and <code>docs/development.md</code>.</header>
+<code>manabot/training/rollout/collection.py</code>, <code>docs/development.md</code>
+and <code>tests/training/test_pipeline_speed.py</code>.</header>
 <main>
 <h1>Which host anchors the standing speed reading?</h1>
 <div class="decision">
@@ -40,13 +41,16 @@ is still missing. Narrow CPU proofs cannot supply it.</p>
 <tr><td>Retain a reviewed reading</td><td>Reference: complete clean reading for this device</td><td><code>--record-reference</code> → baseline JSON</td></tr>
 <tr><td>Check an optimization</td><td>Comparison: matching real runs, whole-sample minima</td><td><code>--compare</code> + <code>--reference-root</code> → <code>Comparison</code></td></tr>
 </tbody></table></div>
-<h2>One clarification to implement</h2>
-<p><strong>Existing:</strong> recording requires every size and supported workload.
-Admission checks only the rows declared by the supplied file, so a successful
-one-size report can pass as a reference.</p>
-<p><strong>Proposed:</strong> one completeness rule for recording and admission.
-A subset stays a diagnostic reading. CPU/CUDA require eight rows; MPS requires
-four training rows. Reject an incomplete reference before launching workers.</p>
+<h2>Before → now: the admission repair is built</h2>
+<p><strong>Before:</strong> recording required the full ladder, while comparison
+could admit a successful one-size report as its reference.</p>
+<p><strong>Existing now:</strong> <code>_require_full_ladder</code> serves recording
+and <code>admit_reference</code>. CPU/CUDA require eight rows; MPS requires four
+training rows. A subset remains diagnostic. Rejection precedes workers and
+persists in <code>report.json</code>; controlled tests cover both paths.</p>
+<p><strong>Proposed, awaiting designation:</strong> use the owned mini's CPU for
+the complete reference, with any MPS training reference separate. No further
+implementation direction follows from this review.</p>
 <h2>Normal use and recovery</h2>
 <p>Designate host → measure clean source → review and retain the complete reading
 → rerun reference and candidate in alternating order. Historical timings never

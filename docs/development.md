@@ -307,10 +307,10 @@ invocation has a 3,600-second deadline, including startup and cleanup; this is a
 limit, not an expected duration. The report records actual elapsed time and
 completed rows. `--seconds` changes that limit, and `--updates` changes the
 training count. A slow machine may need a larger explicit budget to complete
-the ladder. A partial ladder is not a complete reference. The process tree has a
+the ladder. A partial ladder is not a complete suite proof. The process tree has a
 16 GiB RSS ceiling; `--memory-mib` changes it explicitly. Subset checks use
 `--size w64` and/or `--workload training` (repeat either flag for multiple rows);
-`--streams` remains available. Subsets cannot replace a full reference.
+`--streams` remains available. Subsets cannot replace a full-ladder comparison.
 
 `report.json` retains every attempted row, its source/diff identity, measured
 host, elapsed time, cleanup time and any failure. Each row directory retains
@@ -342,21 +342,10 @@ Training is a steady-state estimate; evaluation uses its measured allocation
 interval including startup and replay. Both omit rental setup, idle rental time,
 failed attempts and billing adjustments and are never a rental bill.
 
-### Compare with a retained reference
+### Compare against a reference commit
 
-On the designated reference host, retain a complete reading with
-`--record-reference manabot/perf/baseline.json` added to the suite command.
-The source checkout must be clean: commit the implementation first, measure it,
-then review and commit the baseline. A partial or failed run cannot replace it.
-A successful subset report is a diagnostic reading, not a reference. Both
-recording and comparison require all four sizes and every workload supported by
-the selected device. Comparison rejects a subset reference before starting any
-workers and retains the admission error in an incomplete report. Correct the
-reference and retry with a new output directory.
-Keep CPU and MPS references in separate files. Keep the reference source in a
-separate, clean checkout with its locked environment and native extension built
-from that source. The checkout must contain this suite interface and match the
-baseline's source commit; the command creates no worktrees. To compare a candidate:
+Run from the candidate checkout, with a separate reference checkout on the same
+machine:
 
 ```sh
 uv run --locked --extra evaluation python scripts/bench_training_update.py \
@@ -364,50 +353,75 @@ uv run --locked --extra evaluation python scripts/bench_training_update.py \
   --reference-root /path/to/reference-checkout --out .runs/pipeline-compare-001
 ```
 
-The baseline retains the source commit, world, policy-input configuration,
-`TrainingRun.host` facts plus a machine-identity hash, Python and Torch versions,
-device, precision, workload and behavior digests, and the samples from which its
-reading was made. Comparison reruns the reference
-and candidate on the same host in interleaved order, with three repetitions,
-and reports minimum durations on a shared machine. Each minimum names its
-sample; phase timings come from that sample rather than independently selected
-minima. Use the same suite options as the reference, including updates, streams
-and memory allowance. Comparison has the same total lifetime limit; six
-interleaved readings may need a larger explicit `--seconds` budget. Stored
-historical wall times alone cannot establish a speedup.
+`manabot/perf/baseline.json` contains `commit` (the full source SHA) and
+`suite_interface` (currently `1`).
+There is no designated reference host. Absolute rates and machine details live
+in each run's report as history; they do not bind the baseline to the machine
+or device that recorded it. Only ratios from freshly measured reference and
+candidate runs in the same job can support a performance comparison.
+
+Both source checkouts must be clean, with their own locked environments and
+matching release native extensions. The reference checkout must match the
+baseline commit and declare the matching `SUITE_INTERFACE` in
+`scripts/bench_pipeline.py`. The command creates no
+worktrees. Recording and comparison cover all four sizes and every workload
+supported by the selected device; a subset remains diagnostic. Invalid reference
+metadata or an incompatible checkout rejects before workers start and retains
+the admission error. Correct the cause and retry with a new output directory.
+
+The comparison runs both sources interleaved in one job, with three repetitions,
+and reports minimum durations. Each minimum names its sample; phase timings come
+from that sample rather than independently selected minima. Use matching suite
+options for both sources, including updates, streams and memory allowance.
+Comparison has the same total lifetime limit; six interleaved readings may need
+a larger explicit `--seconds` budget. The report retains every attempt, world,
+input configuration, device, precision, workload and behavior digest, plus
+`TrainingRun.host` facts, machine identity, Python and Torch versions. Host
+admission compares the fresh samples within this job, not an earlier recording.
 
 Training behavior hashes the final policy tensor contents and work counters;
 evaluation hashes initialized tensor contents, retained Commands, state transitions
 and outcomes, excluding clocks and arrival order. A digest match is a conservative
 comparison check, not a proof of learning equivalence.
 
-Compare only matching workloads, host identities, devices and precision with
-matching behavior digests. An identity or behavior mismatch is reported as
-incomparable, not a performance regression or improvement. A changed world or
-recipe needs a new reference; retain the previous evidence. Adopting a reference
-is an explicit reviewed change to the baseline, never an automatic effect of
-`--compare`. Timing agreement does not establish learning equivalence for a
-change to numerical computation.
+Compare only matching workloads, host identities, Python and Torch versions,
+devices and precision with matching behavior digests. An identity or behavior
+mismatch is reported as incomparable, not a performance regression or improvement. A changed world or
+recipe needs a new reference; retain the previous evidence. To propose a new
+reference, run the complete suite on clean source with
+`--record-reference manabot/perf/baseline.json`. Review and commit the resulting
+commit-and-interface metadata; keep the measured rates in the run report. A
+partial or failed run cannot replace the baseline, and `--compare` never adopts
+one automatically. Timing agreement does not establish learning equivalence
+for a change to numerical computation.
 
 CPU, MPS and CUDA are separate readings. Training on an available Apple GPU
 uses `--device mps --workload training`. Shared evaluation currently admits only
-CPU and CUDA; a full MPS suite fails explicitly without substituting CPU. On an
-already provisioned CUDA host, the named CUDA check is:
+CPU and CUDA; a full MPS suite fails explicitly without substituting CPU. Local
+CPU runs are free harness checks: a complete eight-row ladder establishes
+coverage and actual runtime, not GPU performance. The CPU comparison above
+checks the interleaving and admission workflow without making a speed claim.
+
+On an already provisioned CUDA host, prepare both clean checkouts and their
+environments on that host. The named CUDA comparison check is:
 
 ```sh
 uv run --locked --extra evaluation python scripts/bench_training_update.py \
-  --suite --device cuda --out .runs/pipeline-cuda-001
+  --suite --device cuda --compare manabot/perf/baseline.json \
+  --reference-root /path/to/reference-checkout --out .runs/pipeline-cuda-compare-001
 ```
 
-CPU model timings are not GPU evidence, and matching GPU labels on different
-rentals do not establish a same-host comparison. These commands provision
-nothing. Do not introduce artificial contention to test a shared host.
+On a rented GPU, run both sources on the same pod in that one job. Matching GPU
+labels on separate rentals do not establish a comparison, and earlier absolute
+rates are never its denominator. The command provisions nothing; arranging or
+paying for a host is separate. Do not introduce artificial contention to test a
+shared host.
 
 An unavailable device, admission failure, capacity overflow, timeout or failed
 replay retains a failed or incomplete receipt and exits nonzero; missing rows
 never become zero-speed measurements. Resolve the reported cause and rerun into
 a fresh directory. Do not silently reduce capacities, change precision or
-substitute another device to complete a reference.
+substitute another device to complete a comparison.
 
 For attribution of a single recipe, omit `--suite`: the existing
 `--recipe`, `--streams`, `--updates`, `--json` and `--out` workflow remains

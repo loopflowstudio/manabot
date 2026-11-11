@@ -127,12 +127,16 @@ def main() -> None:
     parser.add_argument(
         "--hourly-price", type=float, help="supplied USD/hour; never a rental bill"
     )
-    parser.add_argument("--compare", type=Path, help="retained suite reference")
+    parser.add_argument(
+        "--compare", type=Path, help="reference commit and suite interface"
+    )
     parser.add_argument(
         "--reference-root", type=Path, help="clean checkout of the reference source"
     )
     parser.add_argument(
-        "--record-reference", type=Path, help="retain a complete clean-source reference"
+        "--record-reference",
+        type=Path,
+        help="record source metadata after a complete clean-source ladder",
     )
     parser.add_argument("--suite-request", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--deadline", type=float, help=argparse.SUPPRESS)

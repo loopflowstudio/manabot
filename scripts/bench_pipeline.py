@@ -6,10 +6,12 @@ and compares whole samples only after workload, host and behavior admission.
 Training execution is injected from bench_training_update's existing executor.
 """
 
+import ast
 from collections.abc import Callable
 from dataclasses import dataclass
 import hashlib
 import inspect
+from itertools import product
 import json
 import math
 from multiprocessing.connection import Connection
@@ -45,6 +47,9 @@ import managym
 ROOT = Path(__file__).resolve().parents[1]
 INFERENCE = "Policy inference and action selection"
 REPETITIONS = 3
+# Source admission reads this literal without importing the other checkout.
+type SuiteInterface = Literal[1]
+SUITE_INTERFACE: SuiteInterface = 1
 EVALUATION_MATCHUP = AuthoredMatchup(
     pack_key="elemental-world-v2", role_a="elemental_bg", role_b="elemental_gr"
 )
@@ -68,6 +73,13 @@ class Source(StrictModel):
     commit: str
     dirty: bool
     diff_sha256: str
+
+
+class Reference(StrictModel):
+    """Reviewed source and worker protocol, independent of any measurement host."""
+
+    commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    suite_interface: SuiteInterface
 
 
 class Host(StrictModel):
@@ -133,6 +145,7 @@ class Report(StrictModel, frozen=False):
     version: Literal[1] = 1
     config: SuiteConfig
     source: Source
+    reference: Reference | None = None
     status: Literal["running", "completed", "incomplete"] = "running"
     elapsed_seconds: float = 0
     hourly_price: float | None = None
@@ -613,55 +626,48 @@ def _compatible(samples: list[Sample]) -> str | None:
     return None
 
 
-def compare(attempts: list[Attempt], baseline: Report) -> list[Comparison]:
+def compare(attempts: list[Attempt], config: SuiteConfig) -> list[Comparison]:
+    """Admit only this job's fresh samples; historical rates never participate."""
     results: list[Comparison] = []
-    for workload in baseline.config.workloads:
-        for size in baseline.config.sizes:
-            group = [a for a in attempts if (a.workload, a.size) == (workload, size)]
-            retained = [
-                a.sample
-                for a in baseline.attempts
-                if (a.workload, a.size) == (workload, size) and a.sample is not None
-            ]
-            refs = [a for a in group if a.side == "reference"]
-            candidates = [a for a in group if a.side == "candidate"]
-            reason = None
-            if (
-                len(refs) != REPETITIONS
-                or len(candidates) != REPETITIONS
-                or any(a.error or a.sample is None for a in group)
-                or not retained
-            ):
-                reason = "incomplete interleaved samples"
-            else:
-                reason = _compatible(retained + [a.sample for a in group if a.sample])
-            if reason:
-                results.append(
-                    Comparison(
-                        workload=workload,
-                        size=size,
-                        status="incomparable",
-                        reason=reason,
-                    )
-                )
-                continue
-            reference = min(
-                refs, key=lambda a: a.sample.seconds if a.sample else float("inf")
-            )
-            candidate = min(
-                candidates, key=lambda a: a.sample.seconds if a.sample else float("inf")
-            )
-            assert reference.sample and candidate.sample
+    for workload, size in product(config.workloads, config.sizes):
+        group = [a for a in attempts if (a.workload, a.size) == (workload, size)]
+        refs = [a for a in group if a.side == "reference"]
+        candidates = [a for a in group if a.side == "candidate"]
+        if (
+            len(refs) != REPETITIONS
+            or len(candidates) != REPETITIONS
+            or any(a.error or a.sample is None for a in group)
+        ):
+            reason = "incomplete interleaved samples"
+        else:
+            reason = _compatible([a.sample for a in group if a.sample])
+        if reason:
             results.append(
                 Comparison(
                     workload=workload,
                     size=size,
-                    status="comparable",
-                    reference_sample=reference.directory,
-                    candidate_sample=candidate.directory,
-                    speedup=candidate.sample.rate / reference.sample.rate,
+                    status="incomparable",
+                    reason=reason,
                 )
             )
+            continue
+        reference = min(
+            refs, key=lambda a: a.sample.seconds if a.sample else float("inf")
+        )
+        candidate = min(
+            candidates, key=lambda a: a.sample.seconds if a.sample else float("inf")
+        )
+        assert reference.sample and candidate.sample
+        results.append(
+            Comparison(
+                workload=workload,
+                size=size,
+                status="comparable",
+                reference_sample=reference.directory,
+                candidate_sample=candidate.directory,
+                speedup=candidate.sample.rate / reference.sample.rate,
+            )
+        )
     return results
 
 
@@ -677,35 +683,63 @@ def _require_full_ladder(config: SuiteConfig) -> None:
         )
 
 
-def admit_reference(baseline: Report, host: Host) -> None:
-    """A completion label alone cannot admit missing or mixed-source samples."""
-    _require_full_ladder(baseline.config)
-    expected = {
-        (w, s) for w in baseline.config.workloads for s in baseline.config.sizes
-    }
-    actual = [(a.workload, a.size) for a in baseline.attempts]
+def reference_from_report(report: Report) -> Reference:
+    """Propose source metadata only after a complete clean standalone reading."""
+    validate_config(report.config)
+    _require_full_ladder(report.config)
+    expected = {(w, s) for w in report.config.workloads for s in report.config.sizes}
+    actual = [(a.workload, a.size) for a in report.attempts]
     if (
-        baseline.status != "completed"
-        or baseline.source.dirty
+        report.status != "completed"
+        or report.error is not None
+        or report.reference is not None
+        or report.source.dirty
         or len(actual) != len(expected)
         or set(actual) != expected
     ):
         raise ValueError("reference must contain one complete clean-source ladder")
-    for attempt in baseline.attempts:
+    first = report.attempts[0].sample
+    for attempt in report.attempts:
         sample = attempt.sample
         if (
             attempt.error
             or sample is None
-            or sample.host != host
-            or sample.source != baseline.source
+            or first is None
+            or sample.host != first.host
+            or sample.source != report.source
             or attempt.side != "candidate"
             or attempt.repetition != 0
             or (sample.workload, sample.size) != (attempt.workload, attempt.size)
-            or sample.device != baseline.config.device
+            or sample.device != report.config.device
         ):
             raise ValueError(
                 "incomparable: reference samples are incomplete, mixed-source or from another host"
             )
+    return Reference(commit=report.source.commit, suite_interface=SUITE_INTERFACE)
+
+
+def admit_reference(reference: Reference, root: Path) -> Source:
+    """Check the declared worker interface without executing reference code."""
+    source = source_identity(root)
+    if source.dirty or source.commit != reference.commit:
+        raise ValueError(
+            "reference checkout must be clean at the recorded source commit"
+        )
+    module = root / "scripts/bench_pipeline.py"
+    command = root / "scripts/bench_training_update.py"
+    if module.is_file() and command.is_file():
+        tree = ast.parse(module.read_text())
+        for node in tree.body:
+            if (
+                isinstance(node, ast.AnnAssign)
+                and isinstance(node.target, ast.Name)
+                and node.target.id == "SUITE_INTERFACE"
+                and isinstance(node.value, ast.Constant)
+                and type(node.value.value) is int
+                and node.value.value == reference.suite_interface
+            ):
+                return source
+    raise ValueError("reference source does not support the recorded suite interface")
 
 
 def run_suite(
@@ -729,7 +763,6 @@ def run_suite(
     out.mkdir(parents=True, exist_ok=False)
     report = Report(config=config, source=source, hourly_price=hourly_price)
     atomic_json(out / "report.json", report.model_dump(mode="json"))
-    baseline = None
     try:
         validate_config(config)
         if not math.isfinite(seconds) or seconds <= 4:
@@ -738,63 +771,52 @@ def run_suite(
             not math.isfinite(hourly_price) or hourly_price <= 0
         ):
             raise ValueError("hourly price must be finite and positive")
-        host = host_identity(config.device)
+        if baseline_path or record_reference:
+            _require_full_ladder(config)
+        if record_reference and (baseline_path or source.dirty):
+            raise ValueError("record a reference only from a clean standalone reading")
+        host_identity(config.device)
         if baseline_path:
-            baseline = Report.model_validate_json(baseline_path.read_bytes())
-            admit_reference(baseline, host)
-            if baseline.config != config:
-                raise ValueError(
-                    "incomparable: reference must match the suite configuration"
-                )
+            report.reference = Reference.model_validate_json(baseline_path.read_bytes())
+            if source.dirty:
+                raise ValueError("candidate checkout must be clean for comparison")
             if reference_root is None:
                 raise ValueError(
                     "--compare requires --reference-root at the recorded source"
                 )
             reference_root = reference_root.resolve()
-            ref = source_identity(reference_root)
-            if ref.dirty or ref.commit != baseline.source.commit:
-                raise ValueError(
-                    "reference checkout must be clean at the recorded source commit"
-                )
-            if not (reference_root / "scripts/bench_pipeline.py").is_file():
-                raise ValueError("reference source predates the suite interface")
+            ref = admit_reference(report.reference, reference_root)
         elif reference_root:
             raise ValueError("--reference-root requires --compare")
-        if record_reference and (baseline or source.dirty):
-            raise ValueError("record a reference only from a clean standalone reading")
-        if record_reference:
-            _require_full_ladder(config)
-        repetitions = REPETITIONS if baseline else 1
+        repetitions = REPETITIONS if report.reference else 1
         for repetition in range(repetitions):
-            sides = ("reference", "candidate") if baseline else ("candidate",)
+            sides = ("reference", "candidate") if report.reference else ("candidate",)
             if repetition % 2:
                 sides = tuple(reversed(sides))
-            for size in config.sizes:
-                for workload in config.workloads:
-                    for side in sides:
-                        root = reference_root if side == "reference" else ROOT
-                        assert root is not None
-                        attempt = Attempt(
-                            side=side,
-                            repetition=repetition,
-                            workload=workload,
-                            size=size,
-                            directory=str(
-                                out / f"{repetition}-{side}-{workload}-{size}"
-                            ),
-                        )
-                        _measure_attempt(
-                            attempt,
-                            config,
-                            root,
-                            ref if side == "reference" else source,
-                            deadline,
-                        )
-                        report.attempts.append(attempt)
-                        atomic_json(out / "report.json", report.model_dump(mode="json"))
-                        if attempt.error:
-                            raise RuntimeError(attempt.error)
-        report.comparisons = compare(report.attempts, baseline) if baseline else []
+            for size, workload, side in product(config.sizes, config.workloads, sides):
+                root = reference_root if side == "reference" else ROOT
+                assert root is not None
+                attempt = Attempt(
+                    side=side,
+                    repetition=repetition,
+                    workload=workload,
+                    size=size,
+                    directory=str(out / f"{repetition}-{side}-{workload}-{size}"),
+                )
+                _measure_attempt(
+                    attempt,
+                    config,
+                    root,
+                    ref if side == "reference" else source,
+                    deadline,
+                )
+                report.attempts.append(attempt)
+                atomic_json(out / "report.json", report.model_dump(mode="json"))
+                if attempt.error:
+                    raise RuntimeError(attempt.error)
+        report.comparisons = (
+            compare(report.attempts, config) if report.reference else []
+        )
         if any(c.status != "comparable" for c in report.comparisons):
             raise ValueError(
                 "comparison is incomparable; see comparisons in report.json"
@@ -802,14 +824,15 @@ def run_suite(
         if source_identity(ROOT) != source:
             raise ValueError("candidate source changed during measurement")
         report.status = "completed"
+        if record_reference:
+            reference = reference_from_report(report)
+            record_reference.parent.mkdir(parents=True, exist_ok=True)
+            atomic_json(record_reference, reference.model_dump(mode="json"))
     except Exception as exc:
         report.status = "incomplete"
         report.error = f"{type(exc).__name__}: {exc}"
     report.elapsed_seconds = time.monotonic() - start + startup_seconds
     atomic_json(out / "report.json", report.model_dump(mode="json"))
-    if record_reference and report.status == "completed":
-        record_reference.parent.mkdir(parents=True, exist_ok=True)
-        atomic_json(record_reference, report.model_dump(mode="json"))
     return report
 
 
@@ -840,5 +863,6 @@ def describe(report: Report) -> None:
         f"{report.status}; elapsed {report.elapsed_seconds:.2f}s; {report.error or 'receipts retained'}"
     )
     print(
-        "Rates omit rental setup/idle/failures/billing. CPU readings are not GPU evidence."
+        "Rates omit rental setup/idle/failures/billing. "
+        "CPU readings are harness proofs, not speed claims or GPU evidence."
     )
