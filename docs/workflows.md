@@ -8,8 +8,8 @@ Workflow installation grants no campaign, resource, spending or shipping authori
 | --- | --- | --- | --- |
 | Experiments | Scientific questions spanning model architecture, training regime and card pools; training and evaluation together | `experiment` | Frozen protocol, reconciled actual runs/failures/costs, analysis and supported conclusion |
 | Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, reusable decomposition, measured optimization and integrated batch handoff |
-| Engine performance | Cross-cutting algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-hardware comparison |
-| Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code` | Working maintained systems and their relevant workflow checks |
+| Engine performance | Native engine algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-machine comparison |
+| Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code`; `experiment-performance` for training/evaluation speed | Working maintained systems and their relevant workflow checks |
 | Academy | Browser inspection, replay, human interaction and accessibility | builtin `code` | Correct viewer-safe product behavior through its real configured path |
 
 A model comparison belongs to Experiments; checkpoint serialization reliability
@@ -18,6 +18,81 @@ speedup belongs to Engine performance. Coverage optimizes its own implementation
 without waiting for unrelated global optimization. Scientific results do not gate
 native card support. Campaign failures retain their evidence while their fixes
 belong to the appropriate implementation owner.
+
+## Training and evaluation performance
+
+For a slow training update, start the performance workflow from the repository
+checkout with Loopflow installed:
+
+```sh
+lf graph experiment-performance
+```
+
+The workflow measures the update, selects a bottleneck, then loops through
+implementation, compression, refresh, concept review and performance review.
+It retains the publish, demo, delivery and verification boundaries of
+`engine-performance`. Its result is a software change with supported timing
+evidence, or a documented reason to stop when no useful improvement is supported.
+
+Use `experiment-performance` when the question spans collection, policy inference,
+learner work or evaluation matches, including how these costs change with model
+size. Use `engine-performance` for a bottleneck within the native engine, such as
+state copying or search. Coverage continues to compose `engine-optimization`.
+The performance workflow does not change Wave defaults or replace a Task's
+captured graph.
+
+The repository skills `experiment-measure` and `experiment-performance-review`
+own the measurement plan and its review. Once the standing size-ladder benchmark
+and retained baseline ship, measurement uses their documented command as its
+reference; the current per-recipe benchmark below remains usable today.
+
+Start with retained receipts and the **Update time** Perf series. Read collection's
+native stepping, encoding and policy inference beside learner time; retain
+inference calls and rows per call so batching changes remain interpretable.
+`TrainingRun.host` supplies CPU and quota facts; keep GPU, source, world, input,
+precision, model size and workload identities with each comparison. Read
+evaluation's `performance.json` alongside training to show its share of the
+workload's time. Evaluation clocks can overlap and exclude preparation and billing;
+do not sum them or label elapsed time as rental cost.
+
+For a bounded training reading on an available, authorized machine with the
+[development environment](development.md#environment-and-commands) prepared:
+
+```sh
+mkdir -p .runs/update-baseline
+uv run python scripts/bench_training_update.py --streams 256 --updates 3 \
+  --out .runs/update-baseline/run --json .runs/update-baseline/receipt.json
+```
+
+This prints seconds, decisions and games per update, host facts and phase timings
+in microseconds per decision. It retains checkpoints and per-update metrics under
+`--out`; without that option the run directory is temporary. The default device
+is CPU. `--recipe` selects a regime JSON or `module:function` declaration;
+`--device cuda` selects CUDA. The benchmark pins its in-memory recipe to the
+current world, so it is not a reproduction of frozen experiment evidence. Keep
+the recipe and input capacities matched across baseline and candidate; a capacity
+failure requires a compatible declared workload, not truncation or edits to a
+frozen recipe.
+
+Use `--cuda-counts PATH` in a separate diagnostic run for kernel launches and
+synchronizations. It requires real CUDA and changes timing; its whole-run counts
+are not phase-specific counts. `scripts/diagnose_training_transfers.py` provides
+bounded retained-input probes for recording and transfers, not whole-update speed
+evidence. For evaluation, use the predeclared plan and receipt guidance in
+[performance evidence and calibration](evaluation.md#performance-evidence-and-calibration).
+
+Compare baseline and candidate on the same machine with matched workloads and
+behavior digests. A GPU label alone does not identify a comparable host; the
+[training update investigation](../experiments/training-update-time.md) records
+substantial host variation. Never induce artificial load. If required hardware is
+unavailable, record the exact command and missing hardware as a deferred check;
+do not rent automatically, substitute CPU timing for CUDA evidence or claim a gain.
+
+Fewer seconds per update does not establish faster learning. Changes to precision,
+policy lag or batch composition need separate learning evidence. This software
+workflow produces no such evidence and grants no campaign, resource or spending
+authority. Scientific comparisons remain in `experiment`; frozen worlds,
+observation versions and recipes remain unchanged.
 
 ## Coverage
 
@@ -128,6 +203,6 @@ uv run python scripts/check_loopflow_workflows.py
 
 This check uses the installed `lf` compiler and catalog. It reports a missing CLI
 or reference as a failure rather than treating missing tooling as an empty catalog.
-`lf graph show coverage --json` and `lf graph show experiment --json` expose the
-compiled nodes for review. Gate owns the affected acceptance suites; setup checks
-never launch a scientific campaign.
+`lf graph show coverage --json`, `lf graph show experiment-performance --json`
+and `lf graph show experiment --json` expose the compiled nodes for review. Gate
+owns the affected acceptance suites; setup checks never launch a scientific campaign.

@@ -143,16 +143,44 @@ def _experiment(experiment: list[Step]) -> None:
     )
 
 
+def _performance(steps: list[Step], measure: str, review: str) -> None:
+    """Check the optimization loop and its single software delivery boundary."""
+    ordered = [
+        _one(steps, label)
+        for label in (
+            measure,
+            "implement",
+            "compress",
+            "sync",
+            "realign",
+            "concept-review",
+            review,
+            "loop-or-next",
+            "pr-publish",
+        )
+    ]
+    assert steps[: len(ordered)] == ordered, "Performance loop changed order"
+    assert _one(steps, "loop-or-next").returns_to == _one(steps, "implement").key
+    assert not any(step.interactive or step.paths for step in ordered)
+    _delivery(steps, _one(steps, measure).key)
+
+
 def main() -> None:
     root = Path(__file__).resolve().parents[1]
     assert Path.cwd() == root, "Run from the repository root"
     graphs = _compile_graphs(root)
     _coverage(graphs["coverage"])
-    performance = graphs["engine-performance"]
-    _delivery(performance, performance[0].key)
+    _performance(
+        graphs["engine-performance"], "engine-measure", "engine-performance-review"
+    )
+    _performance(
+        graphs["experiment-performance"],
+        "experiment-measure",
+        "experiment-performance-review",
+    )
     _experiment(graphs["experiment"])
     print(
-        "Coverage loops, single delivery, optional software and experiment review boundaries: valid"
+        "Coverage/performance loops, single delivery, optional software and experiment review boundaries: valid"
     )
 
 
