@@ -540,6 +540,13 @@ def bind_extension(
         if p.is_file()
         and p.suffix in (".py", ".rs", ".json", ".yaml", ".toml")
         and "data" not in p.relative_to(root).parts
+        # V3 binds executable source and actual checkpoint/world inputs. The
+        # publication catalog changes as outcomes arrive; it is not run input.
+        # Preserve the historical v2 binding bytes, including its catalog entry.
+        and (
+            native_sha256 is None
+            or p.relative_to(root) != Path("experiments/data.manifest.json")
+        )
     ]
     sources.extend(
         root / name

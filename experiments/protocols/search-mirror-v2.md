@@ -41,6 +41,11 @@ predecessor digest. Shared locks on all predecessor shards prevent the original
 runner restarting during continuation. Truncated or unsealed evidence blocks
 admission and requires recovery, never an invented score.
 
+The new v3 source binding excludes `experiments/data.manifest.json`: that catalog
+records published outputs and can grow during execution. Actual checkpoint bytes,
+world/input files, executable source and protocol remain bound. The original v2
+source map, including its historical catalog entry, is unchanged.
+
 The implementation change is an explicit scientific limitation: fixed-position
 parity supports this transition but is not full-grid equivalence. Preserve
 oracle/full and uniform/compact costs under their respective identities; do not

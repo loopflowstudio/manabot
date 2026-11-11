@@ -420,6 +420,39 @@ def test_execution_identity_prevents_resharding_and_deadline_extension(
     assert (tmp_path / "identity.json").read_bytes() == original
 
 
+def test_native_identity_excludes_publication_catalog_but_locks_execution_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from manabot.infra import identity
+    from manabot.managym import _managym as native
+
+    original_hash = identity.file_sha256
+    changed: set[str] = set()
+
+    def admitted_hash(path: Path) -> str:
+        if path.suffix == ".so":
+            return "a" * 64
+        if path.name in changed:
+            return "b" * 64
+        return original_hash(path)
+
+    monkeypatch.setattr(identity, "file_sha256", admitted_hash)
+    monkeypatch.setattr(native, "encode_observations_into", Mock(), raising=False)
+    deadline = time.time() + 60
+    mirror.bind_extension(tmp_path, 7, deadline, smoke=False, native_sha256="a" * 64)
+    original = (tmp_path / "identity.json").read_bytes()
+    assert "experiments/data.manifest.json" not in json.loads(original)["source_files"]
+    changed.add("data.manifest.json")
+    mirror.bind_extension(tmp_path, 7, deadline, smoke=False, native_sha256="a" * 64)
+    assert (tmp_path / "identity.json").read_bytes() == original
+    changed.add("search_mirror.py")
+    with pytest.raises(ValueError, match="source, plan"):
+        mirror.bind_extension(
+            tmp_path, 7, deadline, smoke=False, native_sha256="a" * 64
+        )
+
+
 def test_interruption_retains_private_attempt_without_a_game_score(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
