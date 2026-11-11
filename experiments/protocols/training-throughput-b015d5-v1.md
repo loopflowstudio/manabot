@@ -1,4 +1,4 @@
-# Training throughput on the ten-deck Elemental recipe, v1 (C2 executed; evidence review pending)
+# Training throughput on the ten-deck Elemental recipe, v1 (C2 executed and analysed; evidence review pending)
 
 Task b015d5. Question: for two-seat ten-deck Elemental self-play, which machine
 shape and training regime give the most strength per dollar and per hour? The

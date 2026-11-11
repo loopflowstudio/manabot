@@ -382,3 +382,15 @@ scratch. No source, test or doc outside those changed, so nothing was edited.
   keeps C2 ≤ $2.50 including one late-posting minute per pod. The driver bytes are unchanged.
 - Lesson: when a rent loop's success check fails, it must stop, not retry. Allow one
   rent per verified provider refusal.
+
+## C2 analysis, 2026-11-11
+
+- Frozen reader reproduces `c2/.../readings.json` exactly; 946 manifest entries match.
+- Added to the report: 8 empty-filter minibatch skips in `a745e57c284c` (a384l8 K=2
+  seed 26402), and the four phantom Etude records from attempts 9–12 (no provider pod;
+  teardown terminated three at $0.00).
+- Reading choice (reversible): w160l8 K=4 vs K=2 is framed as a dollars-vs-hours
+  trade-off for the planner (6% throughput, 1.88× per-seed latency), not a change
+  to the step-2 four-seed rule.
+- Next decision belongs to evidence review: second host for the marginal w160l8
+  crossing, or close step 3.
