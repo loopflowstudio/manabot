@@ -927,8 +927,11 @@ def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
     """Run a saved `TrainingRegime`'s stages in order through the stage bodies.
 
     Stages an earlier attempt completed are skipped; the first open stage
-    continues the recovery snapshot.
+    continues the recovery snapshot. A smoke run runs the regime's tiny form
+    (`smoke_form`).
     """
+    if run.smoke_execution is not None:
+        regime = smoke_form(regime, run.smoke_execution)
     space = ObservationSpace(regime.observation)
     session: SelfPlaySession | None = None
     for stage_index, stage in enumerate(regime.stages):
@@ -941,6 +944,7 @@ def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
             self_play=isinstance(stage, TrainSelfPlay),
             keep_restored=bool(following)
             and getattr(following[0], "initial", None) is not None,
+            operation=stage.operation,
         )
         if scope is None:
             continue
@@ -987,6 +991,34 @@ def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
                 stage,
                 session if stage.initial else None,
             )
+
+
+def smoke_form(regime: TrainingRegime, execution: Execution) -> TrainingRegime:
+    """The saved regime run tiny: one update of one transition per stream.
+
+    Belief collection plays its minimum three games and belief training takes
+    one step; every stage runs under `execution`. Stream counts that a
+    curriculum stratifies are kept.
+    """
+    stages = []
+    for stage in regime.stages:
+        update: dict[str, object] = {"execution": execution}
+        if isinstance(stage, TrainSelfPlay):
+            update |= {
+                "updates": 1,
+                "transitions": 1,
+                "active_seconds": None,
+                "games_per_stream": None,
+                "streams": 2 if stage.matchup_curriculum == "fixed" else stage.streams,
+            }
+        elif isinstance(stage, CollectBelief):
+            update["games"] = 3
+        elif isinstance(stage, TrainBelief):
+            update["steps"] = 1
+        stages.append(stage.model_copy(update=update))
+    return TrainingRegime.model_validate(
+        regime.model_copy(update={"stages": stages}).model_dump()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1090,7 +1122,8 @@ def self_play(
         frozen = FrozenOpponent(path=reference["path"], sha256=reference["sha256"])
     if run.smoke_execution is not None:
         # One update of one transition per stream: every path runs, cheaply.
-        updates, transitions, streams = 1, 1, 2
+        updates, transitions = 1, 1
+        streams = 2 if matchup_curriculum == "fixed" else streams
         games_per_stream = None
     # Omitted seats and closure take TrainSelfPlay's defaults for the behavior.
     implied = {

@@ -20,7 +20,7 @@ from manabot.training.regime import (
 )
 import manabot.training.run as run_handle
 from manabot.training.run import Run, execute, load_regime, regime_record, smoke
-from manabot.training.stages import self_play
+from manabot.training.stages import run_saved_regime, self_play
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -160,14 +160,17 @@ def test_arguments_are_checked_before_a_run_opens() -> None:
     assert record(rebound).arguments == identity.arguments
 
 
-def test_smoke_runs_one_tiny_update_and_rejects_bad_code() -> None:
+def test_smoke_writes_one_tiny_update_and_rejects_bad_code(tmp_path: Path) -> None:
     torch.set_num_threads(1)
-    record = smoke(partial(one_learner, updates=500))
-    assert record.status == "completed"
-    assert [stage.updates for stage in record.stages] == [1]
-    assert not Path(record.stages[0].artifacts["raw"]["path"]).exists()
+    result = smoke(partial(one_learner, updates=500), out=tmp_path / "smoke")
+    assert result.status == "completed"
+    assert [stage.updates for stage in result.record.stages] == [1]
+    raw = result.checkpoints["policy"].raw
+    assert raw is not None and raw["path"].startswith(str(tmp_path / "smoke"))
+    agent, _ = load_checkpoint(raw["path"])
+    assert agent.config == AGENT
     with pytest.raises(RuntimeError, match="regime code failed"):
-        smoke(partial(failing, updates=500))
+        smoke(partial(failing, updates=500), out=tmp_path / "failing")
 
 
 def test_function_regime_resumes_at_an_update_boundary(
@@ -232,3 +235,33 @@ def test_function_regime_resumes_at_an_update_boundary(
     _assert_same(
         whole.record.stages[0].artifacts["raw"]["path"], stage.artifacts["raw"]["path"]
     )
+
+
+def test_a_saved_regime_smokes_through_the_same_stages(tmp_path: Path) -> None:
+    torch.set_num_threads(1)
+    regime = TrainingRegime(
+        id="saved",
+        world=managym.WORLD_VERSION,
+        match=MatchConfig(),
+        agent=AGENT,
+        stages=[
+            TrainSelfPlay(id="first", operation="train_self_play", **_settings(400)),  # type: ignore[arg-type]
+            TrainSelfPlay(
+                id="second",
+                operation="train_self_play",
+                initial="first",
+                **_settings(400),  # type: ignore[arg-type]
+            ),
+        ],
+    )
+    result = smoke(partial(run_saved_regime, regime=regime), out=tmp_path / "smoke")
+    assert result.status == "completed"
+    record = result.record
+    assert [(s.id, s.operation, s.updates) for s in record.stages] == [
+        ("first", "train_self_play", 1),
+        ("second", "train_self_play", 1),
+    ]
+    assert record.regime_function is not None
+    assert record.regime_function.function.endswith(":run_saved_regime")
+    assert record.selected_artifact == record.stages[-1].artifacts["raw"]
+    load_checkpoint(record.stages[-1].artifacts["raw"]["path"])

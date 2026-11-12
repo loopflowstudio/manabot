@@ -34,6 +34,7 @@ find them. Etude's launcher does not yet hand the job file's name to its runs.
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from functools import partial
 import json
 import math
 import os
@@ -41,6 +42,7 @@ from pathlib import Path
 import signal
 import time
 from types import FrameType
+from typing import Literal
 
 from etude.launch.records import Input, Job
 from etude.run.storage import SAFE_NAME
@@ -56,6 +58,8 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.run import RunResult, smoke
+from manabot.training.stages import run_saved_regime
 from manabot.verify.store import VerifyStore
 
 # Parent files arrive at ETUDE_INPUTS_DIR/<name>.
@@ -263,6 +267,19 @@ class TrainingJob(Strict):
             }
         ).model_dump(mode="json")
         return TrainingRegime.model_validate(serialized)
+
+    def smoke(
+        self, out: Path, *, device: Literal["cpu", "mps", "cuda"] = "cpu"
+    ) -> RunResult:
+        """Run this job's regime in its tiny form into `out`, locally.
+
+        One update of one transition per stream, exported through ordinary
+        admission, so `out` holds a loadable checkpoint. A continuation or
+        initialization input is not staged here; the regime starts fresh.
+        """
+        return smoke(
+            partial(run_saved_regime, regime=self.regime), out=out, device=device
+        )
 
     @property
     def _watchdog_seconds(self) -> float:

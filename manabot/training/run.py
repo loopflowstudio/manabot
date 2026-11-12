@@ -33,7 +33,6 @@ from pathlib import Path
 import platform
 import socket
 import subprocess
-import tempfile
 import time
 from typing import TYPE_CHECKING, Any, Literal, get_type_hints
 import uuid
@@ -58,9 +57,9 @@ from manabot.infra.source import source_commit, source_uncommitted_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
+from manabot.training.decks import UniformDecks
 from manabot.training.learning.learner import Learner
 from manabot.training.mps import mps_torch_error
-from manabot.training.decks import UniformDecks
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
@@ -427,9 +426,7 @@ class Run:
         network = model.network if weights == "raw" else model.ema
         if network is None:
             raise ValueError(f"model {model.name!r} has no {weights} weights")
-        setups = (
-            Match(decks).to_rust() if isinstance(decks, MatchConfig) else None
-        )
+        setups = Match(decks).to_rust() if isinstance(decks, MatchConfig) else None
         if setups is None and model.agent.world != managym.WORLD_SETUP:
             raise ValueError(
                 f"model {model.name!r} does not read the complete world input; "
@@ -1408,21 +1405,26 @@ def execute(
 
 
 def smoke(
-    regime: Regime, *, device: Literal["cpu", "mps", "cuda"] = "cpu"
-) -> TrainingRun:
-    """Run `regime` once for real, tiny, in a temporary store deleted after.
+    regime: Regime,
+    *,
+    out: str | Path,
+    seed: int = 0,
+    store: "VerifyStore | None" = None,
+    device: Literal["cpu", "mps", "cuda"] = "cpu",
+) -> RunResult:
+    """Run `regime` in its tiny form: real, cheap, written to `out`.
 
-    Every stage does one update of one transition per stream on `device`
-    and exports and reloads its checkpoints through admission, so a bad deck,
-    capacity, world mismatch or error in the function fails here in seconds.
-    A smoke run says nothing about speed or learning.
+    Every stage does one update of one transition per stream (at most one
+    game per stream) on `device`, and exports and reloads its checkpoints
+    through admission, so `out` holds real, loadable checkpoints for an
+    evaluation's smoke games. A bad deck, capacity, world mismatch or error in
+    the function fails here in seconds. A smoke run says nothing about speed
+    or learning.
     """
-    with tempfile.TemporaryDirectory(prefix="manabot-smoke-") as root:
-        with VerifyStore(Path(root) / "training.sqlite") as store:
-            return execute(
-                regime,
-                out=Path(root) / "run",
-                seed=0,
-                store=store,
-                smoke_execution=Execution(device=device),
-            ).record
+    return execute(
+        regime,
+        out=out,
+        seed=seed,
+        store=store,
+        smoke_execution=Execution(device=device),
+    )

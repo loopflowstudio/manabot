@@ -1,10 +1,12 @@
 """CLI entrypoints for training and simulation."""
 
+from functools import partial
 import importlib
 import inspect
+import json
 from pathlib import Path
 import pkgutil
-from typing import Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Literal, Optional, Sequence
 
 import typer
 
@@ -16,6 +18,9 @@ from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
 import managym
+
+if TYPE_CHECKING:
+    from manabot.training.run import RunResult
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
@@ -85,6 +90,17 @@ def train_command(
     seconds: float | None = typer.Option(
         None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
     ),
+    function: str | None = typer.Option(
+        None, help="Regime function to run: <module>:<function>"
+    ),
+    arguments: str | None = typer.Option(
+        None, help="JSON object file of the regime function's keyword arguments"
+    ),
+    smoke_run: bool = typer.Option(
+        False,
+        "--smoke",
+        help="Run the regime tiny (one update per stage) into --out",
+    ),
     regime: Optional[str] = typer.Option(None, help="TrainingRegime JSON file"),
     regime_name: str | None = typer.Option(
         None,
@@ -118,25 +134,30 @@ def train_command(
             "or an explicit --regime JSON. Historical reward and optimizer settings "
             "are not translated."
         )
-    if recipe is None and regime is None and regime_name is None:
+    if recipe is None and regime is None and regime_name is None and function is None:
         recipe = "local"
     if recipe is not None:
         if recipe not in {"local", "baseline"}:
             raise typer.BadParameter("unknown recipe; available: local, baseline")
-        if any(
-            value is not None
-            for value in (
-                regime,
-                regime_name,
-                resume_from,
-                source_repair_reason,
-                checkpoint_updates,
-                checkpoint_seconds,
-                initial_admission,
+        if (
+            any(
+                value is not None
+                for value in (
+                    function,
+                    arguments,
+                    regime,
+                    regime_name,
+                    resume_from,
+                    source_repair_reason,
+                    checkpoint_updates,
+                    checkpoint_seconds,
+                    initial_admission,
+                )
             )
+            or smoke_run
         ):
             raise typer.BadParameter(
-                "--recipe cannot be combined with regime inputs or resume/cadence controls"
+                "--recipe cannot be combined with regime inputs, --smoke or resume/cadence controls"
             )
         if recipe == "local":
             result = run_local(
@@ -173,22 +194,63 @@ def train_command(
         raise typer.BadParameter(
             "--steps, --seconds, --learning-seats and --device require a recipe"
         )
-    if regime is not None and regime_name is not None:
-        raise typer.BadParameter("select --regime or --regime-name, not both")
+    if sum(value is not None for value in (function, regime, regime_name)) != 1:
+        raise typer.BadParameter("select one of --function, --regime or --regime-name")
+    if arguments is not None and function is None:
+        raise typer.BadParameter("--arguments belong to --function")
     if out is None:
-        raise typer.BadParameter("--regime requires --out")
+        raise typer.BadParameter("--function and --regime require --out")
     from manabot.training.execution import execute_regime
+    from manabot.training.run import Regime, execute, load_regime, smoke
+    from manabot.training.stages import run_saved_regime
     from manabot.verify.store import VerifyStore
 
+    if smoke_run and any(
+        value is not None
+        for value in (
+            resume_from,
+            source_repair_reason,
+            checkpoint_updates,
+            checkpoint_seconds,
+            initial_admission,
+        )
+    ):
+        raise typer.BadParameter("--smoke takes no resume or cadence controls")
+    training_seed = (0 if smoke_run else 197) if seed is None else seed
+    if function is not None:
+        if source_repair_reason or checkpoint_seconds or initial_admission:
+            raise typer.BadParameter(
+                "regime functions take --resume-from and --checkpoint-updates only"
+            )
+        bound = load_regime(
+            function, json.loads(Path(arguments).read_text()) if arguments else {}
+        )
+        result = (
+            smoke(bound, out=out, seed=training_seed)
+            if smoke_run
+            else execute(
+                bound,
+                out=out,
+                seed=training_seed,
+                resume_from=resume_from,
+                checkpoint_updates=checkpoint_updates,
+            )
+        )
+        _report_function_run(result)
+        return
     if regime_name is not None:
         regime_spec = named_regime(regime_name)
     else:
         assert regime is not None
         regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
+    if smoke_run:
+        saved: Regime = partial(run_saved_regime, regime=regime_spec)
+        _report_function_run(smoke(saved, out=out, seed=training_seed))
+        return
     with VerifyStore(Path(out).parent / "training.sqlite") as store:
         execute_regime(
             regime_spec,
-            197 if seed is None else seed,
+            training_seed,
             out,
             store,
             resume_from=resume_from,
@@ -197,6 +259,17 @@ def train_command(
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
         )
+
+
+def _report_function_run(result: "RunResult") -> None:
+    typer.echo(f"{result.status}; run: {result.record.id}")
+    for name, exports in result.checkpoints.items():
+        if exports.raw is not None:
+            typer.echo(f"{name}: {exports.raw['path']}")
+    if not result.checkpoints and result.record.selected_artifact is not None:
+        typer.echo(f"checkpoint: {result.record.selected_artifact['path']}")
+    if result.status != "completed":
+        raise typer.Exit(1)
 
 
 @app.command("sim")
