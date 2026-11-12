@@ -30,8 +30,17 @@ report and default decision.
   too strict and why; next test = short real learning A/B at w384l8 (same
   seeds, a few hundred updates, strength vs frozen anchor).
 
+## Realign (2026-11-12)
+- Branch already contains origin/main; no upstream change to the forward.
+  Sibling steer f5c9dda9 (MTG-318 CUDA graphs, MTG-319 live-token attention
+  touch the same forward): this branch changes no training code, so only
+  "rebase on main before publishing" applies.
+- docs/training.md numbers aligned with the report (BF16 loss within 0.6%,
+  BF16 2–2.7× at w384l8). The steer's "within 0.4%" is its wording; the
+  report's measured maximum is 6.4e-3.
+
 ## Remaining
-- Delete `scratch/` in the pre-land commit.
+- Rebase on main, delete `scratch/` in the pre-land commit, publish.
 
 ## Compress (2026-11-12)
 - `experiments/cuda_precision.py` measurement path left as run at `71c044113`

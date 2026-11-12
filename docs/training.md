@@ -542,9 +542,9 @@ metrics do not show that it learns the same. CUDA training stays float32: the
 L4 measurement for w160l8 and w384l8
 ([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)) left TF32
 unresolved and BF16 rejected under its pre-registered rule, though both stayed
-within 0.7% of float32's loss at fixed weights and its 200-step replay could
+within 0.6% of float32's loss at fixed weights and its 200-step replay could
 not resolve learning differences that small. TF32 is 1.1× faster at w160l8 and
-1.3–1.5× at w384l8; BF16 is slower at w160l8 and about 2× faster at w384l8. A
+1.3–1.5× at w384l8; BF16 is slower at w160l8 and 2–2.7× faster at w384l8. A
 reduced precision becomes a recommendation only after a real learning
 comparison: same seeds, bucketed shapes, strength at matched updates. Before
 training in one on another GPU or model size, rerun the
