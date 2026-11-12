@@ -27,11 +27,9 @@ plus directed tests. The tracked markdown that names mana triggers
 The proposed v10 `mana_choices` encoding table belongs to MTG-286's
 observation review. Changed doc paths: none.
 
-## Implement status (2026-11-12, rechecked at realign)
+## Implement status (2026-11-12, after design review)
 
-Blocked; no code written. Rechecked at implement and realign: `origin/main` still at
-92560a1e0 and PR #469 (MTG-286) is OPEN, unmerged. Per the steer, this stops
-at design review. The production design is also unreviewed and says "no new
-triggering record is implemented before that review". Resume implement once
-#469 is on main and the production/observation design is reviewed; rebase
-onto that main first.
+Unblocked: PR #469 merged at 2026-11-12T13:35Z. Design decisions are in
+`scratch/heartbeat-design.md`; scope now includes the full production and
+spending contract and Animal Attendant, Toph and Uncle's Musings. The earlier
+dependency notes above are history.
