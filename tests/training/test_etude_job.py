@@ -29,7 +29,6 @@ from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-import manabot.training.execution as execution
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -38,6 +37,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+import manabot.training.stages as stages
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -252,9 +252,9 @@ def test_nonrecoverable_collection_cancellation_retains_receipt(
     ) -> RolloutBatch:
         # Inject cancellation after collection starts, without playing or load.
         stop.touch()
-        clock = execution.time.perf_counter() + 2
+        clock = stages.time.perf_counter() + 2
         with monkeypatch.context() as patch:
-            patch.setattr(execution.time, "perf_counter", lambda: clock)
+            patch.setattr(stages.time, "perf_counter", lambda: clock)
             if check is not None:
                 check()
         raise AssertionError("collection continued after cancellation")

@@ -15,6 +15,7 @@ from manabot.experiment.runner import run_experiment
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import RecoveryPolicy, TrainSelfPlay
+import manabot.training.run as run_handle
 from manabot.training.state import recovery
 from manabot.training.state.recovery import TrainingPaused, load_update
 from manabot.verify.store import VerifyStore
@@ -39,7 +40,7 @@ def test_safe_pause_restores_current_games_and_exact_learning(
     pause = tmp_path / "pause.request"
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        export = execution.export_training_run
+        export = run_handle.export_training_run
 
         def request_pause(
             run_id: str, owner: VerifyStore, out: str | Path
@@ -51,11 +52,11 @@ def test_safe_pause_restores_current_games_and_exact_learning(
 
         with monkeypatch.context() as patch:
             # The pause request is injected through an exported update boundary.
-            patch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0.0)
-            patch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
-            patch.setattr(execution, "export_training_run", request_pause)
+            patch.setattr(run_handle, "PROGRESS_EXPORT_SECONDS", 0.0)
+            patch.setattr(run_handle, "PROGRESS_EXPORT_SHARE", float("inf"))
+            patch.setattr(run_handle, "export_training_run", request_pause)
             # An arbitrarily advanced continuous clock must not spend active time.
-            patch.setattr(execution, "watchdog_seconds", lambda: 1e20)
+            patch.setattr(run_handle, "watchdog_seconds", lambda: 1e20)
             with pytest.raises(TrainingPaused):
                 execution.execute_regime(
                     value, 197, tmp_path / "paused", store, pause_path=pause

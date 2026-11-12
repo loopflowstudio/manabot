@@ -25,6 +25,8 @@ from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
+import manabot.training.run as run_handle
+import manabot.training.stages as stages
 from manabot.training.update_metrics import read_updates, stage_rows
 from manabot.verify.store import VerifyStore
 from managym import WORLD_VERSION
@@ -183,12 +185,11 @@ def test_runtime_failure_is_a_retained_run(tmp_path, monkeypatch):
 
 
 def test_manifest_export_failure_is_retained_in_canonical_store(tmp_path, monkeypatch):
-    from manabot.training import execution
 
     def no_space(*args, **kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(execution, "export_training_run", no_space)
+    monkeypatch.setattr(run_handle, "export_training_run", no_space)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(OSError, match="disk full"):
             execute_regime(recipe(), 197, tmp_path / "run", store)
@@ -220,16 +221,15 @@ def test_cli_rejects_retired_training_overrides() -> None:
 
 
 def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch):
-    from manabot.training import execution
 
     closed = []
-    close = execution.RunContext.close
+    close = stages.RunContext.close
 
     def track_close(experiment, state="finished"):
         closed.append(experiment)
         close(experiment, state)
 
-    monkeypatch.setattr(execution.RunContext, "close", track_close)
+    monkeypatch.setattr(stages.RunContext, "close", track_close)
     value = recipe()
     value.agent.hidden_dim = 8
     value.agent.num_attention_heads = 2
@@ -238,14 +238,14 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
     value.stages[0].updates = 1
     value.stages[0].learning.epochs = 1
 
-    load = execution.load_checkpoint
+    load = stages.load_checkpoint
 
     def reject_checkpoint(path: str) -> object:
         if Path(path).name == "policy-0-raw.pt":
             raise ValueError("checkpoint admission failed")
         return load(path)
 
-    monkeypatch.setattr(execution, "load_checkpoint", reject_checkpoint)
+    monkeypatch.setattr(stages, "load_checkpoint", reject_checkpoint)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="admission"):
             execute_regime(value, 197, tmp_path / "run", store)
@@ -261,7 +261,6 @@ def test_failed_stage_keeps_artifacts_and_exported_config(tmp_path, monkeypatch)
 
 
 def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
-    from manabot.training import execution
 
     value = recipe()
     value.agent.hidden_dim = 8
@@ -270,7 +269,7 @@ def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
         stage.transitions = 4
         stage.updates = 1
         stage.learning.epochs = 1
-    export = execution.export_training_run
+    export = run_handle.export_training_run
 
     def corrupt_completed_input(run_id, store, out):
         run = export(run_id, store, out)
@@ -279,7 +278,7 @@ def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
             artifact.write_bytes(b"changed bytes")
         return run
 
-    monkeypatch.setattr(execution, "export_training_run", corrupt_completed_input)
+    monkeypatch.setattr(run_handle, "export_training_run", corrupt_completed_input)
     with VerifyStore(tmp_path / "store.sqlite") as store:
         with pytest.raises(ValueError, match="input artifact changed"):
             execute_regime(value, 197, tmp_path / "run", store)
@@ -292,12 +291,11 @@ def test_continuation_rejects_mutated_artifact_bytes(tmp_path, monkeypatch):
 def test_self_play_continuation_keeps_adam_and_exports_each_stage(
     tmp_path, monkeypatch
 ):
-    from manabot.training import execution
 
-    clock = execution.time.perf_counter
+    clock = stages.time.perf_counter
     offset = 0.0
     admitted = []
-    export = execution.export_training_run
+    export = run_handle.export_training_run
 
     def delayed_export(run_id, store, out):
         nonlocal offset
@@ -309,8 +307,8 @@ def test_self_play_continuation_keeps_adam_and_exports_each_stage(
             offset += 5.0
         return run
 
-    monkeypatch.setattr(execution.time, "perf_counter", lambda: clock() + offset)
-    monkeypatch.setattr(execution, "export_training_run", delayed_export)
+    monkeypatch.setattr(stages.time, "perf_counter", lambda: clock() + offset)
+    monkeypatch.setattr(run_handle, "export_training_run", delayed_export)
     value = recipe()
     value.agent.hidden_dim = 8
     value.agent.num_attention_heads = 2

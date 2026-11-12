@@ -179,10 +179,12 @@ and materialization; `manabot.belief` owns probability over that domain. A
 query never reveals whether the actual hidden hand satisfies it, and empty
 support is an explicit result.
 
-**Training is declared data.** A `TrainingRegime` (one module per experiment
-under `experiments/`) names the world, decks, model and ordered stages; one
-runner executes it, writes world-bound raw and EMA checkpoints, records every
-attempt in `VerifyStore`, and ships metrics through Etude. Regimes refuse
+**Training is code over a run.** A regime is a Python function (one module per
+experiment under `experiments/`) that takes a `Run`, creates models and calls
+stage functions such as `self_play` in order. The run writes world-bound raw
+and EMA checkpoints, records every stage and its resolved arguments in
+`VerifyStore`, and ships metrics through Etude; saved `TrainingRegime` recipes
+run through the same stage functions. Regimes refuse
 belief inputs; the trained model sees the current observation only
 ([training](docs/training.md)).
 
@@ -356,9 +358,10 @@ otherwise. `--recipe baseline` requires CUDA or Apple MPS and trains on that
 accelerator; its evaluation and search run on CPU. `--device cpu|mps|cuda`
 overrides local selection; baseline accepts only CUDA or MPS. MPS training uses
 float32 and requires Torch 2.15 or newer. This makes no speed or strength claim.
-Training recipes are typed *regimes* composed in Python, one module per
+Training recipes are *regime functions* written in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
-[manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
+[manabot/recipes/builders.py](manabot/recipes/builders.py) and the stage
+functions in `manabot.training.stages`. The current GPU
 baseline is
 `uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering

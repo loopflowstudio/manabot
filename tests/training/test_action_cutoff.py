@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-from managym.decision import Command, DecisionFrame
 import numpy as np
 import pytest
 import torch
@@ -22,6 +21,7 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.training.rollout.collection import SeatRoutedCollector
+from managym.decision import Command, DecisionFrame
 
 
 def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:

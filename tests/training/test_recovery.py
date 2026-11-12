@@ -13,6 +13,8 @@ from experiments.direct_self_play import direct_self_play
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
+import manabot.training.run as run_handle
+import manabot.training.stages as stages
 from manabot.training.state.recovery import attempt_lock, load_update
 from manabot.training.update_metrics import MetricRow, read_updates, stage_rows
 from manabot.verify.store import VerifyStore
@@ -104,8 +106,8 @@ def assert_state_equal(left: Any, right: Any) -> None:
 @pytest.fixture(autouse=True)
 def export_after_every_save(monkeypatch: pytest.MonkeyPatch) -> None:
     """These tests inject failures through the export, so it must follow each save."""
-    monkeypatch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0.0)
-    monkeypatch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SECONDS", 0.0)
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SHARE", float("inf"))
 
 
 def interrupt(
@@ -114,7 +116,7 @@ def interrupt(
     store: VerifyStore,
     monkeypatch: pytest.MonkeyPatch,
 ) -> TrainingRun:
-    export = execution.export_training_run
+    export = run_handle.export_training_run
 
     def fail_after_commit(
         run_id: str, owner: VerifyStore, path: str | Path
@@ -129,7 +131,7 @@ def interrupt(
         return run
 
     with monkeypatch.context() as patch:
-        patch.setattr(execution, "export_training_run", fail_after_commit)
+        patch.setattr(run_handle, "export_training_run", fail_after_commit)
         with pytest.raises(KeyboardInterrupt):
             execution.execute_regime(value, 197, out, store)
     row = store.con.execute(
@@ -238,7 +240,7 @@ def test_sleep_inclusive_watchdog_retains_cost_without_reset(
     value = recipe()
     with VerifyStore(tmp_path / "training.sqlite") as store:
         failed = interrupt(value, tmp_path / "failed", store, monkeypatch)
-        clock = execution.watchdog_seconds
+        clock = run_handle.watchdog_seconds
         calls = 0
 
         def suspended_clock() -> float:
@@ -246,7 +248,7 @@ def test_sleep_inclusive_watchdog_retains_cost_without_reset(
             calls += 1
             return clock() + (10000 if calls > 1 else 0)
 
-        monkeypatch.setattr(execution, "watchdog_seconds", suspended_clock)
+        monkeypatch.setattr(run_handle, "watchdog_seconds", suspended_clock)
         with pytest.raises(TimeoutError):
             execution.execute_regime(
                 value, 197, tmp_path / "sleep", store, resume_from=failed.id
@@ -282,11 +284,12 @@ import os
 import sys
 from pathlib import Path
 from manabot.training import execution
+import manabot.training.run as run_handle
 from manabot.training.regime import TrainingRegime
 from manabot.verify.store import VerifyStore
-execution.PROGRESS_EXPORT_SECONDS = 0.0
-execution.PROGRESS_EXPORT_SHARE = float('inf')
-export = execution.export_training_run
+run_handle.PROGRESS_EXPORT_SECONDS = 0.0
+run_handle.PROGRESS_EXPORT_SHARE = float('inf')
+export = run_handle.export_training_run
 def terminate_after_commit(run_id, store, out):
     run = export(run_id, store, out)
     if run.status == 'running' and run.recovery_artifact is not None:
@@ -294,7 +297,7 @@ def terminate_after_commit(run_id, store, out):
         if name.startswith('second-' + sys.argv[4]):
             os._exit(86)
     return run
-execution.export_training_run = terminate_after_commit
+run_handle.export_training_run = terminate_after_commit
 recipe = TrainingRegime.model_validate_json(Path(sys.argv[1]).read_text())
 with VerifyStore(Path(sys.argv[2])) as store:
     execution.execute_regime(recipe, 197, Path(sys.argv[3]), store)
@@ -369,8 +372,8 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
     value = multistage_recipe(fresh=fresh)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        export = execution.export_training_run
-        save = execution.save_update
+        export = run_handle.export_training_run
+        save = stages.save_update
         fired = False
 
         def fail_at_boundary(
@@ -405,8 +408,8 @@ def test_multistage_boundaries_preserve_state_and_completed_work(
             save(*args, **kwargs)
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "export_training_run", fail_at_boundary)
-            patch.setattr(execution, "save_update", fail_before_completion)
+            patch.setattr(run_handle, "export_training_run", fail_at_boundary)
+            patch.setattr(stages, "save_update", fail_before_completion)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(value, 197, tmp_path / "failed", store)
         parent_id = store.con.execute(
@@ -471,7 +474,7 @@ def test_setup_failure_retains_stage_lineage_and_admission_slot(
                     value, 197, tmp_path / "incompatible", store, resume_from=parent.id
                 )
         assert execution._runtime_identities is fingerprints
-        export = execution.export_training_run
+        export = run_handle.export_training_run
         fired = False
 
         def fail_setup(
@@ -485,7 +488,7 @@ def test_setup_failure_retains_stage_lineage_and_admission_slot(
             return run
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "export_training_run", fail_setup)
+            patch.setattr(run_handle, "export_training_run", fail_setup)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(
                     value, 197, tmp_path / "setup", store, resume_from=parent.id
@@ -513,7 +516,7 @@ def test_stage_budgets_do_not_charge_previous_stages(
         stage.updates = 1
         stage.execution.wall_seconds = 100
     clock = 0.0
-    update = execution.update_iteration
+    update = stages.update_iteration
 
     def timed_update(*args: Any, **kwargs: Any) -> dict[str, Any]:
         nonlocal clock
@@ -521,8 +524,8 @@ def test_stage_budgets_do_not_charge_previous_stages(
         clock += 60
         return result
 
-    monkeypatch.setattr(execution, "watchdog_seconds", lambda: clock)
-    monkeypatch.setattr(execution, "update_iteration", timed_update)
+    monkeypatch.setattr(run_handle, "watchdog_seconds", lambda: clock)
+    monkeypatch.setattr(stages, "update_iteration", timed_update)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         run = execution.execute_regime(value, 197, tmp_path / "run", store)
         assert run.status == "completed"
@@ -534,7 +537,7 @@ def test_completed_artifact_corruption_rejects_before_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     value = multistage_recipe()
-    export = execution.export_training_run
+    export = run_handle.export_training_run
     fired = False
 
     def fail_completed(
@@ -554,7 +557,7 @@ def test_completed_artifact_corruption_rejects_before_claim(
 
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "export_training_run", fail_completed)
+            patch.setattr(run_handle, "export_training_run", fail_completed)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(value, 197, tmp_path / "parent", store)
         parent_id = store.con.execute("SELECT id FROM training_runs").fetchone()[0]
@@ -612,7 +615,7 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
 ) -> None:
     value = recipe()
     value.recovery_every_updates = 3
-    export = execution.export_training_run
+    export = run_handle.export_training_run
 
     def fail_after_second_update(
         run_id: str, owner: VerifyStore, path: str | Path
@@ -625,7 +628,7 @@ def test_sparse_recovery_replays_unsaved_updates_exactly(
     with VerifyStore(tmp_path / "training.sqlite") as store:
         whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "export_training_run", fail_after_second_update)
+            patch.setattr(run_handle, "export_training_run", fail_after_second_update)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(value, 197, tmp_path / "failed", store)
         row = store.con.execute(

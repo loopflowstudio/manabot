@@ -24,6 +24,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+import manabot.training.stages as stages
 from manabot.training.state.learning_state import admit_learning_state
 from manabot.verify.store import VerifyStore
 import managym
@@ -120,7 +121,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         assert payload["bc"]["weights"] == role
     initial_steps = [s["step"].item() for s in admitted.optimizer["state"].values()]
     assert initial_steps and min(initial_steps) > 0
-    original_update_ema = execution.update_ema
+    original_update_ema = stages.update_ema
     observed_ema_updates = 0
 
     def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
@@ -136,7 +137,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
         original_update_ema(averaged, learner, rate)
         observed_ema_updates += 1
 
-    monkeypatch.setattr(execution, "update_ema", checked_ema)
+    monkeypatch.setattr(stages, "update_ema", checked_ema)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         second = execution.execute_regime(
             recipe, 197, tmp_path / "second", store, checkpoint_seconds=1e9
@@ -362,7 +363,7 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
     assert receipt.artifact is not None
     expected, _ = load_checkpoint(receipt.artifact["path"])
     seeded: list[dict[str, torch.Tensor]] = []
-    original_update_ema = execution.update_ema
+    original_update_ema = stages.update_ema
 
     def checked_ema(averaged: ActorCritic, learner: ActorCritic, rate: float) -> None:
         if not seeded:
@@ -371,7 +372,7 @@ def test_raw_only_import_resets_ema_and_adam_at_the_monitoring_export(
             )
         original_update_ema(averaged, learner, rate)
 
-    monkeypatch.setattr(execution, "update_ema", checked_ema)
+    monkeypatch.setattr(stages, "update_ema", checked_ema)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         run = execution.execute_regime(continued, 197, tmp_path / "continued", store)
     assert run.status == "completed" and run.updates_through() == 4

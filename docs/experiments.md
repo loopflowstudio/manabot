@@ -104,7 +104,30 @@ from an earlier world, so read them for the reasoning, not the numbers.
 
 ## Declaring a comparison
 
-`manabot.experiment.config.Experiment` declares a typed comparison. `resolve()`
+A comparison of [regime functions](training.md#regime-functions) is a list of
+calls: each arm is the same function with different arguments, and each call's
+recorded arguments are what the report compares.
+
+```python
+from experiments.two_models import two_models
+from manabot.recipes.builders import move_learning
+from manabot.training.regime import IterationSchedule
+from manabot.training.run import RegimeCall
+
+arms = {
+    f"horizon-{steps}": RegimeCall.of(
+        two_models, decks=DECKS, updates=400,
+        learning=move_learning(IterationSchedule(steps=steps)),
+    )
+    for steps in (400, 1600)
+}
+```
+
+Launch them as [Etude jobs](training.md#remote-training); there is nothing to
+resolve, because the arguments are the declaration.
+
+`manabot.experiment.config.Experiment` declares a typed comparison of saved
+regimes. `resolve()`
 returns complete validated `TrainingRegime` values plus a provenance receipt;
 it never builds a model, opens a store or launches work.
 

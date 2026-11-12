@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import psutil
 import pytest
 
-from manabot.training.execution import process_tree_rss
+from manabot.training.run import process_tree_rss
 
 
 class _Child:

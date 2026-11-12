@@ -13,6 +13,7 @@ from manabot.experiment.execution import StepCalibration
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import CheckpointCadence, TrainSelfPlay
+import manabot.training.run as run_handle
 from manabot.verify.store import VerifyStore
 from tests.training import (
     test_checkpoint_queue as queue_fixtures,
@@ -112,7 +113,7 @@ def test_recovery_preserves_prior_exports_and_cadence(
     assert isinstance(stage, TrainSelfPlay)
     stage.updates = 6
     recipe.recovery_max_microsteps = 10000
-    export = execution.export_training_run
+    export = run_handle.export_training_run
 
     def interrupt(run_id: str, store: VerifyStore, out: str | Path) -> TrainingRun:
         run = export(run_id, store, out)
@@ -122,9 +123,9 @@ def test_recovery_preserves_prior_exports_and_cadence(
 
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "PROGRESS_EXPORT_SECONDS", 0)
-            patch.setattr(execution, "PROGRESS_EXPORT_SHARE", float("inf"))
-            patch.setattr(execution, "export_training_run", interrupt)
+            patch.setattr(run_handle, "PROGRESS_EXPORT_SECONDS", 0)
+            patch.setattr(run_handle, "PROGRESS_EXPORT_SHARE", float("inf"))
+            patch.setattr(run_handle, "export_training_run", interrupt)
             with pytest.raises(KeyboardInterrupt):
                 execution.execute_regime(
                     recipe, 197, tmp_path / "first", store, checkpoint_updates=2

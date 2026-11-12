@@ -96,8 +96,9 @@ from manabot.infra.identity import file_sha256
 from manabot.infra.runtime import RunContext, regime_tag
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.training.execution import cuda_peak_metrics, execute_regime
+from manabot.training.execution import execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.stages import cuda_peak_metrics
 from manabot.training.state.game_errors import GameErrorState
 from manabot.verify.store import VerifyStore
 

@@ -58,6 +58,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+import manabot.training.stages as stages
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -240,10 +241,10 @@ def test_mps_host_loss_and_rng_preservation() -> None:
         torch.rand(4, device="mps")
     assert torch.equal(torch.get_rng_state(), cpu_state)
     assert torch.equal(torch.mps.get_rng_state(), mps_state)
-    assert execution.cuda_peak_metrics("mps") == {}
-    assert execution.mps_memory_metrics("cpu") == {}
-    assert execution.mps_memory_metrics("cuda") == {}
-    assert all(value >= 0 for value in execution.mps_memory_metrics("mps").values())
+    assert stages.cuda_peak_metrics("mps") == {}
+    assert stages.mps_memory_metrics("cpu") == {}
+    assert stages.mps_memory_metrics("cuda") == {}
+    assert all(value >= 0 for value in stages.mps_memory_metrics("mps").values())
 
 
 @pytest.mark.skipif(not torch.backends.mps.is_available(), reason="requires Apple MPS")
@@ -255,7 +256,7 @@ def test_mps_one_update_and_export(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.min_advantage = 0
     observed: list[UpdateDiagnostics] = []
-    original = execution.update_iteration
+    original = stages.update_iteration
 
     def update(
         learner: Learner,
@@ -282,7 +283,7 @@ def test_mps_one_update_and_export(
         observed.append(result)
         return result
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(stages, "update_iteration", update)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         run = execution.execute_regime(plan, 197, tmp_path / "mps", store)
     assert run.status == "completed", run.error
@@ -459,7 +460,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     monkeypatch.setattr(damped_policy, "_targets", singleton)
     monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
     learner = Learner(agent, "mps", minibatch_rows=256)
-    result = execution.update_iteration(
+    result = stages.update_iteration(
         learner, batch, stage.learning, 0, np.random.default_rng(197), iteration=1
     )
     assert empty_calls
@@ -470,7 +471,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
 
     # PPO shares the catalog owner; an empty actor filter still trains its critic.
     empty_calls.clear()
-    result = execution.update_iteration(
+    result = stages.update_iteration(
         learner,
         batch,
         Learning(epochs=1, minibatches=1, filter_scope="actor", min_advantage=1e6),

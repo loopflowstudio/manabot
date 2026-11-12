@@ -560,6 +560,28 @@ class TrainSelfPlay(Stage):
         return self
 
 
+def check_continuation(parent: TrainSelfPlay, stage: TrainSelfPlay) -> None:
+    """A stage continuing `parent`'s live collector must keep what it fixed."""
+    if (
+        parent.execution.device != stage.execution.device
+        or parent.execution.workers != stage.execution.workers
+        or parent.behavior != stage.behavior
+        or parent.streams != stage.streams
+        or parent.learning_seats != stage.learning_seats
+        or parent.batch_closure != stage.batch_closure
+        or parent.games_per_stream != stage.games_per_stream
+        or parent.matchup_curriculum != stage.matchup_curriculum
+        or parent.learning.ema != stage.learning.ema
+        or parent.opponent != stage.opponent
+        or parent.root != stage.root
+        or parent.trainable != stage.trainable
+        or parent.learning.gradient != stage.learning.gradient
+    ):
+        raise ValueError(
+            "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers and opponent"
+        )
+
+
 class SelectionGameSpec(Strict):
     """Population and split membership frozen before observing any outcome."""
 
@@ -866,24 +888,7 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         "live self-play continuation cannot branch from an older collector"
                     )
-                if (
-                    parent.execution.device != stage.execution.device
-                    or parent.execution.workers != stage.execution.workers
-                    or parent.behavior != stage.behavior
-                    or parent.streams != stage.streams
-                    or parent.learning_seats != stage.learning_seats
-                    or parent.batch_closure != stage.batch_closure
-                    or parent.games_per_stream != stage.games_per_stream
-                    or parent.matchup_curriculum != stage.matchup_curriculum
-                    or parent.learning.ema != stage.learning.ema
-                    or parent.opponent != stage.opponent
-                    or parent.root != stage.root
-                    or parent.trainable != stage.trainable
-                    or parent.learning.gradient != stage.learning.gradient
-                ):
-                    raise ValueError(
-                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers and opponent"
-                    )
+                check_continuation(parent, stage)
             if (
                 self.agent.value_kind == "categorical_wdl"
                 and isinstance(stage, TrainSelfPlay)

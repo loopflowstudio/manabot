@@ -46,24 +46,10 @@ _KEYED_LISTS = {
 }
 
 
-class _Stage(Protocol):
-    @property
-    def id(self) -> str: ...
-
-    @property
-    def operation(self) -> str: ...
-
-
-class _Regime(Protocol):
-    @property
-    def stages(self) -> Sequence[_Stage]: ...
-
-
 class _Run(Protocol):
     """A current TrainingRun or a retained report projection of one."""
 
-    @property
-    def regime(self) -> _Regime: ...
+    def stage_operations(self) -> dict[str, str]: ...
 
     @property
     def stages(self) -> Sequence[StageRecord]: ...
@@ -235,11 +221,11 @@ def stage_rows(run: _Run, tracked: Mapping[str, Updates]) -> dict[str, list[Metr
     earlier attempt reads only the updates it completed, not its child's.
     """
     updates = tracked.get(Path(run.metrics_run).name) if run.metrics_run else None
-    stages = {stage.id: stage for stage in run.regime.stages}
+    operations = run.stage_operations()
     result: dict[str, list[MetricRow]] = {}
     total = 0
     for record in run.stages:
-        operation = stages[record.id].operation
+        operation = operations[record.id]
         if operation not in {"train_self_play", "train_compound"}:
             result[record.id] = [metric_row(d) for d in record.diagnostics]
             continue

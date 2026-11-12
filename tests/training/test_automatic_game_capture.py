@@ -6,7 +6,6 @@ import subprocess
 import sys
 from typing import Any
 
-from managym.decision import Command
 import numpy as np
 import pytest
 import torch
@@ -36,6 +35,7 @@ from manabot.training.rollout import selection_data
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.verify.store import VerifyStore
 import managym
+from managym.decision import Command
 
 
 def _model() -> ActorCritic:

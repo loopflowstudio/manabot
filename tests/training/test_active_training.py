@@ -14,6 +14,8 @@ from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
+import manabot.training.run as run_handle
+import manabot.training.stages as stages
 from manabot.verify.store import VerifyStore
 from tests.training.test_ataraxos_regime import _recipe
 
@@ -62,14 +64,15 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, updates: int, expected: str
 ) -> None:
     clock = Clock()
-    monkeypatch.setattr(execution, "time", clock)
+    monkeypatch.setattr(run_handle, "time", clock)
+    monkeypatch.setattr(stages, "time", clock)
     monkeypatch.setattr(
-        execution.SeatRoutedCollector,
+        stages.SeatRoutedCollector,
         "collect",
-        clock.charge(execution.SeatRoutedCollector.collect, 2),
+        clock.charge(stages.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(execution.update_iteration, 10)
+        execution, "update_iteration", clock.charge(stages.update_iteration, 10)
     )
     monkeypatch.setattr(
         execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
@@ -138,14 +141,15 @@ def test_initial_admission_precedes_collection(
         time.sleep(seconds)
 
     monkeypatch.setattr(clock, "sleep", admission_sleep)
-    monkeypatch.setattr(execution, "time", clock)
+    monkeypatch.setattr(run_handle, "time", clock)
+    monkeypatch.setattr(stages, "time", clock)
     monkeypatch.setattr(
-        execution.SeatRoutedCollector,
+        stages.SeatRoutedCollector,
         "collect",
-        clock.charge(execution.SeatRoutedCollector.collect, 2),
+        clock.charge(stages.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(execution.update_iteration, 10)
+        execution, "update_iteration", clock.charge(stages.update_iteration, 10)
     )
     gate = tmp_path / "initial-admission"
     out = tmp_path / "run"

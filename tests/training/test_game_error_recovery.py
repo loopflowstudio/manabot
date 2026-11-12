@@ -28,6 +28,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
+import manabot.training.stages as stages
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -199,7 +200,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             )
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
+            patch.setattr(stages, "SeatRoutedCollector", PaymentMismatchCollector)
             patch.setattr(GameErrorLedger, "record", interrupt_after_second_crash)
             with pytest.raises(KeyboardInterrupt):
                 run("first")
@@ -321,7 +322,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             raise RuntimeError("repair attempt failed during collector setup")
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", unavailable)
+            patch.setattr(stages, "SeatRoutedCollector", unavailable)
             with pytest.raises(RuntimeError, match="collector setup"):
                 run(
                     "setup-failed",
@@ -334,7 +335,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             ).fetchone()[0]
         )
         assert failed.recovery_artifact == parent.recovery_artifact
-        monkeypatch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
+        monkeypatch.setattr(stages, "SeatRoutedCollector", PaymentMismatchCollector)
         child = run("second", resume_from=failed.id)
         assert child.status == "completed"
         assert child.game_errors is not None and child.game_errors.crashed == 2

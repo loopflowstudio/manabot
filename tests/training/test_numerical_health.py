@@ -39,6 +39,8 @@ from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
+import manabot.training.run as run_handle
+import manabot.training.stages as stages
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -438,8 +440,9 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # Charge only injected durations in the executor. Keep watchdogs and the
     # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
     clock = _AccountingClock()
-    monkeypatch.setattr(execution, "time", clock)
-    original_update = execution.update_iteration
+    monkeypatch.setattr(run_handle, "time", clock)
+    monkeypatch.setattr(stages, "time", clock)
+    original_update = stages.update_iteration
     calls = [0]
     corrupted_rows: list[int] = []
 
@@ -479,14 +482,14 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         if run.status == "running":
             clock.elapsed += 2.0
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(stages, "update_iteration", update)
     monkeypatch.setattr(VerifyStore, "save_training_run", save)
     if fault == "capture":
 
         def failed_capture(*args: object, **kwargs: object) -> list[Path]:
             raise OSError("fixture disk failure")
 
-        monkeypatch.setattr(execution, "save_incident", failed_capture)
+        monkeypatch.setattr(run_handle, "save_incident", failed_capture)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(NumericalError, match="nonfinite_probabilities"):
             execution.execute_regime(recipe, 123, tmp_path / "run", store)
@@ -536,7 +539,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     assert run["selected_artifact"] is None
     initial_path = Path(record["artifacts"]["initial_raw"]["path"])
     assert initial_content is not None and initial_path.read_bytes() == initial_content
-    initial_agent, _ = execution.load_checkpoint(str(initial_path))
+    initial_agent, _ = stages.load_checkpoint(str(initial_path))
     assert all(
         torch.isfinite(value).all() for value in initial_agent.state_dict().values()
     )

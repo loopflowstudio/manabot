@@ -1,7 +1,8 @@
 """Measured run records, separate from executable recipe definitions.
 
 RunRecord shares retained measurements across execution and report readers.
-TrainingRun binds those measurements to a currently admitted TrainingRegime.
+TrainingRun binds those measurements to its recipe: a currently admitted
+TrainingRegime, or the RegimeCallRecord of a regime function.
 """
 
 from typing import Any, Literal
@@ -13,6 +14,7 @@ from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
     ProducerCost,
+    RecoveryPolicy,
     Strict,
     TrainingRegime,
     TrainSelfPlay,
@@ -42,7 +44,46 @@ class PhaseTiming(Strict):
     calls: int = Field(ge=0)
 
 
+class SourceRevision(Strict):
+    """The commit a run executed and the digest of uncommitted tracked changes."""
+
+    commit: str | None
+    # SHA-256 of `git diff HEAD` over tracked files; None when clean.
+    uncommitted_sha256: str | None = None
+
+
+class RegimeCallRecord(Strict):
+    """A regime function's identity: what ran, with which resolved arguments.
+
+    `arguments` holds every keyword argument after validation against the
+    function's annotations, defaults included, as JSON. Two runs with equal
+    `function`, `arguments_sha256` and `revision` ran the same recipe.
+    """
+
+    function: str = Field(pattern=r"^[\w.]+:[\w.]+$")
+    arguments: dict[str, Any]
+    arguments_sha256: str
+    revision: SourceRevision
+    # Run-level supervision, part of the identity a resumed attempt must match.
+    wall_seconds: float = Field(gt=0)
+    recovery: RecoveryPolicy | None = None
+
+
+StageOperation = Literal[
+    "train_self_play",
+    "import_policy",
+    "collect_belief",
+    "train_belief",
+    "export",
+    "custom",
+]
+
+
 class StageRecord(Strict):
+    # What a regime function's stage did; a saved regime's stages declare it.
+    operation: StageOperation | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     learning_state_origin: LearningStateOrigin | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -145,7 +186,11 @@ class RunRecord[RegimeT](Strict):
     schema_version: Literal[1] = 1
     id: str
     regime_digest: str
-    regime: RegimeT
+    # Exactly one recipe: a saved regime, or the call of a regime function.
+    regime: RegimeT | None = Field(default=None, exclude_if=lambda v: v is None)
+    regime_call: RegimeCallRecord | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
     seed: int
     seed_streams: dict[str, int]
     identities: dict
@@ -226,6 +271,29 @@ class RunRecord[RegimeT](Strict):
             ]
         return data
 
+    @model_validator(mode="after")
+    def _one_recipe(self) -> "RunRecord[RegimeT]":
+        if (self.regime is None) == (self.regime_call is None):
+            raise ValueError("a run records exactly one regime or regime call")
+        return self
+
+    @property
+    def recovery_policy(self) -> RecoveryPolicy | None:
+        """The run's active recovery policy, whichever recipe declared it."""
+        if self.regime_call is not None:
+            return self.regime_call.recovery
+        return getattr(self.regime, "recovery", None)
+
+    def stage_operations(self) -> dict[str, str]:
+        """Each recorded stage's operation, from its declaration or record."""
+        if self.regime is None:
+            return {s.id: s.operation or "custom" for s in self.stages}
+        return {
+            s.id: s.operation
+            for s in getattr(self.regime, "stages", ())
+            if isinstance(getattr(s, "operation", None), str)
+        }
+
     def _updates_through(self, learning: set[str], stage_id: str | None) -> int:
         total = 0
         for stage in self.stages:
@@ -259,5 +327,10 @@ class TrainingRun(RunRecord[TrainingRegime]):
 
     def updates_through(self, stage_id: str | None = None) -> int:
         """Completed learner iterations; collection records are not updates."""
-        learning = {s.id for s in self.regime.stages if isinstance(s, TrainSelfPlay)}
+        if self.regime is None:
+            learning = {s.id for s in self.stages if s.operation == "train_self_play"}
+        else:
+            learning = {
+                s.id for s in self.regime.stages if isinstance(s, TrainSelfPlay)
+            }
         return self._updates_through(learning, stage_id)

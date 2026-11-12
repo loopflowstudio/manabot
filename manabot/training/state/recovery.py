@@ -149,7 +149,14 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
         state.identities, parent.identities, parent.source_repair_reason
     )
     records = [*state.completed_stages, state.record]
-    expected = [stage.id for stage in parent.regime.stages[: len(records)]]
+    # A saved regime declares its stage order; a regime function's attempt
+    # recorded the stages it reached.
+    declared = (
+        [stage.id for stage in parent.regime.stages]
+        if parent.regime is not None
+        else [stage.id for stage in parent.stages]
+    )
+    expected = declared[: len(records)]
     if [record.id for record in records] != expected or any(
         record.status != "completed" for record in state.completed_stages
     ):
@@ -217,7 +224,7 @@ def settle_orphan(parent: TrainingRun) -> TrainingRun:
     settled.status = "interrupted"
     charged = gap
     if (
-        parent.regime.recovery is not None
+        parent.recovery_policy is not None
         and parent.recovery_boot_identity == boot_identity()
     ):
         if parent.last_recorded_active_seconds is None:

@@ -9,6 +9,7 @@ in [experiments.md](experiments.md); metric definitions live in
 [evaluation.md](evaluation.md).
 
 - [Run training](#run-training)
+- [Regime functions](#regime-functions)
 - [Regimes and stages](#regimes-and-stages)
 - [Experiments](#experiments)
 - [Remote training](#remote-training)
@@ -26,6 +27,10 @@ in [experiments.md](experiments.md); metric definitions live in
 ```bash
 uv run manabot train                                   # --recipe local: bounded smoke
 uv run manabot train --recipe baseline --seed 197      # baseline-v3 with evaluation
+uv run manabot train --function experiments.two_models:two_models \
+    --arguments arguments.json --seed 197 --out .runs/two-models/a1
+uv run manabot train --function experiments.two_models:two_models \
+    --arguments arguments.json --rehearse                # one tiny real update, then discard
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 uv run manabot train --regime regime.json --seed 197 --out .runs/example
 ```
@@ -59,8 +64,11 @@ recovery; accelerator runs cannot resume a stopped learner. This support makes
 no speed or strength claim.
 
 Each experiment is one module, `experiments/<experiment>.py`, next to its
-write-up. Its canonical recipe is the zero-argument function named like the
-module returning a `TrainingRegime`; other such functions are variants.
+write-up. New training is a [regime function](#regime-functions) in that
+module, selected with `--function <module>:<function>` and given its keyword
+arguments as a JSON object in `--arguments`. Older modules declare a saved
+recipe instead: the zero-argument function named like the module returning a
+`TrainingRegime`, with other such functions as variants.
 `--regime-name <experiment>` or `<experiment>:<variant>` selects one, and
 `manabot.cli.regime_names()` lists them. Reusable composition helpers are in
 `manabot.recipes.builders` (`move_learning`, `move_checkpoints`,
@@ -71,19 +79,178 @@ module returning a `TrainingRegime`; other such functions are variants.
 uv run python -c "from experiments.batched_baseline import batched_baseline; print(batched_baseline().model_dump_json(indent=2))" > regime.json
 ```
 
-Regime runs require `--out`. The CLI opens the canonical `training.sqlite` in
-the **parent** of `--out`; choose a new output directory for every attempt.
-`--regime` and `--regime-name` are exclusive. `--resume-from`,
-`--source-repair-reason` ([recovery](#recovery)), `--checkpoint-updates` and
-the legacy `--checkpoint-seconds` ([monitoring](#monitoring)) apply only to
+Function and regime runs require `--out`, except under `--rehearse`. The CLI
+opens the canonical `training.sqlite` in the **parent** of `--out`; choose a
+new output directory for every attempt. `--function`, `--regime` and
+`--regime-name` are exclusive. `--resume-from`, `--source-repair-reason`
+([recovery](#recovery)), `--checkpoint-updates` and the legacy
+`--checkpoint-seconds` ([monitoring](#monitoring)) apply only to function and
 regime runs.
+
+## Regime functions
+
+A training regime is a Python function whose first argument is the run. It
+creates models, calls stage functions in order, and passes results from one
+stage to the next as ordinary values:
+
+```python
+# experiments/two_models.py
+from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.recipes.builders import move_learning
+from manabot.training.decks import UniformDecks
+from manabot.training.regime import DampedPolicyLearning, Execution
+from manabot.training.run import Run
+from manabot.training.stages import self_play
+
+
+def two_models(
+    run: Run,
+    *,
+    decks: UniformDecks,
+    updates: int,
+    learning: DampedPolicyLearning = move_learning(),
+) -> None:
+    """Train a learner against a fixed, untrained reference; export both."""
+    observation = ObservationConfig()
+    reference = run.model("reference", ModelConfig(hidden_dim=32), observation)
+    learner = run.model("learner", ModelConfig(hidden_dim=64), observation)
+    self_play(
+        run, learner, opponent=reference, decks=decks, updates=updates,
+        learning=learning, execution=Execution(workers=4),
+    )
+    run.export(reference)
+```
+
+```python
+from pathlib import Path
+
+from experiments.two_models import two_models
+from manabot.training.decks import UniformDecks
+from manabot.training.run import RegimeCall, execute, rehearse
+
+decks = UniformDecks.model_validate_json(Path("decks.json").read_text())
+call = RegimeCall.of(two_models, decks=decks, updates=200)
+rehearse(call)                                     # raises before any compute is rented
+result = execute(call, out=Path(".runs/two-models/a1"), seed=197)
+result.status                                      # "completed"
+result.checkpoints["learner"].raw                  # learner-raw.pt, world-bound
+result.checkpoints["reference"].raw                # reference-raw.pt, never trained
+```
+
+There is no trainer class and no stage schema: the function is the recipe, and
+anything Python can express between stages (a loop over curriculum phases, a
+branch on a recorded measurement, a third model) is part of it.
+
+### The run handle
+
+`Run` (`manabot.training.run`) owns everything the run is responsible for
+besides the training math. A regime function receives it and never builds one.
+
+| `Run` provides | Meaning |
+| --- | --- |
+| `run.id`, `run.seed`, `run.world` | The run's identity, its root seed and the installed world it is bound to. |
+| `run.model(name, agent, observation)` | A new randomly initialized `Model`, seeded from `run.seed` and `name`. Names are lowercase and unique within the run. |
+| `run.export(model, weights="raw")` | Publish a checkpoint through ordinary checkpoint admission and return its `CheckpointReference`. |
+| `run.metrics(values, update=...)` | Record named metrics beside the stage metrics. |
+| `run.stage(name)` | A context that records one stage of your own: its cost, status and artifacts. Stage functions use it. |
+
+A `Model` is a name bound to a `ModelConfig`, an `ObservationConfig` and its
+current weights. Stage functions read and change models; a model is never
+copied implicitly. Calling `self_play` again on a model continues its live
+learner, Adam state and EMA, as `initial` does in a saved regime. Every model
+in the run shares the run's world, and checkpoint admission binds each one to
+it; models may differ in architecture and observation capacity.
+
+### Stage functions
+
+Stage functions live in `manabot.training.stages`. Each records one stage in
+`VerifyStore` while it runs, so a stage's record, cost and artifacts look the
+same whether a function regime or a saved one produced them.
+
+| Function | Does | Returns |
+| --- | --- | --- |
+| `self_play(run, model, *, decks, updates, learning, ...)` | Ordinary self-play training of `model`. | `SelfPlayResult` with the stage's raw and EMA checkpoints and counters. |
+| `import_policy(run, name, *, source_run, source_stage, checkpoint, weights)` | Admit a published policy as a new frozen `Model`. | The `Model`. |
+| `collect_belief(run, model, *, games, weights)` | Collect hidden-hand labels with a frozen policy. | `BeliefCorpus`. |
+| `train_belief(run, corpus, ...)` | Fit a belief sampler to a corpus. | `BeliefSamplerResult`. |
+
+`self_play` takes the same settings a saved `TrainSelfPlay` stage declares, as
+keyword arguments with the same names and defaults: `streams`, `transitions`,
+`games_per_stream`, `learning_seats`, `batch_closure`, `behavior`,
+`game_errors`, `matchup_curriculum`, `execution` and `learning` (a `Learning`
+or `DampedPolicyLearning`). The sections below describe their meaning once for
+both forms. `decks` is a `MatchConfig` or a `UniformDecks` source.
+`opponent=` takes another `Model` of the run, which plays the opponent seat
+frozen and is never trained; without it the model plays itself. A stage's name
+defaults to the function's name, numbered in call order (`self-play`,
+`self-play-2`); pass `stage="warmup"` to choose one.
+
+To start from a published policy, import it and train the imported model:
+`self_play(run, import_policy(run, "start", ...), ...)`. Only the weights
+carry over, as with `pretrained`.
+
+### Arguments and identity
+
+A run is identified by its `RegimeCall`: the function's import path
+(`experiments.two_models:two_models`), its keyword arguments and the source
+revision. `RegimeCall.of(function, **arguments)` validates the arguments
+against the function's annotations and fills in defaults, so the record holds
+every resolved argument, not only those written. Arguments must be values
+Pydantic can serialize: numbers, strings, the typed records (`Learning`,
+`Execution`, `ModelConfig`, `UniformDecks`, ...) and collections of them. A
+lambda, an open file or an untyped object is rejected before the run opens.
+
+`run.json` stores the call under `regime_call` with `arguments_sha256`, and
+the revision is the commit plus the digest of any uncommitted tracked source.
+Two runs with equal digests ran the same function on the same arguments; to
+compare two runs, compare their `regime_call` blocks.
+
+### Rehearsal
+
+`rehearse(call)` (or `--rehearse`) runs the function for real, in a temporary
+store that it deletes afterwards: models are built, games are played, and every
+stage function completes **one** update with at most one game per stream on
+CPU, then exports and reloads its checkpoints through admission. A bad deck,
+an observation capacity the decks overflow, a world mismatch, an argument the
+function cannot use or an error in the function's own code fails here, in
+seconds, on the machine that wrote the recipe. Rehearsal records nothing in
+your store and says nothing about speed or learning. Pass `device="cuda"` to
+rehearse on the device the stages declare.
+
+### Pause, stop and resume
+
+A `pause.request` file in the output directory, the run's wall deadline or a
+stop request ends the current stage at its next update boundary. The stage
+exports its learner state and the run ends `paused`; the function does not
+continue past that stage. Don't catch `RunPaused`.
+
+`execute(call, out=..., resume_from=<run directory>)` resumes. It requires the
+same `RegimeCall` and refuses a different function, argument or revision.
+Resuming re-enters the function from the top: stages already completed return
+their recorded results without running again, and models are restored from
+their exports; the interrupted stage continues from its last recovery
+snapshot at an update boundary ([recovery](#recovery)). Code between stages
+therefore runs again on resume, so keep it deterministic and let it act on the
+world only through `run` and stage functions.
+
+### Saved regimes
+
+`run_saved_regime(run, regime)` (`manabot.training.stages`) runs a saved
+`TrainingRegime` by calling the stage functions above in its stage order;
+`execute_regime` and `--regime` call it. A saved regime keeps its serialized
+identity: its run record embeds the same regime bytes, and receipts that hash
+those bytes still match. Its `RegimeCall` is `run_saved_regime` with the
+regime as its one argument.
 
 ## Regimes and stages
 
-A `TrainingRegime` (`manabot.training.regime`) is an ordered recipe; a
-`TrainingRun` (`manabot.training.records`) is one bounded execution with
-resolved settings, named seed streams, artifacts, measured costs and status.
-`execute_regime` (`manabot.training.execution`) runs it. `VerifyStore` is the
+A `TrainingRegime` (`manabot.training.regime`) is a saved, serialized recipe;
+a `TrainingRun` (`manabot.training.records`) is one bounded execution, of a
+regime function or a saved regime, with resolved settings, named seed streams,
+artifacts, measured costs and status. `execute_regime`
+(`manabot.training.execution`) runs a saved regime through
+[`run_saved_regime`](#saved-regimes). New recipes are
+[regime functions](#regime-functions); the stage settings below apply to both. `VerifyStore` is the
 canonical SQLite owner of runs and stages; `run.json` is an export of committed
 state. Files are atomically published before their SHA-256 identities enter
 stage records, and every checkpoint uses the ordinary writer and world/setup-
@@ -285,6 +452,28 @@ def runs(revision: str):
 uv run etude launch experiments/<name>.py --revision COMMIT --cohort <name>-1 --rent l4 --max-usd 10
 uv run etude report experiments/<name>.py --source r2://manabot/jobs --open
 ```
+
+A regime function launches the same way with `call=` in place of `regime=`;
+each study case is one more call with different arguments:
+
+```python
+from experiments.two_models import two_models
+from manabot.training.run import RegimeCall
+
+
+def runs(revision: str):
+    calls = [RegimeCall.of(two_models, decks=DECKS, updates=updates) for updates in (400, 800)]
+    return [
+        run
+        for call in calls
+        for run in TrainingJob(call=call, experiment=Path(__file__).stem, milestones=(100, 200))
+        .job(repo=Path("."), revision=revision, max_hours=4, max_usd=Decimal(3))
+        .runs(1)
+    ]
+```
+
+`TrainingJob.rehearse()` runs [rehearsal](#rehearsal) on the job's call;
+run it before `etude launch`, which does not rehearse on its own.
 
 Building a job is pure; nothing is submitted until `etude launch`. Runs track
 under `experiment`, the declaring file's stem, so that file's `eval(state)` and
