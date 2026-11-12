@@ -1,86 +1,112 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>QA — standing pipeline speed (855bff)</title>
 <style>
-body{font:15px/1.5 Georgia,serif;max-width:56rem;margin:2rem auto;padding:0 1rem;color:#2b2520;background:#faf6ef}
-h1,h2{font-weight:normal}code,pre{font:13px Menlo,monospace}pre{background:#f0e9dc;padding:.7rem;overflow:auto}
+body{font:15px/1.5 Georgia,serif;max-width:60rem;margin:2rem auto;padding:0 1rem;color:#2b2520;background:#faf6ef}
+h1,h2{font-weight:normal}code,pre{font:12.5px Menlo,monospace}pre{background:#f0e9dc;padding:.7rem;overflow:auto}
 table{border-collapse:collapse;margin:.5rem 0}td,th{border:1px solid #cbbfa9;padding:.25rem .55rem;text-align:right}th{background:#efe6d6}
 td:first-child,th:first-child{text-align:left}.bad{color:#8a2a1a}.ok{color:#3b5d2a}
 </style></head><body>
 <h1>QA: standing training/evaluation speed suite</h1>
-<p>2026-11-11. Source: dirty <code>2f24ceb09</code> (uncommitted docs/scratch edits), CPython 3.13 locked env,
-release <code>_managym.cpython-313-darwin.so</code>, laptop CPU. Everything here was run through the
-real CLI as documented in <code>docs/development.md</code>; no fixtures. CPU readings are harness proofs,
-not speed claims or GPU evidence.</p>
+<p>2026-11-11, second pass. Source: <b>clean</b> <code>c991025b8</code> (main synced through
+<code>668555c09</code>), CPython 3.13 locked env, release <code>_managym.cpython-313-darwin.so</code>
+rebuilt after the merge (17:14; native source last changed 16:40). 16-CPU Apple-silicon laptop,
+shared with other sessions (load average ≈20 throughout, including a concurrent maturin build).
+Everything was driven through the real CLI exactly as <code>docs/development.md</code> writes it.
+CPU readings are harness proofs, not speed claims or GPU evidence.</p>
 
-<h2>1. Default command, first-time use</h2>
+<h2>1. The documented default ladder, recording a reference</h2>
 <pre>uv run --locked --extra evaluation python scripts/bench_training_update.py \
-  --suite --device cpu --out .runs/qa-ladder-001</pre>
-<p>Ran 15:19–16:19. Printed nothing until the end (fixed, see §4). Final output:</p>
-<pre>training/a384l8: TimeoutError: attempt wall deadline exhausted
-incomplete; elapsed 3598.33s; RuntimeError: TimeoutError: attempt wall deadline exhausted
-Rates omit rental setup/idle/failures/billing. CPU readings are harness proofs, not speed claims or GPU evidence.
-exit=1</pre>
-<p class="ok">Failure behavior is as documented: six completed rows retained in <code>report.json</code>
-and printed, the failed attempt named, cleanup 0.16–0.45 s per attempt, no process left behind, nonzero exit.</p>
-<p class="bad">But the documented default cannot complete on this machine: the 3,600 s deadline ends
-inside a384l8 training.</p>
+  --suite --device cpu --record-reference manabot/perf/baseline.json --out .runs/qa-clean-ladder-001</pre>
+<pre>[1/8] candidate training/w64: measured in 221s
+[2/8] candidate evaluation/w64: measured in 7s
+[3/8] candidate training/w128l4: measured in 457s
+[4/8] candidate evaluation/w128l4: measured in 7s
+[5/8] candidate training/w160l8: measured in 1072s
+[6/8] candidate evaluation/w160l8: measured in 10s
+[7/8] candidate training/a384l8: measured in 2562s
+[8/8] candidate evaluation/a384l8: measured in 14s
+completed; elapsed 4351.09s; receipts retained
+     4351.36 real      4427.77 user      1612.64 sys        exit=0</pre>
+<p class="ok">First complete single-invocation ladder: 4,351 s, eight rows, inside the 7,200 s default.
+<code>manabot/perf/baseline.json</code> = <code>{"commit": "c991025b8…", "suite_interface": 1}</code>;
+committed in <code>4310a4f9f</code>. No processes left behind.</p>
 
-<h2>2. The missing size with an explicit budget</h2>
-<pre>... --suite --device cpu --size a384l8 --seconds 9000 --out .runs/qa-a384l8-001
-[1/2] candidate training/a384l8: measured in 2534s
-[2/2] candidate evaluation/a384l8: measured in 13s
-completed; elapsed 2548.13s; receipts retained   (exit 0)</pre>
-
-<h2>3. Readings (CPU, one Torch thread per worker, 256 streams, 3 updates, first excluded)</h2>
-<table>
-<tr><th>size</th><th>decisions/s</th><th>s/update</th><th>calls/update*</th><th>rows/call*</th><th>idle*</th>
-<th>native s</th><th>encode s</th><th>inference s</th><th>learning s</th><th>train worker s</th><th>eval games/s</th></tr>
-<tr><td>w64 †</td><td>216.8</td><td>251</td><td>513</td><td>104.8</td><td>0.591</td><td>16.9</td><td>2.0</td><td>136.6</td><td>174.0</td><td>798</td><td>0.603</td></tr>
-<tr><td>w128l4</td><td>243.8</td><td>222</td><td>562</td><td>95.5</td><td>0.627</td><td>8.0</td><td>1.1</td><td>138.2</td><td>261.2</td><td>677</td><td>0.620</td></tr>
-<tr><td>w160l8</td><td>118.5</td><td>444</td><td>500</td><td>104.6</td><td>0.591</td><td>7.5</td><td>1.0</td><td>383.0</td><td>444.4</td><td>1386</td><td>0.583</td></tr>
-<tr><td>a384l8</td><td>62.3</td><td>862</td><td>685</td><td>77.8</td><td>0.696</td><td>8.2</td><td>1.1</td><td>652.3</td><td>997.6</td><td>2531</td><td>0.473</td></tr>
-</table>
-<p>* whole-stage, including warmup, as labelled in the output. † w64 overlapped an accidental QA run
-(see §5) for its first ~2.5 minutes; its collection has ~158 s not attributed to any subphase (w128l4: ~29 s).
-Treat w64 as perturbed.</p>
-<p>a384l8 batching (685 calls × 77.8 rows from 256 streams) reproduces the brief's b015d5 reading
-(~700 × ~76): the complete-games closure explanation holds on real runs. Evaluation is four games per size
-in 6–8 s, so the suite's wall time is ~99% training.</p>
-<p><b>Summed completed attempt time: ≈5,470 s</b> across the two runs (~91 min).
-This is not a complete single-invocation ladder measurement. A comparison runs six ladders:
-≈9 hours is an estimate on this CPU, not a completed comparison measurement.</p>
-
-<h2>4. Wrong input and returning use</h2>
-<table>
-<tr><th>Case</th><th>Before</th><th>After</th></tr>
-<tr><td><code>--record-reference</code> on dirty source</td><td colspan="2">rejected before workers, report retained, no baseline written ✓</td></tr>
-<tr><td><code>--compare</code> without <code>--reference-root</code> (dirty)</td><td colspan="2">rejected (dirty candidate checked first) ✓</td></tr>
-<tr><td><code>--device mps</code> full suite</td><td colspan="2">"evaluation does not support mps; no device substitution" ✓</td></tr>
-<tr><td><code>--hourly-price -1</code>, missing baseline file, <code>--reference-root</code> alone, subset <code>--record-reference</code></td><td colspan="2">each rejected in 2–4 s with a retained report ✓</td></tr>
-<tr><td><code>--size w999</code></td><td class="bad">raw pydantic traceback</td><td>usage + <code>--size: Input should be 'w64', 'w128l4', 'w160l8' or 'a384l8'</code></td></tr>
-<tr><td><code>--device tpu --updates 1</code></td><td class="bad">raw traceback</td><td>one usage error naming both flags</td></tr>
-<tr><td>reused <code>--out</code></td><td class="bad">raw <code>FileExistsError</code> traceback</td><td>usage + "--suite requires a new --out directory"</td></tr>
-<tr><td>an hour-long run</td><td class="bad">silent until the end</td><td><code>[n/total] side workload/size: measured in Ns</code> on stderr per attempt</td></tr>
-</table>
-
-<h2>5. What I fixed</h2>
+<h2>2. Readings (now printed by the command itself)</h2>
+<p>The command used to print only ~2 KB JSON lines per row; reading s/update or rows/call meant
+digging through ~20 phase keys. It now ends with this table (rendered from the retained report):</p>
+<pre>     side  rep    workload    size   rate/s               unit  s/update  step+enc s  infer s  learn s  calls/upd*  rows/call*  idle*
+candidate    0    training     w64  757.305  learner decisions      71.9         4.1     22.2     39.9         513       104.8  0.591
+candidate    0  evaluation     w64    1.011              games         -           -        -        -           -           -      -
+candidate    0    training  w128l4  356.784  learner decisions     151.8         3.9     48.9     93.7         562        95.5  0.627
+candidate    0  evaluation  w128l4    0.882              games         -           -        -        -           -           -      -
+candidate    0    training  w160l8  156.705  learner decisions     336.0         3.9    140.9    180.9         500       104.6  0.591
+candidate    0  evaluation  w160l8    0.620              games         -           -        -        -           -           -      -
+candidate    0    training  a384l8   59.116  learner decisions     908.8         5.3    315.8    553.9         685        77.8  0.696
+candidate    0  evaluation  a384l8    0.443              games         -           -        -        -           -           -      -
+* whole stage, including the warmup update</pre>
 <ul>
-<li><code>scripts/bench_training_update.py</code>: suite option validation and an existing <code>--out</code> become argparse errors with flag names.</li>
-<li><code>scripts/bench_pipeline.py</code>: one stderr progress line per finished attempt.</li>
-<li><code>docs/development.md</code>: states the measured CPU runtime, that the default limit stops a CPU ladder, and the budgets for a CPU ladder (<code>--seconds 7200</code>+) and comparison (<code>36000</code>+).</li>
-<li>Tests: <code>pytest tests/training/test_pipeline_speed.py -q</code> — 46 passed; Ruff clean.</li>
+<li>w64's earlier anomaly is gone: collection 63.9 s over two updates, 7.9 s unattributed
+(was ~158 s when an accidental run overlapped it). The overlap explanation is consistent.</li>
+<li>a384l8 again reads 685 calls × 77.8 rows / 0.696 idle, the same as the first pass and the brief's b015d5 figure.</li>
+<li>Policy inference dominates collection at every size; native stepping+encoding is ~4–5 s/update throughout.</li>
 </ul>
-<p>Mistake of my own: because <code>--size w999</code> failed before creating its directory, my "reuse --out" check
-then started a real w64 run alongside the ladder. I stopped it after ~2.5 min; it perturbed the w64 training row.</p>
 
-<h2>Still wrong or unreached, worst first</h2>
+<h2>3. A real interleaved comparison, bounded</h2>
+<p>A full comparison would take ~7 h on this machine (six ladders), so I ran the real path with a
+600 s bound against a fresh reference checkout, to see what a person preparing one meets:</p>
+<pre>git worktree add --detach /tmp/qa-ref-855bff c991025b8
+uv run --locked --extra evaluation python scripts/bench_training_update.py --suite --device cpu \
+  --seconds 600 --compare manabot/perf/baseline.json --reference-root /tmp/qa-ref-855bff --out .runs/qa-cmp-1</pre>
+<pre>[2/48] candidate training/w64: measured in 214s
+[3/48] reference evaluation/w64: measured in 7s
+[4/48] candidate evaluation/w64: measured in 7s
+[5/48] reference training/w128l4: TimeoutError: attempt wall deadline exhausted in 74s
+reference    0    training   w64  703.234  learner decisions      77.4   4.2  24.7  43.2   513  104.8  0.591
+candidate    0    training   w64  775.437  learner decisions      70.2   3.8  20.7  41.9   513  104.8  0.591
+incomplete; elapsed 598.32s; RuntimeError: TimeoutError: attempt wall deadline exhausted</pre>
+<ul>
+<li class="ok">Admission passed; sides interleaved reference→candidate; total 48 attempts announced.</li>
+<li class="ok">I never prepared the reference environment. Its worker's own <code>uv run --locked</code> created
+<code>.venv</code> and built the extension, byte-identical to the candidate's (uv cache; native source
+matches). The first reference row absorbed that setup (294 s wall vs 214 s).</li>
+<li class="ok">Behavior counters are identical across sides (513 calls, 104.8 rows, 0.591 idle).</li>
+<li>Identical code read 703 vs 775 decisions/s (≈10%) on this loaded laptop: one pair is noise,
+which is why the comparison takes minima over three repetitions. No comparison was emitted.</li>
+<li class="ok">Timeout path: report retained with five attempts, cleanup 0.16–0.26 s each, comparison withheld,
+no process left. Reference worktree removed afterwards.</li>
+</ul>
+
+<h2>4. What I changed</h2>
+<ul>
+<li><code>scripts/bench_pipeline.py</code>: <code>describe</code> ends with an aligned summary table
+(rate, s/update, step+encode/inference/learning seconds per measured update, calls/update, rows/call, idle).
+JSON rows and <code>report.json</code> are unchanged; the suite interface is unchanged.</li>
+<li><code>tests/training/test_pipeline_speed.py</code>: the existing describe test asserts the summary appears. 57 passed; Ruff clean.</li>
+<li><code>docs/development.md</code>: the example uses the default deadline; runtime paragraph states the measured
+4,351 s ladder instead of summed attempts; comparison estimate ≈7 h; mentions the summary.</li>
+<li><code>.lf/skills/qa.md</code>: measured runtime and how to stand up a reference checkout for a bounded comparison.</li>
+<li><code>manabot/perf/baseline.json</code>: recorded by the ladder above.</li>
+</ul>
+
+<h2>Earlier pass (dirty <code>2f24ceb09</code>), in brief</h2>
+<p>The former 3,600 s default timed out inside a384l8; wrong-input paths
+(<code>--size w999</code>, <code>--device tpu</code>, reused <code>--out</code>) became usage errors; a per-attempt
+progress line was added. Those fixes and the deadline repair held in this pass.</p>
+
+<h2>Works now</h2>
+<p>The documented command completes the full ladder on a laptop CPU in 73 minutes, prints a readable reading,
+records a reference, and a comparison against a real second checkout admits, interleaves, provisions the
+reference environment itself, and fails cleanly at its deadline.</p>
+
+<h2>Not reached, and still wrong — worst first</h2>
 <ol>
-<li><b>The former default (3,600 s) could not finish the CPU ladder.</b> The implementation repair now sets
-7,200 s for a standalone suite and 36,000 s for a comparison, preserving workload identity.
-Those bounds still need the complete invocation measurements below; the ≈9 h comparison is an estimate.</li>
-<li>No complete clean-source ladder in one invocation yet, so no <code>manabot/perf/baseline.json</code> has been recorded,
-and no real interleaved comparison has run (remaining acceptance 1–2 in <code>scratch/plan.md</code>).</li>
-<li>CUDA and MPS were not exercised (no provisioned GPU; no spending authority).</li>
-<li>w64 collection has large unattributed time in this run (possibly my overlap). Re-check on a clean run.</li>
+<li class="bad">No complete comparison has run (≈7 h estimated, 36,000 s default). Interleaving, admission and
+the timeout path are proven; minimum selection and comparable/incomparable verdicts on real samples are not.</li>
+<li>The baseline names branch commit <code>c991025b8</code>. After a squash merge it remains fetchable only through
+the PR's head ref; a reference checkout must <code>git fetch origin pull/&lt;N&gt;/head</code>. Re-recording on a
+main commit after landing would be simpler for later users; that's gate's call.</li>
+<li>On a shared laptop, single pairs vary ~10% for identical code; the CPU comparison is a workflow check, not a
+regression detector.</li>
+<li>CUDA and MPS not exercised (no provisioned GPU; no spending authority).</li>
 </ol>
 </body></html>

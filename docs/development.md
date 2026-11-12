@@ -279,13 +279,14 @@ Measure the training and evaluation pipelines on this machine, across the fixed
 
 ```sh
 uv run --locked --extra evaluation python scripts/bench_training_update.py \
-  --suite --device cpu --seconds 7200 --out .runs/pipeline-speed-001
+  --suite --device cpu --out .runs/pipeline-speed-001
 ```
 
 Run from the repository root with the pinned Python environment and a release
 native extension built from the same source (see [environment setup](#environment-and-commands)).
-The command prints one training row and one evaluation row per size and retains
-the underlying receipts in the new output directory. It runs locally without
+The command prints one JSON training row and one evaluation row per size, then an
+aligned summary (phase seconds per measured update), and retains the underlying
+receipts in the new output directory. It runs locally without
 cloud credentials, a queue or a rental. Use it when changing collection,
 encoding, model inference, learning or shared evaluation serving; it is not a
 CI timing gate.
@@ -307,14 +308,10 @@ invocation defaults to a 7,200-second deadline, including startup and cleanup;
 this is a limit, not an expected duration. The report records actual elapsed time and
 completed rows, and each finished row prints a progress line to stderr.
 `--seconds` changes that limit, and `--updates` changes the training count.
-On an Apple-silicon laptop CPU (one Torch thread per worker), the former
-3,600-second budget timed out after 3,598 seconds with six completed rows.
-Those completed attempts plus the two attempts in a separate `a384l8` run sum to about
-5,500 seconds, including about 2,500 seconds of `a384l8` training. This is
-summed attempt time, not a completed single-invocation ladder measurement;
-the first training row also overlapped an accidental QA run. The two-hour
-budget leaves headroom over that sum, but still needs a clean full-ladder proof.
-A comparison runs the ladder six times. A partial ladder is not a complete
+On a 16-CPU Apple-silicon laptop CPU (one Torch thread per worker), one clean
+default ladder completed in 4,351 seconds, including 2,562 seconds of `a384l8`
+training; each evaluation row took 7–14 seconds. A comparison runs the ladder
+six times. A partial ladder is not a complete
 suite proof. The process tree has a 16 GiB RSS ceiling; `--memory-mib` changes it
 explicitly. Subset checks use
 `--size w64` and/or `--workload training` (repeat either flag for multiple rows);
@@ -383,8 +380,8 @@ and reports minimum durations. Each minimum names its sample; phase timings come
 from that sample rather than independently selected minima. Use matching suite
 options for both sources, including updates, streams and memory allowance.
 Comparison defaults to a 36,000-second (ten-hour) total deadline for all six
-ladders, including startup and cleanup. About nine hours is an estimate from
-the summed CPU attempts above, not a completed comparison measurement.
+ladders, including startup and cleanup. About seven hours is an estimate from
+the single CPU ladder above, not a completed comparison measurement.
 `--seconds` overrides the total deadline in either mode; it does not change
 workload identity. The report retains every attempt, world,
 input configuration, device, precision, workload and behavior digest, plus

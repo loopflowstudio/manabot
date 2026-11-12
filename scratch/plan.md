@@ -114,13 +114,14 @@ from concept review; this does not complete measurement or delivery.
 
 ## Remaining acceptance — gate/measurement
 
-1. On clean source with matching release extension and locked environment,
-   retain one complete default CPU ladder, actual invocation time and eight rows.
-   Resolve capacity/runtime failures without changing workload identity. Record,
-   review and commit `manabot/perf/baseline.json` through `--record-reference`;
-   keep measured rates in the report. This establishes a local harness proof.
-   Recheck w64's unattributed collection time without the earlier accidental
-   overlap; overlap is a possible cause, not an established explanation.
+1. Done in QA (2026-11-11): clean `c991025b8`, rebuilt matching extension,
+   default CPU ladder completed in 4,351 s with eight rows, exit 0;
+   `--record-reference` wrote `manabot/perf/baseline.json` (commit `c991025b8`,
+   interface 1), committed in `4310a4f9f`. Receipt `.runs/qa-clean-ladder-001/`.
+   w64 collection leaves 7.9 s of 63.9 s unattributed (was ~158 s when
+   overlapped). The baseline commit is a branch commit: after a squash merge
+   it stays fetchable only through the PR head ref. Gate decides whether to
+   re-record on a main commit after landing.
 2. Run a real same-host interleaved reference/candidate comparison with matching
    options. Establish repeatable behavior admission and retain incomparable
    results/failures. The full CPU/CUDA comparison has 48 worker attempts sharing

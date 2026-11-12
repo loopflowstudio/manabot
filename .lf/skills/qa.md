@@ -91,10 +91,16 @@ publish, land or choose the next Graph step from here.
   scripts/bench_training_update.py --suite --device cpu --out .runs/<new-dir>`.
   It hashes tracked *and untracked* files before and after each worker, so do
   not edit the worktree (including `scratch/`) while it runs; `.runs/` is
-  ignored. Laptop CPU completed attempts sum to ~5,500 s across two runs;
-  no complete invocation was measured. Defaults are 7,200 s standalone and
-  36,000 s for comparison (~9 h estimated, unmeasured); `--seconds` overrides
-  either without changing the workload. Rejection paths (dirty `--record-reference`,
-  `--compare` without `--reference-root`, `--device mps` full suite, bad
-  `--size`) exit before workers start, but check the target `--out` exists
-  before "reuse" tests, or you launch a real run that perturbs a concurrent one.
+  ignored. One clean invocation of the default CPU ladder took 4,351 s on a
+  16-CPU laptop (a384l8 training 2,562 s); evaluation rows take 7–14 s.
+  A comparison runs six ladders (~7 h estimated at that rate; default 36,000 s).
+  `--seconds` overrides either default without changing the workload. For a
+  real comparison, `git worktree add --detach /tmp/<dir> <baseline commit>`;
+  the reference worker's own `uv run --locked` creates its venv and builds its
+  extension (byte-identical via uv cache when native source matches). Bound a
+  smoke comparison with `--seconds 600` to exercise interleaving and the
+  timeout path; remove the worktree afterwards. Rejection paths (dirty
+  `--record-reference`, `--compare` without `--reference-root`, `--device mps`
+  full suite, bad `--size`) exit before workers start, but check the target
+  `--out` exists before "reuse" tests, or you launch a real run that perturbs
+  a concurrent one.
