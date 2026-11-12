@@ -152,7 +152,7 @@ impl ObjectLkiLog {
         self.by_object.contains_key(&object)
     }
 
-    /// The card's most recent departed battlefield object.
+    /// The most recent battlefield appearance this object left.
     pub fn latest_for_object(&self, object_id: ObjectId) -> Option<&ObjectLki> {
         self.latest_by_entity
             .get(object_id.0)

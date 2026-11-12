@@ -31,51 +31,26 @@ built"); `managym/README.md` links it. Assumptions and naming exclusions: `quest
 - QA (release extension): 60 random games, 150 Azula games, 4 Academy games; no token or copy seen
   off battlefield/stack at a decision except Treasures mid mana choice (CR 704.3, correct).
 
-## Concept review (2026-11-12, HEAD 9a323463f): next implement direction
-The kind, the rename and the zone decision match the steers. What is left is names and doc wording
-that still say "card" for something that may be a token or copy, the thing steer d57fc17e was about
-("320 still needs a lot of renames"). No behavior, wire name, observation or evidence moves.
+## Concept review direction (2026-11-12): built
+Object names for `move_object_with_entry`, `capture_object_move`, `subject_matches_moved_object`
+and the `assert_stack_consistent` locals; stale `move_card` mentions and the object-path doc
+comments fixed; `docs/engine.md#objects` now gives the built meaning of `ObjectId` first and puts
+the per-zone-change model under "Planned split". Card-named hand/library/graveyard/exile helpers
+left on purpose. PR body drafted in `scratch/pr-491-body.md` (library/hand hold `ObjectId`s; steer
+dbf13009 said "Card-only zones (library, hand, decklists) hold card ids", and the body explains
+the difference: CR 111.7-111.8, 704.5d, byte identity).
+Check: fmt, `cargo build --tests --workspace`, clippy `-D warnings` clean; debug nextest
+cr_400/405/601/603/704 + scenario 30 passed, cards token/azula 41 passed.
 
-1. Helpers that move or match any object take object names:
-   `Game::move_card_with_entry` -> `move_object_with_entry` (`flow/zones.rs`; a dying token goes
-   through it), `capture_card_move` -> `capture_object_move` (`flow/card_capture.rs`),
-   `subject_matches_moved_card` -> `subject_matches_moved_object` (`flow/triggers.rs`; its parameter
-   is already `moved_object`), and in `assert_stack_consistent` `card_counts`, `zone_spell_cards`,
-   `stack_spell_cards` -> `object_counts`, `zone_spell_objects`, `stack_spell_objects` (the stack
-   holds copies). Stale `move_card` mentions: comment at `flow/scenario.rs:107`, expect message at
-   `tests/rules/cr_603_triggers.rs:21`, and the typed-accessor list in `AGENTS.md`/`CLAUDE.md`
-   (line 438; the accessor is `move_object`).
-   Left as `card` on purpose (hand, library, graveyard or exile selection, where the rules text says
-   card): `priority_candidate_cards`, `priority_action_for_card`, `draw_cards`, `library_top_card`,
-   `revealed_cards`, `exile_granted_cards`, `foretold_cards`, `Target::GraveyardCard`.
-2. Doc comments on object paths: `state/src/zone.rs:48,110-111` ("holds `card`", "Move `card`",
-   "the card's owner" -> object; owner rule CR 108.3 applies to tokens through CR 111.2),
-   `game_object.rs:155` ("The card's most recent departed battlefield object"),
-   `stack_object.rs:127,135` ("a spell by its card", "The spell's card").
-3. `docs/engine.md#objects`: the two paragraphs after the table ("Every zone change makes a new
-   object ...", "code that means 'which object' ... goes stale when the object moves") state the
-   unbuilt model as present fact; only the table's Card row and the later "What is built" say
-   otherwise. Today `ObjectId` is the row that survives a zone change and `ObjectRef` is the
-   appearance, the reverse of what those paragraphs say about `ObjectId`. Mark them planned in place
-   (one lead sentence, or move them under a "Planned split" heading after "What is built") so a
-   reader of the table and the first paragraph gets the built meaning of `ObjectId` first.
-4. PR #491 body (already listed under Remaining): also state that library and hand lists hold
-   `ObjectId`s, not card ids. Steer dbf13009 says "Card-only zones (library, hand, decklists) hold
-   card ids"; the built decision differs because a bounced or tucked token is in that zone until
-   state-based actions (CR 111.7-111.8, 704.5d) and observations must stay byte-identical (QA saw
-   Treasures in a graveyard at a mana-choice decision). Say so plainly for the reviewer.
-
-No open product choice for this PR. For the later split Task, not here: whether library and hand
-become card-id lists (a token would then cease to exist inside the move, which changes what is
-observable between the move and state-based actions) or stay object lists as now.
+For the later split Task, not here: whether library and hand become card-id lists or stay object
+lists as now.
 
 ## Remaining
-- CI on 2a3eae3b0 (run 43325427802) was pending when read: Rust Tests (debug), Engine Budget
-  (digest should not move), conformance, integration. It is the first full check after the
-  15e50b205 merge.
-- PR #491 body is stale: it says the record keeps the name `Card`, lists the two main readers as
-  unmoved, and gives old check counts. Rewrite at publish: rename built, readers moved, current
-  checks, and "left for later" below.
+- CI run 43325427802 on 2a3eae3b0: all jobs passed (Rust Tests debug, Engine Budget, both
+  conformance jobs, Python unit, Academy, Integration long/evaluation) except Integration core,
+  still in progress when read. The helper-rename commit needs its own run.
+- PR #491's published body is stale; replace it with `scratch/pr-491-body.md` at publish, updating
+  its CI line.
 - Stack parent PR #476 (MTG-298) is open; it lands first.
 - Left for later (steer allows "land the rename plus the typed ids here, and say what is left in
   the PR body"): separate `Card`/`CardId` store, new object per zone change, the CR 400.7

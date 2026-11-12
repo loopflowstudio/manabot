@@ -124,7 +124,7 @@ impl StackObject {
         }
     }
 
-    /// The object as a target: a spell by its card, an ability by its id.
+    /// The object as a target: a spell by its object, an ability by its id.
     pub fn as_target(&self) -> Target {
         match self {
             StackObject::Spell(spell) => Target::StackSpell(spell.object),
@@ -132,7 +132,7 @@ impl StackObject {
         }
     }
 
-    /// The spell's card, or the card whose ability this is.
+    /// The spell's object, or the object whose ability this is.
     pub fn source_object(&self) -> ObjectId {
         match self {
             StackObject::Spell(spell) => spell.object,

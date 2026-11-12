@@ -517,10 +517,10 @@ impl Game {
     }
 
     pub fn move_object(&mut self, object: ObjectId, to_zone: ZoneType) {
-        self.move_card_with_entry(object, to_zone, ZoneEntry::default());
+        self.move_object_with_entry(object, to_zone, ZoneEntry::default());
     }
 
-    pub(crate) fn move_card_with_entry(
+    pub(crate) fn move_object_with_entry(
         &mut self,
         object: ObjectId,
         to_zone: ZoneType,
@@ -681,7 +681,7 @@ impl Game {
             // whoever owns the card.
             self.invalidate_mana_cache(event_controller);
         }
-        self.capture_card_move(object_id, old_zone, Some(to_zone), event_controller);
+        self.capture_object_move(object_id, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             object_id,
             from: old_zone,
@@ -883,7 +883,7 @@ impl Game {
                 counts
             }
 
-            let zone_spell_cards: Vec<ObjectId> = [PlayerId(0), PlayerId(1)]
+            let zone_spell_objects: Vec<ObjectId> = [PlayerId(0), PlayerId(1)]
                 .into_iter()
                 .flat_map(|player| {
                     self.state
@@ -894,7 +894,7 @@ impl Game {
                 })
                 .collect();
 
-            let stack_spell_cards: Vec<ObjectId> = self
+            let stack_spell_objects: Vec<ObjectId> = self
                 .state
                 .stack_objects
                 .iter()
@@ -905,17 +905,17 @@ impl Game {
                 .collect();
 
             let mut seen = HashSet::new();
-            for object in &stack_spell_cards {
+            for object in &stack_spell_objects {
                 assert!(
                     seen.insert(*object),
-                    "duplicate spell card on stack: {object:?} in {stack_spell_cards:?}"
+                    "duplicate spell object on stack: {object:?} in {stack_spell_objects:?}"
                 );
             }
 
             assert_eq!(
-                card_counts(&zone_spell_cards),
-                card_counts(&stack_spell_cards),
-                "stack/zone spell mismatch: zone={zone_spell_cards:?}, stack={stack_spell_cards:?}"
+                card_counts(&zone_spell_objects),
+                card_counts(&stack_spell_objects),
+                "stack/zone spell mismatch: zone={zone_spell_objects:?}, stack={stack_spell_objects:?}"
             );
         }
     }

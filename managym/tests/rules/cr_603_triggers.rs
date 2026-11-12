@@ -18,7 +18,7 @@ fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) ->
     game.state.pending_events.clear();
     game.state.pending_triggers.clear();
     game.state.observation_events.clear();
-    game.state.object_to_permanent[object_id].expect("permanent should exist after move_card")
+    game.state.object_to_permanent[object_id].expect("permanent should exist after move_object")
 }
 
 fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) -> usize {

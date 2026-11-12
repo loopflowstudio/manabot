@@ -104,7 +104,7 @@ impl Game {
             self.state
                 .zones
                 .move_object(object, player, ZoneType::Library);
-            // move_card pushes to the top (end); rotate to the bottom so the
+            // move_object pushes to the top (end); rotate to the bottom so the
             // cleared hand is not immediately drawn back.
             let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
             if let Some(top) = library.pop() {

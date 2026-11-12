@@ -629,8 +629,8 @@ it:
 
 | Rules term | Rule | Engine type | Holds |
 | --- | --- | --- | --- |
-| Card | CR 108 | `Card`, named by `CardId` (planned; today an `Object` with `ObjectKind::Card`, see [What is built](#what-is-built)) | the physical card: owner and definition, for the whole game |
-| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one appearance in one zone: characteristics, counters, copy effect and `ObjectKind` |
+| Card | CR 108 | `Object` with `ObjectKind::Card` (a separate `Card` named by `CardId` is [planned](#planned-split)) | the physical card: owner and definition, for the whole game |
+| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one card, token or spell copy, kept across zone changes ([What is built](#what-is-built)): characteristics, counters, copy effect and `ObjectKind` |
 | Token | CR 111 | `Object` with `ObjectKind::Token`, from a `TokenDefinition` or a copy effect | no card |
 | Copy of a spell | CR 707.10 | `Object` with `ObjectKind::SpellCopy`, made on the stack | no card |
 | Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card | no card |
@@ -643,15 +643,6 @@ An object keeps its kind for its whole life. The one change of kind is a copy
 of a permanent spell, which becomes a token as it resolves (CR 111.12,
 608.3f). A definition's `is_token` says only that its catalog row is a token
 definition's; an object's kind is the authority for what it is.
-
-Every zone change makes a new object (CR 400.7), stack to battlefield included
-(CR 608.3a). Code that means "which object" (a target, "that creature", last
-known information) names one appearance and goes stale when the object moves;
-code that means "which card" (ownership, a decklist, "return that card")
-names the card. Nothing else crosses a zone change: the only bridge from the
-old object to the new one is a carry-over record holding what CR 400.7's
-sub-rules let the new object know (whether it was cast or kicked, and linked
-effects finding the object they moved).
 
 Engine names follow the same rule: `object`, `objects` and `ObjectId` for
 anything that may be a token or copy (the battlefield, the stack, targets,
@@ -668,8 +659,7 @@ if object.is_card() {
 #### What is built
 
 The engine stores one `Object` row per physical thing, card or token, and
-keeps it across zone changes; the split into a `Card` store and a store of
-appearances is not built yet. Until it is:
+keeps it across zone changes:
 
 - `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
   (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
@@ -682,15 +672,29 @@ appearances is not built yet. Until it is:
   objects and abilities, also used to order timestamps; it is not a storage
   index.
 
+A Clone is still a card. A copy effect changes a card's or token's copiable
+values (CR 707.2) and is recorded on that object (`copy`); it does not make a
+copy object.
+
+#### Planned split
+
+Not built. The rules make a new object on every zone change (CR 400.7), stack
+to battlefield included (CR 608.3a). The plan is to store that directly: a
+`Card` store for the physical card and an `Object` store with one row per
+appearance, so `ObjectId` would name one appearance and go stale when the
+object moves, as `ObjectRef` does today. Code that means "which object" (a
+target, "that creature", last known information) would name the appearance;
+code that means "which card" (ownership, a decklist, "return that card") would
+name the card. Nothing else would cross a zone change: the only bridge from
+the old object to the new one would be a carry-over record holding what
+CR 400.7's sub-rules let the new object know (whether it was cast or kicked,
+and linked effects finding the object they moved).
+
 The split must keep `Card` small and `Copy` (owner, definition id, current
 `ObjectId`), keep both stores flat id-indexed vectors with no hash map on hot
 paths (search clones `Game` constantly), check an object-to-card conversion
 once and assert kinds in debug builds, and measure whether a new id per zone
 change adds layer-view or `TriggerIndex` invalidation before relying on it.
-
-A Clone is still a card. A copy effect changes a card's or token's copiable
-values (CR 707.2) and is recorded on that object (`copy`); it does not make a
-copy object.
 
 ### Zones
 

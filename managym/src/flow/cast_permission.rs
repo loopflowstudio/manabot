@@ -181,7 +181,7 @@ impl Game {
         self.produce_mana(player, &cost)?;
         self.spend_mana(player, &cost)?;
         let turn = self.state.turn.turn_number;
-        self.move_card_with_entry(
+        self.move_object_with_entry(
             object_id,
             ZoneType::Exile,
             ZoneEntry {

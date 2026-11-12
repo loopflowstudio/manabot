@@ -1653,7 +1653,7 @@ impl Game {
                     object_id: object,
                     controller,
                 },
-            ) => self.subject_matches_moved_card(
+            ) => self.subject_matches_moved_object(
                 subject,
                 source_object,
                 source_controller,
@@ -1724,7 +1724,7 @@ impl Game {
             ) => {
                 let entered = *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield);
                 entered
-                    && self.subject_matches_moved_card(
+                    && self.subject_matches_moved_object(
                         subject,
                         source_object,
                         source_controller,
@@ -1744,7 +1744,7 @@ impl Game {
                 },
             ) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;
-                died && self.subject_matches_moved_card(
+                died && self.subject_matches_moved_object(
                     subject,
                     source_object,
                     source_controller,
@@ -1762,7 +1762,7 @@ impl Game {
                     controller,
                     ..
                 },
-            ) if *to != ZoneType::Battlefield => self.subject_matches_moved_card(
+            ) if *to != ZoneType::Battlefield => self.subject_matches_moved_object(
                 subject,
                 source_object,
                 source_controller,
@@ -1993,7 +1993,7 @@ impl Game {
         }
     }
 
-    fn subject_matches_moved_card(
+    fn subject_matches_moved_object(
         &self,
         subject: &TriggerSubject,
         source_object: ObjectId,

@@ -271,7 +271,7 @@ impl Game {
         for (object_id, owner) in tokens_to_remove {
             let from = self.state.zones.zone_of(object_id);
             self.state.zones.remove_object(object_id);
-            self.capture_card_move(object_id, from, None, owner);
+            self.capture_object_move(object_id, from, None, owner);
             performed = true;
         }
 

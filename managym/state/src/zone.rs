@@ -45,7 +45,7 @@ impl Default for ZoneManager {
 }
 
 impl ZoneManager {
-    /// The player whose `zone` holds `card`.
+    /// The player whose `zone` holds `object`.
     fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
@@ -107,8 +107,8 @@ impl ZoneManager {
         }
     }
 
-    /// Move `card` from wherever it is to the end of `holder`'s `to_zone`.
-    /// The holder is the card's owner (CR 108.3), except on the
+    /// Move `object` from wherever it is to the end of `holder`'s `to_zone`.
+    /// The holder is the object's owner (CR 108.3, 111.2), except on the
     /// battlefield, where it is the permanent's controller (CR 110.2): each
     /// player's battlefield lists the permanents they control.
     pub fn move_object(&mut self, object: ObjectId, holder: PlayerId, to_zone: ZoneType) {

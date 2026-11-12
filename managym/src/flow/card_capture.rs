@@ -213,7 +213,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn capture_card_move(
+    pub(crate) fn capture_object_move(
         &mut self,
         object: ObjectId,
         from: Option<ZoneType>,

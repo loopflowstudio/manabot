@@ -435,7 +435,7 @@ their input order and validating the shared board once per immutable scan.
 `Game::state` is a `TrackedState` with
 `Revisions` (`characteristics`, `mana_pools`, `tapped`, `triggers`): `DerefMut`
 advances every counter, and its typed accessors (`tap`, `mark_damage`,
-`events_mut`, `move_card`, `mana_pool_mut`, ...) advance only the counters
+`events_mut`, `move_object`, `mana_pool_mut`, ...) advance only the counters
 their field feeds. Tap/untap advances `tapped`; layers retain their board only
 when no discovered scope, condition or value predicate reads tap state. Removing
 a stun counter also advances `characteristics`. Route a hot write through a typed accessor only when no
