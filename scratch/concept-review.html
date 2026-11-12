@@ -10,34 +10,40 @@ header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
 pre{overflow-x:auto;border-left:3px solid var(--line);padding:.6rem .9rem;font:13px/1.45 ui-monospace,Menlo,monospace}
 .old{border-color:var(--old)}.new{border-color:var(--new)}
 .tag{font:12px ui-monospace,monospace;color:var(--mute)}
+table{border-collapse:collapse;font-size:.9rem}td,th{border-bottom:1px solid var(--line);padding:.3rem .6rem;text-align:left}
 h2{font-size:1.15rem;margin-top:2rem}
 </style></head><body><main>
 <header>
-<h1>Regime functions: saved regimes should call the stage functions</h1>
-<p>Task MTG-303 · concept-review step · 2026-11-12</p>
-<p>Built from manabot/training/run.py, manabot/training/stages.py, experiments/two_models.py, manabot/experiment/job.py and scratch/plan.md</p>
+<h1>Regime functions: a model's lineage should survive resume</h1>
+<p>Task MTG-303 · concept-review step (second pass) · 2026-11-12, against d4271e1fc</p>
+<p>Built from manabot/training/run.py, manabot/training/stages.py, tests/training/test_regime_functions.py and scratch/plan.md</p>
 </header>
 
-<p><strong>Decision needed:</strong> none for the next round. The design already settles this: invert the call direction. One Etude question (below) waits until after that.</p>
+<p><strong>Decision needed:</strong> none for the next round. The design settles it: a continued stage must record the same arguments whether or not the run was resumed. The Etude budget question below stays open.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<p>Actions: write a regime function, bind arguments, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code>, stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_belief</code>, <code>train_belief</code>. These hold up.</p>
+<p>Actions: write a regime function, bind arguments with <code>partial</code>, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code>, stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_selection</code>, <code>collect_belief</code>, <code>train_belief</code>. Since the first pass, <code>run_saved_regime</code> calls these stage functions, so each stage body has one caller. That holds.</p>
 
-<h2>Biggest mismatch: which way the calls go</h2>
+<h2>Biggest mismatch: lineage is read from live state</h2>
 <p class="tag">existing</p>
-<pre class="old">run_saved_regime(run, regime)  ──isinstance──▶ _train_self_play(run, scope, regime, …)
-self_play(run, model, …)       ──TrainSelfPlay + one-stage TrainingRegime──▶ _train_self_play(…)</pre>
+<pre class="old">self_play(run, model, …)
+    initial = model.session.declaration.id if model.session else None
+_restore_model(model, record)          # resume replays a completed stage
+    model.session = None               # → the next continued stage records initial=None</pre>
+<p>Probe: two <code>self_play</code> calls on one model, interrupted after update 1 of the second, then resumed (seed 5):</p>
+<table><tr><th></th><th>stage 2 <code>settings.initial</code></th><th>raw weights</th></tr>
+<tr><td>uninterrupted</td><td><code>"self-play"</code></td><td rowspan="2">bit-equal</td></tr>
+<tr><td>resumed</td><td><code>None</code></td></tr></table>
+<p>Training is right; the record is wrong, so two runs no longer compare by their resolved arguments.</p>
 <p class="tag">proposed</p>
-<pre class="new">run_saved_regime(run, regime)
-    model = run.model("agent", regime.agent, regime.observation, seed=run.seeds["initialization"])
-    for stage in regime.stages:
-        self_play(run, model, stage=stage.id, decks=…, **settings)   # or import_policy / collect_* / train_belief
-self_play(run, model, …)  ──▶ _train_self_play(run, scope, decks, agent, observation, settings, clock)</pre>
-<p>Records do not change: a saved run still records <code>regime</code> and its digest. <code>_stage_regime</code> is deleted, input digest checks move into the stage functions, and <code>collect_selection</code> becomes public.</p>
+<pre class="new">Model.trained_by: str | None   # last self-play stage; set by self_play and _restore_model
+self_play: initial = model.trained_by
+    live session is the run's latest → continue live
+    else a recovery snapshot for this stage → restore it
+    else → refuse by name (never silently start a fresh learner from weights)</pre>
 
 <h2>Open questions</h2>
 <ol>
-<li>How should a function job declare its Etude budget? (a) the job passes an <code>updates</code> argument the function must accept; (b) Etude stops function jobs on wall/USD only, and they resume at update boundaries; (c) a smoke run reports the planned updates.</li>
-<li>Should custom <code>run.stage</code> blocks be resumable? (a) no, and we document that; (b) yes, through a scope that says it is already complete so the body can skip.</li>
+<li>How should a function job declare its Etude budget? (a) the job passes an <code>updates</code> argument the function must accept; (b) Etude stops function jobs on wall/USD only, and they resume at update boundaries; (c) a smoke run reports the planned updates. This decides <code>TrainingJob(regime=callable)</code> and Outcome 6; it does not block the change above.</li>
 </ol>
 </main></body></html>

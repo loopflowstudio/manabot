@@ -140,3 +140,29 @@ test_game_errors `binding_mismatch` (3).
   Etude PR.
 - Known limit, not a choice yet: `run.stage(name)` custom stages refuse
   resume past them, so a regime that uses one cannot recover after it.
+
+## Concept review 2 (2026-11-12, against `d4271e1fc`)
+
+One implementation per stage holds; the remaining mismatch is that a
+model's continuation lineage is derived from live state. `self_play` sets
+`TrainSelfPlay.initial` from `model.session`, and `_restore_model` clears
+the session on resume, so a resumed function run records a continued stage
+as fresh. Probe (two consecutive `self_play` calls on one model, interrupted
+after update 1 of the second, `RecoveryPolicy(checkpoint_updates=1)`, seed 5):
+raw weights bit-equal to the uninterrupted run, but stage 2
+`arguments.settings.initial` was `"self-play"` uninterrupted and `None`
+resumed. That breaks Outcome 7's comparable resolved arguments.
+
+Next implement direction:
+
+1. Lineage is a fact of the model: `Model` keeps the id of the last
+   self-play stage that trained it (set by `self_play` and by
+   `_restore_model`), and `self_play` derives `initial` from it. The live
+   session only decides how the stage continues: live (session is the run's
+   latest), from the recovery snapshot, or refuse. A continuing stage with
+   neither a live session nor a snapshot for it refuses by name instead of
+   silently starting a fresh learner from the weights.
+2. A regression test in `test_regime_functions.py`: the probe above, asserting
+   equal stage arguments and weights.
+
+Unchanged: the open Etude budget choice and the `run.stage` resume limit.
