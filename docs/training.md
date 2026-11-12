@@ -538,19 +538,16 @@ float32 regime. Precision changes no `ModelConfig` field, checkpoint or world
 binding: a checkpoint trained in any precision loads and runs in any other.
 
 Reduced precision changes learning numerics, not just speed, and finite
-metrics do not show that it learns the same. The admission measurement on an
-NVIDIA L4, for w160l8 and w384l8 with bucketed shapes on and off, is
-[`experiments/cuda_precision.md`](../experiments/cuda_precision.md): learner
-step and collection time and peak memory per precision, forward and gradient
-differences from float32 on retained minibatches, and a same-seed multi-update
-comparison of policy loss, value loss and clip fraction against a rule fixed
-before the scored runs. CUDA training stays float32: under that rule TF32 was
-unresolved and BF16 rejected, though both stayed within 0.7% of float32's loss
-at fixed weights. The 200-step replay could not resolve learning differences
-that small. BF16 is slower than float32 at w160l8 and about 2× faster at w384l8;
-TF32 is 1.1× and 1.3–1.5×. A reduced precision becomes a recommendation only
-after a real learning comparison: same seeds, bucketed shapes, strength at
-matched updates. Before training in one on another GPU or model size, rerun the
+metrics do not show that it learns the same. CUDA training stays float32: the
+L4 measurement for w160l8 and w384l8
+([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)) left TF32
+unresolved and BF16 rejected under its pre-registered rule, though both stayed
+within 0.7% of float32's loss at fixed weights and its 200-step replay could
+not resolve learning differences that small. TF32 is 1.1× faster at w160l8 and
+1.3–1.5× at w384l8; BF16 is slower at w160l8 and about 2× faster at w384l8. A
+reduced precision becomes a recommendation only after a real learning
+comparison: same seeds, bucketed shapes, strength at matched updates. Before
+training in one on another GPU or model size, rerun the
 [CUDA numerics validation](#validation) on that host.
 
 ### Terminal incidents
