@@ -53,3 +53,8 @@ because the reference teacher received today's config class (its config_json
 gained `rollout_evidence`); it now gets its own class and matches main exactly.
 Fixed: the compact README example omitted `decision_seconds` and would time out
 at the 1 s default on real checkpoints. Still owed: debug native suite.
+
+Gate (after sync onto main 6e0320338, no managym changes from main): debug
+`cargo nextest run --workspace --profile ci` 1167 passed, 2 skipped; local-update
++ package-boundary pytest 36 passed; cargo fmt clean. Ruff I001 findings in the
+touched files exist on main too (ruff is not in CI); left alone.
