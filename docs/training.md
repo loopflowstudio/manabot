@@ -343,9 +343,9 @@ phase seconds under `time/` (`time/collection`,
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
 `selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
 outcomes are a row table, logged once per update with Etude's
-`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`,
-`opponent_deck`, `position` (`play` or `draw`), `wins`, `losses` and `draws`, so
-deck pairs add rows rather than metric columns. Etude stores the table as an
+`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`
+and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
+`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude stores the table as an
 immutable JSON file under the metric run's `artifacts/` and carries it with the
 metrics, including for launched jobs; keep `artifacts/` when copying a run for
 offline analysis. Read the rows directly through Etude:
@@ -361,7 +361,7 @@ for table in history.read_table("self_play_outcomes", "updates"):
 ```
 
 ```text
-1.0 ({'deck': 'Elemental', 'opponent_deck': 'Elemental', 'position': 'play', 'wins': 9, 'losses': 7, 'draws': 0}, ...)
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
 ```
 
 `manabot.training.update_metrics.read_updates` reads the same tables and

@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>MTG-311 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto;font-size:12px}h2{margin-top:1.6em}img{max-width:100%;border:1px solid #ccc}</style>
+<h1>MTG-311 QA: self-play outcomes as Etude tables</h1>
+<p>Run on 2026-11-12 at <code>dafbc985e</code> plus the docs fix below, on CPU, using the installed <code>manabot train</code> CLI, Etude 0.2.16's reader, and manabot's report loader (<code>load_evidence</code> → <code>self_play_figures</code>). Runs are in ignored <code>.runs/qa311-*</code>.</p>
+
+<h2>1. Fresh run, then read the rows as the docs describe</h2>
+<p><code>uv run manabot train --recipe local --device cpu --out .runs/qa311-a</code> finished in about 6 s. The Etude run holds <code>artifacts/&lt;sha256&gt;.json</code> tables and no <code>self-play-outcomes/</code> directory. Running the <code>docs/training.md</code> snippet unchanged:</p>
+<pre>1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, {'deck': 'fc948195…', …, 'position': 'play', 'wins': 1, 'losses': 1, 'draws': 0})
+2.0 ({… 'position': 'draw', 'wins': 2, 'losses': 0 …}, {… 'position': 'play', 'wins': 0, 'losses': 2 …})</pre>
+<p>Through <code>load_evidence</code>, both update rows carry the projected <code>self_play_outcomes/&lt;deck&gt;/&lt;opp&gt;/&lt;play|draw&gt;/…</code> counts alongside about 400 ordinary metrics. No bare <code>self_play_outcomes</code> digest is left in the rows. <code>self_play_points</code> returns the same counts.</p>
+<p><b>Same counts as main:</b> running the same recipe and seed from an <code>origin/main</code> worktree (<code>48cb12b54</code>), then reading the result with main's reader, gave the same four points: 1–1, 1–1, 2–0, 0–2.</p>
+
+<h2>2. 40 updates</h2>
+<p><code>--steps 40</code> wrote only 3 table files, because tables are named by content and identical tables share a file. Etude's <code>read_table</code> still returns 40 tables (x = 1…40), and the report has 80 points (2 positions × 40 updates). Nothing was lost.</p>
+
+<h2>3. Interrupt and resume</h2>
+<p>I trained a regime file (the local recipe with 60 updates and <code>recovery_max_microsteps</code>) and sent SIGINT to its process group after 14 s. It stopped as <code>interrupted</code> at update 5. <code>--resume-from 35da4ae6…</code> into a sibling <code>--out</code> continued the same Etude run until the regime's 120 s wall stopped it at update 50, also as <code>interrupted</code>, which is expected for that wall.</p>
+<pre>attempts [('bb760f40', {}), ('4e53db77', {'updates': 5.0, 'learner_transitions': 1759.0})]
+read_table: 50 tables, x = 1..50, no duplicates
+report: child run 50 rows, all 50 with outcomes; parent run 5 rows, all with outcomes</pre>
+<img src="qa/selfplay-0.png" alt="Resumed run, Allies vs Lessons play/draw and deck win rate across 50 updates">
+<p>The report's figure labels the decks (Allies vs Lessons) and plots 50 updates.</p>
+
+<h2>4. A run from before this change</h2>
+<p>The main worktree wrote <code>.runs/qa311-old</code> in the retired format (<code>artifacts/self-play-outcomes/</code> plus a <code>self_play_outcomes/table</code> metric). This branch's report loader refuses it:</p>
+<pre>ValueError: run 060ddd4a… records self-play outcomes in the retired 'self_play_outcomes/table' format; read it from manabot revision bf4e280f7</pre>
+<p>Main's reader, which the message points to (by way of an example revision), reads that run correctly. Etude's own <code>read_table</code> returns nothing for it, because the table name differs. The documented path is manabot's reader.</p>
+
+<h2>5. A copied run with a missing or damaged table</h2>
+<p>Deleting one table file from a copy raises <code>FileNotFoundError</code> naming <code>…/artifacts/43b5df01….json</code>. Overwriting it with other JSON raises <code>EtudeError: table_artifact_damaged</code>, and the chained <code>ValueError</code> names the same path. Neither case is silently empty.</p>
+
+<h2>6. MTG-273 diagnostic</h2>
+<p>The command in the report, <code>uv run --locked --extra artifacts python scripts/diagnose_outcome_index.py</code>, runs in 0.2 s. Refresh peak was 35,666 bytes (scalar) and 6,408 bytes (table) at 1, 4 and 8 blocks; the manifest reached 389,180 versus 5,709 bytes at 8 blocks. These match the dated line in <code>experiments/self-play-collection-273.md</code> exactly.</p>
+
+<h2>Fixed</h2>
+<ul><li><code>docs/training.md</code>: the example output showed <code>'deck': 'Elemental'</code> with made-up counts. Rows actually hold deck identities, as the collector records them. The paragraph now says so, and the example is the real output from scenario 1.</li></ul>
+
+<h2>Not reached</h2>
+<ul><li>A launched (rented) Etude job carrying tables through the courier. That costs money and needs a rental; only local storage was exercised.</li>
+<li>A crash between <code>log_update</code> and <code>log_table</code>. SIGINT never landed in that gap; the reasoning for it is in plan.md.</li>
+<li>Long-run time and RSS (MTG-273 acceptance). Out of scope here.</li></ul>
+
+<h2>Still wrong</h2>
+<p>Nothing found in this change. A side observation, not new: resuming requires a regime file, because <code>--recipe</code> refuses <code>--resume-from</code> with "--recipe cannot be combined with regime inputs or resume/cadence controls". That error message doesn't say to use <code>--regime</code>.</p>
