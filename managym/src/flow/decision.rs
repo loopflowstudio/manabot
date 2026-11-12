@@ -1375,20 +1375,25 @@ impl Game {
                 player,
                 tap_remaining,
                 ..
-            } => ActionSpace {
-                player: Some(*player),
-                kind: if *tap_remaining > 0 {
-                    ActionSpaceKind::LookAndSelect
+            } => {
+                let (kind, actions) = if *tap_remaining > 0 {
+                    (
+                        ActionSpaceKind::LookAndSelect,
+                        self.mana_tap_cost_actions(*player),
+                    )
                 } else {
-                    ActionSpaceKind::PayOrNot
-                },
-                actions: if *tap_remaining > 0 {
-                    self.mana_tap_cost_actions(*player)
-                } else {
-                    self.mana_ability_actions(*player, None)
-                },
-                focus: source_focus,
-            },
+                    (
+                        ActionSpaceKind::PayOrNot,
+                        self.mana_ability_actions(*player, None),
+                    )
+                };
+                ActionSpace {
+                    player: Some(*player),
+                    kind,
+                    actions,
+                    focus: source_focus,
+                }
+            }
             Decision::Payment(payment) => {
                 let player = payment.player;
                 let mut actions = self.mana_ability_actions(player, None);

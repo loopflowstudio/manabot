@@ -1146,13 +1146,13 @@ impl Game {
         }
         let permanent = self.state.card_to_permanent[card].unwrap();
         self.tap_permanent(permanent, false);
-        let Some(suspended) = self.state.suspended_decision_mut().as_mut() else {
-            unreachable!()
-        };
-        let Decision::ManaUpfront { tap_remaining, .. } = &mut suspended.decision else {
-            unreachable!()
-        };
-        *tap_remaining -= 1;
+        if let Some(SuspendedResolution {
+            decision: Decision::ManaUpfront { tap_remaining, .. },
+            ..
+        }) = self.state.suspended_decision_mut()
+        {
+            *tap_remaining -= 1;
+        }
         self.advance_mana_upfront()
     }
 

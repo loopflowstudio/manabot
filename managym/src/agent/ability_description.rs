@@ -76,8 +76,13 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When you cast a {}",
             predicate_description(predicate, "spell")
         ),
-        TriggerCondition::CreatureDealsCombatDamageToYou => "Whenever a creature deals combat damage to you".into(),
-        TriggerCondition::OpponentCastsSpell { predicate } => format!("Whenever an opponent casts a {}", predicate_description(predicate, "spell")),
+        TriggerCondition::CreatureDealsCombatDamageToYou => {
+            "Whenever a creature deals combat damage to you".into()
+        }
+        TriggerCondition::OpponentCastsSpell { predicate } => format!(
+            "Whenever an opponent casts a {}",
+            predicate_description(predicate, "spell")
+        ),
         TriggerCondition::PlayerCastsSpell { predicate } => format!(
             "When a player casts a {}",
             predicate_description(predicate, "spell")
