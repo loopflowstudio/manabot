@@ -387,7 +387,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/model/records.py",
         "manabot/model/semantic_cards.py",
         "manabot/model/shared_effects.py",
-        "manabot/model/token_stream.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/reports/selection.py",

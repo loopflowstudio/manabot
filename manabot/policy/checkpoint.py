@@ -82,8 +82,6 @@ def require_supported(model: ModelConfig, observation: ObservationConfig) -> Non
         reasons.append("belief inputs")
     if model.recent_events:
         reasons.append("policy history input (recent_events)")
-    if model.token_stream != "tables":
-        reasons.append(f"token_stream={model.token_stream!r}")
     if model.value_aggregation != "masked_mean":
         reasons.append(f"value_aggregation={model.value_aggregation!r}")
     if model.value_kind != "scalar":

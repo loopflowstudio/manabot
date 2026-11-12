@@ -93,10 +93,3 @@ def test_padded_policy_measures_no_live_count() -> None:
     case = _policy()
     with torch.no_grad(), PolicyInference(case.agent) as scope:
         assert scope.prepare(case.obs).live_token_count is None
-
-
-def test_pooled_stream_rejects_live_tokens() -> None:
-    case = _policy()
-    config = case.agent.config.model_copy(update={"token_stream": "pooled"})
-    with pytest.raises(ValueError, match="does not support live tokens"):
-        ActorCritic(case.agent.observation_space, config, live_tokens=True)

@@ -197,8 +197,8 @@ that is not a container (a `.pt`, or a conversion without the metadata) raises
 input. Backends
 cover what the w160l8 regime uses: a catalog world with catalog record ids,
 table attention, a masked-mean scalar critic and policy input v9. A checkpoint
-that enables anything else (belief inputs, policy history, the pooled token
-stream, another critic, FiLM, input v10) is refused with every unsupported
+that enables anything else (belief inputs, policy history, another critic,
+FiLM, input v10) is refused with every unsupported
 field named (`UnsupportedPolicy`), rather than run partially. Checkpoints of
 the `local` recipe use FiLM and are refused.
 
