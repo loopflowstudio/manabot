@@ -3,11 +3,11 @@
 The recursions here run on the host in every backend: a complete-game rollout
 is one packed column of tens of thousands of rows whose trajectories advance
 together (`reverse_waves`), which is launch latency on a device, not work. A
-backend whose framework has no better form wraps these (`manabot.backends.mlx.rl`);
-the update diagnostics in `manabot.training.updates.selection` read them
-directly. The torch backend keeps the same algorithms over host tensors
-(`manabot.backends.torch.rl`), and these match it bit for bit, `quantile`
-included.
+backend's `transition_gae` wraps them (`manabot.backends.torch.rl`,
+`manabot.backends.mlx.rl`), and the update diagnostics in
+`manabot.training.updates.selection` read them directly. Torch's categorical
+targets walk `reverse_waves` over host tensors, and its device-side advantage
+selection (`torch.quantile`) matches `quantile` bit for bit.
 
 Rows are [T,E]: T same-viewer transitions of E packed columns. An end flag
 belongs to its own row's reward and cuts both bootstrap and trace.

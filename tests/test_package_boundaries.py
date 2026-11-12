@@ -445,7 +445,12 @@ _GENERIC = (
     "manabot/backends/torch/learner.py",
     "manabot/backends/torch/arrays.py",
 )
-_GENERIC_ALLOWED = ("manabot.backends.torch.rl", "manabot.infra.profiler")
+_GENERIC_ALLOWED = (
+    "manabot.backends.torch.rl",
+    "manabot.backends.torch.arrays",
+    "manabot.infra.profiler",
+    "manabot.policy.returns",
+)
 
 
 def test_generic_learning_pieces_import_only_themselves() -> None:
@@ -479,6 +484,7 @@ class _RefuseRoles(importlib.abc.MetaPathFinder):
             "manabot.backends",
             "manabot.backends.torch",
             "manabot.infra",
+            "manabot.policy",
             *_GENERIC_ALLOWED,
         }
         if root in {"managym", "academy", "etude"} or (

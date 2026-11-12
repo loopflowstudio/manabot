@@ -56,9 +56,6 @@
 - PPO runs on torch only (it steps through `learner.step` but calls tensor
   methods and `get_value`). The damped update is the one MLX runs. Follow-up if PPO is wanted
   on MLX.
-- Torch's host recursions (`terminal_distances`, `reverse_waves`,
-  `transition_gae`) fold onto `policy/returns.py` (concept review, plan.md);
-  torch keeps device-side selection.
 - Steer 793944f0 is satisfied: main's #499 is merged (71ab00215) and
   `require_supported` no longer reads `token_stream`.
 - Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint` writing

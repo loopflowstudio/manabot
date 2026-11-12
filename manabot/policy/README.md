@@ -22,8 +22,9 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   trims its own arrays.
 - `returns.py` holds the returns and advantage-selection recursions over host
   NumPy rows (`transition_gae`, `selection_mask`, `quantile`,
-  `terminal_distances`), bit for bit what the torch backend computes. The
-  update diagnostics read them, and a backend with no better form wraps them.
+  `terminal_distances`). The update diagnostics read them and every backend's
+  `transition_gae` wraps them; torch's device-side selection matches them bit
+  for bit.
 - `protocol.py` states what a backend provides (`BackendPolicy`,
   `BackendLearner`, `Backend`) and one captured minibatch's constants and
   coefficients (`Targets`, `Settings`). Values are `[B]`.

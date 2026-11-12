@@ -462,3 +462,12 @@ Open product choice (unchanged): steer aeac5366, ship this PR with
 Remaining 1 and 2 stacked, or build them here. Steer 449b1a8e's "Rerun this
 check if the forward changes (e.g. if the Prepared rewrite lands here)"
 leaves it open. Items 1 and 2 above are needed on either answer.
+
+## Pass after the concept review (2026-11-12)
+
+- Item 1 built: torch `rl.transition_gae` wraps `policy.returns.transition_gae`;
+  `categorical_lambda_returns` walks `returns.reverse_waves`; torch's
+  `terminal_distances`/`reverse_waves` deleted. Boundary allow-list gains
+  `manabot.policy.returns` and `manabot.backends.torch.arrays`. Check: returns,
+  boundaries, update backends, minimal loop 58 passed; `updates.py` vs
+  `after.json`: only the known 1-ulp `value_scale` std (3 damped configs).

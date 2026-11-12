@@ -108,8 +108,10 @@ NumPy keeps the host-side bookkeeping and everything computed once per batch
 on host rows: which rows train, minibatch indexes, action-type counts, batch
 health, `selection_diagnostics` and `value_scale`. Logic that is pure NumPy
 lives once in `manabot.policy`: `reference_distribution` (`prepare.py`) and
-the returns and selection recursions (`returns.py`), which match torch's bit
-for bit and which a backend without a better form wraps (MLX does). The
+the returns and selection recursions (`returns.py`), which both backends'
+`transition_gae` wrap; torch keeps advantage selection on the minibatch's
+device (`selected_rows`, `torch.quantile`), matching `returns.quantile` bit
+for bit. The
 update modules import no framework and no backend at runtime
 (`tests/test_package_boundaries.py` enforces it); the torch types they name
 are annotations only.
