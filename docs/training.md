@@ -342,20 +342,36 @@ phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
 `selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
-outcomes are rows with `deck`, `opponent_deck`, `position` (`play` or `draw`),
-`wins`, `losses` and `draws` in an immutable JSON table under the metric run's
-`artifacts/self-play-outcomes/`. The update's `self_play_outcomes/table` metric
-names its SHA-256 digest. Etude carries these files alongside metrics, including
-for launched jobs; keep the artifacts when copying a run for offline analysis.
-Deck pairs no longer create metric columns, which made background index refreshes
-repeatedly load large matchup histories.
+outcomes are a row table, logged once per update with Etude's
+`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`,
+`opponent_deck`, `position` (`play` or `draw`), `wins`, `losses` and `draws`, so
+deck pairs add rows rather than metric columns. Etude stores the table as an
+immutable JSON file under the metric run's `artifacts/` and carries it with the
+metrics, including for launched jobs; keep `artifacts/` when copying a run for
+offline analysis. Read the rows directly through Etude:
 
-`manabot.training.update_metrics.read_updates` verifies the selected tables and
+```python
+from etude.train.read import read
+
+# The runs directory holding the metric run, its experiment (the stage id
+# unless the experiment names one) and TrainingRun.id.
+history = read(runs_dir, experiment, run_id)
+for table in history.read_table("self_play_outcomes", "updates"):
+    print(table.x, table.rows)
+```
+
+```text
+1.0 ({'deck': 'Elemental', 'opponent_deck': 'Elemental', 'position': 'play', 'wins': 9, 'losses': 7, 'draws': 0}, ...)
+```
+
+`manabot.training.update_metrics.read_updates` reads the same tables and
 projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
-(and `losses`/`draws`) for existing reports. It selects resumed and duplicate
-updates before reading their tables; unreferenced tables supply no results.
-Missing or corrupt referenced tables raise an error. Historical scalar outcome
-metrics remain readable unchanged. Selection and belief
+(and `losses`/`draws`) for existing reports. Etude selects resumed and duplicate
+updates before fetching tables; unreferenced tables supply no results, and a
+missing or damaged selected table raises, naming the file to restore. Historical
+scalar outcome metrics remain readable unchanged. Runs that recorded
+`self_play_outcomes/table` references (written from `1659b0e29`) are refused;
+read them from `bf4e280f7`, the last revision that does. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:
