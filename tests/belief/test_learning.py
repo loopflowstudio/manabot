@@ -178,7 +178,7 @@ def test_population_split_is_by_episode_and_provenance_is_not_packed() -> None:
         dataset.sampling_seed = 0  # type: ignore[misc]
 
 
-def test_supervision_rejects_an_authority_engine_from_another_revision() -> None:
+def test_supervision_matches_hand_and_rejects_another_revision() -> None:
     env, _ = _runtime_env()
     engine = env._engine
     viewer = int(engine.current_agent_index())
@@ -191,14 +191,17 @@ def test_supervision_rejects_an_authority_engine_from_another_revision() -> None
         count_buckets=max(2, max(count for _, count in space.pool) + 1),
     )
 
+    example = capture_materialized_world_supervision(
+        engine, world_space=space, viewer_history=history, schema=schema
+    )
+    hand = tuple(sorted(engine.hand_snapshot(space.opponent).cards.items()))
+    assert space.worlds[example.target_world].hand == hand
+
     class MismatchedAuthority:
         def semantic_observation_json(self, requested_viewer: int) -> str:
             payload = json.loads(engine.semantic_observation_json(requested_viewer))
             payload["identity"]["revision"] += 1
             return json.dumps(payload)
-
-        def observation_for_player(self, player: int):
-            return engine.observation_for_player(player)
 
     with pytest.raises(BeliefError, match="authority revision"):
         capture_materialized_world_supervision(

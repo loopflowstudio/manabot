@@ -264,8 +264,14 @@ Use distinct Python test filenames across test directories: the configured
 pytest import mode shares their module namespace, so duplicate basenames fail
 collection even when the tests pass individually.
 
+Native `PlayerConfig::new` creates a fixed/test setup and bypasses submitted-deck
+admission. Admission-rejection fixtures must mark the config as submitted
+(`submit_to_world`); otherwise an invalid deck can reach game construction.
+
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
-  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  class names are `PyAgentError` / `PanicException`. Catch the former through
+  its public export `managym.AgentError` (there is no `managym.PyAgentError`).
+  Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world

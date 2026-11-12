@@ -3,6 +3,10 @@
 Inherited MTG-271 notes are unrelated background, recoverable at
 `1659b0e290f55daa632ec8f869adff4a3059d79f:scratch/questions.md`.
 
+Sync resolution (2026-11-11): keep this branch's MTG-282 decisions here.
+Main's unrelated MTG-285 release notes remain recoverable at
+`668555c095c61709191ee7c4c59ad767b6903317:scratch/questions.md`.
+
 The documentation step chose the reversible public API
 `managym.LimitedRules(pool=..., max_cards=60).choices(picks=...)`, returning
 `cards` and `can_stop`. Keep the cap separate from Limited's 40-card minimum.

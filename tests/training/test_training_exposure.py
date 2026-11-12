@@ -257,6 +257,9 @@ def test_retention_binds_replay_and_interrupted_prefix(
         def enable_exposure_capture(self) -> None:
             pass
 
+        def current_game_generations(self) -> list[int]:
+            return [0]
+
         def take_exposure(self) -> list[list[str]]:
             rows, self.pending = self.pending, [[]]
             return rows
