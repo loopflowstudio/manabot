@@ -1,4 +1,6 @@
 //! Dictionary discovery of native policy layouts, without constructing an Env.
+// PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
+#![allow(clippy::useless_conversion)]
 use crate::agent::observation_layout::{self as native_layout, ValueLayout};
 use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
 
