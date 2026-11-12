@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
 
+from . import format as format
+
 class PoolDefinition(TypedDict):
     card_def_id: int
     key: str | None
@@ -907,3 +909,9 @@ def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...
+
+class CardPool:
+    """The cards available to a build: supported names and positive counts."""
+    def __init__(self, cards: dict[str, int]) -> None: ...
+    @property
+    def cards(self) -> dict[str, int]: ...

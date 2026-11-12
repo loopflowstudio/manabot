@@ -141,10 +141,6 @@ draws from the training pools. To evaluate a builder, play its deck against
 the human build of the **same held-out pool**, using a fixed reference pilot.
 Evaluate pilot changes separately on fixed trophy lists.
 
-Playing corpus decks requires policy input v8 or later
-(`ObservationConfig(policy_input_version=8)`): earlier inputs reject some of
-their layer effects, which fails a self-play stage once such a card is in play.
-
 To use pools in self-play, give each deck its pool and build:
 
 ```python
