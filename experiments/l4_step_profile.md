@@ -24,6 +24,8 @@ is the CUDA cost.
 Both jobs ran in sequence on one hand-held L4 window: machine
 `l4-etude-6fc061afd2e6`, RunPod pod `jvkaqth5y6wyt9`, 11:27–12:40 UTC on
 2026-11-12. The host was an AMD EPYC 9254 with 48 schedulable CPUs.
+MTG-302 later landed on main as `bf4e280f7` with `manabot/model` identical to
+`54cd65420`, so the bucketed arm measures the code on main.
 
 Cost: RunPod had posted $0.143 when this was written ($0.032 for the first
 attempt's pod `26qog3f0upfmuy`, $0.112 for `jvkaqth5y6wyt9`). The window at the
@@ -245,7 +247,7 @@ At w384l8 the bucketed learner step (402 ms) matches the w160l8 baseline step
   work.
 - **Option 3:** do not pursue. Fixed shapes at maximum capacity cost more GPU
   work than they save in syncs.
-- **MTG-302 (bucketed shapes):** worth keeping. Task `c85f69` moves the switch
+- **MTG-302 (bucketed shapes):** worth keeping. Task MTG-312 moves the switch
   into the typed regime: an Execution field next to `device`, serialized only
   when set so frozen regime hashes do not change, exposed on the CLI and
   recorded in run receipts. It then deletes `MANABOT_BUCKETED_SHAPES`. Making it

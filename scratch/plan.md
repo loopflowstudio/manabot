@@ -32,6 +32,9 @@ with stack attribution, input captures. Stage B offline replays of captured inpu
 - 11:27 UTC rented l4-etude-6fc061afd2e6 / pod jvkaqth5y6wyt9, window to 12:57, max $1.00
 - Done 12:40 UTC: option3 run d8ad784530d7 (src 4a002968e), bucketed run 1999b57daf19 (src e55157ac5 on local
   branch mtg301-bucketed-run, not pushed). Rental terminated; posted billing $0.143, window bound ~$0.80.
-  Evidence published to experiments/data/l4_step_profile; report experiments/l4_step_profile.md; follow-up Task c85f69.
+  Evidence published to experiments/data/l4_step_profile; report experiments/l4_step_profile.md; follow-up Task MTG-312 (c85f69).
 - Compress pass: HEAD's experiments/l4_step_profile.py equals what ran at 4a002968e/e55157ac5 except runs()'s
   `hours` parameter; left unchanged so the merged module stays the evidence.
+- Realign: MTG-302 landed on main as bf4e280f7; `git diff 54cd65420 bf4e280f7 -- manabot/model` is empty, so the
+  bucketed arm measured main's code (noted in the report's runs section). Remaining: push `mtg301-bucketed-run`
+  (questions.md) at publish.
