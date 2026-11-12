@@ -123,6 +123,17 @@ publish, land or choose the next Graph step from here.
   `game_errors` policy (`recover_capacity: true`) of
   `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
   `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+- Served evaluation without a GPU: `evaluate(request, out_dir=...,
+  execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
+  runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting
+  `execution` plays scalar, which never compares ABI hashes. An experiment's
+  `_registration` takes an Etude `Model` whose `checkpoint.key.address` and
+  `artifact.uri` are a `file://` URI with `sha256`/`size_bytes`. To compare
+  with `main`, `git worktree add --detach /private/tmp/<x> <merge-base>`, copy
+  this checkout's `managym/_managym.cpython-313-darwin.so` into it (only when
+  the Rust is unchanged), and run the driver with
+  `PYTHONPATH=/private/tmp/<x>`; use the resolved `/private` path, or
+  `_source()`'s `relative_to(ROOT)` fails. Remove the worktree afterwards.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
