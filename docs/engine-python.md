@@ -48,7 +48,9 @@ from two bundled decks and executes the first legal action, then prints the
 next chooser and whether the game ended. Both seats' choices belong to the
 caller. Forced single-action decisions are skipped by default. See the
 [engine guide](engine.md#choosing-a-python-api) for complete games, batches,
-reset behavior, Commands and hidden-information boundaries.
+reset behavior, Commands and hidden-information boundaries, and
+[encoded observations](engine.md#encoded-observations) for reading the native
+arrays by column name and joining card definition IDs.
 
 ## Add training or migrate an existing project
 

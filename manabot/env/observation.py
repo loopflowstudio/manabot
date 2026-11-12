@@ -485,7 +485,7 @@ class ObservationEncoder:
             row[FACT_VALID_INDEX] = 1.0
             rows.append(row)
 
-        token = managym.learning_token_value
+        token = managym.catalog_token_value
         permanents = [*obs.agent_permanents, *obs.opponent_permanents]
         for perm in permanents:
             if perm.plus1_counters > 0:

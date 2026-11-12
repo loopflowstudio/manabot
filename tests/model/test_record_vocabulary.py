@@ -33,7 +33,7 @@ from manabot.verify.representation import kellan_upgrade_root
 import managym
 
 WIDTH = 8
-_value = managym.learning_token_value
+_value = managym.catalog_token_value
 
 
 @pytest.fixture(scope="module")
@@ -75,7 +75,7 @@ def _fact_encoder() -> FactEncoder:
 
 
 def test_every_record_name_reads_exactly_one_row(cards: SemanticCardEncoder) -> None:
-    names = managym.learning_record_names()
+    names = managym.record_vocabulary()
     rows = []
     for space, name, value, kind, token in names:
         namespace = RecordNamespace[space.upper()]

@@ -165,7 +165,7 @@ def test_cpu_baseline_differs_only_in_device(
 
 @pytest.mark.parametrize(
     "cuda,mps,expected",
-    [(True, True, "cuda"), (False, True, "mps"), (False, False, None)],
+    [(True, True, "cuda"), (False, True, None), (False, False, None)],
 )
 @pytest.mark.parametrize("override", [None, "cpu", "cuda", "mps"])
 @pytest.mark.parametrize("recipe", ["baseline", "local"])
@@ -183,7 +183,9 @@ def test_recipe_and_cli_device_selection(
     assert accelerator() == expected
     selected = override if override is not None else expected
     rejected = recipe == "baseline" and selected in {None, "cpu"}
-    message = "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+    message = (
+        "baseline requires CUDA or an explicit --device mps; use --recipe local for CPU"
+    )
     if rejected:
         with pytest.raises(ValueError, match=message):
             baseline(device=override)
