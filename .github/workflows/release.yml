@@ -11,6 +11,7 @@ on:
       - 'tests/infra/test_release.py'
       - 'release/**'
       - 'pyproject.toml'
+      - 'LICENSE'
       - 'uv.lock'
       - '.github/workflows/release.yml'
   push:

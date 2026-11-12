@@ -33,9 +33,8 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     stage = tmp_path / "stage"
     _load("prepare").prepare(stage)
     config = tomllib.loads((stage / "pyproject.toml").read_text())
-    assert (stage / "pyproject.toml").read_bytes() == (
-        ROOT / "pyproject.toml"
-    ).read_bytes()
+    for name in ("LICENSE", "pyproject.toml", "protocol/experience-v1.schema.json"):
+        assert (stage / name).read_bytes() == (ROOT / name).read_bytes(), name
     assert not any(
         dep.startswith("managym") for dep in config["project"]["dependencies"]
     )
@@ -55,9 +54,6 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert (
         stage / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
     ).is_file()
-    assert (stage / "protocol/experience-v1.schema.json").read_bytes() == (
-        ROOT / "protocol/experience-v1.schema.json"
-    ).read_bytes()
     assert (stage / "manabot/reports/time_cohort.html").is_file()
     assert not (stage / "academy/ui/node_modules").exists()
     assert not (stage / "experiments").exists()
