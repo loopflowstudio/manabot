@@ -107,7 +107,10 @@ def categorical_lambda_returns(
         or not 0 <= trace_lambda <= 1
     ):
         raise ValueError("invalid outcome target shapes or lambda")
-    for distribution in (probabilities, bootstrap):
+    for name, distribution in (
+        ("probabilities", probabilities),
+        ("bootstrap", bootstrap),
+    ):
         if (
             not torch.isfinite(distribution).all()
             or (distribution < 0).any()
@@ -118,7 +121,7 @@ def categorical_lambda_returns(
                 rtol=1e-5,
             )
         ):
-            raise ValueError("outcome probabilities must normalize")
+            raise ValueError(f"outcome {name} must be distributions over 3 outcomes")
     if (
         not torch.isfinite(rewards).all()
         or not ((rewards == -1) | (rewards == 0) | (rewards == 1)).all()

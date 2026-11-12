@@ -71,7 +71,7 @@ of rows and `A` for padded legal offers.
 | --- | --- |
 | `SeatRoutedCollector` (`manabot.training.rollout.collection`) | Owns native game streams. `collect(agent, decisions)` plays with `agent` and returns a `RolloutBatch`; `collect_pair(agent, decisions)` returns one batch per model when `opponent_mode="learning"` and `opponent_agent` is a second learner. `close()` stops the streams. |
 | `RolloutBatch` | One update's rows, `[T,E]`. Complete games are packed into one column separated by end flags. `rewards`, `dones` (an end belongs to that row), `values` (critic at collection), `actions`, `logprobs` (behavior log likelihood of the chosen action), `next_obs` for bootstrapping an unfinished tail, and `outcome_probabilities` `[T,E,3]` for a categorical critic. `observations(indexes)` materializes flat rows as an observation dict and the full behavior distribution. |
-| `AdmittedRollout(agent, batch)` (`manabot.training.learning.learner`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` with their behavior distributions, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
+| `AdmittedRollout(agent, batch)` (`manabot.training.learning.learner`) | Checks a batch's policy input against `agent` once, so the model's forward does no validation. `admit_rows(indexes, chunk_rows)` admits the rows an update will train; `rows(indexes, device)` returns their observations on `device` and an `ActionRows` whose `log_probabilities` `[B,A]` (NumPy) are the behavior log likelihoods a KL or ratio term reads, and raises `ValueError` for a row not admitted. `next_observation(device)` is the bootstrap row of each column. The batch must not change afterwards. |
 
 The opponent is `opponent_mode`: `"self"` (one model, both seats learn by
 default), `"learning"` (two models), `"frozen"` (with `opponent_agent`, only
@@ -126,7 +126,7 @@ loss, so you choose the reduction, mask and weight.
 | --- | --- | --- |
 | `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.rl.returns` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our rules call it once per lambda (policy and value). |
 | `standardized_advantages(advantages, over=None)` | `manabot.rl.returns` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO rule takes the statistics over the rows it trains on. |
-| `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.rl.returns` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). |
+| `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.rl.returns` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). `bootstrap` `[E,3]` is the outcome distribution past each column's last row (read only where it is not an end). |
 | `clipped_surrogate(log_ratio, advantages, clip)` | `manabot.rl.losses` | Negative PPO clipped surrogate (Schulman et al. 2017), with float64 ratios. |
 | `reverse_kl(logs, target_logs, valid)` | `manabot.rl.losses` | KL(current ‖ frozen target) over valid entries. |
 | `squared_value_loss(values, targets)`, `categorical_value_loss(value_logits, targets)` | `manabot.rl.losses` | Scalar squared error; cross entropy of `[B,3]` loss/draw/win logits against target mixtures. |
@@ -265,12 +265,12 @@ def train(
 uv run python -c "from manabot.training.loops.minimal import train; train(3)"
 ```
 
-Three iterations take about 20 seconds on a laptop CPU and return a policy;
+Three iterations take a few seconds on a laptop CPU and return a policy;
 they teach it almost nothing. Keep a run with `save_checkpoint(policy,
 policy.observation_space, "policy.pt", player_configs=Match().to_rust())` from
 `manabot.model.checkpoint`, which binds it to the decks it played, as a
 regime's checkpoint is bound to its setups; `load_checkpoint("policy.pt")`
-reads it back. `tests/training/test_minimal_loop.py`
+returns the policy and its observation space. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,
 then saves and reloads its checkpoint.
 
