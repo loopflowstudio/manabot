@@ -1,4 +1,4 @@
-"""Outside consumers can interpret native arrays by name without changing saved inputs."""
+"""Outside consumers can read native observation arrays by column name."""
 
 import subprocess
 import sys
@@ -7,11 +7,11 @@ from typing import Literal
 import numpy as np
 import pytest
 
-from manabot import managym
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.verify.representation import kellan_upgrade_root
 from manabot.verify.text_observation import priority_root
+import managym
 
 
 @pytest.fixture(scope="module")
@@ -20,23 +20,20 @@ def board() -> tuple[managym.Env, managym.Observation]:
     return env, env.observation_for_player(env.current_agent_index())
 
 
-@pytest.mark.parametrize("version", range(1, 10))
 @pytest.mark.parametrize("history", [0, 1])
 def test_named_layout_matches_native_buffers_and_python_values(
     board: tuple[managym.Env, managym.Observation],
-    version: int,
     history: Literal[0, 1],
 ) -> None:
     env, obs = board
     config = ObservationConfig(
-        policy_input_version=version,
         policy_history_version=history,
         max_cards_per_player=64,
         max_permanents_per_player=44,
         max_events=7,
     )
     space = ObservationSpace(config)
-    layout = managym.observation_layout(version, history_version=history)
+    layout = managym.observation_layout(policy_history=history == 1)
     native = space.encoder.allocate()
     env.encode_observation_into(obs, native)
     reference = space.encode(obs)
@@ -58,7 +55,7 @@ def test_named_layout_matches_native_buffers_and_python_values(
             assert "element" in metadata and "feature" not in metadata["axes"]
         np.testing.assert_array_equal(array, reference[key], err_msg=key)
     if history == 0:
-        scalar = env.encode_observation(obs, version)
+        scalar = env.encode_observation(obs)
         assert scalar.keys() == layout.keys()
         for key, array in scalar.items():
             columns = layout[key]["columns"]
@@ -78,38 +75,30 @@ def test_named_layout_matches_native_buffers_and_python_values(
         assert row[columns["valid"]["index"]] == 1
 
 
-def test_named_layout_distinguishes_tagged_rows_and_history() -> None:
-    v4 = managym.observation_layout(4)
-    v5 = managym.observation_layout(5)
-    v7 = managym.observation_layout(7)
-    v9 = managym.observation_layout(9, history_version=1)
-    assert "permission" not in v4["agent_cards"]["columns"]
-    assert v4["agent_cards"]["columns"]["valid"]["index"] == 40
-    assert v5["agent_cards"]["columns"]["valid"]["index"] == 55
-    assert v5["facts"]["shape"] == [128, 12]
-    assert v7["facts"]["shape"] == [None, 12]
-    assert 6 in v5["facts"]["row_kinds"] and 6 not in v7["facts"]["row_kinds"]
-    assert 14 not in v7["facts"]["row_kinds"] and 14 in v9["facts"]["row_kinds"]
-    assert v7["effect_details"]["shape"] == [512, 3]
-    assert v9["effect_details"]["shape"] == [4096, 3]
-    assert 10 not in v7["relations"]["row_kinds"] and 10 in v9["relations"]["row_kinds"]
-    assert v9["name_candidates"]["columns"]["group_last"]["index"] == 3
-    assert v5["events"]["columns"]["source_id"]["kind"] == "id"
-    assert v9["events"]["columns"]["source_context"]["kind"] == "reference"
-    assert not v9["action_focus"]["columns"]
-    assert v9["action_focus"]["element"]["kind"] == "reference"
+def test_named_layout_describes_tagged_rows_and_history() -> None:
+    raw = managym.observation_layout()
+    history = managym.observation_layout(policy_history=True)
+    assert raw["agent_cards"]["columns"]["valid"]["index"] == 55
+    assert raw["facts"]["shape"] == [None, 12]
+    assert set(raw["facts"]["row_kinds"]) == set(range(1, 15)) - {6}
+    assert raw["effect_details"]["shape"] == [4096, 3]
+    assert set(raw["relations"]["row_kinds"]) == set(range(1, 11))
+    assert raw["name_candidates"]["columns"]["group_last"]["index"] == 3
+    assert raw["events"]["columns"]["source_id"]["kind"] == "id"
+    assert history["events"]["columns"]["source_context"]["kind"] == "reference"
+    assert history.keys() == raw.keys()
+    assert not raw["action_focus"]["columns"]
+    assert raw["action_focus"]["element"]["kind"] == "reference"
 
 
-@pytest.mark.parametrize("version", [-1, 0, 10, 256])
-def test_named_layout_rejects_unsupported_input(version: int) -> None:
-    with pytest.raises(ValueError, match="encoding version"):
-        managym.observation_layout(version)
-
-
-@pytest.mark.parametrize("history", [-1, 2, 256])
-def test_named_layout_rejects_unsupported_history(history: int) -> None:
-    with pytest.raises(ValueError, match="history version"):
-        managym.observation_layout(9, history_version=history)
+def test_named_layout_reads_effect_programs_by_name() -> None:
+    env = kellan_upgrade_root()
+    encoded = env.encode_observation(
+        env.observation_for_player(env.current_agent_index())
+    )
+    details = managym.observation_layout()["effect_details"]
+    kind = details["columns"]["kind"]["index"]
+    assert (encoded["effect_details"][:, kind] >= 11).any()
 
 
 def test_named_layout_discovery_is_torch_free() -> None:
@@ -125,9 +114,8 @@ class NoTorch(importlib.abc.MetaPathFinder):
         if fullname == 'torch' or fullname.startswith('torch.'):
             raise AssertionError('layout discovery imported Torch')
 sys.meta_path.insert(0, NoTorch())
-from manabot import managym
-assert managym.recommended_encoding_version() == 9
-assert managym.observation_layout(9)['agent_permanents']['columns']['definition']['index'] == 24
+import managym
+assert managym.observation_layout()['agent_permanents']['columns']['definition']['index'] == 24
 assert 'torch' not in sys.modules
 """,
         ],
@@ -139,56 +127,16 @@ assert 'torch' not in sys.modules
     assert result.returncode == 0, result.stderr
 
 
-def test_recommended_input_admits_payload_and_keeps_defaults(
-    board: tuple[managym.Env, managym.Observation],
+@pytest.mark.parametrize(
+    "old,new,args",
+    [
+        ("learning_catalog", "catalog_tokens", ()),
+        ("learning_token_value", "catalog_token_value", ("Ally",)),
+        ("learning_record_names", "record_vocabulary", ()),
+    ],
+)
+def test_deprecated_catalog_names_warn_and_delegate(
+    old: str, new: str, args: tuple[str, ...]
 ) -> None:
-    version = managym.recommended_encoding_version()
-    assert version == 9
-    assert ObservationConfig().policy_input_version == 6
-    assert ObservationConfig.from_checkpoint({}).policy_input_version == 1
-    env, obs = board
-    implicit = env.encode_observation(obs)
-    explicit = env.encode_observation(obs, 6)
-    assert implicit.keys() == explicit.keys()
-    for key in implicit:
-        np.testing.assert_array_equal(implicit[key], explicit[key])
-    env = kellan_upgrade_root()
-    obs = env.observation_for_player(env.current_agent_index())
-    for old in range(1, 8):
-        with pytest.raises(ValueError, match=rf"v{old}.*select v8.*recommended.*v9"):
-            env.encode_observation(obs, old)
-    accepted = env.encode_observation(obs, version)
-    assert (accepted["effect_details"][:, 0] >= 11).any()
-    assert "name_candidates" in accepted
-
-
-def test_latest_encoding_version_bounds_layouts() -> None:
-    latest = managym.latest_encoding_version()
-    assert managym.recommended_encoding_version() <= latest
-    assert managym.observation_layout(latest)
-    with pytest.raises(ValueError, match="encoding version"):
-        managym.observation_layout(latest + 1)
-
-
-def test_deprecated_engine_names_warn_and_delegate(
-    board: tuple[managym.Env, managym.Observation],
-) -> None:
-    env, obs = board
-    with pytest.warns(DeprecationWarning, match="encoding_version"):
-        legacy = env.encode_observation(obs, policy_input_version=5)
-    current = env.encode_observation(obs, encoding_version=5)
-    assert legacy.keys() == current.keys()
-    for key in current:
-        np.testing.assert_array_equal(legacy[key], current[key])
-    with pytest.raises(TypeError, match="deprecated alias"):
-        env.encode_observation(obs, 5, policy_input_version=5)
-
-    aliases = {
-        "learning_catalog": managym.catalog_tokens,
-        "learning_token_value": managym.catalog_token_value,
-        "learning_record_names": managym.record_vocabulary,
-    }
-    for old, new in aliases.items():
-        args = ("Ally",) if old == "learning_token_value" else ()
-        with pytest.warns(DeprecationWarning, match=new.__name__):
-            assert getattr(managym, old)(*args) == new(*args)
+    with pytest.warns(DeprecationWarning, match=rf"0\.3\.0.*managym\.{new}"):
+        assert getattr(managym, old)(*args) == getattr(managym, new)(*args)

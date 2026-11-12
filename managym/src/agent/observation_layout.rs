@@ -1,8 +1,20 @@
-//! Named observation-array columns shared by native writes and public discovery.
-//! Frozen prefixes retain their indices; legacy card/permanent validity replaces
-//! the first appended column. Capacities remain the caller's allocation contract.
+//! Named columns of the policy-input encoding, shared by native writes and
+//! public discovery.
+//!
+//! Each `columns!` module is one feature axis: its constants are the column
+//! indices the encoders write (`player::LIFE`, `permanent::DEFINITION`, ...),
+//! `COLUMNS` carries each column's name and value encoding, and `WIDTH` is the
+//! axis width the buffers allocate. [`observation_layout`] assembles them into
+//! the per-array description `managym.observation_layout()` publishes.
+//! Capacities (cards, permanents, actions, events, facts) stay the caller's
+//! allocation contract and are published as `None` extents.
 
 use std::collections::BTreeMap;
+
+use super::{
+    observation_encoder::FactKind,
+    shared_effects::{DETAIL_ROWS, EFFECT_ROWS, MEMBER_ROWS},
+};
 
 /// Stored value semantics, shared by feature columns and scalar array elements.
 #[derive(Clone, Copy, Debug)]
@@ -320,7 +332,7 @@ columns! { history {
 
 columns! { fact {
     0: OBJECT => ("object", ValueLayout::OBJECT_REFERENCE),
-    1: KIND => ("kind", ValueLayout::new("category", "FactKind; see row_kinds", "1..14; 0 padding")),
+    1: KIND => ("kind", ValueLayout::new("category", "FactKind; see row_kinds", "1..14 excluding 6; 0 padding")),
     2: ID_HIGH => ("id_high", ValueLayout::TOKEN_HALF),
     3: ID_LOW => ("id_low", ValueLayout::TOKEN_HALF),
     4: DETAIL_HIGH => ("detail_high", ValueLayout::TOKEN_HALF),
@@ -355,7 +367,7 @@ columns! { effect {
 } }
 
 columns! { detail {
-    0: KIND => ("kind", ValueLayout::new("category", "1 keyword, 2 subtype, 3 color; v8+: 10 + learning TokenKind (1..9)", "0 padding; 1..3 or 11..19")),
+    0: KIND => ("kind", ValueLayout::new("category", "1 keyword, 2 subtype, 3 color; 10 + catalog TokenKind (1..9)", "0 padding; 1..3 or 11..19")),
     1: VALUE_HIGH => ("value_high", ValueLayout::TOKEN_HALF),
     2: VALUE_LOW => ("value_low", ValueLayout::TOKEN_HALF),
 } }
@@ -369,7 +381,7 @@ columns! { relation {
     0: KIND => ("kind", ValueLayout::new("category", "Relation row kind; see row_kinds", "1..10; 0 padding")),
     1: FRAME => ("frame", ValueLayout::new("reference", "Continuation frame index + 1; 0 absent", "nonnegative integers; 0 absent")),
     2: PARENT => ("parent", ValueLayout::new("reference", "Continuation frame index + 1; 0 absent", "nonnegative integers; 0 absent")),
-    3: FRAME_KIND => ("frame_kind", ValueLayout::new("category", "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor; v5+: 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation", "1..14; 0 padding")),
+    3: FRAME_KIND => ("frame_kind", ValueLayout::new("category", "1 spell, 2 activated, 3 triggered, 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger, 8 placing trigger, 9 placement cursor, 10 delayed trigger, 11 scheduled turn, 12 combat, 13 control, 14 delegation", "1..14; 0 padding")),
     4: CONTROLLER => ("controller", ValueLayout::new("category", "1 agent, 2 opponent", "0..2")),
     5: SOURCE_DEFINITION => ("source_definition", ValueLayout::DEFINITION),
     6: SOURCE => ("source", ValueLayout::OBJECT_REFERENCE),
@@ -394,7 +406,7 @@ columns! { relation {
     25: REFERENCE_PLAYER => ("reference_player", ValueLayout::new("category", "0 absent, 1 agent, 2 opponent", "0..2")),
     26: HYBRID_FIRST => ("hybrid_first", ValueLayout::new("category", "Color index + 1; 0 absent", "0..6")),
     27: HYBRID_SECOND => ("hybrid_second", ValueLayout::new("category", "Color index + 1; 0 absent", "0..6")),
-    28: DECISION => ("decision", ValueLayout::new("category", "Frame decision code; v1-v7 retain legacy selection codes 5/6/7, v8+ uses 28. Kind-9 rows: delayed frequency 1 once / 2 each match", "nonnegative integer codes")),
+    28: DECISION => ("decision", ValueLayout::new("category", "Frame decision code. Kind-9 rows: delayed frequency 1 once / 2 each match", "nonnegative integer codes")),
     29: ORDINAL => ("ordinal", ValueLayout::new("reference", "Reference ordinal + 1; kind 10 is effect-execution reference slot", "nonnegative integers; 0 absent")),
     30: RESOLUTIONS_THIS_TURN => ("resolutions_this_turn", ValueLayout::COUNT),
     31: VALID => ("valid", ValueLayout::FLAG),
@@ -416,15 +428,6 @@ columns! { relation {
     47: INDESTRUCTIBLE => ("indestructible", ValueLayout::FLAG),
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
 } }
-
-/// The newest encoding version this engine supports; layouts exist for 1..=it.
-pub const LATEST_ENCODING_VERSION: u8 = 9;
-
-/// The version a new consumer with no saved configuration should pin, resolved
-/// once. It can trail `LATEST_ENCODING_VERSION` while a new version is
-/// unproven, and does not change implicit defaults or saved configurations.
-pub const RECOMMENDED_ENCODING_VERSION: u8 = 9;
-const _: () = assert!(RECOMMENDED_ENCODING_VERSION <= LATEST_ENCODING_VERSION);
 
 #[derive(Clone, Debug)]
 pub struct ArrayLayout {
@@ -471,52 +474,33 @@ impl ArrayLayout {
     }
 }
 
-/// Versioned layout without allocating game buffers. Integers outside the supported
-/// versions are rejected rather than interpreted as a future layout.
-pub fn observation_layout(
-    version: u8,
-    history: u8,
-) -> Result<BTreeMap<String, ArrayLayout>, &'static str> {
-    if !(1..=LATEST_ENCODING_VERSION).contains(&version) {
-        return Err("unsupported encoding version; expected 1..9");
+fn fact_row_kind(kind: FactKind) -> &'static str {
+    match kind {
+        FactKind::Counter => "id: CounterKind token; value: count / 10",
+        FactKind::AddedSubtype => "id: added subtype token; value: 1",
+        FactKind::SetName => "id: set-name token; value: 1",
+        FactKind::SetCreatureType => "id: creature-type token; value: 1",
+        FactKind::UsedAbility => "id: zero-based activated ability index; value: 1",
+        FactKind::Copy => "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2",
+        FactKind::CopyException => "Copy exception: id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
+        FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
+        FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
+        FactKind::EffectProgram => "Copy-exception program: id: Modification token; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal; duration, timestamp, source_definition retain provenance",
+        FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
+        FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
+        FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 catalog token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
     }
-    if history > 1 {
-        return Err("unsupported history version; expected 0 or 1");
-    }
+}
+
+/// Every array `encode` writes, keyed by its buffer name, without allocating
+/// game buffers. `policy_history` selects the public history rows of `events`.
+pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout> {
     let mut layout = BTreeMap::new();
-    let player_columns = if version >= 5 {
-        player::COLUMNS
-    } else {
-        &player::COLUMNS[..player::RESTRICTED_LESSON_WHITE]
-    };
-    let legacy = |columns: &[Column], end: usize| {
-        let mut result = columns[..end].to_vec();
-        result.push(Column {
-            index: end,
-            ..*columns.last().expect("validity column")
-        });
-        result
-    };
-    let card_columns = if version >= 5 {
-        card::COLUMNS.to_vec()
-    } else {
-        legacy(card::COLUMNS, card::PERMISSION)
-    };
-    let permanent_columns = if version >= 5 {
-        permanent::COLUMNS.to_vec()
-    } else {
-        legacy(permanent::COLUMNS, permanent::EXHAUSTED_ABILITIES)
-    };
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
-            ("player", "player", Some(1), player_columns),
-            ("cards", "card", None, card_columns.as_slice()),
-            (
-                "permanents",
-                "permanent",
-                None,
-                permanent_columns.as_slice(),
-            ),
+            ("player", "player", Some(1), player::COLUMNS),
+            ("cards", "card", None, card::COLUMNS),
+            ("permanents", "permanent", None, permanent::COLUMNS),
         ] {
             layout.insert(
                 format!("{side}_{suffix}"),
@@ -537,7 +521,7 @@ pub fn observation_layout(
         ArrayLayout::features(
             &["event"],
             &[None],
-            if history == 1 {
+            if policy_history {
                 history::COLUMNS
             } else {
                 event::COLUMNS
@@ -570,208 +554,135 @@ pub fn observation_layout(
     layout.insert("action_focus".into(), ArrayLayout::elements(&["action", "focus"], &[None, None], "int32", ValueLayout {
         kind: "reference", encoding: "Zero-based padded object-table index; -1 absent. Order: agent player, opponent player, agent cards, opponent cards, agent permanents, opponent permanents", range: "integers >= -1",
     }));
-    if version >= 2 {
-        let width = match version {
-            2 | 3 => relation::LEGAL_AT_RESOLUTION_START,
-            4 => relation::X,
-            _ => relation::WIDTH,
-        };
-        let mut relations = ArrayLayout::features(
-            &["relation"],
-            &[Some(super::continuation::RELATION_ROWS)],
-            &relation::COLUMNS[..width],
-        );
-        relations.row_kinds = BTreeMap::from([
-            (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
-            (2, "Target: clause, ordinal, reference_definition/reference/reference_player; v4+ retains legal_at_resolution_start"),
-            (3, "Event context: reference_definition/reference/reference_player"),
-            (4, "Sacrifice: reference_definition/reference/reference_player"),
-            (5, "Hybrid payment: hybrid_first/hybrid_second are alternative colors"),
-            (6, "Mana output: mode, mana_white..mana_colorless and restricted flag; generic retains header cost"),
-        ]);
-        if version >= 5 {
-            relations.row_kinds.extend([
-                (7, "Inherited ability lender: reference_definition/reference/reference_player"),
-                (8, "Remembered subject: reference_definition/reference/reference_player and ordinal"),
-                (9, "Delayed frequency: decision is 1 once or 2 each match; this_turn is expiry"),
-            ]);
-        }
-        if version >= 8 {
-            relations.row_kinds.insert(10, "Effect execution reference: ordinal is the one-based slot in the continuation program; reference_definition/reference/reference_player identify its visible subject");
-        }
-        layout.insert("relations".into(), relations);
+    let mut relations = ArrayLayout::features(
+        &["relation"],
+        &[Some(super::continuation::RELATION_ROWS)],
+        relation::COLUMNS,
+    );
+    relations.row_kinds = BTreeMap::from([
+        (1, "Frame header; frame_kind describes the unfinished work; other rows repeat this header"),
+        (2, "Target: clause, ordinal, reference_definition/reference/reference_player and legal_at_resolution_start"),
+        (3, "Event context: reference_definition/reference/reference_player"),
+        (4, "Sacrifice: reference_definition/reference/reference_player"),
+        (5, "Hybrid payment: hybrid_first/hybrid_second are alternative colors"),
+        (6, "Mana output: mode, mana_white..mana_colorless and restricted flag; generic retains header cost"),
+        (7, "Inherited ability lender: reference_definition/reference/reference_player"),
+        (8, "Remembered subject: reference_definition/reference/reference_player and ordinal"),
+        (9, "Delayed frequency: decision is 1 once or 2 each match; this_turn is expiry"),
+        (10, "Effect execution reference: ordinal is the one-based slot in the continuation program; reference_definition/reference/reference_player identify its visible subject"),
+    ]);
+    layout.insert("relations".into(), relations);
+    layout.insert(
+        "decklists".into(),
+        ArrayLayout::features(
+            &["viewer_relative_seat", "definition"],
+            &[Some(2), None],
+            decklist::COLUMNS,
+        ),
+    );
+    let mut facts = ArrayLayout::features(&["fact"], &[None], fact::COLUMNS);
+    facts.row_kinds = FactKind::ALL
+        .into_iter()
+        .map(|kind| (kind as u8, fact_row_kind(kind)))
+        .collect();
+    layout.insert("facts".into(), facts);
+    layout.insert(
+        "effects".into(),
+        ArrayLayout::features(&["effect"], &[Some(EFFECT_ROWS)], effect::COLUMNS),
+    );
+    let mut details = ArrayLayout::features(&["detail"], &[Some(DETAIL_ROWS)], detail::COLUMNS);
+    details.row_kinds = BTreeMap::from([
+        (1, "Keyword token in value_high/value_low"),
+        (2, "Subtype token in value_high/value_low"),
+        (3, "Color token in value_high/value_low"),
+    ]);
+    for kind in 11..=19 {
+        details.row_kinds.insert(kind, "Catalog token: TokenKind = kind - 10; exact signed i32 value in value_high/value_low; row order is program order");
     }
-    if version >= 5 {
-        layout.insert(
-            "decklists".into(),
-            ArrayLayout::features(
-                &["viewer_relative_seat", "definition"],
-                &[Some(2), None],
-                decklist::COLUMNS,
-            ),
-        );
-        let mut facts = ArrayLayout::features(
-            &["fact"],
-            &[if version == 5 {
-                Some(super::observation_encoder::V5_FACT_ROWS)
-            } else {
-                None
-            }],
-            fact::COLUMNS,
-        );
-        use super::observation_encoder::FactKind;
-        for kind in FactKind::ALL {
-            if version < 8 && kind as u8 >= FactKind::EffectProgram as u8
-                || version >= 7 && kind == FactKind::Effect
-            {
-                continue;
-            }
-            facts.row_kinds.insert(kind as u8, match kind {
-                FactKind::Counter => "id: CounterKind token; value: count / 10",
-                FactKind::AddedSubtype => "id: added subtype token; value: 1",
-                FactKind::SetName => "id: set-name token; value: 1",
-                FactKind::SetCreatureType => "id: creature-type token; value: 1",
-                FactKind::UsedAbility => "id: zero-based activated ability index; value: 1",
-                FactKind::Effect => "id: Modification token; detail: keyword/subtype/color token or 0; value: power or amount / 10; value_2: toughness / 10; duration, timestamp and source_definition identify record provenance",
-                FactKind::Copy => "id: CopyEffect token; source_definition: copied definition; timestamp: copy rank; duration: 2",
-                FactKind::CopyException => "Copy exception: same columns as a Modification effect, retained even when active effects move to shared arrays",
-                FactKind::Transforms => "id: 0 for permanent, frame index + 1 for captured source; value: unscaled transform count",
-                FactKind::CombatRestriction => "id: frame index + 1; detail: attacker-predicate token",
-                FactKind::EffectProgram => "Copy-exception program: id: Modification token; detail: signed i32 learning token value; value: TokenKind; value_2: zero-based ordinal; duration, timestamp, source_definition retain provenance",
-                FactKind::EffectiveColor => "id: Color token (Colorless for empty colors); value: 1",
-                FactKind::KeywordCounterTimestamp => "id: CounterKind token; timestamp: counter timestamp rank",
-                FactKind::ContinuationProgram => "object: controller; id: frame index + 1; detail: signed i32 learning token value; value: TokenKind; value_2: zero-based ordinal. Source program then effect execution are separate occurrences, each resetting ordinal to 0",
-            });
-        }
-        facts.columns[fact::KIND].value.range = if version < 8 {
-            "1..10; 0 padding"
-        } else {
-            "1..14 excluding 6; 0 padding"
-        };
-        layout.insert("facts".into(), facts);
-    }
-    if version >= 7 {
-        use super::shared_effects::{detail_rows, EFFECT_ROWS, MEMBER_ROWS};
-        layout.insert(
-            "effects".into(),
-            ArrayLayout::features(&["effect"], &[Some(EFFECT_ROWS)], effect::COLUMNS),
-        );
-        let mut details =
-            ArrayLayout::features(&["detail"], &[Some(detail_rows(version))], detail::COLUMNS);
-        details.row_kinds = BTreeMap::from([
-            (1, "Keyword token in value_high/value_low"),
-            (2, "Subtype token in value_high/value_low"),
-            (3, "Color token in value_high/value_low"),
-        ]);
-        if version >= 8 {
-            for kind in 11..=19 {
-                details.row_kinds.insert(kind, "Learning token: TokenKind = kind - 10; exact signed i32 value in value_high/value_low; row order is program order");
-            }
-        } else {
-            details.columns[detail::KIND].value.range = "0 padding; 1..3";
-        }
-        layout.insert("effect_details".into(), details);
-        layout.insert(
-            "effect_members".into(),
-            ArrayLayout::features(&["membership"], &[Some(MEMBER_ROWS)], member::COLUMNS),
-        );
-    }
-    if version >= 9 {
-        layout.insert(
-            "name_candidates".into(),
-            ArrayLayout::features(&["action"], &[None], name::COLUMNS),
-        );
-    }
-    Ok(layout)
+    layout.insert("effect_details".into(), details);
+    layout.insert(
+        "effect_members".into(),
+        ArrayLayout::features(&["membership"], &[Some(MEMBER_ROWS)], member::COLUMNS),
+    );
+    layout.insert(
+        "name_candidates".into(),
+        ArrayLayout::features(&["action"], &[None], name::COLUMNS),
+    );
+    layout
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent::observation_encoder::{ObservationEncodeError, ObservationEncoderConfig};
+    use crate::agent::{
+        observation::KEYWORD_COUNT,
+        observation_encoder::{ObservationEncoderConfig, FACT_DIM},
+    };
 
     #[test]
-    fn named_layout_preserves_every_frozen_width_and_column() {
-        for version in 1..=LATEST_ENCODING_VERSION {
-            for history in 0..=1 {
-                let config = ObservationEncoderConfig {
-                    encoding_version: version,
-                    policy_history: history == 1,
-                    ..Default::default()
-                };
-                let layout = observation_layout(version, history).unwrap();
-                for array in layout.values() {
-                    assert_eq!(array.axes.len(), array.shape.len());
-                    let names: std::collections::BTreeSet<_> =
-                        array.columns.iter().map(|c| c.name).collect();
-                    assert_eq!(names.len(), array.columns.len());
-                    for (index, column) in array.columns.iter().enumerate() {
-                        assert_eq!(column.index, index, "{}", column.name);
-                        assert!(
-                            !column.value.kind.is_empty()
-                                && !column.value.encoding.is_empty()
-                                && !column.value.range.is_empty()
-                        );
-                    }
+    fn named_layout_matches_every_encoder_width() {
+        for policy_history in [false, true] {
+            let config = ObservationEncoderConfig {
+                policy_history,
+                ..Default::default()
+            };
+            let layout = observation_layout(policy_history);
+            for array in layout.values() {
+                assert_eq!(array.axes.len(), array.shape.len());
+                let names: std::collections::BTreeSet<_> =
+                    array.columns.iter().map(|c| c.name).collect();
+                assert_eq!(names.len(), array.columns.len());
+                for (index, column) in array.columns.iter().enumerate() {
+                    assert_eq!(column.index, index, "{}", column.name);
+                    assert!(
+                        !column.value.kind.is_empty()
+                            && !column.value.encoding.is_empty()
+                            && !column.value.range.is_empty()
+                    );
                 }
-                for (key, width, frozen) in [
-                    (
-                        "agent_player",
-                        config.player_dim(),
-                        if version < 5 { 40 } else { 73 },
-                    ),
-                    (
-                        "agent_cards",
-                        config.card_dim(),
-                        if version < 5 { 41 } else { 56 },
-                    ),
-                    (
-                        "agent_permanents",
-                        config.permanent_dim(),
-                        if version < 5 { 29 } else { 38 },
-                    ),
-                    ("actions", super::action::WIDTH, 22),
-                    (
-                        "events",
-                        config.event_dim(),
-                        if history == 0 { 7 } else { 12 },
-                    ),
-                ] {
-                    assert_eq!(layout[key].columns.len(), width);
-                    assert_eq!(width, frozen);
-                }
-                assert_eq!(layout.contains_key("relations"), version >= 2);
-                assert_eq!(layout.contains_key("facts"), version >= 5);
-                assert_eq!(layout.contains_key("decklists"), version >= 5);
-                assert_eq!(layout.contains_key("effects"), version >= 7);
-                assert_eq!(layout.contains_key("name_candidates"), version >= 9);
-                if version >= 2 {
-                    assert_eq!(layout["relations"].columns.len(), config.relation_dim());
-                    assert_eq!(layout["relations"].columns[31].name, "valid");
-                }
-                assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
-                assert_eq!(layout["agent_cards"].columns.last().unwrap().name, "valid");
-                assert_eq!(
-                    layout["agent_permanents"].columns.last().unwrap().name,
-                    "valid"
-                );
+            }
+            // Numeric ABI: changing a width is a layout change that checkpoints see.
+            for (key, width, abi) in [
+                ("agent_player", player::WIDTH, 73),
+                ("agent_cards", card::WIDTH, 56),
+                ("agent_permanents", permanent::WIDTH, 38),
+                ("actions", action::WIDTH, 22),
+                (
+                    "events",
+                    config.event_dim(),
+                    if policy_history { 12 } else { 7 },
+                ),
+                ("relations", relation::WIDTH, 49),
+                ("facts", FACT_DIM, 12),
+                ("effects", effect::WIDTH, 18),
+                ("effect_details", detail::WIDTH, 3),
+                ("effect_members", member::WIDTH, 2),
+                ("name_candidates", name::WIDTH, 4),
+                ("decklists", decklist::WIDTH, 5),
+                ("known_hand", known_hand::WIDTH, 2),
+            ] {
+                assert_eq!(layout[key].columns.len(), width, "{key}");
+                assert_eq!(width, abi, "{key}");
+            }
+            assert_eq!(
+                config.cards_len(),
+                config.max_cards_per_player * layout["agent_cards"].columns.len()
+            );
+            assert_eq!(
+                config.relations_len(),
+                super::super::continuation::RELATION_ROWS * relation::WIDTH
+            );
+            assert_eq!(relation::THIS_TURN - relation::FLYING, KEYWORD_COUNT);
+            assert_eq!(layout["agent_permanents"].columns[24].name, "definition");
+            for key in [
+                "agent_cards",
+                "agent_permanents",
+                "actions",
+                "facts",
+                "effects",
+            ] {
+                assert_eq!(layout[key].columns.last().unwrap().name, "valid", "{key}");
             }
         }
-    }
-
-    #[test]
-    fn recommended_input_keeps_defaults_and_names_recovery() {
-        assert_eq!(RECOMMENDED_ENCODING_VERSION, 9);
-        assert_eq!(ObservationEncoderConfig::default().encoding_version, 6);
-        for error in [
-            ObservationEncodeError::UnsupportedLayerInput(6),
-            ObservationEncodeError::UnsupportedEffectExecutionInput(7),
-        ] {
-            let message = error.to_string();
-            assert!(message.contains("select v8 or later"));
-            assert!(message.contains("recommended for new consumers: v9"));
-        }
-        assert!(observation_layout(0, 0).is_err());
-        assert!(observation_layout(10, 0).is_err());
-        assert!(observation_layout(9, 2).is_err());
     }
 }

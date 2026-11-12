@@ -2,7 +2,7 @@
 // PyO3's #[pyfunction] wrappers trigger false-positive `useless_conversion`.
 #![allow(clippy::useless_conversion)]
 use crate::agent::observation_layout::{self as native_layout, ValueLayout};
-use pyo3::{exceptions::PyValueError, prelude::*, types::PyDict};
+use pyo3::{prelude::*, types::PyDict};
 
 fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py, PyDict>> {
     let value = PyDict::new_bound(py);
@@ -12,27 +12,16 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
     Ok(value)
 }
 
-/// Native column names, encodings and fixed extents of each encoded array.
+/// Column names, value encodings and fixed extents of each encoded array.
 ///
-/// Keys are the encoder's array names for `encoding_version` (1–9) and
-/// `history_version` (0 legacy events, 1 public history). A `None`
-/// extent is a caller-selected capacity. Seats are viewer-relative. Unsupported
-/// versions raise `ValueError`; no game or buffer is created.
+/// Keys are the encoder's array names; `policy_history` selects the public
+/// history rows of `events`. A `None` extent is a caller-selected capacity.
+/// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]
-#[pyo3(signature = (encoding_version, *, history_version=0))]
-fn observation_layout(
-    py: Python<'_>,
-    encoding_version: i64,
-    history_version: i64,
-) -> PyResult<PyObject> {
-    let version = u8::try_from(encoding_version)
-        .map_err(|_| PyValueError::new_err("unsupported encoding version; expected 1..9"))?;
-    let history = u8::try_from(history_version)
-        .map_err(|_| PyValueError::new_err("unsupported history version; expected 0 or 1"))?;
-    let layout =
-        native_layout::observation_layout(version, history).map_err(PyValueError::new_err)?;
+#[pyo3(signature = (*, policy_history=false))]
+fn observation_layout(py: Python<'_>, policy_history: bool) -> PyResult<PyObject> {
     let out = PyDict::new_bound(py);
-    for (key, array) in layout {
+    for (key, array) in native_layout::observation_layout(policy_history) {
         let value = PyDict::new_bound(py);
         value.set_item("axes", array.axes)?;
         value.set_item("shape", array.shape)?;
@@ -53,24 +42,7 @@ fn observation_layout(
     Ok(out.into())
 }
 
-/// The encoding version to pin for a new consumer with no saved configuration.
-///
-/// Resolve it once and save it with the model; it does not change the implicit
-/// v6 default of `encode_observation` or any saved version.
-#[pyfunction]
-fn recommended_encoding_version() -> u8 {
-    native_layout::RECOMMENDED_ENCODING_VERSION
-}
-
-/// The newest encoding version this engine supports; layouts exist for 1 to it.
-#[pyfunction]
-fn latest_encoding_version() -> u8 {
-    native_layout::LATEST_ENCODING_VERSION
-}
-
 pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(observation_layout, module)?)?;
-    module.add_function(wrap_pyfunction!(recommended_encoding_version, module)?)?;
-    module.add_function(wrap_pyfunction!(latest_encoding_version, module)?)?;
     Ok(())
 }

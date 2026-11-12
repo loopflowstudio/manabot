@@ -396,32 +396,30 @@ player may observe, and requires no policy-input version or checkpoint migration
 
 ## Encoded observations
 
-The native encoder turns an observation into NumPy arrays for a selected
-encoding version. manabot stores the same number as
-`ObservationConfig.policy_input_version`, because there the arrays are its
-policy's input. What each version adds, and how manabot's network reads it, is
-in [observations and the policy network](observation-and-model.md#policy-inputs).
+The native encoder turns an observation into NumPy arrays, one layout per
+engine release. manabot reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
+[observations and the policy network](observation-and-model.md#policy-inputs).
 
 ### Reading arrays by name
 
-To read a permanent's card definition without hard-coding column 24, select an
-encoding version and ask the native API for its layout:
+To read a permanent's card definition without hard-coding column 24, ask the
+native API for the layout:
 
 ```python
-from manabot import managym
+import managym
 
-version = managym.recommended_encoding_version()
-layout = managym.observation_layout(version)
+layout = managym.observation_layout()
 definition = layout["agent_permanents"]["columns"]["definition"]
-print(version, definition["index"], definition["kind"])
-# 9 24 id
+print(definition["index"], definition["kind"])
+# 24 id
 print(definition["encoding"])
 # CardDefId + 1; 0 means absent
 ```
 
-With an installed `manabot` package, the same version works with the scalar
-encoder. This example starts a game with fixed decks and reads only valid
-permanent rows (the first decision can have none):
+The scalar encoder writes the arrays the layout describes. This example starts
+a game with fixed decks and reads only valid permanent rows (the first
+decision can have none):
 
 ```python
 game = managym.Env(seed=42)
@@ -429,7 +427,7 @@ observation, info = game.reset([
     managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
     managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
 ])
-arrays = game.encode_observation(observation, encoding_version=version)
+arrays = game.encode_observation(observation)
 valid = arrays["agent_permanents_valid"].astype(bool)
 references = arrays["agent_permanents"][valid, definition["index"]]
 definition_ids = [int(reference) - 1 for reference in references if reference != 0]
@@ -440,23 +438,24 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(encoding_version, *, history_version=0)` returns
-a mapping keyed by the encoder's array names. It requires an explicit supported
-encoding version, 1 to `managym.latest_encoding_version()`. Each array describes its `axes`, `shape` and stored `dtype`;
-a `None` extent in `shape` is a caller-selected capacity, not a default. The seat axis
-is viewer-relative (agent first, opponent second). Feature arrays have a
-`columns` mapping keyed by column name. Each column gives its
-zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish identities
-and references, categorical codes, flags, counts, numeric values and ranks.
-The encoding explains scaling, join targets, index bases and absence sentinels;
-the range describes stored values, including when no fixed bound exists.
-A `tagged` kind needs its row-kind description before preprocessing.
+`observation_layout(*, policy_history=False)` returns a mapping keyed by the
+encoder's array names. Each array describes its `axes`, `shape` and stored
+`dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
+default. The seat axis is viewer-relative (agent first, opponent second).
+Feature arrays have a `columns` mapping keyed by column name. Each column gives
+its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
+identities and references, categorical codes, flags, counts, numeric values and
+ranks. The encoding explains scaling, join targets, index bases and absence
+sentinels; the range describes stored values, including when no fixed bound
+exists. A `tagged` kind needs its row-kind description before preprocessing.
 Tagged fact, relation and effect rows describe meanings conditional on their
 row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
 scalar-valued arrays have empty `columns` and describe their `element` meaning
 without inventing a feature axis. Shared headers own the detail/member slices;
-unused rows are zero. Public event history is bounded to 32 rows, even though
-its allocated event capacity is selected separately.
+unused rows are zero. `policy_history=True` describes the 12-column public
+history rows of `events` instead of the 7-column raw events; public history is
+bounded to 32 rows, even though its allocated event capacity is selected
+separately.
 
 Read the stored encoding before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
@@ -464,50 +463,16 @@ Fact timestamp ranks are stored as ranks; the built-in model divides them by
 128, independently of fact capacity. The layout describes the array values,
 not a blanket normalization to apply to every column.
 
-The layout comes from the native encoder's layout authority, for the selected
-version, without starting a game or importing Torch. It includes only that
-version's arrays. `history_version=1` selects the 12-column public-event
-layout; the default 0 selects the legacy 7-column events. Unsupported versions
-raise `ValueError`. Row capacities are a separate allocation choice: use the
-selected `ObservationSpace.shapes` when allocating caller-owned buffers, and
-retain all its keys. A layout lookup neither allocates buffers nor changes an
-observation or saved configuration.
+The layout comes from the column table the native encoder writes through, so
+it cannot drift from the arrays. Reading it starts no game and imports no
+Torch. Row capacities are a separate allocation choice: use
+`ObservationSpace.shapes` when allocating caller-owned buffers, and retain all
+its keys. Capacity errors need larger buffers and a compatible model; state is
+never truncated.
 
-### Choosing an encoding version
-
-For a new consumer with no saved configuration, use
-`managym.recommended_encoding_version()` and save the returned integer with
-the model and observation configuration. The recommendation is v9: it carries
-v8's composable layer and effect-execution programs plus card-name identities
-and group spans. V8 remains sufficient for those programs but presents naming
-choices without their name identities. The recommendation describes the
-installed engine and can advance in a future release; resolve it once when
-creating new work, not on each observation or checkpoint load.
-
-The recommendation does not change the existing defaults:
-`ObservationConfig()` and `Env.encode_observation(obs)` select v6. Choose
-explicitly for new work: pass `encoding_version=version` to the encoder, or in
-manabot `ObservationConfig(policy_input_version=version)`, and construct the collector
-and model with that same configuration. Keep saved versions and use
-`ObservationConfig.from_checkpoint` when loading; a missing saved version means
-v1. Changing a version changes the model's input contract, so never upgrade a
-checkpoint by editing its version or reshaping its weights.
-
-A legal game state can exceed an older encoding's representational vocabulary.
-Admission errors identify the selected version and a version that represents
-the rejected payload, for example `policy input v6 cannot represent layer
-payload; select v8 or later (recommended for new consumers: v9)`. Preserve the
-failed configuration and evidence, then use the recommended version for a new
-compatible run. Validation happens before
-encoded buffer writes, but does not undo a game action already executed.
-
-Representability does not promise unlimited capacity: even v9 can reject a
-legal board that exceeds its declared rows. Capacity errors require suitable
-buffer capacities and a compatible model, not merely a newer version. Some
-axes are fixed by the version; see
-[policy inputs](observation-and-model.md#policy-inputs). Do not truncate state or
-silently replace a saved policy to recover. World/checkpoint admission remains
-an independent requirement.
+A later engine release can change the layout. Save the package version and
+world identity with collected arrays, and look columns up by name rather than
+by position.
 
 ### Card definition IDs
 
@@ -528,7 +493,6 @@ manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
 
 | Deprecated | Use |
 |---|---|
-| `Env.encode_observation(obs, policy_input_version=…)` | `encoding_version=…` |
 | `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
 | `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
 | `managym.learning_record_names()` | `managym.record_vocabulary()` |
