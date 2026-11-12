@@ -448,8 +448,6 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
     match kind {
         CounterKind::PlusOnePlusOne => "+1/+1",
         CounterKind::MinusOneMinusOne => "-1/-1",
-        CounterKind::Age => "age",
-        CounterKind::Ice => "ice",
         CounterKind::DoubleStrike => "double strike",
         _ => kind.name(),
     }

@@ -2870,8 +2870,6 @@ impl Game {
         library.extend(cards.iter().rev());
     }
 
-    /// Move a library card to the bottom of its owner's library. Not a zone
-    /// change (CR 701.26b-style reorder), so no events fire.
     /// Put each of `cards` still in exile on the bottom of its owner's
     /// library, in a random order (cascade, CR 702.85a).
     pub(crate) fn put_exiled_on_bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
@@ -2883,6 +2881,8 @@ impl Game {
         }
     }
 
+    /// Move a library card to the bottom of its owner's library. Not a zone
+    /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         self.reorder_in_library(card, LibraryEnd::Bottom);
     }

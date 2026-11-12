@@ -1034,7 +1034,7 @@ impl Game {
                     .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
                 _ => None,
             };
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1055,11 +1055,6 @@ impl Game {
                 inline_effects: granted,
                 program,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1249,6 +1244,15 @@ impl Game {
         .remembered = trigger.remembered.clone();
     }
 
+    /// A fresh identity for the trigger occurrence about to be enqueued.
+    fn next_trigger_id(&mut self) -> TriggerId {
+        let id = TriggerId(self.state.trigger_enqueue_counter);
+        *self.state.trigger_enqueue_counter_mut() =
+            id.0.checked_add(1)
+                .expect("trigger occurrence identity exhausted");
+        id
+    }
+
     /// Put an occurrence with inline effects (no `Card::abilities` entry to
     /// reference: a delayed, reflexive or granted-firebending ability) in the
     /// waiting list, with its source's last known information when that was
@@ -1268,7 +1272,7 @@ impl Game {
                     .flatten()
             })
         });
-        let id = TriggerId(self.state.trigger_enqueue_counter);
+        let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
             program: false,
             remembered: Vec::new(),
@@ -1289,11 +1293,6 @@ impl Game {
             attacker: None,
             inline_effects: Some(effects),
         });
-        *self.state.trigger_enqueue_counter_mut() = self
-            .state
-            .trigger_enqueue_counter
-            .checked_add(1)
-            .expect("trigger occurrence identity exhausted");
         self.state
             .pending_triggers_mut()
             .last_mut()
@@ -1334,7 +1333,7 @@ impl Game {
             }
         }
         for (source, ability_index) in fired {
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 program: false,
                 remembered: Vec::new(),
@@ -1355,11 +1354,6 @@ impl Game {
                 attacker: None,
                 inline_effects: None,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1377,7 +1371,6 @@ impl Game {
             .filter(|ability| {
                 let Ability::Triggered { condition, .. } = ability;
                 *condition == TriggerCondition::YouCastThis
-                    && self.trigger_condition_fires(condition, card, caster, false, event)
             })
             .map(|ability| ability.effects().to_vec())
             .collect();
@@ -1410,7 +1403,7 @@ impl Game {
         }
         for (card, ability_index, owner) in fired {
             let source_ref = self.current_object_ref(card);
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 program: false,
                 remembered: Vec::new(),
@@ -1431,11 +1424,6 @@ impl Game {
                 attacker: None,
                 inline_effects: None,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1640,12 +1628,9 @@ impl Game {
                         .position(|cast| cast == card)
                         == Some(*n as usize - 1)
             }
-            (TriggerCondition::NoCounters { .. }, _) => false,
-            // Only `cast_triggers` asks this of the spell itself; a
-            // battlefield source is never the card being cast.
-            (TriggerCondition::YouCastThis, GameEvent::SpellCast { card, .. }) => {
-                *card == source_card
-            }
+            // `check_state_triggers` and `cast_triggers` own these; a
+            // battlefield source never fires them from an event.
+            (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller
                     && self.card_matches_predicate(*card, predicate)

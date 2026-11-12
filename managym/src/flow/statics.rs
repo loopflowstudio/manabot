@@ -379,22 +379,17 @@ impl Game {
         controller: PlayerId,
         view: &Characteristics,
     ) -> u8 {
-        self.layer_views(self.iter_battlefield_permanents(controller))
-            .flat_map(|(_, source)| {
-                source
-                    .static_abilities
-                    .iter()
-                    .filter_map(|ability| match ability {
-                        StaticAbility::ActivatedAbilitiesCostLess { predicate, generic }
-                            if matches_view(self, id, predicate, view, None) =>
-                        {
-                            Some(*generic)
-                        }
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .fold(0u8, u8::saturating_add)
+        let mut total = 0u8;
+        for (_, source) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+            for ability in &source.static_abilities {
+                if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
+                    if matches_view(self, id, predicate, view, None) {
+                        total = total.saturating_add(*generic);
+                    }
+                }
+            }
+        }
+        total
     }
     pub(crate) fn effective_pt(&self, id: PermanentId) -> (i32, i32) {
         self.layer_view(id).pt()

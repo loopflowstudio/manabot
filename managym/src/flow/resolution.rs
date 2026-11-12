@@ -26,6 +26,7 @@ use crate::{
         card::{CardDefId, CardDefinition, Keyword, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
+        mana::ManaCost,
         permanent::{CounterKind, Counters, Permanent},
         predicate::CardPredicate,
         stack_object::{
@@ -1155,9 +1156,7 @@ impl Game {
                     .source_permanent_id(frame)
                     .and_then(|id| self.state.permanents[id].as_ref())?
                     .counter_count(CounterKind::Age);
-                let cost = (0..ages).fold(crate::state::mana::ManaCost::default(), |cost, _| {
-                    cost.plus(each)
-                });
+                let cost = (0..ages).fold(ManaCost::default(), |cost, _| cost.plus(each));
                 Some(Decision::Payment(PaymentProgress::new(
                     frame.controller,
                     PaymentCost::Mana(cost),
