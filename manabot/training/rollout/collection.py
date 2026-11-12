@@ -35,6 +35,7 @@ import torch
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
+from manabot.game_results import CompletedGame, GameSeat
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
@@ -51,7 +52,6 @@ from manabot.sim.rollout import (
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.game_results import CompletedGame, GameSeat
 from manabot.training.precision import forward_precision
 from manabot.training.regime import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
@@ -387,12 +387,8 @@ class SeatRoutedCollector:
                 "adaptive collection requires both-seat current-self, one producer, fixed roots and current-game recovery"
             )
         self._record_result = record_result
-        self._build_episodes = (
-            dict(zip(deck_source.entry_ids, deck_source.build_episodes, strict=True))
-            if deck_source is not None
-            and deck_source.entry_ids is not None
-            and deck_source.build_episodes is not None
-            else {}
+        self._result_seats = (
+            deck_source.seats_by_player() if deck_source is not None else {}
         )
         self._sampler = AdaptiveSampler(adaptive) if adaptive is not None else None
         self._assignments = (
@@ -710,6 +706,10 @@ class SeatRoutedCollector:
             self.stats.self_play = SelfPlayCounter()
         if not hasattr(self.stats, "learned_game_rows"):
             self.stats.learned_game_rows = {}
+
+    def _result_seat(self, player: str) -> GameSeat:
+        pool, build = self._result_seats.get(player, (None, None))
+        return GameSeat(pool=pool, build=build)
 
     def _refresh_roots(self, rows: np.ndarray) -> None:
         """Read native sampling after resets, before counting the next game's rows.
@@ -1287,14 +1287,8 @@ class SeatRoutedCollector:
                         stream=int(row),
                         game=self.stats.games_by_stream[int(row)],
                         seats=(
-                            GameSeat(
-                                entry_id=match.hero,
-                                build_episode=self._build_episodes.get(match.hero),
-                            ),
-                            GameSeat(
-                                entry_id=match.villain,
-                                build_episode=self._build_episodes.get(match.villain),
-                            ),
+                            self._result_seat(match.hero),
+                            self._result_seat(match.villain),
                         ),
                         winner=winner,
                     )

@@ -236,7 +236,8 @@ class Execution(Strict):
 class Stage(Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     execution: Execution = Execution()
-    trains: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Schema-3 model roles: named models this stage updates and reads frozen.
+    trains: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
     frozen: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
@@ -776,20 +777,22 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         f"stage {stage.id}: named models support module and self-play stages"
                     )
-                if stage.trains is not None and stage.trains not in self.models:
-                    raise ValueError(f"stage {stage.id} trains an undeclared model")
-                if len(set(stage.frozen)) != len(stage.frozen) or any(
-                    name not in self.models for name in stage.frozen
+                for role, names in (
+                    ("trained", stage.trains),
+                    ("frozen", stage.frozen),
                 ):
-                    raise ValueError(
-                        f"stage {stage.id}: frozen model names must be declared and unique"
-                    )
-                if stage.trains in stage.frozen:
+                    if len(set(names)) != len(names) or any(
+                        name not in self.models for name in names
+                    ):
+                        raise ValueError(
+                            f"stage {stage.id}: {role} model names must be declared and unique"
+                        )
+                if set(stage.trains) & set(stage.frozen):
                     raise ValueError(
                         f"stage {stage.id}: a model cannot be trained and frozen in one stage"
                     )
                 if isinstance(stage, TrainSelfPlay) and (
-                    stage.trains is None
+                    len(stage.trains) != 1
                     or stage.frozen
                     or stage.pretrained is not None
                     or stage.learning_state is not None
@@ -803,7 +806,7 @@ class TrainingRegime(Strict):
                     "named models must share the observation history contract"
                 )
         elif any(
-            stage.trains is not None or stage.frozen or isinstance(stage, ModuleStage)
+            stage.trains or stage.frozen or isinstance(stage, ModuleStage)
             for stage in self.stages
         ):
             raise ValueError("model roles and module stages require schema 3")
@@ -1003,7 +1006,7 @@ class TrainingRegime(Strict):
 
     def model_for(self, stage: TrainSelfPlay) -> ModelConfig:
         if self.models is not None:
-            if stage.trains is None:
-                raise ValueError("named self-play requires a trained model")
-            return self.models[stage.trains]
+            if len(stage.trains) != 1:
+                raise ValueError("named self-play trains exactly one model")
+            return self.models[stage.trains[0]]
         return self.agent

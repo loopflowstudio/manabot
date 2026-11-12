@@ -1,9 +1,10 @@
-"""Small end-to-end contracts for pools, picking, public results and stage modules."""
+"""Small end-to-end contracts for pools, Limited builds, public results and stage modules."""
 
 from collections.abc import Mapping
 from copy import deepcopy
 import json
 from pathlib import Path
+import subprocess
 import sys
 from types import ModuleType
 
@@ -14,33 +15,47 @@ import torch
 from experiments.tla_corpus import Corpus, GameEvidence, Source, Trophy
 from experiments.tla_pools import derive_pools, main as pools_main
 from manabot import managym
+from manabot.game_results import read_game_results
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import StrictModel, file_sha256
 from manabot.model.checkpoint import load_checkpoint
+from manabot.pools import PoolCorpus
 from manabot.training.decks import UniformDecks
 from manabot.training.execution import execute_regime
-from manabot.training.game_results import read_game_results
-from manabot.training.pools import PoolCorpus
 from manabot.training.regime import ModuleStage, TrainingRegime, TrainSelfPlay
 from manabot.training.stages.contract import StageContext, StageDefinition
 from manabot.training.stages.model_inventory import ModelInventory
 from manabot.verify.store import VerifyStore
 
 
-def test_limited_python_choices_and_malformed_prefixes() -> None:
-    rules = managym.LimitedRules(pool={"Llanowar Elves": 6})
-    assert not rules.choices(picks={"Llanowar Elves": 6, "Forest": 33}).can_stop
-    choices = rules.choices(picks={"Llanowar Elves": 6, "Forest": 34})
-    assert choices.can_stop and "Forest" in choices.cards
-    assert "Llanowar Elves" not in choices.cards
-    assert not rules.check(picks={"Forest": 61})  # Construction is not the cap.
-    assert rules.choices(picks={"Forest": 60}).cards == []
-    for picks in ({"Llanowar Elves": 7}, {"Forest": 0}, {"Ally": 1}, {"Forest": 61}):
+def test_limited_builds_select_from_a_pool_and_reject_bad_input() -> None:
+    pool = managym.CardPool({"Llanowar Elves": 6})
+    limited = managym.format.Limited()
+    build = limited.build(pool)
+    for _ in range(6):
+        build.select("Llanowar Elves")
+    with pytest.raises(ValueError, match="not selectable"):
+        build.select("Llanowar Elves")
+    assert build.deck == {"Llanowar Elves": 6}  # A rejected selection changes nothing.
+    for _ in range(34):
+        build.select("Forest")
+    assert build.can_stop and "Forest" in build.selectable
+    assert limited.issues(pool, build.deck) == []
+    assert limited.issues(pool, {"Forest": 61}) == []  # Construction is not the cap.
+    assert limited.issues(pool, {"Llanowar Elves": 7, "Forest": 40})
+    capped = limited.build(pool, max_cards=40)
+    for _ in range(40):
+        capped.select("Forest")
+    assert capped.selectable == [] and capped.can_stop
+    assert set(limited.basic_cards()) >= {"Forest", "Island"}
+    with pytest.raises(ValueError):
+        limited.build(pool, max_cards=39)
+    for cards in ({"Ally": 1}, {"Not a Card": 1}, {"Forest": 0}):
         with pytest.raises(ValueError):
-            rules.choices(picks=picks)
-    for count in (True, 1.5, -1, "2"):
-        with pytest.raises((ValueError, TypeError, OverflowError)):
-            managym.LimitedRules(pool={"Forest": count})
+            managym.CardPool(cards)
+    for count in (True, 1.5, -1, 0, "2"):
+        with pytest.raises(ValueError, match="Forest: count"):
+            managym.CardPool({"Forest": count})
 
 
 def _pool_source(event_ids: tuple[str, ...] = ("a", "b", "c")) -> Corpus:
@@ -80,7 +95,7 @@ def _pool_source(event_ids: tuple[str, ...] = ("a", "b", "c")) -> Corpus:
     )
 
 
-def test_pool_derivation_preserves_events_references_and_frozen_split(
+def test_pool_derivation_keeps_drafts_human_builds_and_frozen_split(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -101,73 +116,70 @@ def test_pool_derivation_preserves_events_references_and_frozen_split(
     corpus = derive_pools(path, held_out=1)
     assert derive_pools(path, held_out=1) == corpus
     assert path.read_bytes() == before
-    assert len(corpus.entries) == 3
-    assert len(corpus.held_out_event_ids) == 1
-    assert all(entry.pool == {"Llanowar Elves": 10} for entry in corpus.entries)
-    assert [sum(entry.reference.main.values()) for entry in corpus.entries] == [
-        40,
-        40,
-        41,
-    ]
-    assert corpus.entries[0].reference == corpus.entries[1].reference
-    assert corpus.entries[0].entry_id != corpus.entries[1].entry_id
-    output = tmp_path / "pools-v1" / "corpus.json"
+    assert [pool.id for pool in corpus.pools] == ["a", "b", "c"]
+    assert sum(pool.split == "held_out" for pool in corpus.pools) == 1
+    assert all(pool.cards == {"Llanowar Elves": 10} for pool in corpus.pools)
+    assert [sum(pool.human_build.values()) for pool in corpus.pools] == [40, 40, 41]
+    assert corpus.pools[0].human_build == corpus.pools[1].human_build
+    assert corpus.provenance.human_build_indexes == {"a": 1, "b": 1, "c": 1}
+    output = tmp_path / "pools-v2" / "corpus.json"
     monkeypatch.setattr(
         sys, "argv", ["tla_pools", str(path), str(output), "--held-out", "1"]
     )
     pools_main()
     with pytest.raises(SystemExit, match="choose a new versioned path"):
         pools_main()
-    restored = PoolCorpus.read(output)
-    assert restored.digest == corpus.digest
-    assert len(restored.population("train").decks) == 2
-    assert len(restored.population("held_out").decks) == 1
-    damaged = corpus.model_dump(mode="json")
-    damaged["held_out_event_ids"] = ["missing"]
-    with pytest.raises(ValueError, match="held-out"):
-        PoolCorpus.model_validate(damaged)
+    assert PoolCorpus.read(output).digest == corpus.digest
+    for damage in (
+        lambda c: c["pools"][0].update(
+            split="train" if c["pools"][0]["split"] == "held_out" else "held_out"
+        ),
+        lambda c: c["pools"][0]["human_build"].update({"Llanowar Elves": 11}),
+        lambda c: c["pools"][0]["cards"].update({"Forest": 1}),
+    ):
+        damaged = corpus.model_dump(mode="json")
+        damage(damaged)
+        with pytest.raises(ValueError):
+            PoolCorpus.model_validate(damaged)
 
 
-def test_pool_exclusions_preserve_source_split_without_backfilling(
+def test_unknown_cards_stay_in_their_pools_without_moving_the_split(
     tmp_path: Path,
 ) -> None:
     source = _pool_source(("a", "b", "c", "d"))
     path = tmp_path / "source.json"
     path.write_text(source.model_dump_json())
     complete = derive_pools(path, held_out=2)
-    excluded = {
-        complete.held_out_event_ids[0],
-        next(e.event_id for e in complete.entries if e.split == "train"),
-    }
+    unknown = {"a", "c"}
     payload = source.model_dump(mode="json")
     for trophy in payload["trophies"]:
-        if trophy["event_id"] in excluded:
+        if trophy["event_id"] in unknown:
             trophy["decklist"] = managym.Decklist(
                 "Main\n40 Forest\n1 Unknown main card\nSideboard\n1 Unknown sideboard card\n"
             ).to_dict()
     path.write_text(json.dumps(payload))
-    before = path.read_bytes()
     corpus = derive_pools(path, held_out=2)
-    assert path.read_bytes() == before
-    assert len(corpus.entries) == 2
-    assert corpus.held_out_event_ids == complete.held_out_event_ids[1:]
-    assert {e.event_id: e.split for e in corpus.entries} == {
-        e.event_id: e.split for e in complete.entries if e.event_id not in excluded
+    assert [p.split for p in corpus.pools] == [p.split for p in complete.pools]
+    assert corpus.pools[0].cards == {
+        "Unknown main card": 1,
+        "Unknown sideboard card": 1,
     }
-    assert corpus.provenance.source_event_count == 4
-    assert corpus.provenance.held_out_count == 2
-    assert {e.event_id for e in corpus.provenance.excluded_events} == excluded
-    assert all(
-        e.unknown_names == ("Unknown main card", "Unknown sideboard card")
-        for e in corpus.provenance.excluded_events
+    assert corpus.pools[0].human_build == {"Forest": 40, "Unknown main card": 1}
+    playable = [
+        p.id
+        for p in corpus.pools
+        if not managym.unsupported_cards([*p.cards, *p.human_build])
+    ]
+    assert playable == ["b", "d"]
+
+
+def test_pool_and_result_types_import_no_engine_or_training() -> None:
+    probe = (
+        "import sys; import manabot.pools, manabot.game_results; "
+        "loaded = [m for m in sys.modules if m.startswith(('manabot.managym', "
+        "'manabot.training', 'manabot.model', 'torch'))]; assert not loaded, loaded"
     )
-    output = tmp_path / "pools.json"
-    output.write_text(corpus.model_dump_json())
-    assert PoolCorpus.read(output) == corpus
-    damaged = corpus.model_dump(mode="json")
-    damaged["provenance"]["excluded_events"].pop()
-    with pytest.raises(ValueError, match="cover the source"):
-        PoolCorpus.model_validate(damaged)
+    subprocess.run([sys.executable, "-c", probe], check=True)
 
 
 def test_pool_derivation_does_not_exclude_malformed_lists(
@@ -198,8 +210,8 @@ def _tiny_regime() -> TrainingRegime:
         ),
         deck_source=UniformDecks(
             decks=(managym.Deck({"Forest": 10}), managym.Deck({"Forest": 10})),
-            entry_ids=("event-a", "event-b"),
-            build_episodes=(None, "build-b-1"),
+            pools=("pool-a", "pool-a"),
+            builds=(None, "build-a-1"),
             sampling="uniform-independent-v1",
         ),
         schedule_clock="iteration_fraction",
@@ -231,12 +243,9 @@ def test_self_play_without_recovery_emits_public_game_rows(tmp_path: Path) -> No
     assert len(results) == run.stages[0].games == 2
     assert {(row.stream, row.game) for row in results} == {(0, 1), (1, 1)}
     for row in results:
-        assert row.on_play == 0 and row.winner in (0, 1, None)
+        assert row.winner in (0, 1, None)
         for seat in row.seats:
-            assert seat.entry_id in ("event-a", "event-b")
-            assert seat.build_episode == (
-                "build-b-1" if seat.entry_id == "event-b" else None
-            )
+            assert seat.pool == "pool-a" and seat.build in (None, "build-a-1")
     assert not any(key in path.read_text() for key in ("actions", "seed", "matchup"))
 
 
@@ -263,7 +272,7 @@ def test_two_models_execute_module_and_preserve_legacy_serialization(
             ModuleStage(
                 id="inspect",
                 module="manabot.training.stages.model_inventory",
-                trains="builder",
+                trains=("builder",),
                 frozen=("pilot",),
             )
         ]
@@ -277,9 +286,12 @@ def test_two_models_execute_module_and_preserve_legacy_serialization(
     output = ModelInventory.model_validate_json(
         Path(run.stages[0].artifacts["result"]["path"]).read_bytes()
     )
-    assert output.trainable_parameters == output.frozen_parameters["pilot"] > 0
+    assert output.trainable_parameters["builder"] == output.frozen_parameters["pilot"]
+    assert output.frozen_parameters["pilot"] > 0
+    assert set(run.selected_models) == {"builder"}
     for change in (
-        {"trains": "missing"},
+        {"trains": ("missing",)},
+        {"trains": ("builder", "builder")},
         {"frozen": ("builder",)},
         {"inputs": {"future": "later"}},
     ):
@@ -297,9 +309,8 @@ def test_modules_exchange_typed_artifacts_and_cannot_mutate_frozen_owner(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     def train(context: StageContext, inputs: Mapping[str, BaseModel]) -> WeightReceipt:
-        assert context.trainable is not None
         with torch.no_grad():
-            next(context.trainable.parameters()).fill_(3)
+            next(context.trainable["builder"].parameters()).fill_(3)
             next(context.frozen["pilot"].parameters()).fill_(99)
         return WeightReceipt(value=3)
 
@@ -326,7 +337,10 @@ def test_modules_exchange_typed_artifacts_and_cannot_mutate_frozen_owner(
         monkeypatch.setitem(sys.modules, name, module)
     stages = [
         ModuleStage(
-            id="train", module="foundation.train", trains="builder", frozen=("pilot",)
+            id="train",
+            module="foundation.train",
+            trains=("builder",),
+            frozen=("pilot",),
         ),
         ModuleStage(
             id="consume",
@@ -339,7 +353,7 @@ def test_modules_exchange_typed_artifacts_and_cannot_mutate_frozen_owner(
     with VerifyStore(tmp_path / "store.sqlite") as store:
         run = execute_regime(regime, 12, tmp_path / "run", store)
     assert run.status == "completed"
-    model, _ = load_checkpoint(run.stages[0].artifacts["raw"]["path"])
+    model, _ = load_checkpoint(run.stages[0].artifacts["raw/builder"]["path"])
     assert next(model.parameters()).flatten()[0].item() == 3
     assert run.stages[1].inputs["weights"] == run.stages[0].artifacts["result"]
     with pytest.raises(ValueError, match="earlier"):
@@ -376,7 +390,7 @@ def test_named_self_play_keeps_its_model_and_exports_by_name(tmp_path: Path) -> 
     source = _tiny_regime()
     play = source.stages[0]
     assert isinstance(play, TrainSelfPlay)
-    play.trains = "pilot"
+    play.trains = ("pilot",)
     regime = TrainingRegime(
         schema_version=3,
         id="named-play",
@@ -404,3 +418,50 @@ def test_named_self_play_keeps_its_model_and_exports_by_name(tmp_path: Path) -> 
         len(read_game_results(Path(run.stages[0].artifacts["game_results"]["path"])))
         == 2
     )
+
+
+def test_joint_module_stage_trains_several_models(tmp_path: Path) -> None:
+    regime = _named_regime(
+        [
+            ModuleStage(
+                id="joint",
+                module="manabot.training.stages.model_inventory",
+                trains=("builder", "pilot"),
+            )
+        ]
+    )
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        run = execute_regime(regime, 12, tmp_path / "run", store)
+    assert run.status == "completed"
+    assert run.selected_models == {
+        name: run.stages[0].artifacts[f"raw/{name}"] for name in ("builder", "pilot")
+    }
+    play = _tiny_regime().stages[0]
+    assert isinstance(play, TrainSelfPlay)
+    play.trains = ("builder", "pilot")
+    with pytest.raises(ValueError, match="one trained model"):
+        _named_regime([play])
+
+
+def test_pooled_deck_sources_require_unique_aligned_builds() -> None:
+    decks = (managym.Deck({"Forest": 40}), managym.Deck({"Forest": 40}))
+    source = UniformDecks(
+        decks=decks,
+        pools=("p", None),
+        builds=(None, None),
+        sampling="uniform-independent-v1",
+    )
+    assert source.seats_by_player() == {"p": ("p", None)}
+    for pools, builds in (
+        (("p", "p"), (None, None)),
+        ((None, None), ("b", None)),
+        (("p",), (None,)),
+        (("p", "q"), None),
+    ):
+        with pytest.raises(ValueError):
+            UniformDecks(
+                decks=decks,
+                pools=pools,
+                builds=builds,
+                sampling="uniform-independent-v1",
+            )

@@ -13,16 +13,17 @@ from manabot.training.stages.contract import StageContext, StageDefinition
 
 
 class ModelInventory(StrictModel):
-    trainable_parameters: int
+    trainable_parameters: dict[str, int]
     frozen_parameters: dict[str, int]
 
 
 def execute(context: StageContext, inputs: Mapping[str, BaseModel]) -> ModelInventory:
     context.check()
     return ModelInventory(
-        trainable_parameters=sum(p.numel() for p in context.trainable.parameters())
-        if context.trainable is not None
-        else 0,
+        trainable_parameters={
+            name: sum(p.numel() for p in model.parameters())
+            for name, model in context.trainable.items()
+        },
         frozen_parameters={
             name: sum(p.numel() for p in model.parameters())
             for name, model in context.frozen.items()

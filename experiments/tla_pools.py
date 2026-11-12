@@ -1,4 +1,9 @@
-"""Derive the Limited corpus from retained trophy events, never a fresh scrape."""
+"""Derive the TLA pool corpus from retained trophy drafts, never a fresh scrape.
+
+Every source draft becomes a pool, including drafts with cards the installed
+engine does not define: playability is a consumer's filter, so defining more
+cards never moves a pool between splits. Malformed lists fail derivation.
+"""
 
 import argparse
 from collections import Counter
@@ -8,13 +13,20 @@ from experiments.tla_corpus import Corpus
 from manabot import managym
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
-from manabot.training.pools import (
-    PoolCorpus,
-    PoolEntry,
-    PoolExclusion,
-    PoolProvenance,
-    held_out_events,
-)
+from manabot.pools import Pool, PoolCorpus, PoolProvenance, held_out_ids
+
+
+def _entries(event_id: str, decklist: managym.Decklist) -> list[managym.DeckEntry]:
+    """Parsed entries of unchanged source text; only unknown names may fail."""
+    # Reparse: historical admission issues are evidence, not current diagnostics.
+    reparsed = managym.Decklist(decklist.source, decklist.filename)
+    try:
+        managym.admit_decklists([(event_id, reparsed)])
+    except managym.DeckImportError as error:
+        issues = error.decklists[event_id].issues
+        if not issues or any(i.code != "unknown" for i in issues):
+            raise
+    return reparsed.entries
 
 
 def derive_pools(source_path: Path, held_out: int = 100) -> PoolCorpus:
@@ -23,61 +35,32 @@ def derive_pools(source_path: Path, held_out: int = 100) -> PoolCorpus:
         raise ValueError(
             "retained source does not contain its entire selected population"
         )
-    if not 0 < held_out < source.target:
+    ids = [t.event_id for t in source.trophies]
+    if len(set(ids)) != len(ids):
+        raise ValueError("source draft ids must be unique")
+    if not 0 < held_out < len(ids):
         raise ValueError(
-            "held-out count must leave nonempty training and evaluation partitions"
+            "held-out count must leave nonempty training and evaluation splits"
         )
-    event_ids = [t.event_id for t in source.trophies]
-    if len(set(event_ids)) != len(event_ids):
-        raise ValueError("source event IDs must be unique")
-    held_out_ids = held_out_events(event_ids, held_out)
-    basics = set(managym.LimitedRules.basic_cards())
-    entries: list[PoolEntry] = []
-    exclusions: list[PoolExclusion] = []
+    evaluation = held_out_ids(ids, held_out)
+    basics = managym.format.Limited.basic_cards()
+    pools: list[Pool] = []
     for trophy in source.trophies:
-        # Reparse unchanged text: historical admission issues are evidence, not
-        # current eligibility. Only unknown names qualify for this exclusion.
-        try:
-            [imported] = managym.admit_decklists(
-                [
-                    (
-                        trophy.event_id,
-                        managym.Decklist(
-                            trophy.decklist.source, trophy.decklist.filename
-                        ),
-                    )
-                ]
-            )
-        except managym.DeckImportError as error:
-            issues = error.decklists[trophy.event_id].issues
-            if not issues or any(
-                i.code != "unknown" or i.card_name is None for i in issues
-            ):
-                raise
-            exclusions.append(
-                PoolExclusion(
-                    event_id=trophy.event_id,
-                    unknown_names=tuple(
-                        sorted({i.card_name for i in issues if i.card_name is not None})
-                    ),
-                )
-            )
-            continue
-        counts = Counter(imported.deck.main) + Counter(imported.deck.sideboard)
-        entries.append(
-            PoolEntry(
-                event_id=trophy.event_id,
-                entry_id=trophy.source_id,
-                pool={
-                    name: count
-                    for name, count in sorted(counts.items())
-                    if name not in basics
-                },
-                reference=managym.Deck(imported.deck.main),
-                split="held_out" if trophy.event_id in held_out_ids else "train",
+        entries = _entries(trophy.event_id, trophy.decklist)
+        main: Counter[str] = Counter()
+        cards: Counter[str] = Counter()
+        for entry in entries:
+            cards[entry.name] += entry.count
+            if entry.section == "main":
+                main[entry.name] += entry.count
+        pools.append(
+            Pool(
+                id=trophy.event_id,
+                cards={n: c for n, c in sorted(cards.items()) if n not in basics},
+                human_build=dict(sorted(main.items())),
+                split="held_out" if trophy.event_id in evaluation else "train",
             )
         )
-    excluded_ids = {entry.event_id for entry in exclusions}
     return PoolCorpus(
         provenance=PoolProvenance(
             source_corpus_sha256=file_sha256(source_path),
@@ -85,13 +68,13 @@ def derive_pools(source_path: Path, held_out: int = 100) -> PoolCorpus:
             url=source.source.url,
             attribution=source.source.attribution,
             license=source.source.license,
-            source_event_count=source.target,
             held_out_count=held_out,
-            excluded_events=tuple(exclusions),
+            basic_lands=tuple(basics),
+            human_build_indexes={
+                t.event_id: t.games[-1].build_index for t in source.trophies
+            },
         ),
-        world=managym.world_identity(),
-        held_out_event_ids=tuple(e for e in held_out_ids if e not in excluded_ids),
-        entries=tuple(entries),
+        pools=tuple(pools),
     )
 
 
@@ -108,14 +91,12 @@ def main() -> None:
     try:
         corpus = derive_pools(args.source, args.held_out)
     except managym.DeckImportError as error:
-        # Native diagnostics retain the event, source line and rejection reason.
+        # Native diagnostics retain the draft, source line and rejection reason.
         raise SystemExit(f"No corpus written: {error}") from None
     args.out.parent.mkdir(parents=True, exist_ok=True)
     atomic_json(args.out, corpus.model_dump(mode="json"))
-    print(
-        f"{len(corpus.entries)} events; {len(corpus.held_out_event_ids)} held out; "
-        f"{len(corpus.provenance.excluded_events)} excluded; sha256={corpus.digest}"
-    )
+    held = sum(pool.split == "held_out" for pool in corpus.pools)
+    print(f"{len(corpus.pools)} pools; {held} held out; sha256={corpus.digest}")
 
 
 if __name__ == "__main__":

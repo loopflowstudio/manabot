@@ -76,7 +76,7 @@ regime runs.
 
 ## Regimes and stages
 
-For Limited pool/reference pairs, public per-game attribution and stages with
+For Limited pools and their human builds, public per-game results and stages with
 separate trainable and frozen models, see [deck building](deck-building.md).
 
 A `TrainingRegime` (`manabot.training.regime`) is an ordered recipe; a

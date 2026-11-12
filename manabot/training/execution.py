@@ -28,6 +28,7 @@ from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.env.failures import CaptureScope, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
+from manabot.game_results import CompletedGame
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.host import host_facts
@@ -42,7 +43,6 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.game_results import CompletedGame, GameResultWriter
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
 from manabot.training.outcome_tables import OUTCOME_TABLE_METRIC, write_outcomes
@@ -65,6 +65,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.result_journal import GameResultWriter
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.selection_data import (
@@ -938,9 +939,10 @@ def _execute_regime(
                     record.inputs[name] = dict(item)
                     module_inputs[name] = Path(item["path"])
                 context = StageContext(
-                    trainable=named_model(stage.trains).to(stage.execution.device)
-                    if stage.trains
-                    else None,
+                    trainable={
+                        name: named_model(name).to(stage.execution.device)
+                        for name in stage.trains
+                    },
                     frozen={
                         name: deepcopy(named_model(name))
                         .to(stage.execution.device)
@@ -954,18 +956,19 @@ def _execute_regime(
                 record.artifacts["result"] = artifact(
                     definition.run(context, module_inputs)
                 )
-                if context.trainable is not None:
-                    target = context.directory / "raw.pt"
+                # Each trained model passes ordinary checkpoint admission.
+                for name, model in context.trainable.items():
+                    target = context.directory / f"{name}.pt"
                     temporary = target.with_suffix(".partial")
                     save_checkpoint(
-                        context.trainable,
+                        model,
                         space,
                         temporary,
                         player_configs=_checkpoint_setups(regime),
                     )
                     temporary.replace(target)
                     load_checkpoint(str(target))
-                    record.artifacts["raw"] = artifact(target)
+                    record.artifacts[f"raw/{name}"] = artifact(target)
             elif isinstance(stage, ImportPolicy):
                 tick = time.perf_counter()
                 record.inputs = {
@@ -1212,8 +1215,8 @@ def _execute_regime(
                 else:
                     torch.manual_seed(seeds["initialization"])
                     agent = (
-                        named_model(stage.trains).to(stage.execution.device)
-                        if stage.trains is not None
+                        named_model(stage.trains[0]).to(stage.execution.device)
+                        if stage.trains
                         else ActorCritic(space, stage_model).to(stage.execution.device)
                     )
                     if stage.initial_weights is not None:
@@ -1758,8 +1761,10 @@ def _execute_regime(
             stages_by_id = {stage.id: stage for stage in regime.stages}
             for completed_stage in run.stages:
                 spec = stages_by_id[completed_stage.id]
-                if spec.trains is not None and "raw" in completed_stage.artifacts:
-                    run.selected_models[spec.trains] = completed_stage.artifacts["raw"]
+                for name in spec.trains:
+                    key = "raw" if isinstance(spec, TrainSelfPlay) else f"raw/{name}"
+                    if key in completed_stage.artifacts:
+                        run.selected_models[name] = completed_stage.artifacts[key]
         else:
             completed_models = [
                 item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts

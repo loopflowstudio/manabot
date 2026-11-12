@@ -62,3 +62,31 @@ The 78 exclusions contain 41 distinct unknown names. Publishing with the
 documented Doppler `manabot/prd` environment succeeded; an empty-cache remote
 restore matched the manifest and loaded both populations. No open question
 remains for implementation; broad validation belongs to gate.
+
+## Docs assumptions after concept review — 2026-11-11 (headless, reversible)
+
+- Plain types live at `manabot/pools.py` (`PoolCorpus`, `Pool`) and
+  `manabot/game_results.py` (`read_game_results`, row types): "beside
+  managym", importing no engine, training, torch or model code.
+- New corpus path `experiments/data/mtg282/pools-v2/corpus.json`.
+- `Pool` fields: `id` (17Lands draft id), `cards`, `human_build`, `split`;
+  the seventh-win build index is provenance.
+- Self-play seats get `{pool, build}` from new aligned `UniformDecks.pools`
+  and `UniformDecks.builds`, replacing this branch's unmerged
+  `build_episodes`; (pool, build) unique; `entry_ids` unchanged. A deck with
+  no pool reports `pool: null`.
+- `CardPool` rejects unsupported cards and non-positive counts at
+  construction; `build.select` outside `selectable` raises `ValueError` and
+  leaves the build unchanged; `limited.basic_cards()` retained for batched
+  builders (answer 5 default).
+- 4a: `ModuleStage.trains` is a tuple of names; self-play still trains
+  exactly one; a model may not be both trained and frozen in one stage.
+
+## Implementation assumptions — 2026-11-11 (headless, reversible)
+
+- The engine-free reader needs basic-land names to check human builds, so
+  derivation records them in `provenance.basic_lands`.
+- Pooled players without `entry_ids` are named `pool` or `pool/build`; the
+  collector joins result seats by player name.
+- Module stages export each trained model as artifact `raw/<name>`.
+- `CardPool` count errors name the card (binding parses counts itself).

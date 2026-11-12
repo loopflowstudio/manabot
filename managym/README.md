@@ -7,7 +7,8 @@ bundled with the `manabot` distribution; `import managym` remains a compatibilit
 alias. Rust sources stay in this directory.
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
-pool counts, unlimited basics, legal next picks and when stopping is legal.
+`CardPool` holds the cards available, `format.Limited` holds the rules, and a
+build started from both reports the selectable cards and when stopping is legal.
 Format rules live in `src/format/` (`format::limited`); they build on the
 definitions, decklists and world admission in `src/cards/`.
 
@@ -30,7 +31,7 @@ are in the [README](../README.md#contracts-the-code-enforces).
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
    and their tests, reached by the engine only through `managym_cards::catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
-5. **`src/format/`**: Format construction rules and picking interfaces;
+5. **`src/format/`**: Format construction rules and card selection;
    `limited.rs` adds Limited pool counts and deck size rules to world admission
 6. **`src/infra/`**: Logging and profiler infrastructure
 7. **`src/python/`**: PyO3 bindings and Rust→Python conversions

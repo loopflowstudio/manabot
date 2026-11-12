@@ -10,7 +10,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use pyo3::{
     exceptions::PyValueError,
     prelude::*,
-    types::{PyDict, PyModule, PyType},
+    types::{PyBool, PyDict, PyModule, PyType},
 };
 use serde::{de::DeserializeOwned, Serialize};
 
@@ -23,7 +23,7 @@ use crate::{
             DeckImport, Decklist, DecklistError,
         },
     },
-    format::limited::{basic_lands, LimitedChoices, LimitedRules, DEFAULT_PICK_CAP},
+    format::limited::{basic_lands, CardPool, Limited, LimitedBuild, DEFAULT_BUILD_CAP},
     state::deck::Deck,
 };
 
@@ -315,38 +315,92 @@ fn admit_decklists(
     native_admit_decklists(&decklists).map_err(|e| decklist_error(py, e))
 }
 
+/// Names and positive integer counts, each malformed count named by its card.
+fn card_counts(cards: &Bound<'_, PyDict>) -> PyResult<BTreeMap<String, usize>> {
+    cards
+        .iter()
+        .map(|(name, count)| {
+            let name: String = name.extract()?;
+            let parsed = if count.is_instance_of::<PyBool>() {
+                None
+            } else {
+                count.extract::<usize>().ok().filter(|&n| n > 0)
+            };
+            parsed
+                .map(|n| (name.clone(), n))
+                .ok_or_else(|| value_error(format!("{name}: count must be a positive integer")))
+        })
+        .collect()
+}
+
 #[pymethods]
-impl LimitedRules {
+impl CardPool {
     #[new]
-    #[pyo3(signature = (pool, max_cards=DEFAULT_PICK_CAP))]
-    fn py_new(pool: &Bound<'_, PyAny>, max_cards: usize) -> PyResult<Self> {
-        Self::new(from_python(pool)?, max_cards).map_err(value_error)
+    fn py_new(cards: &Bound<'_, PyDict>) -> PyResult<Self> {
+        Self::new(card_counts(cards)?).map_err(value_error)
     }
 
-    #[pyo3(name = "choices")]
-    fn py_choices(&self, picks: &Bound<'_, PyAny>) -> PyResult<LimitedChoices> {
-        self.choices(&from_python(picks)?).map_err(value_error)
+    #[getter(cards)]
+    fn py_cards(&self) -> BTreeMap<String, usize> {
+        self.cards().clone()
     }
 
-    #[pyo3(name = "check")]
-    fn py_check(&self, picks: &Bound<'_, PyAny>) -> PyResult<Vec<DeckIssue>> {
-        Ok(self.check(&from_python(picks)?))
+    fn __repr__(&self) -> String {
+        format!("CardPool({:?})", self.cards())
+    }
+}
+
+#[pymethods]
+impl Limited {
+    #[new]
+    fn py_new() -> Self {
+        Self
+    }
+
+    #[pyo3(name = "build", signature = (pool, max_cards=DEFAULT_BUILD_CAP))]
+    fn py_build(&self, pool: &CardPool, max_cards: usize) -> PyResult<LimitedBuild> {
+        self.build(pool.clone(), max_cards).map_err(value_error)
+    }
+
+    #[pyo3(name = "issues")]
+    fn py_issues(&self, pool: &CardPool, deck: &Bound<'_, PyAny>) -> PyResult<Vec<DeckIssue>> {
+        Ok(self.issues(pool, &from_python(deck)?))
     }
 
     #[staticmethod]
     fn basic_cards() -> Vec<String> {
         basic_lands().into_iter().collect()
     }
+
+    fn __repr__(&self) -> &'static str {
+        "Limited()"
+    }
 }
 
 #[pymethods]
-impl LimitedChoices {
+impl LimitedBuild {
+    #[pyo3(name = "select")]
+    fn py_select(&mut self, card: &str) -> PyResult<()> {
+        self.select(card).map_err(value_error)
+    }
+
+    #[getter]
+    fn selectable(&self) -> Vec<String> {
+        self.selection().cards
+    }
+
+    #[getter]
+    fn can_stop(&self) -> bool {
+        self.selection().can_stop
+    }
+
+    #[getter(deck)]
+    fn py_deck(&self) -> BTreeMap<String, usize> {
+        self.deck().clone()
+    }
+
     fn __repr__(&self) -> String {
-        format!(
-            "LimitedChoices(cards={:?}, can_stop={})",
-            self.cards,
-            if self.can_stop { "True" } else { "False" }
-        )
+        format!("LimitedBuild(deck={:?})", self.deck())
     }
 }
 
@@ -356,8 +410,12 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
         "MAX_DECKLIST_BYTES",
         crate::cards::decklist::MAX_SOURCE_BYTES,
     )?;
-    m.add_class::<LimitedRules>()?;
-    m.add_class::<LimitedChoices>()?;
+    m.add_class::<CardPool>()?;
+    // `managym.format` mirrors `src/format/`: rules, not the cards available.
+    let format = PyModule::new_bound(py, "format")?;
+    format.add_class::<Limited>()?;
+    format.add_class::<LimitedBuild>()?;
+    m.add_submodule(&format)?;
     m.add_class::<Deck>()?;
     m.add_class::<DeckIssue>()?;
     m.add_class::<DeckEntry>()?;

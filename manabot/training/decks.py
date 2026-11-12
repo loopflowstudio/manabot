@@ -30,9 +30,11 @@ from managym import Deck
 class UniformDecks(StrictModel):
     """Uniform population entries in experiment order, with explicit pair semantics.
 
-    Independent sampling keeps duplicate lists from different source events as
-    separate entries. Optional stable entry IDs distinguish those events in game
-    receipts; deck content identity remains owned by `Deck`.
+    Independent sampling keeps duplicate lists from different sources as
+    separate entries. Optional stable entry IDs distinguish them in game
+    receipts; deck content identity remains owned by `Deck`. Optional aligned
+    `pools` and `builds` name each deck's pool and build (None: the human
+    build) for public game results; a deck without a pool has pool None.
     """
 
     decks: tuple[Deck, ...] = Field(min_length=1)
@@ -44,20 +46,35 @@ class UniformDecks(StrictModel):
         default=None,
         exclude_if=lambda value: value is None,
     )
-    build_episodes: tuple[str | None, ...] | None = Field(
+    pools: tuple[str | None, ...] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    builds: tuple[str | None, ...] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
 
     @model_validator(mode="after")
     def valid_population(self) -> UniformDecks:
-        if self.build_episodes is not None and (
-            self.entry_ids is None
-            or len(self.build_episodes) != len(self.decks)
-            or any(
-                value is not None and not value.strip() for value in self.build_episodes
-            )
-        ):
-            raise ValueError("build episodes require aligned population entry IDs")
+        if (self.pools is None) != (self.builds is None):
+            raise ValueError("pools and builds are declared together")
+        if self.pools is not None and self.builds is not None:
+            if len(self.pools) != len(self.decks) or len(self.builds) != len(
+                self.decks
+            ):
+                raise ValueError("pools and builds must align with decks")
+            if any(
+                value is not None and not value.strip()
+                for value in (*self.pools, *self.builds)
+            ):
+                raise ValueError("pool and build ids must be nonempty")
+            if any(
+                pool is None and build is not None
+                for pool, build in zip(self.pools, self.builds, strict=True)
+            ):
+                raise ValueError("a build requires its pool")
+            pooled = [pair for pair in self.seats() if pair[0] is not None]
+            if len(set(pooled)) != len(pooled):
+                raise ValueError("each (pool, build) pair must be unique")
         if self.sampling == "uniform-distinct-v1" and (
             len(self.decks) < 2
             or len({deck.identity for deck in self.decks}) != len(self.decks)
@@ -82,12 +99,34 @@ class UniformDecks(StrictModel):
         """Admit every deck in the current world before any root is allocated."""
         admit_world_decks(self.players())
 
+    def seats(self) -> list[tuple[str | None, str | None]]:
+        """Each deck's (pool, build), in population order."""
+        if self.pools is None or self.builds is None:
+            return [(None, None)] * len(self.decks)
+        return list(zip(self.pools, self.builds, strict=True))
+
     def players(self) -> list[managym.PlayerConfig]:
+        """Native setups; their names are what game results join back on."""
         players = [deck.player() for deck in self.decks]
         if self.entry_ids is not None:
-            for player, name in zip(players, self.entry_ids, strict=True):
+            names: list[str | None] = list(self.entry_ids)
+        else:
+            names = [
+                None if pool is None else pool if build is None else f"{pool}/{build}"
+                for pool, build in self.seats()
+            ]
+        for player, name in zip(players, names, strict=True):
+            if name is not None:
                 player.name = name
         return players
+
+    def seats_by_player(self) -> dict[str, tuple[str, str | None]]:
+        """Pooled decks' (pool, build) by native player name."""
+        return {
+            player.name: (pool, build)
+            for player, (pool, build) in zip(self.players(), self.seats(), strict=True)
+            if pool is not None
+        }
 
     def match_config(self) -> MatchConfig:
         """A representative root; sampled roots come from the native draw."""

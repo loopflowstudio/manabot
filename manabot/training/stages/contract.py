@@ -1,7 +1,7 @@
 """Typed module-stage boundary: declared JSON artifacts and scoped model access.
 
 Modules export a `STAGE` definition. Recipe admission resolves artifact types
-before execution. Only a stage's named trainable model is passed live; frozen
+before execution. Only a stage's named trainable models are passed live; frozen
 readers receive detached copies, so their parameters and buffers cannot mutate
 the models owned by the run.
 """
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class StageContext:
-    trainable: "ActorCritic | None"
+    trainable: Mapping[str, "ActorCritic"]
     frozen: Mapping[str, "ActorCritic"]
     directory: Path
     check: Callable[[], None]
