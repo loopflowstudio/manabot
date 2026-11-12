@@ -4,13 +4,29 @@ Apple Silicon only (the optional `mlx` extra); elsewhere the module is skipped.
 Whole-policy parity on real checkpoints is `manabot.model.mlx.parity`.
 """
 
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 import torch
 
 mx = pytest.importorskip("mlx.core")
 
-from manabot.model.mlx.checkpoint import mlx_parameters, torch_to_mlx  # noqa: E402
+from mlx.utils import tree_flatten  # noqa: E402
+
+from manabot.env.match import Match  # noqa: E402
+from manabot.env.observation import ObservationSpace  # noqa: E402
+from manabot.infra.config import MatchConfig, ModelConfig  # noqa: E402
+from manabot.model.actor_critic import ActorCritic  # noqa: E402
+from manabot.model.checkpoint import save_checkpoint  # noqa: E402
+from manabot.model.mlx.checkpoint import (  # noqa: E402
+    convert,
+    convert_state,
+    load_mlx_policy,
+    mlx_parameters,
+    torch_to_mlx,
+)
 from manabot.model.mlx.model import (  # noqa: E402
     ObjectAttention,
     PackedGRU,
@@ -88,3 +104,65 @@ def test_sequential_children_move_under_layers() -> None:
     assert list(torch_to_mlx("value_head.5.weight", weight, 2)) == [
         "value_head.layers.5.weight"
     ]
+
+
+def _converted(tmp_path: Path) -> tuple[Path, Path, ActorCritic]:
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            world="ur-lessons-vs-gw-allies",
+            value_aggregation="masked_mean",
+        ),
+    )
+    original = tmp_path / "policy.pt"
+    match = Match(
+        MatchConfig.authored("ur-lessons-vs-gw-allies", "ur_lessons", "gw_allies")
+    )
+    save_checkpoint(agent, space, original, player_configs=match.to_rust())
+    target, tensors = convert(original)
+    assert tensors == len(agent.state_dict())
+    return original, target, agent
+
+
+def test_converted_checkpoint_is_one_file_carrying_the_original_source(
+    tmp_path: Path,
+) -> None:
+    original, target, agent = _converted(tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == [
+        "policy.mlx.safetensors",
+        "policy.pt",
+    ]
+    _, metadata = mx.load(str(target), return_metadata=True)
+    source = torch.load(original, weights_only=False)["source"]
+    assert json.loads(metadata["source"]) == source
+    assert metadata["converted_from"] == str(original)
+
+    policy, _ = load_mlx_policy(target)
+    state = {k: v.detach().numpy() for k, v in agent.state_dict().items()}
+    expected, _ = convert_state(state, agent.config.hidden_dim)
+    loaded = dict(tree_flatten(policy.parameters()))
+    assert set(loaded) == set(expected)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(np.array(loaded[key]), value)
+
+
+def test_a_refused_converted_checkpoint_names_the_original_revision(
+    tmp_path: Path,
+) -> None:
+    _, target, _ = _converted(tmp_path)
+    arrays, metadata = mx.load(str(target), return_metadata=True)
+    metadata["source"] = json.dumps(
+        {"commit": "7c1e9a2", "dirty": False, "etude_run": "3a1380d9"}
+    )
+    binding = json.loads(metadata["world_binding"])
+    binding["input_schema"]["agent_permanents"]["shape"] = [40, 37]
+    metadata["world_binding"] = json.dumps(binding)
+    mx.save_safetensors(str(target), arrays, metadata=metadata)
+    with pytest.raises(ValueError) as refused:
+        load_mlx_policy(target)
+    assert "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in str(
+        refused.value
+    )

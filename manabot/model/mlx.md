@@ -13,7 +13,6 @@ uv run --extra mlx python -m manabot.model.mlx.convert .runs/example/checkpoint.
 ```text
 read   .runs/example/checkpoint.pt  (180 tensors)
 wrote  .runs/example/checkpoint.mlx.safetensors
-wrote  .runs/example/checkpoint.mlx.json
 ```
 
 ```python
@@ -25,7 +24,8 @@ logits, values = policy(policy.prepare(observation, inference=True))
 ```
 
 `load_mlx_policy` validates the same world binding as
-`manabot.model.checkpoint.load_checkpoint` and fails with the same errors.
+`manabot.model.checkpoint.load_checkpoint` and fails with the same errors; a
+refusal names the revision that wrote the original torch checkpoint.
 `observation` is the dictionary of numpy buffers `VectorEnv` already produces,
 admitted as for the PyTorch policy; `prepare` does every integer lookup
 (definition rows, record vocabulary, legal actions, packed GRU schedules,
@@ -71,9 +71,11 @@ float64 (the GPU has none); the two differ only for |log ratio| > 88.
 
 ## Checkpoint conversion
 
-The converter writes a [safetensors](https://huggingface.co/docs/safetensors)
-file of float32 arrays and a JSON sidecar holding the checkpoint's model,
-observation and world configuration. Two layouts differ between the frameworks
+The converter writes one [safetensors](https://huggingface.co/docs/safetensors)
+file of float32 arrays. Its metadata holds the checkpoint's model, observation
+and world configuration, its architecture receipt and the `source` record of
+the revision that wrote it, as JSON strings, and the torch file it was
+converted from under `converted_from`. Three layouts differ between the frameworks
 and are mapped explicitly:
 
 - **Attention.** PyTorch's `nn.MultiheadAttention` packs query, key and value

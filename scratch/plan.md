@@ -14,7 +14,11 @@ Steers (quoted in full in .lf/prompts): comment e43e505b (MPS learner arm at w16
 comment f6ed5b35 ("Stop running MLX or torch on the laptop ... the rented M2 ... is the only place this Task executes code").
 Before that steer, early parity development and one smoke run ran on the laptop; everything after ran on the M2.
 
-Remaining: rebase onto main before landing (report links experiments/cuda_precision.md, which is on origin/main only).
+Single-file conversion (2026-11-12): done as directed below; `convert` returns (path, tensors), `converted_path` one path;
+two new tests (round-trip, refusal names original revision). M2: 5 passed; local boundary test: 10 passed.
+
+Remaining: delivery only (publish/review/land). Branch is merged with origin/main (0 behind on 2026-11-12), so the
+report's link to experiments/cuda_precision.md resolves.
 Remote state: ~/mlx-pilot/{manabot,venv,capture (12 GB),bench,report} on the M2; owner releases the host.
 
 Compress (2026-11-12): one parameter mapping `mlx_parameters` (checkpoint.py) now serves conversion, parity's
@@ -22,3 +26,25 @@ one-step comparison and the GRU test; `require_supported` raises; `attend`/`pack
 dead `PackedGRU.compiled` and `prepare` leftovers removed. On the M2: 3 tests passed; parity pass with identical
 numbers (step max |Δ| 9.43e-5, update cosine 0.944017); convert + load_mlx_policy round-trip ok.
 experiments/mlx_pilot.py left as measured.
+
+## Concept review (2026-11-12, headless)
+
+People see three actions: `convert` a torch checkpoint, `load_mlx_policy` the result, run `parity` on a capture.
+The concepts behind them are right (a converted checkpoint is a derived artifact of one torch checkpoint;
+parity is the gate; MLXLearner measures and never writes). One mismatch, settled by the existing design:
+
+- **The converted checkpoint loses its provenance.** `convert` writes the sidecar key `"source": str(checkpoint)`
+  (a local path), replacing the checkpoint's own `source` record (`checkpoint_source()`: commit, dirty, etude_run).
+  `load_mlx_policy` passes that sidecar to `validate_checkpoint_world`, whose `written_at` then reads a string and
+  says "it records no source revision". So mlx.md's claim that it "fails with the same errors" as
+  `load_checkpoint` is false for exactly the case CLAUDE.md requires (a refusal names the writing revision).
+- **Next implement direction:** make the converted checkpoint one file. Store `hypers`, `world_binding`,
+  `architecture` and the checkpoint's `source` record as JSON strings in the safetensors metadata
+  (`mx.save_safetensors(..., metadata=...)`; read back with `mx.load(..., return_metadata=True)`), and the torch
+  path under a separate key (`converted_from`). Drop the `.mlx.json` sidecar and the name-substitution lookup;
+  `converted_paths` returns one path. Update mlx.md's convert output and the test round-trip; add a directed test
+  that a converted checkpoint with a mismatched world binding names the original revision. No re-measurement:
+  timings and parity do not touch this path. Published capture metadata is evidence and stays as written.
+
+Noted, not changed: `parity` reads a capture format written by `experiments/mlx_pilot.py capture`; the format is
+documented in parity's docstring. Moving the writer into the package would edit the measured experiment file.

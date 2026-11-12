@@ -2,7 +2,7 @@
 
     uv run --extra mlx python -m manabot.model.mlx.convert CHECKPOINT.pt
 
-Writes `<stem>.mlx.safetensors` and `<stem>.mlx.json` beside the checkpoint
+Writes `<stem>.mlx.safetensors` beside the checkpoint
 (`manabot.model.mlx.checkpoint.convert`).
 """
 
@@ -16,10 +16,9 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint", type=Path)
     args = parser.parse_args(argv)
-    weights, sidecar, tensors = convert(args.checkpoint)
+    target, tensors = convert(args.checkpoint)
     print(f"read   {args.checkpoint}  ({tensors} tensors)")
-    print(f"wrote  {weights}")
-    print(f"wrote  {sidecar}")
+    print(f"wrote  {target}")
 
 
 if __name__ == "__main__":

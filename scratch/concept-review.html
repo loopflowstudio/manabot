@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-321 concept review</title>
+<style>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--code:#f0ede6;--prop:#2d6a4f}
+@media(prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--code:#2a2825;--prop:#74c69d}}
+body{font:16px/1.55 system-ui,sans-serif;color:var(--fg);background:var(--bg);max-width:44rem;margin:2rem auto;padding:0 1rem}
+code,pre{font:13px/1.45 ui-monospace,monospace;background:var(--code)}pre{padding:.7rem;overflow-x:auto}
+.mute{color:var(--mute)}.prop{border-left:3px solid var(--prop);padding-left:.8rem}
+</style>
+<p class="mute">MTG-321 · concept-review (headless) · 2026-11-12 · built from manabot/model/mlx/checkpoint.py, manabot/model/world.py, manabot/model/mlx.md, scratch/plan.md</p>
+<h1>Decision: make the converted checkpoint one file that keeps its source revision</h1>
+<h2>Actions → concepts → APIs</h2>
+<p><b>convert</b> a torch checkpoint → converted checkpoint (derived artifact) → <code>convert(path)</code><br>
+<b>load</b> it for inference or learning → MLX policy + observation space → <code>load_mlx_policy(path)</code><br>
+<b>gate</b> on agreement → parity report → <code>python -m manabot.model.mlx.parity</code></p>
+<h2>Biggest mismatch (existing behaviour)</h2>
+<pre>sidecar = {"hypers": ..., "world_binding": ..., "architecture": ...,
+           "source": str(checkpoint)}          # a path, replacing {commit, dirty, etude_run}
+validate_checkpoint_world(sidecar, space)    # refusal: "it records no source revision"</pre>
+<p>The guide says <code>load_mlx_policy</code> fails with the same errors as <code>load_checkpoint</code>. On a world mismatch it cannot name the revision to run from.</p>
+<div class="prop"><h2>Proposed</h2>
+<pre>checkpoint.mlx.safetensors   # arrays + metadata: hypers, world_binding,
+                             # architecture, source (unchanged), converted_from</pre>
+<p>One file, no sidecar lookup; a mismatch names the original revision. A directed test covers it. No timing or parity rerun.</p></div>
+<h2>Questions</h2>
+<ol><li>None open: the repository rule already settles this (a refusal names the revision that wrote the checkpoint).</li></ol>
+</html>
