@@ -26,6 +26,13 @@ On CPU, `tests/model/test_live_tokens.py` checks logits, values and gradients
 against the padded path within 1e-5, alone and over buckets, with masked-mean
 and value-token critics, and that collection packs with its host-measured count.
 
+Attention runs as `scaled_dot_product_attention` over jagged nested tensors,
+which dispatches to fused variable-length kernels on CUDA; the tensors are built
+with host `min_seqlen`/`max_seqlen` bounds so dispatch reads nothing back from
+the device. `flex_attention` (block masks, compiled) was not measured. Learning
+reads the packed-token count back once per forward (`nonzero`); collection
+measures it on the host while preparing the batch and reads nothing.
+
 ## Results
 
 **Answer.** Yes. At w384l8 on an L4, live tokens over bucketed shapes take the
@@ -93,7 +100,7 @@ USD 0.24 (launcher), one L4 for 17 minutes of job time, under the USD 3 cap.
 
 - One rented L4, one in-situ update, two replay passes per arm. Timings are of
   retained inputs replayed in separate processes, not of a whole training run.
-- Packing reads the live-object count on the host once per learning forward.
+- Packing reads the live-token count on the host once per learning forward.
   It is included in the learner step above. Collection takes the count from
   host preparation.
 - The CPU path is correct but slow (per-observation attention), so the layout
@@ -104,6 +111,35 @@ USD 0.24 (launcher), one L4 for 17 minutes of job time, under the USD 3 cap.
 Build out live tokens. The pilot passes its pre-registered rule: the
 bucketed-live learner step is 0.52 of bucketed's at w384l8, below the 0.67 bar,
 with outputs equal within float tolerance.
+
+## What a default for larger models would take
+
+Recommended as its own Task, not done here. Today live tokens run only where a
+training stage's collection and learner policies set `Execution.live_tokens`;
+evaluation and search build their policies without it and still attend over
+padded tables. Making it the default for larger models needs:
+
+- **A device rule.** On CPU, jagged attention falls back to per-observation math
+  attention: correct, but slow. Either the default applies to CUDA only, or a
+  CPU stage that asks for it is refused rather than silently slowed.
+- **Adoption by evaluation and search**, so the layout a model trains with is
+  the one it is evaluated and searched with, and their cost falls with it.
+- **The w160l8 collection question.** At w160l8, collection over full tables was
+  faster than over buckets (2.4 s against 2.9 s per pass), while the learner
+  step favoured buckets. Whether a default should skip bucket trimming for
+  collection at small widths needs a measurement that separates the trimming
+  cost; this pilot did not.
+
+It composes with bucketed shapes, so the default can be both together.
+
+## What MTG-306's pooled stream becomes
+
+Recommendation: strip `token_stream="pooled"`, in its own Task. Its only benefit
+was attending over fewer tokens; live tokens deliver that per observation
+without padding every observation to a common width, and the two are mutually
+exclusive (a configuration that asks for both is rejected). Keeping it would
+mean maintaining a second reduced-attention layout that the faster one
+supersedes.
 
 <details><summary>Appendix: run and evidence</summary>
 

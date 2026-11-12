@@ -409,7 +409,7 @@ class ActorCritic(nn.Module):
         """
         capacity = obs["actions_valid"].shape
         # Trimming keeps every valid object, so the count holds for buckets too.
-        live = obs.live_objects if isinstance(obs, PreparedObservation) else None
+        live = obs.live_token_count if isinstance(obs, PreparedObservation) else None
         buckets = None
         if self.bucketed_shapes:
             obs, buckets = self._bucketed(obs)
@@ -446,7 +446,7 @@ class ActorCritic(nn.Module):
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
 
-    def live_object_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
+    def live_token_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
         """Host count of the tokens live-token attention packs for CPU `obs`.
 
         Valid table objects, belief rows and their global row, and one value

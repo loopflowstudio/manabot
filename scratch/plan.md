@@ -14,7 +14,7 @@
 - Embeddings, links, facts, shared effects, catalog, focus joins and critic stay on the
   (optionally bucket-trimmed) table. Composes with `bucketed_shapes`.
 - Host reads: collection counts live tokens on the CPU batch in `PolicyInference.prepare`
-  (`PreparedObservation.live_objects`) and packs with `nonzero_static`; learning uses
+  (`PreparedObservation.live_token_count`) and packs with `nonzero_static`; learning uses
   `nonzero` (one read per forward).
 - `historical_mean` works unchanged (padding comes back zero).
 - CPU: NJT SDPA falls back to per-observation math (correct, slow). Docs say so; no
@@ -42,6 +42,48 @@
   `test_head_to_head` x2 (needs `--extra evaluation`); `test_active_recovery` and
   `test_learning_state` pass alone. The full suite is left to CI.
 
+## Concept review (2026-11-12): next implement direction
+
+The code and the pilot match the design. The report does not yet answer every
+part of the Task's Outcome, and one name doesn't match what it counts.
+
+1. **Report: what the default for larger models would take** (Outcome 3, not
+   yet answered). Add a short section after Decision. Facts already
+   established: the layout runs only where a stage's collection/learner
+   policies use it; evaluation and search don't; on CPU it falls back to
+   per-observation math; it composes with `bucketed_shapes`; at w160l8,
+   collection on full tables beat bucketed-live (2.4 s vs 2.9 s), which this
+   pilot did not separate. State what a default flip requires (CUDA-only or a
+   CPU path that refuses, evaluation and search adoption, the w160 collection
+   question) as a recommendation. Don't build it here.
+2. **Report: what MTG-306's pooled stream becomes** (Outcome 3, not yet
+   answered). The evidence points toward stripping it: its only benefit was
+   attending over fewer tokens, which live tokens deliver per observation
+   without its common-width padding; the two are mutually exclusive.
+   Recommend strip-or-keep with that reason, and leave the removal to its own
+   Task.
+3. **Report: primitives and host reads** (Outcome 1). The design reasoning is
+   in `live_tokens.py` and the docs, but not in the report. Add two or three
+   sentences to Method: jagged-NJT `scaled_dot_product_attention` (fused
+   varlen kernels on CUDA, `min_seqlen`/`max_seqlen` given so dispatch reads
+   nothing) against `flex_attention` (block masks, compile required; say
+   why it wasn't chosen only if that was actually established, otherwise just
+   say it wasn't measured), and the one host read per learning forward.
+4. **Name the count for what it counts.** `PreparedObservation.live_objects` and
+   `ActorCritic.live_object_count` count live *tokens* (valid objects, belief
+   rows plus their global row, value tokens), not objects. Rename them to
+   `live_token_count` (field and method), and update the docstrings in
+   `inference.py`/`live_tokens.py` and `tests/model/test_live_tokens.py`.
+   These are internal names, not published ones, so no alias is needed.
+
+No open product choice: whether to flip the default or strip pooled happens in
+later Tasks; this Task only reports a recommendation for each.
+
 ## Remaining
 
-- Nothing for the outcome. Publishing and CI belong to the caller.
+- Items 1–4 done: report has Method primitives/host-read sentences, "What a default
+  for larger models would take" and "What MTG-306's pooled stream becomes" (strip, own
+  Task); count renamed to `live_token_count` (field and method, no alias).
+  `pytest tests/model/test_live_tokens.py tests/training/test_bucketed_execution.py`:
+  13 passed (the bucketed test lives under `tests/training/`).
+- Publishing and CI belong to the caller.

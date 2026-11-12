@@ -108,7 +108,8 @@ class PreparedObservation(AdmittedObservation):
 
     `transfers` counts the host-to-device copies that produced them; `buckets`
     holds host-measured bucket sizes when the policy uses bucketed shapes;
-    `live_objects` the host-measured live-token count when it uses live tokens.
+    `live_token_count` the host-measured number of packed tokens when it uses
+    live tokens.
     """
 
     def __init__(
@@ -117,7 +118,7 @@ class PreparedObservation(AdmittedObservation):
         scope: "PolicyInference",
         transfers: int,
         buckets: BucketSizes | None = None,
-        live_objects: int | None = None,
+        live_token_count: int | None = None,
     ) -> None:
         super().__init__(
             admitted, admitted.binding, admitted.references, admitted.legal
@@ -125,7 +126,7 @@ class PreparedObservation(AdmittedObservation):
         self.scope = scope
         self.transfers = transfers
         self.buckets = buckets
-        self.live_objects = live_objects
+        self.live_token_count = live_token_count
 
 
 def trim_admitted(
@@ -162,7 +163,7 @@ def trim_prepared(obs: PreparedObservation) -> PreparedObservation:
         trim_admitted(obs, obs.buckets),
         obs.scope,
         obs.transfers,
-        live_objects=obs.live_objects,
+        live_token_count=obs.live_token_count,
     )
 
 
@@ -237,6 +238,6 @@ class PolicyInference:
             if self.agent.bucketed_shapes
             else None
         )
-        live = self.agent.live_object_count(admitted)
+        live = self.agent.live_token_count(admitted)
         moved, transfers = transfer_admitted(admitted, self.device)
         return PreparedObservation(moved, self, transfers, buckets, live)

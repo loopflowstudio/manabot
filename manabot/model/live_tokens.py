@@ -17,9 +17,9 @@ CPU it falls back to per-observation math attention, which is correct but slow
 and only meant for tests. The setting changes no parameter, buffer,
 configuration field, checkpoint or policy input.
 
-Host reads: sizing the packed sequence needs the batch's total number of valid
-objects. Collection measures it on the host while preparing a batch
-(`PreparedObservation.live_objects`), so its forward reads nothing back;
+Host reads: sizing the packed sequence needs the batch's total number of live
+tokens. Collection measures it on the host while preparing a batch
+(`PreparedObservation.live_token_count`), so its forward reads nothing back;
 learning reads it once per forward through `nonzero`. Offsets stay on the
 device, and the jagged tensors carry host bounds on sequence length so the
 attention dispatch reads nothing either.
