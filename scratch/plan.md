@@ -219,6 +219,11 @@ backend first, client second). Next passes:
    over 400 random [B<40, A<200] masks it differs from the deleted torch
    function by at most 5 ulp (uniform: identical); it did not change any
    byte on the captured batch.
+   Compress pass: the damped update computes its target residual once;
+   the boundary test's runtime-import helper drops top-level
+   `TYPE_CHECKING` blocks and reuses `_FRAMEWORKS`. Boundaries, learning
+   pieces, minimal loop, credit assignment: 66 passed; `updates.py` JSON
+   still `cmp`-identical to after.json.
 10. Tests: `test_learning_pieces`, `test_minimal_loop` on torch; one
     parametrized test running the update on every installed backend on the
     same captured batch within MTG-321 tolerances (skip absent backends).

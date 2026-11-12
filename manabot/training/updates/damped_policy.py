@@ -176,16 +176,15 @@ def update_damped_iteration(
             else targets.values
         )
         predictions = to_device(batch.values, device)
+        residuals = expected_targets - predictions
         if batch.assignments is not None:
-            batch.target_residuals = backend.arrays.to_numpy(
-                expected_targets - predictions
-            )
+            batch.target_residuals = backend.arrays.to_numpy(residuals)
         chosen_types = to_device(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device
         )
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
-            expected_targets - predictions,
+            residuals,
             targets.selected,
             to_device(batch.dones, device),
             chosen_types,

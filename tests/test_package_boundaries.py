@@ -517,21 +517,17 @@ _WRITTEN_ONCE = (
 
 
 def _runtime_imports(tree: ast.Module) -> list[str]:
-    checking = {
-        id(inner)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.Name)
-        and node.test.id == "TYPE_CHECKING"
-        for inner in ast.walk(node)
-    }
-    return [
-        module
-        for node in ast.walk(tree)
-        if id(node) not in checking
-        for _, module in _imported_modules(ast.Module(body=[node], type_ignores=[]))
-        if isinstance(node, ast.Import | ast.ImportFrom)
+    """Imports outside the module's top-level `if TYPE_CHECKING:` blocks."""
+    tree.body = [
+        node
+        for node in tree.body
+        if not (
+            isinstance(node, ast.If)
+            and isinstance(node.test, ast.Name)
+            and node.test.id == "TYPE_CHECKING"
+        )
     ]
+    return [module for _, module in _imported_modules(tree)]
 
 
 def test_updates_take_the_backend_as_an_argument() -> None:
@@ -541,7 +537,6 @@ def test_updates_take_the_backend_as_an_argument() -> None:
         for module in _runtime_imports(
             ast.parse((REPO_ROOT / relative).read_text(), relative)
         )
-        if module.split(".")[0] in {"torch", "mlx"}
-        or module.startswith("manabot.backends")
+        if module.split(".")[0] in _FRAMEWORKS or module.startswith("manabot.backends")
     ]
     assert violations == []
