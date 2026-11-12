@@ -94,3 +94,12 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Engine rules changes (zones, tokens, copies, SBAs): play many games through
+  `managym.Env` with `PlayerConfig(name, {card: count}, world=managym.WORLD_SETUP)`
+  decks built around the cards involved, and a scripted policy over
+  `obs.action_space.actions`. Actions carry no `description`; match
+  `action.focus` ids against `env.observation_for_player(env.current_agent_index())`
+  card ids to pick a card. Read `observation_for_player(p).agent_cards`
+  (`zone`, `is_token`) at every decision. A token in the graveyard during a
+  mana ability's color choice is correct: SBAs wait for priority. Academy's
+  game end is a "Game Over" dialog with "Play Again".
