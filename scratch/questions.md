@@ -79,8 +79,6 @@ remains for implementation; broad validation belongs to gate.
   construction; `build.select` outside `selectable` raises `ValueError` and
   leaves the build unchanged; `limited.basic_cards()` retained for batched
   builders (answer 5 default).
-- 4a: `ModuleStage.trains` is a tuple of names; self-play still trains
-  exactly one; a model may not be both trained and frozen in one stage.
 
 ## Implementation assumptions — 2026-11-11 (headless, reversible)
 
@@ -88,7 +86,6 @@ remains for implementation; broad validation belongs to gate.
   derivation records them in `provenance.basic_lands`.
 - Pooled players without `entry_ids` are named `pool` or `pool/build`; the
   collector joins result seats by player name.
-- Module stages export each trained model as artifact `raw/<name>`.
 - `CardPool` count errors name the card (binding parses counts itself).
 
 ## Sync onto main dac7f9005 — 2026-11-11
