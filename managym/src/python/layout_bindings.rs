@@ -10,6 +10,12 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
     Ok(value)
 }
 
+/// Native column names, encodings and fixed extents of each encoded array.
+///
+/// Keys are the encoder's array names for `policy_input_version` (1–9) and
+/// `policy_history_version` (0 legacy events, 1 public history). A `None`
+/// extent is a caller-selected capacity. Seats are viewer-relative. Unsupported
+/// versions raise `ValueError`; no game or buffer is created.
 #[pyfunction]
 #[pyo3(signature = (policy_input_version, *, policy_history_version=0))]
 fn observation_layout(
@@ -46,6 +52,10 @@ fn observation_layout(
     Ok(out.into())
 }
 
+/// The input version to pin for a new consumer with no saved configuration.
+///
+/// Resolve it once and save it with the model; it does not change the implicit
+/// v6 default of `encode_observation` or any saved version.
 #[pyfunction]
 fn recommended_policy_input_version() -> u8 {
     native_layout::RECOMMENDED_POLICY_INPUT_VERSION
