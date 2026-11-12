@@ -1,14 +1,17 @@
 [build-system]
-requires = ["maturin>=1.5,<2.0"]
-build-backend = "maturin"
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
 
 [project]
 name = "manabot"
-version = "0.2.0"
+version = "0.2.2"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.14"
 dependencies = [
+    "managym==0.2.2",
     # Split markers keep uv group-specific CPU/CUDA indexes disjoint.
     "torch>=2.10.0 ; sys_platform == 'linux'",
     "torch>=2.10.0 ; sys_platform != 'linux'",
@@ -46,7 +49,7 @@ evaluation = [
     "matplotlib>=3.9",
 ]
 play = [
-    "maturin>=1.5,<2.0",
+    "maturin>=1.9.3,<2.0",
 ]
 dev = [
     "fastapi>=0.116.0",
@@ -72,7 +75,7 @@ play-runtime = [
     # A trained opponent loads through manabot's model and env packages,
     # which import these at module load.
     "gymnasium>=1.0.0",
-    "maturin>=1.5,<2.0",
+    "maturin>=1.9.3,<2.0",
     "numpy>=1.24.0",
     "psutil>=5.9.0",
     "torch==2.10.0",
@@ -104,7 +107,11 @@ name = "pytorch-cuda"
 url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
+[tool.uv.workspace]
+members = ["managym"]
+
 [tool.uv.sources]
+managym = { workspace = true }
 torch = [
     { index = "pytorch-cpu", group = "play-runtime" },
     { index = "pytorch-cuda", group = "training-runtime", marker = "sys_platform == 'linux'" },
@@ -115,37 +122,25 @@ torch = [
 Homepage = "https://manabot.gg"
 Repository = "https://github.com/loopflowstudio/manabot"
 
-[tool.maturin]
-bindings = "pyo3"
-features = ["python"]
-manifest-path = "managym/Cargo.toml"
-module-name = "manabot.managym._managym"
-python-source = "."
-python-packages = ["manabot", "academy", "managym"]
-zip64 = true
-include = [
-    { path = "content/semantic/**/*.json", format = ["sdist", "wheel"] },
-    { path = "docs/experiment-metrics.md", format = ["sdist", "wheel"] },
-    { path = "protocol/experience-v1.schema.json", format = ["sdist", "wheel"] },
-    { path = ".manabot-source.json", format = ["sdist", "wheel"] },
-    { path = "README.md", format = "sdist" },
-]
-exclude = [
-    "**/__pycache__/**",
-    "**/*.pyc",
-    "academy/ui/node_modules/**",
-    "academy/ui/.svelte-kit/**",
-    "academy/ui/build/**",
-    "academy/ui/e2e/**",
-    "academy/ui/static/**",
-    { path = "managym/src/**", format = "wheel" },
-    { path = "managym/state/**", format = "wheel" },
-    { path = "managym/cards/**", format = "wheel" },
-    { path = "managym/tests/**", format = "wheel" },
-    { path = "managym/examples/**", format = "wheel" },
-    "managym/target/**",
-    "managym/libmanagym.dylib.dSYM/**",
-]
+[tool.hatch.build]
+exclude = ["**/__pycache__", "**/*.pyc", "**/*.so", "**/*.dylib"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/manabot", "/academy", "/content/semantic", "/docs/experiment-metrics.md", "/protocol/experience-v1.schema.json", "/.manabot-source.json", "/README.md", "/pyproject.toml"]
+exclude = ["/academy/ui"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["manabot", "academy"]
+exclude = ["/academy/ui"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"academy/ui/src/lib/packs" = "academy/ui/src/lib/packs"
+"content/semantic" = "content/semantic"
+"docs/experiment-metrics.md" = "docs/experiment-metrics.md"
+"protocol/experience-v1.schema.json" = "protocol/experience-v1.schema.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

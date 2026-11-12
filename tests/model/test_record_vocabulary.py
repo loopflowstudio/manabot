@@ -1,6 +1,7 @@
 """Fact and shared-effect ids read the card encoder's exact vocabulary."""
 
 from pathlib import Path
+from typing import Literal
 
 import pytest
 import torch
@@ -11,13 +12,12 @@ from manabot.env.observation import (
     FACT_EFFECT,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
 )
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
@@ -66,7 +66,7 @@ def _granted_keyword(name: str, source: int = 0) -> torch.Tensor:
 
 
 def _fact_encoder() -> FactEncoder:
-    encoder = FactEncoder(WIDTH, 4, kinds=FACT_KINDS_V8, vocabulary="catalog")
+    encoder = FactEncoder(WIDTH, 4, vocabulary="catalog")
     # A fresh fact output is zero; expose the representation and its gradients.
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(WIDTH))
@@ -131,7 +131,7 @@ def test_fact_and_effect_gradients_reach_shared_rows(
     headers[0, 0, 13:18] = torch.tensor([0, 1, 0, 1, 1])
     details[0, 0] = torch.tensor([1, *_halves(_value("flying"))])
     members[0, 0] = torch.tensor([2, 1])
-    effects = SharedEffectEncoder(WIDTH, version=8, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
     records = RecordEmbeddings(cards, cards.definitions())
     effects(
         headers, details, members, torch.zeros(1, 2, WIDTH), records
@@ -191,7 +191,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
     """Program boundaries and source gradients survive batched vocabulary lookup."""
     torch.set_num_threads(1)
     env = kellan_upgrade_root()
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     observation = space.encode(env.observation_for_player(env.current_agent_index()))
     headers = torch.from_numpy(observation["effects"]).repeat(3, 1, 1)
     details = torch.from_numpy(observation["effect_details"]).repeat(3, 1, 1)
@@ -202,7 +202,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         torch.cat((members[..., 0].flatten(), headers[..., 10:13:2].flatten())).max()
     )
     objects = torch.randn(3, count, WIDTH)
-    effects = SharedEffectEncoder(WIDTH, version=9, vocabulary="catalog")
+    effects = SharedEffectEncoder(WIDTH, vocabulary="catalog")
     parameters = [*effects.parameters(), *cards.parameters()]
 
     def reading(batched: bool) -> tuple[torch.Tensor, list[torch.Tensor | None]]:
@@ -257,7 +257,7 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
     torch.set_num_threads(1)
     env = kellan_upgrade_root()
     obs = env.observation_for_player(env.current_agent_index())
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace()
     values = {key: torch.from_numpy(v)[None] for key, v in space.encode(obs).items()}
     assert (values["effect_details"][..., 0] >= 11).any()
     fresh = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
@@ -282,13 +282,17 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
 
 
 def test_architecture_identity_names_catalog_only_where_it_applies() -> None:
-    def identity(version: int, vocabulary: str) -> str:
-        config = ModelConfig(world=managym.WORLD_SETUP, record_vocabulary=vocabulary)
-        space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    space = ObservationSpace()
+
+    def identity(world: str | None, vocabulary: Literal["hashed", "catalog"]) -> str:
+        config = ModelConfig(world=world, record_vocabulary=vocabulary)
         return architecture_identity(config, space)
 
-    assert identity(6, "catalog") == identity(6, "hashed")
-    assert identity(9, "catalog") != identity(9, "hashed")
+    # Without a world there is no card vocabulary for record ids to read.
+    assert identity(None, "catalog") == identity(None, "hashed")
+    assert identity(managym.WORLD_SETUP, "catalog") != identity(
+        managym.WORLD_SETUP, "hashed"
+    )
     # Regimes keep their bytes: the fresh default is omitted.
     assert "record_vocabulary" not in ModelConfig().model_dump()
 
@@ -302,36 +306,17 @@ def test_fresh_regimes_can_select_hashed_ids() -> None:
     payload = regime.model_dump()
     assert payload["record_vocabulary"] == "hashed"
     assert ModelConfig.model_validate(payload) == regime
-    assert ModelConfig.from_checkpoint(regime.checkpoint_payload(), 9) == regime
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    assert ModelConfig.from_checkpoint(regime.checkpoint_payload()) == regime
+    space = ObservationSpace()
     model = ActorCritic(space, regime)
     assert hasattr(model.shared_effects, "modification")
     assert hasattr(model.facts, "ident")
 
 
-def test_checkpoints_without_the_field_read_hashed_only_where_it_applies() -> None:
+def test_checkpoints_without_the_field_read_hashed_only_with_a_world() -> None:
     world = {"world": managym.WORLD_SETUP}
-    assert ModelConfig.from_checkpoint(world, 8).record_vocabulary == "hashed"
-    assert ModelConfig.from_checkpoint(world, 9).record_vocabulary == "hashed"
-    # Elsewhere both layouts build one model; omission equals the regime's.
-    assert ModelConfig.from_checkpoint({}, 9) == ModelConfig()
-    assert ModelConfig.from_checkpoint(world, 7) == ModelConfig(**world)
+    assert ModelConfig.from_checkpoint(world).record_vocabulary == "hashed"
+    # Without a world both layouts build one model; omission equals the regime's.
+    assert ModelConfig.from_checkpoint({}) == ModelConfig()
     explicit = ModelConfig(**world).checkpoint_payload()
-    assert ModelConfig.from_checkpoint(explicit, 9).record_vocabulary == "catalog"
-
-
-def test_pre_field_v6_checkpoint_equals_its_regime(tmp_path: Path) -> None:
-    """A checkpoint saved before the field existed passes the raw
-    `agent.config != regime.agent` admission and learning-state checks."""
-    torch.set_num_threads(1)
-    regime = ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP)
-    space = ObservationSpace(ObservationConfig(policy_input_version=6))
-    path = tmp_path / "v6.pt"
-    save_checkpoint(ActorCritic(space, regime), space, path, player_configs=None)
-    checkpoint = torch.load(path, weights_only=False)
-    checkpoint["hypers"]["agent_hypers"] = regime.model_dump()
-    assert "record_vocabulary" not in checkpoint["hypers"]["agent_hypers"]
-    torch.save(checkpoint, path)
-    restored, restored_space = load_checkpoint(str(path))
-    assert restored.config == regime
-    assert restored_space.encoder.config == space.encoder.config
+    assert ModelConfig.from_checkpoint(explicit).record_vocabulary == "catalog"
