@@ -42,6 +42,39 @@ place still merges the two namespaces.
 - Nothing else to change. `CardDefId` naming a token's row joins the
   out-of-scope renames below. No open product choice.
 
+## Concept review 2 (2026-11-12): next implement direction
+The deck-entry change is in and right. One more place still identifies a
+definition by printed name, and it is the one that breaks the Task's outcome
+("two tokens can share a printed name").
+
+- **The learning catalog binds rows by printed name.**
+  `BoundSemanticPack.bind` (`manabot/semantic/learning.py`) joins manifest
+  `card_def_id`s to `managym.catalog_tokens()` rows through
+  `registry_names`, a dict keyed by printed name, and raises on a repeat.
+  The native pack already keeps tokens by key, so a second token of a name
+  registers fine and then training cannot bind. Run on 1d5a58732 with the
+  `token.ballistic_boulder` row renamed "Ally" in both the catalog names and
+  the manifest: `ContentPackBindingError duplicate ContentPack registry name
+  'Ally'`. Same failure for a card and a token of one name. Latent: no two
+  rows share a name today.
+  Change: bind on the definition's identity, not its printed name: the token
+  key for a token row, the name for a card, back face or fixture (what
+  `tokens_by_key` / `cards_by_name` already use natively). Carry `key` beside
+  `registry_name` in `catalog_tokens` and in the manifest definitions
+  (`ContentPackDefinitionManifest`, the env binding, `bind_policy_catalog`,
+  which reads pool rows that already have `key`); a manifest row without a key
+  binds by name as now. The join stays independent of CardDefId allocation
+  (`test_semantic_only_ablation_is_independent_of_card_def_id_allocation`
+  must still pass), and `binding_hash` hashes only `(card_def_id, row)` pairs,
+  so no hash, digest, token or observation moves. Test in
+  `tests/semantic/test_learning_projection.py`: two token rows sharing a
+  printed name bind to their own rows.
+- Read and left alone: `world::unsupported_cards` (eligible names only),
+  `possible_worlds` / `belief/encoding` (name sets and id-name pairs over deck
+  cards), Academy receipts (id to name), `content_digest` (stable sort over
+  rows registered in name-then-key order).
+- No open product choice.
+
 ## Remaining
 - Concept-review change made in e22a18a29 (`named_definition` returns the single
   Eligible row; test `a_card_is_admitted_when_a_token_shares_its_printed_name`).
@@ -55,3 +88,4 @@ place still merges the two namespaces.
 - Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
   `CardDefId`;
   keying Academy curated token art by `token.*`.
+- Concept review 2 direction above is not implemented.
