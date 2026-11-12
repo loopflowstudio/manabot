@@ -54,3 +54,9 @@ times out again on any branch, profile its worker log before rerunning.
   not enforce the rule.
 - The branch is 3 commits behind main. They are training-only and merge cleanly
   (`git merge-tree`); no sync was done, so CI does not need to rerun.
+
+## Decision pass 1 (2026-11-12)
+
+Since `36196e1f5`, only this note changed. PR #496 shows 23 checks passed and 2 skipped,
+and `tests/semantic/test_restricted_mana_input.py` passes again (7 passed). The
+decision was advance to the review stop. Questions 1 and 2 stay with a person.
