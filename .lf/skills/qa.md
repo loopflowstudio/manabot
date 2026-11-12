@@ -97,6 +97,17 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+- Training CLI (`manabot train --function/--regime`): CPU two_models runs at
+  about 3.5 s per update; `--smoke` takes seconds. To Ctrl-C a run started
+  in the background of a non-interactive shell, exec it through a wrapper
+  that sets `signal.signal(SIGINT, SIG_DFL)` first: background jobs inherit
+  an ignored SIGINT, so a plain `kill -INT` does nothing. A function run is
+  resumable only with `--recovery-updates N`, and recovery refuses a frozen
+  opponent, so test resume with a self-play-only function on `PYTHONPATH`.
+  Cross-revision resume is refused by source identity; to compare old and
+  new code, run the same saved regime uninterrupted in a `git worktree add
+  --detach /tmp/...` of the base (copy the native `.so`, run with
+  `PYTHONPATH=<that worktree>`) and compare checkpoint tensors.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter

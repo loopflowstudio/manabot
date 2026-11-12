@@ -92,9 +92,12 @@ new output directory for every attempt. `--function`, `--regime` and
 `--regime-name` are exclusive. `--resume-from`, `--source-repair-reason`
 ([recovery](#recovery)), `--checkpoint-updates` and the legacy
 `--checkpoint-seconds` ([monitoring](#monitoring)) apply only to saved regime
-runs; a function run takes `--resume-from` and `--checkpoint-updates`.
-`--smoke` runs either kind in its [tiny form](#smoke-runs) and takes no resume
-or cadence controls.
+runs; a function run takes `--resume-from`, `--checkpoint-updates`,
+`--recovery-updates N` (a recovery snapshot every N updates, without which
+`--resume-from` has no boundary to continue from) and `--seconds` (the run's
+wall budget, default 900). A saved regime declares its own `recovery` and
+`wall_seconds`. `--smoke` runs either kind in its [tiny form](#smoke-runs) and
+takes no resume, cadence or wall controls.
 
 ## Regime functions
 
@@ -148,7 +151,7 @@ from experiments.two_models import two_models
 from manabot.infra.config import MatchConfig
 from manabot.training.run import execute, smoke
 
-regime = partial(two_models, decks=MatchConfig(), updates=200)
+regime = partial(two_models, decks=MatchConfig(), updates=40)
 smoke(regime, out=Path(".runs/two-models/smoke"))  # one tiny real update per stage
 result = execute(regime, out=Path(".runs/two-models/a1"), seed=197)
 result.status                                       # "completed"
@@ -247,10 +250,19 @@ accelerator.
 
 ### Pause, stop and resume
 
-`execute(..., pause_path=...)` (with a `recovery=RecoveryPolicy(...)`), the
-run's wall budget or `stop_path` end the current stage at its next update
-boundary. A pause commits a recovery snapshot and raises `TrainingPaused`; the
-attempt ends `interrupted`. `execute(regime, out=..., seed=...,
+`execute(..., pause_path=...)` (with a `recovery=RecoveryPolicy(...)`) ends
+the current stage at its next update boundary: it commits a recovery snapshot
+and raises `TrainingPaused`, and the attempt ends `interrupted`. `stop_path`
+cancels the stage at its next check without that promise. The run's wall
+budget (`execute(wall_seconds=...)`, `--seconds`, default 900 s) and each
+stage's `Execution.wall_seconds` (default 300 s; on CPU an update of four
+256-transition streams takes a few seconds) are watchdogs: a stage still
+running when one expires raises `TimeoutError` and the attempt ends
+`interrupted`. Both budgets count across attempts and belong to the run's
+identity, so a run that exhausted one cannot be resumed; size them for the
+whole run before it starts. A function run cannot yet stop gracefully before
+its budget, as a saved regime's `stop_reserve_seconds` does, and recovery
+supports self-play only, not a frozen opponent. `execute(regime, out=..., seed=...,
 resume_from=<run id>)` resumes it and refuses a different function, argument,
 revision, supervision or seed. Resuming re-enters the function from the top:
 stages already completed return their recorded results and their models load

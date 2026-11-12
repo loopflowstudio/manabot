@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-303 QA: regime functions</title>
+<style>
+body{font:15px/1.5 -apple-system,system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}
+h1{font-size:1.4rem}h2{font-size:1.1rem;margin-top:2rem;border-bottom:1px solid #ddd}
+pre{background:#f6f4ef;padding:.6rem .8rem;overflow-x:auto;font-size:13px}
+code{font-size:13px}.ok{color:#2a6b2a}.bad{color:#9a2a1a}.fix{color:#6b4a00}
+table{border-collapse:collapse}td,th{border:1px solid #ddd;padding:.25rem .5rem;text-align:left;vertical-align:top}
+</style></head><body>
+<h1>QA: regime functions over a Run handle (MTG-303, at 3ea33d0d4 + QA fixes)</h1>
+<p>I drove the installed <code>manabot train</code> CLI and the documented Python API on a local CPU
+(macOS, cp313). All runs were tiny and went into ignored <code>.runs/qa/</code>.</p>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>Scenario</th><th>What I did</th><th>What I saw</th></tr>
+<tr><td>Smoke a function regime (CLI)</td><td><code>manabot train --function experiments.two_models:two_models --arguments args.json --smoke --out …</code> with <code>{"decks": {}, "updates": 2}</code></td>
+<td class="ok">completed in 2.8 s. Both checkpoints were listed and <code>run.json</code> held <code>regime_function</code> (function, arguments, sha, revision). The stage settings recorded the smoke's shrunken form (1 update, 2 streams, 1 transition).</td></tr>
+<tr><td>Real function run (CLI)</td><td>Same, 2 / 8 / 40 updates, <code>--seed 197</code></td>
+<td class="ok">completed, about 3.5 s per update on CPU. Stage records carry <code>operation</code> and <code>arguments</code>.</td></tr>
+<tr><td>Docs' Python example</td><td><code>smoke(partial(two_models, …))</code> then <code>execute(…, seed=197)</code>, run as written</td>
+<td class="ok">completed (2m23s with 40 updates). <code>checkpoints["learner"].raw</code> → <code>self-play-raw.pt</code>, <code>["reference"]</code> → <code>export-reference-raw.pt</code>.
+<span class="fix">The example said <code>updates=200</code>, which runs into the stage's default 300 s watchdog on CPU and raises <code>TimeoutError</code>. Fixed to 40.</span></td></tr>
+<tr><td>Checkpoints readable elsewhere</td><td><code>load_checkpoint</code> on smoke, real, reference and resumed exports</td><td class="ok">All loaded with world binding.</td></tr>
+<tr><td>Pause / resume (Python)</td><td>Two-stage self-play function (warm 2, long 60); <code>RecoveryPolicy(checkpoint_updates=4)</code>; touched <code>pause_path</code> after 20 s; resumed</td>
+<td class="ok">a1 <code>interrupted</code> (TrainingPaused) at self-play-2 update 10. a2 completed with parent linked. Final raw weights matched an uninterrupted run exactly (max |Δ| = 0.0).</td></tr>
+<tr><td>Ctrl-C then <code>--resume-from</code> (CLI)</td><td>SIGINT a function run, then resume it</td>
+<td><span class="bad">Before the fix: <code>ValueError: attempt has no committed recovery boundary</code>. The CLI could not give a function run a recovery policy, so the documented <code>--resume-from</code> could never work.</span>
+<span class="fix">Added <code>--recovery-updates N</code> and let <code>--seconds</code> set a function run's wall budget.</span>
+<span class="ok">After: interrupted at update 7, resumed to completion. The weights equal the uninterrupted Python run's (Δ = 0.0). Resuming with different <code>--recovery-updates</code> is refused ("recovery recipe or seed mismatch").</span></td></tr>
+<tr><td>Saved regimes keep meaning</td><td>Same saved regime (2 stages, recovery): uninterrupted on the base commit e5897c7ab vs interrupted and resumed on this branch</td>
+<td class="ok">Same <code>regime_digest</code>, same embedded regime, final raw weights Δ = 0.0. The readable regimes in <code>experiments/regimes/</code> serialize to identical bytes on both.</td></tr>
+<tr><td>Returning user</td><td><code>manabot train</code> (local recipe), <code>--regime-name direct_self_play --smoke</code>, <code>TrainingJob(tla_frontier w64).smoke()</code></td><td class="ok">All completed in 6–8 s; the job's smoke checkpoint loads.</td></tr>
+<tr><td>Wrong input</td><td>wrong type, misspelled arg, missing arg, no arguments file, malformed JSON, missing function/module, no colon, reused <code>--out</code>, <code>--function</code>+<code>--regime-name</code>, <code>--smoke --seconds</code>, saved regime + <code>--recovery-updates</code>, no <code>--out</code></td>
+<td class="ok">Each fails at once and names the problem ("unknown regime arguments: upates", "regime argument 'updates' is not bound", pydantic's int message, FileExistsError, typer's BadParameter). None opens a run except a bad deck (below).</td></tr>
+<tr><td>Unknown card in a deck</td><td><code>"Not A Card"</code> in hero_deck, smoke</td><td>Fails within seconds as <code>PanicException: unknown card in decklist</code> and the run is recorded <code>failed</code>. The saved-regime path does the same; this predates the branch.</td></tr>
+<tr><td>Run wall budget</td><td><code>--seconds 20</code> on a 60-update stage, with and without recovery; then resume</td>
+<td><span class="bad">The run ends with a <code>TimeoutError</code> traceback, not at an update boundary as the docs said. The resume also times out at once: the budget counts across attempts and belongs to the identity.</span> <span class="fix">The docs now say this (see below).</span></td></tr>
+</table>
+
+<h2>Fixed</h2>
+<ul>
+<li><code>manabot/cli.py</code>: <code>--recovery-updates N</code> (function runs → <code>RecoveryPolicy(checkpoint_updates=N)</code>) and <code>--seconds</code> as a function run's wall budget. Both are refused for saved regimes, which declare their own, and for <code>--smoke</code>.</li>
+<li><code>tests/training/test_regime_functions.py</code>: the CLI hands both settings to <code>execute</code> and <code>--smoke</code> refuses wall controls.</li>
+<li><code>docs/training.md</code>: the CLI flags, a realistic example horizon, and the pause/stop paragraph. It now covers pause vs <code>stop_path</code>, both watchdogs and their defaults, that an exhausted budget cannot be resumed, that function runs have no graceful stop reserve yet, and that recovery refuses a frozen opponent.</li>
+<li><code>.lf/skills/qa.md</code>: how to drive and interrupt training runs for QA.</li>
+</ul>
+<p>Re-run after fixes: the CLI resume path above, plus test_regimes, test_baseline_recipe, test_mps_training, test_regime_functions and test_package_boundaries: 97 passed, then the new test, 1 passed.</p>
+
+<h2>Works now</h2>
+<p>Smoke, real runs, pause and resume (Python), Ctrl-C and resume (CLI, with <code>--recovery-updates</code>), two models in one run, and saved-regime equivalence with base code. Exports load through admission. Bad arguments are rejected before a run opens.</p>
+
+<h2>Not reached</h2>
+<ul>
+<li>Etude launch and <code>training-report</code>: they need the Etude service, and function jobs are not a <code>TrainingJob</code> yet (plan item 2).</li>
+<li>CUDA/MPS devices; Academy loading a function-run checkpoint in the browser (I checked <code>load_checkpoint</code> only).</li>
+</ul>
+
+<h2>Still wrong, worst first</h2>
+<ol>
+<li><b>A function run that hits its wall budget is a dead end.</b> It stops with <code>TimeoutError</code>, cannot be resumed (the budget is identity and charged across attempts), and cannot yet produce a continuation (plan item 4). Long function runs need the open Etude budget choice: a graceful stop reserve, or a continuation contract.</li>
+<li><b><code>two_models</code> cannot be recovered at all</b>: <code>RecoveryPolicy</code> with a frozen opponent fails as the stage opens ("recovery supports current-self opponents only"). Smoke does not catch it, since smoke runs without recovery. This is a collector limit that predates the branch.</li>
+<li>A smoke run and a real run of the same partial record the same <code>regime_function</code> (same <code>arguments_sha256</code>). Only the stage settings show it was a smoke, so "equal function, sha and revision ran the same recipe" also matches a smoke.</li>
+<li>An unknown card surfaces as a native panic, on both paths (predates the branch).</li>
+</ol>
+</body></html>

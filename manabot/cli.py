@@ -92,7 +92,9 @@ def train_command(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
     seconds: float | None = typer.Option(
-        None, min=1, help="Recipe wall-time limit; does not alter learning schedules"
+        None,
+        min=1,
+        help="Recipe or regime-function wall-time limit; does not alter learning schedules",
     ),
     function: str | None = typer.Option(
         None, help="Regime function to run: <module>:<function>"
@@ -120,6 +122,11 @@ def train_command(
     ),
     checkpoint_updates: int | None = typer.Option(
         None, min=1, help="Raw monitoring export every N absolute self-play iterations"
+    ),
+    recovery_updates: int | None = typer.Option(
+        None,
+        min=1,
+        help="Regime functions: commit a recovery snapshot every N updates so --resume-from can continue",
     ),
     checkpoint_seconds: Optional[float] = typer.Option(
         None,
@@ -154,6 +161,7 @@ def train_command(
                     resume_from,
                     source_repair_reason,
                     checkpoint_updates,
+                    recovery_updates,
                     checkpoint_seconds,
                     initial_admission,
                 )
@@ -197,10 +205,10 @@ def train_command(
             raise typer.Exit(1)
         return
     if bucketed_shapes or any(
-        value is not None for value in (steps, seconds, learning_seats, device)
+        value is not None for value in (steps, learning_seats, device)
     ):
         raise typer.BadParameter(
-            "--steps, --seconds, --learning-seats, --device and --bucketed-shapes "
+            "--steps, --learning-seats, --device and --bucketed-shapes "
             "require a recipe; a regime sets execution.bucketed_shapes"
         )
     if sum(value is not None for value in (function, regime, regime_name)) != 1:
@@ -210,7 +218,7 @@ def train_command(
     if out is None:
         raise typer.BadParameter("--function and --regime require --out")
     from manabot.training.execution import execute_regime
-    from manabot.training.regime import Execution
+    from manabot.training.regime import Execution, RecoveryPolicy
     from manabot.training.run import execute, load_regime, smoke
     from manabot.verify.store import VerifyStore
 
@@ -220,16 +228,19 @@ def train_command(
             resume_from,
             source_repair_reason,
             checkpoint_updates,
+            recovery_updates,
+            seconds,
             checkpoint_seconds,
             initial_admission,
         )
     ):
-        raise typer.BadParameter("--smoke takes no resume or cadence controls")
+        raise typer.BadParameter("--smoke takes no resume, cadence or wall controls")
     training_seed = (0 if smoke_run else 197) if seed is None else seed
     if function is not None:
         if source_repair_reason or checkpoint_seconds or initial_admission:
             raise typer.BadParameter(
-                "regime functions take --resume-from and --checkpoint-updates only"
+                "regime functions take --resume-from, --recovery-updates, "
+                "--checkpoint-updates and --seconds only"
             )
         bound = load_regime(
             function, json.loads(Path(arguments).read_text()) if arguments else {}
@@ -243,10 +254,21 @@ def train_command(
                 seed=training_seed,
                 resume_from=resume_from,
                 checkpoint_updates=checkpoint_updates,
+                **({} if seconds is None else {"wall_seconds": seconds}),
+                recovery=(
+                    None
+                    if recovery_updates is None
+                    else RecoveryPolicy(checkpoint_updates=recovery_updates)
+                ),
             )
         )
         _report_function_run(result)
         return
+    if seconds is not None or recovery_updates is not None:
+        raise typer.BadParameter(
+            "a saved regime sets its wall_seconds and recovery; --seconds and "
+            "--recovery-updates belong to --function"
+        )
     if regime_name is not None:
         regime_spec = named_regime(regime_name)
     else:

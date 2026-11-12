@@ -400,3 +400,33 @@ def test_a_saved_regime_smokes_through_the_same_stages(tmp_path: Path) -> None:
     assert record.stages[1].inputs.keys() >= {"first/raw", "first/optimizer"}
     assert record.selected_artifact == record.stages[-1].artifacts["raw"]
     load_checkpoint(record.stages[-1].artifacts["raw"]["path"])
+
+
+def test_the_cli_gives_a_function_run_its_recovery_and_wall_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without a recovery policy a CLI function run has nothing to resume from."""
+    from typer.testing import CliRunner
+
+    from manabot import cli
+
+    received: dict[str, object] = {}
+
+    def record_call(regime: object, **options: object) -> None:
+        received.update(options)
+        raise SystemExit(0)
+
+    monkeypatch.setattr(run_handle, "execute", record_call)
+    arguments = tmp_path / "arguments.json"
+    arguments.write_text('{"updates": 2}')
+    command = ["train", "--function", f"{__name__}:one_learner"]
+    command += ["--arguments", str(arguments), "--out", str(tmp_path / "run")]
+    result = CliRunner().invoke(
+        cli.app, [*command, "--recovery-updates", "4", "--seconds", "1200"]
+    )
+    assert result.exit_code == 0, result.output
+    assert received["recovery"] == RecoveryPolicy(checkpoint_updates=4)
+    assert received["wall_seconds"] == 1200
+    smoked = CliRunner().invoke(cli.app, [*command, "--smoke", "--seconds", "60"])
+    assert smoked.exit_code != 0
+    assert "wall controls" in smoked.output
