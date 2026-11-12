@@ -14,7 +14,7 @@ import json
 import sys
 from typing import Any, Iterable, Mapping, Sequence
 
-from manabot.managym.decision import SEMANTIC_DECISION_VERSION
+from managym.decision import SEMANTIC_DECISION_VERSION
 
 POSSIBLE_WORLD_SPACE_VERSION: int = 3
 WORLD_SCHEMA_IDENTITY: str = "managym.possible-world-space/v3"

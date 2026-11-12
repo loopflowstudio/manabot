@@ -17,15 +17,15 @@ from enum import IntEnum
 import json
 from typing import Any
 
-from manabot import managym
-from manabot.managym.enums import (
+import managym
+from managym.enums import (
     ActionEnum,
     ActionSpaceEnum,
     PhaseEnum,
     StepEnum,
     ZoneEnum,
 )
-from manabot.managym.experience import LegacyHeroObservation
+from managym.experience import LegacyHeroObservation
 
 # The protocol-v1 projection labels seat 0 "Hero" and seat 1 "Villain".
 HERO_PLAYER_INDEX = 0

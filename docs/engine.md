@@ -257,8 +257,9 @@ search/decision digest, fails.
 The [scalar/batch API audit](python-api-audit.md) records the capability
 comparison, source evidence and independent follow-ups.
 
-The native API is available through `from manabot import managym` in the
-installed `manabot` distribution. `import managym` is a compatibility alias.
+Install the native API as the [engine-only `managym` distribution](engine-python.md)
+and use `import managym`. Installing `manabot` adds training and keeps
+`from manabot import managym` as a compatibility alias to the same engine.
 The Torch wrapper and the capture wrapper are separate Python classes:
 
 | Need | API |

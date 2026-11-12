@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
+import pytest
+
+from academy import authored_match_parity
 from academy.authored_match_parity import ParityDivergence, verify_receipt
 
 
@@ -44,6 +50,34 @@ def test_first_divergence_names_both_source_identities() -> None:
     assert "authority_receipt_sha256=" in message
     assert "relevant_source_sha256=" in message
     assert "unavailable" not in message
+
+
+@pytest.mark.parametrize("commands", [135, 134])
+def test_relocated_source_preserves_receipt_and_rejects_behavior_drift(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, commands: int
+) -> None:
+    checked = {
+        "identity": {"relevant_source": {"sha256": "historical"}},
+        "summary": {"commands_per_surface": 135},
+    }
+    receipt_path = tmp_path / "receipt.json"
+    original = json.dumps(checked).encode()
+    receipt_path.write_bytes(original)
+    monkeypatch.setattr(authored_match_parity, "RECEIPT_PATH", receipt_path)
+    monkeypatch.setattr(
+        authored_match_parity,
+        "build_receipt",
+        lambda: {
+            "identity": {"relevant_source": {"sha256": "relocated"}},
+            "summary": {"commands_per_surface": commands},
+        },
+    )
+    if commands == 135:
+        assert verify_receipt() == checked
+    else:
+        with pytest.raises(RuntimeError, match="receipt is stale"):
+            verify_receipt()
+    assert receipt_path.read_bytes() == original
 
 
 def test_divergence_survives_context_manager_unwinding() -> None:
