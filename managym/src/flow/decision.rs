@@ -439,6 +439,8 @@ pub enum Decision {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        tap_remaining: usize,
         resume: Option<Box<Decision>>,
     },
     ManaChoice {
@@ -1369,10 +1371,22 @@ impl Game {
                 ),
                 focus: source_focus,
             },
-            Decision::ManaUpfront { player, .. } => ActionSpace {
+            Decision::ManaUpfront {
+                player,
+                tap_remaining,
+                ..
+            } => ActionSpace {
                 player: Some(*player),
-                kind: ActionSpaceKind::PayOrNot,
-                actions: self.mana_ability_actions(*player, None),
+                kind: if *tap_remaining > 0 {
+                    ActionSpaceKind::LookAndSelect
+                } else {
+                    ActionSpaceKind::PayOrNot
+                },
+                actions: if *tap_remaining > 0 {
+                    self.mana_tap_cost_actions(*player)
+                } else {
+                    self.mana_ability_actions(*player, None)
+                },
                 focus: source_focus,
             },
             Decision::Payment(payment) => {
@@ -1737,6 +1751,13 @@ impl Game {
                 .ok_or_else(|| AgentError("illegal mana color".into()))?;
             if !self.mana_choice_completes_payment(*player, mana) {
                 return Err(AgentError("mana color cannot complete the payment".into()));
+            }
+        }
+        if let (Decision::ManaUpfront { tap_remaining, .. }, Action::SelectCard { player, card }) =
+            (&suspended.decision, action)
+        {
+            if *tap_remaining > 0 {
+                return self.pay_mana_tap_cost(*player, *card);
             }
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();

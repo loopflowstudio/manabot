@@ -1304,12 +1304,13 @@ impl Game {
         let ability = self
             .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing source".into()))?;
-        if ability.tap_cost.is_some() {
+        if let Some(cost) = &ability.tap_cost {
             self.pending_choice = Some(PendingChoice::TapPayment {
                 player,
                 source,
                 ability_index,
                 targets,
+                remaining: cost.count,
             });
             return Ok(());
         }
@@ -1323,7 +1324,7 @@ impl Game {
         player: PlayerId,
         ability: &ActivatedAbilityDefinition,
     ) -> Vec<PermanentId> {
-        let Some(predicate) = &ability.tap_cost else {
+        let Some(cost) = &ability.tap_cost else {
             return Vec::new();
         };
         self.battlefield_permanents(player)
@@ -1332,7 +1333,7 @@ impl Game {
                 self.state.permanents[*id]
                     .as_ref()
                     .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_matches_predicate(*id, predicate)
+                    && self.permanent_matches_predicate(*id, &cost.predicate)
             })
             .collect()
     }
@@ -1348,6 +1349,7 @@ impl Game {
             source,
             ability_index,
             targets,
+            remaining,
         }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no tap payment pending".into()));
@@ -1362,8 +1364,29 @@ impl Game {
                 "tap cost must be an untapped permanent you control".into(),
             ));
         };
+        let payment = Payment::Activation {
+            source,
+            ability_index,
+            targets: targets.clone(),
+            x: 0,
+        };
+        if !self.tap_activation_payment_possible(player, &payment, remaining, Some(tapped)) {
+            return Err(AgentError(
+                "tap cost selection cannot complete the activation".into(),
+            ));
+        }
         self.pending_choice = None;
         self.tap_permanent(tapped, false);
+        if remaining > 1 {
+            self.pending_choice = Some(PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                targets,
+                remaining: remaining - 1,
+            });
+            return Ok(());
+        }
         self.continue_activation_payment(player, source, ability_index, targets, 0)
     }
 

@@ -792,3 +792,70 @@ def test_v6_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     obs, *_ = scalar.step(0)
     env.step_into_buffers([0])
     assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
+
+
+@pytest.mark.parametrize("version", [5, 6, 8, 9])
+def test_merchant_tap_count_native_reference_and_text_parity(version: int) -> None:
+    from manabot.semantic.text_observation import capture_text_decision, submit_response
+
+    env = priority_root(
+        ("Unlucky Cabbage Merchant", "Unlucky Cabbage Merchant"),
+        ("The Cabbage Merchant", "Forest", "Forest", "Forest", "Forest"),
+    )
+    owner = env.current_agent_index()
+    assert owner is not None
+    for food_count in (1, 2):
+        obs = env.observation_for_player(owner)
+        cast_index = next(
+            index
+            for index, action in enumerate(obs.action_space.actions)
+            if int(action.action_type) == ActionEnum.PRIORITY_CAST_SPELL
+        )
+        env.step(cast_index)
+        for _ in range(16):
+            obs = env.observation_for_player(owner)
+            if (
+                sum(card.name == "Food" for card in obs.agent_cards) == food_count
+                and not obs.stack_objects
+            ):
+                break
+            actor = env.current_agent_index()
+            assert actor is not None
+            pending = env.observation_for_player(actor)
+            index = next(
+                index
+                for index, action in enumerate(pending.action_space.actions)
+                if int(action.action_type)
+                in (ActionEnum.PAY_COST, ActionEnum.PRIORITY_PASS_PRIORITY)
+            )
+            env.step(index)
+        else:
+            raise AssertionError("Food creation did not resolve")
+    decision = capture_text_decision(env)
+    activation = next(
+        action
+        for action in decision.actions
+        if "Activate" in action.description
+        and "The Cabbage Merchant" in action.description
+    )
+    submit_response(env, decision, activation.reference)
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    for remaining in (2, 1):
+        actor = env.current_agent_index()
+        assert actor is not None
+        obs = env.observation_for_player(actor)
+        assert obs.continuation[-1].mode == remaining
+        reference = encoder.encode(obs)
+        native = env.encode_observation(obs, version, encoder.config.max_facts)
+        buffers = encoder.allocate()
+        env.encode_observation_into(obs, buffers)
+        for key, value in reference.items():
+            np.testing.assert_array_equal(native[key], value, err_msg=key)
+            np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+        decision = capture_text_decision(env)
+        assert f"{remaining} tap selections still required" in decision.text
+        assert all(
+            "Tap Food to pay" in action.description for action in decision.actions
+        )
+        submit_response(env, decision, decision.actions[0].reference)
+    assert len(capture_text_decision(env).actions) == 5

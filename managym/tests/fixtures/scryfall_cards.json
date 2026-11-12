@@ -4620,5 +4620,19 @@
     "colors": [
       "G"
     ]
+  },
+  "The Cabbage Merchant": {
+    "name": "The Cabbage Merchant",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Creature — Human Citizen",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "Whenever an opponent casts a noncreature spell, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever a creature deals combat damage to you, sacrifice a Food token.\nTap two untapped Foods you control: Add one mana of any color.",
+    "colors": [
+      "G"
+    ]
   }
 }

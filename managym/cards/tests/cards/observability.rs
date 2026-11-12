@@ -947,6 +947,10 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
+        TriggerCondition::CreatureDealsCombatDamageToYou => {
+            "TriggerCondition::CreatureDealsCombatDamageToYou"
+        }
+        TriggerCondition::OpponentCastsSpell { .. } => "TriggerCondition::OpponentCastsSpell",
         TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
@@ -1047,6 +1051,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::PlayerCastsSpell {
             predicate: CardPredicate::creature(),
         },
+        TriggerCondition::OpponentCastsSpell {
+            predicate: CardPredicate::creature(),
+        },
+        TriggerCondition::CreatureDealsCombatDamageToYou,
         TriggerCondition::AttacksWithAnother,
         TriggerCondition::OpponentSearchesLibrary,
         TriggerCondition::FromZone {
@@ -4394,4 +4402,24 @@ fn counter_and_creation_replacements_reach_learning_tokens() {
     };
     *effects_only = false;
     assert_ne!(doubling, tokens_of(&definition));
+}
+
+#[test]
+fn merchant_counted_tap_cost_reaches_learning_tokens() {
+    let definition = managym_cards::catalog()
+        .iter()
+        .find(|card| card.name == "The Cabbage Merchant")
+        .unwrap();
+    let tokens = tokens_of(definition);
+    let cost = tokens
+        .iter()
+        .position(|token| *token == (TokenKind::Structure, name_value("TapCost")))
+        .unwrap();
+    let count = tokens[cost..]
+        .iter()
+        .position(|token| *token == (TokenKind::Field, name_value("count")))
+        .unwrap()
+        + cost;
+    assert_eq!(tokens[count + 1], (TokenKind::Integer, 2));
+    assert!(tokens[cost..count].contains(&(TokenKind::Text, name_value("Food"))));
 }

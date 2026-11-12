@@ -156,6 +156,8 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        #[serde(skip_serializing_if = "is_single_tap")]
+        remaining: usize,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -585,4 +587,8 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
+}
+
+fn is_single_tap(remaining: &usize) -> bool {
+    *remaining == 1
 }

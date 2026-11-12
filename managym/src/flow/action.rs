@@ -156,6 +156,9 @@ impl Game {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
+                        Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => {
+                            Some(format!("Tap {} to pay", self.state.cards[*card].name))
+                        }
                         Decision::ChooseObject { effect, .. } => Some(format!(
                             "{} {}",
                             choice_verb(effect),
@@ -311,12 +314,9 @@ impl Game {
                 {
                     continue;
                 }
-                if ability.tap_cost.is_some()
-                    && self.tap_cost_candidates(player, ability).is_empty()
-                {
-                    continue;
-                }
-                let affordable = if ability.waterbend {
+                let affordable = if let Some(cost) = &ability.tap_cost {
+                    self.tap_activation_payment_possible(player, &payment, cost.count, None)
+                } else if ability.waterbend {
                     self.can_pay_waterbend_activation(player, permanent_id, ability)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
@@ -520,7 +520,8 @@ impl Game {
                 player,
                 source,
                 ability_index,
-                ..
+                targets,
+                remaining,
             } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
@@ -529,6 +530,19 @@ impl Game {
                     .map(|ability| self.tap_cost_candidates(*player, &ability))
                     .unwrap_or_default()
                     .into_iter()
+                    .filter(|id| {
+                        self.tap_activation_payment_possible(
+                            *player,
+                            &Payment::Activation {
+                                source: *source,
+                                ability_index: *ability_index,
+                                targets: targets.clone(),
+                                x: 0,
+                            },
+                            *remaining,
+                            Some(*id),
+                        )
+                    })
                     .filter_map(|id| self.state.permanents[id].as_ref())
                     .map(|permanent| Action::SelectCard {
                         player: *player,

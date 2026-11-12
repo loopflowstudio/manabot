@@ -92,6 +92,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
         TriggerCondition::YouCastSpell { .. }
         | TriggerCondition::YouCastNthSpellThisTurn { .. }
+        | TriggerCondition::OpponentCastsSpell { .. }
         | TriggerCondition::PlayerCastsSpell { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
         | TriggerCondition::Dies { .. }
@@ -100,7 +101,8 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::AttacksWithAnother
         | TriggerCondition::AttacksAlone { .. } => EventKinds::of(EventKind::AttackersDeclared),
         TriggerCondition::OpponentSearchesLibrary => EventKinds::of(EventKind::LibrarySearched),
-        TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
+        TriggerCondition::CreatureDealsCombatDamageToYou
+        | TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
         | TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
@@ -1535,6 +1537,13 @@ impl Game {
                     && self.card_matches_predicate(*card, predicate)
             }
             (
+                TriggerCondition::OpponentCastsSpell { predicate },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                self.spell_caster(*card) != source_controller
+                    && self.card_matches_predicate(*card, predicate)
+            }
+            (
                 TriggerCondition::PlayerCastsSpell { predicate },
                 GameEvent::SpellCast { card, .. },
             ) => self.card_matches_predicate(*card, predicate),
@@ -1694,7 +1703,8 @@ impl Game {
                 }
             }
             (
-                TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
+                TriggerCondition::CreatureDealsCombatDamageToYou
+                | TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
                 GameEvent::CombatDamageToPlayers { .. },
             ) => self.trigger_multiplicity(condition, source_card, source_controller, event) > 0,
             (
@@ -1857,6 +1867,18 @@ impl Game {
         event: &GameEvent,
     ) -> usize {
         match (condition, event) {
+            (
+                TriggerCondition::CreatureDealsCombatDamageToYou,
+                GameEvent::CombatDamageToPlayers { creatures },
+            ) => {
+                // In the two-seat combat model, only the defending player can
+                // receive combat damage. The event excludes prevented damage.
+                if source_controller != self.active_player() {
+                    creatures.len()
+                } else {
+                    0
+                }
+            }
             (
                 TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
                 GameEvent::CombatDamageToPlayers { creatures },

@@ -755,6 +755,21 @@ impl Game {
                 frame.cost(&owed);
             }
         }
+        if let PendingChoice::TapPayment {
+            remaining,
+            source,
+            ability_index,
+            ..
+        } = pending
+        {
+            if self
+                .activation_ability(*source, *ability_index)
+                .and_then(|a| a.tap_cost)
+                .is_some_and(|cost| cost.count > 1)
+            {
+                frame.mode = Some(*remaining);
+            }
+        }
         frame
     }
 
@@ -884,10 +899,14 @@ impl Game {
             Decision::ManaUpfront {
                 permanent,
                 ability_index,
+                tap_remaining,
                 ..
             } => {
                 frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);
+                if *tap_remaining > 0 {
+                    frame.mode = Some(*tap_remaining);
+                }
                 frame.cost(
                     &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
                 );
@@ -1307,6 +1326,7 @@ mod tests {
                 player,
                 permanent: PermanentId(0),
                 ability_index: 0,
+                tap_remaining: 0,
                 resume: None,
             },
             Decision::ManaChoice {

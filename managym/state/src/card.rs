@@ -568,6 +568,27 @@ pub struct AbilityGrant {
     pub index: usize,
 }
 
+/// A chosen set of distinct untapped permanents, not a source {T} symbol.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TapCost {
+    pub predicate: CardPredicate,
+    pub count: usize,
+}
+
+impl serde::Serialize for TapCost {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Preserve existing single-object definition digests and learning tokens.
+        if self.count == 1 {
+            return self.predicate.serialize(serializer);
+        }
+        use serde::ser::SerializeStruct;
+        let mut cost = serializer.serialize_struct("TapCost", 2)?;
+        cost.serialize_field("predicate", &self.predicate)?;
+        cost.serialize_field("count", &self.count)?;
+        cost.end()
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     /// Omitted for battlefield abilities so existing definition digests hold.
@@ -584,7 +605,7 @@ pub struct ActivatedAbilityDefinition {
     /// source itself qualifies, and summoning sickness doesn't matter (not a
     /// {T} cost, CR 302.6).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tap_cost: Option<CardPredicate>,
+    pub tap_cost: Option<TapCost>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,

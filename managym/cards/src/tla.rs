@@ -12,7 +12,7 @@ use managym_state::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, ManaAbility, PowerCda,
         ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
         StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction,
-        StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
+        StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost, TargetCostReduction,
         TriggeredManaAbility,
     },
     mana::{Color, Colors, Mana, ManaCost, ManaUse},
@@ -1824,7 +1824,10 @@ fn boiling_rock_rioter() -> CardDefinition {
             },
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_cost: Some(CardPredicate::subtype("Ally")),
+            tap_cost: Some(TapCost {
+                predicate: CardPredicate::subtype("Ally"),
+                count: 1,
+            }),
             effects: vec![Effect::exile_linked(
                 ObjectSelector::Target(TargetSpec::GraveyardCard {
                     predicate: CardPredicate::default(),

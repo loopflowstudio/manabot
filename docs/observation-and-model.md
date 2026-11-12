@@ -200,6 +200,12 @@ acting viewer receives private continuation; overflow fails rather than
 truncating. Transport IDs are joins to the card catalog and object table,
 never numeric features. At `Decision::ManaChoice` the activation source is
 unavailable because rules state has discarded it.
+A pending counted mana tap cost keeps its unpaid count in the continuation
+mode field, using the existing source and ability joins. Ordinary counted
+activation tap costs use the same mode meaning on their announcement frame.
+Each chosen tap immediately updates the permanent's tapped column. The acting
+viewer receives these choices and their unpaid count; other viewers retain
+public permanent state. No tensor width or input default changes.
 Waiting delayed abilities (frame kind 10) carry event codes independently of
 frequency and expiry. In v5–v8, relation row kind 9 carries frequency in column
 28 (1 once, 2 each matching event); column 48 retains cleanup expiry. Remembered

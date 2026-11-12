@@ -343,6 +343,7 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
+                Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
@@ -376,6 +377,11 @@ impl Game {
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
+            if let Decision::ManaUpfront { tap_remaining, .. } = &suspended.decision {
+                if *tap_remaining > 0 {
+                    view.instruction = format!("Choose an untapped permanent to tap. {tap_remaining} more tap selections are required to pay this ability.");
+                }
+            }
         }
         if let Some(placement) = &self.state.trigger_placement {
             let choosing_mode = placement

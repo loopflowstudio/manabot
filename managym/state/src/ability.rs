@@ -75,6 +75,11 @@ pub enum TriggerCondition {
     PlayerCastsSpell {
         predicate: CardPredicate,
     },
+    OpponentCastsSpell {
+        predicate: CardPredicate,
+    },
+    /// Each creature dealing combat damage to this ability's controller.
+    CreatureDealsCombatDamageToYou,
     /// "When [subject] enters the battlefield."
     EntersTheBattlefield {
         subject: TriggerSubject,

@@ -50,6 +50,8 @@ mod stx;
 mod ths;
 #[path = "cards/tla.rs"]
 mod tla;
+#[path = "cards/tle.rs"]
+mod tle;
 #[path = "cards/war.rs"]
 mod war;
 #[path = "cards/zen.rs"]

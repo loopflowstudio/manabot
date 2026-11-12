@@ -90,6 +90,7 @@ _STAGES = frozenset(
         "declare_attackers",
         "declare_blockers",
         "mana_payment",
+        "tap_payment",
         "mana_color",
         "resolution_choice",
         "private_search",
@@ -548,7 +549,10 @@ class _Renderer:
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        if relation.kind == 6 and relation.decision == 25:
+        if relation.kind == 6 and relation.decision == 2 and relation.mode:
+            details.append(f"{relation.mode} tap selections still required")
+            details += _selectors(None, relation.ability)
+        elif relation.kind == 6 and relation.decision == 25:
             details.append(f"may exile up to {relation.mode} more cards")
         elif relation.kind == 6 and relation.decision == 27:
             details.append(f"{relation.mode or 0} kept cards already ordered on top")

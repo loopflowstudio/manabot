@@ -254,14 +254,17 @@ commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
 
-Every registered chosen-output mana mode consumes a tap (sometimes also a
-sacrifice), so each source has one use during a payment. The registry contract
-requires a model extension before introducing separate tap/sacrifice mana uses,
-repeatable free sources, or additional mana-ability cost methods.
-Search retains identities rather than grouping equal outputs. Its total and
-spend-purpose bounds only reject impossible branches; every accepted payment
-still requires a complete witness. This is finite search, without a general
-large-board performance guarantee.
+Payment search tracks an object's untapped resource, presence and limited
+ability uses separately. Counted tap costs select distinct untapped matching
+permanents through ordinary SelectCard decisions; The Cabbage Merchant can use
+four Foods twice without tapping itself. Each selected tap commits before the
+next selection and is unavailable to nested costs or waterbending. Pending tap
+counts use the continuation mode field; source and ability retain their usual
+joins. Single-object costs keep their serialized definition shape.
+Every registered mana ability must consume a finite resource. The total and
+spend-purpose bounds count repeatable outputs optimistically; every accepted
+payment still requires an identity-preserving witness with explicit tap choices.
+This is finite search, without a general large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card

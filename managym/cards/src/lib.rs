@@ -40,6 +40,7 @@ mod sth;
 mod stx;
 mod ths;
 mod tla;
+mod tle;
 mod tokens;
 mod vis;
 mod war;
@@ -62,7 +63,7 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 34] = [
+const SETS: [fn() -> Vec<CardDefinition>; 35] = [
     afr::cards,
     blb::cards,
     bro::cards,
@@ -93,6 +94,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 34] = [
     stx::cards,
     ths::cards,
     tla::cards,
+    tle::cards,
     tokens::cards,
     vis::cards,
     war::cards,

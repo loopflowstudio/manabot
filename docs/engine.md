@@ -526,7 +526,9 @@ to an authored setup refuse imported decks even when shapes agree
 ### TLA decks with TLE bonus-sheet cards
 
 TLA Limited decks containing Avatar: The Last Airbender Eternal (TLE) cards
-use the same importer, with no extra pack or flag:
+use the same importer, with no extra pack or flag. Full TLE coverage is planned;
+the current catalog still lacks Scout's Warning and other TLE names. The example
+below describes the intended admission result once those definitions are added:
 
 ```python
 import managym
@@ -537,10 +539,11 @@ decklist = managym.Decklist(
 )
 admitted, = managym.admit_decklists([("hero", decklist)])
 print(managym.check_decks([admitted.deck]))
-# [[]] — no admission issues
+# Expected after TLE support: [[]] — no admission issues
 ```
 
-All TLE non-token cards belong to the world pool. This small example checks
+Every defined non-token card belongs to the world pool; the planned coverage
+adds all remaining TLE names. This small example checks
 `development-v1` admission, not Limited construction or booster contents;
 use a complete deck for play.
 
