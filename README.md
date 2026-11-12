@@ -351,11 +351,13 @@ uv run python scripts/inspect_batch.py     # one real batch and how credit reach
 ```
 
 `uv run manabot train` trains a small agent and saves checkpoints under
-`.runs/`. The local recipe uses CUDA, then Apple MPS, when available and CPU
-otherwise. `--recipe baseline` requires CUDA or Apple MPS and trains on that
-accelerator; its evaluation and search run on CPU. `--device cpu|mps|cuda`
-overrides local selection; baseline accepts only CUDA or MPS. MPS training uses
-float32 and requires Torch 2.15 or newer. This makes no speed or strength claim.
+`.runs/`. The local recipe uses CUDA when available and CPU otherwise, including
+on Apple Silicon. `--recipe baseline` requires CUDA (or an explicit
+`--device mps`) and trains on that accelerator; its evaluation and search run on
+CPU. `--device cpu|mps|cuda` overrides local selection; baseline accepts only
+CUDA or MPS. MPS is never selected automatically: it was not faster than CPU in
+our measurements. MPS training uses float32 and requires Torch 2.15 or newer.
+This makes no speed or strength claim.
 Training recipes are typed *regimes* composed in Python, one module per
 current experiment in [experiments/](experiments/), from reusable parts in
 [manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU

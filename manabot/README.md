@@ -27,9 +27,10 @@ actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
-The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
-`--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
-the local device; baseline rejects CPU. MPS self-play uses float32 and requires
+The local recipe selects CUDA when available and CPU otherwise; Apple MPS is used
+only with an explicit `--device mps`. `--recipe baseline` requires CUDA or an
+explicit `--device mps`. `--device cpu|mps|cuda` overrides the local device;
+baseline rejects CPU. MPS self-play uses float32 and requires
 Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
@@ -488,7 +489,7 @@ observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
-embedding. Native `learning_record_names` lists every counter kind, color,
+embedding. Native `record_vocabulary` lists every counter kind, color,
 subtype, keyword, modification, set name and combat restriction the encoders
 hash. Each reads the row of the card token for the same concept (a granted
 `flying` and a printed `Keyword::flying` share one row) or a row appended after

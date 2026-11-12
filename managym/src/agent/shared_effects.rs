@@ -4,6 +4,8 @@
 //! store. Equal complete payloads share storage; every original record retains
 //! an ordered membership, including duplicates. No timestamps are coalesced.
 
+use super::observation_layout::{detail, effect, member};
+
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
@@ -105,11 +107,11 @@ pub fn project(game: &Game) -> Vec<SharedEffectData> {
 // timestamp rank, controller/source joins, detail offset/count, member offset/count,
 // validity. A membership retains its original one-based record order.
 pub const EFFECT_ROWS: usize = 128;
-pub const EFFECT_DIM: usize = 18;
+pub const EFFECT_DIM: usize = effect::WIDTH;
 pub const DETAIL_ROWS: usize = 4096;
-pub const DETAIL_DIM: usize = 3;
+pub const DETAIL_DIM: usize = detail::WIDTH;
 pub const MEMBER_ROWS: usize = 2048;
-pub const MEMBER_DIM: usize = 2;
+pub const MEMBER_DIM: usize = member::WIDTH;
 
 pub fn encode(
     observation: &super::observation::Observation,
@@ -170,34 +172,34 @@ pub fn encode(
         .zip(records)
     {
         let effect = &record.effect;
-        row[..2].copy_from_slice(&split_id(name_value(&format!(
-            "Modification::{}",
-            effect.modification
-        ))));
+        row[effect::MODIFICATION_HIGH..effect::POWER].copy_from_slice(&split_id(name_value(
+            &format!("Modification::{}", effect.modification),
+        )));
         for (i, value) in [effect.power, effect.toughness, effect.amount]
             .into_iter()
             .enumerate()
         {
-            row[2 + i] = value.unwrap_or(0) as f32 / 10.0;
-            row[5 + i] = u8::from(value.is_some()) as f32;
+            row[effect::POWER + i] = value.unwrap_or(0) as f32 / 10.0;
+            row[effect::HAS_POWER + i] = u8::from(value.is_some()) as f32;
         }
-        row[8] = duration_code(&effect.duration)
+        row[effect::DURATION] = duration_code(&effect.duration)
             .filter(|_| effect.duration != "WhileYouControlSource" || record.source.is_some())
             .ok_or(Error::InvalidShared(
                 "invalid shared effect duration/source",
             ))?;
-        row[9] = *ranks
+        row[effect::TIMESTAMP] = *ranks
             .get(&effect.timestamp)
             .ok_or(Error::InvalidShared("missing effect timestamp"))?;
-        row[10] = join(Some(record.controller_id))?;
-        row[11] = effect.source_registry_key.map_or(0.0, |id| (id + 1) as f32);
-        row[12] = record
+        row[effect::CONTROLLER] = join(Some(record.controller_id))?;
+        row[effect::SOURCE_DEFINITION] =
+            effect.source_registry_key.map_or(0.0, |id| (id + 1) as f32);
+        row[effect::SOURCE] = record
             .source
             .as_ref()
             .map(|source| join(source.object_id))
             .transpose()?
             .unwrap_or(0.0);
-        row[13] = d as f32;
+        row[effect::DETAIL_OFFSET] = d as f32;
         for (kind, token) in effect
             .keywords
             .iter()
@@ -210,17 +212,19 @@ pub fn encode(
                     .map(|s| (3.0, name_value(&format!("Color::{s}")))),
             )
         {
-            details[d * DETAIL_DIM] = kind;
-            details[d * DETAIL_DIM + 1..(d + 1) * DETAIL_DIM].copy_from_slice(&split_id(token));
+            details[d * DETAIL_DIM + detail::KIND] = kind;
+            details[d * DETAIL_DIM + detail::VALUE_HIGH..(d + 1) * DETAIL_DIM]
+                .copy_from_slice(&split_id(token));
             d += 1;
         }
         for &(kind, value) in &effect.program {
-            details[d * DETAIL_DIM] = 10.0 + f32::from(kind);
-            details[d * DETAIL_DIM + 1..(d + 1) * DETAIL_DIM].copy_from_slice(&split_id(value));
+            details[d * DETAIL_DIM + detail::KIND] = 10.0 + f32::from(kind);
+            details[d * DETAIL_DIM + detail::VALUE_HIGH..(d + 1) * DETAIL_DIM]
+                .copy_from_slice(&split_id(value));
             d += 1;
         }
-        row[14] = d as f32 - row[13];
-        row[15] = m as f32;
+        row[effect::DETAIL_COUNT] = d as f32 - row[effect::DETAIL_OFFSET];
+        row[effect::MEMBER_OFFSET] = m as f32;
         if record.members.is_empty() {
             return Err(Error::InvalidShared("shared effect has no memberships"));
         }
@@ -230,17 +234,17 @@ pub fn encode(
                     "invalid shared effect membership order",
                 ));
             }
-            members[m * MEMBER_DIM] = join(member.target.object_id)?;
-            members[m * MEMBER_DIM + 1] = (member.order + 1) as f32;
+            members[m * MEMBER_DIM + member::OBJECT] = join(member.target.object_id)?;
+            members[m * MEMBER_DIM + member::ORDER] = (member.order + 1) as f32;
             m += 1;
         }
-        row[16] = m as f32 - row[15];
-        row[17] = 1.0;
+        row[effect::MEMBER_COUNT] = m as f32 - row[effect::MEMBER_OFFSET];
+        row[effect::VALID] = 1.0;
     }
     Ok(())
 }
 
-/// Header column 8 and the copy-exception fact's duration: the record's
+/// The header duration column and the copy-exception fact's duration: the record's
 /// `EffectDuration` code, or `None` for a name no record carries.
 pub(super) fn duration_code(duration: &str) -> Option<f32> {
     match duration {

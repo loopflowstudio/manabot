@@ -212,7 +212,9 @@ pilot's first-64 action prefix.
 `agent/continuation.rs` projects the relation frames and
 `agent/observation_encoder.rs` the fact rows once per observation;
 `manabot/env/observation.py` is the matching reference encoder. A buffer that
-is missing or has the wrong shape fails before any write.
+is missing or has the wrong shape fails before any write. Column names and
+value encodings for every buffer come from `managym.observation_layout()`
+([reading arrays by name](engine.md#reading-arrays-by-name)).
 
 ### Relations and facts
 

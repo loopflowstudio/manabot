@@ -2,6 +2,8 @@
 //! References link only to exact, visible incarnations. Tensor rows and portable
 //! text evidence consume these same facts; no strings or JSON enter encoding.
 
+use super::observation_layout::relation;
+
 use crate::state::ability::LibraryEnd;
 use serde::{Deserialize, Serialize};
 
@@ -21,16 +23,12 @@ use crate::{
     },
 };
 
-/// Up to 64 relation rows of 49 floats. Overflow is an admission error,
-/// never truncation. Zero is padding/absence for selectors. Validity is
-/// column 31 and target eligibility column 32, followed by the frame's X
-/// (33), its granted keywords (34..48, in `KeywordData` field order) and a
-/// waiting delayed trigger's "this turn" (48).
+/// Up to 64 relation rows, columns named by `observation_layout::relation`.
+/// Overflow is an admission error, never truncation. Zero is padding/absence
+/// for selectors. Granted keywords follow `KeywordData` field order.
 pub const RELATION_ROWS: usize = 64;
-pub const RELATION_DIM: usize = 49;
-pub const RELATION_X_INDEX: usize = 33;
-pub const RELATION_KEYWORDS_INDEX: usize = 34;
-pub const RELATION_THIS_TURN_INDEX: usize = RELATION_KEYWORDS_INDEX + KEYWORD_COUNT;
+pub const RELATION_DIM: usize = relation::WIDTH;
+const _: () = assert!(relation::THIS_TURN == relation::FLYING + KEYWORD_COUNT);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -143,7 +141,7 @@ pub struct ContinuationFrame {
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_keywords: [bool; KEYWORD_COUNT],
     /// Waiting frequency: 1 once, 2 each match. Missing historical data is unknown.
-    /// Encoded as a kind-9 relation row with the code in column 28.
+    /// Encoded as a kind-9 relation row with the code in `relation::DECISION`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delayed_frequency: Option<u8>,
     /// A waiting delayed trigger that ends in this turn's cleanup step.
@@ -1068,34 +1066,34 @@ pub fn encode_into(
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
         let mut header = [0.0; RELATION_DIM];
-        header[0] = 1.0;
-        header[1] = (index + 1) as f32;
-        header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
-        header[3] = frame.kind as f32;
-        header[4] = if frame.controller == viewer { 1.0 } else { 2.0 };
-        header[5] = definition(frame.source);
-        header[6] = link(frame.source);
-        header[7] = frame.mode.map_or(0.0, |v| (v + 1) as f32);
-        header[8] = frame.ability.map_or(0.0, |v| (v + 1) as f32);
-        header[9] = f32::from(frame.kicked);
-        header[10] = frame.active_clause.map_or(0.0, |v| (v + 1) as f32);
-        header[11] = f32::from(frame.cost.is_some());
+        header[relation::KIND] = 1.0;
+        header[relation::FRAME] = (index + 1) as f32;
+        header[relation::PARENT] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
+        header[relation::FRAME_KIND] = frame.kind as f32;
+        header[relation::CONTROLLER] = if frame.controller == viewer { 1.0 } else { 2.0 };
+        header[relation::SOURCE_DEFINITION] = definition(frame.source);
+        header[relation::SOURCE] = link(frame.source);
+        header[relation::MODE] = frame.mode.map_or(0.0, |v| (v + 1) as f32);
+        header[relation::ABILITY] = frame.ability.map_or(0.0, |v| (v + 1) as f32);
+        header[relation::KICKED] = f32::from(frame.kicked);
+        header[relation::ACTIVE_CLAUSE] = frame.active_clause.map_or(0.0, |v| (v + 1) as f32);
+        header[relation::HAS_COST] = f32::from(frame.cost.is_some());
         if let Some(cost) = frame.cost {
             for (i, amount) in cost.iter().enumerate() {
-                header[12 + i] = *amount as f32;
+                header[relation::MANA_WHITE + i] = *amount as f32;
             }
         }
-        header[19] = f32::from(frame.lesson);
-        header[20] = f32::from(frame.waterbend);
-        header[21] = f32::from(frame.can_decline);
-        header[28] = frame.decision as f32;
-        header[30] = frame.resolutions_this_turn as f32;
-        header[31] = 1.0;
-        header[RELATION_X_INDEX] = f32::from(frame.x);
+        header[relation::RESTRICTED] = f32::from(frame.lesson);
+        header[relation::WATERBEND] = f32::from(frame.waterbend);
+        header[relation::CAN_DECLINE] = f32::from(frame.can_decline);
+        header[relation::DECISION] = frame.decision as f32;
+        header[relation::RESOLUTIONS_THIS_TURN] = frame.resolutions_this_turn as f32;
+        header[relation::VALID] = 1.0;
+        header[relation::X] = f32::from(frame.x);
         for (index, granted) in frame.granted_keywords.iter().enumerate() {
-            header[RELATION_KEYWORDS_INDEX + index] = f32::from(*granted);
+            header[relation::FLYING + index] = f32::from(*granted);
         }
-        header[RELATION_THIS_TURN_INDEX] = f32::from(frame.this_turn);
+        header[relation::THIS_TURN] = f32::from(frame.this_turn);
         rows.next().unwrap().copy_from_slice(&header);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,
@@ -1104,17 +1102,19 @@ pub fn encode_into(
                                  legal: Option<bool>| {
             let row = rows.next().unwrap();
             row.copy_from_slice(&header);
-            row[0] = kind;
-            row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
-            row[22] = (clause + 1) as f32;
-            row[29] = (ordinal + 1) as f32;
-            row[23] = definition(reference);
-            row[24] = link(reference);
-            row[25] = reference
-                .player
-                .map_or(0.0, |p| if p == viewer { 1.0 } else { 2.0 });
+            row[relation::KIND] = kind;
+            row[relation::LEGAL_AT_RESOLUTION_START] =
+                legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
+            row[relation::CLAUSE] = (clause + 1) as f32;
+            row[relation::ORDINAL] = (ordinal + 1) as f32;
+            row[relation::REFERENCE_DEFINITION] = definition(reference);
+            row[relation::REFERENCE] = link(reference);
+            row[relation::REFERENCE_PLAYER] =
+                reference
+                    .player
+                    .map_or(0.0, |p| if p == viewer { 1.0 } else { 2.0 });
             if let Some(player) = reference.player {
-                row[24] = if player == viewer { 1.0 } else { 2.0 };
+                row[relation::REFERENCE] = if player == viewer { 1.0 } else { 2.0 };
             }
         };
         for (ordinal, target) in frame.targets.iter().enumerate() {
@@ -1144,26 +1144,26 @@ pub fn encode_into(
         if let Some(frequency) = frame.delayed_frequency {
             let row = rows.next().unwrap();
             row.copy_from_slice(&header);
-            row[0] = 9.0;
-            row[28] = f32::from(frequency);
+            row[relation::KIND] = 9.0;
+            row[relation::DECISION] = f32::from(frequency);
         }
         for pair in &frame.hybrid {
             let row = rows.next().unwrap();
             row.copy_from_slice(&header);
-            row[0] = 5.0;
-            row[26] = (pair[0] + 1) as f32;
-            row[27] = (pair[1] + 1) as f32;
+            row[relation::KIND] = 5.0;
+            row[relation::HYBRID_FIRST] = (pair[0] + 1) as f32;
+            row[relation::HYBRID_SECOND] = (pair[1] + 1) as f32;
         }
         for output in &frame.mana_outputs {
             for (restricted, amounts) in [(false, output.mana), (true, output.lesson)] {
                 let row = rows.next().unwrap();
                 row.copy_from_slice(&header);
-                row[0] = 6.0;
-                row[7] = (output.mode + 1) as f32;
+                row[relation::KIND] = 6.0;
+                row[relation::MODE] = (output.mode + 1) as f32;
                 for (index, amount) in amounts.iter().enumerate() {
-                    row[12 + index] = *amount as f32;
+                    row[relation::MANA_WHITE + index] = *amount as f32;
                 }
-                row[19] = f32::from(restricted);
+                row[relation::RESTRICTED] = f32::from(restricted);
             }
         }
     }
