@@ -141,6 +141,8 @@ Reflowed the event paragraph in `docs/engine.md`.
 Implement pass (head d002b743b): nothing to build. Main's only new commit,
 c32b321b0 (#480), is Python policy-input admission with no `managym/` or docs
 changes and merges cleanly (`git merge-tree`).
+Implement pass (head d230b3173): nothing to build. Main's new f4c948f4a
+(MTG-301) adds only `experiments/` files and merges cleanly.
 
 QA re-run (head bc35142da): 1332 random games, 0 errors, output identical to
 da964c606; two Academy games to Game Over, no page errors. No fixes.
