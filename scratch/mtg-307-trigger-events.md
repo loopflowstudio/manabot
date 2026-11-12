@@ -123,12 +123,11 @@ debug nextest `trigger|description|attack|combat_damage|dies|sacrific|observabil
 249/249; clippy `--workspace --all-targets` no findings. Later gates
 (aaa6dd564, 9479b26a5): no suite inputs moved, no reruns.
 
-## Status (head 21e161b2a)
+## Status (head 38f6311a6)
 
-Nothing remains to build. Since 17768efe2 only base merge 59cf727bc
-(`managym/perf/baseline.json` moved to PR #469's Engine Budget run,
-`docs/development.md`) and scratch changed. Main's c32b321b0 (#480) and
-f4c948f4a (MTG-301) touch no `managym/` or trigger docs; `git merge-tree`
-clean; merging them is left to realign. Remaining: parent PR #469 lands first,
-then PR #484 CI. This branch changes definitions, so its Engine Budget digest
-likely moves: adopt #484's own run against the new reference.
+Nothing remains to build. Parent PR #469 landed on main as 306612865
+(2026-11-12) and is merged here with c32b321b0 (#480) and f4c948f4a
+(MTG-301); relative to 21e161b2a the merges change no `managym/`, trigger docs
+or AGENTS/CLAUDE files, so earlier checks stand. Branch is level with
+origin/main. Remaining: PR #484 CI on 38f6311a6 (started 13:36Z). Its Engine
+Budget digest likely moves (definitions changed): adopt #484's own run.
