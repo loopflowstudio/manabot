@@ -9,7 +9,11 @@ both as ``bench_search.jsonl`` and ``bench_steps.jsonl``; the Engine Budget
 job writes the candidate's to ``.cache/engine-budget`` (with
 ``measurement.json`` naming the commit, date, run and runner) and the
 reference's to ``.cache/engine-budget/reference``, and uploads the whole
-directory as the ``engine-budget`` artifact.
+directory as the ``engine-budget`` artifact. ``sample`` runs already-built
+binaries in candidate/reference/reference/candidate order and retains every raw
+sample plus host scheduling counters. The comparison files contain median
+durations; step throughput is their inverse. A recording without a reference
+runs once. No sample is discarded, and differing digests reject aggregation.
 
 ``managym/perf/baseline.json`` names a reference commit, the digests both
 workloads must reproduce, and the figures the reference measured when it was
@@ -28,8 +32,13 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
+import resource
+import statistics
+import subprocess
 import sys
+import time
 from typing import Any, TypedDict, cast
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -63,6 +72,32 @@ class Measurement(TypedDict):
     date: str
     run: str
     runner: str
+
+
+class HostSample(TypedDict):
+    load_average: list[float]
+    proc_stat: str | None
+    cpu_pressure: str | None
+
+
+class BenchmarkSample(TypedDict):
+    side: str
+    ordinal: int
+    benchmark: str
+    before: HostSample
+    after: HostSample
+    elapsed_s: float
+    exit_code: int
+    user_s: float
+    system_s: float
+    voluntary_switches: int
+    involuntary_switches: int
+
+
+class SamplingEvidence(TypedDict):
+    order: list[str]
+    aggregation: str
+    samples: list[BenchmarkSample]
 
 
 class Reference(Measurement):
@@ -201,11 +236,11 @@ def _same(name: str, expected: int | None, measured: int | None) -> Check:
     )
 
 
-def digest_checks(label: str, baseline: Baseline, run: Run) -> list[Check]:
-    """Both workloads reproduce the committed digests, seed set included."""
-    expected_seeds = baseline["bench_search"]["seeds"]
+def digest_checks(label: str, expected: Run, run: Run) -> list[Check]:
+    """Match workload counts and digests, including the complete seed set."""
+    expected_seeds = expected.search["seeds"]
     seeds = run.search["seeds"]
-    expected_steps = baseline["bench_steps"]
+    expected_steps = expected.steps
     checks = [
         _same(
             f"{label} search seed {seed} digest",
@@ -281,9 +316,10 @@ def render(baseline: Baseline, rows: list[Check]) -> str:
 
 def compare(args: argparse.Namespace) -> int:
     baseline = load_baseline(args.baseline)
+    expected = Run(baseline["bench_search"], baseline["bench_steps"])
     reference = read_run(args.reference)
     candidate = read_run(args.artifact)
-    rows = digest_checks("reference", baseline, reference)
+    rows = digest_checks("reference", expected, reference)
     if any(row.failure for row in rows):
         # The file, not the candidate, is wrong: say so before any timing.
         # The footer's recording is the recovery.
@@ -296,7 +332,7 @@ def compare(args: argparse.Namespace) -> int:
                 "digests do not describe the reference",
             ),
         )
-    rows += digest_checks("candidate", baseline, candidate)
+    rows += digest_checks("candidate", expected, candidate)
     rows += timing_checks(baseline["tolerance"], reference, candidate)
     print(render(baseline, rows))
     return 1 if any(row.failure for row in rows) else 0
@@ -316,6 +352,118 @@ def record(args: argparse.Namespace) -> int:
     )
     args.baseline.write_text(json.dumps(baseline, indent=2) + "\n")
     print(f"Recorded {args.baseline} at {measurement['commit'][:9]}: {args.reason}")
+    return 0
+
+
+def _host_sample() -> HostSample:
+    """Read existing scheduling counters without a polling worker."""
+    stat = Path("/proc/stat")
+    pressure = Path("/proc/pressure/cpu")
+    return HostSample(
+        load_average=list(os.getloadavg()),
+        proc_stat=stat.read_text() if stat.exists() else None,
+        cpu_pressure=pressure.read_text() if pressure.exists() else None,
+    )
+
+
+def _aggregate_samples(directories: list[Path], output: Path) -> None:
+    """Median durations in the fixed two-order plan; every digest must agree."""
+    runs = [read_run(directory) for directory in directories]
+    first = runs[0]
+    for run in runs[1:]:
+        if any(check.failure for check in digest_checks("sample", first, run)):
+            raise ValueError("benchmark samples disagree on workload or digest")
+    output.mkdir(parents=True, exist_ok=True)
+    steps = dict(first.steps)
+    steps["steps_per_s"] = 1 / statistics.median(
+        1 / run.steps["steps_per_s"] for run in runs
+    )
+    (output / "bench_steps.jsonl").write_text(json.dumps(steps) + "\n")
+    rows = [
+        {
+            "seed": int(key),
+            "digest": seed["digest"],
+            "worst_s": statistics.median(
+                run.search["seeds"][key]["worst_s"] for run in runs
+            ),
+            "total_s": statistics.median(
+                run.search["seeds"][key]["total_s"] for run in runs
+            ),
+        }
+        for key, seed in first.search["seeds"].items()
+    ]
+    (output / "bench_search.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows)
+    )
+
+
+def sample(args: argparse.Namespace) -> int:
+    """Run already-built binaries C/R/R/C once; no retry or concurrent workers."""
+    if any(
+        (args.artifact / name).exists()
+        for name in ("samples", "bench_steps.jsonl", "bench_search.jsonl")
+    ):
+        raise ValueError(
+            "sample needs a fresh artifact directory; retain prior measurements"
+        )
+    plan = (
+        ["candidate", "reference", "reference", "candidate"]
+        if args.reference
+        else ["candidate"]
+    )
+    directories: dict[str, list[Path]] = {"candidate": [], "reference": []}
+    evidence = SamplingEvidence(order=plan, aggregation="median-duration", samples=[])
+    args.artifact.mkdir(parents=True, exist_ok=True)
+    for ordinal, side in enumerate(plan):
+        directory = args.artifact / "samples" / f"{ordinal}-{side}"
+        directory.mkdir(parents=True, exist_ok=True)
+        binaries = args.candidate if side == "candidate" else args.reference
+        for benchmark in ("bench_steps", "bench_search"):
+            before = resource.getrusage(resource.RUSAGE_CHILDREN)
+            host_before = _host_sample()
+            started = time.perf_counter()
+            with (
+                (directory / f"{benchmark}.jsonl").open("w") as out,
+                (directory / f"{benchmark}.stderr").open("w") as err,
+            ):
+                result = subprocess.run(
+                    [str((binaries / benchmark).resolve())],
+                    stdout=out,
+                    stderr=err,
+                    timeout=1200,
+                )
+            elapsed = time.perf_counter() - started
+            after = resource.getrusage(resource.RUSAGE_CHILDREN)
+            evidence["samples"].append(
+                BenchmarkSample(
+                    side=side,
+                    ordinal=ordinal,
+                    benchmark=benchmark,
+                    before=host_before,
+                    after=_host_sample(),
+                    elapsed_s=elapsed,
+                    exit_code=result.returncode,
+                    user_s=after.ru_utime - before.ru_utime,
+                    system_s=after.ru_stime - before.ru_stime,
+                    voluntary_switches=after.ru_nvcsw - before.ru_nvcsw,
+                    involuntary_switches=after.ru_nivcsw - before.ru_nivcsw,
+                )
+            )
+            (args.artifact / "sampling.json").write_text(
+                json.dumps(evidence, indent=2) + "\n"
+            )
+            print(
+                f"{ordinal} {side} {benchmark}: exit {result.returncode}, {elapsed:.3f}s",
+                flush=True,
+            )
+            if result.returncode:
+                return result.returncode
+        directories[side].append(directory)
+        # Retain an adoptable candidate even if a later reference run fails.
+        _aggregate_samples(
+            directories[side],
+            args.artifact if side == "candidate" else args.artifact / "reference",
+        )
     return 0
 
 
@@ -349,6 +497,19 @@ def main(argv: list[str] | None = None) -> int:
             help="candidate run directory: the job's output, or where "
             "`gh run download --name engine-budget` wrote it",
         )
+    sample_command = commands.add_parser(
+        "sample", help="run built binaries in both orders with scheduling evidence"
+    )
+    sample_command.add_argument(
+        "--candidate", type=Path, required=True, help="candidate executable directory"
+    )
+    sample_command.add_argument(
+        "--reference",
+        type=Path,
+        help="reference executable directory; omit for a recording",
+    )
+    sample_command.add_argument("--artifact", type=Path, default=ARTIFACT)
+    sample_command.set_defaults(handler=sample)
     args = parser.parse_args(argv)
     return int(args.handler(args))
 

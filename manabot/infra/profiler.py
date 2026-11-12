@@ -58,6 +58,16 @@ class TimingNode:
         if self.start_time is None:
             raise RuntimeError(f"Timer '{self.label}' was not started!")
         elapsed = time.perf_counter() - self.start_time
+        self._sample(elapsed)
+        self.start_time = None
+        return elapsed
+
+    def add(self, seconds: float) -> None:
+        """Count one finished interval without running this node's clock."""
+        self.count += 1
+        self._sample(seconds)
+
+    def _sample(self, elapsed: float) -> None:
         self.previous_total += elapsed
 
         # Add duration using reservoir sampling to maintain max_samples limit
@@ -67,9 +77,6 @@ class TimingNode:
                 self.durations[idx] = elapsed
         else:
             self.durations.append(elapsed)
-
-        self.start_time = None
-        return elapsed
 
     def running_total(self) -> float:
         """Return total accumulated time plus running time if still active."""
@@ -117,27 +124,11 @@ class Profiler:
         if not label:
             raise ValueError("Empty label is not allowed")
 
-        # Handle the case where this might be a root-level node
-        if not self.stack:
-            # This is a root level node
-            full_label = label
-            parent = None
-        else:
-            # This is a child node, create proper path
-            parent = self.stack[-1]
-            parent_path = self._get_full_path(parent)
-            full_label = f"{parent_path}/{label}" if parent_path else label
-
-        # Get or create the node
-        if full_label in self.node_cache:
-            node = self.node_cache[full_label]
-            if node.start_time is not None:
-                raise RuntimeError(f"Node '{full_label}' is already running.")
-        else:
-            node = TimingNode(label, parent, max_samples=self.max_samples)
-            self.node_cache[full_label] = node
-            if parent:
-                parent.children[label] = node
+        node = self._node(label)
+        if node.start_time is not None:
+            raise RuntimeError(
+                f"Node '{self._get_full_path(node)}' is already running."
+            )
 
         # Start timing and add to stack
         node.start()
@@ -153,8 +144,29 @@ class Profiler:
             else:
                 # This shouldn't happen with proper context manager usage
                 raise RuntimeError(
-                    f"Profiler stack corruption detected while stopping '{full_label}'"
+                    "Profiler stack corruption detected while stopping "
+                    f"'{self._get_full_path(node)}'"
                 )
+
+    def _node(self, label: str) -> TimingNode:
+        """The cached node for `label` below the active node."""
+        parent = self.stack[-1] if self.stack else None
+        full_label = f"{self._get_full_path(parent)}/{label}" if parent else label
+        if full_label not in self.node_cache:
+            node = TimingNode(label, parent, max_samples=self.max_samples)
+            self.node_cache[full_label] = node
+            if parent:
+                parent.children[label] = node
+        return self.node_cache[full_label]
+
+    def record(self, label: str, seconds: float) -> None:
+        """Add one interval another clock measured, below the active node.
+
+        A native call times its own parts; each lands in the tree as a child of
+        the phase holding the call, so it restarts and nests as a tracked one does.
+        """
+        if self.enabled:
+            self._node(label).add(seconds)
 
     def _get_full_path(self, node: TimingNode) -> str:
         """Return the full hierarchical path for a node."""

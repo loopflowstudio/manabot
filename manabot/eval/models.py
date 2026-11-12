@@ -28,6 +28,18 @@ class EvaluationKey(StrictModel):
     )
 
 
+class PolicyActionCounts(StrictModel):
+    """One game's decisions and the actions past its first-legal policy capacity.
+
+    Both players' decisions, as in training's cutoff receipt, so no per-policy
+    rate follows. Native legality kept every dropped action; only a policy could
+    not choose it.
+    """
+
+    decisions: int = Field(ge=0)
+    dropped_actions: int = Field(ge=0)
+
+
 class MatchRow(StrictModel):
     arena_key: EvaluationKey
     cell_id: str
@@ -63,6 +75,10 @@ class MatchRow(StrictModel):
     integrity: dict[str, Any]
     latency: dict[str, Any]
     game_seconds: float = Field(gt=0.0)
+    # Only a first-legal game that returned its result has this; frozen rows omit it.
+    policy_actions: PolicyActionCounts | None = Field(
+        default=None, exclude_if=lambda v: v is None
+    )
 
     @model_validator(mode="after")
     def validate_match_result(self) -> "MatchRow":

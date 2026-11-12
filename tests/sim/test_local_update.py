@@ -17,7 +17,12 @@ from manabot.belief.tracker import BeliefTracker
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
@@ -32,6 +37,7 @@ from manabot.sim.search.local_update import (
     SamplerArtifact,
     regularized_update,
 )
+import managym
 
 
 def small_match() -> MatchConfig:
@@ -41,11 +47,25 @@ def small_match() -> MatchConfig:
     )
 
 
-def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
+def make_teacher(
+    tmp_path: Path,
+    *,
+    config: LocalSearchConfig | None = None,
+    observation: ObservationConfig | None = None,
+) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
-    space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
+    space = ObservationSpace(observation)
+    history = space.encoder.config.policy_history_version == 1
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8,
+            num_attention_heads=2,
+            world=managym.WORLD_SETUP if history else None,
+            recent_events=history,
+        ),
+    )
     match = Match(small_match())
     path = tmp_path / "policy.pt"
     save_checkpoint(
@@ -58,13 +78,39 @@ def make_teacher(tmp_path: Path) -> tuple[LocalUpdateTeacher, Env]:
     teacher = LocalUpdateTeacher(
         path,
         file_sha256(path),
-        LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
+        config
+        or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
-    env = Env(
-        match, space, Reward(RewardConfig()), auto_reset=False, enable_profiler=False
-    )
+    env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
     return teacher, env
+
+
+@pytest.mark.parametrize(
+    "owner",
+    [
+        "manabot/model/facts.py",
+        "manabot/sim/search/rollout.py",
+        "manabot/sim/search/rollout_receipt.py",
+    ],
+)
+def test_teacher_identity_tracks_implementation_owners(
+    monkeypatch: pytest.MonkeyPatch, owner: str
+) -> None:
+    original = local_update.local_search_source_sha256()
+    revision = "implementation-revision-one"
+
+    def source_hash(path: Path) -> str:
+        if path.as_posix().endswith("/" + owner):
+            return canonical_sha256(revision)
+        return file_sha256(path)
+
+    monkeypatch.setattr(local_update, "file_sha256", source_hash)
+    first = local_update.local_search_source_sha256()
+    assert first != original
+    assert local_update.local_search_source_sha256() == first
+    revision = "implementation-revision-two"
+    assert local_update.local_search_source_sha256() != first
 
 
 def test_two_kl_optimum_and_shift_invariance() -> None:

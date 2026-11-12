@@ -26,7 +26,8 @@ class AttackTarget(Strict):
 
 class AttackPlan(Strict):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{2,40}$")
-    schema_version: Literal[1] = 1
+    # Schema 1 attackers stopped at an exact quota whatever the template said.
+    schema_version: Literal[1, 2] = 2
     targets: tuple[AttackTarget, ...] = Field(min_length=1)
     attacker_seeds: tuple[int, ...] = Field(min_length=2)
     cumulative_updates: tuple[int, ...] = Field(min_length=2)
@@ -94,6 +95,8 @@ class AttackPlan(Strict):
             stage.behavior = "frozen"
             # Only the attacker learns; the target remains a frozen policy.
             stage.learning_seats = "one"
+            if self.schema_version == 1:
+                stage.batch_closure = "exact-quota"
             stage.opponent = target.policy
             stage.updates = cumulative - previous
             stages.append(stage)

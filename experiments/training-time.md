@@ -74,7 +74,7 @@ deferred. The new investigation has a separate $25 GPU allowance.
 
 ## Basic-profile-001: evidence delivery failed
 
-The [first protocol](protocols/basic-training-profile.txt) admitted 28 cases on
+The [first protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/basic-training-profile.txt) admitted 28 cases on
 one RTX5090, covering the small benchmark model and the larger historical shape.
 Source `79ea7a0e`, run `70ec76cbf84d`. The job log reports an incomplete study, but
 no cell records or training archive reached storage. All 28 planned cells remain
@@ -94,7 +94,7 @@ still appear running while delivering artifacts. It does **not** identify the
 actual failure: the archive's size, transfer rate and upload exception were not
 recovered. Neither this delay nor its rental cost measures a training bottleneck.
 
-The [focused follow-up protocol](protocols/basic-training-profile-002.txt) keeps
+The [focused follow-up protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/basic-training-profile-002.txt) keeps
 the historical width-384/eight-layer, 64-stream comparison: both deterministic
 proofs and all three ordinary timer-on/off repetitions at the original work
 counts. Timing metadata is independently readable and sorts before model data;

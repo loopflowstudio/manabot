@@ -12,6 +12,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world
 from manabot.semantic.decision_contract import SemanticDecisionContract
@@ -40,7 +41,12 @@ def _agent(
 
 def _collector(agent: ActorCritic) -> SeatRoutedCollector:
     return SeatRoutedCollector(
-        agent.observation_space, Match(), Reward(RewardConfig()), num_envs=2, seed=17
+        agent.observation_space,
+        Match(),
+        Reward(RewardConfig()),
+        num_envs=2,
+        seed=17,
+        batch_closure="exact-quota",
     )
 
 
@@ -86,10 +92,10 @@ def test_value_interface_and_collection_likelihoods(
     batch = collector.collect(agent, 4)
     obs = {
         key: torch.from_numpy(value.reshape((-1,) + value.shape[2:]))
-        for key, value in batch.obs.items()
+        for key, value in batch.observations().observation.items()
     }
-    policy, raw_value = agent.forward_distribution(obs)
-    ordinary_policy, value = agent(obs)
+    policy, raw_value = agent.forward_distribution(admit_observation(agent, obs))
+    ordinary_policy, value = agent(admit_observation(agent, obs))
     assert torch.equal(policy, ordinary_policy)
     if kind == "categorical_wdl":
         assert raw_value.shape == (8, 3)
@@ -113,7 +119,7 @@ def test_value_interface_and_collection_likelihoods(
         batch.logprobs.ravel(),
         atol=1e-6,
     )
-    torch.testing.assert_close(agent.get_value(obs), value)
+    torch.testing.assert_close(agent.get_value(admit_observation(agent, obs)), value)
 
     path = tmp_path / "critic.pt"
     saved_config = agent.config.model_dump()
@@ -125,7 +131,9 @@ def test_value_interface_and_collection_likelihoods(
     assert loaded.config.value_kind == kind
     assert loaded.config.value_aggregation == aggregation
     assert loaded.config.attention_layers == depth
-    loaded_policy, loaded_value = loaded.forward_distribution(obs)
+    loaded_policy, loaded_value = loaded.forward_distribution(
+        admit_observation(loaded, obs)
+    )
     torch.testing.assert_close(loaded_policy, policy, rtol=0, atol=0)
     torch.testing.assert_close(loaded_value, raw_value, rtol=0, atol=0)
 
@@ -192,8 +200,11 @@ def test_distributional_supervision_reaches_shared_encoder() -> None:
     agent = _agent("categorical_wdl")
     collector = _collector(agent)
     batch = collector.collect(agent, 1)
-    obs = {key: torch.from_numpy(value[0]) for key, value in batch.obs.items()}
-    _, logits = agent.forward_distribution(obs)
+    obs = {
+        key: torch.from_numpy(value[0])
+        for key, value in batch.observations().observation.items()
+    }
+    _, logits = agent.forward_distribution(admit_observation(agent, obs))
     F.cross_entropy(logits, torch.tensor([0, 2])).backward()
     assert any(
         parameter.grad is not None and bool(parameter.grad.abs().sum() > 0)
@@ -224,7 +235,7 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         key: torch.from_numpy(value).unsqueeze(0)
         for key, value in space.encode(engine.observation_for_player(actor)).items()
     }
-    expected = agent.forward_distribution(original)
+    expected = agent.forward_distribution(admit_observation(agent, original))
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=actor)
@@ -234,6 +245,6 @@ def test_categorical_policy_and_value_do_not_read_hidden_deal(
         }
         for key in original:
             torch.testing.assert_close(original[key], observation[key], rtol=0, atol=0)
-        actual = agent.forward_distribution(observation)
+        actual = agent.forward_distribution(admit_observation(agent, observation))
         for left, right in zip(expected, actual, strict=True):
             torch.testing.assert_close(left, right, rtol=0, atol=0)

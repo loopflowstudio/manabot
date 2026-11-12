@@ -19,6 +19,17 @@ pub enum Ability {
 }
 
 impl Ability {
+    /// The triggered rule represented by printed or granted ward (CR 702.21).
+    pub fn ward(cost: PaymentCost) -> Self {
+        Self::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::BecomesTargeted {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::CounterUnlessPays { cost }],
+        }
+    }
+
     pub fn effects(&self) -> &[Effect] {
         match self {
             Ability::Triggered { effects, .. } => effects,
@@ -30,67 +41,44 @@ impl Ability {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
     /// The entering source must have been cast, rather than created or returned.
-    WasCast {
-        condition: Box<TriggerCondition>,
-    },
-    Sacrificed {
-        predicate: CardPredicate,
-        controller_only: bool,
-        /// "another permanent": the exact source object's own sacrifice
-        /// does not trigger it.
-        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
-        another: bool,
-    },
+    WasCast { condition: Box<TriggerCondition> },
+    /// "Whenever [subject] is sacrificed" (CR 701.21): once per sacrificed
+    /// permanent, matched as it last existed on the battlefield.
+    Sacrificed { subject: TriggerSubject },
     /// Wrap the whole condition, including ActiveIf. The limit is recorded
     /// when the event fires, once per exact source incarnation and turn.
-    OnceEachTurn {
-        condition: Box<TriggerCondition>,
-    },
-    YouCastSpell {
-        predicate: CardPredicate,
-    },
+    OnceEachTurn { condition: Box<TriggerCondition> },
+    /// "When [this] has no [kind] counters on it": a state trigger (CR 603.8)
+    /// of a battlefield source. It triggers whenever the state holds and
+    /// not again while its last occurrence waits or is on the stack.
+    NoCounters { kind: CounterKind },
+    /// "When you cast this spell" (CR 603.2): functions while the source is
+    /// a spell on the stack, and its caster controls the trigger.
+    YouCastThis,
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
-    WhileSourceAttacking {
-        condition: Box<TriggerCondition>,
-    },
-    /// "Whenever you cast your Nth spell each turn" (CR 603.2): the spell is
-    /// the Nth its controller cast this turn.
-    YouCastNthSpellThisTurn {
-        n: u32,
-    },
-    /// "Whenever a player casts a [predicate] spell": any player, including
-    /// you. The caster is the trigger context ("they").
-    PlayerCastsSpell {
-        predicate: CardPredicate,
-    },
+    WhileSourceAttacking { condition: Box<TriggerCondition> },
+    /// "Whenever a player casts a [predicate] spell that targets only this
+    /// [permanent]": every target of the spell is this permanent. The spell
+    /// is the context and its caster "that player".
+    SpellTargetsOnlyThis { predicate: CardPredicate },
     /// "When [subject] enters the battlefield."
-    EntersTheBattlefield {
-        subject: TriggerSubject,
-    },
+    EntersTheBattlefield { subject: TriggerSubject },
     /// "When [subject] dies." — battlefield to graveyard (CR 700.4).
-    Dies {
-        subject: TriggerSubject,
-    },
+    Dies { subject: TriggerSubject },
     /// "When [subject] leaves the battlefield": to any other zone, looking
     /// back in time (CR 603.10a).
-    LeavesTheBattlefield {
-        subject: TriggerSubject,
-    },
-    /// "Whenever [subject] attacks." Fires after the declare-attackers
-    /// turn-based action (CR 508.1); a subject of `AnotherYouControl` /
-    /// `AnyYouControl` fires once per combat ("whenever one or more ...
-    /// attack"), not once per attacker.
+    LeavesTheBattlefield { subject: TriggerSubject },
+    /// "Whenever [subject] attacks" (CR 508.1, after the declare-attackers
+    /// turn-based action). `per` says whether it triggers once for each
+    /// matching attacker or once per combat ("whenever you attack", "one or
+    /// more ... attack"); `attackers` limits how many creatures were
+    /// declared in all ("attacks alone", "and at least one other creature
+    /// attack"). A lone matching attacker is the trigger's context.
     Attacks {
         subject: TriggerSubject,
-    },
-    /// "Whenever [this] and at least one other creature attack": the source
-    /// is among two or more declared attackers.
-    AttacksWithAnother,
-    /// "Whenever [subject] attacks alone": exactly one creature was
-    /// declared as an attacker (CR 506.5). The attacker is the context.
-    AttacksAlone {
-        subject: TriggerSubject,
+        per: Per,
+        attackers: AttackSize,
     },
     /// The inner cast or entry trigger only for an object that came from
     /// `zone` ("whenever you cast a spell from exile", "whenever a permanent
@@ -99,78 +87,73 @@ pub enum TriggerCondition {
         zone: ZoneType,
         condition: Box<TriggerCondition>,
     },
-    /// "Whenever an opponent searches their library" (CR 701.23), even when
-    /// the search finds nothing.
-    OpponentSearchesLibrary,
-    /// "Whenever [subject] deals combat damage to a player": once for each
-    /// creature that does (`AnyYouControl`: "a creature you control").
-    CreatureDealsCombatDamageToPlayer {
-        subject: TriggerSubject,
-    },
-    /// "Whenever one or more [predicate] you control deal combat damage to a
-    /// player": once per combat damage step.
-    OneOrMoreDealCombatDamageToPlayer {
-        predicate: CardPredicate,
-    },
     /// "Whenever [subject] becomes tapped."
-    BecomesTapped {
-        subject: TriggerSubject,
-    },
+    BecomesTapped { subject: TriggerSubject },
     /// "Whenever [subject] is tapped for mana."
-    TappedForMana {
-        subject: TriggerSubject,
-    },
+    TappedForMana { subject: TriggerSubject },
     /// "Whenever [subject] becomes the target of a spell or ability an
     /// opponent controls." (Ward, CR 702.21.) The triggering spell or ability
     /// is threaded to the ability's effects as the trigger context target.
-    BecomesTargeted {
-        subject: TriggerSubject,
-    },
-    /// "At the beginning of your upkeep."
-    BeginningOfYourUpkeep,
-    /// "At the beginning of each upkeep."
-    BeginningOfEachUpkeep,
-    /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
-    /// bending instruction or waterbend payment.
-    YouBend,
-    BeginningOfYourCombat,
-    BeginningOfYourEndStep,
+    BecomesTargeted { subject: TriggerSubject },
     /// "Whenever a creature you control attacking causes a triggered ability
     /// of that creature to trigger": that ability, once on the stack, is the
     /// trigger's context.
     YourAttackingCreatureTriggers,
-    /// "At the beginning of your first main phase" (the precombat main).
-    BeginningOfYourFirstMainPhase,
     /// A Saga's chapter ability (CR 714.2b): triggers as lore counters put
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
-    Chapter {
-        chapter: u8,
-    },
-    /// "Whenever you draw your Nth card each turn." The per-player draw
-    /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
-    YouDrawNthCardThisTurn {
-        n: u32,
-    },
-    /// "Whenever you put one or more [kind] counters on a creature": once
-    /// per creature an instruction you control puts them on. The trigger's
-    /// X is how many were put ("that much").
-    YouPutCountersOnCreature {
+    Chapter { chapter: u8 },
+    /// "Whenever [who] puts one or more [kind] counters on a [on]
+    /// permanent": once per permanent an instruction that player controls
+    /// puts them on. The trigger's X is how many were put ("that much").
+    PutsCounters {
+        who: Actor,
         kind: CounterKind,
+        on: CardPredicate,
     },
-    /// "Whenever you scry" (CR 701.22): once per scry instruction with a
-    /// count above zero. (No current effect surveils.)
-    YouScry,
-    /// "Whenever an opponent draws their Nth card each turn."
-    OpponentDrawsNthCardThisTurn {
-        n: u32,
+    /// "Whenever [who] casts a [predicate] spell" (CR 601.2i); with `nth`,
+    /// only the spell that is the Nth its caster cast this turn ("whenever
+    /// you cast your second spell each turn"). The caster is "that player".
+    Casts {
+        who: Actor,
+        predicate: CardPredicate,
+        nth: Option<u32>,
+    },
+    /// "Whenever [who] draws a card"; with `nth`, only that player's Nth
+    /// draw this turn (see `PlayerTurnHistory::cards_drawn`). The drawer is
+    /// "that player".
+    Draws { who: Actor, nth: Option<u32> },
+    /// "At the beginning of [whose] [step]": `whose` is asked of the active
+    /// player, who is "that player".
+    BeginningOf { step: TurnStep, whose: Actor },
+    /// "Whenever [who] [does one of these keyword actions]": once per
+    /// search (even one that finds nothing, CR 701.23), scry with a count
+    /// above zero (CR 701.22), completed surveil (CR 701.25), bending
+    /// instruction or waterbend payment. The performer is "that player".
+    Performs {
+        who: Actor,
+        any_of: Vec<KeywordAction>,
+    },
+    /// "Whenever a [predicate] card is put into [whose] graveyard from
+    /// anywhere" (Bloodchief Ascension): once per card, never a token
+    /// (tokens are not cards); the graveyard's owner is "that player".
+    PutIntoGraveyard {
+        whose: Actor,
+        predicate: CardPredicate,
+    },
+    /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
+    /// prevented damage excluded. `per` says whether it triggers once for
+    /// each creature that does or once per combat damage step ("one or
+    /// more").
+    DealsCombatDamage {
+        subject: TriggerSubject,
+        to: Actor,
+        per: Per,
     },
     /// The inner condition, for an ability that functions only while its
     /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
     /// the ability's source is that graveyard object.
-    InGraveyard {
-        condition: Box<TriggerCondition>,
-    },
+    InGraveyard { condition: Box<TriggerCondition> },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller: a conditionally granted triggered ability
     /// ("has firebending 2 as long as there's a Lesson card in your
@@ -201,11 +184,25 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if a graveyard has `count` or more cards in it": any player's
+    /// graveyard (Visions of Beyond).
+    AnyGraveyardAtLeast {
+        count: usize,
+    },
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
         count: usize,
         predicate: CardPredicate,
+    },
+    /// "if you control `count` or more permanents you don't own" (Agent of
+    /// Treachery).
+    ControlsUnownedAtLeast {
+        count: usize,
+    },
+    /// "if you have `count` or more cards in hand".
+    CardsInHandAtLeast {
+        count: usize,
     },
     /// "as long as you have `count` or more unspent mana" (both pools).
     UnspentManaAtLeast {
@@ -222,6 +219,11 @@ pub enum Condition {
     /// "if you've sacrificed `count` or more permanents this turn".
     SacrificedThisTurnAtLeast {
         count: u32,
+    },
+    /// "if an opponent lost `amount` or more life this turn" (Bloodchief
+    /// Ascension): any one opponent's total loss this turn.
+    OpponentLostLifeThisTurnAtLeast {
+        amount: u32,
     },
     /// At least one alternative holds ("as long as you control a land
     /// creature or a land entered the battlefield under your control this
@@ -245,13 +247,15 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// The exact ability source has these current characteristics.
+    SourceMatches(CardPredicate),
     /// Triggering question: the permanent whose event fired the trigger has
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
-    /// Resolution only: a card the resolution's latest discard moved matches
+    /// Resolution only: a card the scope's latest mill or discard moved matches
     /// [predicate] ("When you discard a nonland card this way").
-    DiscardedThisWay(CardPredicate),
+    CardsThisWayMatch(CardPredicate),
     /// Resolution only: the spell whose casting triggered the ability
     /// matches [predicate] ("If that spell is a Lesson").
     TriggeringSpellMatches(CardPredicate),
@@ -259,13 +263,39 @@ pub enum Condition {
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
     TargetCardExiled(CardPredicate),
-    /// Resolution only: the resolution's latest `Move` or `Sacrifice`
-    /// moved at least one object ("If you do").
+    /// Resolution only: the resolution's latest `Move`, `Sacrifice` or
+    /// `Destroy` moved at least one object ("If you do", "if a creature is
+    /// destroyed this way").
     Moved,
     /// Resolution only: the frame's primary target is a permanent the
     /// resolving player controls, or last controlled once it has left ("If
     /// you controlled it").
     TargetControlledByYou,
+}
+
+impl TriggerCondition {
+    /// "Whenever [who] casts a [predicate] spell", any spell of the turn.
+    pub fn casts(who: Actor, predicate: CardPredicate) -> Self {
+        TriggerCondition::Casts {
+            who,
+            predicate,
+            nth: None,
+        }
+    }
+
+    /// "At the beginning of [whose] [step]".
+    pub fn beginning_of(step: TurnStep, whose: Actor) -> Self {
+        TriggerCondition::BeginningOf { step, whose }
+    }
+
+    /// "Whenever [subject] attacks", whatever else attacks with it.
+    pub fn attacks(subject: TriggerSubject, per: Per) -> Self {
+        TriggerCondition::Attacks {
+            subject,
+            per,
+            attackers: AttackSize::Any,
+        }
+    }
 }
 
 impl Condition {
@@ -276,6 +306,7 @@ impl Condition {
         match self {
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters => true,
             Condition::ControlsAtLeast { predicate, .. } => predicate.reads_source(),
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
@@ -301,26 +332,105 @@ impl Condition {
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
             | Condition::TargetCardExiled(_)
-            | Condition::DiscardedThisWay(_)
+            | Condition::CardsThisWayMatch(_)
             | Condition::TriggeringSpellMatches(_)
             | Condition::Moved
             | Condition::TargetControlledByYou => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::SourceMatches(_)
             | Condition::TriggeringHadCounters
             | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
             | Condition::GraveyardAtLeast { .. }
+            | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
+            | Condition::ControlsUnownedAtLeast { .. }
+            | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
             | Condition::BentAllFourThisTurn
-            | Condition::SacrificedThisTurnAtLeast { .. } => false,
+            | Condition::SacrificedThisTurnAtLeast { .. }
+            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => false,
         }
     }
+}
+
+/// The player who performs a trigger's event, relative to the ability's
+/// controller ("you"). Resolution-time players are `PlayerSelector`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Actor {
+    You,
+    Opponent,
+    AnyPlayer,
+}
+
+impl Actor {
+    /// Whether `player` is this actor for an ability controlled by `you`.
+    pub fn includes(self, you: PlayerId, player: PlayerId) -> bool {
+        match self {
+            Actor::You => player == you,
+            Actor::Opponent => player != you,
+            Actor::AnyPlayer => true,
+        }
+    }
+}
+
+/// A step whose beginning triggers abilities (CR 503.1a, 504.2, 505.4,
+/// 507.1, 513.1). `FirstMain` is the precombat main phase; `Combat` is the
+/// beginning of combat step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TurnStep {
+    Upkeep,
+    Draw,
+    FirstMain,
+    Combat,
+    End,
+}
+
+/// A keyword action a `TriggerCondition::Performs` event watches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum KeywordAction {
+    /// Searching one's library (CR 701.23).
+    Search,
+    Scry,
+    Surveil,
+    Waterbend,
+    Earthbend,
+    Firebend,
+    Airbend,
+}
+
+impl KeywordAction {
+    /// "waterbend, earthbend, firebend, or airbend".
+    pub const BENDING: [KeywordAction; 4] = [
+        KeywordAction::Waterbend,
+        KeywordAction::Earthbend,
+        KeywordAction::Firebend,
+        KeywordAction::Airbend,
+    ];
+}
+
+/// How often an event over several objects at once triggers: once for each
+/// matching object, or once for the batch ("one or more").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Per {
+    Object,
+    Batch,
+}
+
+/// How many creatures in all an `Attacks` trigger requires to have been
+/// declared as attackers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AttackSize {
+    Any,
+    /// Exactly one (CR 506.5).
+    Alone,
+    /// Two or more, the subject among them.
+    WithAnother,
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -328,14 +438,47 @@ impl Condition {
 pub enum TriggerSubject {
     /// The permanent this ability is on.
     This,
-    /// "another [predicate] you control"
-    AnotherYouControl(CardPredicate),
-    /// "this or another [predicate] you control"
-    AnyYouControl(CardPredicate),
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// "a/another [predicate] [controlled_by controls]": an object whose
+    /// controller is `controlled_by`, relative to the ability's controller.
+    /// `another` excludes the source itself (CR 109.4).
+    Matching {
+        controlled_by: Actor,
+        predicate: Box<CardPredicate>,
+        another: bool,
+    },
+}
+
+impl TriggerSubject {
+    /// "a/another [predicate] [controlled_by controls]".
+    pub fn matching(controlled_by: Actor, predicate: CardPredicate, another: bool) -> Self {
+        Self::Matching {
+            controlled_by,
+            predicate: Box::new(predicate),
+            another,
+        }
+    }
+
+    /// "a [predicate] you control", this included.
+    pub fn you_control(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::You, predicate, false)
+    }
+
+    /// "another [predicate] you control".
+    pub fn another_you_control(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::You, predicate, true)
+    }
+
+    /// "a [predicate]", whoever controls it, this included.
+    pub fn any(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::AnyPlayer, predicate, false)
+    }
+
     /// "another [predicate]", whoever controls it.
-    Another(CardPredicate),
+    pub fn another(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::AnyPlayer, predicate, true)
+    }
 }
 
 /// The players an effect affects, relative to its controller.
@@ -347,6 +490,9 @@ pub enum PlayerSelector {
     EachOpponent,
     /// The trigger's player ("they": the caster of the triggering spell).
     TriggeringPlayer,
+    /// "each of that player's opponents" (Standstill): the opponents of the
+    /// trigger's player, whoever controls the effect.
+    TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
     /// The controller of the frame's primary target permanent, as it is or
@@ -364,6 +510,7 @@ impl PlayerSelector {
             Self::You
             | Self::EachOpponent
             | Self::TriggeringPlayer
+            | Self::TriggeringPlayersOpponents
             | Self::TargetController
             | Self::Owner => None,
         }
@@ -395,7 +542,7 @@ pub enum EffectValue {
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
     /// The source permanent's current power ("where X is this creature's
-    /// power"); 0 once it has left the battlefield or outside a resolution.
+    /// power"); last-known power after departure, 0 outside a resolution.
     SourcePower,
     /// Attacking creatures `controller` controls matching `predicate`, as
     /// the effect resolves ("search for up to that many").
@@ -404,19 +551,29 @@ pub enum EffectValue {
     },
     /// Permanents `controller` has sacrificed this turn.
     PermanentsSacrificedThisTurn,
+    /// "The number of spells you've cast this turn."
+    SpellsCastThisTurn,
     /// The power of the permanent whose event fired the trigger, from its
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// The toughness of the frame's primary target, from its last known
+    /// information once it has left ("you gain life equal to its
+    /// toughness").
+    TargetToughness,
     /// Permanents `controller` owns that an opponent controls.
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
-    /// The greatest power among creatures `controller` controls (0 with
-    /// none).
-    GreatestPowerYouControl,
+    /// The greatest power among creatures `controller` controls that match
+    /// [predicate] ("non-Human creatures you control"); 0 with none.
+    GreatestPowerYouControl {
+        predicate: CardPredicate,
+    },
     /// Cards in `controller`'s hand.
     CardsInHand,
+    /// Number of objects still named by a resolution result or selector.
+    Objects(Box<ObjectSelector>),
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -436,6 +593,23 @@ impl PaymentCost {
     }
 }
 
+/// Where the revealed cards of a distinct-name search go.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DistinctSearchEnd {
+    /// An opponent chooses `picks` of them for the graveyard; the rest enter
+    /// the battlefield tapped, then the searcher shuffles.
+    OpponentSplits { picks: usize },
+    /// Into the searcher's hand, then the searcher shuffles.
+    Hand,
+}
+
+/// Which end of a library receives a moved or ordered card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LibraryEnd {
+    Top,
+    Bottom,
+}
+
 /// Which objects a verb acts on, read as the instruction resolves
 /// (`Game::select`). A verb acts only on the objects it can: counters, taps
 /// and sacrifices need battlefield permanents, a move any card object, a
@@ -450,6 +624,10 @@ pub enum ObjectSelector {
     /// The clause's chosen target. The spec declares the implicit targeting
     /// clause of an effect list without an explicit `TargetClause`.
     Target(TargetSpec),
+    /// All eligible targets of the active clause, acted on by one instruction
+    /// ("put a counter on each target"). Unlike `ForEachTarget`, this does not
+    /// run a separate instruction sequence or commit a separate event per slot.
+    Targets(TargetSpec),
     /// The permanent whose event fired the trigger ("that creature", "that
     /// token"), which the trigger keeps as its context.
     Triggering,
@@ -466,6 +644,21 @@ pub enum ObjectSelector {
     /// The objects the resolution's latest `Move` or `Sacrifice` moved, as
     /// they now exist ("then return it to the battlefield").
     Moved,
+    /// Cards moved by the latest mill or discard in this scope. Later Move
+    /// instructions do not replace this distinct instruction result.
+    CardsThisWay,
+    /// Exact objects chosen by the enclosing SelectCards operation.
+    Selected,
+    /// Cards the resolving player owns in a zone. Hidden selection retains
+    /// the zone provenance across sampled worlds.
+    Zone(ZoneType),
+    /// Cards the clause's chosen target player owns in a zone ("search target
+    /// opponent's library"); `spec` declares that player target. The
+    /// resolving player selects, and only that zone is revealed to them.
+    TargetPlayersZone {
+        spec: Box<TargetSpec>,
+        zone: ZoneType,
+    },
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -560,7 +753,8 @@ impl ObjectSelector {
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
-            Self::Target(spec) => Some(spec),
+            Self::Target(spec) | Self::Targets(spec) => Some(spec),
+            Self::TargetPlayersZone { spec, .. } => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..
@@ -572,6 +766,9 @@ impl ObjectSelector {
             | Self::Remembered
             | Self::Grantor
             | Self::Moved
+            | Self::CardsThisWay
+            | Self::Selected
+            | Self::Zone(_)
             | Self::You
             | Self::Chosen { .. }
             | Self::Each { .. } => None,
@@ -667,6 +864,9 @@ pub enum Effect {
     /// objects become [`ObjectSelector::Moved`] and answer
     /// [`Condition::Moved`].
     Move {
+        /// A stated end replaces the usual shuffle-into-library movement.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        library_end: Option<LibraryEnd>,
         what: ObjectSelector,
         to: ZoneType,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -687,8 +887,11 @@ pub enum Effect {
     Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
     RemoveAllCounters { from: ObjectSelector },
-    /// Create a token that's a copy of the source, or of the target `of`
-    /// names (CR 707.2, 111.1). The token copies the copiable values: the
+    /// Create a token that's a copy of each object `of` names (CR 707.2,
+    /// 111.1): the source (`This`), the target, or every permanent of an
+    /// `Each` ("for each creature target player controls, create a token
+    /// that's a copy of that creature"), all copied as the instruction
+    /// resolves and created simultaneously. The token copies the copiable values: the
     /// definition of the face that's up, including any copy effect already
     /// applied, and never counters, damage, tapped state or non-copy
     /// effects. A copy of a double-faced permanent has both faces and enters
@@ -698,8 +901,7 @@ pub enum Effect {
     /// the token's own copiable values (CR 707.9b), so a copy of it inherits
     /// them.
     CreateTokenCopy {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        of: Option<TargetSpec>,
+        of: ObjectSelector,
         exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
@@ -707,23 +909,27 @@ pub enum Effect {
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     },
+    /// Cumulative upkeep's payment (CR 702.24a): sacrifice this unless you
+    /// pay `each` for each age counter on it. The age counter is put on by a
+    /// preceding instruction.
+    CumulativeUpkeep { each: ManaCost },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife { amount: EffectValue },
-    /// "Return up to one [predicate] card milled this way to the
-    /// battlefield under your control": a choice among the cards the
-    /// resolution's latest mill moved, still in the graveyard.
-    ReturnMilledThisWay { predicate: CardPredicate },
     MillCards {
         count: EffectValue,
         /// The target player mills instead of the controller.
         target: Option<TargetSpec>,
     },
-    MillAndSelect {
-        count: usize,
+    /// Choose a subset of exact objects from `from`, then run `effects` in
+    /// a child scope where `Selected` names them. An empty selection runs
+    /// `if_declined`; the caller retains its earlier results and suffix.
+    SelectCards {
+        from: ObjectSelector,
         predicate: CardPredicate,
+        min: usize,
+        max: EffectValue,
+        effects: Vec<Effect>,
         if_declined: Vec<Effect>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        if_milled: Option<MilledBonus>,
     },
     /// A distinct targeting clause. Effects within it refer to the same
     /// chosen objects; different clauses may choose the same object.
@@ -733,29 +939,6 @@ pub enum Effect {
     },
     /// Internal cursor emitted when clauses are lowered into a frame queue.
     SelectTargetRequirement { index: usize },
-    /// Search is a private choice that always shuffles, including failure to find.
-    SearchBasicLand {
-        subtype: Option<String>,
-        /// Up to this many cards, read at resolution.
-        #[serde(skip_serializing_if = "is_fixed_one")]
-        count: EffectValue,
-        #[serde(skip_serializing_if = "is_true")]
-        tapped: bool,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        untap_if_lands: Option<usize>,
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        bottom_source: bool,
-        /// Landcycling: any card of `subtype` (not only a basic land) is
-        /// revealed and put into hand instead of onto the battlefield.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        to_hand: bool,
-    },
-    /// Discard up to `up_to` cards, then draw `count` for each discarded.
-    OptionalDiscardDraw {
-        count: usize,
-        #[serde(skip_serializing_if = "is_one")]
-        up_to: usize,
-    },
     /// The player `what` names discards `count` cards, chosen by them.
     Discard {
         what: ObjectSelector,
@@ -802,6 +985,10 @@ pub enum Effect {
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
+    /// "End the turn" (CR 723.1): every object on the stack is exiled,
+    /// waiting triggered abilities cease to exist, and the turn skips to its
+    /// cleanup step, which proceeds as usual.
+    EndTheTurn,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -837,6 +1024,12 @@ pub enum Effect {
     /// card; you may cast it without paying its mana cost if its mana value
     /// is less than `below`, otherwise put it into your hand.
     ExileUntilNonlandCastFree { below: EffectValue },
+    /// Cascade (CR 702.85a): exile cards from the top of your library until
+    /// you exile a nonland card with lesser mana value than the source spell;
+    /// you may cast it without paying its mana cost. Every other card exiled
+    /// this way, and that one if not cast, goes on the bottom in a random
+    /// order.
+    Cascade,
     /// "Look at the top card of your library. You may cast that card without
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
@@ -855,10 +1048,14 @@ pub enum Effect {
         target: TargetSpec,
         predicate: CardPredicate,
     },
-    /// Search for up to `count` land cards with different names; an
-    /// opponent puts `opponent_picks` of them into the graveyard and the rest
-    /// enter tapped (Elemental Teachings).
-    SearchLandsOpponentSplits { count: usize, opponent_picks: usize },
+    /// Search your library for up to `count` [predicate] cards with
+    /// different names, revealing each, then `end` places them (Elemental
+    /// Teachings, Three Dreams).
+    SearchDistinctNames {
+        predicate: CardPredicate,
+        count: usize,
+        end: DistinctSearchEnd,
+    },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
     PlaceTargetInLibrary { second_from_top: bool },
@@ -881,14 +1078,24 @@ pub enum Effect {
     /// The source deals `amount` damage to each creature, permanent or
     /// player `what` names (a `Target` selector may name a player),
     /// `amount` read as the instruction resolves; the excess dealt to the
-    /// last creature is kept for a following "the excess damage".
+    /// last creature is kept for a following "the excess damage". `by`
+    /// names another object as the source of the damage (CR 120.2: "it deals
+    /// damage equal to its power"), as it is or last existed.
     DealDamage {
         amount: EffectValue,
         what: ObjectSelector,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        by: Option<ObjectSelector>,
     },
     /// Counter each spell `what` names (CR 701.6a); abilities are not
     /// affected.
-    CounterSpell { what: ObjectSelector },
+    CounterSpell {
+        what: ObjectSelector,
+        /// "If that spell is countered this way, exile it instead of
+        /// putting it into its owner's graveyard."
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        exile: bool,
+    },
     /// "Counter target activated or triggered ability" (CR 701.6b): the
     /// ability leaves the stack and does nothing; spells are not affected.
     /// A stack ability is no card object, so the clause's chosen target is
@@ -914,13 +1121,13 @@ pub enum Effect {
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
-        /// "then attach this Equipment to it" (one token).
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        attach_source: bool,
+        /// "create a tapped [token]": enters tapped, not attacking.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        tapped: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
-    AttachSourceTo { target: TargetSpec },
+    AttachSourceTo { what: ObjectSelector },
     /// "Distribute `count` [kind] counters among any number of tapped
     /// creatures your opponents control": the controller places them one
     /// at a time, choosing among the eligible creatures at each placement.
@@ -962,9 +1169,7 @@ pub enum Effect {
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry { count: usize },
     /// Surveil `count` (CR 701.25): look at the top cards and put any
-    /// number of them into the graveyard. Kept cards stay on top in their
-    /// existing order, which is the whole choice for surveil 1, the only
-    /// amount the pool prints.
+    /// number of them into the graveyard, then order the kept cards on top.
     Surveil { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
@@ -986,11 +1191,15 @@ pub enum Effect {
     /// Put the top `count` cards of the controller's library into their
     /// hand (not a draw — no draw triggers).
     PutTopCardsInHand { count: usize },
-    /// "You may discard a card. If you do, [then]."
-    MayDiscard { then: Vec<Effect> },
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
+    /// "Copy that spell for each [each] the spell could target. Each copy
+    /// targets a different one of those" (Mirrorwing Dragon): the triggering
+    /// spell is copied under the resolving player once per selected
+    /// permanent that is a legal new target for it, and each copy's targets
+    /// become that permanent; nobody chooses.
+    CopyTriggeringSpellForEach { each: ObjectSelector },
     /// "Change the target of target spell or ability with a single target"
     /// (CR 115.7): to another legal target, if there is one.
     ChangeTarget { target: TargetSpec },
@@ -1055,9 +1264,8 @@ pub enum Effect {
     /// The first chosen creature fights the last (CR 701.14); records the
     /// excess damage dealt to the last.
     FightLastTarget,
-    /// Search your library for a card matching `predicate`, reveal it, put
-    /// it into your hand, then shuffle (CR 701.23).
-    SearchLibraryToHand { predicate: CardPredicate },
+    /// Shuffle the resolving player's library (CR 701.20).
+    ShuffleLibrary,
     /// "Remove up to `up_to` counters from [from]." With `chosen` unset the
     /// controller picks a present kind or stops; with it set, one counter of
     /// that kind is removed and the choice repeats for `up_to - 1`.
@@ -1068,7 +1276,7 @@ pub enum Effect {
     },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
-    /// creatures; they each get +2/+2"). Inner effects must not suspend.
+    /// creatures; they each get +2/+2"). Children may suspend.
     ForEachTarget { effects: Vec<Effect> },
 }
 
@@ -1092,7 +1300,7 @@ pub enum DelayedEvent {
         your_turn: bool,
     },
     /// The matching spell supplies event context, separate from captured subjects.
-    YouCastSpell(CardPredicate),
+    YouCastSpell(Box<CardPredicate>),
     Upkeep,
 }
 
@@ -1109,13 +1317,6 @@ pub enum DelayedExpiry {
     ThisTurn,
     /// No stated expiry; exact-object watchers still retire when that object leaves.
     Never,
-}
-
-/// Effects that run when any card milled by the same instruction matches.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub struct MilledBonus {
-    pub predicate: CardPredicate,
-    pub effects: Vec<Effect>,
 }
 
 impl Modification<EffectValue> {
@@ -1181,6 +1382,10 @@ pub enum TargetSpec {
     },
     /// "target creature or spell".
     CreatureOrSpell,
+    /// "target [predicate] spell" ("noncreature spell").
+    SpellMatching {
+        predicate: CardPredicate,
+    },
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".
@@ -1215,6 +1420,11 @@ pub struct TargetRequirement {
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
+    /// "Target creature of an opponent's choice": the controller's opponent
+    /// chooses this clause's targets as the ability is activated; legality
+    /// is still from the controller's side (CR 115.4).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub opponent_chooses: bool,
 }
 
 impl TargetRequirement {
@@ -1231,6 +1441,7 @@ impl TargetRequirement {
             another: false,
             max_x: false,
             total_mana_value_x: false,
+            opponent_chooses: false,
         }
     }
 
@@ -1272,9 +1483,6 @@ fn is_one(value: &usize) -> bool {
 fn is_fixed_one(value: &EffectValue) -> bool {
     *value == EffectValue::Fixed(1)
 }
-fn is_true(value: &bool) -> bool {
-    *value
-}
 
 impl Default for Effect {
     fn default() -> Self {
@@ -1312,6 +1520,7 @@ impl Effect {
     pub fn selectors(&self) -> Vec<&ObjectSelector> {
         match self {
             Effect::CreateDelayedTrigger { remember, .. } => remember.iter().collect(),
+            Effect::SelectCards { from, .. } => vec![from],
             Effect::PutCounters { on, .. } => vec![on],
             Effect::PutCountersFrom { from, on } => vec![from, on],
             Effect::ApplyContinuous { affected: what, .. }
@@ -1324,8 +1533,9 @@ impl Effect {
             | Effect::GainControl { what, .. }
             | Effect::ControlPlayer { what, .. }
             | Effect::DealDamage { what, .. }
-            | Effect::CounterSpell { what }
+            | Effect::CounterSpell { what, .. }
             | Effect::CounterAbility { what }
+            | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
             | Effect::Discard { what, .. } => vec![what],
             Effect::RemoveCounters { from, .. } | Effect::RemoveAllCounters { from } => {
@@ -1368,7 +1578,8 @@ impl Effect {
                 effects.iter().any(Effect::asks_triggering_spell)
             }
             // "Copy that spell": the cast spell is the context.
-            Effect::CopyTriggeringObject => true,
+            Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
+            Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
             _ => false,
         }
     }
@@ -1424,7 +1635,6 @@ impl Effect {
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
             Effect::ChangeTarget { target }
-            | Effect::AttachSourceTo { target }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
@@ -1439,12 +1649,18 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::MayDiscard { then }
-            | Effect::ForPlayer { effects: then, .. }
-            | Effect::MayOnceEachTurn { effects: then } => {
+            Effect::SelectCards {
+                effects,
+                if_declined,
+                ..
+            } => effects
+                .iter()
+                .chain(if_declined)
+                .find_map(Effect::target_spec),
+            Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateTokenCopy { of, .. } => of.as_ref(),
+            Effect::CreateTokenCopy { of, .. } => of.target_spec(),
             Effect::PutCounters { .. }
             | Effect::PutCountersFrom { .. }
             | Effect::Sacrifice { .. }
@@ -1463,24 +1679,25 @@ impl Effect {
             | Effect::Discard { .. }
             | Effect::DrainLife { .. }
             | Effect::SelectTargetRequirement { .. }
-            | Effect::MillAndSelect { .. }
             | Effect::ApplyContinuous { .. }
-            | Effect::SearchBasicLand { .. }
-            | Effect::OptionalDiscardDraw { .. }
+            | Effect::ShuffleLibrary
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::Cascade
+            | Effect::CumulativeUpkeep { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }
             | Effect::TriggerModes { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
-            | Effect::SearchLandsOpponentSplits { .. }
+            | Effect::SearchDistinctNames { .. }
             | Effect::DrawCards { .. }
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }
             | Effect::EachPlayerChoosesToExile { .. }
@@ -1492,14 +1709,13 @@ impl Effect {
             | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
-            | Effect::ReturnMilledThisWay { .. }
+            | Effect::CopyTriggeringSpellForEach { .. }
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
             | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::GainLife { .. }
             | Effect::FightLastTarget
-            | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
@@ -1510,7 +1726,8 @@ impl Effect {
             | Effect::AddMana { .. }
             | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
-            | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
+            | Effect::TargetCreaturesDealPowerDamageToLastTarget
+            | Effect::AttachSourceTo { .. } => None,
         }
     }
 
@@ -1567,6 +1784,7 @@ impl Effect {
         Effect::DealDamage {
             amount: amount.into(),
             what,
+            by: None,
         }
     }
 
@@ -1575,6 +1793,52 @@ impl Effect {
         Effect::GainLife {
             amount: amount.into(),
         }
+    }
+
+    /// Search a library subset, run its selected branch, then shuffle even
+    /// on failure to find. The runtime announces completion after that scope.
+    pub fn search_library(
+        predicate: CardPredicate,
+        max: EffectValue,
+        mut effects: Vec<Effect>,
+    ) -> Self {
+        effects.push(Effect::ShuffleLibrary);
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Library),
+            predicate,
+            min: 0,
+            max,
+            effects,
+            if_declined: vec![Effect::ShuffleLibrary],
+        }
+    }
+
+    /// Select private hand cards as one subset, then discard them together.
+    /// The selected child retains its bindings through any subsequent question.
+    pub fn may_discard(up_to: usize, then: Vec<Effect>) -> Self {
+        let mut effects = vec![Self::move_to(ObjectSelector::Selected, ZoneType::Graveyard)];
+        effects.push(Self::if_you_do(then));
+        Effect::SelectCards {
+            from: ObjectSelector::Zone(ZoneType::Hand),
+            predicate: CardPredicate::default(),
+            min: 0,
+            max: EffectValue::Fixed(up_to as i32),
+            effects,
+            if_declined: Vec::new(),
+        }
+    }
+
+    /// "Discard up to N cards, then draw for each card discarded this way."
+    pub fn discard_draw(up_to: usize, per_card: usize) -> Self {
+        Self::may_discard(
+            up_to,
+            vec![
+                Effect::DrawCards {
+                    count: EffectValue::Objects(Box::new(ObjectSelector::Moved)),
+                };
+                per_card
+            ],
+        )
     }
 
     /// "Discard a card."
@@ -1591,7 +1855,7 @@ impl Effect {
             token_name: token_name.into(),
             count: count.into(),
             tapped_and_attacking: false,
-            attach_source: false,
+            tapped: false,
         }
     }
 
@@ -1607,8 +1871,24 @@ impl Effect {
     /// "Put [what] into [zone]" with no further terms.
     pub fn move_to(what: ObjectSelector, to: ZoneType) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to,
+            tapped: false,
+            transformed: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }
+    }
+
+    /// Put an object on the stated end without shuffling. Placement commits
+    /// with the move, before linked returns can ask a subsequent question.
+    pub fn put_in_library(what: ObjectSelector, end: LibraryEnd) -> Self {
+        Effect::Move {
+            library_end: Some(end),
+            what,
+            to: ZoneType::Library,
             tapped: false,
             transformed: false,
             under: None,
@@ -1631,6 +1911,7 @@ impl Effect {
     /// player's control.
     pub fn return_to_battlefield(what: ObjectSelector, tapped: bool) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Battlefield,
             tapped,
@@ -1644,6 +1925,7 @@ impl Effect {
     /// "Exile [what] with this" or "until this leaves the battlefield".
     pub fn exile_linked(what: ObjectSelector, linked: LinkedExile) -> Self {
         Effect::Move {
+            library_end: None,
             what,
             to: ZoneType::Exile,
             tapped: false,
@@ -1729,4 +2011,12 @@ pub fn bind_effect_clauses(effects: Vec<Effect>) -> Vec<Effect> {
         }
     }
     bound
+}
+
+/// Effective triggered ability with the provenance needed after its source leaves.
+/// Catalog grants have retained input joins; a continuous-effect program does not.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct EffectiveTrigger {
+    pub ability: Ability,
+    pub program: bool,
 }

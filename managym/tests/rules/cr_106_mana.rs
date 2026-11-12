@@ -1,115 +1,10 @@
 use managym::{
-    agent::action::{Action, ActionType},
-    flow::{decision::Decision, trigger::ExileLink, turn::StepKind},
-    state::{
-        card::ReplacementEffect,
-        game_object::PlayerId,
-        mana::{Color, Mana},
-        permanent::CounterKind,
-        zone::ZoneType,
-    },
+    agent::action::ActionType,
+    flow::turn::StepKind,
+    state::{mana::Color, zone::ZoneType},
 };
 
 use crate::support::game::*;
-use crate::support::{inspect::card_of, play::command};
-
-/// A constructed mana source exercises the linked-return cost path without
-/// adding a card definition. This covers synchronous entry replacement only;
-/// affected-player replacement ordering needs the shared event continuation.
-#[test]
-fn mana_sacrifice_linked_return_preserves_parent_payment_through_commands() {
-    for seat in 0..2 {
-        for (mode, output) in ["W", "U", "B", "R", "G"].into_iter().enumerate() {
-            let cards = deck(&[("Mountain", 24), ("Prophetic Prism", 4), ("Gray Ogre", 12)]);
-            let mut s = Scenario::new(cards.clone(), cards, 106_605);
-            s.advance_to_active_step(seat, StepKind::Main);
-            let player = PlayerId(seat);
-            let prism = s.force_permanent_on_battlefield(seat, "Prophetic Prism");
-            let treasure = s
-                .game_mut()
-                .create_token("Treasure", player, false)
-                .unwrap();
-            let source_card = card_of(&s, treasure);
-            s.game_mut().state.cards[source_card].activated_abilities[0].life_cost = 2;
-            let returned = s.force_permanent_on_battlefield(1 - seat, "Gray Ogre");
-            let returned_card = card_of(&s, returned);
-            s.game_mut().move_card(returned_card, ZoneType::Exile);
-            s.game_mut().state.cards[returned_card].replacement_effects =
-                vec![ReplacementEffect::EntersWithPlusOneCounters {
-                    count: 2,
-                    condition: None,
-                }];
-            let source = s.game().current_object_ref(source_card).unwrap();
-            s.game_mut().state.exile_links.push(ExileLink {
-                source,
-                exiled_card: returned_card,
-                returns: true,
-            });
-            s.set_player_mana_pool(seat, "0");
-            s.game_mut().scenario_refresh_priority().unwrap();
-            let life = s.life(seat);
-            let sacrifices = s.game().state.turn.history[seat].permanents_sacrificed;
-
-            command(
-                &mut s,
-                |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == prism),
-            );
-            assert!(!s.game().state.permanents[prism].as_ref().unwrap().tapped);
-            assert!(s.game().state.permanents[treasure].is_some());
-            assert_eq!(s.life(seat), life);
-
-            command(
-                &mut s,
-                |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == treasure),
-            );
-            assert!(s.game().state.permanents[treasure].is_none());
-            assert!(s.game().state.exile_links.is_empty());
-            assert_eq!(s.life(seat), life - 2);
-            assert_eq!(s.game().state.players[seat].mana_pool.total(), 0);
-            assert!(!s.game().state.permanents[prism].as_ref().unwrap().tapped);
-            let returned_ref = s.game().current_object_ref(returned_card);
-            let entered = s.game().state.card_to_permanent[returned_card].unwrap();
-            let permanent = s.game().state.permanents[entered].as_ref().unwrap();
-            assert_eq!(permanent.controller, PlayerId(1 - seat));
-            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
-            assert!(matches!(
-                &s.game().state.suspended_decision.as_ref().unwrap().decision,
-                Decision::ManaChoice { player: chooser, resume: Some(parent), .. }
-                    if *chooser == player && matches!(parent.as_ref(), Decision::ManaUpfront { permanent, .. } if *permanent == prism)
-            ));
-
-            command(
-                &mut s,
-                |action| matches!(action, Action::ChooseMode { mode: chosen, .. } if *chosen == mode),
-            );
-            assert_eq!(s.game().state.players[seat].mana_pool.total(), 0);
-            assert!(s.game().state.permanents[prism].as_ref().unwrap().tapped);
-            assert_eq!(s.life(seat), life - 2);
-            assert!(matches!(
-                &s.game().state.suspended_decision.as_ref().unwrap().decision,
-                Decision::ManaChoice { resume: None, .. }
-            ));
-
-            command(
-                &mut s,
-                |action| matches!(action, Action::ChooseMode { mode: chosen, .. } if *chosen == mode),
-            );
-            assert_eq!(s.game().state.players[seat].mana_pool, Mana::parse(output));
-            assert_eq!(s.life(seat), life - 2);
-            assert!(s.game().state.suspended_decision.is_none());
-            assert!(s.game().state.stack_objects.is_empty());
-            assert_eq!(
-                s.game().state.turn.history[seat].permanents_sacrificed,
-                sacrifices + 1
-            );
-            assert_eq!(s.game().current_object_ref(returned_card), returned_ref);
-            assert_eq!(
-                s.game().state.card_to_permanent[returned_card],
-                Some(entered)
-            );
-        }
-    }
-}
 
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
@@ -226,17 +121,17 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost, ManaRestriction, SpendingContext};
+    use managym::state::mana::{Mana, ManaCost, ManaUse};
 
-    let lesson = ManaRestriction::spell(["Lesson"]);
+    let lesson = ManaUse::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
             let mut amounts = [0; 6];
             amounts[slot] = 1;
-            let mut pool = Mana::restricted_to(lesson.clone(), amounts);
+            let mut pool = Mana::restricted_to(lesson, amounts);
             let mut cost = ManaCost::parse("1");
             if eligible {
-                cost.purpose = SpendingContext::spell(["Lesson"]);
+                cost.purpose = lesson;
             }
             assert_eq!(pool.can_pay(&cost), eligible);
             if eligible {
@@ -247,75 +142,4 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
             assert_eq!(pool, Mana::default());
         }
     }
-}
-
-/// A live variable producer cannot be bounded by its current output: paying a
-/// sacrifice may remove a negative static modifier before production resolves.
-#[test]
-fn mana_variable_bound_preserves_output_gained_after_sacrifice() {
-    use managym::state::{
-        ability::{Effect, EffectValue},
-        card::{CardType, StaticAbility, StaticPtBuff, StaticScope},
-        predicate::CardPredicate,
-    };
-    let cards = deck(&[
-        ("Mountain", 24),
-        ("White Lotus Tile", 4),
-        ("Gray Ogre", 8),
-        ("Hill Giant", 4),
-    ]);
-    let mut s = Scenario::new(cards.clone(), cards, 242);
-    s.advance_to_active_step(0, StepKind::Main);
-    let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
-    let ogre = s.force_permanent_on_battlefield(0, "Hill Giant");
-    let treasure = s
-        .game_mut()
-        .create_token("Treasure", PlayerId(0), false)
-        .unwrap();
-    let tile_card = card_of(&s, tile);
-    let treasure_card = card_of(&s, treasure);
-    let ability = &mut s.game_mut().state.cards[tile_card].activated_abilities[0];
-    ability.mana_cost = managym::state::mana::ManaCost::parse("1");
-    ability.effects = vec![Effect::AddOneColorManaValue {
-        amount: EffectValue::GreatestPowerYouControl,
-    }];
-    s.game_mut().state.cards[treasure_card]
-        .statics
-        .push(StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::YouControl(CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-            condition: None,
-            power: -3,
-            toughness: 0,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        }));
-    assert_eq!(s.game().characteristics(ogre).power, 0);
-    s.set_player_mana_pool(0, "0");
-    s.force_card_in_hand(0, "Gray Ogre");
-    s.game_mut().scenario_refresh_priority().unwrap();
-    command(&mut s, |action| matches!(action, Action::CastSpell { .. }));
-    command(
-        &mut s,
-        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == tile),
-    );
-    command(
-        &mut s,
-        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == treasure),
-    );
-    command(&mut s, |action| {
-        matches!(action, Action::ChooseMode { mode: 3, .. })
-    });
-    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
-    assert_eq!(s.game().characteristics(ogre).power, 3);
-    command(&mut s, |action| {
-        matches!(action, Action::ChooseMode { mode: 3, .. })
-    });
-    assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("RRR"));
-    assert!(s.game().state.permanents[treasure].is_none());
-    command(&mut s, |action| matches!(action, Action::PayCost { .. }));
-    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }

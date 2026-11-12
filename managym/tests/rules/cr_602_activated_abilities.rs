@@ -171,9 +171,8 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
     use managym::{
         agent::{
             action::Action,
-            observation_encoder::{
-                encode, ObservationEncoderConfig, ACTION_ABILITY_INDEX, ACTION_DIM,
-            },
+            observation_encoder::{encode, ObservationEncoderConfig, ACTION_DIM},
+            observation_layout::action,
         },
         state::{
             ability::{Effect, ObjectSelector},
@@ -210,7 +209,7 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         for (ability, &index) in indices.iter().enumerate() {
             assert_eq!(obs.action_space.actions[index].ability_index, Some(ability));
             assert_eq!(
-                encoded.actions[index * ACTION_DIM + ACTION_ABILITY_INDEX],
+                encoded.actions[index * ACTION_DIM + action::ABILITY],
                 (ability + 1) as f32
             );
         }

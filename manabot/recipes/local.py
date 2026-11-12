@@ -4,7 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from manabot.recipes.baseline import baseline
+from manabot.recipes.baseline import baseline, baseline_test
+from manabot.recipes.device import accelerator
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -19,14 +20,33 @@ def local_smoke(
     steps: int = LOCAL_STEPS,
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
+    bucketed_shapes: bool = False,
 ) -> TrainingRegime:
-    """Terminal-outcome self-play; complete games for both, exact quotas for one.
+    """Terminal-outcome self-play with complete-game batch closure.
 
     This deliberately replaces, and is not equivalent to, the retired local
     fixed-seat PPO preset. The baseline model and horizon mapping are shared;
     this recipe omits independent outcome evaluation and makes no strength claim.
     """
-    regime = baseline(steps, seconds=seconds, learning_seats=learning_seats).regime
+    selected = device if device is not None else accelerator() or "cpu"
+    recipe = (
+        baseline_test(
+            steps,
+            seconds=seconds,
+            learning_seats=learning_seats,
+            bucketed_shapes=bucketed_shapes,
+        )
+        if selected == "cpu"
+        else baseline(
+            steps,
+            seconds=seconds,
+            learning_seats=learning_seats,
+            device=selected,
+            bucketed_shapes=bucketed_shapes,
+        )
+    )
+    regime = recipe.regime
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     regime.id = "local-smoke-v1"
@@ -44,8 +64,16 @@ def run_local(
     out: Path | None = None,
     seconds: float = LOCAL_SECONDS,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
+    bucketed_shapes: bool = False,
 ) -> TrainingRun:
-    plan = local_smoke(steps=steps, seconds=seconds, learning_seats=learning_seats)
+    plan = local_smoke(
+        steps=steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device=device,
+        bucketed_shapes=bucketed_shapes,
+    )
     destination = out or Path(".runs") / (
         "local-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     )

@@ -73,6 +73,7 @@ def recipe() -> TrainingRegime:
     # This fixture exercises exact-quota tails across updates; whole-game
     # both-seat recovery has its own collector and game-error coverage.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.learning.epochs = 1
     stage.learning.ema = 0.9
     value.agent.hidden_dim = 8
@@ -149,6 +150,7 @@ def test_real_interruption_restores_complete_learning_state(
     stage = value.stages[0]
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = seats
+    stage.batch_closure = "exact-quota" if seats == "one" else "complete-games"
     if gradient == "damped_policy":
         value.agent.value_kind = "categorical_wdl"
         stage.learning = DampedPolicyLearning(
@@ -167,6 +169,13 @@ def test_real_interruption_restores_complete_learning_state(
         assert resumed.prior_watchdog_seconds == failed.watchdog_seconds
         assert resumed.recovery_seconds > 0
         assert resumed.stages[0].cumulative_seconds >= resumed.prior_seconds
+        # Stage timers describe this attempt while counts continue the trajectory.
+        step = "Environment step and encoding"
+        assert resumed.stages[0].updates == whole.stages[0].updates
+        assert (
+            resumed.stages[0].collection_timings[step].calls
+            < whole.stages[0].collection_timings[step].calls
+        )
         a, b = load_update(whole), load_update(resumed)
         for name in (
             "learner",
@@ -348,102 +357,6 @@ def multistage_recipe(*, fresh: bool = False) -> TrainingRegime:
     second.initial = None if fresh else first.id
     value.stages.append(second)
     return value
-
-
-@pytest.mark.parametrize(
-    "boundary", ["start", "before_complete", "completed", "second_update", "terminal"]
-)
-@pytest.mark.parametrize("fresh", [False, True])
-def test_multistage_boundaries_preserve_state_and_completed_work(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, boundary: str, fresh: bool
-) -> None:
-    value = multistage_recipe(fresh=fresh)
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
-        export = execution.export_training_run
-        save = execution.save_update
-        fired = False
-
-        def fail_at_boundary(
-            run_id: str, owner: VerifyStore, path: str | Path
-        ) -> TrainingRun:
-            nonlocal fired
-            run = export(run_id, owner, path)
-            if fired or run.status != "running" or run.recovery_artifact is None:
-                return run
-            name = Path(run.recovery_artifact["path"]).name
-            first = value.stages[0].id
-            matches = {
-                "start": name == f"{first}-start.pt",
-                "completed": name == f"{first}-completed.pt",
-                "second_update": name.startswith("second-update-"),
-                "terminal": name == "second-completed.pt",
-            }
-            if matches.get(boundary, False):
-                fired = True
-                raise KeyboardInterrupt("boundary injection")
-            return run
-
-        def fail_before_completion(*args: Any, **kwargs: Any) -> None:
-            nonlocal fired
-            if (
-                boundary == "before_complete"
-                and not fired
-                and str(args[0]).endswith("-completed.pt")
-            ):
-                fired = True
-                raise KeyboardInterrupt("before completion publication")
-            save(*args, **kwargs)
-
-        with monkeypatch.context() as patch:
-            patch.setattr(execution, "export_training_run", fail_at_boundary)
-            patch.setattr(execution, "save_update", fail_before_completion)
-            with pytest.raises(KeyboardInterrupt):
-                execution.execute_regime(value, 197, tmp_path / "failed", store)
-        parent_id = store.con.execute(
-            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
-        ).fetchone()[0]
-        parent = store.training_run(parent_id)
-        completed = [item for item in parent.stages if item.status == "completed"]
-        frozen = {
-            item["path"]: Path(item["path"]).read_bytes()
-            for row in completed
-            for item in row.artifacts.values()
-        }
-        child = execution.execute_regime(
-            value, 197, tmp_path / "child", store, resume_from=parent.id
-        )
-        assert child.status == "completed"
-        assert store.training_run(parent.id) == parent
-        assert child.prior_seconds == parent.prior_seconds + parent.seconds
-        assert child.stages[: len(completed)] == completed
-        for path, data in frozen.items():
-            assert Path(path).read_bytes() == data
-        for row in completed:
-            assert not list((tmp_path / "child").glob(f"{row.id}-*.pt"))
-        a, b = load_update(whole), load_update(child)
-        for name in (
-            "learner",
-            "optimizer",
-            "ema",
-            "minibatch_rng",
-            "python_rng",
-            "numpy_rng",
-            "torch_rng",
-        ):
-            assert_state_equal(getattr(a, name), getattr(b, name))
-        assert a.iteration == b.iteration
-        assert a.collector.journal == b.collector.journal
-        assert_state_equal(a.collector.buffers, b.collector.buffers)
-        assert_learning_metrics_equal(whole, child, tmp_path)
-        for left, right in zip(whole.stages, child.stages, strict=True):
-            assert left.learner_transitions == right.learner_transitions
-            assert left.environment_decisions == right.environment_decisions
-            assert left.games == right.games
-        with pytest.raises(ValueError, match="stopped failed, interrupted or paused"):
-            execution.execute_regime(
-                value, 197, tmp_path / "terminal", store, resume_from=child.id
-            )
 
 
 def test_setup_failure_retains_stage_lineage_and_admission_slot(

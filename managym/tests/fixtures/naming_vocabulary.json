@@ -1,0 +1,3006 @@
+{
+  "source": "https://api.scryfall.com/cards/search?q=game%3Apaper+-is%3Afunny&unique=cards&order=name",
+  "retrieved": "2026-11-04",
+  "names": [
+    {
+      "name": "+2 Mace",
+      "oracle_id": "629fe1be-272d-465f-b9b1-2ce177410f13",
+      "scryfall_id": "e882c9f9-bf30-46b6-bedc-379d2c80e5cb"
+    },
+    {
+      "name": "70,000 Light-Years from Home",
+      "oracle_id": "9356aee1-3d2b-4d17-8863-663e1ddf56f3",
+      "scryfall_id": "02080f42-863a-471b-992b-67e35ef1b7b7"
+    },
+    {
+      "name": "Aang, Airbending Master",
+      "oracle_id": "f3176779-74f7-4136-a701-438feeead7a0",
+      "scryfall_id": "de7a150b-1b0d-4928-a2cc-80a4b7412350"
+    },
+    {
+      "name": "Aang, Air Nomad",
+      "oracle_id": "e46b2ac6-97d6-48f2-aba3-cd92f8e092c6",
+      "scryfall_id": "f369827d-e4cd-4bc7-8c5e-72882eff0908"
+    },
+    {
+      "name": "Aang, A Lot to Learn",
+      "oracle_id": "854278bc-2bcf-45dd-abd5-6aca7a1e5fc9",
+      "scryfall_id": "50a22ad6-d2a4-48a6-91c9-147c946a60a5"
+    },
+    {
+      "name": "Aang and Katara",
+      "oracle_id": "481c3e14-b670-4fab-aa9f-6ce5b514096d",
+      "scryfall_id": "f333ea01-124f-4125-87ab-609be40e774c"
+    },
+    {
+      "name": "Aang, at the Crossroads",
+      "oracle_id": "96e5d4a1-e59f-4140-823f-a17e15ee5d8d",
+      "scryfall_id": "fea89ca0-8070-4f28-9851-994314f9d248"
+    },
+    {
+      "name": "Aang, Destined Savior",
+      "oracle_id": "96e5d4a1-e59f-4140-823f-a17e15ee5d8d",
+      "scryfall_id": "fea89ca0-8070-4f28-9851-994314f9d248"
+    },
+    {
+      "name": "Aang's Defense",
+      "oracle_id": "92b617f9-6e6b-42a0-9c45-6ff5f6193051",
+      "scryfall_id": "642e1b90-c240-44fe-82b2-7522026224ae"
+    },
+    {
+      "name": "Aang's Iceberg",
+      "oracle_id": "646f9ad8-9d18-4b42-954a-e21a62e9f0e8",
+      "scryfall_id": "720fbd87-b1c1-4b3b-97a1-46b943b115e3"
+    },
+    {
+      "name": "Aang's Journey",
+      "oracle_id": "ddf461b9-a205-4dc7-a9c3-c047b1ff709f",
+      "scryfall_id": "5e51f727-5a9b-4bc7-83a9-dbcf1c933e15"
+    },
+    {
+      "name": "Aang, Swift Savior",
+      "oracle_id": "cbf09050-39d0-463b-96db-9e22011ae0d8",
+      "scryfall_id": "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4"
+    },
+    {
+      "name": "Aang and La, Ocean's Fury",
+      "oracle_id": "cbf09050-39d0-463b-96db-9e22011ae0d8",
+      "scryfall_id": "82866a0e-485a-4f7e-8c49-f7d9ff3f4ad4"
+    },
+    {
+      "name": "Aang, the Last Airbender",
+      "oracle_id": "70564c3a-858f-498e-8b92-acb3ca54ae7e",
+      "scryfall_id": "245e008c-e073-443f-9592-6f628c0026ec"
+    },
+    {
+      "name": "Aarakocra Sneak",
+      "oracle_id": "c1882cb4-f69e-441e-8871-743ed636cad0",
+      "scryfall_id": "2a83882c-3e03-4e85-aaac-97fa1d08a772"
+    },
+    {
+      "name": "Aardvark Sloth",
+      "oracle_id": "1c385880-3eea-45c8-8e89-330ad8ad92b1",
+      "scryfall_id": "e16365a2-4969-4ad5-af95-9dd2d0499f06"
+    },
+    {
+      "name": "Aatchik, Emerald Radian",
+      "oracle_id": "405c4a7b-dbb3-48a1-9205-7dbe6e2ad363",
+      "scryfall_id": "fbdaa29b-85ff-4a06-b27e-fcdbdfd4a3fe"
+    },
+    {
+      "name": "Abaddon the Despoiler",
+      "oracle_id": "8dedb9a7-0afa-4dff-b124-2344c170f11a",
+      "scryfall_id": "c9f1fc97-00c0-492b-a4a3-b179afc2f95d"
+    },
+    {
+      "name": "Abandon Attachments",
+      "oracle_id": "82333385-631f-4abf-b159-bb367f1c6fd9",
+      "scryfall_id": "74ca45a4-97ab-4255-9129-884e8b42b984"
+    },
+    {
+      "name": "Abandoned Air Temple",
+      "oracle_id": "9575d7ce-f26d-4b90-87a3-6329e9799572",
+      "scryfall_id": "9c0433f9-8f1e-4a19-a83f-a41925f1b1a9"
+    },
+    {
+      "name": "Abandoned Campground",
+      "oracle_id": "0eec9984-cd11-4a52-9234-469c6a5fb9aa",
+      "scryfall_id": "ee0565f5-ebdb-43f9-bbb4-0485b1968937"
+    },
+    {
+      "name": "Abandoned Outpost",
+      "oracle_id": "5a70ccfa-d12d-4e62-a1a4-f05cda2fd442",
+      "scryfall_id": "4945031e-1158-474c-9e50-1ec817acc767"
+    },
+    {
+      "name": "Abandoned Sarcophagus",
+      "oracle_id": "a051dee0-60c8-4f58-84cb-55460c097115",
+      "scryfall_id": "23b587f3-5eac-45a7-a048-dd73d2a2b74f"
+    },
+    {
+      "name": "Abandon Hope",
+      "oracle_id": "8adbba6e-03ef-4278-aec5-8a4496b377a8",
+      "scryfall_id": "942cf220-472c-48f6-8f60-993939ea5ab8"
+    },
+    {
+      "name": "Abandon Reason",
+      "oracle_id": "fa43793d-a215-4a64-a09c-ed9799f745a4",
+      "scryfall_id": "18c0b3b3-bb62-42c5-9869-386af0540a9b"
+    },
+    {
+      "name": "Abandon the Post",
+      "oracle_id": "5404c6a5-399d-4237-b03c-41b6a1b79050",
+      "scryfall_id": "983da138-f0f5-46c4-90c2-d3c34cc37d1f"
+    },
+    {
+      "name": "Abattoir Ghoul",
+      "oracle_id": "2b211adb-de44-4468-b65d-907a09aa7e9d",
+      "scryfall_id": "43297ddd-276f-4d2d-9d9c-937603d0e376"
+    },
+    {
+      "name": "Abbey Gargoyles",
+      "oracle_id": "c208b959-d0e4-4a9a-8255-2c7cc7596767",
+      "scryfall_id": "29b5b70d-e5b9-4bc3-87b1-51dc6e5085a5"
+    },
+    {
+      "name": "Abbey Griffin",
+      "oracle_id": "6eb74f6e-1c9d-4caf-a0d8-fa472d435346",
+      "scryfall_id": "bf87803b-e7c6-4122-add4-72e596167b7e"
+    },
+    {
+      "name": "Abbey Matron",
+      "oracle_id": "62e3f285-886c-414e-b4ff-403a7c01c23a",
+      "scryfall_id": "158caa84-da2e-4c4c-b24d-0c035c900e20"
+    },
+    {
+      "name": "Abbot of Keral Keep",
+      "oracle_id": "09be0f69-9c7f-491f-964d-bfbbc2d4251f",
+      "scryfall_id": "cd94f624-9b35-4468-829f-106366f61c1a"
+    },
+    {
+      "name": "Abby, Merciless Soldier",
+      "oracle_id": "e05efd01-0202-4bd6-bac6-c6210819d463",
+      "scryfall_id": "28e11b59-c677-4235-a377-18921c5131f0"
+    },
+    {
+      "name": "Abdel Adrian, Gorion's Ward",
+      "oracle_id": "cab092f9-b7ff-43b9-935f-310869a4daf8",
+      "scryfall_id": "396f9198-67b6-45d8-91b4-dc853bff9623"
+    },
+    {
+      "name": "Abduction",
+      "oracle_id": "d0e1904e-1a37-41f6-8582-b9ea794bb886",
+      "scryfall_id": "63c82bef-50d6-4d25-bc3f-dda2826fc99c"
+    },
+    {
+      "name": "Aberrant",
+      "oracle_id": "46b5f12e-9fe5-44f6-b895-ee8c33205521",
+      "scryfall_id": "49dfee68-c242-4579-94b1-c23238f8c87d"
+    },
+    {
+      "name": "Aberrant Manawurm",
+      "oracle_id": "a0657586-0404-4bb0-a92d-25f040d560c1",
+      "scryfall_id": "797131cf-d80d-4050-bebd-2ce1d7fae5d0"
+    },
+    {
+      "name": "Aberrant Mind Sorcerer",
+      "oracle_id": "753ead8c-f3f8-42fe-931d-79f5ee3ece54",
+      "scryfall_id": "d9c6401a-e152-4acf-a2ca-75c484f296d5"
+    },
+    {
+      "name": "Aberrant Researcher",
+      "oracle_id": "722ee05f-6815-41b7-9813-5ec3902c1e9f",
+      "scryfall_id": "41b0eddd-9364-4ca1-ac81-0175dd1387e8"
+    },
+    {
+      "name": "Perfected Form",
+      "oracle_id": "722ee05f-6815-41b7-9813-5ec3902c1e9f",
+      "scryfall_id": "41b0eddd-9364-4ca1-ac81-0175dd1387e8"
+    },
+    {
+      "name": "Aberrant Return",
+      "oracle_id": "3a92b235-196b-4f46-9d20-06f4d3653d36",
+      "scryfall_id": "a27a3d4b-caa7-4c5e-b1f3-aa607d3b157d"
+    },
+    {
+      "name": "Abeyance",
+      "oracle_id": "6300de53-6e71-4f0e-87e1-b0acd25c59a8",
+      "scryfall_id": "125a355d-bfcf-4125-aa6c-35e7dea6f63e"
+    },
+    {
+      "name": "Abhorrent Oculus",
+      "oracle_id": "b1a0e129-27f0-4a09-b00d-497e18777306",
+      "scryfall_id": "d2705b43-a94a-44c0-8740-82e0b296820c"
+    },
+    {
+      "name": "Abhorrent Overlord",
+      "oracle_id": "13f63240-a6bb-4333-a3dd-818725c6fb73",
+      "scryfall_id": "4415d050-7a76-4f8b-bf78-e33dd21fe4f1"
+    },
+    {
+      "name": "Abiding Grace",
+      "oracle_id": "f4e7bc58-336d-4670-84cb-a46ca1f48671",
+      "scryfall_id": "db113c47-c403-4c7f-9fa9-212c977df8d1"
+    },
+    {
+      "name": "Abigale, Eloquent First-Year",
+      "oracle_id": "48a773d0-c433-4463-b50f-b6d4604a042c",
+      "scryfall_id": "bf708169-a307-494b-b8d8-baae53b2e2f2"
+    },
+    {
+      "name": "Abigale, Poet Laureate",
+      "oracle_id": "2f5f46ed-b8aa-4864-bd20-17281d4632bf",
+      "scryfall_id": "77285d12-e658-4eb3-ba13-ff202afab9c8"
+    },
+    {
+      "name": "Heroic Stanza",
+      "oracle_id": "2f5f46ed-b8aa-4864-bd20-17281d4632bf",
+      "scryfall_id": "77285d12-e658-4eb3-ba13-ff202afab9c8"
+    },
+    {
+      "name": "Abjure",
+      "oracle_id": "dd97e457-07eb-4918-b780-ae7ff42a37e7",
+      "scryfall_id": "fbad9449-d09c-4fd0-b2ad-2aa3a29e03bf"
+    },
+    {
+      "name": "Abnormal Endurance",
+      "oracle_id": "edbf1b87-2d1e-47e6-a04e-a2b1646af7d9",
+      "scryfall_id": "de2de2bd-9ba7-4b6f-94c2-dafb2011a48e"
+    },
+    {
+      "name": "Aboleth Spawn",
+      "oracle_id": "d6ae77b3-59e7-475c-800c-930a5cb2e0ca",
+      "scryfall_id": "51889b3f-082a-40e9-8be7-11f8c1a7a9a8"
+    },
+    {
+      "name": "Abolish",
+      "oracle_id": "d6d7faa8-ecc9-408b-9c46-a0f62c74f567",
+      "scryfall_id": "842e7e6a-c89a-463d-a6e8-743a953c827c"
+    },
+    {
+      "name": "Abominable Treefolk",
+      "oracle_id": "9d341ed4-4f9b-40df-9bd9-3bfeaf0fe595",
+      "scryfall_id": "1eddb834-ea01-44e2-afca-bd9a4ebbdb94"
+    },
+    {
+      "name": "Abomination",
+      "oracle_id": "2c57c4e9-0a46-45d6-92db-9203fb722b60",
+      "scryfall_id": "a363bc91-8278-448e-9d5c-564e4b51eb62"
+    },
+    {
+      "name": "Abomination, Irradiated Brute",
+      "oracle_id": "e7436d37-c331-4524-b5d4-861e9d25bfc5",
+      "scryfall_id": "0b82c865-ae3e-43f0-9ac8-fabdd5539b36"
+    },
+    {
+      "name": "Abomination of Gudul",
+      "oracle_id": "3d98af5f-7a0b-4a5a-b3e4-f3c9d150c993",
+      "scryfall_id": "7df9759e-1072-4a6a-be57-f73b15bf3847"
+    },
+    {
+      "name": "Abomination of Llanowar",
+      "oracle_id": "5146ba3f-2c5f-4a86-95d7-a34ce1e842b0",
+      "scryfall_id": "4b68bc46-5591-44dd-becc-eca154066925"
+    },
+    {
+      "name": "Abomination, Terrifying Titan",
+      "oracle_id": "72101185-4336-480a-b4d7-f8ceb0007a51",
+      "scryfall_id": "2c6ab9bb-dba2-4b5b-a4d9-54735f65ac21"
+    },
+    {
+      "name": "Abomination, World Ravager",
+      "oracle_id": "e0b12c48-7234-40b5-a84c-6901d2b4e5b0",
+      "scryfall_id": "fddd2e68-8e1e-4162-a2c7-49da2c86d471"
+    },
+    {
+      "name": "Aboroth",
+      "oracle_id": "28f70f86-19a9-4811-bc10-423a05842d39",
+      "scryfall_id": "8c72ac67-e4fb-49a1-b1e5-cd2e414bec28"
+    },
+    {
+      "name": "Aboshan, Cephalid Emperor",
+      "oracle_id": "d4d44264-b276-4bd7-8fbe-6af292b08773",
+      "scryfall_id": "82db4a41-03e8-4f0c-946c-a98fc5c9f7c8"
+    },
+    {
+      "name": "Aboshan's Desire",
+      "oracle_id": "95db05eb-2c25-43f2-8e18-dfc64f490634",
+      "scryfall_id": "137b701e-6140-463e-84b5-58d8a728df40"
+    },
+    {
+      "name": "About Face",
+      "oracle_id": "8a810017-06ac-4824-bc2f-a7d303d58ad7",
+      "scryfall_id": "85e71828-095b-4729-ab11-c6c39ba29aab"
+    },
+    {
+      "name": "Abrade",
+      "oracle_id": "f9db72dc-9a5b-48a4-a86e-7464d9a2166a",
+      "scryfall_id": "847b4081-25c9-4a9a-a2f3-d5fdadbfe81b"
+    },
+    {
+      "name": "Abraded Bluffs",
+      "oracle_id": "ca7d093c-0533-493f-9ad3-8af30118fbfc",
+      "scryfall_id": "19e96521-b4ce-4a36-a887-200e05ccc804"
+    },
+    {
+      "name": "Abrupt Decay",
+      "oracle_id": "1c747fe2-289e-492a-a846-aa77707e2dc3",
+      "scryfall_id": "a8e328c6-3a84-49cf-a1a3-1d1e5373d274"
+    },
+    {
+      "name": "Absolute Grace",
+      "oracle_id": "41785f7b-3d02-4b7f-86ff-b381f626142e",
+      "scryfall_id": "fe7d1839-7180-4b4c-8ddb-7df24573f740"
+    },
+    {
+      "name": "Absolute Law",
+      "oracle_id": "f4aa8391-34d5-4ad2-a981-9aa08f8229db",
+      "scryfall_id": "59d1f05b-f165-47c7-8a78-3b60ee3298ca"
+    },
+    {
+      "name": "Absolute Virtue",
+      "oracle_id": "d4fddf20-6b3a-42c3-a245-002dacbb4725",
+      "scryfall_id": "aa192912-c9ee-403f-8a46-a338c9edb4b9"
+    },
+    {
+      "name": "Absolver Thrull",
+      "oracle_id": "a9002245-0f33-48cb-96d3-fde884236eb5",
+      "scryfall_id": "711979c3-e70b-4973-a4f1-020db534fc73"
+    },
+    {
+      "name": "Absolving Lammasu",
+      "oracle_id": "dbedd45e-f76c-4be7-ad89-ff57bed6626f",
+      "scryfall_id": "bd6e71a1-713e-4eca-bd65-9f0638c16794"
+    },
+    {
+      "name": "Absorb",
+      "oracle_id": "132ca99a-a3c7-4ed6-b4d0-0edcd7140ca2",
+      "scryfall_id": "21892cbc-1af2-4ea1-8907-cec514b53004"
+    },
+    {
+      "name": "Absorb Identity",
+      "oracle_id": "4489f362-9b7e-4dc0-a459-a990a487454e",
+      "scryfall_id": "aa1c6bcc-2d43-4ea9-a93f-019793616869"
+    },
+    {
+      "name": "Absorbing Man",
+      "oracle_id": "ec8e310f-e871-498f-8d80-c3617c5e1433",
+      "scryfall_id": "7114ef87-53ff-43e9-864c-9faa455d86ef"
+    },
+    {
+      "name": "Absorbing Man and Titania",
+      "oracle_id": "a1afb796-1b0b-4f41-9c8f-5320c9af5989",
+      "scryfall_id": "5f363991-91f2-4675-b0ca-cc7fe230c4ff"
+    },
+    {
+      "name": "Absorb Vis",
+      "oracle_id": "04ea7e88-7ea5-4b4c-9a7c-2a6ac0bc0682",
+      "scryfall_id": "e319956e-982b-4bba-829a-67bf4ef79d74"
+    },
+    {
+      "name": "Abstergo Entertainment",
+      "oracle_id": "d06a8026-1657-4404-8dff-64e44f1a14f8",
+      "scryfall_id": "4d197866-7633-493c-80dd-ec3a09165934"
+    },
+    {
+      "name": "Abstract Paintmage",
+      "oracle_id": "bc899d5c-0a91-4f19-a3e4-3078ae966110",
+      "scryfall_id": "ea008094-d995-4740-9b39-c61049356c55"
+    },
+    {
+      "name": "Abstract Performance",
+      "oracle_id": "3e0e3676-e634-4e64-bdfd-4aaa5885461f",
+      "scryfall_id": "2795c812-0850-4405-b968-b624deaccd55"
+    },
+    {
+      "name": "Abstruse Appropriation",
+      "oracle_id": "61a23402-3244-4b5e-9134-98e1f82eda65",
+      "scryfall_id": "d7149359-bb3f-413c-b21d-e4cd88618e56"
+    },
+    {
+      "name": "Abstruse Archaic",
+      "oracle_id": "0727dc95-03df-4a2c-aed5-73fb840f3db7",
+      "scryfall_id": "1fc2871b-c685-4951-b8e2-7370b9668f7e"
+    },
+    {
+      "name": "Abstruse Interference",
+      "oracle_id": "e8ebf5cb-3a26-4bbd-812b-414c129e4bb7",
+      "scryfall_id": "249a7be3-311e-4ce6-97dc-97242463ae23"
+    },
+    {
+      "name": "Abuelo, Ancestral Echo",
+      "oracle_id": "eaa9baac-72f2-4bde-9146-860878d9860b",
+      "scryfall_id": "40eee689-2514-421a-8056-eb7668be66ff"
+    },
+    {
+      "name": "Abuelo's Awakening",
+      "oracle_id": "2b22cf44-7b03-4919-9812-6796bf193484",
+      "scryfall_id": "f93b725e-2b9c-4830-ac54-b2562afe09bb"
+    },
+    {
+      "name": "Abu Ja'far",
+      "oracle_id": "a2404d88-0621-49ae-9908-052c23a96ac6",
+      "scryfall_id": "023b5e6f-10de-422d-8431-11f1fdeca246"
+    },
+    {
+      "name": "Abuna Acolyte",
+      "oracle_id": "cf082161-47ff-46b9-926d-3fa5e5727861",
+      "scryfall_id": "9e17bbf7-00c0-46f2-9718-2762fd7388d3"
+    },
+    {
+      "name": "Abuna's Chant",
+      "oracle_id": "2d4721f1-1a49-45aa-99d5-ab8c6f3f3ab6",
+      "scryfall_id": "b9e0bf63-0399-40d6-9162-4562d7bcdd0e"
+    },
+    {
+      "name": "Abundance",
+      "oracle_id": "eccc9a54-2b56-4a02-9926-258d5b2e25fb",
+      "scryfall_id": "9bc359b0-8886-415b-a497-e98a2241084e"
+    },
+    {
+      "name": "Abundant Countryside",
+      "oracle_id": "e3eb6f90-ccfc-41e7-bff6-0b378226bc7e",
+      "scryfall_id": "37478625-dd07-476d-bd9b-b2e0d71ac0d1"
+    },
+    {
+      "name": "Abundant Growth",
+      "oracle_id": "947a2665-2f4d-4193-8768-118f85334549",
+      "scryfall_id": "88b8b051-3f05-4cc1-9506-732faa25553a"
+    },
+    {
+      "name": "Abundant Harvest",
+      "oracle_id": "34841228-31ac-48ac-b6d6-486b5e1e07dd",
+      "scryfall_id": "516e137a-d9d9-4ba7-89fb-e680ddb2c2d1"
+    },
+    {
+      "name": "Abundant Maw",
+      "oracle_id": "3676b745-001d-46e6-880f-2fe26476a38d",
+      "scryfall_id": "c5620c22-910c-4d33-a5e9-4c4eac8c6304"
+    },
+    {
+      "name": "Abyssal Gatekeeper",
+      "oracle_id": "4954181c-cb46-4cac-adc3-2c8b7693a211",
+      "scryfall_id": "6d2a66f0-1afe-41e6-a597-ec2e95685191"
+    },
+    {
+      "name": "Abyssal Gorestalker",
+      "oracle_id": "465cda20-c8f3-4a7c-a250-875877bce21d",
+      "scryfall_id": "a559f77f-1f10-475b-9361-7f297d50f254"
+    },
+    {
+      "name": "Abyssal Harvester",
+      "oracle_id": "68cc5065-0514-4adf-885f-da554e1db00a",
+      "scryfall_id": "f2e0f538-5825-47e9-883c-3ec6fd5b25ea"
+    },
+    {
+      "name": "Abyssal Horror",
+      "oracle_id": "6b60422a-765b-4168-a37b-68109103385a",
+      "scryfall_id": "ccb42943-f599-4068-a364-a023e70c4ed2"
+    },
+    {
+      "name": "Abyssal Hunter",
+      "oracle_id": "b96ccc2f-88e5-4522-924e-76fc76dc3b39",
+      "scryfall_id": "3c3f6ad7-4782-40db-8eb3-e71d71ec3388"
+    },
+    {
+      "name": "Abyssal Nightstalker",
+      "oracle_id": "10733767-1c97-4e2e-b02b-54bf346f6583",
+      "scryfall_id": "0b688039-7441-490b-ad06-8a72086c4023"
+    },
+    {
+      "name": "Abyssal Nocturnus",
+      "oracle_id": "b79c4066-66a9-4a53-8716-23f7a340a85f",
+      "scryfall_id": "fe094903-45a6-4b11-b80e-aabe915c4b7c"
+    },
+    {
+      "name": "Abyssal Persecutor",
+      "oracle_id": "7282f643-191b-41be-9f6f-82360c915d6d",
+      "scryfall_id": "9f2b9f27-459c-4585-9051-b83ffe053a74"
+    },
+    {
+      "name": "Abyssal Specter",
+      "oracle_id": "51833cff-6519-4806-8d91-0040e9a02189",
+      "scryfall_id": "69a41bec-7fb0-4060-918a-38cbbb329543"
+    },
+    {
+      "name": "Abzan Advantage",
+      "oracle_id": "e7b2f844-2ba2-4465-bb80-358a4d915f36",
+      "scryfall_id": "3ffd46f5-afd1-4130-b019-d8822e61fdfa"
+    },
+    {
+      "name": "Abzan Ascendancy",
+      "oracle_id": "3b7d4206-0d88-407b-ace5-d5d28881bf95",
+      "scryfall_id": "80b722d9-be9d-463c-929e-78f7156af9c6"
+    },
+    {
+      "name": "Abzan Banner",
+      "oracle_id": "46535f8e-1bcd-4588-ac6c-a4bc89c379c8",
+      "scryfall_id": "7855528a-ede9-49a9-8749-795a004fd927"
+    },
+    {
+      "name": "Abzan Battle Priest",
+      "oracle_id": "1b44fe0a-4a99-4166-b0b3-102b36b54ffa",
+      "scryfall_id": "c0fb53e6-441f-4faa-bf0e-0847cf83279d"
+    },
+    {
+      "name": "Abzan Beastmaster",
+      "oracle_id": "aab463bb-e790-403b-a88d-06ef81c7302b",
+      "scryfall_id": "219c4ab2-1f7c-469b-a72a-d435213f130c"
+    },
+    {
+      "name": "Abzan Charm",
+      "oracle_id": "4137a22c-f793-4e27-a9b2-72740a6e2121",
+      "scryfall_id": "bd5b386e-e71e-492d-8456-6cd178ef5b3d"
+    },
+    {
+      "name": "Abzan Devotee",
+      "oracle_id": "3d02ee2f-b7bd-40b0-b9be-2420991b2be0",
+      "scryfall_id": "66555946-e747-46fa-b1ac-b103a8edcd93"
+    },
+    {
+      "name": "Abzan Falconer",
+      "oracle_id": "8b972819-507a-40a9-ab1f-1a674ea56083",
+      "scryfall_id": "f7e2b0e1-c9ea-4f91-b19e-73b1bd6a0884"
+    },
+    {
+      "name": "Abzan Guide",
+      "oracle_id": "85b2fb89-5ebe-4c13-bc12-38d1417e5880",
+      "scryfall_id": "1b7f7158-4a31-4a1c-bf3b-574c0b09276a"
+    },
+    {
+      "name": "Abzan Kin-Guard",
+      "oracle_id": "b292d183-1ba9-40b4-9cba-bd70bf1380ef",
+      "scryfall_id": "cec0ef55-57fd-404f-b9f6-b5d41e77b58c"
+    },
+    {
+      "name": "Abzan Monument",
+      "oracle_id": "93563b7b-5685-4832-b164-0701dbf3cf18",
+      "scryfall_id": "d2da9024-3b58-4a57-8f7d-4094c193daee"
+    },
+    {
+      "name": "Abzan Runemark",
+      "oracle_id": "0a9276fc-387c-4bde-a6d6-b0dd7abee94b",
+      "scryfall_id": "fe356261-3126-41f1-ae71-b69ca5641f84"
+    },
+    {
+      "name": "Abzan Skycaptain",
+      "oracle_id": "866fc4b9-f661-444b-b7fd-929814dbc69d",
+      "scryfall_id": "c4195373-e902-4fc3-aead-1f6e728dbbae"
+    },
+    {
+      "name": "Academic Ascent",
+      "oracle_id": "406e853b-713f-4c89-9efb-aca74a11183f",
+      "scryfall_id": "730d8c28-1e58-4b8e-89e9-445d154d2e83"
+    },
+    {
+      "name": "Academic Dispute",
+      "oracle_id": "b22de128-6dad-4e15-a547-1c9ca08df5ff",
+      "scryfall_id": "4620cc3b-e401-4096-b310-fed080806344"
+    },
+    {
+      "name": "Academic Probation",
+      "oracle_id": "400b2e17-ee48-4e22-a8a6-a607c215d1a2",
+      "scryfall_id": "05521edf-f47f-4e7a-aec5-cdc4ae7368c2"
+    },
+    {
+      "name": "Academy Drake",
+      "oracle_id": "65f3ebeb-1ca5-4923-b681-032579991c8a",
+      "scryfall_id": "f8bacb12-da46-4b00-804f-9ff6bff452bc"
+    },
+    {
+      "name": "Academy Elite",
+      "oracle_id": "ba6c3c72-c014-45c6-a0b4-59eb9a65303e",
+      "scryfall_id": "f3728fbb-3a99-443a-b514-40f9990669c5"
+    },
+    {
+      "name": "Academy Instructor",
+      "oracle_id": "8802b7f0-1ed1-4872-9939-182afb8441ca",
+      "scryfall_id": "660ec8bc-dc03-4b42-84f3-091c19e2a853"
+    },
+    {
+      "name": "Academy Journeymage",
+      "oracle_id": "b400700c-1d82-4721-a166-56f88ba6ad19",
+      "scryfall_id": "a46a65e0-66a3-4896-8acc-0ad5e9927c40"
+    },
+    {
+      "name": "Academy Loremaster",
+      "oracle_id": "7d540860-ae94-4773-a526-aaffca3eb057",
+      "scryfall_id": "9fca4c4f-a77b-483e-9da4-574ba2e3d179"
+    },
+    {
+      "name": "Academy Manufactor",
+      "oracle_id": "f36d1d8b-8303-44a9-ab56-531931641ea2",
+      "scryfall_id": "76480f4d-ad6d-4ed6-82c6-fa12abc22557"
+    },
+    {
+      "name": "Academy Raider",
+      "oracle_id": "75131d75-0703-44d0-b503-35190be8e66f",
+      "scryfall_id": "6652ed29-ee90-4abc-a6cf-6b18a6cbae86"
+    },
+    {
+      "name": "Academy Rector",
+      "oracle_id": "e3c85068-b4b6-40b9-a16c-5c3b2d059ec4",
+      "scryfall_id": "4367bc78-0912-4abd-8edd-bc792558d01a"
+    },
+    {
+      "name": "Academy Researchers",
+      "oracle_id": "df2d2c52-475b-4057-9cf8-7886700f0fae",
+      "scryfall_id": "b62ca800-ec24-476e-b56f-834eef9622a9"
+    },
+    {
+      "name": "Academy Ruins",
+      "oracle_id": "a3da7d5b-2c2b-45fe-b9c5-413b8c8fc0a2",
+      "scryfall_id": "d0e3ff04-aa5b-4d6d-b06e-b4679f7938b8"
+    },
+    {
+      "name": "Academy Wall",
+      "oracle_id": "0cd77ee1-408c-4c51-ac87-24f4fc50083d",
+      "scryfall_id": "d2028115-f0de-4e8b-99bc-7369352e1e07"
+    },
+    {
+      "name": "Accelerate",
+      "oracle_id": "79189464-9645-4411-8886-68fd40a588ed",
+      "scryfall_id": "6a28dd88-db90-4f02-8aa9-39051d2c4763"
+    },
+    {
+      "name": "Accelerated Evolution",
+      "oracle_id": "6401d0ae-4635-497d-91ef-ce2eabefb893",
+      "scryfall_id": "2b13c4de-241c-4c34-a140-0b599c61226d"
+    },
+    {
+      "name": "Accelerated Mutation",
+      "oracle_id": "f8a9c279-0f11-4a22-8651-f9caf013ca3c",
+      "scryfall_id": "282f808c-0b58-4b98-aeda-f606a10d1a4b"
+    },
+    {
+      "name": "Acceptable Losses",
+      "oracle_id": "2b6d95b5-0680-43ae-9ff3-8e287a9eb837",
+      "scryfall_id": "9082bfb8-0ab0-4378-976d-a2c9d3c35a5e"
+    },
+    {
+      "name": "Access Denied",
+      "oracle_id": "353dd446-2ea6-41c9-a10f-5a03e4de19b4",
+      "scryfall_id": "1642df77-6fe8-47cf-b750-ca4dd9b331ba"
+    },
+    {
+      "name": "Access Tunnel",
+      "oracle_id": "ed9cc560-f30b-4b60-a094-ccf93ed656a7",
+      "scryfall_id": "4bef5957-71a4-4fe0-b2ce-dff8e8690bd9"
+    },
+    {
+      "name": "Acclaimed Contender",
+      "oracle_id": "35df179a-c0e6-4ac1-a861-e6e9b4d1614d",
+      "scryfall_id": "a508ffbe-aa58-4dae-b366-fea688b60755"
+    },
+    {
+      "name": "Accomplished Alchemist",
+      "oracle_id": "97e18a8d-9068-4782-a744-280d28c68228",
+      "scryfall_id": "0d7b7830-b65e-4c53-98e8-152026764e4b"
+    },
+    {
+      "name": "Accomplished Automaton",
+      "oracle_id": "f5af0d1b-531e-4053-848a-5e0fa1022f9a",
+      "scryfall_id": "aa453daf-6ceb-4e45-bfb3-f6f45835ac11"
+    },
+    {
+      "name": "Accorder Paladin",
+      "oracle_id": "6891c8b7-7112-40dc-8b94-b84ad1885e5e",
+      "scryfall_id": "df0a4370-729d-40e7-b68b-21902648492d"
+    },
+    {
+      "name": "Accorder's Shield",
+      "oracle_id": "dd70d439-bd60-43d1-ac26-13b744cc4a37",
+      "scryfall_id": "c5a4c2ab-c5bc-4e07-8671-a688ebd5471c"
+    },
+    {
+      "name": "Accumulated Knowledge",
+      "oracle_id": "1ca25379-d194-4670-a7bf-525ad11cf436",
+      "scryfall_id": "ad88e5ee-0eee-47af-a7b4-9bac044e1c8c"
+    },
+    {
+      "name": "Accumulate Wisdom",
+      "oracle_id": "a63eb744-71c4-447d-9372-c3a734f022c5",
+      "scryfall_id": "a6335319-6c92-40d4-ab2d-c06c79049c30"
+    },
+    {
+      "name": "Accursed Centaur",
+      "oracle_id": "b1e6921e-e460-4e58-82b0-d98ee31c279d",
+      "scryfall_id": "894556d8-6d5c-431b-a45d-26cd37c5f456"
+    },
+    {
+      "name": "Accursed Duneyard",
+      "oracle_id": "48edc348-93f6-4dce-9cc4-7244d76b6f4a",
+      "scryfall_id": "bd9e6ba8-1c5e-4416-8bff-90db3b3b1f41"
+    },
+    {
+      "name": "Accursed Horde",
+      "oracle_id": "8f3cba20-e7a4-47f4-8bce-90168ce9cc5c",
+      "scryfall_id": "709bcbca-7238-4c31-8d9e-ec0d54d0b298"
+    },
+    {
+      "name": "Accursed Marauder",
+      "oracle_id": "d8ad23a1-0b43-48ea-9fbe-d89b29194509",
+      "scryfall_id": "5da14d86-0780-4821-a799-96f64b377df4"
+    },
+    {
+      "name": "Accursed Spirit",
+      "oracle_id": "0e20afd2-507b-4878-a78c-f23b51ec071f",
+      "scryfall_id": "2513fe72-4e20-49e6-9970-839f1c635792"
+    },
+    {
+      "name": "Accursed Witch",
+      "oracle_id": "80b07882-e144-4815-8b6f-04b3ab343d97",
+      "scryfall_id": "8093f8b0-5d50-48ca-b616-e92535a47138"
+    },
+    {
+      "name": "Infectious Curse",
+      "oracle_id": "80b07882-e144-4815-8b6f-04b3ab343d97",
+      "scryfall_id": "8093f8b0-5d50-48ca-b616-e92535a47138"
+    },
+    {
+      "name": "Ace, Fearless Rebel",
+      "oracle_id": "50d0d870-fe3d-44a2-ad6e-93307a1fb468",
+      "scryfall_id": "75f001a0-8393-4977-84bb-cde39740606c"
+    },
+    {
+      "name": "Acererak the Archlich",
+      "oracle_id": "31b4e85d-89fc-4712-8f05-7ec097b1d3b6",
+      "scryfall_id": "dd52d0bd-3abd-401c-9f56-ee911613da3b"
+    },
+    {
+      "name": "Ace's Baseball Bat",
+      "oracle_id": "3f47ec32-4ee9-4bc0-96f2-310a939cb973",
+      "scryfall_id": "5f1132b6-9db6-440c-9e0a-fae6c157e8a3"
+    },
+    {
+      "name": "Achilles Davenport",
+      "oracle_id": "b921a672-721e-4bd8-a10b-a6de8c13c7d8",
+      "scryfall_id": "f8ead24c-dd4a-40cd-839e-de08017a7c29"
+    },
+    {
+      "name": "Acidic Dagger",
+      "oracle_id": "bf034a20-e362-4f38-9bf9-857777c62598",
+      "scryfall_id": "6dfdea79-2a7c-489d-8466-e6090c2a0919"
+    },
+    {
+      "name": "Acidic Slime",
+      "oracle_id": "21f45043-5419-4019-8b6c-e5294bd5f549",
+      "scryfall_id": "932d48fb-42b5-4aaa-a91c-d35cdb5e41a3"
+    },
+    {
+      "name": "Acidic Sliver",
+      "oracle_id": "a149eeb1-007c-435d-9d55-34af205090e0",
+      "scryfall_id": "2d92c3f7-a589-4c87-aa17-0d9707605ff4"
+    },
+    {
+      "name": "Acidic Soil",
+      "oracle_id": "4ccc1ac5-db90-4fc9-9795-7afaf7466c3e",
+      "scryfall_id": "790157c9-b1ed-4da5-9d50-e99e0dd807b7"
+    },
+    {
+      "name": "Acid Rain",
+      "oracle_id": "6ae3c3a2-bd17-4fea-ae27-9d2d1eaf8cc0",
+      "scryfall_id": "ba93c50a-2440-4e92-9cba-d97e20b1d29c"
+    },
+    {
+      "name": "Acid-Spewer Dragon",
+      "oracle_id": "f4378682-359f-48b0-adb7-b996b8d972db",
+      "scryfall_id": "aa8f58f1-4843-4926-b3c4-98898201c216"
+    },
+    {
+      "name": "Acid Web Spider",
+      "oracle_id": "23d4f436-a417-4a26-b5b8-c698f11a186b",
+      "scryfall_id": "968a25a5-9ec1-47fa-bf1f-e65eb75fdb00"
+    },
+    {
+      "name": "Aclazotz, Deepest Betrayal",
+      "oracle_id": "fcdfe9d5-2743-4d3e-ab57-bf0f96beaa15",
+      "scryfall_id": "627c392c-4d18-4eb2-a4e8-c668f61f5487"
+    },
+    {
+      "name": "Temple of the Dead",
+      "oracle_id": "fcdfe9d5-2743-4d3e-ab57-bf0f96beaa15",
+      "scryfall_id": "627c392c-4d18-4eb2-a4e8-c668f61f5487"
+    },
+    {
+      "name": "Acolyte Hybrid",
+      "oracle_id": "998daf11-c0ed-4801-b013-d8b3136f16d1",
+      "scryfall_id": "b229697e-b6ff-450b-8020-45c454da9b3e"
+    },
+    {
+      "name": "Acolyte of Aclazotz",
+      "oracle_id": "324d2aa8-6dea-4b0d-898d-1e52ed187565",
+      "scryfall_id": "99009400-ffa4-40af-8305-78295ae605ac"
+    },
+    {
+      "name": "Acolyte of Affliction",
+      "oracle_id": "d57c246f-18e5-4523-898c-1509db738363",
+      "scryfall_id": "a14afed6-ca42-442d-ba86-621179e6957c"
+    },
+    {
+      "name": "Acolyte of Bahamut",
+      "oracle_id": "38477748-bc57-449c-afe1-c5f34caf8eff",
+      "scryfall_id": "b0260e1f-ff6a-4ef3-bef7-8c77f8413500"
+    },
+    {
+      "name": "Acolyte of the Inferno",
+      "oracle_id": "35bf67e0-8141-4664-b762-2c613353e1eb",
+      "scryfall_id": "186581c7-81a6-4c27-b8a9-ff7f7a4b1d40"
+    },
+    {
+      "name": "Acolyte of Xathrid",
+      "oracle_id": "62dca41b-58b0-45eb-ada7-568e80a2abec",
+      "scryfall_id": "4b0b14d4-41de-42ac-9894-77bbcebaabfc"
+    },
+    {
+      "name": "Acolyte's Reward",
+      "oracle_id": "944689b2-f9f7-45c3-952c-54287b9824d5",
+      "scryfall_id": "cd8980af-c3fa-4027-917a-4a3d441c0a75"
+    },
+    {
+      "name": "Acorn Catapult",
+      "oracle_id": "56d13879-2dc5-4d84-918b-4bd1a5fc2a33",
+      "scryfall_id": "834354a3-f984-4882-bc71-080112107e64"
+    },
+    {
+      "name": "Acorn Harvest",
+      "oracle_id": "6aeba615-2d37-4eb8-a377-41a517e95aa3",
+      "scryfall_id": "32987720-cc0c-416b-b79b-217d3b37542d"
+    },
+    {
+      "name": "Acquire",
+      "oracle_id": "f1c3d749-5cdb-4af2-967f-6413d6cb04fe",
+      "scryfall_id": "993957c7-5d61-4c98-826d-b657aed667e1"
+    },
+    {
+      "name": "Acquired Mutation",
+      "oracle_id": "9ecd53b0-4551-4505-b5d2-02ae49d4cbdb",
+      "scryfall_id": "19586946-a6a6-4154-a544-15a052483f96"
+    },
+    {
+      "name": "Acquisition Octopus",
+      "oracle_id": "234ff22f-2ff1-4a73-a7c5-e9c53557c4c6",
+      "scryfall_id": "8e971a72-31db-4b7e-b9b9-9f45e8c3f87e"
+    },
+    {
+      "name": "Acquisitions Expert",
+      "oracle_id": "07e5f59e-3a98-4e01-a368-0be60e0463ba",
+      "scryfall_id": "281336c7-ca7c-4c91-bdfb-d253a965cb7c"
+    },
+    {
+      "name": "Acridian",
+      "oracle_id": "c6d0f1bc-b82a-4e64-a4bc-11ad3f54c71a",
+      "scryfall_id": "05d5a38f-5a60-46da-af1c-440e4bf7fe9e"
+    },
+    {
+      "name": "Acrobatic Cheerleader",
+      "oracle_id": "d8ce3f18-26fe-47e8-be8b-0d89d7de7038",
+      "scryfall_id": "6f1a7590-3eee-4803-b192-d4fb771e6a86"
+    },
+    {
+      "name": "Acrobatic Leap",
+      "oracle_id": "1347224f-421e-4270-8e50-cf25c875909c",
+      "scryfall_id": "a8b4bc34-cc8d-41d0-88ee-f40ec95cc0b8"
+    },
+    {
+      "name": "Acrobatic Maneuver",
+      "oracle_id": "1aa1cf50-ee79-4bef-826b-5f1a9e1aa1a5",
+      "scryfall_id": "74f92174-f38f-4623-a5f7-f5be7f7dcc9d"
+    },
+    {
+      "name": "Action News Crew",
+      "oracle_id": "a9d68cf5-3055-4ec9-9893-244bfd7046be",
+      "scryfall_id": "bc0f5ca8-47bd-4451-8fd1-a312ff7d31ec"
+    },
+    {
+      "name": "Activated Sleeper",
+      "oracle_id": "e12da2a1-e390-4487-b154-69e439cb7b05",
+      "scryfall_id": "343d01cf-9806-4c2d-a993-ddc9ed248d7f"
+    },
+    {
+      "name": "Active Volcano",
+      "oracle_id": "205ffa76-ff8e-4405-b21a-42358a9883c2",
+      "scryfall_id": "56adb184-f261-40e1-bdf3-e85d7d13faa2"
+    },
+    {
+      "name": "Act of Aggression",
+      "oracle_id": "9d7624ea-ffff-470b-928b-bbac66ddbd1c",
+      "scryfall_id": "8d34c3aa-7d74-4a8b-898c-cb62b1f05989"
+    },
+    {
+      "name": "Act of Authority",
+      "oracle_id": "c12b8e31-5702-4d3c-80c9-56c87e50679d",
+      "scryfall_id": "e107bd35-eddd-40f7-aea8-3a1eec3363c0"
+    },
+    {
+      "name": "Act of Heroism",
+      "oracle_id": "25edb501-11b5-4617-8a65-2eb4869cccd5",
+      "scryfall_id": "969860ba-6923-4715-b065-81803bba3dd6"
+    },
+    {
+      "name": "Act of Treason",
+      "oracle_id": "9d08af23-9f4a-4097-9abc-3b17475ab744",
+      "scryfall_id": "a1a9d323-fb40-411b-a0e7-64024bc6ba58"
+    },
+    {
+      "name": "Act on Impulse",
+      "oracle_id": "19ad338a-c89f-406d-ad1a-222c22044e1b",
+      "scryfall_id": "bfe513d1-2509-4051-ba85-49a19479fa5c"
+    },
+    {
+      "name": "Adagia, Windswept Bastion",
+      "oracle_id": "70d35dbd-1d91-4a2a-a643-6870d168f4f5",
+      "scryfall_id": "c634273a-94b0-4104-9d10-ae522ece1fc7"
+    },
+    {
+      "name": "Adamant Will",
+      "oracle_id": "467e22c3-6107-40ff-afc7-5960710c970b",
+      "scryfall_id": "1fd2c9ab-b3dd-4f68-b91f-0f075a045757"
+    },
+    {
+      "name": "Adamaro, First to Desire",
+      "oracle_id": "18f34bfd-7675-49df-91ea-695c510cd3c3",
+      "scryfall_id": "d2fa85ea-f5d5-4be3-a874-ce246c3e4245"
+    },
+    {
+      "name": "Adanto Vanguard",
+      "oracle_id": "91c380f6-2c41-48b7-9f07-104e8659e397",
+      "scryfall_id": "21c950d7-b4f6-4902-8c9a-98f2933f9fa5"
+    },
+    {
+      "name": "Adaptive Automaton",
+      "oracle_id": "53c730c6-2f8c-4af8-b400-b9d573a71e60",
+      "scryfall_id": "e35e614c-51a9-4d5c-b7fa-1a0a87108785"
+    },
+    {
+      "name": "Adaptive Gemguard",
+      "oracle_id": "2fdc0d15-ecb4-4a6d-be77-7a3fca188c9c",
+      "scryfall_id": "83c91e24-b7e8-4040-80cb-d1b375002c10"
+    },
+    {
+      "name": "Adaptive Omnitool",
+      "oracle_id": "e91240bc-4a13-4131-9379-5ddac6555f4a",
+      "scryfall_id": "9e84f840-d7c6-4a82-8891-3d12281020ee"
+    },
+    {
+      "name": "Adaptive Shimmerer",
+      "oracle_id": "8003ca2d-0c1d-47c1-bcd1-4609615c7a82",
+      "scryfall_id": "d8a2e243-e446-46c6-8a37-e26620951c41"
+    },
+    {
+      "name": "Adaptive Snapjaw",
+      "oracle_id": "0a56e2ad-684d-45a7-9145-479d1505bba2",
+      "scryfall_id": "0d3c0c43-2d6d-49b8-a112-07611a23ae69"
+    },
+    {
+      "name": "Adaptive Sporesinger",
+      "oracle_id": "f6311b7a-7482-4b13-9f8f-13e80c98e98e",
+      "scryfall_id": "3db6d202-9c6f-4485-9224-173b23de7054"
+    },
+    {
+      "name": "Adaptive Training Post",
+      "oracle_id": "a6657fcf-f08c-4b03-8ec8-cb0b194eb553",
+      "scryfall_id": "654a1564-0356-44ad-b1ab-8c1a556fc244"
+    },
+    {
+      "name": "Adarkar Sentinel",
+      "oracle_id": "bd372a53-48f9-4e9a-ab00-0f9c4606d452",
+      "scryfall_id": "ff62754b-f4f0-4731-8dd7-327a820f60a8"
+    },
+    {
+      "name": "Adarkar Unicorn",
+      "oracle_id": "287cd5e8-51e2-42a4-a139-c112ff89706d",
+      "scryfall_id": "0ba7526f-dba8-4483-b925-946164fc0ae9"
+    },
+    {
+      "name": "Adarkar Valkyrie",
+      "oracle_id": "2932baae-bdf1-455a-9ac4-23ba1f83e7e1",
+      "scryfall_id": "fc2a4abc-85da-46a6-a616-9aa607ce7372"
+    },
+    {
+      "name": "Adarkar Wastes",
+      "oracle_id": "d5ad26cc-2bdb-46b7-b8bf-dd099d5fa09b",
+      "scryfall_id": "42e0aa15-639a-4e88-9bd8-ce5e7c7d7649"
+    },
+    {
+      "name": "Adarkar Windform",
+      "oracle_id": "dd66b8ab-14a9-455b-98f6-5356df72a522",
+      "scryfall_id": "c18bce4a-9afb-4b91-bc9a-d62634b0f8dd"
+    },
+    {
+      "name": "Adder-Staff Boggart",
+      "oracle_id": "c95e75fb-2bf2-431c-b7ca-d84236bffe5c",
+      "scryfall_id": "d116839f-6a3a-4a2e-a3ab-ea177c012746"
+    },
+    {
+      "name": "Additive Evolution",
+      "oracle_id": "ce1a6c1f-6b4e-4d19-b256-48d073b359b7",
+      "scryfall_id": "b44ec684-d558-45eb-bcd6-8119428634c2"
+    },
+    {
+      "name": "Addle",
+      "oracle_id": "3745aea4-4455-4859-9772-bcfd14e4067b",
+      "scryfall_id": "e8afb9d0-affa-4599-bf29-729cfe64703b"
+    },
+    {
+      "name": "Adelbert Steiner",
+      "oracle_id": "657a4500-4b47-4c78-945b-a7791af7d10e",
+      "scryfall_id": "1a67a991-1e52-4676-a2e3-2bc7aa943ab3"
+    },
+    {
+      "name": "Adeline, Resplendent Cathar",
+      "oracle_id": "38515f89-348b-4cf3-b7bd-1f6fe4ce2fba",
+      "scryfall_id": "1de30c12-2011-495a-be25-f7a46b23e142"
+    },
+    {
+      "name": "Adeliz, the Cinder Wind",
+      "oracle_id": "850eb3c3-029b-49b0-91a9-6daeb1b3a9e8",
+      "scryfall_id": "b3c950e2-a43b-47f8-9ad6-1909ccc7acbf"
+    },
+    {
+      "name": "Adept Watershaper",
+      "oracle_id": "602cce3e-7033-47d6-aec1-d755f234f270",
+      "scryfall_id": "6e53f246-8347-4632-9d5b-4aeb12f7b762"
+    },
+    {
+      "name": "Adéwalé, Breaker of Chains",
+      "oracle_id": "e30d9e08-cf88-4e2d-95e1-7144d8fea5c7",
+      "scryfall_id": "914efc24-5c3a-4d22-9d77-fce337a08d4d"
+    },
+    {
+      "name": "Adherent of Hope",
+      "oracle_id": "b5f5400e-f341-40e3-b935-36d9cf983a20",
+      "scryfall_id": "ce2bc7ad-458d-445e-a0a9-7897b596fdd0"
+    },
+    {
+      "name": "Adipose Offspring",
+      "oracle_id": "1e21e57e-3bc9-41a8-9746-57b583a5ad63",
+      "scryfall_id": "68f91092-b679-46c1-9f0c-3b286ee1d02f"
+    },
+    {
+      "name": "Admiral Beckett Brass",
+      "oracle_id": "43b5e462-d860-473d-828f-6c513fc7768a",
+      "scryfall_id": "02cbd397-3ef3-465f-84fe-765dd1444af8"
+    },
+    {
+      "name": "Admiral Brass, Unsinkable",
+      "oracle_id": "4df179b4-7c6b-4e63-9d7d-62f4df377989",
+      "scryfall_id": "bdc2d492-9d1e-4543-8b9c-c66ee67992ce"
+    },
+    {
+      "name": "Admiral's Order",
+      "oracle_id": "ae4fe5e0-408d-4398-84d7-a901b836df2a",
+      "scryfall_id": "80dc0310-afd9-49b4-b58f-a0e91120c38c"
+    },
+    {
+      "name": "Admonition Angel",
+      "oracle_id": "78a7bb30-fc60-410c-b086-862b5521c1aa",
+      "scryfall_id": "a6e7713d-6054-46a7-a8bc-f09e7a81a571"
+    },
+    {
+      "name": "Ad Nauseam",
+      "oracle_id": "981b0e21-e5e6-4a1e-bfde-679d56623f7f",
+      "scryfall_id": "a9f2c53e-ff58-4aa8-89a6-4f45628cc571"
+    },
+    {
+      "name": "Adorned Crocodile",
+      "oracle_id": "fb49c7d2-d750-4676-b90e-76e7fae70a25",
+      "scryfall_id": "bb13a34b-6ac8-47cb-9e91-47106a585fc1"
+    },
+    {
+      "name": "Adorned Pouncer",
+      "oracle_id": "80b8ee3d-4174-4f47-a533-a3db1e703382",
+      "scryfall_id": "865e267d-450c-4eeb-b61d-bd0ec5d8534a"
+    },
+    {
+      "name": "Adrenaline Jockey",
+      "oracle_id": "c3dc6b0e-8790-4bd3-b166-63b2dc77488f",
+      "scryfall_id": "c8655373-320d-440d-b700-d03413f743fd"
+    },
+    {
+      "name": "Adrestia",
+      "oracle_id": "94779ca4-c202-4163-9c77-1036921a34bc",
+      "scryfall_id": "b3d878fc-cc21-407f-b3cc-95bf2d717a80"
+    },
+    {
+      "name": "Adriana, Captain of the Guard",
+      "oracle_id": "de23275e-e9c1-4151-aed8-f79ead03d5d4",
+      "scryfall_id": "01c2337d-1c3c-4c5e-8b06-dc8a8c56164e"
+    },
+    {
+      "name": "Adriana's Valor",
+      "oracle_id": "512a9ab9-ddd4-4872-b4f4-dee56f9f5575",
+      "scryfall_id": "8bfd6889-90e2-49fe-bd30-7d850dc18db2"
+    },
+    {
+      "name": "Adric, Mathematical Genius",
+      "oracle_id": "af566158-23b2-4f91-8d59-a58342a9f576",
+      "scryfall_id": "1f290a17-699e-420d-8322-3e28300a0d2e"
+    },
+    {
+      "name": "Adrix and Nev, Twincasters",
+      "oracle_id": "12a6cad9-eb42-43bd-9e68-aaf862cd83db",
+      "scryfall_id": "b9c11061-bb34-4904-b9f1-ea106b517bbe"
+    },
+    {
+      "name": "Adult Gold Dragon",
+      "oracle_id": "a361fdd1-7f97-4aed-8e24-ab2a03387f73",
+      "scryfall_id": "67a76010-d932-4727-8b5e-b8e2d14e1362"
+    },
+    {
+      "name": "Adun Oakenshield",
+      "oracle_id": "aefd49a4-ecec-42cb-b882-e5db7f81eff8",
+      "scryfall_id": "60252226-a102-4d88-9b80-42d021b5184d"
+    },
+    {
+      "name": "Advanced Hoverguard",
+      "oracle_id": "65dc61a4-9052-49d4-bce8-9c16f0339382",
+      "scryfall_id": "7384d50a-5801-47ed-ab9f-5c7e4f1f20dd"
+    },
+    {
+      "name": "Advanced Reconstruction",
+      "oracle_id": "f00bc101-8082-4459-b987-f0c4b7a12344",
+      "scryfall_id": "cc912fec-827d-4deb-8430-79f5ea31ca9b"
+    },
+    {
+      "name": "Advanced Stitchwing",
+      "oracle_id": "7e5d2801-873f-4318-9c23-9a73e00e31a4",
+      "scryfall_id": "044b2bfc-a5cc-4505-831d-5e1e3a6fdb3c"
+    },
+    {
+      "name": "Advance Scout",
+      "oracle_id": "831e2185-0bb2-45bb-99cd-d2091bad86f0",
+      "scryfall_id": "81ce7e1e-ffe5-4ced-8967-9a6917245240"
+    },
+    {
+      "name": "Advancing the Spirit",
+      "oracle_id": "c9949a5a-13d4-41ca-80fe-902b0ae71204",
+      "scryfall_id": "85d0495c-cca0-4aeb-a03e-2bc102b3c556"
+    },
+    {
+      "name": "Advantageous Proclamation",
+      "oracle_id": "86373537-7424-416a-8d89-cc38f6538458",
+      "scryfall_id": "f8c37fe8-43b3-454e-a70b-5b0d0f396a33"
+    },
+    {
+      "name": "Advent of the Wurm",
+      "oracle_id": "eb62aa4b-c11b-4195-ae85-cff8f78ce17b",
+      "scryfall_id": "ba3b5e35-5448-4115-a9c5-6ac14013c904"
+    },
+    {
+      "name": "Adventure Awaits",
+      "oracle_id": "70235727-e330-46fa-b057-ddbb55cd1ac3",
+      "scryfall_id": "db50f988-da46-4b9b-9cc5-78497df2df8b"
+    },
+    {
+      "name": "Adventurer's Airship",
+      "oracle_id": "e3016295-00f7-4daf-91b0-57653733b103",
+      "scryfall_id": "0a1d6dcd-bd41-4f57-a35b-6613811fe4d4"
+    },
+    {
+      "name": "Adventurers' Guildhouse",
+      "oracle_id": "bf29b215-d4f5-4641-97ef-b65d4c463e72",
+      "scryfall_id": "32865e68-5842-4f17-b2ea-4ffa743b511f"
+    },
+    {
+      "name": "Adventurer's Inn",
+      "oracle_id": "232bd88c-ecdb-43dd-b34a-d381cb3bedf2",
+      "scryfall_id": "f0da2ee1-986e-4cbf-92eb-d96fdb572ca5"
+    },
+    {
+      "name": "Adventuring Gear",
+      "oracle_id": "17042684-7af4-43a6-88c7-885032cfb27c",
+      "scryfall_id": "361f9b99-5b5d-40da-b4b9-5ad90f6280ee"
+    },
+    {
+      "name": "Adventurous Eater",
+      "oracle_id": "02125db4-4507-467a-ac0c-406de2c7d533",
+      "scryfall_id": "d40cc7da-c731-418e-8547-7033d1939450"
+    },
+    {
+      "name": "Have a Bite",
+      "oracle_id": "02125db4-4507-467a-ac0c-406de2c7d533",
+      "scryfall_id": "d40cc7da-c731-418e-8547-7033d1939450"
+    },
+    {
+      "name": "Adventurous Impulse",
+      "oracle_id": "5bf49f39-b3d5-4148-8dc2-b5b5011769d2",
+      "scryfall_id": "30811fb2-5767-4106-9a8d-6091f61969c6"
+    },
+    {
+      "name": "Adversary by Algorithm",
+      "oracle_id": "37f3eda9-3242-4d62-846f-935543d8f4fd",
+      "scryfall_id": "41644f06-d08f-406c-a56a-47e1b5273982"
+    },
+    {
+      "name": "Adverse Conditions",
+      "oracle_id": "7a5a81f7-1597-4972-8565-fd2a5667df99",
+      "scryfall_id": "03d86e0b-294f-41b8-a5cd-d3144a019334"
+    },
+    {
+      "name": "Advice from the Fae",
+      "oracle_id": "5063f015-bd1c-4e14-9888-63e202be2ac8",
+      "scryfall_id": "d874f345-e623-4317-9aa7-66d14a011303"
+    },
+    {
+      "name": "Advocate of the Beast",
+      "oracle_id": "1208cb6e-34b4-4a23-9a5b-a01229113e38",
+      "scryfall_id": "b1320400-5aa8-48d6-be84-197b4559456f"
+    },
+    {
+      "name": "Aegar, the Freezing Flame",
+      "oracle_id": "592d847e-e3f3-425d-89f9-01ab533ad581",
+      "scryfall_id": "68011f60-6202-48f4-8255-fb94764e2951"
+    },
+    {
+      "name": "Aegis Angel",
+      "oracle_id": "5902e074-7154-4fc7-8776-b87e8b1925e7",
+      "scryfall_id": "3d27e65f-6d55-420e-a843-16097b50f7a2"
+    },
+    {
+      "name": "Aegis Automaton",
+      "oracle_id": "727f4734-53cc-4279-ba51-dfa26c4ceb1d",
+      "scryfall_id": "e5f9fa2d-4bf4-4fcb-9b76-fd4a9ff5a58c"
+    },
+    {
+      "name": "Aegis of Honor",
+      "oracle_id": "ea93acc8-0c1f-42a2-bed3-f385d210d58f",
+      "scryfall_id": "9561ffdb-f4dd-4b62-a2c2-933498e3a061"
+    },
+    {
+      "name": "Aegis of the Gods",
+      "oracle_id": "c5bfc1b9-a55d-4608-a6f7-bb62cb8dc3c6",
+      "scryfall_id": "f2b2f381-86a2-42ac-b694-dcde437d574f"
+    },
+    {
+      "name": "Aegis of the Heavens",
+      "oracle_id": "f8e1b38a-2a77-4cf1-8bef-31acb61ede10",
+      "scryfall_id": "a94f356d-4714-4500-8fb0-1ac68ec5c1cf"
+    },
+    {
+      "name": "Aegis of the Legion",
+      "oracle_id": "99eb05eb-11ef-456f-9132-166a0691dd04",
+      "scryfall_id": "76cd4e45-30a0-4a24-9612-adeb8fddff23"
+    },
+    {
+      "name": "Aegis of the Meek",
+      "oracle_id": "0cf78877-bf08-413c-8ecb-8c3265ac1c4a",
+      "scryfall_id": "5d272051-f442-4f6e-8c64-df28b398d2e8"
+    },
+    {
+      "name": "Aegis Sculptor",
+      "oracle_id": "3a75c56a-bdf7-490d-aa41-51d5eb8be46c",
+      "scryfall_id": "19c1417a-9719-46f6-8749-d92b93ce0529"
+    },
+    {
+      "name": "Aegis Turtle",
+      "oracle_id": "f84c30e7-2ea8-43ff-9356-1f907558cfd9",
+      "scryfall_id": "c7f2014a-fbc9-447c-a440-e06d01066bb9"
+    },
+    {
+      "name": "Aeolipile",
+      "oracle_id": "0897adea-2759-40e8-a05a-c722473e1cf3",
+      "scryfall_id": "a09030ee-415c-45af-bf08-7623197a314f"
+    },
+    {
+      "name": "Aeon Chronicler",
+      "oracle_id": "a1399cb8-f22a-487e-b539-2db47b09a790",
+      "scryfall_id": "5cec8dcc-8ebb-4640-a5f3-90e6e62c27e5"
+    },
+    {
+      "name": "Aeon Engine",
+      "oracle_id": "af471455-6b9f-4c14-bb90-a74a44ecd247",
+      "scryfall_id": "ea4dfdd7-f35a-45d6-9fc7-2c096f92dd5f"
+    },
+    {
+      "name": "Aerathi Berserker",
+      "oracle_id": "5cb495a2-c683-4066-b6ee-d0b7d8843cb9",
+      "scryfall_id": "06673800-22a7-4ee3-92fa-7c7cd4865d30"
+    },
+    {
+      "name": "Aerial Assault",
+      "oracle_id": "a4eb06ca-16d8-41c2-8fc6-22e73872b5b0",
+      "scryfall_id": "58e84a4a-034f-4f55-a827-e62f2b61f091"
+    },
+    {
+      "name": "Aerial Boost",
+      "oracle_id": "d7fa5c42-7cd5-42e7-a42e-724c1a3df96a",
+      "scryfall_id": "f7017afb-4c7c-4c8d-9c9d-3f056a55561e"
+    },
+    {
+      "name": "Aerial Caravan",
+      "oracle_id": "d13aff7c-f0ee-44e2-ae1c-62cd86ad46a6",
+      "scryfall_id": "adac91af-5165-4779-99f7-e75c83fa5d5d"
+    },
+    {
+      "name": "Aerial Doombot",
+      "oracle_id": "f24efc60-fdac-4a5d-bcbc-784ec5ae6d96",
+      "scryfall_id": "e727ec1c-dc3b-4f1a-8a62-18549f118b89"
+    },
+    {
+      "name": "Aerial Engineer",
+      "oracle_id": "27f5969e-d613-4cbc-87af-98899bb5c58a",
+      "scryfall_id": "5314bae2-4930-4f8a-8a52-853bc3feb88f"
+    },
+    {
+      "name": "Aerialephant",
+      "oracle_id": "20046568-b067-49fb-93b4-2ee86421f14b",
+      "scryfall_id": "1a2f4abd-089e-4015-a207-8a62616668b1"
+    },
+    {
+      "name": "Aerial Extortionist",
+      "oracle_id": "7e7d7f4d-2c22-4803-ba5e-5eb653c25b5e",
+      "scryfall_id": "5353bcb9-800d-4d74-95fa-42350a0f25de"
+    },
+    {
+      "name": "Aerial Formation",
+      "oracle_id": "b0168b7e-a8b8-4ce3-af12-a43f3818b6a1",
+      "scryfall_id": "fce86785-bc03-451e-8422-8bb53082cc12"
+    },
+    {
+      "name": "Aerial Guide",
+      "oracle_id": "b56c0846-e465-4251-93ea-2e3e7be8dffc",
+      "scryfall_id": "b744c138-9b9e-47f6-9d56-feb6a78ce377"
+    },
+    {
+      "name": "Aerial Maneuver",
+      "oracle_id": "d4ccc319-db23-4ef4-8129-317426f3a794",
+      "scryfall_id": "c63e9c49-3fa4-41ad-9eed-19801df103c6"
+    },
+    {
+      "name": "Aerial Modification",
+      "oracle_id": "290cd0b1-55d6-4b30-962d-075a6f75d562",
+      "scryfall_id": "b89cab47-25fb-49ea-bb43-90a0089b6b20"
+    },
+    {
+      "name": "Aerial Predation",
+      "oracle_id": "6bac1495-16cf-4e1e-9126-482f85322c78",
+      "scryfall_id": "3b405858-83eb-4939-b86d-4ba190fca048"
+    },
+    {
+      "name": "Aerial Responder",
+      "oracle_id": "69b1b0ec-9db0-48d1-a7b5-71281aca16fe",
+      "scryfall_id": "8833065e-5022-4f48-b2fd-6fe5647c0a07"
+    },
+    {
+      "name": "Aerial Surveyor",
+      "oracle_id": "92c9b2fd-95d6-4937-aee2-67b4bb8ca29d",
+      "scryfall_id": "7c474f31-336d-44df-a7da-27aefd220e22"
+    },
+    {
+      "name": "Aerial Volley",
+      "oracle_id": "ab855992-34da-42a2-b7c7-dec4db849159",
+      "scryfall_id": "c5178301-f766-48d3-af07-6bd6f822c725"
+    },
+    {
+      "name": "Aerid Konstrari",
+      "oracle_id": "172a8f58-c420-4497-b962-c5853f923667",
+      "scryfall_id": "f17d2792-b075-4c47-ad38-e7a7eaee5f8c"
+    },
+    {
+      "name": "Aerie Auxiliary",
+      "oracle_id": "0c97aea7-c997-45b4-a044-84fb5c07a021",
+      "scryfall_id": "5e4c134b-a416-467e-a158-def84c92c6af"
+    },
+    {
+      "name": "Aerie Bowmasters",
+      "oracle_id": "43ace4d5-9006-4bad-bd17-3d368c20564d",
+      "scryfall_id": "a6db26b5-d28c-4524-9347-eec412d584bc"
+    },
+    {
+      "name": "Aerie Mystics",
+      "oracle_id": "12134f7d-433a-416a-b668-c1a21984c94b",
+      "scryfall_id": "ac774ed1-75f0-4c22-adf7-73a64183981a"
+    },
+    {
+      "name": "Aerie Ouphes",
+      "oracle_id": "70cdd24a-8dc5-47b5-8729-9ebf486f4821",
+      "scryfall_id": "b2e4cb09-c99f-4a17-a6fd-55c9a169a808"
+    },
+    {
+      "name": "Aerie Worshippers",
+      "oracle_id": "674c34eb-1080-4811-8f2a-5006e08d98b8",
+      "scryfall_id": "06c8b3b9-f0fb-4cc1-8916-82ee2c74f089"
+    },
+    {
+      "name": "Aerith Gainsborough",
+      "oracle_id": "dd9a6f6b-f9b7-4292-bc80-b7da326de032",
+      "scryfall_id": "e86328b6-ded2-41df-8b6e-4a770e7b171e"
+    },
+    {
+      "name": "Aerith, Last Ancient",
+      "oracle_id": "d6cba688-faff-4d9f-8148-37d389fa5fb3",
+      "scryfall_id": "d041a51c-9a28-4b32-9da3-0f06807959f1"
+    },
+    {
+      "name": "Aerith Rescue Mission",
+      "oracle_id": "14c3e48b-4c4e-4787-8c50-0e3aee19aa23",
+      "scryfall_id": "3123d16c-e1e6-4659-a7a3-2ec6efc6bf08"
+    },
+    {
+      "name": "Aeromoeba",
+      "oracle_id": "1e276998-9c54-4d68-a901-657853312d06",
+      "scryfall_id": "2a304f7e-0b9e-4ef6-9ad8-34350839f7d9"
+    },
+    {
+      "name": "Aeromunculus",
+      "oracle_id": "a0cd19c1-9125-4627-83ba-d42c489b4e7d",
+      "scryfall_id": "671c94c1-df52-4985-ad78-3e1c9c78df18"
+    },
+    {
+      "name": "Aeronaut Admiral",
+      "oracle_id": "dcde1a62-33a5-4454-a389-9bf7a3521a4c",
+      "scryfall_id": "943f7244-aa62-423f-aaaa-680bdfb4f47e"
+    },
+    {
+      "name": "Aeronaut Cavalry",
+      "oracle_id": "153292f9-e0d1-43a7-a083-275c49d0554a",
+      "scryfall_id": "38a62bb2-bc33-44d4-9a7e-92c9ea7d3c2c"
+    },
+    {
+      "name": "Aeronaut's Wings",
+      "oracle_id": "e3bad2e2-1024-4261-b3d7-82a6998416fd",
+      "scryfall_id": "fcc65821-e4e7-471c-941c-9d3e25ae8bb9"
+    },
+    {
+      "name": "Aeronaut Tinkerer",
+      "oracle_id": "a15bb807-ea31-4bff-b573-c249c4c78dd6",
+      "scryfall_id": "e145e85d-1eaa-4ec6-9208-ca6491577302"
+    },
+    {
+      "name": "Aesi, Tyrant of Gyre Strait",
+      "oracle_id": "6511f317-bd38-46d0-b800-7125a3f420da",
+      "scryfall_id": "673c21f8-02b6-4ac4-b2fc-df065b4ac662"
+    },
+    {
+      "name": "Aesthir Glider",
+      "oracle_id": "99dcde0b-4f4d-4d7a-89aa-8a89c256e38f",
+      "scryfall_id": "25afd4a7-4253-4a4e-a105-e92f64460faa"
+    },
+    {
+      "name": "Aether Adept",
+      "oracle_id": "e076067c-77b7-4a37-a62d-51434392dd53",
+      "scryfall_id": "1640b76d-15d6-4b08-a34b-c5432259d570"
+    },
+    {
+      "name": "Aether Barrier",
+      "oracle_id": "0fe602b7-9f88-4d3d-af24-7790df867ed5",
+      "scryfall_id": "36298f9f-12cc-43bd-adda-ccabd67a9568"
+    },
+    {
+      "name": "Aetherblade Agent",
+      "oracle_id": "80ecb069-36e2-490d-9f6c-ef553c00e997",
+      "scryfall_id": "dad34ae5-56b4-4394-be02-e043dc1cc23d"
+    },
+    {
+      "name": "Gitaxian Mindstinger",
+      "oracle_id": "80ecb069-36e2-490d-9f6c-ef553c00e997",
+      "scryfall_id": "dad34ae5-56b4-4394-be02-e043dc1cc23d"
+    },
+    {
+      "name": "Aetherborn Marauder",
+      "oracle_id": "ff6427f6-d2b1-4e33-984d-c06bd15d7c2c",
+      "scryfall_id": "4c861a13-4e02-41fb-a2c0-29d3a7ae3922"
+    },
+    {
+      "name": "Aether Burst",
+      "oracle_id": "1e33f39b-a61a-4a09-a541-16cc1bd53d02",
+      "scryfall_id": "3d09ea4a-0d3a-40b8-be0f-a31693099c4f"
+    },
+    {
+      "name": "Aether Channeler",
+      "oracle_id": "fb220f46-f8b8-4804-baa4-e7d50b4871f7",
+      "scryfall_id": "60afeb75-2c1e-4634-8c83-88b1dddb77c2"
+    },
+    {
+      "name": "Aether Charge",
+      "oracle_id": "15e83068-6253-4c65-8679-7295f3dc2075",
+      "scryfall_id": "05df2792-4971-49e8-a8f2-17700e247500"
+    },
+    {
+      "name": "Aether Chaser",
+      "oracle_id": "8aab0b55-2779-43c7-a3ee-151b8e5c72f3",
+      "scryfall_id": "290cde84-d97a-4737-aff2-c443a4e43f7d"
+    },
+    {
+      "name": "Aether Figment",
+      "oracle_id": "15fee0bd-ede2-4f65-a9a1-2da4623679d5",
+      "scryfall_id": "15fd5ce4-335f-409c-a09e-e17a41c2da71"
+    },
+    {
+      "name": "Aetherflame Wall",
+      "oracle_id": "6bb24767-687e-4ff6-b7ac-3bf969f4dfeb",
+      "scryfall_id": "93b14f08-dd93-4a9f-a616-8f8d0b26b966"
+    },
+    {
+      "name": "Aether Flash",
+      "oracle_id": "a3c35742-e306-49b6-b042-db4f685c6f86",
+      "scryfall_id": "780f9197-e910-4c7a-bb4b-2c4a94903c39"
+    },
+    {
+      "name": "Aetherflux Conduit",
+      "oracle_id": "775617cd-7264-4365-94c4-ffae4eb9ec8b",
+      "scryfall_id": "dd9ac0f2-2d8f-40fc-97fb-d6e05633405d"
+    },
+    {
+      "name": "Aetherflux Reservoir",
+      "oracle_id": "5f15125e-ae89-471e-b055-226a783bc7c1",
+      "scryfall_id": "96b6b2e1-c3e6-464c-8a13-b15deb34e862"
+    },
+    {
+      "name": "Aether Gale",
+      "oracle_id": "b21d6482-1b3a-47e6-98a5-3067f5f3818b",
+      "scryfall_id": "4e336e87-e5af-46a0-8caf-5d9ad8d671fd"
+    },
+    {
+      "name": "Aethergeode Miner",
+      "oracle_id": "92045f6c-9ec2-4bf0-826c-e21ef253011c",
+      "scryfall_id": "80bb3abd-ebaf-4dc2-97eb-ed4a2b005177"
+    },
+    {
+      "name": "Aether Gust",
+      "oracle_id": "ecf1e378-d6bc-4ee0-800e-eb8a955d781f",
+      "scryfall_id": "783da808-6698-4e55-9fac-430a6effe2b1"
+    },
+    {
+      "name": "Aether Helix",
+      "oracle_id": "9c83979a-b354-4e20-9638-85e8f354da81",
+      "scryfall_id": "7d1c653e-f629-4105-a52c-379c5cd78208"
+    },
+    {
+      "name": "Aether Herder",
+      "oracle_id": "be89a032-8ade-4048-b95d-76e958dca330",
+      "scryfall_id": "e8744a31-451b-4349-8f62-e2392a72a154"
+    },
+    {
+      "name": "Aether Hub",
+      "oracle_id": "61c89b11-65c9-4fda-bbcd-d84de25df801",
+      "scryfall_id": "25ea04d8-5d85-49d3-8d8d-7fe123d0ed6c"
+    },
+    {
+      "name": "Aetheric Amplifier",
+      "oracle_id": "295cd8e1-0830-46c1-9957-556afd4bcee6",
+      "scryfall_id": "21c33a91-b02c-43ec-a385-aa0349928f9c"
+    },
+    {
+      "name": "Aether Inspector",
+      "oracle_id": "9373a176-a5e9-4fdc-906b-bc6aef657e5b",
+      "scryfall_id": "f5dcbe97-d582-464e-98e7-dd06d8652606"
+    },
+    {
+      "name": "Aetherize",
+      "oracle_id": "7c779721-cd1b-4696-9ae9-68ccc284ed2a",
+      "scryfall_id": "1e5530fc-0291-4a17-b048-c5d24e6f51d8"
+    },
+    {
+      "name": "Aetherjacket",
+      "oracle_id": "062c8e40-dea7-4df7-bcaa-f1d696fe61c3",
+      "scryfall_id": "0a29c8a5-fd98-422c-9518-2db0993495e5"
+    },
+    {
+      "name": "Aetherling",
+      "oracle_id": "b980bf11-9e12-4ee9-83c1-45706d9ae344",
+      "scryfall_id": "9c93313b-cf43-47e9-a911-717b4d14b0b5"
+    },
+    {
+      "name": "Aethermage's Touch",
+      "oracle_id": "15692698-ef57-4672-bf76-5fe4a00c693a",
+      "scryfall_id": "df59b2e4-21a6-4cf1-80bd-f92f8ea99f2c"
+    },
+    {
+      "name": "Aether Meltdown",
+      "oracle_id": "433a2880-d989-4c40-99fa-0896de341b88",
+      "scryfall_id": "91f99614-45e2-4688-8403-f3a6b9162b08"
+    },
+    {
+      "name": "Aether Membrane",
+      "oracle_id": "5efea57b-937d-46ac-999e-490316e0f820",
+      "scryfall_id": "8be64d5d-779e-4c63-baf4-00a07f73fc9f"
+    },
+    {
+      "name": "Aether Mutation",
+      "oracle_id": "6697fe5b-90ac-4321-aa2f-cdc6ec283cb4",
+      "scryfall_id": "a9507116-ede8-40a1-8fa3-705e6f6f64c0"
+    },
+    {
+      "name": "Aetherplasm",
+      "oracle_id": "0cd99210-8d34-4112-8e41-7e8c5d2a95b9",
+      "scryfall_id": "07d71f03-de9c-4a85-be22-e4eb4d98a343"
+    },
+    {
+      "name": "Aether Poisoner",
+      "oracle_id": "73757d44-7889-416b-94d2-e730e601ace3",
+      "scryfall_id": "c9b217f1-1621-40d1-8a98-24c1f7cba800"
+    },
+    {
+      "name": "Aether Refinery",
+      "oracle_id": "9e9cde32-0568-44bc-a00a-9709f15c1350",
+      "scryfall_id": "94553de8-52e8-4209-919a-cdf9289af116"
+    },
+    {
+      "name": "Aether Revolt",
+      "oracle_id": "b73661a6-d136-4c65-804c-461e83484f4b",
+      "scryfall_id": "b8732e62-cdee-4d32-82a8-8a71a04be7a1"
+    },
+    {
+      "name": "Aether Rift",
+      "oracle_id": "2577ef8e-d85e-47af-ac34-629f31992751",
+      "scryfall_id": "692c186a-997c-4f7e-a339-bf84884e1019"
+    },
+    {
+      "name": "Aether Searcher",
+      "oracle_id": "80ea63fd-691a-45ba-a4bf-862e5ec2922d",
+      "scryfall_id": "94dcff94-9f25-4ca9-a1f1-5d97de4ab9df"
+    },
+    {
+      "name": "Aethershield Artificer",
+      "oracle_id": "d2575513-72fa-49c7-be6b-9f6f85950f88",
+      "scryfall_id": "226f7c45-db9f-4d48-b575-4d2f1904c963"
+    },
+    {
+      "name": "Aether Shockwave",
+      "oracle_id": "e9db79fd-a5b6-4d59-9176-e713e2e9c708",
+      "scryfall_id": "8214d2e9-5aa1-42a7-8f1a-f4eaa2def1b1"
+    },
+    {
+      "name": "Aether Snap",
+      "oracle_id": "1a1a16e5-ce4f-42b8-a1c6-05dd635d83cc",
+      "scryfall_id": "dd9cade1-b077-4fb0-b55a-01b9916647e7"
+    },
+    {
+      "name": "Aethersnatch",
+      "oracle_id": "45892ec2-8996-444f-a61c-5151926baa0b",
+      "scryfall_id": "0ce562a9-ca35-4f31-8618-bc26d3d40169"
+    },
+    {
+      "name": "Aethersnipe",
+      "oracle_id": "3e0be003-4f42-4917-b85d-46baf2afd734",
+      "scryfall_id": "2cc9b5ee-4d6d-42ea-8b13-b8a7059781c9"
+    },
+    {
+      "name": "Aether Spellbomb",
+      "oracle_id": "4b033a0a-c1ae-44d7-9662-72cbbfda024b",
+      "scryfall_id": "a54e8ce9-edd7-4ae7-9521-6fb6727cf63b"
+    },
+    {
+      "name": "Aethersphere Harvester",
+      "oracle_id": "7b3e74ad-0179-480b-871c-9e3bc30a43ff",
+      "scryfall_id": "4160bb5f-4b49-4535-94f5-776d7abd1d1a"
+    },
+    {
+      "name": "Aether Spike",
+      "oracle_id": "e4a85647-0b8c-40b2-a5d5-43c78877ce36",
+      "scryfall_id": "012f5195-10ab-4b32-a5de-a79341cd536a"
+    },
+    {
+      "name": "Aetherspouts",
+      "oracle_id": "48369aec-a991-4bef-8554-01c84302b063",
+      "scryfall_id": "b5cb6da6-d43b-4ad1-bb77-9eeb6d15240c"
+    },
+    {
+      "name": "Aethersquall Ancient",
+      "oracle_id": "47c685b1-6e1e-4e08-8a52-9da6902df113",
+      "scryfall_id": "55127a25-dc64-4f26-ae50-ed7247c22ae6"
+    },
+    {
+      "name": "Aether Sting",
+      "oracle_id": "61105cb5-d7a1-4021-a006-dd1b947dfa68",
+      "scryfall_id": "66a09917-50ce-4b51-a5cf-e28e88a45762"
+    },
+    {
+      "name": "Aether Storm",
+      "oracle_id": "ff4297d3-3d96-4bd6-a606-1bdc20a6df2b",
+      "scryfall_id": "79d6b89e-f24a-4d32-a6f7-8466f46d9ad0"
+    },
+    {
+      "name": "Aetherstorm Roc",
+      "oracle_id": "06f09e5a-5cfb-437f-9dd1-1682d71f4e7f",
+      "scryfall_id": "79fb7541-7a27-40a5-aabd-fce26df03485"
+    },
+    {
+      "name": "Aetherstream Leopard",
+      "oracle_id": "8517e5f4-89c5-4879-9b4f-b35e268798df",
+      "scryfall_id": "6f3a727a-5eca-44de-aa8f-0d2573db83eb"
+    },
+    {
+      "name": "Aether Swooper",
+      "oracle_id": "f7ed301a-dce7-49d0-a68a-d3a099201f65",
+      "scryfall_id": "8c34dbe3-3a66-40b3-a5c2-c2d6acb47773"
+    },
+    {
+      "name": "Aether Syphon",
+      "oracle_id": "d8956775-fda8-475d-9e8a-b61196a958ea",
+      "scryfall_id": "d7033739-4cd8-4727-b9b5-099fb597006b"
+    },
+    {
+      "name": "Aether Theorist",
+      "oracle_id": "b07ef53e-46db-457e-a5a2-846bb9805b70",
+      "scryfall_id": "882b5580-ee23-4d65-a2b3-82475d6faf8e"
+    },
+    {
+      "name": "Aether Tide",
+      "oracle_id": "2fbf95b4-bcf4-4b5e-b5dc-0294f2b48d3e",
+      "scryfall_id": "9aab7526-5825-4f31-92ff-be25ab5af2f5"
+    },
+    {
+      "name": "Aethertide Whale",
+      "oracle_id": "53b2c8f2-db9a-4ab0-a4e8-17385b2fa3bd",
+      "scryfall_id": "38722c25-13a7-47af-a4cd-90722f289499"
+    },
+    {
+      "name": "Aethertorch Renegade",
+      "oracle_id": "7db864fe-e0b7-4b32-8706-2ad01f93f7ca",
+      "scryfall_id": "e5c443e1-fd13-4627-85a9-8e9a340a2786"
+    },
+    {
+      "name": "Aethertow",
+      "oracle_id": "dd0cac88-0a78-408f-8eb0-080f79150180",
+      "scryfall_id": "c0b34ecd-6dd4-49b0-ab49-3c11f70e0c4a"
+    },
+    {
+      "name": "Aether Tradewinds",
+      "oracle_id": "3a0dd318-9523-4740-b0aa-a911032e3851",
+      "scryfall_id": "26fe4768-fe18-4698-885d-86f5ad150125"
+    },
+    {
+      "name": "Aether Tunnel",
+      "oracle_id": "0a90d1fb-7a76-4b62-b001-4a539a8e5df1",
+      "scryfall_id": "5d6178ed-6353-4733-81e1-7b3dc592c3bd"
+    },
+    {
+      "name": "Aether Vial",
+      "oracle_id": "fc148e1e-dff0-448e-9f16-625341754356",
+      "scryfall_id": "11e8d2fd-b132-4807-9410-8edeffa519ed"
+    },
+    {
+      "name": "Aether Web",
+      "oracle_id": "97e7778f-971c-4425-8f6d-f4ff3fae000f",
+      "scryfall_id": "ce9a6af9-1b39-41e1-bd71-210700b7608b"
+    },
+    {
+      "name": "Aetherwind Basker",
+      "oracle_id": "d9ec9a4f-0644-47c5-bc09-1201d5251bde",
+      "scryfall_id": "fa04d5fa-6ba2-4833-8ea0-1941a03bd3e9"
+    },
+    {
+      "name": "Aetherworks Marvel",
+      "oracle_id": "470ec98e-120c-446d-ade6-7d80aa836b55",
+      "scryfall_id": "884f6948-3e03-48c6-8be2-6f2539386c9d"
+    },
+    {
+      "name": "Aettir and Priwen",
+      "oracle_id": "19d8937e-23fb-4758-a306-0e7af9bb44c4",
+      "scryfall_id": "038710ca-c756-4e66-a9de-278e676c9f5b"
+    },
+    {
+      "name": "Aeve, Progenitor Ooze",
+      "oracle_id": "44600a74-9584-488b-a342-2fccd8fa7599",
+      "scryfall_id": "dfe9b1b8-dffe-427d-be1e-2c6b8395bd54"
+    },
+    {
+      "name": "Affa Guard Hound",
+      "oracle_id": "3819daab-fe35-4f99-9282-47bd05c7fcd6",
+      "scryfall_id": "f762546c-f5eb-420d-a8f7-c3566cd8f506"
+    },
+    {
+      "name": "Affa Protector",
+      "oracle_id": "5b38a1e4-a6af-4094-9392-70a87759e20d",
+      "scryfall_id": "0e54ac79-fbaa-4385-869b-aaf31e33a11f"
+    },
+    {
+      "name": "Affectionate Indrik",
+      "oracle_id": "88aa032d-dc11-4cae-81f3-ce66353963e0",
+      "scryfall_id": "2da8347d-06a4-46e0-a55e-cc2da4660263"
+    },
+    {
+      "name": "Afflict",
+      "oracle_id": "471f6ad3-cf01-42dd-a519-ea8e13039fea",
+      "scryfall_id": "20f18447-2853-469b-b3b3-20d6bcafa6e7"
+    },
+    {
+      "name": "Afflicted Deserter",
+      "oracle_id": "52adc761-1a0a-43d1-a706-41a92bb7880c",
+      "scryfall_id": "a2c044c0-3625-4bdf-9445-b462394cecae"
+    },
+    {
+      "name": "Werewolf Ransacker",
+      "oracle_id": "52adc761-1a0a-43d1-a706-41a92bb7880c",
+      "scryfall_id": "a2c044c0-3625-4bdf-9445-b462394cecae"
+    },
+    {
+      "name": "Afiya Grove",
+      "oracle_id": "056a98aa-f3f7-4ac9-9755-3e8a60a59abb",
+      "scryfall_id": "c495e1f3-0845-4556-83e6-de8b9d518d1d"
+    },
+    {
+      "name": "Afterburner Expert",
+      "oracle_id": "b4d19e3a-c2f8-4503-bcfa-1b46bde972e5",
+      "scryfall_id": "555e1bfc-6d07-4979-a914-b2bd1fb031f2"
+    },
+    {
+      "name": "Afterlife",
+      "oracle_id": "4c13e2b5-961a-4031-84b1-15bd19b94286",
+      "scryfall_id": "258946f2-294a-4ddf-be91-9ff4c94e4bdb"
+    },
+    {
+      "name": "Afterlife from the Loam",
+      "oracle_id": "151c867f-cc77-42de-9ae5-5fd2233ccdab",
+      "scryfall_id": "9361b548-a8d9-4e57-98cf-0c464742e1c9"
+    },
+    {
+      "name": "Afterlife Insurance",
+      "oracle_id": "05501e88-d4c3-4474-92a9-c02ab15b107b",
+      "scryfall_id": "2fa47810-ba83-4a6e-9940-7315ee7e44a5"
+    },
+    {
+      "name": "Aftermath Analyst",
+      "oracle_id": "374e54d8-8e73-4268-9dde-c28c77bbbf32",
+      "scryfall_id": "66f135b4-8cb3-4a4e-86ae-81a3cf4b7259"
+    },
+    {
+      "name": "Aftershock",
+      "oracle_id": "e6bef0c4-3dfc-49a8-8fec-22b2570b704b",
+      "scryfall_id": "c91a26b2-03f8-43f0-a3a4-ff6c5a3690c4"
+    },
+    {
+      "name": "Afterthought Sentry",
+      "oracle_id": "f0c533a2-751a-4c5a-8cec-b83da3c8c62f",
+      "scryfall_id": "4d4b3bf7-a149-4099-b97d-4e36a87dfa60"
+    },
+    {
+      "name": "Agadeem Occultist",
+      "oracle_id": "9c462cd8-36f9-4e39-adf3-310ad4d76051",
+      "scryfall_id": "c592ef76-d612-4cfe-b906-0e63c44d36f8"
+    },
+    {
+      "name": "Agadeem's Awakening",
+      "oracle_id": "562d71b9-1646-474e-9293-55da6947a758",
+      "scryfall_id": "67f4c93b-080c-4196-b095-6a120a221988"
+    },
+    {
+      "name": "Agadeem, the Undercrypt",
+      "oracle_id": "562d71b9-1646-474e-9293-55da6947a758",
+      "scryfall_id": "67f4c93b-080c-4196-b095-6a120a221988"
+    },
+    {
+      "name": "Against All Odds",
+      "oracle_id": "f4a73cde-58bf-4719-8eb0-e039fdde4f62",
+      "scryfall_id": "3cd8dd4e-6892-49d7-8fae-97d04f9f6c84"
+    },
+    {
+      "name": "Agate Assault",
+      "oracle_id": "7b89b7d2-c724-4d5d-9f0b-7d3302ad1168",
+      "scryfall_id": "7dd9946b-515e-4e0d-9da2-711e126e9fa6"
+    },
+    {
+      "name": "Agate-Blade Assassin",
+      "oracle_id": "381a3e8e-71dd-48e4-ab62-53478bde4a14",
+      "scryfall_id": "39ebb84a-1c52-4b07-9bd0-b360523b3a5b"
+    },
+    {
+      "name": "Agate Instigator",
+      "oracle_id": "e1a2bd31-b800-47cd-8866-1b849a601b09",
+      "scryfall_id": "72de7010-3449-4fe1-bf2a-f4bd8feb74e9"
+    },
+    {
+      "name": "Agatha of the Vile Cauldron",
+      "oracle_id": "f398d222-f8e7-4983-9a77-267adef7f551",
+      "scryfall_id": "d6c48f07-63b7-4a60-8da6-ce77405abf1e"
+    },
+    {
+      "name": "Agatha's Champion",
+      "oracle_id": "debdfab7-454f-4fec-9ee8-aa5b570ea7fb",
+      "scryfall_id": "92652c41-1239-4299-a486-11fe1a96e912"
+    },
+    {
+      "name": "Agatha's Soul Cauldron",
+      "oracle_id": "c259e16f-2a44-4552-8678-815f757a02e8",
+      "scryfall_id": "019b51b0-e5c6-4208-922b-7736686dddcd"
+    },
+    {
+      "name": "Ageless Entity",
+      "oracle_id": "2a93236d-f182-4826-8112-4048bb3cbaf9",
+      "scryfall_id": "8fefd7d1-8c70-4d54-be0a-f45833340670"
+    },
+    {
+      "name": "Ageless Guardian",
+      "oracle_id": "468658bc-19d8-464a-ab8e-d36281680273",
+      "scryfall_id": "4a5ff6af-402f-4bf6-a75b-dc1e0e40aff6"
+    },
+    {
+      "name": "Ageless Sentinels",
+      "oracle_id": "9023c530-f329-4301-8b24-4cf676194265",
+      "scryfall_id": "ccaa4a19-8eba-4c43-8a9a-636e234df751"
+    },
+    {
+      "name": "Agency Coroner",
+      "oracle_id": "3686fd97-49ff-4a92-9cb2-7d8e9438d945",
+      "scryfall_id": "d63f2c23-e877-42e3-9362-5d003a173c6d"
+    },
+    {
+      "name": "Agency Outfitter",
+      "oracle_id": "23b2de61-a29c-4a32-b38c-408c723727ce",
+      "scryfall_id": "8112f133-535e-4264-8357-9cbf97957710"
+    },
+    {
+      "name": "Agent 13, Sharon Carter",
+      "oracle_id": "ddf7201a-6672-416d-be6b-202dafbeccab",
+      "scryfall_id": "107cb521-9806-47dc-92d8-b43112b63caa"
+    },
+    {
+      "name": "Agent Bishop, Man in Black",
+      "oracle_id": "f33217cc-175f-45e8-bc69-801f41cb4495",
+      "scryfall_id": "9c769202-178c-442a-a9e2-aa08b5ae5c9a"
+    },
+    {
+      "name": "Agent Frank Horrigan",
+      "oracle_id": "aedcde3b-3ed5-443c-a81c-03d785153e55",
+      "scryfall_id": "91193a0b-9087-404f-b397-815e29d0fe12"
+    },
+    {
+      "name": "Agent Maria Hill",
+      "oracle_id": "a2d90efe-80f2-4069-b135-a8bd00ccd2b0",
+      "scryfall_id": "9e327c67-1cf1-4d82-903c-b41c8e7cf747"
+    },
+    {
+      "name": "Agent of Acquisitions",
+      "oracle_id": "19047c4b-0106-455d-ab71-68cabfae7404",
+      "scryfall_id": "c57def6f-cc2a-4aec-927b-6a561d9fa7a1"
+    },
+    {
+      "name": "Agent of Atlas",
+      "oracle_id": "cd403866-bef1-413a-85e2-c86e295b3589",
+      "scryfall_id": "a9db550e-ed1f-4973-a7f5-ec2e6adb8e6b"
+    },
+    {
+      "name": "Agent of Erebos",
+      "oracle_id": "3fa5e109-4a67-4523-8183-90e48a906400",
+      "scryfall_id": "1e07a595-5579-4d5a-b07c-84239d690459"
+    },
+    {
+      "name": "Agent of Horizons",
+      "oracle_id": "668a6a9d-80fc-437b-99b8-6807e92eabca",
+      "scryfall_id": "cc08576f-1d48-4db4-9bb9-e039f75c98b8"
+    },
+    {
+      "name": "Agent of Kotis",
+      "oracle_id": "584fe1e4-029d-43fe-8c9e-6995dd392d65",
+      "scryfall_id": "812d0462-0158-467f-951d-a7a121188a10"
+    },
+    {
+      "name": "Agent of Masks",
+      "oracle_id": "632ccf7e-eaf4-42a6-9069-6ad915d03a5b",
+      "scryfall_id": "7d6ace1f-c056-494d-a41f-75efa54312a5"
+    },
+    {
+      "name": "Agent of Shauku",
+      "oracle_id": "d2e0d739-b441-4173-a8f1-b831a19ea98e",
+      "scryfall_id": "d8316804-6f8b-423e-a2c3-fa476c095544"
+    },
+    {
+      "name": "Agent of Stromgald",
+      "oracle_id": "099fd4b3-92fd-4b5f-bb4f-eefa6f09700c",
+      "scryfall_id": "4a7506f8-cf09-46ca-ad80-3c398c487ae2"
+    },
+    {
+      "name": "Agent of the Fates",
+      "oracle_id": "45f88a6a-ac8a-4a53-a96b-f09ca33c79ba",
+      "scryfall_id": "ecd59977-8788-417d-ba50-e21b8a636bd3"
+    },
+    {
+      "name": "Agent of the Iron Throne",
+      "oracle_id": "325032d5-c452-4454-8976-82f86fee5ab8",
+      "scryfall_id": "5a5984d3-1e76-4d97-9373-b59cfa9c38ae"
+    },
+    {
+      "name": "Agent of the Shadow Thieves",
+      "oracle_id": "b2142d8b-ea53-443e-bd60-9e70d9da9bd7",
+      "scryfall_id": "f50448e9-afe4-4d4e-b027-bbb855f17aeb"
+    },
+    {
+      "name": "Agent of Treachery",
+      "oracle_id": "4cd82c7a-86df-4d29-b578-c009208c0d4b",
+      "scryfall_id": "cc6686e6-4535-49be-b0b3-e76464656cd2"
+    },
+    {
+      "name": "Agent Phil Coulson",
+      "oracle_id": "dae20bcd-dc24-4f9d-9400-a6f013b49f14",
+      "scryfall_id": "1383e587-df58-4b45-9067-b9399e90b9ed"
+    },
+    {
+      "name": "Agents of HYDRA",
+      "oracle_id": "31816924-1430-4581-86e8-325e2ca16217",
+      "scryfall_id": "857fef2e-df1f-4ec6-a262-f6fa52389cf9"
+    },
+    {
+      "name": "Agents of S.H.I.E.L.D.",
+      "oracle_id": "203b72d2-a273-49cc-bd10-2fbc07ed2fc8",
+      "scryfall_id": "d9b5e156-0764-44e0-b0c7-de2561ea9e04"
+    },
+    {
+      "name": "Agent's Toolkit",
+      "oracle_id": "a87abe7a-fee9-45fd-b3d8-896e43ed6b3c",
+      "scryfall_id": "64cbb81d-3444-4491-963f-8ce9a9430788"
+    },
+    {
+      "name": "Agent Venom",
+      "oracle_id": "14c356aa-178d-4c14-a88e-fbe92ee6d89f",
+      "scryfall_id": "f5f80d82-d64c-466f-8874-9cfb00469f02"
+    },
+    {
+      "name": "Age of Ultron",
+      "oracle_id": "51042581-4add-4487-a1b6-85446539b975",
+      "scryfall_id": "54050442-c9b1-481a-a1cd-77c147e9013e"
+    },
+    {
+      "name": "Aggravate",
+      "oracle_id": "192aa7b2-a819-4ffd-bfbf-a270271898e6",
+      "scryfall_id": "999f40a7-b723-42e1-83c1-f45a72a26dd4"
+    },
+    {
+      "name": "Aggravated Assault",
+      "oracle_id": "20129459-a386-41eb-899d-1aede3427300",
+      "scryfall_id": "c99c5707-d5f2-4675-bfca-e801e6b0f627"
+    },
+    {
+      "name": "Aggression",
+      "oracle_id": "b6c38a2b-2fe8-4080-80ce-cfa12aaf57f0",
+      "scryfall_id": "f3f26060-0c24-496c-b8e2-4dac7ea6166b"
+    },
+    {
+      "name": "Aggressive Biomancy",
+      "oracle_id": "9080a7bb-2b8b-42af-9f5b-a9f374ecb801",
+      "scryfall_id": "24cf121b-c6ad-4425-a2fc-7ce185cd30ef"
+    },
+    {
+      "name": "Aggressive Instinct",
+      "oracle_id": "d1c8f14b-7977-488a-8bd9-cefd6687f017",
+      "scryfall_id": "40ab4bcf-e6b9-4368-97d5-56862713a66a"
+    },
+    {
+      "name": "Aggressive Mammoth",
+      "oracle_id": "032b5fc4-5aca-41b6-9bf6-2c1ed0018968",
+      "scryfall_id": "7724b978-999b-4654-96f3-58e28aa7cb34"
+    },
+    {
+      "name": "Aggressive Mining",
+      "oracle_id": "ff321c13-03ae-4cb9-b371-1242290f8433",
+      "scryfall_id": "e15a3f1a-83af-4541-8d1c-bf7844f969c9"
+    },
+    {
+      "name": "Aggressive Negotiations",
+      "oracle_id": "c469133e-174d-476b-b135-bbf15e415e72",
+      "scryfall_id": "993ade84-031f-4a3e-bd68-55f61b559248"
+    },
+    {
+      "name": "Aggressive Sabotage",
+      "oracle_id": "a47ff11e-dbcf-45b1-a13d-fff677ea42c9",
+      "scryfall_id": "ac809fca-664a-4e7d-a39f-2bc1dea0fbd8"
+    },
+    {
+      "name": "Aggressive Urge",
+      "oracle_id": "43f5a93b-0f8d-48d2-ab9d-275d44cf88b5",
+      "scryfall_id": "ff69e6a8-f34f-4aea-9a54-c4b64ed3116c"
+    },
+    {
+      "name": "Agility",
+      "oracle_id": "0f5f8b47-d104-4e29-b052-02d730d76ec0",
+      "scryfall_id": "5694cb42-7489-40c5-b21a-aeb36636015f"
+    },
+    {
+      "name": "Agility Bobblehead",
+      "oracle_id": "83a3897c-c245-4fad-b253-3f8bbe6445fb",
+      "scryfall_id": "cff8b0c5-5457-432a-8c27-f193c9922aec"
+    },
+    {
+      "name": "Agitator Ant",
+      "oracle_id": "abe377f8-35f0-4dea-a681-91d31a36815c",
+      "scryfall_id": "bc63ff71-ff42-4baf-977b-55f69c8e122f"
+    },
+    {
+      "name": "Agna Qel'a",
+      "oracle_id": "22d0a848-2126-48f0-9050-38daaf93b1d0",
+      "scryfall_id": "6b885829-a323-4f7d-87c9-aa4615dcbe5c"
+    },
+    {
+      "name": "Agonasaur Rex",
+      "oracle_id": "1ad5766b-9ae3-437b-bd91-c4c988a8b095",
+      "scryfall_id": "5b11ec26-9e07-45e1-bcaa-5d44d1231586"
+    },
+    {
+      "name": "Agonizing Demise",
+      "oracle_id": "41681a1f-0777-4b96-8c7e-d6a5d1b1c8fc",
+      "scryfall_id": "b7621aab-4839-45ef-bfa2-9aa2417bbec0"
+    },
+    {
+      "name": "Agonizing Memories",
+      "oracle_id": "2ac9d397-10ca-43ce-bff9-45d631553486",
+      "scryfall_id": "28bac7a8-d3bb-4032-b30b-db7328e4d2fc"
+    },
+    {
+      "name": "Agonizing Remorse",
+      "oracle_id": "1267dfda-eb1a-4963-9fe3-fa619d924d7a",
+      "scryfall_id": "09270c65-546e-4737-a6b7-402cbb87917a"
+    },
+    {
+      "name": "Agonizing Syphon",
+      "oracle_id": "11669fe5-9298-4e1a-a4f7-6a4598dbc8dd",
+      "scryfall_id": "3532a279-b8e1-4124-bcd7-d7f4c71673eb"
+    },
+    {
+      "name": "Agony Warp",
+      "oracle_id": "377c217b-ddad-4e1a-9122-f347113d3dfa",
+      "scryfall_id": "5890a23e-1da0-432b-8dc8-85b92dee9ba1"
+    },
+    {
+      "name": "A Good Day to Die",
+      "oracle_id": "4c4559a5-a7a4-4a40-8a8f-e7375c741748",
+      "scryfall_id": "e2b350b2-0eda-4c2b-b9d6-b58ab4848545"
+    },
+    {
+      "name": "A Good Day to Pie",
+      "oracle_id": "92de7cf0-ac3e-46ae-86b2-7d8ebb0276e4",
+      "scryfall_id": "9cc2b6b4-399d-411a-a057-8dd1fff0d3b7"
+    },
+    {
+      "name": "Agoraphobia",
+      "oracle_id": "b268fe15-2860-4730-865e-eed7f308fc45",
+      "scryfall_id": "b450de6b-4b2f-4004-be7c-484434f28faf"
+    },
+    {
+      "name": "Agrus Kos, Eternal Soldier",
+      "oracle_id": "3d19823a-dbb8-4384-81f4-5c6818b7f46d",
+      "scryfall_id": "ea531418-6c7c-4e23-b681-6bfdd4a3eb79"
+    },
+    {
+      "name": "Agrus Kos, Spirit of Justice",
+      "oracle_id": "11b7ee78-fca6-4b34-93e4-e60492583d50",
+      "scryfall_id": "58aeac7c-1275-49d4-9915-7604ae4bfdff"
+    },
+    {
+      "name": "Agrus Kos, Wojek Veteran",
+      "oracle_id": "e758aecd-6ce1-42f6-9716-32871e3bfa41",
+      "scryfall_id": "c2521942-0ecd-45a9-bac6-04267a2c29ed"
+    },
+    {
+      "name": "Ahn-Crop Champion",
+      "oracle_id": "c03d073e-ea59-4873-952a-bcf2730f1115",
+      "scryfall_id": "2ddda94a-4b2d-47b0-8d2c-3ad70a0d5584"
+    },
+    {
+      "name": "Ahn-Crop Crasher",
+      "oracle_id": "5b3ef91a-5804-43cc-a947-f25f33b7b88c",
+      "scryfall_id": "dd5db68c-24d5-44ce-9809-e446f26fac5d"
+    },
+    {
+      "name": "Ahn-Crop Invader",
+      "oracle_id": "d7d163a7-6f3f-40ab-a47c-ed497df92244",
+      "scryfall_id": "2dea2466-5c7f-40ce-b749-100ae89d2c90"
+    },
+    {
+      "name": "Ahriman",
+      "oracle_id": "37d1d507-25dc-4cd0-b51e-2f1e9b24832c",
+      "scryfall_id": "162a415c-5465-497e-8f4e-c6f09681641d"
+    },
+    {
+      "name": "Aid from the Cowl",
+      "oracle_id": "9597c974-6120-43a7-9ad3-7e4fddc8c9f5",
+      "scryfall_id": "327dbb25-833a-4293-b397-ebe7859227a5"
+    },
+    {
+      "name": "Aid the Fallen",
+      "oracle_id": "acb0084d-3b09-4d2a-a4c1-848c92588845",
+      "scryfall_id": "5f8bc010-f1af-42a2-9009-2039cf3d8f0a"
+    },
+    {
+      "name": "A.I.M. Bot",
+      "oracle_id": "bd269d87-5f72-4559-bf2b-270e2ebe6154",
+      "scryfall_id": "52b09b2a-8876-4b7d-97bd-2f46fd96849a"
+    },
+    {
+      "name": "Aim for the Head",
+      "oracle_id": "b191ae0c-7d54-459f-abe3-aab5d792e514",
+      "scryfall_id": "1174e8e1-2e8e-4070-9871-7d5d93e0dd56"
+    },
+    {
+      "name": "Aim High",
+      "oracle_id": "c169929a-850b-4d46-9f14-a922f4465d85",
+      "scryfall_id": "b28dbf2c-9bfe-42be-be55-1e7fb523df36"
+    },
+    {
+      "name": "A.I.M. Labs",
+      "oracle_id": "8417f2d5-93c9-474a-a143-5c4e17097a88",
+      "scryfall_id": "ca24cd9f-fd9f-4ea0-8b9c-ecf98db219a6"
+    },
+    {
+      "name": "A.I.M. Scientists",
+      "oracle_id": "fa732888-5b7d-4087-a6e5-1db1c98fbd4c",
+      "scryfall_id": "ab96b656-100e-491a-a8c9-94dbb9482c4d"
+    },
+    {
+      "name": "A.I.M. Synthoids",
+      "oracle_id": "10916f33-aaa6-43a1-9835-b60fd061161f",
+      "scryfall_id": "f29dee50-ea7e-4a54-bc91-99928a8405e3"
+    },
+    {
+      "name": "Ainok Artillerist",
+      "oracle_id": "860d0449-8032-458b-8335-30be238d6689",
+      "scryfall_id": "3a4c8964-06e4-4a24-9a7e-9cac0fb8518e"
+    },
+    {
+      "name": "Ainok Bond-Kin",
+      "oracle_id": "8a4028cd-6004-4fb0-a044-0bee662a78e1",
+      "scryfall_id": "6956c523-507c-4256-88b8-58a8a108c79f"
+    },
+    {
+      "name": "Ainok Guide",
+      "oracle_id": "e5f96482-4bae-4d1b-97b2-dcc09676eb6e",
+      "scryfall_id": "c361ea9c-a989-4ded-8b2c-f565aa9d8a1d"
+    },
+    {
+      "name": "Ainok Strike Leader",
+      "oracle_id": "8c1fda45-09f1-4b58-a487-e11c868e1357",
+      "scryfall_id": "cabd77a6-0913-4522-891d-c8a412a536c2"
+    },
+    {
+      "name": "Ainok Survivalist",
+      "oracle_id": "7a5dae5f-29ab-4996-b236-c754de8769bc",
+      "scryfall_id": "0f4b5b18-569f-4f61-ad2f-966ba4fbabdc"
+    },
+    {
+      "name": "Ainok Tracker",
+      "oracle_id": "bf84a598-12d3-406d-8eeb-40592e782b87",
+      "scryfall_id": "0ff9400d-4842-471f-bf7e-3b21df352e0a"
+    },
+    {
+      "name": "Ainok Wayfarer",
+      "oracle_id": "8134f3fd-197a-4b44-a370-311cc955dea3",
+      "scryfall_id": "57695a9b-8f72-4ccc-a946-5d5037b09b8f"
+    },
+    {
+      "name": "Airbender Ascension",
+      "oracle_id": "c4d2fdf9-637d-4e97-ae33-45f2d27bf8cd",
+      "scryfall_id": "99a90d13-891c-45cc-b1d5-6080ebae5862"
+    },
+    {
+      "name": "Airbender's Reversal",
+      "oracle_id": "64e3791b-de99-4eed-af49-cbec218c28aa",
+      "scryfall_id": "6b7078e4-2892-4b5f-83ab-90369e0d6dba"
+    },
+    {
+      "name": "Airbending Lesson",
+      "oracle_id": "e101b744-9175-4aa5-bf80-d6944359e538",
+      "scryfall_id": "e2bcd0a6-e94d-4a21-a334-a57459c1b8cc"
+    },
+    {
+      "name": "Air Bladder",
+      "oracle_id": "25c8a3b0-c393-4fc6-a373-808cd8e9850c",
+      "scryfall_id": "a7363c6f-53a3-4f41-b451-8120bc24f1ee"
+    },
+    {
+      "name": "Airborne Aid",
+      "oracle_id": "7f715f72-5444-4ab3-a6ca-3d5bfd0d4851",
+      "scryfall_id": "0aaa43b0-601f-4b99-a328-541b04d5696d"
+    },
+    {
+      "name": "Air-Cult Elemental",
+      "oracle_id": "6ec2d957-c6d9-469f-8190-8b621c490238",
+      "scryfall_id": "fba82564-a9a9-4ded-a5fa-0e5fab2a3faa"
+    },
+    {
+      "name": "Airdrop Aeronauts",
+      "oracle_id": "009a399b-c78e-475b-8bc3-7db2afc9d676",
+      "scryfall_id": "49827a57-cf10-4a44-a1fd-ac611da39dc9"
+    },
+    {
+      "name": "Airdrop Condor",
+      "oracle_id": "25fc274f-d5af-4174-b8e8-c2e65bb4c13f",
+      "scryfall_id": "ec9796ac-11e2-4295-bf00-f684d0111970"
+    },
+    {
+      "name": "Air Elemental",
+      "oracle_id": "7744bae4-a8b7-44a5-9b4c-0048ad4cc448",
+      "scryfall_id": "a27efec0-40c4-48bc-a21a-3af28a6529b5"
+    },
+    {
+      "name": "Airlift Chaplain",
+      "oracle_id": "719aeb50-c8cf-4cd8-b74c-d2cef408b52e",
+      "scryfall_id": "7ad55575-6053-43b1-9496-bcb1ea25e2a1"
+    },
+    {
+      "name": "Air Marshal",
+      "oracle_id": "59b2edf0-00e4-4cd4-88ac-6dd74e9b1b14",
+      "scryfall_id": "991e1a6c-914b-45c8-9170-c09e72696117"
+    },
+    {
+      "name": "Air Nomad Legacy",
+      "oracle_id": "9e830359-ab92-4bfd-82b3-d9c67ac80cf7",
+      "scryfall_id": "10874416-fa4c-4aa3-b885-4351d011d208"
+    },
+    {
+      "name": "Air Nomad Student",
+      "oracle_id": "a468f6ab-c0a8-4295-8b01-7147d3f889b4",
+      "scryfall_id": "18e539c8-f0c5-4715-97a5-b060d996eef2"
+    },
+    {
+      "name": "Air Response Unit",
+      "oracle_id": "18a22d9f-81bc-4ed5-bd83-e3f8ec5e38c8",
+      "scryfall_id": "d77c8e29-de24-4664-baf8-959608dd99ca"
+    },
+    {
+      "name": "Air Servant",
+      "oracle_id": "49638d96-e83e-4aab-bafb-d6183a6e3ff6",
+      "scryfall_id": "01007d7f-e29b-49d5-bc60-44b2fb77ed3d"
+    },
+    {
+      "name": "Airship Crash",
+      "oracle_id": "72a0e0f1-e8be-441a-bcaf-029fb1bd1fd2",
+      "scryfall_id": "ec91c4e4-711f-464d-bc83-e6813f4fdcdb"
+    },
+    {
+      "name": "Airship Engine Room",
+      "oracle_id": "01ed9139-293d-4477-a145-3c6fe59266c7",
+      "scryfall_id": "0b98ba34-f251-4bd0-9d75-1d4445be5cfd"
+    },
+    {
+      "name": "Airtight Alibi",
+      "oracle_id": "cb666ea8-55e3-4e27-ae6d-806677dfc17a",
+      "scryfall_id": "bffbbe21-0a1d-48b9-903e-81c109aa11de"
+    },
+    {
+      "name": "Aisha of Sparks and Smoke",
+      "oracle_id": "eae3e762-dacd-4bd2-923c-3abb5ceb729a",
+      "scryfall_id": "093aa76d-2154-4e71-a2bf-461d1afb887b"
+    },
+    {
+      "name": "Aisling Leprechaun",
+      "oracle_id": "5456f00c-0bef-4c14-902f-f5c14475f284",
+      "scryfall_id": "640a161d-ad7b-4e5b-8f2d-d3753cb9daa3"
+    },
+    {
+      "name": "Ajani, Adversary of Tyrants",
+      "oracle_id": "b25bea73-7444-4ee2-8022-611461506117",
+      "scryfall_id": "4c565076-5db2-47ea-8ee0-4a4fd7bb353d"
+    },
+    {
+      "name": "Ajani, Caller of the Pride",
+      "oracle_id": "1d5ff280-7f4d-4801-aefd-9b6e6b1f2818",
+      "scryfall_id": "59793f1c-8c7e-433e-9c09-40aa3ce931a1"
+    },
+    {
+      "name": "Ajani Fells the Godsire",
+      "oracle_id": "0daefecb-7189-44bb-9ca0-96a9572cd240",
+      "scryfall_id": "1d918133-d4e2-4674-a3cb-58edef1c6758"
+    },
+    {
+      "name": "Ajani Goldmane",
+      "oracle_id": "dfb5f660-fd8b-4b7b-934c-6a71cd182f15",
+      "scryfall_id": "2d911053-a026-4b20-ba2d-dbcc367c1413"
+    },
+    {
+      "name": "Ajani, Inspiring Leader",
+      "oracle_id": "15474e82-94b4-47e1-b91c-3deaf4dbffd6",
+      "scryfall_id": "dba41e5f-66b8-4459-8a07-bbe893216f1e"
+    },
+    {
+      "name": "Ajani, Mentor of Heroes",
+      "oracle_id": "a612bd38-069f-4bdc-9aa6-c172435e3841",
+      "scryfall_id": "4a30bcfa-6f95-450f-aea7-885983d7c6a5"
+    },
+    {
+      "name": "Ajani, Nacatl Pariah",
+      "oracle_id": "2588f348-d7a3-46c8-9ace-dca53ed5ef99",
+      "scryfall_id": "0d16e8e0-31b2-4389-afd6-783c501f6fa0"
+    },
+    {
+      "name": "Ajani, Nacatl Avenger",
+      "oracle_id": "2588f348-d7a3-46c8-9ace-dca53ed5ef99",
+      "scryfall_id": "0d16e8e0-31b2-4389-afd6-783c501f6fa0"
+    },
+    {
+      "name": "Ajani, Outland Chaperone",
+      "oracle_id": "3ba809ce-3556-415c-9fcc-291cb10a43cd",
+      "scryfall_id": "6124a691-ae83-4d22-a177-0aee65b47064"
+    },
+    {
+      "name": "Ajani Resolute",
+      "oracle_id": "0d60c095-4c6c-4618-8ef3-508f3d454efa",
+      "scryfall_id": "a5e1a7dd-8c49-4435-935c-bcc78704082b"
+    },
+    {
+      "name": "Ajani's Aid",
+      "oracle_id": "b3779fbe-7701-433b-afad-bebd6096a3c8",
+      "scryfall_id": "7026c374-0776-403b-86fd-5092677fd5c9"
+    },
+    {
+      "name": "Ajani's Anguish",
+      "oracle_id": "4a37f4a0-2869-4f81-b51b-4c3e7e0e0671",
+      "scryfall_id": "d9039a58-2f17-4b8a-b714-3a2f0b46f057"
+    },
+    {
+      "name": "Ajani's Chosen",
+      "oracle_id": "9c77eb0a-543a-41db-ba1f-aa0163837ae0",
+      "scryfall_id": "bc20cca0-303f-4463-85ae-26b80ff26211"
+    },
+    {
+      "name": "Ajani's Comrade",
+      "oracle_id": "15b86440-2040-47ae-ab4e-8445b3e24462",
+      "scryfall_id": "5bebef1c-2f03-4e0a-b3ba-861546ebf8a6"
+    },
+    {
+      "name": "Ajani's Influence",
+      "oracle_id": "2a3e3f3b-1f74-4ac7-b5ac-7c3cb9cc38a6",
+      "scryfall_id": "d38ad178-35a5-44ad-b80a-d746f3e6a45c"
+    },
+    {
+      "name": "Ajani's Last Stand",
+      "oracle_id": "17c4807c-158e-4a86-90f1-d8fb2ebe892a",
+      "scryfall_id": "1aebbb57-31b3-4289-815e-4f529e29f3ea"
+    },
+    {
+      "name": "Ajani, Sleeper Agent",
+      "oracle_id": "37714eb9-a39d-4534-a2d3-27908c418f8a",
+      "scryfall_id": "7641f4d9-4614-41c8-87f5-4845bd78e9b3"
+    },
+    {
+      "name": "Ajani's Mantra",
+      "oracle_id": "2f47661e-a107-4d98-8773-0a068a63df49",
+      "scryfall_id": "de4da30d-5c72-4323-b305-7277038b4a05"
+    },
+    {
+      "name": "Ajani's Presence",
+      "oracle_id": "925a0b9b-a1fa-4aad-89d9-e2698ac3582f",
+      "scryfall_id": "e77e2fd5-5c46-4f6b-ac43-ec23fab57a1a"
+    },
+    {
+      "name": "Ajani's Pridemate",
+      "oracle_id": "95e94dea-5ac0-4d6f-adec-ca147aee861f",
+      "scryfall_id": "222c1a68-e34c-4103-b1be-17d4ceaef6ce"
+    },
+    {
+      "name": "Ajani's Response",
+      "oracle_id": "bf7ec320-64bb-46ca-aac0-ca3d4224b69e",
+      "scryfall_id": "9cd1417a-badc-4abd-a8ca-5b31f85c1072"
+    },
+    {
+      "name": "Ajani's Sunstriker",
+      "oracle_id": "31009c45-afba-45f4-a6ca-9dfdb9990e72",
+      "scryfall_id": "373d6799-e031-4043-8437-ed4880be0de9"
+    },
+    {
+      "name": "Ajani Steadfast",
+      "oracle_id": "90249526-1875-450a-882d-bf6f6bfd37a6",
+      "scryfall_id": "51825d35-cdb2-40fa-ab89-1625161b04af"
+    },
+    {
+      "name": "Ajani, Strength of the Pride",
+      "oracle_id": "c3974ec7-7af0-4b65-baf6-4c1c4fe8a5c4",
+      "scryfall_id": "79883468-a37c-4894-8d05-6a4d150b7d59"
+    },
+    {
+      "name": "Ajani's Welcome",
+      "oracle_id": "4a782bf9-4051-4613-8852-33b0d85a0edd",
+      "scryfall_id": "c9045fcb-b633-4c35-8058-6234311551ae"
+    },
+    {
+      "name": "Ajani, the Greathearted",
+      "oracle_id": "f5d9be71-91d0-4166-ba58-cbbf5d490c40",
+      "scryfall_id": "6cc78151-8cb0-4521-9674-fb0c67e24a17"
+    },
+    {
+      "name": "Ajani Unrelenting",
+      "oracle_id": "71620e92-45a4-49cb-94d5-348013ecf886",
+      "scryfall_id": "bc3c096f-7f6c-474c-a2c8-75d3e6ddd6f5"
+    },
+    {
+      "name": "Ajani Unyielding",
+      "oracle_id": "8a70ddc5-bb51-45eb-96f2-8ecaecac0cc2",
+      "scryfall_id": "41000308-144d-4d3b-afec-e3928d20edfc"
+    },
+    {
+      "name": "Ajani, Valiant Protector",
+      "oracle_id": "542423cb-fbfb-4a2f-9f6d-87b273a95e96",
+      "scryfall_id": "791fdd9a-0ab6-4db9-84f9-859d2d862518"
+    },
+    {
+      "name": "Ajani Vengeant",
+      "oracle_id": "f953afdf-96f7-4851-994c-1617e8f5e5c9",
+      "scryfall_id": "f3bf1867-aab4-4935-b891-45489ebeb231"
+    },
+    {
+      "name": "Ajani, Wise Counselor",
+      "oracle_id": "341f198b-beb6-4a44-af91-a64a5989c865",
+      "scryfall_id": "b4a22ecc-3a5c-44a1-bb52-bbeffa2dbf17"
+    },
+    {
+      "name": "Akal Pakal, First Among Equals",
+      "oracle_id": "53bfe54e-9b97-4113-97d9-3c5dbc85e7cf",
+      "scryfall_id": "ab9f6a1b-8467-4584-affd-8c71d3e34d2f"
+    },
+    {
+      "name": "Akawalli, the Seething Tower",
+      "oracle_id": "0679dcef-e1c3-4739-a769-18a4ffdcfde7",
+      "scryfall_id": "3ee62dd1-97d0-4e5d-8937-26c9e51e9414"
+    },
+    {
+      "name": "A Killer Among Us",
+      "oracle_id": "79d577a8-53c0-4220-bc0e-70764d72d5fd",
+      "scryfall_id": "2c1392c5-91a5-4e6e-803d-ed032e4d594b"
+    },
+    {
+      "name": "Akim, the Soaring Wind",
+      "oracle_id": "2a20530b-d1d6-4dac-8d08-f583bea55e6e",
+      "scryfall_id": "23736c5f-bd1c-4505-8639-5fb92cd74b21"
+    },
+    {
+      "name": "Akiri, Fearless Voyager",
+      "oracle_id": "c03ae426-2536-4c20-a73a-a24e816f76b0",
+      "scryfall_id": "fa135775-abcd-4a21-abb7-3aeb5a39df28"
+    },
+    {
+      "name": "Akiri, Line-Slinger",
+      "oracle_id": "3e0a0276-b640-41c7-95bd-ba3067f5c911",
+      "scryfall_id": "3b951e0c-a4dd-4a20-87c6-eaa947e33aa4"
+    },
+    {
+      "name": "Akki Avalanchers",
+      "oracle_id": "5a98decb-30ba-4c34-a88a-424b7f4e03bc",
+      "scryfall_id": "bfef6acb-a11c-4a3f-9cfb-9394dece2675"
+    },
+    {
+      "name": "Akki Battle Squad",
+      "oracle_id": "5bd81d2f-46a1-4536-92e7-28c7e1892735",
+      "scryfall_id": "ca624ce6-5b99-41af-8e26-b952f5a30916"
+    },
+    {
+      "name": "Akki Blizzard-Herder",
+      "oracle_id": "16fe1f04-9bbf-43a3-ab14-395fdf4a3a43",
+      "scryfall_id": "7ce1ee90-67d1-4e83-ae1e-3bd71069aae4"
+    },
+    {
+      "name": "Akki Coalflinger",
+      "oracle_id": "96de29a1-3178-4c8b-a67b-ab0262442cb6",
+      "scryfall_id": "2c7067f4-8578-4e5e-886a-c9b14729c4b6"
+    },
+    {
+      "name": "Akki Drillmaster",
+      "oracle_id": "aa228a01-7de3-4539-9ebb-b3c546f72b41",
+      "scryfall_id": "7fb63254-5786-43fb-8ccd-132095a55e64"
+    },
+    {
+      "name": "Akki Ember-Keeper",
+      "oracle_id": "8df42f4a-022c-4fcb-a953-fb165fdbfc13",
+      "scryfall_id": "4d83e837-fcd1-4833-9117-e6f1bb53caad"
+    },
+    {
+      "name": "Akki Lavarunner",
+      "oracle_id": "47795817-73e5-4af6-bd1e-d69b193e8e9e",
+      "scryfall_id": "6ee6cd34-c117-4d7e-97d1-8f8464bfaac8"
+    },
+    {
+      "name": "Tok-Tok, Volcano Born",
+      "oracle_id": "47795817-73e5-4af6-bd1e-d69b193e8e9e",
+      "scryfall_id": "6ee6cd34-c117-4d7e-97d1-8f8464bfaac8"
+    },
+    {
+      "name": "Akki Raider",
+      "oracle_id": "bf9c5c0d-86a5-467a-863c-653279f2e6e7",
+      "scryfall_id": "c8fb34ae-157c-4f4b-bb47-2a9dc394a20c"
+    },
+    {
+      "name": "Akki Rockspeaker",
+      "oracle_id": "01cd52f9-7fac-4396-bec7-d06bf683e011",
+      "scryfall_id": "9c8b6685-2c74-4026-aef0-73ca7bc43306"
+    },
+    {
+      "name": "Akki Ronin",
+      "oracle_id": "4b4c76e1-c480-4d10-93d4-483ef2debc4b",
+      "scryfall_id": "96f15754-1ca6-45b0-a7de-2fe507df2a1a"
+    },
+    {
+      "name": "Akki Scrapchomper",
+      "oracle_id": "baea7cc5-15ec-4229-ad8b-d4b34c2e21e8",
+      "scryfall_id": "b0e02737-0193-46e4-a506-cec86a44dc99"
+    },
+    {
+      "name": "Akki Underling",
+      "oracle_id": "91f95d83-3637-4cf8-af6c-56bc4e4b2591",
+      "scryfall_id": "106382db-56aa-4061-9d1e-17821937f1de"
+    },
+    {
+      "name": "Akki Underminer",
+      "oracle_id": "8358f65a-7572-430d-b4f0-4fba7a372bd9",
+      "scryfall_id": "efdd1e22-d68d-4858-b253-80071d26d50e"
+    },
+    {
+      "name": "Akki War Paint",
+      "oracle_id": "e01ab6d8-8419-436e-a8fb-10aa46ca3d05",
+      "scryfall_id": "f110698e-a343-4eff-ba23-ed7ac5a3f87b"
+    },
+    {
+      "name": "Akoum Battlesinger",
+      "oracle_id": "eb448589-28e1-49d4-ba3e-7ddb4341fdc5",
+      "scryfall_id": "031950b6-110f-4e20-b31b-afe5ffdd6086"
+    },
+    {
+      "name": "Akoum Boulderfoot",
+      "oracle_id": "c16367eb-1c0a-4197-8e2f-2d74e4381024",
+      "scryfall_id": "88e8f7b6-1214-447b-8665-ff3c85845564"
+    },
+    {
+      "name": "Akoum Firebird",
+      "oracle_id": "10ab3102-43a3-4c60-8641-2c5a7c1e29c2",
+      "scryfall_id": "304a2e4c-da2c-43fb-b44d-9db55ff94f04"
+    },
+    {
+      "name": "Akoum Flameseeker",
+      "oracle_id": "efae637f-3232-46f2-9839-f3386e2f447d",
+      "scryfall_id": "6ef4e1e2-7961-47d2-bb55-9168ea201214"
+    },
+    {
+      "name": "Akoum Hellhound",
+      "oracle_id": "05074b68-6b31-4f9f-b3ec-bffe3e7eab47",
+      "scryfall_id": "3a5ad1c8-3d70-43ed-9539-2aa6289c5c4a"
+    },
+    {
+      "name": "Akoum Hellkite",
+      "oracle_id": "05b6f9e3-9acd-43a6-acff-caa811aaf0a1",
+      "scryfall_id": "f6ba0c10-6707-40f4-8f01-387532df9958"
+    },
+    {
+      "name": "Akoum Refuge",
+      "oracle_id": "354fecd1-2371-49e3-81c6-7e47728dbb1f",
+      "scryfall_id": "51aecc57-f0cc-4e35-af38-ead25cf8a1b8"
+    },
+    {
+      "name": "Akoum Stonewaker",
+      "oracle_id": "36d1a46e-44ac-4a65-a93c-8d6ab5c31cbf",
+      "scryfall_id": "c92ab7b5-6a29-463e-b294-3cb0efaccddb"
+    },
+    {
+      "name": "Akoum Warrior",
+      "oracle_id": "afedce7b-0e18-40ad-a26a-1933fddb560d",
+      "scryfall_id": "d8ed0335-daa6-4dbe-a94d-4d56c8cfd093"
+    },
+    {
+      "name": "Akoum Teeth",
+      "oracle_id": "afedce7b-0e18-40ad-a26a-1933fddb560d",
+      "scryfall_id": "d8ed0335-daa6-4dbe-a94d-4d56c8cfd093"
+    },
+    {
+      "name": "Akrasan Squire",
+      "oracle_id": "2b8ef83b-1a1d-4299-ab69-e9e296bb224d",
+      "scryfall_id": "59fdc045-b938-4321-aec3-51685cbbaa52"
+    },
+    {
+      "name": "Akroan Conscriptor",
+      "oracle_id": "54216953-c575-4e08-9bee-384721c0bc4d",
+      "scryfall_id": "decb529f-44fd-409d-932f-be9c403f12f6"
+    },
+    {
+      "name": "Akroan Crusader",
+      "oracle_id": "d981d85c-e97b-4fe7-b415-6e73a3e7e35c",
+      "scryfall_id": "73d295ac-3c83-47db-a324-aa4907bcefdd"
+    },
+    {
+      "name": "Akroan Hoplite",
+      "oracle_id": "e15db59f-4477-4139-8e7e-741ab4584e7f",
+      "scryfall_id": "04aa9d4f-37cc-4fc8-877a-6190f96eb509"
+    },
+    {
+      "name": "Akroan Horse",
+      "oracle_id": "8d0213d7-9e25-49d2-93fa-1d346cb2e869",
+      "scryfall_id": "31a8954f-467d-4eb9-8a48-d25bae9529b8"
+    },
+    {
+      "name": "Akroan Jailer",
+      "oracle_id": "e3ad2c77-2a41-4a4a-a6bf-e542d0162b88",
+      "scryfall_id": "8d96bc2b-2e31-4654-b192-c3f023d9fde6"
+    },
+    {
+      "name": "Akroan Line Breaker",
+      "oracle_id": "01443d75-3f86-45c0-81fa-fbf1b3175d4f",
+      "scryfall_id": "a5114db5-b545-43dc-85a3-c0e68ab22a95"
+    },
+    {
+      "name": "Akroan Mastiff",
+      "oracle_id": "6039b9b7-e49a-4ea3-887c-a17dd502d63f",
+      "scryfall_id": "7e21938b-46b1-4b2f-8269-0cd0e998cddc"
+    },
+    {
+      "name": "Akroan Phalanx",
+      "oracle_id": "0edd4894-0df0-4a4e-8a96-d20360ea81c7",
+      "scryfall_id": "fe23019a-e432-4a27-8acb-b17728a1e8b0"
+    },
+    {
+      "name": "Akroan Sergeant",
+      "oracle_id": "8a206c6f-4f6f-4c31-9dab-d73a57db989c",
+      "scryfall_id": "31913547-460c-45b3-be23-89f0e3a43325"
+    },
+    {
+      "name": "Akroan Skyguard",
+      "oracle_id": "f4e8be6f-2a1f-47b2-a4d8-7e576e25ab60",
+      "scryfall_id": "d55e85c3-234e-49c4-a307-96fb4497eea8"
+    },
+    {
+      "name": "Akroma, Angel of Fury",
+      "oracle_id": "2b80faaf-92fd-4fa0-a3f6-8bb263e7ff1d",
+      "scryfall_id": "2b5ac7bd-3788-4c8b-b945-c1105986807a"
+    },
+    {
+      "name": "Akroma, Angel of Wrath",
+      "oracle_id": "107f204c-9fd3-490d-8887-be63d14fc6a4",
+      "scryfall_id": "bf1ef8ec-d915-41f2-b087-3d6d82e3db85"
+    },
+    {
+      "name": "Akroma's Blessing",
+      "oracle_id": "a3fc6888-0a4b-4e1d-b709-042b8b6b1a04",
+      "scryfall_id": "c3710c68-3f71-4d76-8bd2-001f0e8036f5"
+    },
+    {
+      "name": "Akroma's Devoted",
+      "oracle_id": "d264903b-d23e-48c8-95f1-cb1606a705a2",
+      "scryfall_id": "798893df-e720-471d-822d-50284de23efd"
+    },
+    {
+      "name": "Akroma's Memorial",
+      "oracle_id": "967e8b3f-8266-4d9a-a38b-d0e10184e1e4",
+      "scryfall_id": "950ee61d-0bc1-4d7b-ba68-157061aa98eb"
+    },
+    {
+      "name": "Akroma's Vengeance",
+      "oracle_id": "ae19dce5-c9fc-4fbe-99b5-dc6a12124a68",
+      "scryfall_id": "e45b4cba-cd60-4491-a334-30976d0990b7"
+    },
+    {
+      "name": "Akroma's Will",
+      "oracle_id": "fd949f82-fc10-4e37-8aa9-6c7569fe3c55",
+      "scryfall_id": "608cdbdb-6f7e-438a-bab0-0e7782435f0f"
+    },
+    {
+      "name": "Akroma, Vision of Ixidor",
+      "oracle_id": "b9be5ce9-08bb-4361-940c-9031e429ba86",
+      "scryfall_id": "c0bdd07d-9fb9-4ee4-80db-494ee0cba58d"
+    },
+    {
+      "name": "Akron Legionnaire",
+      "oracle_id": "c5f50a78-9dc4-4f3c-aa11-b41c8278bc16",
+      "scryfall_id": "7b658243-267b-473f-acce-b4e211945c67"
+    },
+    {
+      "name": "Aku Djinn",
+      "oracle_id": "233c6686-ead8-4569-941d-3bfa768ff270",
+      "scryfall_id": "369a5df5-fc36-476c-84f4-ec4bdeb4f9d2"
+    },
+    {
+      "name": "Akul the Unrepentant",
+      "oracle_id": "d6b56d6d-e2f6-47f5-a9d1-cd0e17f94a0d",
+      "scryfall_id": "68fd8548-50db-4243-9154-377f32408d58"
+    },
+    {
+      "name": "Akuta, Born of Ash",
+      "oracle_id": "29169659-309f-4e1c-86ba-1d36420ed41e",
+      "scryfall_id": "08730b49-e51e-4868-9cc8-4ddc4a1dce4c"
+    },
+    {
+      "name": "Al-abara's Carpet",
+      "oracle_id": "0f5b0c77-1e3d-46a1-ae0e-03ed79196cd9",
+      "scryfall_id": "5d5aae6e-fe20-4363-9589-5a54bcbbb77e"
+    },
+    {
+      "name": "Alabaster Dragon",
+      "oracle_id": "2392a41a-59d3-4749-be94-4d9df0af9c4c",
+      "scryfall_id": "3a2fcc23-ac09-4ada-b194-424739c9c734"
+    },
+    {
+      "name": "Alabaster Host Intercessor",
+      "oracle_id": "d1d719e9-9c02-40cf-8849-91a5c120a516",
+      "scryfall_id": "165357cc-ec74-490f-aec3-7048bb43c8f9"
+    },
+    {
+      "name": "Alabaster Host Sanctifier",
+      "oracle_id": "ad172d4e-febf-4844-9544-861d03e27ab5",
+      "scryfall_id": "efbd934a-39c4-4ce7-af2a-34ca226d7f23"
+    },
+    {
+      "name": "Alabaster Kirin",
+      "oracle_id": "640fa591-ba79-4148-86a6-9de994a9e67c",
+      "scryfall_id": "ad1ce529-06ed-4e85-9988-8c8b58401ed5"
+    },
+    {
+      "name": "Alabaster Leech",
+      "oracle_id": "8a8b032e-90b7-4782-b854-b575f316d641",
+      "scryfall_id": "c86b45d9-aba6-4c09-8605-037754ba7fd4"
+    },
+    {
+      "name": "Alabaster Mage",
+      "oracle_id": "ea7a8acb-f01f-4a69-9b3c-954d8f0d3155",
+      "scryfall_id": "0ef65e86-3759-465d-862b-29516eed46e6"
+    },
+    {
+      "name": "Alabaster Potion",
+      "oracle_id": "2fcca686-03c8-4407-9f9f-2b7462470044",
+      "scryfall_id": "950acce3-b079-49fc-8016-75fcdbca9b82"
+    },
+    {
+      "name": "Alabaster Wall",
+      "oracle_id": "f9f52651-cc64-48c5-bc18-cd5f646dfb1f",
+      "scryfall_id": "9cf393a3-831e-4d3a-8404-ee83f60970aa"
+    },
+    {
+      "name": "Alaborn Cavalier",
+      "oracle_id": "f8273146-f2e5-40ec-ba96-c0a4192caec8",
+      "scryfall_id": "8877b120-55ee-4e5a-9f51-e72a110f638e"
+    },
+    {
+      "name": "Alaborn Grenadier",
+      "oracle_id": "69c4429e-a8a4-49c3-bb43-9dce4cc6b90a",
+      "scryfall_id": "153b7197-57a7-4e38-bd4a-4550b9d22dd8"
+    },
+    {
+      "name": "Alaborn Musketeer",
+      "oracle_id": "61daa88d-fca4-4019-97f3-568346157ba6",
+      "scryfall_id": "4776a9ed-dbc6-44d2-9761-b2d09ff34008"
+    },
+    {
+      "name": "Alaborn Trooper",
+      "oracle_id": "17969b71-9612-45ff-b789-1c033f832154",
+      "scryfall_id": "e1cd30b4-4ed8-467e-808e-b0caf4196d90"
+    },
+    {
+      "name": "Alaborn Veteran",
+      "oracle_id": "7d9e905b-5f5c-4dbb-95cb-ccba0a5cbf8d",
+      "scryfall_id": "79d7992d-9acd-4eaa-b6e0-a47acb880548"
+    },
+    {
+      "name": "Alaborn Zealot",
+      "oracle_id": "0d0d97dd-2653-4d37-b475-ac3b50c5ee53",
+      "scryfall_id": "a5eba273-0b83-42a7-b8b0-9e0cd6a7aa6f"
+    },
+    {
+      "name": "Alacrian Armory",
+      "oracle_id": "3fa2d51c-d549-4287-ac3b-76bc72bcd8bc",
+      "scryfall_id": "d39f7f98-ad5e-4e5e-9f7b-abe0984ffe17"
+    },
+    {
+      "name": "Alacrian Jaguar",
+      "oracle_id": "caeb4ec1-a8ba-4ac4-ad32-edbc671e5a39",
+      "scryfall_id": "2bd40bca-aa54-4e52-8d48-b3709a11e633"
+    },
+    {
+      "name": "Aladdin",
+      "oracle_id": "9a410f83-ed92-4b55-834a-c7cec8f5d1e2",
+      "scryfall_id": "f1681ad7-c5ce-4f11-af53-cf2882637ba7"
+    },
+    {
+      "name": "Aladdin's Lamp",
+      "oracle_id": "2aa2f96b-5784-4767-b9ea-b8d9222cb1de",
+      "scryfall_id": "42e7cf40-c136-4fcb-a947-558b713b39f6"
+    },
+    {
+      "name": "Aladdin's Ring",
+      "oracle_id": "7810915f-df4d-445a-8ba8-fe6ed3abf1ae",
+      "scryfall_id": "40b7370d-8ab4-4506-b7dd-d02c1ba92032"
+    },
+    {
+      "name": "Alandra, Sky Dreamer",
+      "oracle_id": "97bb1589-2941-4a75-a5f6-916871e51e9e",
+      "scryfall_id": "54bf48d4-e350-4ca7-87da-ce04fefd4610"
+    },
+    {
+      "name": "Alania, Divergent Storm",
+      "oracle_id": "63d50d5e-56de-44c4-b906-b2a21a56e3f3",
+      "scryfall_id": "436d6a84-4cea-4ca7-94aa-9d08280652af"
+    },
+    {
+      "name": "Alania's Pathmaker",
+      "oracle_id": "ce36a450-68a6-4519-a9f0-0e3b772054eb",
+      "scryfall_id": "d3871fe6-e26e-4ab4-bd81-7e3c7b8135c1"
+    },
+    {
+      "name": "Alarum",
+      "oracle_id": "18e96674-6fd8-4046-a3fe-7ba80138d85d",
+      "scryfall_id": "155f2aa6-6c47-4a06-b0ef-2d9205cd133e"
+    },
+    {
+      "name": "Alaundo the Seer",
+      "oracle_id": "1e048c15-50d6-4313-880a-e04348952a51",
+      "scryfall_id": "b22c33bb-47fe-4334-9105-00f4b87811bd"
+    },
+    {
+      "name": "Al Bhed Salvagers",
+      "oracle_id": "43f81514-e812-4e17-9b1a-704c136d8ffd",
+      "scryfall_id": "58ccdcfc-a669-480f-bded-4273cfaf2045"
+    },
+    {
+      "name": "Albino Troll",
+      "oracle_id": "02079e18-ac14-4255-95c4-741eb76c4799",
+      "scryfall_id": "114fefca-8472-4c09-ae61-75d300d6e681"
+    },
+    {
+      "name": "Alchemax Slayer-Bots",
+      "oracle_id": "cdc7356c-9621-4420-9fda-c8b91df0ec7c",
+      "scryfall_id": "0c28edfe-8b30-41b6-889b-c42d5eca778b"
+    },
+    {
+      "name": "Alchemist's Apprentice",
+      "oracle_id": "de085c51-2555-450e-a479-ddbb3bea9e8c",
+      "scryfall_id": "31abba67-1241-4fb3-88b5-4c4668ec5f25"
+    },
+    {
+      "name": "Alchemist's Assistant",
+      "oracle_id": "2844d274-cb60-46c1-a73b-e763c633e496",
+      "scryfall_id": "4d305609-64f8-4f3f-bf67-cd5257f0d01e"
+    },
+    {
+      "name": "Alchemist's Gambit",
+      "oracle_id": "271d8db6-8606-46d7-9812-75aa22fcfd8e",
+      "scryfall_id": "a8fbf5d3-4677-4bf0-891f-57d6dcddaff7"
+    },
+    {
+      "name": "Alchemist's Gift",
+      "oracle_id": "4e698713-6203-44f2-b438-1b26b951536d",
+      "scryfall_id": "6e4c9574-1ee3-461e-848f-8f02c6a8b7ee"
+    },
+    {
+      "name": "Alchemist's Greeting",
+      "oracle_id": "9aaf0df7-5e2d-4f49-a8cb-66523be15ad6",
+      "scryfall_id": "f36e2146-b6a9-4b61-9ccf-969a2c79b747"
+    },
+    {
+      "name": "Alchemist's Refuge",
+      "oracle_id": "357ed28b-899f-404b-94ff-6fb2ef81d87b",
+      "scryfall_id": "36a11c11-1ea9-48e2-b1bc-49cba1390620"
+    },
+    {
+      "name": "Alchemist's Retrieval",
+      "oracle_id": "8651da8e-9b2c-4530-a521-aea490ad88d4",
+      "scryfall_id": "edbf9d4f-6027-40b8-81c1-7f001a9119dd"
+    },
+    {
+      "name": "Alchemist's Talent",
+      "oracle_id": "5a2dfff5-9dba-42f5-bcca-918c16f23807",
+      "scryfall_id": "2fb8dace-c604-40fc-bbd4-5add5deb041a"
+    },
+    {
+      "name": "Alchemist's Vial",
+      "oracle_id": "f574bd9f-4246-42cb-bf4e-d2888daa44c9",
+      "scryfall_id": "251f89c5-d4da-4754-83fa-218c8864ef41"
+    },
+    {
+      "name": "Alchor's Tomb",
+      "oracle_id": "61473d8e-45f1-4753-918d-04918a466031",
+      "scryfall_id": "f4395b19-2118-4a09-8932-f9ce9bc54d6d"
+    },
+    {
+      "name": "Aleatory",
+      "oracle_id": "da4cab2d-0068-440f-ba7c-f2d4e5fa976e",
+      "scryfall_id": "7380af0a-8a8f-44fd-9456-14a68a2830d3"
+    },
+    {
+      "name": "Alela, Artful Provocateur",
+      "oracle_id": "936ae5dc-9838-47f3-ba1f-66523a7f5b76",
+      "scryfall_id": "abc9e41e-fd03-4b6f-8f44-17ba94fa44f5"
+    },
+    {
+      "name": "Alela, Cunning Conqueror",
+      "oracle_id": "1cae5752-b4af-4a8f-8c8c-2493e163083b",
+      "scryfall_id": "79ba5c35-6e5c-406a-b95f-844d5ec296ab"
+    },
+    {
+      "name": "Alena, Kessig Trapper",
+      "oracle_id": "ca349ba9-b5ea-48e6-a617-c9b7f2708853",
+      "scryfall_id": "90c51949-b1ef-4c6e-98b0-4fb33a81db24"
+    },
+    {
+      "name": "Alert Heedbonder",
+      "oracle_id": "683a06b6-af77-440f-81b9-8958597a7324",
+      "scryfall_id": "15a2ccae-c322-4e99-a094-a68fc5d52ea3"
+    },
+    {
+      "name": "Alert Shu Infantry",
+      "oracle_id": "0f019387-4684-493f-80c4-de6023096306",
+      "scryfall_id": "c94a92a9-060e-42d3-a8d1-49425defc08a"
+    }
+  ]
+}

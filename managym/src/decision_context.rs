@@ -6,6 +6,7 @@
 //! typed continuation projection is shared with tensor and text inputs; the
 //! frozen semantic observation/digest contract stays intact.
 
+use crate::state::ability::LibraryEnd;
 use crate::{
     agent::continuation::ContinuationFrame,
     experience::{
@@ -187,7 +188,8 @@ impl Game {
     /// Only the decision owner receives announcement/private continuation
     /// details. Other viewers receive the public owner/kind and committed facts.
     pub fn decision_context(&self, viewer: PlayerId) -> Option<DecisionContextView> {
-        let frames = self.continuation_frames(viewer);
+        let mut frames = self.continuation_frames(viewer);
+        self.describe_effect_execution(viewer, &mut frames);
         let mut view = self.decision_context_from_frames(viewer, &frames)?;
         view.recent_facts = self
             .state
@@ -240,6 +242,7 @@ impl Game {
         let player = space.actions.first().map(|action| action.player())?;
         let actor = space.player?;
         let mut view = DecisionContextView {
+            pending: Vec::new(),
             actor: actor.0 as u8,
             stage: "priority".into(),
             instruction: "Choose an explicit legal offer to commit one decision.".into(),
@@ -255,6 +258,10 @@ impl Game {
             view.instruction = format!("Waiting for Seat {}. Private continuation details are available only to that player.", actor.0 + 1);
             return Some(view);
         }
+        view.pending = frames
+            .iter()
+            .flat_map(|frame| frame.effect_execution_summary.iter().cloned())
+            .collect();
         // Presentation consumes the same typed current facts as the native
         // observation and policy tensors. Only labels and instructions live here.
         if let Some(frame) = frames
@@ -312,6 +319,8 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::ExileFromHandPayment { .. }) =>
+                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
             Some(PendingChoice::DiscardPayment { .. }) =>
                 ("additional_cost", "Choose a card to discard as an activation cost."),
             Some(PendingChoice::TapPayment { .. }) =>
@@ -324,7 +333,9 @@ impl Game {
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
+            Some(PendingChoice::KickerChoice { card, .. }) if self.state.cards[*card].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::AnnounceX { card, .. }) if self.state.cards[*card].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -336,23 +347,29 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
+                Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),
+                Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
-                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a card or the legal failure-to-find offer; no library order is disclosed."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
-                Decision::OrderLibraryBottom { .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
-                Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard; declining keeps the rest on top."),
+                Decision::OrderLibrary { end: LibraryEnd::Bottom, .. } => ("order_library_bottom", "Choose which remaining card to draw first. It goes above the other remaining cards on the bottom. Each choice commits immediately; the last card is placed automatically."),
+                Decision::OrderLibrary { end: LibraryEnd::Top, .. } => ("order_library_top", "Choose which remaining card to draw next. Earlier choices stay above later choices; the last card is placed automatically."),
+                Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard, then keep and order the rest on top."),
+                Decision::OrderReplacement { .. } => ("order_replacement", "Choose the next replacement to apply to the proposed event."),
                 Decision::ChoosePaymentX { .. } => ("resolution_payment", "Choose X for the optional payment, or decline. Targets are chosen only after payment."),
                 Decision::SearchNamed { .. } => ("private_search", "Inspect the searched zones. Choose a matching card to exile, or stop and shuffle."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
+                Decision::NameCard { scope, .. } if !scope.is_leaf() => ("name_card", "Choose the group of names containing the card name you want. Choosing a group names nothing and commits nothing; the next choice offers the group's names or smaller groups."),
+                Decision::NameCard { .. } => ("name_card", "Choose a card name from this group of the installed naming vocabulary."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
-                Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
-                Decision::SelectMilled { .. } => ("select_milled", "Choose from the milled cards, or decline when offered."),
+                Decision::Discard { .. } => ("discard", "Choose a card to discard, or decline when offered."),
+                Decision::SelectCards { origin: crate::flow::decision::SelectionOrigin::Library, .. } => ("private_search", "Inspect the permitted library candidates. Choose a card, then finish searching when offered."),
+                Decision::SelectCards { .. } => ("select_cards", "Choose from the eligible cards, then finish selection when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
-                Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
+                Decision::SearchDistinctNames { .. } => ("private_search", "Inspect the permitted library candidates. Choose a permitted card with a new name, or stop searching; chosen cards are revealed."),
                 Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
                 Decision::CastDuringResolution { paid: false, .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
                 Decision::CastDuringResolution { paid: true, .. } => ("resolution_cast", "Choose a spell to cast now, paying its costs, or decline."),
@@ -365,13 +382,6 @@ impl Game {
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
-            if let Decision::ManaUpfront { taps_remaining, .. } = &suspended.decision {
-                if *taps_remaining > 0 {
-                    view.instruction = format!(
-                        "Tap {taps_remaining} more untapped permanents to pay the mana ability's cost. Each selected tap commits immediately; mana is added only after all costs are paid and an output is chosen."
-                    );
-                }
-            }
         }
         if let Some(placement) = &self.state.trigger_placement {
             let choosing_mode = placement

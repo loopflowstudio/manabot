@@ -7,7 +7,6 @@ The native constraint projection shares exact-range semantics without enumeratio
 
 from __future__ import annotations
 
-from collections import Counter
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
 import hashlib
@@ -225,6 +224,10 @@ def public_sampler_input(
     """
     encoded = engine.hidden_hand_constraints_json(history.viewer)
     projected = json.loads(encoded)
+    if projected.get("retained_selection", False) or projected["foretold"]:
+        raise ValueError(
+            "count-only belief sampler cannot represent retained selections or foretold slots"
+        )
     pool = _counts(projected["pool"])
     known = _counts(projected["known_hand"])
     if (set(pool) | set(known)) - set(schema.card_names):
@@ -295,8 +298,6 @@ def collect_frozen_policy(
                 seed=seed + game_index,
                 options={"match": match if game_index % 2 == 0 else match.swapped()},
             )
-            # The collector owns game boundaries; discard any queued compound suffix.
-            player.start_game(env, seat=0)
             manifest = env._engine.content_pack_manifest()
             if schema is None:
                 # Restrict work to configured definitions; generated out-of-roster
@@ -334,16 +335,11 @@ def collect_frozen_policy(
                     history = histories[viewer]
                     inputs, _ = public_sampler_input(env._engine, history, schema)
                     # Privileged label access begins only after all inference inputs exist.
-                    authority = env._engine.observation_for_player(1 - viewer)
-                    hand = Counter(
-                        str(card.name)
-                        for card in authority.agent_cards
-                        if int(card.zone) == 1
-                    )
+                    hand = env.hand_snapshot(1 - viewer).cards
                     examples.append(
                         SamplerExample(
                             inputs,
-                            tuple(hand[name] for name in schema.card_names),
+                            tuple(hand.get(name, 0) for name in schema.card_names),
                             viewer,
                             history.current_revision,
                             history.current_viewer_state_hash,

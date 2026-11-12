@@ -242,6 +242,10 @@ class TestObservationEncoder:
             "decklists",
             "relations",
             "facts",
+            "effects",
+            "effect_details",
+            "effect_members",
+            "name_candidates",
         }
 
     def test_encode_observation(
@@ -407,27 +411,17 @@ class TestObservationEncoder:
                 atol=1e-6,
             )
 
-    def test_action_space_overflow_rejects_incomplete_policy_input(self):
-        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
-        obs = SimpleNamespace(
-            action_space=SimpleNamespace(actions=[SimpleNamespace(focus=[])] * 3),
-            agent_cards=[],
-            opponent_cards=[],
-            agent_permanents=[],
-            opponent_permanents=[],
-        )
-        with pytest.raises(ValueError, match="actions 3 > 2"):
-            encoder.encode(obs)
-
-    def test_action_capacity_rejects_omitted_choices(self) -> None:
-        encoder = ObservationEncoder(ObservationConfig(max_actions=2))
-        obs = SimpleNamespace(
-            action_space=SimpleNamespace(
-                actions=[SimpleNamespace(action_type=i, focus=[]) for i in range(3)]
-            )
-        )
-        with pytest.raises(ValueError, match="capacity exceeded: actions 3 > 2"):
-            encoder.encode(obs)
+    def test_action_space_overflow_rejects_incomplete_policy_input(
+        self, observation: managym.Observation
+    ) -> None:
+        count = len(observation.action_space.actions)
+        assert count > 1
+        encoder = ObservationEncoder(ObservationConfig(max_actions=count - 1))
+        with pytest.raises(
+            ValueError, match=rf"capacity exceeded: actions {count} > {count - 1}"
+        ):
+            encoder.encode(observation)
+        assert len(observation.action_space.actions) == count
 
     @pytest.mark.parametrize(
         "method, capacity, label",
@@ -458,6 +452,9 @@ class TestObservationEncoder:
                         mode_index=None,
                         ability_index=None,
                         continuation_index=None,
+                        name_index=None,
+                        name_definition=None,
+                        name_group=None,
                     )
                 ]
             )

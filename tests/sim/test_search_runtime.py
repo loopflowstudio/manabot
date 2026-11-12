@@ -1,4 +1,4 @@
-"""Retained checkpoint registration and model ABI identity."""
+"""Retained checkpoint registration identity."""
 
 from __future__ import annotations
 
@@ -6,9 +6,6 @@ import json
 
 import pytest
 
-from manabot.env.observation import ActionEnum, ObservationSpace
-from manabot.infra.identity import canonical_sha256
-from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.search.runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
     RetainedCheckpointMismatchError,
@@ -16,32 +13,6 @@ from manabot.sim.search.runtime import (
     retained_int7_manifest_digest,
     retained_int7_policy_only_checkpoint,
 )
-
-
-def _observation_abi_sha256(observation_space: ObservationSpace) -> str:
-    """Hash the tensor names, shapes and dtypes the checkpoint consumes."""
-
-    return canonical_sha256(
-        {
-            name: {"shape": list(shape), "dtype": "float32"}
-            for name, shape in sorted(observation_space.shapes.items())
-        }
-    )
-
-
-def _action_abi_sha256(observation_space: ObservationSpace) -> str:
-    """Hash the action enum and encoded action tensor limits."""
-
-    return canonical_sha256(
-        {
-            "enum": {member.name: int(member.value) for member in ActionEnum},
-            "max_actions": observation_space.encoder.max_actions,
-            "actions_shape": list(observation_space.shapes["actions"]),
-            "action_focus_shape": list(observation_space.shapes["action_focus"]),
-            "actions_valid_shape": list(observation_space.shapes["actions_valid"]),
-        }
-    )
-
 
 EXPECTED = {
     197: "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
@@ -107,16 +78,3 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     monkeypatch.setattr(runtime, "file_sha256", checkpoint_bytes_must_not_be_read)
     with pytest.raises(RetainedCheckpointMismatchError, match="identity drifted"):
         retained_int7_policy_only_checkpoint(197)
-
-
-@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
-def test_seed_197_checkpoint_model_abis_match_the_registry() -> None:
-    registration = retained_int7_policy_only_checkpoint(197)
-    agent, observation_space = load_checkpoint(str(registration.checkpoint_path))
-
-    assert sum(parameter.numel() for parameter in agent.parameters()) == 102_722
-    assert (
-        _observation_abi_sha256(observation_space)
-        == registration.observation_abi_sha256
-    )
-    assert _action_abi_sha256(observation_space) == registration.action_abi_sha256

@@ -44,7 +44,7 @@ The original local before/after samples did not use the subsequently published
 boundaries, memory method, and raw-data provenance were not contract-identical,
 so the numeric claims have been removed rather than relabeled.
 
-[W2-182's contract](../docs/benchmarks/search-branching-contract-v1.md),
+[W2-182's contract](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/benchmarks/search-branching-contract-v1.md),
 [raw artifact](data/w2-182-search-branching-v1.json), and
 [generated summary](w2-182-search-branching-v1.md) own the full-clone baseline.
 That checked-in artifact is one historical run at its recorded source state,

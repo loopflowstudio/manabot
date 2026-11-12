@@ -17,6 +17,7 @@ from pydantic import JsonValue
 import pytest
 import torch
 
+from manabot.env.card_capture import CapturedCards
 from manabot.env.match import Match as EnvMatch
 from manabot.env.observation import ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
@@ -52,7 +53,6 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.card_evidence import (
-    CapturedCards,
     GameEvidence,
     GameTrace,
     capture_verified_game,

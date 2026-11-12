@@ -21,6 +21,11 @@
       <p class="type-caption text-ink-2">Details not recorded.</p>
     {/if}
   </div>
+  {#if context?.pending?.length}
+    <details><summary class="type-rubric">Pending resolution</summary>
+      <ol class="type-caption list-decimal pl-5">{#each context.pending as fact}<li>{fact}</li>{/each}</ol>
+    </details>
+  {/if}
   {#if observation.player_controls?.length}
     <div aria-label="Player control" class="type-caption">
       <h3 class="font-medium">Player control</h3>

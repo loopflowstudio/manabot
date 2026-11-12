@@ -7,6 +7,7 @@ use managym_state::{
     },
     card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility},
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -106,14 +107,17 @@ fn field_trip() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{G}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::SearchBasicLand {
-                subtype: Some("Forest".into()),
-                count: EffectValue::Fixed(1),
-                tapped: true,
-                untap_if_lands: None,
-                bottom_source: false,
-                to_hand: false,
-            },
+            Effect::search_library(
+                CardPredicate {
+                    subtype: Some("Forest".into()),
+                    ..CardPredicate::basic_land()
+                },
+                EffectValue::Fixed(1),
+                vec![Effect::return_to_battlefield(
+                    ObjectSelector::Selected,
+                    true,
+                )],
+            ),
             Effect::Learn,
         ],
         text_box: text_box.into(),

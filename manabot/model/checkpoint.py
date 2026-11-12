@@ -31,6 +31,7 @@ from manabot.model.architecture import (
     validate_architecture_receipt,
 )
 from manabot.model.world import (
+    checkpoint_source,
     checkpoint_world,
     deck_world,
     validate_checkpoint_world,
@@ -111,23 +112,34 @@ def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
 
 @overload
 def load_checkpoint(
-    path: str | StoredArtifact,
+    path: str | StoredArtifact, *, bucketed_shapes: bool = False
 ) -> tuple[ActorCritic, ObservationSpace]: ...
 
 
 @overload
 def load_checkpoint(
-    path: str | StoredArtifact, *, include_belief_binding: Literal[True]
+    path: str | StoredArtifact,
+    *,
+    include_belief_binding: Literal[True],
+    bucketed_shapes: bool = False,
 ) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]: ...
 
 
 def load_checkpoint(
-    path: str | StoredArtifact, *, include_belief_binding: bool = False
+    path: str | StoredArtifact,
+    *,
+    include_belief_binding: bool = False,
+    bucketed_shapes: bool = False,
 ) -> (
     tuple[ActorCritic, ObservationSpace]
     | tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]
 ):
-    """Load saved configuration and validate world/schema; verify S3 bytes before loading."""
+    """Load saved configuration and validate world/schema; verify S3 bytes before loading.
+
+    Raises `UnsupportedPolicyInput` for a checkpoint of another policy input.
+    `bucketed_shapes` selects the forward's padding path (see `ActorCritic`);
+    it is an execution choice, not a checkpoint field.
+    """
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
@@ -139,7 +151,8 @@ def load_checkpoint(
     )
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
-    agent = ActorCritic(obs_space, ModelConfig(**config["agent_hypers"]))
+    agent_config = ModelConfig.from_checkpoint(config["agent_hypers"])
+    agent = ActorCritic(obs_space, agent_config, bucketed_shapes=bucketed_shapes)
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):
@@ -184,11 +197,12 @@ def save_checkpoint(
             if player_configs is None
             else checkpoint_world(player_configs, obs_space)
         ),
+        "source": checkpoint_source(),
         "architecture": architecture_receipt(agent).model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": obs_space.encoder.config.model_dump(),
             "train_hypers": {},
         },

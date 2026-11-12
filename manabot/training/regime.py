@@ -1,5 +1,6 @@
 """Validated recipe definitions: stages, learning settings and execution admission."""
 
+from collections.abc import Mapping
 from typing import Annotated, Literal, TypedDict
 
 from pydantic import (
@@ -11,9 +12,17 @@ from pydantic import (
     model_validator,
 )
 
-from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.infra.config import (
+    COMPOUND_DECISIONS_REMOVED,
+    MatchConfig,
+    ModelConfig,
+    ObservationConfig,
+)
 from manabot.training.decks import UniformDecks
+from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
+
+BatchClosure = Literal["exact-quota", "complete-games"]
 
 
 class ArtifactReference(TypedDict):
@@ -199,9 +208,14 @@ class DampedPolicyLearning(Strict):
         )
 
 
+# float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
+# tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
+Precision = Literal["float32", "tf32", "bf16"]
+
+
 class Execution(Strict):
-    device: Literal["cpu", "cuda"] = "cpu"
-    precision: Literal["float32"] = "float32"
+    device: Literal["cpu", "mps", "cuda"] = "cpu"
+    precision: Precision = "float32"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
@@ -210,6 +224,16 @@ class Execution(Strict):
     # Historical opt-in; phase timers are now always recorded. Retained so
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Collection and learner forwards trim variable axes to power-of-two
+    # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
+    # hashes are unchanged; never part of the model or its checkpoints.
+    bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
+
+    @model_validator(mode="after")
+    def reduced_precision_on_cuda(self) -> "Execution":
+        if self.precision != "float32" and self.device != "cuda":
+            raise ValueError(f"precision {self.precision} requires CUDA")
+        return self
 
 
 class Stage(Strict):
@@ -218,15 +242,13 @@ class Stage(Strict):
 
     @model_validator(mode="after")
     def supported_workers(self) -> "Stage":
-        if (
-            self.execution.profile_collection
-            and getattr(self, "operation", None) != "train_self_play"
-        ):
+        if getattr(self, "operation", None) == "train_self_play":
+            return self
+        if self.execution.profile_collection:
             raise ValueError("collection profiling requires train_self_play")
-        if (
-            self.execution.workers != 1
-            and getattr(self, "operation", None) != "train_self_play"
-        ):
+        if self.execution.bucketed_shapes:
+            raise ValueError("bucketed shapes require train_self_play")
+        if self.execution.workers != 1:
             raise ValueError(
                 "multiple producers are supported only for train_self_play"
             )
@@ -357,7 +379,28 @@ class LearningStateOrigin(Strict):
     )
 
 
+def _default_seats(behavior: object) -> Literal["one", "both"]:
+    return "one" if behavior in ("random", "frozen") else "both"
+
+
+def _implied_closure(stage: Mapping[str, object]) -> BatchClosure:
+    """What a serialized stage omitting `batch_closure` declares.
+
+    Closure was once inferred from these fields, and saved recipes rely on it:
+    only one-seat recipes with neither optional field stopped at an exact quota.
+    """
+    complete = (
+        stage["learning_seats"] == "both"
+        or stage.get("games_per_stream") is not None
+        or stage.get("game_errors") is not None
+    )
+    return "complete-games" if complete else "exact-quota"
+
+
 class TrainSelfPlay(Stage):
+    adaptive: AdaptiveConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     game_errors: GameErrorPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -373,6 +416,9 @@ class TrainSelfPlay(Stage):
     opponent: FrozenOpponent | None = None
     initial: str | None = None
     learning_state: LearningStateImport | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    initial_weights: ArtifactReference | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     pretrained: PretrainedPolicy | None = Field(
@@ -391,6 +437,15 @@ class TrainSelfPlay(Stage):
         default=None, ge=1, exclude_if=lambda value: value is None
     )
     learning_seats: Literal["one", "both"] = "both"
+    # When a batch closes, independently of who learns. "complete-games" treats
+    # `transitions` as a per-stream floor and finishes the game in progress, so
+    # every return ends at a real result. "exact-quota" pauses each stream at
+    # `transitions` learner rows, usually mid-game, and bootstraps from
+    # V(next_obs). Under capacity recovery a failed game loses only the rows no
+    # update has learned from and its stream refills. A new stage defaults here; a
+    # saved one that omits the field is resolved by TrainingRegime, so it serializes
+    # only when `_implied_closure` would say otherwise.
+    batch_closure: BatchClosure = "complete-games"
     matchup_curriculum: Literal[
         "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
     ] = Field(default="fixed", exclude_if=lambda value: value == "fixed")
@@ -399,22 +454,54 @@ class TrainSelfPlay(Stage):
     @model_validator(mode="before")
     @classmethod
     def default_learning_seats(cls, value: object) -> object:
-        if (
-            isinstance(value, dict)
-            and "learning_seats" not in value
-            and value.get("behavior") in ("random", "frozen")
-        ):
-            return {**value, "learning_seats": "one"}
+        if isinstance(value, dict) and "learning_seats" not in value:
+            return {**value, "learning_seats": _default_seats(value.get("behavior"))}
         return value
+
+    @model_serializer(mode="wrap")
+    def omit_implied_closure(
+        self, handler: SerializerFunctionWrapHandler
+    ) -> dict[str, object]:
+        # Regime digests hash these bytes, and saved stages never held the field.
+        values: dict[str, object] = handler(self)
+        if self.batch_closure == _implied_closure(values):
+            values.pop("batch_closure")
+        return values
 
     @model_validator(mode="after")
     def valid_behavior(self) -> "TrainSelfPlay":
+        if self.adaptive is not None and (
+            self.behavior != "current-self"
+            or self.learning_seats != "both"
+            or self.execution.workers != 1
+            or self.root is not None
+            or self.matchup_curriculum != "fixed"
+            or self.initial is not None
+            or self.trainable != "policy_value"
+        ):
+            raise ValueError(
+                "adaptive sampling requires fresh both-seat current-self with one producer and no static curriculum"
+            )
         if self.game_errors is not None and (
             self.root is not None or self.initial is not None
         ):
             raise ValueError(
                 "game error recovery requires native fresh-stage collection"
             )
+        if self.batch_closure == "exact-quota":
+            if self.learning_seats == "both":
+                raise ValueError(
+                    "both learning seats require complete games: at a pause only "
+                    "the acting seat has a next observation, so the other seat's "
+                    "pending row has no successor"
+                )
+            if self.games_per_stream is not None:
+                raise ValueError("games_per_stream requires complete games")
+            if self.game_errors is not None and not self.game_errors.recover_capacity:
+                raise ValueError(
+                    "game error recovery without capacity recovery requires "
+                    "complete games"
+                )
         if self.learning_seats == "both" and self.behavior not in (
             "current-self",
             "ema-self",
@@ -425,13 +512,9 @@ class TrainSelfPlay(Stage):
         if self.execution.workers != 1 and self.root is not None:
             raise ValueError("diagnostic roots require one producer")
         if self.matchup_curriculum == "elemental-uniform":
-            if (
-                self.behavior != "current-self"
-                or self.execution.workers != 1
-                or self.root is not None
-            ):
+            if self.behavior != "current-self" or self.root is not None:
                 raise ValueError(
-                    "elemental-uniform requires current-self, one producer and ordinary roots"
+                    "elemental-uniform requires current-self and ordinary roots"
                 )
         elif self.matchup_curriculum != "fixed":
             width = 12 if self.matchup_curriculum == "mirrors-balanced" else 4
@@ -439,6 +522,13 @@ class TrainSelfPlay(Stage):
                 raise ValueError(
                     "balanced matchups require current-self and complete stream strata"
                 )
+        if self.initial_weights is not None and any(
+            value is not None
+            for value in (self.initial, self.pretrained, self.learning_state)
+        ):
+            raise ValueError(
+                "initial weights cannot be combined with another starting state"
+            )
         if self.pretrained is not None and (
             self.initial is not None or self.learning_state is not None
         ):
@@ -532,42 +622,8 @@ class TrainBelief(Stage):
     evaluation_samples: int = Field(default=32, ge=1)
 
 
-class TrainCompound(Stage):
-    """Complete-game self-play with explicit decoder credit units."""
-
-    operation: Literal["train_compound"]
-    initial: str | None = None
-    updates: int = Field(default=1, ge=1)
-    games_per_update: int = Field(default=2, ge=1)
-    max_commands: int = Field(default=4000, ge=1)
-    grouping: Literal["sequential", "grouped"] = "grouped"
-    estimator: Literal["outcome", "bootstrapped"] = "outcome"
-    skip_trivial: bool = True
-    learning: Learning = Learning(retained_fraction=1, epochs=1)
-
-    @model_validator(mode="after")
-    def supported_learning(self) -> "TrainCompound":
-        if (
-            self.learning.filter_kind != "top_count"
-            or self.learning.filter_scope != "actor_critic"
-        ):
-            raise ValueError(
-                "compound stages support top-count actor-critic filtering only"
-            )
-        if self.learning.reference != "uniform" or self.learning.ema is not None:
-            raise ValueError(
-                "compound stages require conditional uniform reference and raw weights"
-            )
-        return self
-
-
 Operation = Annotated[
-    ImportPolicy
-    | TrainSelfPlay
-    | TrainCompound
-    | CollectBelief
-    | CollectSelection
-    | TrainBelief,
+    ImportPolicy | TrainSelfPlay | CollectBelief | CollectSelection | TrainBelief,
     Field(discriminator="operation"),
 ]
 
@@ -581,6 +637,14 @@ class RecoveryPolicy(Strict):
 
     max_game_microsteps: int = Field(default=40000, ge=1, le=1_000_000)
     checkpoint_updates: int = Field(default=128, ge=1)
+
+
+def _read_saved_self_play(
+    stage: dict[str, object], one_seat: bool
+) -> dict[str, object]:
+    seats = "one" if one_seat else _default_seats(stage.get("behavior"))
+    resolved = {"learning_seats": seats, **stage}
+    return {"batch_closure": _implied_closure(resolved), **resolved}
 
 
 class TrainingRegime(Strict):
@@ -614,21 +678,31 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="before")
     @classmethod
-    def read_one_seat_regime(cls, value: object) -> object:
-        """Schema 1 omitted the one-seat choice; never relabel frozen evidence."""
-        if isinstance(value, dict) and value.get("schema_version") == 1:
-            stages = value.get("stages")
-            if isinstance(stages, list):
-                return {
-                    **value,
-                    "stages": [
-                        {**stage, "learning_seats": stage.get("learning_seats", "one")}
-                        if isinstance(stage, dict)
-                        and stage.get("operation") == "train_self_play"
-                        else stage
-                        for stage in stages
-                    ],
-                }
+    def read_saved_stages(cls, value: object) -> object:
+        """Resolve what saved stages omit; never relabel frozen evidence.
+
+        Schema 1 omitted the one-seat choice, and no saved stage declared its
+        batch closure. Stage instances are new authoring and keep their defaults.
+        Retired `train_compound` stages fail with the reproduction commit
+        rather than as an unknown discriminator.
+        """
+        if isinstance(value, dict) and any(
+            isinstance(stage, dict) and stage.get("operation") == "train_compound"
+            for stage in value.get("stages") or ()
+        ):
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        if isinstance(value, dict) and isinstance(value.get("stages"), list):
+            one_seat = value.get("schema_version") == 1
+            return {
+                **value,
+                "stages": [
+                    _read_saved_self_play(stage, one_seat)
+                    if isinstance(stage, dict)
+                    and stage.get("operation") == "train_self_play"
+                    else stage
+                    for stage in value["stages"]
+                ],
+            }
         return value
 
     @model_serializer(mode="wrap")
@@ -674,13 +748,12 @@ class TrainingRegime(Strict):
         if self.deck_source is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"
-            or stage.execution.workers != 1
             or stage.root is not None
             or stage.matchup_curriculum != "fixed"
             for stage in self.stages
         ):
             raise ValueError(
-                "a deck source requires current-self, one producer, ordinary roots and no curriculum"
+                "a deck source requires current-self, ordinary roots and no curriculum"
             )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
@@ -712,25 +785,6 @@ class TrainingRegime(Strict):
         self.observation = self.observation.model_copy(
             update={"policy_history_version": 1 if self.agent.recent_events else 0}
         )
-        has_compound = any(isinstance(stage, TrainCompound) for stage in self.stages)
-        has_import = any(isinstance(stage, ImportPolicy) for stage in self.stages)
-        if (
-            has_compound
-            and not self.agent.compound_decisions
-            or (self.agent.compound_decisions and not (has_compound or has_import))
-        ):
-            raise ValueError(
-                "compound stages and compound ActorCritic must be selected together"
-            )
-        if self.agent.compound_decisions and any(
-            not isinstance(
-                stage, (TrainCompound, ImportPolicy, CollectBelief, TrainBelief)
-            )
-            for stage in self.stages
-        ):
-            raise ValueError(
-                "compound policies require compound policy stages throughout the run"
-            )
         if self.recovery is not None and self.recovery_max_microsteps is not None:
             raise ValueError("select one recovery contract")
         if self.recoverable and (
@@ -752,17 +806,27 @@ class TrainingRegime(Strict):
             for stage in self.stages
         ):
             raise ValueError("active-time process recovery is unsupported")
-        if any(stage.execution.device == "cuda" for stage in self.stages):
+        if any(stage.execution.device != "cpu" for stage in self.stages):
+            accelerator = (
+                "CUDA"
+                if any(stage.execution.device == "cuda" for stage in self.stages)
+                else "MPS"
+            )
             if self.recoverable:
-                raise ValueError("CUDA process recovery is unsupported")
+                raise ValueError(f"{accelerator} process recovery is unsupported")
             if self.agent.belief_count_buckets or any(
                 not isinstance(stage, TrainSelfPlay) or stage.opponent is not None
                 for stage in self.stages
             ):
-                raise ValueError("CUDA requires self-contained ordinary self-play")
+                raise ValueError(
+                    f"{accelerator} requires self-contained ordinary self-play"
+                )
+        if self.agent.token_stream == "pooled" and any(
+            stage.execution.bucketed_shapes for stage in self.stages
+        ):
+            raise ValueError("token_stream='pooled' does not support bucketed shapes")
         previous: dict[str, Stage] = {}
         latest_self_play = None
-        latest_compound = None
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
@@ -774,7 +838,7 @@ class TrainingRegime(Strict):
                     raise ValueError("selection EMA dependency requires EMA weights")
             if isinstance(stage, CollectBelief):
                 policy = previous.get(stage.policy)
-                if not isinstance(policy, (TrainSelfPlay, TrainCompound, ImportPolicy)):
+                if not isinstance(policy, (TrainSelfPlay, ImportPolicy)):
                     raise ValueError(
                         "belief policy must refer to an earlier policy stage"
                     )
@@ -811,9 +875,12 @@ class TrainingRegime(Strict):
                 if (
                     parent.execution.device != stage.execution.device
                     or parent.execution.workers != stage.execution.workers
+                    or parent.execution.bucketed_shapes
+                    != stage.execution.bucketed_shapes
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.learning_seats != stage.learning_seats
+                    or parent.batch_closure != stage.batch_closure
                     or parent.games_per_stream != stage.games_per_stream
                     or parent.matchup_curriculum != stage.matchup_curriculum
                     or parent.learning.ema != stage.learning.ema
@@ -823,17 +890,11 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, curriculum, gradient, EMA clock, workers and opponent"
+                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes and opponent"
                     )
-            if isinstance(stage, TrainCompound):
-                if initial and parent is not latest_compound:
-                    raise ValueError(
-                        "compound continuation cannot branch from older weights"
-                    )
-                latest_compound = stage
-            if self.agent.value_kind == "categorical_wdl" and (
-                isinstance(stage, TrainCompound)
-                or isinstance(stage, TrainSelfPlay)
+            if (
+                self.agent.value_kind == "categorical_wdl"
+                and isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, DampedPolicyLearning)
             ):
                 raise ValueError("categorical outcome training requires damped_policy")

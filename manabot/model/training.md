@@ -55,7 +55,7 @@ Scalar value loss is squared error; categorical value loss is cross-entropy to
 loss/draw/win lambda-return mixtures. Actor-only selection retains critic rows;
 actor-and-critic selection removes both. Inclusive quantile selection keeps ties.
 Method provenance, equations and MTG adaptations are in
-[the source fidelity contract](../../docs/training.md#ataraxos).
+[the source fidelity contract](../../docs/learning.md#fidelity-to-the-sources).
 
 Iteration schedules count completed collection/update boundaries, including
 empty-filter skips. EMA advances once at each such boundary. Optimizer steps,

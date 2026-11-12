@@ -15,18 +15,20 @@ instruments.
 | --- | --- | --- |
 | [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/training.md#ataraxos)) | `manabot train` |
+| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([fidelity](../docs/learning.md#fidelity-to-the-sources)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
-| [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
+
+The compound-decision study (`compound_decisions.py`) is no longer runnable;
+reproduce it at commit `ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b`.
 
 ## Etude experiment files
 
 ```sh
 uv run etude report experiments/ --source r2://manabot/jobs --serve   # every experiment, with an index
 uv run etude eval experiments/elemental.py --source r2://manabot/jobs # play what is new, here
-uv run etude launch experiments/seat_comparison.py --revision COMMIT --rent l4 --max-usd 60
+uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort seats-1 --rent l4 --max-usd 60
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
@@ -71,15 +73,36 @@ commit with the report. Every worktree on a machine shares one read-only cache,
 when the store is unreachable. Data committed before the manifest remains in git
 history.
 
+## Protocols and regimes
+
+New experiments add nothing under `protocols/` or `regimes/`: an experiment is
+its module at a commit and its one report
+([work boundaries](../docs/workflows.md#experiments)). The files still there are
+read by an experiment module or are the only written record of an earlier
+experiment. Job, identity and superseded protocol files that nothing reads were
+removed from the tree; they remain at
+[revision ac601834d](https://github.com/loopflowstudio/manabot/tree/ac601834d/experiments/protocols),
+where older documents that name them by path can find them.
+
+Main carries one policy input, v9, so the modules of finished experiments bound
+to earlier inputs were removed with their regimes: the TLA trophy pilots, the
+state-representation studies, the growing-pool league, the curriculum cohorts
+and the throughput C1 readings. Their reports and protocols name those modules
+at the source each run pinned; ac601834d is the last revision carrying them.
+
 ## Discipline
 
 1. **Build before diagnosing.** Primary experiments exercise a runnable agent,
    teacher, or training loop in the real engine. Use katas and ablations to
    resolve an observed ambiguity or choose between concrete next builds, not
    as admission tests before integration.
-2. **Predict first, in git.** Question, numeric prediction, kill criteria,
-   and cost cap are committed *before* the run. No pre-run commit → the
-   result is exploratory, not evidence.
+2. **Exploratory by default; a finding predicts first.** Calibration,
+   throughput, capacity and pilot runs need no prediction and are labelled
+   exploratory. A result that will be cited as a finding commits one paragraph
+   *before* its runs: question, numeric prediction, the result that would
+   refute it and a cost cap. The freeze is the commit and the run ID; a change
+   that keeps the question is a dated line in the report
+   ([how a claim gets made](../docs/experiments.md#how-a-claim-gets-made)).
 3. **Name the strongest confound.** Every report says how its result could
    be wrong and what would discriminate.
 4. **Mechanism over aggregates.** "Can/cannot" claims need a behavioral
@@ -96,6 +119,41 @@ history.
    changes that break them are failing changes regardless of green tests.
 
 ## Index
+
+[Mirror search on MTG-183](search-mirror.md): **completed 2026-11-12**,
+exploratory — 3,000 games (six settings × 500 deals) plus an 8,000-game earlier
+sweep on the frozen w13 policy. With playable uniform hand sampling, mirror
+search beats the policy's sampled play by +12.5 to +17.4 points from 4 to 16
+shuffles and beats PUCT-1024 at lower cost; the true hand adds at most +5.2.
+The HTML report and evidence are in the data manifest under
+`experiments/data/search-mirror-v1/` and `search-mirror-v2/`; source is tag
+`mirror-w13-study-frozen`.
+
+[Critic readouts and attention depth, MTG-252](value-readout-252-results.md):
+**completed 2026-11-09** — five arms, three seeds each, 300 updates and 28,200
+valid evaluation games. Depth-4 masked mean/token score 61.0%/61.7% against the
+heuristic, with no clear readout winner. The equal-update depth advantage largely
+disappears at matched measured training hours; no default promotion. Graphs,
+uncertainty, cost limits and the offline HTML report are retained in the data
+manifest under `experiments/data/value-readout-252/`.
+
+[V7 state reduction, GPU horizon](state-representation-gpu.md): **completed
+2026-11-05** — four paired seeds, 256 updates (524,288 training games), 11,264
+replayed evaluation games. No qualified plateau (one of six final-window
+intervals within ±5). Held-out GRU minus pooling: −1.95 points [−5.88, +1.98],
+neither advantage nor equivalence; no promotion. GRU and pooling are two
+within-decision reducers, not agent memory.
+
+[V7 state reduction, CPU](state-representation-v7.md): **preliminary,
+2026-11-04** — four seeds at 128 updates, 32,768 training games and 1,024
+replayed evaluation games. GRU minus pooling: −0.98 points [−10.13, +8.18], at
+1.06× training time. Too short a horizon to choose an architecture; the GPU
+study above is the answer.
+
+[Growing card pools, MTG-245](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/growing-pool-245-v1.md): **removed
+unexecuted, 2026-11-11** — authored reference league, frozen mixtures and
+separate retention, expansion and generalization panels. No training or
+strength results; the protocol and modules remain at that revision.
 
 [Heuristic strength](heuristic-strength.md): **completed 2026-10-24** — the
 `heuristic` anchor as UR against MTG-183's update-1,750 GW rises from 18.3% to
@@ -172,3 +230,18 @@ studies. Proposed budgets are separate from ETU-91 and grant no execution author
 Distributed-RL research and the unexecuted bounded workload plan live in
 [the ETU-108 report](../docs/training.md#distributed-training); its benchmark supervisor was
 removed unexecuted and remains in git history.
+
+The [GPU representation horizon study](protocols/state-representation-5da5f4-gpu.md)
+retains four paired CUDA seeds, initialization and periodic evaluation, a
+sustained-plateau criterion, and separate held-out scoring. Its first cohort
+was cancelled before scoring when measured concurrent GPU throughput invalidated
+the allocation budget. `state_representation_gpu.py` declared one recovery unit
+per frozen allocation file; the throughput admission and CUDA operator profiler
+that qualified it ended with the cohort and remain at source `d57c5c9e7`,
+reachable through PR 421's head ref (`refs/pull/421/head`). Wider
+batches change optimization; the prospective recipe retains the original
+complete-game horizon. Scientific Run `e51f61b92931` ended `lost / machine_lost`
+on 2026-11-05 after three of eight learners completed, with no curve or held-out
+endpoint; that record is unchanged. The recovery amendment completed the cohort
+the same day: [the GPU report](state-representation-gpu.md) holds its result.
+The preliminary CPU study remains frozen.

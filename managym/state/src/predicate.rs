@@ -3,9 +3,13 @@
 // blocking restrictions, and zone counting (no scattered string compares).
 
 use super::card::{Card, CardType, Keyword};
+use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
+/// Deserialization reads a definition's serialized predicate back, so
+/// observation vocabularies can enumerate what the encoders describe.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct CardPredicate {
     /// Shares the asking source permanent's layered name. Requires a source
     /// (currently ControlsAtLeast); card-only matching cannot answer it.
@@ -33,8 +37,17 @@ pub struct CardPredicate {
     /// "tapped": only permanents are tapped.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tapped: bool,
+    /// "card in a graveyard that was put there from the battlefield this
+    /// turn" (Brought Back): game history, so card-only matching refuses it
+    /// and `Game::card_matches_predicate` answers it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_battlefield_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
+    /// Has at least one of these colors ("white or blue"), as its
+    /// characteristics are now (layer 5).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors_any: Vec<Color>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -75,6 +88,14 @@ impl CardPredicate {
         }
     }
 
+    pub fn basic_land() -> Self {
+        Self {
+            card_type: Some(CardType::Land),
+            supertype: Some("basic".into()),
+            ..Self::default()
+        }
+    }
+
     pub fn subtype(subtype: &str) -> Self {
         Self {
             subtype: Some(subtype.to_string()),
@@ -92,14 +113,6 @@ impl CardPredicate {
         self.min_power.is_some()
             || self.max_power.is_some()
             || self.any_of.iter().any(CardPredicate::reads_power)
-    }
-
-    /// Whether matching compares card types, here or in an alternative.
-    pub fn reads_types(&self) -> bool {
-        self.card_type.is_some()
-            || !self.card_types_any.is_empty()
-            || !self.not_card_types.is_empty()
-            || self.any_of.iter().any(CardPredicate::reads_types)
     }
 
     /// Match against a card's printed characteristics.
@@ -121,6 +134,7 @@ impl CardPredicate {
             || self.with_counter
             || self.attacking
             || self.tapped
+            || self.from_battlefield_this_turn
             || (self.flying && !card.keywords.has(Keyword::Flying))
         {
             return false;
@@ -130,6 +144,12 @@ impl CardPredicate {
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
             return false;
+        }
+        if !self.colors_any.is_empty() {
+            let colors = card.colors();
+            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+                return false;
+            }
         }
         if !self.any_of.is_empty()
             && !self

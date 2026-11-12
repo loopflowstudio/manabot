@@ -1738,6 +1738,13 @@
           ],
           "title": "Mana Cost"
         },
+        "pending": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Pending",
+          "type": "array"
+        },
         "recent_facts": {
           "items": {
             "type": "string"

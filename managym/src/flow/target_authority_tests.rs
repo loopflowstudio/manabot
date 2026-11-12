@@ -73,6 +73,7 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
 
 fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
     PendingTrigger {
+        program: false,
         remembered: Vec::new(),
         source_card: source,
         source_ref: None,
@@ -200,6 +201,7 @@ fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
         bolt,
         vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+            exile: false,
         }],
         0,
     ));
@@ -223,6 +225,7 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
         vec![
             Effect::CounterSpell {
                 what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+                exile: false,
             },
             Effect::gain_life(7),
         ],
@@ -249,6 +252,7 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         vec![
             Effect::CounterSpell {
                 what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+                exile: false,
             },
             Effect::gain_life(7),
         ],
@@ -815,6 +819,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let mut delayed = trigger(
         source,
         vec![Effect::Move {
+            library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
             tapped: true,

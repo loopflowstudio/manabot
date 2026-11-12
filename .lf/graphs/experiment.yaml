@@ -1,0 +1,10 @@
+- experiment-design
+- xor:
+    router: experiment-tier
+    paths:
+      exploratory:
+        graph: experiment-exploratory
+        description: No result will be cited as a finding; the report ends the experiment
+      finding:
+        graph: experiment-finding
+        description: A result will be cited as a finding, which a person reviews against its prediction

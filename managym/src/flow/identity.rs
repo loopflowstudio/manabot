@@ -78,6 +78,16 @@ impl Game {
         Some(ObjectLki {
             transforms: permanent.transforms,
             inherited_from: self.inherited_definition_id(permanent_id),
+            granted_abilities: characteristics
+                .triggered_abilities
+                .iter()
+                .skip(if characteristics.abilities_lost {
+                    0
+                } else {
+                    definition.abilities.len()
+                })
+                .cloned()
+                .collect(),
             keywords: characteristics.keywords,
             creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
@@ -85,6 +95,7 @@ impl Game {
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             power: characteristics.power,
+            toughness: characteristics.toughness,
             counters: permanent.counters.clone(),
             object_ref,
             card,

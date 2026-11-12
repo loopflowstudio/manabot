@@ -25,6 +25,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.catalog import inspect_checkpoint
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import (
@@ -42,8 +43,12 @@ PACK = "elemental-world-v2"
 
 
 def test_exact_accepted_lists_match_inventory() -> None:
-    accepted = json.loads(Path("docs/rules/elemental/decks.json").read_text())
-    with Path("docs/rules/elemental/cube-snapshot.csv").open(newline="") as stream:
+    accepted = json.loads(
+        Path("tests/semantic/fixtures/elemental/decks.json").read_text()
+    )
+    with Path("tests/semantic/fixtures/elemental/cube-snapshot.csv").open(
+        newline=""
+    ) as stream:
         inventory = Counter(row["name"] for row in csv.DictReader(stream))
     basics = {"Plains", "Island", "Swamp", "Mountain", "Forest"}
     assert len(accepted["decks"]) == 10
@@ -137,7 +142,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
     }
-    policy, value = agent(tensors)
+    policy, value = agent(admit_observation(agent, tensors))
     legal = tensors["actions_valid"].bool()
     assert torch.isfinite(policy[legal]).all()
     assert torch.isfinite(value).all()
@@ -156,7 +161,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     assert summary.compatible
     assert len(summary.setups) == 10
     restored, _ = load_checkpoint(str(path))
-    restored_policy, restored_value = restored(tensors)
+    restored_policy, restored_value = restored(admit_observation(restored, tensors))
     torch.testing.assert_close(restored_policy, policy)
     torch.testing.assert_close(restored_value, value)
 
@@ -189,6 +194,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
                 streams=2,
                 transitions=8,
                 learning_seats="one",
+                batch_closure="exact-quota",
                 learning=Learning(epochs=1, minibatches=2, retained_fraction=1),
             )
         ],

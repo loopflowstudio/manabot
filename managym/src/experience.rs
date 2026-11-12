@@ -536,6 +536,9 @@ pub struct LegacyPlayerView {
     /// What this player has done this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Spells this player cast this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
@@ -599,6 +602,9 @@ pub struct StackEntryView {
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DecisionContextView {
+    /// Native pending execution, omitted on older recorded projections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending: Vec<String>,
     pub recent_facts: Vec<String>,
     pub actor: u8,
     pub stage: String,
@@ -685,7 +691,8 @@ impl LegacyHeroObservation {
     pub fn exposes_other_private_context(&self) -> bool {
         self.decision_context.as_ref().is_some_and(|context| {
             context.actor != self.agent.player_index
-                && (context.source.0.is_some()
+                && (!context.pending.is_empty()
+                    || context.source.0.is_some()
                     || !context.targets.is_empty()
                     || context.reserved_sacrifice.0.is_some()
                     || context.mana_cost.0.is_some()

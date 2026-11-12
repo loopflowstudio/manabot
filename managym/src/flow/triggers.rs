@@ -8,17 +8,16 @@ use crate::{
     flow::{
         event::{EventKind, GameEvent},
         game::Game,
-        statics::ScopeView,
         trigger::{
             DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
             TriggerPlacement,
         },
-        turn::StepKind,
+        turn::{Bending, StepKind},
     },
     state::{
         ability::{
-            Ability, DelayedFrequency, Effect, EffectValue, TargetSpec, TriggerCondition,
-            TriggerSubject,
+            Ability, AttackSize, DelayedFrequency, Effect, EffectValue, KeywordAction, Per,
+            TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::CardType,
         effect::{EffectDuration, Modification},
@@ -37,16 +36,17 @@ struct FiredTrigger {
     source: TriggerSourceSnapshot,
     ability_index: usize,
     granted: Option<Vec<Effect>>,
+    program: bool,
 }
 
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub(crate) struct TriggerSourceSnapshot {
-    card: CardId,
-    controller: PlayerId,
-    lki: ObjectLki,
+    pub(crate) card: CardId,
+    pub(crate) controller: PlayerId,
+    pub(crate) lki: ObjectLki,
 }
 
 /// A set of `EventKind`s, one bit per variant.
@@ -61,7 +61,11 @@ impl EventKinds {
     }
 
     fn contains(self, kind: EventKind) -> bool {
-        self.0 & Self::of(kind).0 != 0
+        self.intersects(Self::of(kind))
+    }
+
+    fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
     }
 }
 
@@ -86,41 +90,81 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
-        TriggerCondition::YouCastSpell { .. }
-        | TriggerCondition::YouCastNthSpellThisTurn { .. }
-        | TriggerCondition::PlayerCastsSpell { .. } => EventKinds::of(EventKind::SpellCast),
+        // Indexed with counter changes; `check_state_triggers` asks it, never
+        // an event.
+        TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
+        TriggerCondition::Casts { .. }
+        | TriggerCondition::YouCastThis
+        | TriggerCondition::SpellTargetsOnlyThis { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
         | TriggerCondition::Dies { .. }
         | TriggerCondition::LeavesTheBattlefield { .. } => EventKinds::of(EventKind::CardMoved),
-        TriggerCondition::Attacks { .. }
-        | TriggerCondition::AttacksWithAnother
-        | TriggerCondition::AttacksAlone { .. } => EventKinds::of(EventKind::AttackersDeclared),
-        TriggerCondition::OpponentSearchesLibrary => EventKinds::of(EventKind::LibrarySearched),
-        TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
-        | TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
+        TriggerCondition::Attacks { .. } => EventKinds::of(EventKind::AttackersDeclared),
+        TriggerCondition::Performs { any_of, .. } => {
+            any_of.iter().fold(EventKinds::NONE, |kinds, action| {
+                kinds | EventKinds::of(keyword_action_event(*action))
+            })
+        }
+        TriggerCondition::PutIntoGraveyard { .. } => EventKinds::of(EventKind::CardMoved),
+        TriggerCondition::DealsCombatDamage { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
         TriggerCondition::BecomesTapped { .. } | TriggerCondition::TappedForMana { .. } => {
             EventKinds::of(EventKind::PermanentTapped)
         }
         TriggerCondition::BecomesTargeted { .. } => EventKinds::of(EventKind::PermanentTargeted),
-        TriggerCondition::BeginningOfYourUpkeep
-        | TriggerCondition::BeginningOfEachUpkeep
-        | TriggerCondition::BeginningOfYourCombat
-        | TriggerCondition::BeginningOfYourEndStep
-        | TriggerCondition::BeginningOfYourFirstMainPhase => EventKinds::of(EventKind::StepStarted),
+        TriggerCondition::BeginningOf { .. } => EventKinds::of(EventKind::StepStarted),
         TriggerCondition::YourAttackingCreatureTriggers => {
             EventKinds::of(EventKind::AbilityTriggered)
         }
-        TriggerCondition::YouDrawNthCardThisTurn { .. }
-        | TriggerCondition::OpponentDrawsNthCardThisTurn { .. } => {
-            EventKinds::of(EventKind::CardDrawn)
-        }
-        TriggerCondition::YouPutCountersOnCreature { .. } | TriggerCondition::Chapter { .. } => {
+        TriggerCondition::Draws { .. } => EventKinds::of(EventKind::CardDrawn),
+        TriggerCondition::PutsCounters { .. } | TriggerCondition::Chapter { .. } => {
             EventKinds::of(EventKind::CountersPut)
         }
-        TriggerCondition::YouBend => EventKinds::of(EventKind::Bent),
-        TriggerCondition::YouScry => EventKinds::of(EventKind::Scried),
+    }
+}
+
+/// The event that reports a keyword action.
+fn keyword_action_event(action: KeywordAction) -> EventKind {
+    match action {
+        KeywordAction::Search => EventKind::LibrarySearched,
+        KeywordAction::Scry => EventKind::Scried,
+        KeywordAction::Surveil => EventKind::Surveilled,
+        KeywordAction::Waterbend
+        | KeywordAction::Earthbend
+        | KeywordAction::Firebend
+        | KeywordAction::Airbend => EventKind::Bent,
+    }
+}
+
+/// The player and keyword action an event reports, if it reports one.
+fn performed_action(event: &GameEvent) -> Option<(PlayerId, KeywordAction)> {
+    match event {
+        GameEvent::LibrarySearched { player } => Some((*player, KeywordAction::Search)),
+        GameEvent::Scried { player } => Some((*player, KeywordAction::Scry)),
+        GameEvent::Surveilled { player } => Some((*player, KeywordAction::Surveil)),
+        GameEvent::Bent { player, kind } => Some((
+            *player,
+            match kind {
+                Bending::Water => KeywordAction::Waterbend,
+                Bending::Earth => KeywordAction::Earthbend,
+                Bending::Fire => KeywordAction::Firebend,
+                Bending::Air => KeywordAction::Airbend,
+            },
+        )),
+        _ => None,
+    }
+}
+
+/// The trigger step a started step is, if abilities can watch its beginning.
+fn turn_step(step: StepKind) -> Option<TurnStep> {
+    match step {
+        StepKind::Upkeep => Some(TurnStep::Upkeep),
+        StepKind::Draw => Some(TurnStep::Draw),
+        StepKind::Main => Some(TurnStep::FirstMain),
+        StepKind::BeginningOfCombat => Some(TurnStep::Combat),
+        StepKind::End => Some(TurnStep::End),
+        _ => None,
     }
 }
 
@@ -148,7 +192,6 @@ struct TriggerSourceEntry {
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct TriggerIndex {
     sources: Vec<TriggerSourceEntry>,
-    granted: EventKinds,
 }
 
 impl Game {
@@ -702,6 +745,7 @@ impl Game {
         let targets = trigger.targets;
         self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+            program: trigger.program,
             remembered: trigger.remembered,
             source_transforms: trigger.source_lki.as_ref().map_or(0, |lki| lki.transforms),
             id,
@@ -756,6 +800,7 @@ impl Game {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
+            | TargetSpec::SpellMatching { .. }
             | TargetSpec::SpellOrPermanent { .. }
             | TargetSpec::CreatureOrSpell => self
                 .state
@@ -823,14 +868,24 @@ impl Game {
         }
     }
 
-    /// Process a simultaneous committed batch using the same pre-batch source
-    /// facts for every event. Matching only enqueues triggers, so the snapshot
-    /// remains immutable throughout collection.
-    pub(crate) fn process_game_events_with_sources(&mut self, sources: &[TriggerSourceSnapshot]) {
+    /// Departures look back to the whole pre-batch battlefield. Entry and
+    /// counter events see the completed battlefield, including every entrant.
+    pub(crate) fn process_event_batch(&mut self, before: &[TriggerSourceSnapshot]) {
         while !self.state.pending_events.is_empty() {
             let events = std::mem::take(self.state.pending_events_mut());
             for event in events {
-                self.check_triggers_for_event(&event, sources);
+                if matches!(
+                    event,
+                    GameEvent::CardMoved {
+                        from: Some(ZoneType::Battlefield),
+                        ..
+                    } | GameEvent::PermanentSacrificed { .. }
+                ) {
+                    self.check_triggers_for_event(&event, before);
+                } else {
+                    let sources = self.trigger_ability_sources(&event);
+                    self.check_triggers_for_event(&event, &sources);
+                }
             }
         }
     }
@@ -852,15 +907,17 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
+        self.cast_triggers(event);
         self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
-        for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
+        for source in sources {
             for (ability_index, ability) in self
                 .source_face(source.card, source.lki.definition_id)
                 .expect("source face")
                 .abilities
                 .iter()
                 .enumerate()
+                .filter(|_| !source.lki.abilities_lost)
             {
                 let Ability::Triggered {
                     condition,
@@ -889,17 +946,19 @@ impl Game {
                             source: source.clone(),
                             ability_index,
                             granted: None,
+                            program: false,
                         },
                         times,
                     ));
                 }
             }
-            for ability in self.granted_triggered_abilities(source) {
+            // Departure triggers use the grants captured at the event boundary.
+            for effective in &source.lki.granted_abilities {
                 let Ability::Triggered {
                     condition,
                     effects,
                     intervening_if,
-                } = ability;
+                } = &effective.ability;
                 if intervening_if.as_ref().is_some_and(|condition| {
                     !self.check_intervening_if(
                         condition,
@@ -910,12 +969,24 @@ impl Game {
                 }) {
                     continue;
                 }
-                let times = self.trigger_occurrences(&condition, source, event);
+                // Keep CR 603.4's second check in the captured program when
+                // there is no printed ability to recover at resolution.
+                let effects = if let Some(condition) = intervening_if {
+                    vec![Effect::If {
+                        condition: condition.clone(),
+                        then: effects.clone(),
+                        otherwise: Vec::new(),
+                    }]
+                } else {
+                    effects.clone()
+                };
+                let times = self.trigger_occurrences(condition, source, event);
                 fired.extend(std::iter::repeat_n(
                     FiredTrigger {
                         source: source.clone(),
                         ability_index: 0,
                         granted: Some(effects),
+                        program: effective.program,
                     },
                     times,
                 ));
@@ -926,6 +997,7 @@ impl Game {
             source,
             ability_index,
             granted,
+            program,
         } in fired
         {
             let TriggerSourceSnapshot {
@@ -967,8 +1039,17 @@ impl Game {
             };
             let player = match event {
                 GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
-                GameEvent::LibrarySearched { player } => Some(*player),
-                _ => None,
+                GameEvent::CardDrawn { player, .. } => Some(*player),
+                // "that player": whose graveyard the card was put into.
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                } => Some(self.state.cards[*card].owner),
+                // "that player": whose step it is.
+                GameEvent::StepStarted { .. } => Some(self.active_player()),
+                // "that player": who searched, scried, surveilled or bent.
+                _ => performed_action(event).map(|(player, _)| player),
             };
             // CR 107.3m: an entering permanent's own trigger sees its spell's
             // X; a counters trigger's X is how many were put ("that much").
@@ -990,7 +1071,7 @@ impl Game {
                     .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
                 _ => None,
             };
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1009,12 +1090,8 @@ impl Game {
                 chosen_modes: Vec::new(),
                 attacker,
                 inline_effects: granted,
+                program,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1062,41 +1139,6 @@ impl Game {
         }
     }
 
-    /// Triggered abilities static grants give the battlefield source
-    /// (CR 613.1f), in battlefield order of the granting permanents.
-    fn granted_triggered_abilities(&self, source: &TriggerSourceSnapshot) -> Vec<Ability> {
-        // Departure triggers read the inherited abilities from the captured
-        // battlefield object, before its effect records are removed.
-        let inherited = source
-            .lki
-            .inherited_from
-            .and_then(|id| crate::cards::content_pack::default_content_pack().definition(id));
-        let Ok(target) = self.lookup_current_permanent(source.lki.object_ref) else {
-            return inherited.map_or_else(Vec::new, |definition| definition.abilities.clone());
-        };
-        inherited
-            .into_iter()
-            .flat_map(|definition| definition.abilities.iter().cloned())
-            .chain(
-                self.static_sources()
-                    .into_iter()
-                    .flat_map(|(grantor, controller, card)| {
-                        card.triggered_grants()
-                            .filter(move |grant| {
-                                self.static_scope_applies(
-                                    &grant.scope,
-                                    grantor,
-                                    controller,
-                                    target,
-                                    ScopeView::Rules,
-                                )
-                            })
-                            .map(|grant| (*grant.ability).clone())
-                    }),
-            )
-            .collect()
-    }
-
     /// Extra occurrences of one of `source`'s triggered abilities: one for
     /// each permanent its controller controls whose "triggers an additional
     /// time" covers the source (CR 603.2d), as the source is or last was.
@@ -1104,11 +1146,17 @@ impl Game {
         let current = self.lookup_current_permanent(source.lki.object_ref).ok();
         let card = &self.state.cards[source.card];
         self.static_sources()
-            .into_iter()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
                 grantor
-                    .additional_trigger_predicates()
+                    .static_abilities
+                    .iter()
+                    .filter_map(|ability| match ability {
+                        crate::state::card::StaticAbility::TriggersAdditionalTime(predicate) => {
+                            Some(predicate)
+                        }
+                        _ => None,
+                    })
                     .filter(|predicate| match current {
                         Some(id) => self.permanent_matches_predicate(id, predicate),
                         None => predicate.matches_card_with_power(card, source.lki.power),
@@ -1233,6 +1281,15 @@ impl Game {
         .remembered = trigger.remembered.clone();
     }
 
+    /// A fresh identity for the trigger occurrence about to be enqueued.
+    fn next_trigger_id(&mut self) -> TriggerId {
+        let id = TriggerId(self.state.trigger_enqueue_counter);
+        *self.state.trigger_enqueue_counter_mut() =
+            id.0.checked_add(1)
+                .expect("trigger occurrence identity exhausted");
+        id
+    }
+
     /// Put an occurrence with inline effects (no `Card::abilities` entry to
     /// reference: a delayed, reflexive or granted-firebending ability) in the
     /// waiting list, with its source's last known information when that was
@@ -1252,8 +1309,9 @@ impl Game {
                     .flatten()
             })
         });
-        let id = TriggerId(self.state.trigger_enqueue_counter);
+        let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
+            program: false,
             remembered: Vec::new(),
             targets: Vec::new(),
             target_req_indices: Vec::new(),
@@ -1272,15 +1330,112 @@ impl Game {
             attacker: None,
             inline_effects: Some(effects),
         });
-        *self.state.trigger_enqueue_counter_mut() = self
-            .state
-            .trigger_enqueue_counter
-            .checked_add(1)
-            .expect("trigger occurrence identity exhausted");
         self.state
             .pending_triggers_mut()
             .last_mut()
             .expect("enqueued trigger")
+    }
+
+    /// State triggers (CR 603.8) of battlefield sources whose state holds,
+    /// unless that exact source's occurrence is still waiting or on the stack.
+    pub(crate) fn check_state_triggers(&mut self) {
+        let mut fired = Vec::new();
+        for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
+            let Some(permanent) = self.state.card_to_permanent[source.card]
+                .and_then(|id| self.state.permanents[id].as_ref())
+            else {
+                continue;
+            };
+            let face = self
+                .source_face(source.card, source.lki.definition_id)
+                .expect("source face");
+            for (ability_index, ability) in face.abilities.iter().enumerate() {
+                let Ability::Triggered {
+                    condition: TriggerCondition::NoCounters { kind },
+                    ..
+                } = ability
+                else {
+                    continue;
+                };
+                let object = Some(source.lki.object_ref);
+                let waiting = self.state.pending_triggers.iter().any(|trigger| {
+                    trigger.source_ref == object && trigger.ability_index == ability_index
+                }) || self.state.stack_objects.iter().any(|item| {
+                    matches!(item, StackObject::TriggeredAbility(trigger)
+                        if trigger.source_ref == object && trigger.ability_index == ability_index)
+                });
+                if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
+                    fired.push((source.clone(), ability_index));
+                }
+            }
+        }
+        for (source, ability_index) in fired {
+            let id = self.next_trigger_id();
+            self.state.pending_triggers_mut().push(PendingTrigger {
+                program: false,
+                remembered: Vec::new(),
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+                requirement_index: 0,
+                source_card: source.card,
+                source_ref: Some(source.lki.object_ref),
+                source_lki: Some(source.lki),
+                ability_index,
+                controller: source.controller,
+                id,
+                ordering_class: TriggerOrderingClass::Ordinary,
+                context: None,
+                player: None,
+                x: 0,
+                chosen_modes: Vec::new(),
+                attacker: None,
+                inline_effects: None,
+            });
+        }
+    }
+
+    /// "When you cast this spell" abilities of the spell just cast; the spell
+    /// is the source and its caster controls the trigger.
+    fn cast_triggers(&mut self, event: &GameEvent) {
+        let GameEvent::SpellCast { card, .. } = event else {
+            return;
+        };
+        let card = *card;
+        let caster = self.spell_caster(card);
+        let fired: Vec<Vec<Effect>> = self.state.cards[card]
+            .abilities
+            .iter()
+            .filter(|ability| {
+                let Ability::Triggered { condition, .. } = ability;
+                *condition == TriggerCondition::YouCastThis
+            })
+            .map(|ability| ability.effects().to_vec())
+            .collect();
+        let source_ref = self.current_object_ref(card);
+        for effects in fired {
+            self.enqueue_inline_trigger(card, source_ref, caster, effects, None);
+        }
+        // CR 702.56a: replicate copies the spell once per payment, each copy
+        // with a chance to choose new targets.
+        let replicated = match self
+            .find_spell_on_stack_index(card)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) if self.state.cards[card].replicate().is_some() => {
+                usize::from(spell.x)
+            }
+            _ => 0,
+        };
+        if replicated > 0 {
+            let copies = vec![Effect::CopyTriggeringObject; replicated];
+            self.enqueue_inline_trigger(
+                card,
+                source_ref,
+                caster,
+                copies,
+                Some(Target::StackSpell(card)),
+            );
+        }
     }
 
     /// Abilities that function from their owner's graveyard (CR 113.6k):
@@ -1306,8 +1461,9 @@ impl Game {
         }
         for (card, ability_index, owner) in fired {
             let source_ref = self.current_object_ref(card);
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
+                program: false,
                 remembered: Vec::new(),
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -1326,32 +1482,33 @@ impl Game {
                 attacker: None,
                 inline_effects: None,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
-    /// Cards whose triggered abilities can see this event: every permanent on
-    /// the battlefield, plus — for zone changes — the moved card itself, so
-    /// that leave-the-battlefield abilities look back in time (CR 603.6c).
+    /// The sources whose abilities can see a battlefield departure or a
+    /// sacrifice, as they exist before the event: the indexed permanents with a
+    /// printed or granted ability of those kinds, including a departing
+    /// object's own, so leave-the-battlefield abilities look back in time
+    /// (CR 603.6c, 603.10a).
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
-        let grants = self
-            .static_sources()
-            .into_iter()
-            .any(|(_, _, card)| card.triggered_grants().next().is_some());
-        let mut sources: Vec<_> = self
-            .state
-            .permanents
+        self.indexed_sources(
+            EventKinds::of(EventKind::CardMoved) | EventKinds::of(EventKind::PermanentSacrificed),
+        )
+    }
+
+    /// Current snapshots of the indexed permanents with an ability of any of
+    /// `kinds`, in object order.
+    fn indexed_sources(&self, kinds: EventKinds) -> Vec<TriggerSourceSnapshot> {
+        let index = self.trigger_index();
+        let mut sources: Vec<_> = index
+            .sources
             .iter()
-            .flatten()
-            .filter(|permanent| grants || !self.state.cards[permanent.card].abilities.is_empty())
-            .filter_map(|permanent| {
-                self.snapshot_current_permanent(permanent.card)
+            .filter(|entry| entry.kinds.intersects(kinds))
+            .filter_map(|entry| {
+                let permanent = self.state.permanents[entry.permanent].as_ref()?;
+                self.snapshot_current_permanent(entry.card)
                     .map(|lki| TriggerSourceSnapshot {
-                        card: permanent.card,
+                        card: entry.card,
                         controller: permanent.controller,
                         lki,
                     })
@@ -1361,8 +1518,8 @@ impl Game {
         sources
     }
 
-    /// The trigger index at the current `triggers` revision, built once per
-    /// revision.
+    /// Trigger candidates at the current source and characteristic revisions.
+    /// Layered grants/conditions can change the event kinds without a zone move.
     fn trigger_index(&self) -> Arc<TriggerIndex> {
         let revisions = self.state.revisions();
         let cached = self
@@ -1381,40 +1538,30 @@ impl Game {
     }
 
     fn build_trigger_index(&self) -> TriggerIndex {
-        let granted = self
-            .static_sources()
-            .into_iter()
-            .flat_map(|(_, _, card)| card.triggered_grants())
-            .fold(EventKinds::NONE, |kinds, grant| {
-                kinds | ability_event_kinds(&grant.ability)
-            });
         let mut sources: Vec<TriggerSourceEntry> = self
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter_map(|(slot, permanent)| {
-                let permanent = permanent.as_ref()?;
-                let inherited = self
-                    .inherited_definition(PermanentId(slot))
-                    .map_or(&[][..], |definition| definition.abilities.as_slice());
-                Some(TriggerSourceEntry {
-                    permanent: PermanentId(slot),
+            .layer_views(
+                (0..self.state.permanents.len())
+                    .map(PermanentId)
+                    .filter(|&id| !self.is_phased_out(id)),
+            )
+            .map(|(id, view)| {
+                let permanent = self.state.permanents[id].as_ref().unwrap();
+                TriggerSourceEntry {
+                    permanent: id,
                     card: permanent.card,
-                    kinds: self.state.cards[permanent.card]
-                        .abilities
+                    kinds: view
+                        .triggered_abilities
                         .iter()
-                        .chain(inherited)
                         .fold(EventKinds::NONE, |kinds, ability| {
-                            kinds | ability_event_kinds(ability)
+                            kinds | ability_event_kinds(&ability.ability)
                         }),
-                })
+                }
             })
             .collect();
         // Object order (a battlefield card has one current object, so its
         // entity orders it): the order the fired triggers are numbered in.
         sources.sort_by_key(|entry| entry.card);
-        TriggerIndex { sources, granted }
+        TriggerIndex { sources }
     }
 
     /// The sources whose abilities can see `event`: the indexed permanents
@@ -1422,22 +1569,7 @@ impl Game {
     /// `snapshot_trigger_sources` reads, less sources nothing could fire
     /// for), plus a moved card's last battlefield object.
     fn trigger_ability_sources(&self, event: &GameEvent) -> Vec<TriggerSourceSnapshot> {
-        let kind = event.kind();
-        let index = self.trigger_index();
-        let mut sources: Vec<TriggerSourceSnapshot> = index
-            .sources
-            .iter()
-            .filter(|entry| (entry.kinds | index.granted).contains(kind))
-            .filter_map(|entry| {
-                let permanent = self.state.permanents[entry.permanent].as_ref()?;
-                self.snapshot_current_permanent(entry.card)
-                    .map(|lki| TriggerSourceSnapshot {
-                        card: entry.card,
-                        controller: permanent.controller,
-                        lki,
-                    })
-            })
-            .collect();
+        let mut sources = self.indexed_sources(EventKinds::of(event.kind()));
 
         if let GameEvent::CardMoved {
             card, controller, ..
@@ -1482,9 +1614,6 @@ impl Game {
                         event,
                     )
             }
-            (TriggerCondition::OpponentSearchesLibrary, GameEvent::LibrarySearched { player }) => {
-                *player != source_controller
-            }
             (TriggerCondition::FromZone { zone, condition }, _) => {
                 self.event_origin(event) == Some(*zone)
                     && self.trigger_condition_fires(
@@ -1503,27 +1632,16 @@ impl Game {
                 event,
             ),
             (
-                TriggerCondition::Sacrificed {
-                    predicate,
-                    controller_only,
-                    another,
-                },
+                TriggerCondition::Sacrificed { subject },
                 GameEvent::PermanentSacrificed { card, controller },
-            ) => {
-                (!controller_only || *controller == source_controller)
-                    && !(*another && *card == source_card)
-                    && self.state.card_to_permanent[*card]
-                        .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
-            }
-            (
-                TriggerCondition::BeginningOfEachUpkeep,
-                GameEvent::StepStarted {
-                    step: StepKind::Upkeep,
-                },
-            ) => true,
-            (TriggerCondition::YouBend, GameEvent::Bent { player, .. }) => {
-                *player == source_controller
-            }
+            ) => self.subject_matches_moved_card(
+                subject,
+                source_card,
+                source_controller,
+                source_was_on_battlefield,
+                *card,
+                *controller,
+            ),
             (TriggerCondition::WhileSourceAttacking { condition }, _) => {
                 self.state.card_to_permanent[source_card]
                     .and_then(|id| self.state.permanents[id].as_ref())
@@ -1536,36 +1654,20 @@ impl Game {
                         event,
                     )
             }
+            // `check_state_triggers` and `cast_triggers` own these; a
+            // battlefield source never fires them from an event.
+            (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
             (
-                TriggerCondition::YouCastNthSpellThisTurn { n },
+                TriggerCondition::SpellTargetsOnlyThis { predicate },
                 GameEvent::SpellCast { card, .. },
             ) => {
-                self.spell_caster(*card) == source_controller
-                    && self.state.turn.spells_cast[source_controller.0]
-                        .iter()
-                        .position(|cast| cast == card)
-                        == Some(*n as usize - 1)
-            }
-            (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
-                self.spell_caster(*card) == source_controller
-                    && self.card_matches_predicate(*card, predicate)
-            }
-            (
-                TriggerCondition::PlayerCastsSpell { predicate },
-                GameEvent::SpellCast { card, .. },
-            ) => self.card_matches_predicate(*card, predicate),
-            (
-                TriggerCondition::AttacksWithAnother,
-                GameEvent::AttackersDeclared { attackers, .. },
-            ) => {
-                attackers.len() >= 2
-                    && self
-                        .state
-                        .card_to_permanent
-                        .get(source_card.0)
-                        .copied()
-                        .flatten()
-                        .is_some_and(|permanent_id| attackers.contains(&permanent_id))
+                let this = self.state.card_to_permanent[source_card].map(Target::Permanent);
+                self.card_matches_predicate(*card, predicate)
+                    && this.is_some()
+                    && self.find_spell_on_stack_index(*card).is_some_and(|index| {
+                        let targets = self.state.stack_objects[index].targets();
+                        !targets.is_empty() && targets.iter().all(|target| Some(*target) == this)
+                    })
             }
             // Conditionally-granted abilities: the ability only exists (and
             // so only triggers) while the condition holds for its
@@ -1644,84 +1746,11 @@ impl Game {
                 *card,
                 *controller,
             ),
-            (
-                TriggerCondition::Attacks { subject },
-                GameEvent::AttackersDeclared { player, attackers },
-            ) => match subject {
-                TriggerSubject::This => self
-                    .state
-                    .card_to_permanent
-                    .get(source_card.0)
-                    .copied()
-                    .flatten()
-                    .is_some_and(|permanent_id| attackers.contains(&permanent_id)),
-                TriggerSubject::AnotherYouControl(predicate) => {
-                    *player == source_controller
-                        && attackers.iter().any(|attacker| {
-                            self.permanent_is_other(*attacker, source_card)
-                                && self.permanent_matches_predicate(*attacker, predicate)
-                        })
-                }
-                TriggerSubject::AnyYouControl(predicate) => {
-                    *player == source_controller
-                        && attackers
-                            .iter()
-                            .any(|attacker| self.permanent_matches_predicate(*attacker, predicate))
-                }
-                TriggerSubject::EnchantedCreature => attackers
-                    .iter()
-                    .any(|attacker| self.is_enchanted_by(*attacker, source_card)),
-                TriggerSubject::Another(predicate) => attackers.iter().any(|attacker| {
-                    self.permanent_is_other(*attacker, source_card)
-                        && self.permanent_matches_predicate(*attacker, predicate)
-                }),
-            },
-            (
-                TriggerCondition::AttacksAlone { subject },
-                GameEvent::AttackersDeclared { player, attackers },
-            ) => {
-                let [attacker] = attackers.as_slice() else {
-                    return false;
-                };
-                match subject {
-                    TriggerSubject::This => self
-                        .state
-                        .card_to_permanent
-                        .get(source_card.0)
-                        .copied()
-                        .flatten()
-                        .is_some_and(|permanent_id| permanent_id == *attacker),
-                    TriggerSubject::AnotherYouControl(predicate) => {
-                        *player == source_controller
-                            && self.permanent_is_other(*attacker, source_card)
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                    TriggerSubject::AnyYouControl(predicate) => {
-                        *player == source_controller
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                    TriggerSubject::EnchantedCreature => {
-                        self.is_enchanted_by(*attacker, source_card)
-                    }
-                    TriggerSubject::Another(predicate) => {
-                        self.permanent_is_other(*attacker, source_card)
-                            && self.permanent_matches_predicate(*attacker, predicate)
-                    }
-                }
-            }
-            (
-                TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
+            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
+            | (
+                TriggerCondition::DealsCombatDamage { .. },
                 GameEvent::CombatDamageToPlayers { .. },
             ) => self.trigger_multiplicity(condition, source_card, source_controller, event) > 0,
-            (
-                TriggerCondition::OneOrMoreDealCombatDamageToPlayer { predicate },
-                GameEvent::CombatDamageToPlayers { creatures },
-            ) => creatures.iter().any(|creature| {
-                self.state.permanents[*creature]
-                    .as_ref()
-                    .is_some_and(|permanent| permanent.controller == source_controller)
-                    && self.permanent_matches_predicate(*creature, predicate)
-            }),
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },
@@ -1756,37 +1785,6 @@ impl Game {
                     )
             }
             (
-                TriggerCondition::BeginningOfYourCombat,
-                GameEvent::StepStarted {
-                    step: StepKind::BeginningOfCombat,
-                },
-            ) => self.active_player() == source_controller,
-            (
-                TriggerCondition::BeginningOfYourUpkeep,
-                GameEvent::StepStarted {
-                    step: StepKind::Upkeep,
-                },
-            )
-            | (
-                TriggerCondition::BeginningOfYourEndStep,
-                GameEvent::StepStarted {
-                    step: StepKind::End,
-                },
-            )
-            | (
-                TriggerCondition::BeginningOfYourFirstMainPhase,
-                GameEvent::StepStarted {
-                    step: StepKind::Main,
-                },
-            ) => self.active_player() == source_controller,
-            (
-                TriggerCondition::YouDrawNthCardThisTurn { n },
-                GameEvent::CardDrawn {
-                    player,
-                    nth_this_turn,
-                },
-            ) => *player == source_controller && nth_this_turn == n,
-            (
                 TriggerCondition::YourAttackingCreatureTriggers,
                 GameEvent::AbilityTriggered {
                     controller,
@@ -1798,9 +1796,6 @@ impl Game {
                     && self.state.permanents[*attacker]
                         .as_ref()
                         .is_some_and(|permanent| permanent.controller == source_controller)
-            }
-            (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
-                *player == source_controller
             }
             (
                 TriggerCondition::Chapter { chapter },
@@ -1818,7 +1813,7 @@ impl Game {
                     && chapter <= *total
             }
             (
-                TriggerCondition::YouPutCountersOnCreature { kind },
+                TriggerCondition::PutsCounters { who, kind, on },
                 GameEvent::CountersPut {
                     permanent,
                     kind: put,
@@ -1827,16 +1822,62 @@ impl Game {
                 },
             ) => {
                 put == kind
-                    && *by == source_controller
-                    && self.permanent_is_battlefield_creature(*permanent)
+                    && who.includes(source_controller, *by)
+                    && self.state.permanents[*permanent].is_some()
+                    && self.permanent_matches_predicate(*permanent, on)
             }
             (
-                TriggerCondition::OpponentDrawsNthCardThisTurn { n },
+                TriggerCondition::Casts {
+                    who,
+                    predicate,
+                    nth,
+                },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                let caster = self.spell_caster(*card);
+                who.includes(source_controller, caster)
+                    && self.card_matches_predicate(*card, predicate)
+                    && nth.is_none_or(|n| {
+                        self.state.turn.spells_cast[caster.0]
+                            .iter()
+                            .position(|cast| cast == card)
+                            == Some(n as usize - 1)
+                    })
+            }
+            (
+                TriggerCondition::Draws { who, nth },
                 GameEvent::CardDrawn {
                     player,
                     nth_this_turn,
                 },
-            ) => *player != source_controller && nth_this_turn == n,
+            ) => {
+                who.includes(source_controller, *player) && nth.is_none_or(|n| n == *nth_this_turn)
+            }
+            (
+                TriggerCondition::BeginningOf { step, whose },
+                GameEvent::StepStarted { step: started },
+            ) => {
+                turn_step(*started) == Some(*step)
+                    && whose.includes(source_controller, self.active_player())
+            }
+            (TriggerCondition::Performs { who, any_of }, _) => {
+                performed_action(event).is_some_and(|(player, action)| {
+                    who.includes(source_controller, player) && any_of.contains(&action)
+                })
+            }
+            (
+                TriggerCondition::PutIntoGraveyard { whose, predicate },
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                },
+            ) => {
+                let moved = &self.state.cards[*card];
+                !moved.is_token
+                    && whose.includes(source_controller, moved.owner)
+                    && self.card_matches_predicate(*card, predicate)
+            }
             _ => false,
         }
     }
@@ -1859,8 +1900,8 @@ impl Game {
     }
 
     /// How many times one event triggers a matching ability: once, except
-    /// "whenever a creature ... deals combat damage to a player", which
-    /// triggers for each creature that did (CR 603.2c).
+    /// attacks and combat damage `per` object, which trigger for each
+    /// matching creature (CR 603.2c).
     fn trigger_multiplicity(
         &self,
         condition: &TriggerCondition,
@@ -1868,22 +1909,48 @@ impl Game {
         source_controller: PlayerId,
         event: &GameEvent,
     ) -> usize {
-        match (condition, event) {
+        let (subject, per, creatures) = match (condition, event) {
             (
-                TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
+                TriggerCondition::DealsCombatDamage { subject, to, per },
                 GameEvent::CombatDamageToPlayers { creatures },
-            ) => creatures
-                .iter()
-                .filter(|creature| {
-                    self.subject_matches_permanent(
-                        subject,
-                        source_card,
-                        source_controller,
-                        **creature,
-                    )
-                })
-                .count(),
-            _ => 1,
+            ) => {
+                // In the two-seat combat model only the defending player, the
+                // active player's opponent, receives combat damage.
+                let defender = PlayerId(1 - self.active_player().0);
+                if !to.includes(source_controller, defender) {
+                    return 0;
+                }
+                (subject, per, creatures)
+            }
+            (
+                TriggerCondition::Attacks {
+                    subject,
+                    per,
+                    attackers: size,
+                },
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                let size_holds = match size {
+                    AttackSize::Any => true,
+                    AttackSize::Alone => attackers.len() == 1,
+                    AttackSize::WithAnother => attackers.len() >= 2,
+                };
+                if !size_holds {
+                    return 0;
+                }
+                (subject, per, attackers)
+            }
+            _ => return 1,
+        };
+        let matching = creatures
+            .iter()
+            .filter(|creature| {
+                self.subject_matches_permanent(subject, source_card, source_controller, **creature)
+            })
+            .count();
+        match per {
+            Per::Object => matching,
+            Per::Batch => usize::from(matching > 0),
         }
     }
 
@@ -1914,19 +1981,15 @@ impl Game {
         };
         match subject {
             TriggerSubject::This => moved_card == source_card,
-            TriggerSubject::AnotherYouControl(predicate) => {
-                moved_card != source_card
-                    && moved_controller == source_controller
-                    && source_was_on_battlefield
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                source_was_on_battlefield
+                    && controlled_by.includes(source_controller, moved_controller)
+                    && !(*another && moved_card == source_card)
                     && matches(predicate)
-            }
-            TriggerSubject::AnyYouControl(predicate) => {
-                moved_controller == source_controller
-                    && source_was_on_battlefield
-                    && matches(predicate)
-            }
-            TriggerSubject::Another(predicate) => {
-                moved_card != source_card && source_was_on_battlefield && matches(predicate)
             }
             // The Aura is still attached to the departed object as the
             // event is matched (CR 603.10a).
@@ -1951,18 +2014,14 @@ impl Game {
         };
         match subject {
             TriggerSubject::This => permanent.card == source_card,
-            TriggerSubject::AnotherYouControl(predicate) => {
-                permanent.card != source_card
-                    && permanent.controller == source_controller
-                    && self.permanent_matches_predicate(permanent_id, predicate)
-            }
-            TriggerSubject::AnyYouControl(predicate) => {
-                permanent.controller == source_controller
-                    && self.permanent_matches_predicate(permanent_id, predicate)
-            }
             TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_card),
-            TriggerSubject::Another(predicate) => {
-                permanent.card != source_card
+            TriggerSubject::Matching {
+                controlled_by,
+                predicate,
+                another,
+            } => {
+                controlled_by.includes(source_controller, permanent.controller)
+                    && !(*another && permanent.card == source_card)
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
         }
@@ -1973,12 +2032,6 @@ impl Game {
     fn is_enchanted_by(&self, permanent_id: PermanentId, aura: CardId) -> bool {
         self.state.card_to_permanent[aura].and_then(|aura| self.attached_permanent(aura))
             == Some(permanent_id)
-    }
-
-    fn permanent_is_other(&self, permanent_id: PermanentId, source_card: CardId) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|permanent| permanent.card != source_card)
     }
 }
 

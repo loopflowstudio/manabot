@@ -3,7 +3,7 @@ use std::{collections::BTreeSet, fmt, sync::Arc};
 use super::{
     ability::{
         effect_target_requirements, Ability, Condition, Effect, EffectValue, PaymentCost,
-        TargetRequirement, TargetSpec, TriggerCondition,
+        TargetRequirement, TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -20,7 +20,9 @@ use super::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct CardDefId(pub u32);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+#[derive(
+    Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum CardType {
     Creature,
     Instant,
@@ -282,18 +284,21 @@ pub enum PowerCda {
     CreaturesYouControl,
     /// "This creature's power is equal to the number of [predicate] cards
     /// in your graveyard." (Dragonfly Swarm: noncreature, nonland.)
-    GraveyardMatching(CardPredicate),
+    GraveyardMatching(Box<CardPredicate>),
 }
 
 /// Which battlefield permanents a static P/T buff applies to.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticScope {
+    /// Every matching permanent, regardless of controller.
+    All(CardPredicate),
+    /// Every matching permanent except the source, regardless of controller.
+    Other(CardPredicate),
     /// The source permanent itself ("This creature gets +1/+1 as long as
     /// ..." — First-Time Flyer).
     This,
     /// "Other [predicate] you control" (anthem — White Lotus
-    /// Reinforcements). Matched against printed characteristics (no
-    /// power predicates, to keep P/T computation non-recursive).
+    /// Reinforcements). Predicates read the current layer context.
     OtherYouControl(CardPredicate),
     /// "[predicate] you control", including the source (Air Nomad Legacy's
     /// "creatures you control with flying", Badgermole's "with +1/+1
@@ -335,9 +340,8 @@ pub struct StaticPtBuff {
 /// addition to their other types [as long as condition]" (Toph, the First
 /// Metalbender; War Balloon's "as long as it has three or more fire counters
 /// on it, it's an artifact creature"). It grants no abilities. Scopes read
-/// printed types only, and the condition is asked of the source permanent
-/// (its counters, its controller's permanents), so type computation never
-/// recurses.
+/// the current layer context, and the condition is asked of the source
+/// permanent. Dependency ordering accounts for changes to those reads.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticTypeGrant {
     pub scope: StaticScope,
@@ -370,8 +374,8 @@ pub struct SetCharacteristics {
 
 /// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
 /// [as long as condition]". Applies only while the source is on the
-/// battlefield. Scopes read printed characteristics, counters and
-/// non-static keywords, so keyword computation never recurses.
+/// battlefield. Scopes read the current layer context; dependency ordering
+/// accounts for another effect changing their matches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticKeywordGrant {
     pub scope: StaticScope,
@@ -429,10 +433,8 @@ pub enum Restriction {
 /// Declarative replacement/prevention effects supported by the curated
 /// proposed-event slice (CR 614-616).
 ///
-/// This is intentionally not a general replacement language. The event
-/// pipeline applies matching definitions once in deterministic source order;
-/// unsupported affected-player ordering choices are documented alongside the
-/// pipeline.
+/// The event pipeline rechecks applicability after each replacement and retains
+/// each exact source/definition identity so it applies once per event.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ReplacementEffect {
     /// Prevent `amount` damage that would be dealt to this permanent's
@@ -457,6 +459,8 @@ pub enum ReplacementEffect {
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
     EntersWithXCounters { kind: CounterKind },
+    /// This object enters with `count` counters of `kind` (CR 614.1c).
+    EntersWithCounters { kind: CounterKind, count: i32 },
     /// Damage a source this permanent's controller controls would deal to
     /// an opponent or a permanent an opponent controls is increased by the
     /// number of `kind` counters on this permanent (CR 614.1a).
@@ -465,56 +469,118 @@ pub enum ReplacementEffect {
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
     UnspentManaBecomesRed,
+    /// Replace a positive placement on a matching permanent you control with
+    /// `count * multiplier + additional` counters. Entry counters are placements
+    /// too (CR 122.6). `None` matches every counter kind.
+    ModifyCounters {
+        /// Only placements caused by effects, including replacement effects
+        /// applied to an original cost or turn action (CR 614.16).
+        effects_only: bool,
+        kind: Option<CounterKind>,
+        predicate: CardPredicate,
+        multiplier: i32,
+        additional: i32,
+    },
+    /// Replace a logical creation under your control, before any token enters
+    /// (CR 616.1g). Entry and copy terms belong to every resulting token.
+    MultiplyTokens { multiplier: i32 },
+    /// "You may have this creature enter as a copy of [a creature in
+    /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
+    /// controller chooses before the move commits, and the copy's own entry
+    /// replacements then apply (CR 614.12, 616.1c). `exceptions` become part
+    /// of the copiable values ("except it has this card's other abilities",
+    /// CR 707.9b). It leaves the battlefield as its printed card.
+    EntersAsCopy {
+        scope: crate::ability::Scope,
+        predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        exceptions: Vec<crate::effect::Modification>,
+    },
 }
 
-/// A fixed mana mode has exactly one production effect and no other work.
-fn fixed_mana_output(effects: &[Effect]) -> Option<&Mana> {
-    match effects {
-        [Effect::AddMana {
-            mana,
-            amount: EffectValue::Fixed(1),
-            until_end_of_combat: false,
-        }] => Some(mana),
-        _ => None,
-    }
+/// A mana ability's later instruction: it adds no mana and targets nothing
+/// (CR 605.1a), so the ability stays a mana ability and resolves at once.
+fn is_mana_suffix_effect(effect: &Effect) -> bool {
+    !matches!(
+        effect,
+        Effect::AddMana { .. }
+            | Effect::AddOneColorManaValue { .. }
+            | Effect::Modal { .. }
+            | Effect::If { .. }
+    ) && effect.target_spec().is_none()
 }
 
 impl ActivatedAbilityDefinition {
-    /// Structural mana-ability classification, independent of current output.
-    pub fn is_mana_ability(&self) -> bool {
-        match self.effects.as_slice() {
-            [Effect::Modal { modes }] => modes
-                .iter()
-                .all(|effects| fixed_mana_output(effects).is_some()),
-            [Effect::AddOneColorManaValue { .. }] => true,
-            [Effect::If { then, otherwise, .. }] => [then, otherwise].iter().all(|branch| {
-                matches!(branch.as_slice(), [Effect::AddMana { until_end_of_combat: false, .. }])
-            }),
-            effects => fixed_mana_output(effects).is_some(),
-        }
-    }
-
+    /// The outputs of a mana ability (CR 605.1a): an untargeted activation
+    /// whose leading effect adds one of these mana, optionally followed by
+    /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
+    /// for an ability that uses the stack.
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        match self.effects.as_slice() {
-            [Effect::Modal { modes }] => modes
+        let (effect, suffix) = self.effects.split_first()?;
+        if !suffix.iter().all(is_mana_suffix_effect) {
+            return None;
+        }
+        match effect {
+            Effect::AddMana {
+                mana,
+                amount: EffectValue::Fixed(1),
+                until_end_of_combat: false,
+            } => Some(vec![mana.clone()]),
+            Effect::Modal { modes } => modes
                 .iter()
-                .map(|effects| fixed_mana_output(effects).cloned())
+                .map(|effects| match effects.as_slice() {
+                    [Effect::AddMana {
+                        mana,
+                        amount: EffectValue::Fixed(1),
+                        until_end_of_combat: false,
+                    }] => Some(mana.clone()),
+                    _ => None,
+                })
                 .collect(),
-            effects => fixed_mana_output(effects).map(|mana| vec![mana.clone()]),
+            _ => None,
         }
     }
 
-    /// The activation's targeting clause (CR 602.2b, 601.2c); activated
-    /// abilities have at most one.
-    pub fn target_requirement(&self) -> Option<TargetRequirement> {
-        self.target_spec()?;
-        effect_target_requirements(&self.effects).into_iter().next()
+    /// What a mana ability does besides adding mana ("You gain 2 life"),
+    /// resolving with it, off the stack, once per activation (CR 605.3b).
+    /// Empty for an ability that is not a mana ability.
+    pub fn mana_suffix(&self) -> &[Effect] {
+        match self.mana_choices() {
+            Some(_) => &self.effects[1..],
+            None => &[],
+        }
+    }
+
+    /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
+    /// Of several clauses each names a fixed number of targets, so a target's
+    /// position names its clause (`target_clause_indices`).
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        if self.target_spec().is_none() {
+            return Vec::new();
+        }
+        effect_target_requirements(&self.effects)
     }
 
     /// The activation cannot proceed without choosing a target.
     pub fn requires_target(&self) -> bool {
-        self.target_requirement()
-            .is_some_and(|requirement| requirement.min > 0)
+        self.target_requirements()
+            .iter()
+            .any(|requirement| requirement.min > 0)
+    }
+
+    /// The clause of each of the first `count` chosen targets; empty for a
+    /// single clause, whose targets are all clause 0.
+    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
+        let requirements = self.target_requirements();
+        if requirements.len() < 2 {
+            return Vec::new();
+        }
+        requirements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
+            .take(count)
+            .collect()
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
@@ -562,11 +628,25 @@ pub struct AbilityGrant {
     pub index: usize,
 }
 
-/// A choice of distinct untapped permanents, paid without tapping for mana.
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+/// A chosen set of distinct untapped permanents, not a source {T} symbol.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TapCost {
     pub predicate: CardPredicate,
-    pub count: u8,
+    pub count: usize,
+}
+
+impl serde::Serialize for TapCost {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Preserve existing single-object definition digests and learning tokens.
+        if self.count == 1 {
+            return self.predicate.serialize(serializer);
+        }
+        use serde::ser::SerializeStruct;
+        let mut cost = serializer.serialize_struct("TapCost", 2)?;
+        cost.serialize_field("predicate", &self.predicate)?;
+        cost.serialize_field("count", &self.count)?;
+        cost.end()
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -602,6 +682,10 @@ pub struct ActivatedAbilityDefinition {
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
+    /// "Activate only ... before attackers are declared": before the turn's
+    /// declare attackers step.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -638,10 +722,33 @@ pub struct SpellCostReduction {
     pub generic: u8,
 }
 
-/// A static ability (CR 604). The engine applies each by matching its
-/// variant; unless noted, it functions while its card is on the battlefield.
+/// A P/T amount read from the current layer context for an affected object.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LayerValue {
+    Fixed(i32),
+    /// The affected object's mana value (Opalescence, March of the Machines).
+    ManaValue,
+    /// Distinct card types among cards in all graveyards (Tarmogoyf).
+    GraveyardCardTypes {
+        offset: i32,
+    },
+}
+
+/// One static effect: once its first part applies, later layers retain its
+/// affected objects even if its generating ability disappears (CR 613.6).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticContinuous {
+    pub scope: StaticScope,
+    pub condition: Option<Condition>,
+    pub characteristic_defining: bool,
+    pub modifications: Vec<crate::effect::Modification<LayerValue>>,
+}
+
+/// A static ability (CR 604), interpreted by the rules engine.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum StaticAbility {
+    /// One continuous effect whose parts may apply in different layers.
+    Continuous(StaticContinuous),
     /// "During your turn, spells in your graveyard have flashback": a Lesson's
     /// flashback cost is {1}, any other spell's is its mana cost (Iroh, Grand
     /// Lotus).
@@ -664,9 +771,20 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] you control"
     /// (CR 601.2f); functions while casting, generic floor 0.
     CostsLessPerPermanent(CardPredicate),
+    /// "This spell can't be countered" (CR 101.2): an effect that would
+    /// counter it does nothing to it; it may still be targeted, and still
+    /// leaves the stack when all its targets are illegal (CR 608.2b).
+    CantBeCountered,
+    /// "This spell costs {1} less to cast for each [predicate] on the
+    /// battlefield", whoever controls them (Blasphemous Act); generic floor 0.
+    CostsLessPerPermanentOnBattlefield(CardPredicate),
     /// "This spell costs {1} less to cast for each [predicate] card in your
     /// graveyard"; functions while casting, generic floor 0.
     CostsLessPerGraveyardCard(CardPredicate),
+    /// "This spell costs {X} less to cast, where X is the greatest power
+    /// among [predicate] you control" (The Great Henge); functions while
+    /// casting, generic floor 0.
+    CostsLessByGreatestPower(CardPredicate),
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
     FlashIf(Condition),
@@ -678,6 +796,22 @@ pub enum StaticAbility {
     Foretell(ManaCost),
     /// "You have no maximum hand size."
     NoMaximumHandSize,
+    /// "Your opponents can't cast spells from anywhere other than their
+    /// hands" while this is on the battlefield (Drannith Magistrate).
+    OpponentsCastOnlyFromHand,
+    /// "Each player may play an additional land on each of their turns"
+    /// (CR 305.2): one more land play per such permanent, for every player.
+    AdditionalLandPlayEachPlayer,
+    /// "The legend rule doesn't apply to permanents you control" (CR 704.5j).
+    LegendRuleDoesntApply,
+    /// "Activated abilities of [predicate] you control cost {generic} less to
+    /// activate. This effect can't reduce the mana in that cost to less than
+    /// one mana" (Training Grounds); applies to the generic part, mana
+    /// abilities included.
+    ActivatedAbilitiesCostLess {
+        predicate: CardPredicate,
+        generic: u8,
+    },
     /// A continuous P/T effect (layer 7c).
     PtBuff(StaticPtBuff),
     /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
@@ -763,10 +897,23 @@ pub enum AdditionalCost {
     /// otherwise the life is paid as it is cast (CR 119.4: only from a life
     /// total of at least that much).
     PayLifeOrMana { life: u32, mana: ManaCost },
+    /// "[If it's not your turn,] you may exile a [predicate] card from your
+    /// hand rather than pay this spell's mana cost" (CR 118.9): chosen like
+    /// kicker, which marks the spell kicked; it then costs no mana, and its
+    /// caster exiles another matching card from hand as it is paid.
+    ExileFromHandAlternative {
+        predicate: crate::predicate::CardPredicate,
+        not_your_turn: bool,
+    },
     /// "As an additional cost to cast this spell, waterbend [cost]": required,
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
     RequiredWaterbend(ManaCost),
+    /// Replicate (CR 702.56): an optional cost paid any number of times,
+    /// announced like X (the spell's announced X holds the count). When the
+    /// spell is cast, a trigger copies it once per payment; each copy may
+    /// take new targets. Payments add to the total cost, not the mana value.
+    Replicate(ManaCost),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -839,21 +986,6 @@ impl CardDefinition {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
     }
 
-    /// Its final chapter number (CR 714.2d): the greatest of its chapter
-    /// abilities' numbers.
-    pub fn final_chapter(&self) -> Option<u8> {
-        self.abilities
-            .iter()
-            .filter_map(|ability| match ability {
-                Ability::Triggered {
-                    condition: TriggerCondition::Chapter { chapter },
-                    ..
-                } => Some(*chapter),
-                _ => None,
-            })
-            .max()
-    }
-
     /// The optional additional cost a cast may choose to pay: kicker or an
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
@@ -861,7 +993,22 @@ impl CardDefinition {
             AdditionalCost::Kicker(kicker)
             | AdditionalCost::Waterbend(kicker)
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
-            AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
+            AdditionalCost::Sacrifice(_)
+            | AdditionalCost::RequiredWaterbend(_)
+            | AdditionalCost::Replicate(_)
+            | AdditionalCost::ExileFromHandAlternative { .. } => None,
+        })
+    }
+
+    /// The exile-from-hand alternative cost and whether it is offered only
+    /// outside its caster's turn.
+    pub fn exile_alternative(&self) -> Option<(&crate::predicate::CardPredicate, bool)> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::ExileFromHandAlternative {
+                predicate,
+                not_your_turn,
+            } => Some((predicate, *not_your_turn)),
+            _ => None,
         })
     }
 
@@ -884,6 +1031,14 @@ impl CardDefinition {
     pub fn required_waterbend(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::RequiredWaterbend(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    /// The replicate cost, paid once per announced copy.
+    pub fn replicate(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::Replicate(cost) => Some(cost),
             _ => None,
         })
     }
@@ -939,72 +1094,11 @@ impl CardDefinition {
         })
     }
 
-    pub fn library_top_casting(&self) -> Option<&CardPredicate> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::CastFromLibraryTop(predicate) => Some(predicate),
-            _ => None,
-        })
-    }
-
     pub fn cost_reduction_if_targets(&self) -> Option<&TargetCostReduction> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
             _ => None,
         })
-    }
-
-    pub fn attacks_despite_defender(&self) -> Option<&Condition> {
-        self.statics.iter().find_map(|ability| match ability {
-            StaticAbility::AttacksDespiteDefender(condition) => Some(condition),
-            _ => None,
-        })
-    }
-
-    pub fn pt_buffs(&self) -> impl Iterator<Item = &StaticPtBuff> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::PtBuff(buff) => Some(buff),
-            _ => None,
-        })
-    }
-
-    pub fn keyword_grants(&self) -> impl Iterator<Item = &StaticKeywordGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::KeywordGrant(grant) => Some(grant),
-            _ => None,
-        })
-    }
-
-    pub fn triggered_grants(&self) -> impl Iterator<Item = &StaticTriggeredGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TriggeredGrant(grant) => Some(grant),
-            _ => None,
-        })
-    }
-
-    /// The predicate of each "triggers an additional time" ability.
-    pub fn additional_trigger_predicates(&self) -> impl Iterator<Item = &CardPredicate> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TriggersAdditionalTime(predicate) => Some(predicate),
-            _ => None,
-        })
-    }
-
-    pub fn restrictions(&self) -> impl Iterator<Item = &StaticRestriction> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::Restriction(restriction) => Some(restriction),
-            _ => None,
-        })
-    }
-
-    pub fn type_grants(&self) -> impl Iterator<Item = &StaticTypeGrant> {
-        self.statics.iter().filter_map(|ability| match ability {
-            StaticAbility::TypeGrant(grant) => Some(grant),
-            _ => None,
-        })
-    }
-
-    pub fn has_static(&self, ability: &StaticAbility) -> bool {
-        self.statics.contains(ability)
     }
 
     pub fn colors(&self) -> Colors {
@@ -1033,6 +1127,9 @@ pub struct Card {
     /// The front face's row while the back face is up (CR 712.8): set by
     /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
     front: Option<(CardDefId, Arc<CardDefinition>)>,
+    /// The printed card while it is a copy it entered as (CR 707.5), restored
+    /// by [`Card::restore_printed`] when it leaves the battlefield.
+    printed: Option<(CardDefId, Arc<CardDefinition>)>,
 }
 
 impl Card {
@@ -1050,6 +1147,48 @@ impl Card {
             copy: None,
             definition,
             front: None,
+            printed: None,
+        }
+    }
+
+    /// Enter as a copy of `source` (CR 707.5): take its copiable values,
+    /// face and copy chain, then `exceptions` (CR 707.9b). The object stays a
+    /// card or token as it was; its printed row is kept for
+    /// [`Card::restore_printed`].
+    pub fn become_copy_of(&mut self, source: &Card, exceptions: &[crate::effect::Modification]) {
+        let token = self.is_token;
+        let printed = self
+            .printed
+            .take()
+            .unwrap_or_else(|| (self.definition_id, Arc::clone(&self.definition)));
+        self.definition_id = source.definition_id;
+        self.registry_key = ObjectId(source.definition_id.0);
+        self.definition = source.copiable_definition();
+        self.front = source.front.clone();
+        if self.is_token != token {
+            self.is_token = token;
+        }
+        for exception in exceptions {
+            exception.apply_copiable(self);
+        }
+        let mut copy = source.copy.clone().unwrap_or(crate::effect::CopyEffect {
+            of: source.definition_id,
+            exceptions: Vec::new(),
+        });
+        copy.exceptions.extend(exceptions.iter().cloned());
+        self.copy = Some(copy);
+        self.printed = Some(printed);
+    }
+
+    /// Show the printed card again after an entry copy (CR 400.7): the object
+    /// leaving the battlefield is no longer a copy.
+    pub fn restore_printed(&mut self) {
+        if let Some((id, definition)) = self.printed.take() {
+            self.definition_id = id;
+            self.registry_key = ObjectId(id.0);
+            self.definition = definition;
+            self.front = None;
+            self.copy = None;
         }
     }
 
@@ -1065,6 +1204,16 @@ impl Card {
     /// Whether its back face is up (CR 712.8).
     pub fn is_transformed(&self) -> bool {
         self.front.is_some()
+    }
+
+    /// The front face's row while the back face is up.
+    pub fn front_face(&self) -> Option<&(CardDefId, Arc<CardDefinition>)> {
+        self.front.as_ref()
+    }
+
+    /// Carry a copied object's front face, keeping its mana value (CR 712.8).
+    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<CardDefinition>)>) {
+        self.front = front;
     }
 
     /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
@@ -1098,6 +1247,11 @@ impl Card {
             }
             self.copy = Some(copy);
         }
+    }
+
+    /// Snapshot the current copiable face without copying its ability programs.
+    pub fn copiable_definition(&self) -> Arc<CardDefinition> {
+        Arc::clone(&self.definition)
     }
 
     pub fn shares_definition_with(&self, other: &Self) -> bool {
@@ -1137,7 +1291,7 @@ impl Card {
             return None;
         }
         self.spell_effects.iter().find_map(|effect| match effect {
-            Effect::AttachSourceTo { target } => Some(target),
+            Effect::AttachSourceTo { what } => what.target_spec(),
             _ => None,
         })
     }

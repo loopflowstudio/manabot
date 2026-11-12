@@ -8,6 +8,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import shutil
 import socket
 import time
 from typing import TYPE_CHECKING
@@ -29,6 +30,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
+from manabot.infra.host import host_facts
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -40,9 +42,10 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.learning.compound import optimize_games
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.mps import mps_torch_error
+from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -57,20 +60,15 @@ from manabot.training.regime import (
     CollectSelection,
     ImportPolicy,
     TrainBelief,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.training.rollout.compound import (
-    CompoundStatistics,
-    collect_game,
-    replay_game,
-)
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.selection_data import (
     SelectionDataset,
     collect_selection_game,
+    replay_selection_game,
 )
 from manabot.training.state.admission import admit_policy
 from manabot.training.state.game_errors import (
@@ -91,7 +89,12 @@ from manabot.training.state.recovery import (
     save_update,
     settle_orphan,
 )
-from manabot.training.update_metrics import metric_row, phase_seconds, time_since
+from manabot.training.update_metrics import (
+    OUTCOME_TABLE,
+    metric_row,
+    phase_seconds,
+    time_since,
+)
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -114,6 +117,30 @@ def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
         )
         for path, stats in profiler.get_stats().items()
         if path.startswith(f"{root}/")
+    }
+
+
+def cuda_peak_metrics(device: str) -> dict[str, int]:
+    """This process's CUDA high-water marks so far; absent off CUDA.
+
+    Reserved bytes include the allocator's cache, so they are what a card must
+    hold; allocated bytes are what the tensors themselves needed.
+    """
+    if device != "cuda":
+        return {}
+    return {
+        "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
+        "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
+    }
+
+
+def mps_memory_metrics(device: str) -> dict[str, int]:
+    """Current MPS tensor/driver bytes, not peaks or additive memory totals."""
+    if device != "mps":
+        return {}
+    return {
+        "memory/allocated_mps_bytes": torch.mps.current_allocated_memory(),
+        "memory/driver_allocated_mps_bytes": torch.mps.driver_allocated_memory(),
     }
 
 
@@ -177,6 +204,13 @@ def validate_regime(
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
+    for stage in regime.stages:
+        if isinstance(stage, TrainSelfPlay) and stage.adaptive is not None:
+            if regime.recovery_max_microsteps is not None:
+                raise ValueError("adaptive sampling requires current-game recovery")
+            if regime.agent.world == "elemental-world-v2":
+                for cell in stage.adaptive.cells:
+                    elemental_roster(Match(cell))
     if regime.deck_source is not None:
         if require_current_world:
             regime.deck_source.check()
@@ -234,6 +268,11 @@ def _runtime_identities(
             "capability": list(torch.cuda.get_device_capability(0)),
             "runtime": torch.version.cuda,
         }
+    if any(stage.execution.device == "mps" for stage in regime.stages):
+        if not torch.backends.mps.is_available():
+            raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
+        if (error := mps_torch_error()) is not None:
+            raise ValueError(error)
     return identities
 
 
@@ -252,6 +291,7 @@ def execute_regime(
     stop_path: Path | None = None,
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
+    training_exposure: bool = False,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -389,6 +429,7 @@ def execute_regime(
             stop_reserve_seconds=stop_reserve_seconds,
             initial_admission=initial_admission,
             experiment=experiment,
+            training_exposure=training_exposure,
         )
 
 
@@ -409,6 +450,7 @@ def _execute_regime(
     stop_reserve_seconds: float | None = None,
     initial_admission: Path | None = None,
     experiment: str | None = None,
+    training_exposure: bool = False,
 ) -> TrainingRun:
     """Execute admitted inputs while the caller holds both recovery writer leases."""
     # A retry can fail during setup before reaching its stage. Walk the retained
@@ -505,9 +547,9 @@ def _execute_regime(
         store.save_training_run(run)
     else:
         store.claim_training_recovery(parent.id, run)
-    outputs = {}
     self_play_session = None
     resources = ExitStack()
+    resources.callback(apply_matmul_precision, "float32")
     producers = resources.enter_context(ExitStack())
     game_index = 0
     last_monitor_seconds = 0.0
@@ -589,6 +631,7 @@ def _execute_regime(
                     "games",
                 )
             },
+            "idle_stream_steps": sum(s.idle_stream_steps for s in run.stages),
             "rss_bytes": psutil.Process().memory_info().rss,
             "host_load_1m": os.getloadavg()[0],
             "process_cpu_seconds": time.process_time()
@@ -664,8 +707,10 @@ def _execute_regime(
             os.replace(target.with_suffix(".tmp"), target)
             # Admission constructs a fresh model. Its initialization must not
             # consume the learner's action-sampling RNG stream.
+            export_device = next(model.parameters()).device.type
             with torch.random.fork_rng(
-                devices=[0] if next(model.parameters()).is_cuda else []
+                devices=[0] if export_device in {"cuda", "mps"} else [],
+                device_type="mps" if export_device == "mps" else "cuda",
             ):
                 load_checkpoint(str(target))
             receipt.artifact = artifact(target)
@@ -684,6 +729,7 @@ def _execute_regime(
         space = ObservationSpace(regime.observation)
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
+        run.host = host_facts()
         if snapshot is not None:
             admit_recovery_identities(
                 snapshot.identities, identities, source_repair_reason
@@ -694,6 +740,8 @@ def _execute_regime(
             out / "failures",
             lambda: {
                 "run": run.id,
+                "seed": seed,
+                "regime_digest": run.regime_digest,
                 "stage": run.stages[-1].id if run.stages else None,
                 "identities": run.identities,
                 "coordinates": coordinates(),
@@ -701,6 +749,7 @@ def _execute_regime(
                 "allocation_deadline": run.allocation_deadline,
                 "parent_run_id": run.parent_run_id,
             },
+            training_exposure=training_exposure,
         )
         resources.enter_context(capture_scope(failures))
         # Set when stop_reserve_seconds ends the (single) stage before its target.
@@ -765,15 +814,23 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
+            apply_matmul_precision(stage.execution.precision)
             cuda = stage.execution.device == "cuda"
+            mps = stage.execution.device == "mps"
             if cuda and not torch.cuda.is_available():
                 raise ValueError(
                     "CUDA requested but unavailable; CPU fallback is forbidden"
+                )
+            if mps and not torch.backends.mps.is_available():
+                raise ValueError(
+                    "MPS requested but unavailable; CPU fallback is forbidden"
                 )
 
             def synchronize() -> None:
                 if cuda:
                     torch.cuda.synchronize()
+                elif mps:
+                    torch.mps.synchronize()
 
             synchronize()
             if not restoring_completed:
@@ -847,99 +904,6 @@ def _execute_regime(
                 record.artifacts["source_run"] = admitted.source_run
                 record.producer_cost = admitted.producer_cost
                 record.export_seconds = time.perf_counter() - tick
-            elif isinstance(stage, TrainCompound):
-                if stage.initial:
-                    agent, optimizer = outputs[stage.initial]
-                else:
-                    torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent)
-                    optimizer = torch.optim.Adam(
-                        agent.parameters(), lr=stage.learning.learning_rate.initial
-                    )
-                sampling = torch.Generator().manual_seed(
-                    seeds["collection"] + game_index
-                )
-                shuffling = torch.Generator().manual_seed(
-                    seeds["minibatches"] + game_index
-                )
-                stats = CompoundStatistics()
-                record.diagnostics = [asdict(stats)]
-                for _ in range(stage.updates):
-                    games = []
-                    for _ in range(stage.games_per_update):
-                        target = out / f"{stage.id}-game-{game_index}.jsonl"
-                        match = Match(regime.root_match)
-                        if game_index % 2:
-                            match = match.swapped()
-                        tick = time.perf_counter()
-                        stats.attempted_games += 1
-                        try:
-                            game = collect_game(
-                                agent,
-                                match,
-                                seeds["collection"] + game_index,
-                                sampling,
-                                target,
-                                max_commands=stage.max_commands,
-                                check=check,
-                                skip_trivial=stage.skip_trivial,
-                            )
-                            # Replay consumes the retained Commands, never another policy.
-                            check()
-                            replay_game(target)
-                        except BaseException:
-                            stats.failed_games += 1
-                            if target.exists():
-                                record.rejected_artifacts[f"game-{game_index}"] = (
-                                    artifact(target)
-                                )
-                                with target.open() as partial:
-                                    stats.interrupted_microchoices += sum(
-                                        '"command":' in line for line in partial
-                                    )
-                            raise
-                        finally:
-                            # Failed collection/replay still consumes the run's
-                            # collection budget; retain that cost before settlement.
-                            record.collection_seconds += time.perf_counter() - tick
-                            stats.collection_seconds = record.collection_seconds
-                            record.diagnostics = [asdict(stats)]
-                        record.artifacts[f"game-{game_index}"] = artifact(target)
-                        stats.record_game(game)
-                        record.games = stats.games
-                        record.environment_decisions = stats.microchoices
-                        record.learner_transitions = (
-                            stats.factors
-                            if stage.grouping == "sequential"
-                            else stats.decisions
-                        )
-                        games.append(game)
-                        game_index += 1
-                        stats.collection_seconds = record.collection_seconds
-                        record.diagnostics = [asdict(stats)]
-                        persist(progress=True)
-                    tick = time.perf_counter()
-                    update = optimize_games(
-                        agent,
-                        optimizer,
-                        games,
-                        stage.learning,
-                        grouped=stage.grouping == "grouped",
-                        estimator=stage.estimator,
-                        progress=(time.perf_counter() - start) / regime.wall_seconds,
-                        generator=shuffling,
-                        check=check,
-                    )
-                    record.learning_seconds += time.perf_counter() - tick
-                    record.updates += 1
-                    record.optimizer_exposures += update.optimizer_exposures
-                    stats.learning_seconds = record.learning_seconds
-                    stats.optimizer_exposures += update.optimizer_exposures
-                    stats.losses.extend(update.losses)
-                    record.diagnostics = [asdict(stats)]
-                    persist(progress=True)
-                outputs[stage.id] = (agent, optimizer)
-                optimizer_state = optimizer.state_dict()
             elif isinstance(stage, CollectSelection):
                 policy_run = (
                     store.training_run(stage.source_run) if stage.source_run else run
@@ -993,7 +957,7 @@ def _execute_regime(
                     )
                     record.collection_seconds += time.perf_counter() - tick
                     tick = time.perf_counter()
-                    if replay_game(target) != len(game.rows):
+                    if replay_selection_game(target) != len(game.rows):
                         raise ValueError("selection replay decision count mismatch")
                     record.diagnostic_seconds += time.perf_counter() - tick
                     record.artifacts[f"game-{index}"] = artifact(target)
@@ -1155,17 +1119,14 @@ def _execute_regime(
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
                         opponent_agent, opponent_space = load_checkpoint(
-                            str(opponent_path)
+                            str(opponent_path),
+                            bucketed_shapes=stage.execution.bucketed_shapes,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
                         )
                         if opponent_space.encoder.config != space.encoder.config:
                             raise ValueError("frozen opponent observation ABI differs")
-                        if opponent_agent.config.compound_decisions:
-                            raise ValueError(
-                                "frozen collector does not support compound opponent submissions"
-                            )
                         if opponent_agent.belief_count_buckets:
                             raise ValueError(
                                 "frozen collector does not supply belief inputs"
@@ -1176,7 +1137,59 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(
+                        space,
+                        regime.agent,
+                        bucketed_shapes=stage.execution.bucketed_shapes,
+                    ).to(stage.execution.device)
+                    if stage.initial_weights is not None:
+                        reference = stage.initial_weights
+                        copied = out / f"{stage.id}-initialization-source.pt"
+                        if (
+                            file_sha256(reference["path"]) != reference["sha256"]
+                            or Path(reference["path"]).stat().st_size
+                            != reference["bytes"]
+                        ):
+                            raise ValueError(
+                                "initialization checkpoint digest/size differs"
+                            )
+                        if not copied.exists():
+                            shutil.copyfile(reference["path"], copied)
+                        if file_sha256(copied) != reference["sha256"]:
+                            raise ValueError(
+                                "retained initialization checkpoint differs"
+                            )
+                        payload = torch.load(
+                            copied, map_location="cpu", weights_only=False
+                        )
+                        if not isinstance(payload, dict):
+                            raise ValueError(
+                                "initial weights require a checkpoint mapping"
+                            )
+                        bc = payload.get("bc")
+                        if (
+                            payload.get("global_step") != 0
+                            or not isinstance(bc, dict)
+                            or bc.get("weights") != "initial_raw"
+                        ):
+                            raise ValueError(
+                                "initial weights require a retained update-zero initialization"
+                            )
+                        with torch.random.fork_rng(devices=[]):
+                            initialization, initial_space = load_checkpoint(copied)
+                        if (
+                            initialization.config != regime.agent
+                            or initial_space.encoder.config != space.encoder.config
+                        ):
+                            raise ValueError(
+                                "initialization model or observation differs"
+                            )
+                        validate_agent_setup(
+                            initialization, Match(regime.match).to_rust()
+                        )
+                        agent.load_state_dict(initialization.state_dict())
+                        record.inputs["initial_weights"] = dict(reference)
+                        record.artifacts["initialization_source"] = artifact(copied)
                     if imported is not None:
                         agent.load_state_dict(imported.raw.state_dict())
                     if pretrained is not None:
@@ -1206,8 +1219,10 @@ def _execute_regime(
                         # New self-play monitoring must preserve initialization and
                         # action-sampling streams compared with monitoring disabled.
                         if stage.opponent is None:
+                            export_device = next(agent.parameters()).device.type
                             with torch.random.fork_rng(
-                                devices=[0] if next(agent.parameters()).is_cuda else []
+                                devices=[0] if export_device in {"cuda", "mps"} else [],
+                                device_type="mps" if export_device == "mps" else "cuda",
                             ):
                                 load_checkpoint(str(target))
                         else:
@@ -1253,6 +1268,7 @@ def _execute_regime(
                         else "self",
                         opponent_agent=opponent_agent,
                         learning_seats=stage.learning_seats,
+                        batch_closure=stage.batch_closure,
                         games_per_stream=stage.games_per_stream,
                         recovery_max_microsteps=regime.recovery_max_microsteps,
                         game_errors=stage.game_errors,
@@ -1267,6 +1283,8 @@ def _execute_regime(
                         deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
+                        adaptive=stage.adaptive,
+                        precision=stage.execution.precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1280,6 +1298,7 @@ def _execute_regime(
                             log_level="WARNING",
                         ),
                         experiment=experiment or stage.id,
+                        regime=regime.id,
                         run=run.id,
                         # A recovery attempt continues its parent's metrics.
                         resume=Path(run.metrics_run) if run.metrics_run else None,
@@ -1319,7 +1338,10 @@ def _execute_regime(
                         )
                         record.export_seconds += time.perf_counter() - tick
                     learner = Learner(
-                        agent, experiment.device, minibatch_rows=stage.streams
+                        agent,
+                        experiment.device,
+                        minibatch_rows=stage.streams,
+                        precision=stage.execution.precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0
@@ -1416,7 +1438,7 @@ def _execute_regime(
                             behavior_agent,
                             stage.transitions,
                             deadline_monotonic=deadline,
-                            check=check if regime.recoverable else None,
+                            check=check,
                         )
                     finally:
                         synchronize()
@@ -1458,6 +1480,9 @@ def _execute_regime(
                                         "numerical": {"optimizer_steps": 0},
                                     }
                                 )
+                                adaptive_diagnostics = collector.commit_adaptive(batch)
+                                if adaptive_diagnostics is not None:
+                                    diagnostic["adaptive"] = adaptive_diagnostics
                                 if stage.matchup_curriculum != "fixed":
                                     diagnostic["matchup_curriculum"] = (
                                         stage.matchup_curriculum
@@ -1488,10 +1513,6 @@ def _execute_regime(
                         record.learning_timings = _phase_timings(
                             learner.profiler, "Learning"
                         )
-                    if collector.opponent_mode == "self":
-                        diagnostic["self_play_outcomes"] = (
-                            collector.stats.self_play.drain()
-                        )
                     record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
@@ -1502,6 +1523,9 @@ def _execute_regime(
                     record.environment_decisions = (
                         collector.stats.micro_steps - before.micro_steps
                     )
+                    record.idle_stream_steps = (
+                        collector.stats.idle_stream_steps - before.idle_stream_steps
+                    )
                     record.learner_transitions = (
                         collector.stats.learner_transitions - before.learner_transitions
                     )
@@ -1509,12 +1533,24 @@ def _execute_regime(
                     spent = phase_seconds(record)
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
-                        metric_row(diagnostic) | time_since(timed, spent),
+                        metric_row(diagnostic)
+                        | time_since(timed, spent)
+                        | cuda_peak_metrics(stage.execution.device)
+                        | mps_memory_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]
                         ),
                     )
+                    if collector.opponent_mode == "self":
+                        experiment.log_table(
+                            OUTCOME_TABLE,
+                            collector.stats.self_play.drain(),
+                            updates=int(diagnostic["coordinates"]["updates"]),
+                            transitions=int(
+                                diagnostic["coordinates"]["learner_transitions"]
+                            ),
+                        )
                     timed = spent
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds
@@ -1566,10 +1602,10 @@ def _execute_regime(
                 self_play_session = (learner, ema, iteration)
                 agent = learner.agent
                 optimizer_state = learner.optimizer.state_dict()
-            if isinstance(stage, (TrainSelfPlay, TrainCompound)):
+            if isinstance(stage, TrainSelfPlay):
                 tick = time.perf_counter()
                 variants = {"raw": agent}
-                if isinstance(stage, TrainSelfPlay) and ema is not None:
+                if ema is not None:
                     variants["ema"] = ema
                 for name, model in variants.items():
                     target = out / f"{stage.id}-{name}.pt"
@@ -1741,4 +1777,8 @@ def _execute_regime(
         raise
     finally:
         resources.close()
+        if training_exposure and run.stages:
+            for path in sorted((out / "exposure").glob("*.jsonl")):
+                run.stages[-1].artifacts[f"exposure/{path.name}"] = artifact(path)
+            persist()
     return run

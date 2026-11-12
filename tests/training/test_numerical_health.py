@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import time
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import admit_on_device
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -34,6 +36,7 @@ from manabot.training.learning.damped_policy import (
 )
 from manabot.training.learning.health import NumericalHealth, OptimizerHealth
 from manabot.training.learning.learner import Learner
+from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -276,6 +279,58 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
 
+@pytest.mark.parametrize("aggregation", ["value_token", "masked_mean"])
+def test_critic_readout_norm_excludes_the_shared_value_token(
+    aggregation: Literal["value_token", "masked_mean"],
+) -> None:
+    torch.manual_seed(252)
+    agent = ActorCritic(
+        ObservationSpace(), ModelConfig(value_aggregation=aggregation)
+    ).to(DEVICE)
+    collector = SeatRoutedCollector(
+        agent.observation_space,
+        Match(MatchConfig()),
+        Reward(RewardConfig()),
+        num_envs=1,
+        seed=29,
+        device=DEVICE,
+    )
+    batch = collector.collect(agent, 1)
+    obs = admit_on_device(
+        agent,
+        {
+            key: torch.from_numpy(value)
+            for key, value in batch.observations(np.array([0])).observation.items()
+        },
+    )
+    optimizer = torch.optim.Adam(agent.parameters())
+
+    def measure(loss: Literal["policy", "value"]) -> NumericalHealth:
+        logits, values = agent.forward_distribution(obs)
+        valid = obs["actions_valid"] > 0
+        objective = (
+            -policy_logs(logits, valid)[valid].mean()
+            if loss == "policy"
+            else values.square().sum()
+        )
+        health = _health()
+        OptimizerHealth(agent, optimizer, health, iteration=1).step(objective, 1e9)
+        return health
+
+    policy = measure("policy")
+    value = measure("value")
+    # A policy-only loss never reaches critic-only parameters; a value-only
+    # loss does.
+    assert policy["gradient_norm_critic_readout"] == 0
+    assert value["gradient_norm_critic_readout"] > 0
+    if aggregation == "value_token":
+        # Actor logits read the token through attention: policy loss reaches it.
+        assert policy["gradient_norm_value_token"] > 0
+        assert value["gradient_norm_value_token"] > 0
+    else:
+        assert "gradient_norm_value_token" not in policy
+
+
 class ExtremeAgent(ActorCritic):
     def forward_distribution(self, obs: dict[str, Tensor]) -> tuple[Tensor, Tensor]:
         logits, values = super().forward_distribution(obs)
@@ -297,13 +352,14 @@ def test_extreme_real_collector_to_learner() -> None:
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
-        # This numerical fixture needs four decisions per stream. Two-seat
-        # collection waits for whole games, which this extreme policy can stall.
+        # This numerical fixture needs four decisions per stream. Complete-game
+        # closure waits for whole games, which this extreme policy can stall.
         learning_seats="one",
+        batch_closure="exact-quota",
         device=DEVICE,
     )
     batch = collector.collect(agent, 4)
-    assert np.isfinite(batch.log_probabilities[batch.obs["actions_valid"] > 0]).all()
+    assert np.isfinite(batch.action_data.log_probabilities).all()
     trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
 
     learning = DampedPolicyLearning(
@@ -317,6 +373,39 @@ def test_extreme_real_collector_to_learner() -> None:
     )
     assert result["numerical"]["parameter_delta_l2"] > 0
     assert all(torch.isfinite(p).all() for p in agent.parameters())
+    critic = result["numerical"]["gradient_norm_critic_readout"]
+    assert 0 < critic <= result["numerical"]["gradient_norm_before"]
+    scale = result["value_scale"]
+    # Quantile 0 with no floor keeps every row: the threshold is the least |A|.
+    threshold = scale["selection_threshold"]
+    assert threshold is not None and scale["floor_binds"] is False
+    assert threshold <= result["advantage_abs_mean"]
+    assert result["retained"] == result["rows"]
+    assert scale["advantage_std"] > 0 and scale["prediction_std"] >= 0
+
+
+def test_value_scale_reports_target_fit_and_binding_floor() -> None:
+    targets = torch.tensor([[1.0, -1.0], [0.5, -0.5]])
+    predictions = torch.tensor([[0.5, -0.5], [0.5, -0.5]])
+    advantages = torch.tensor([[0.001, -0.002], [0.003, 0.004]])
+    scale = value_scale(
+        predictions, targets, advantages, kind="quantile", quantile=0.75, minimum=0.01
+    )
+    # Residual variance 0.125 of target variance 0.625.
+    assert scale["explained_variance"] == pytest.approx(0.8)
+    assert scale["target_mean"] == 0 and scale["prediction_std"] == 0.5
+    assert scale["selection_threshold"] == 0.01 and scale["floor_binds"] is True
+    assert not selected_moves(advantages, 0.75, 0.01).any()
+    constant = value_scale(
+        predictions,
+        torch.zeros_like(targets),
+        advantages,
+        kind="top_count",
+        quantile=0.75,
+        minimum=0.01,
+    )
+    assert constant["explained_variance"] is None
+    assert constant["selection_threshold"] is None and constant["floor_binds"] is None
 
 
 class _AccountingClock:
@@ -347,6 +436,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # Fault accounting needs two tiny updates, not completion of sampled games.
     # Keep the workload bounded as well as the injected accounting clock.
     stage.learning_seats = "one"
+    stage.batch_closure = "exact-quota"
     stage.execution.device = DEVICE
     stage.learning.min_advantage = 0
     # Charge only injected durations in the executor. Keep watchdogs and the
@@ -365,12 +455,13 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
             return result
         clock.elapsed += 0.25
         batch = args[1]
-        probabilities = torch.as_tensor(batch.probabilities).clone()
+        rows = batch.observations()
+        probabilities = torch.as_tensor(rows.probabilities).clone()
         probabilities[-1, -1, 0] = float("nan")
         corrupted_rows.append(probabilities.numel() // probabilities.shape[-1] - 1)
         check_probabilities(
             probabilities,
-            torch.as_tensor(batch.obs["actions_valid"]) > 0,
+            torch.as_tensor(rows.observation["actions_valid"]) > 0,
             positive=False,
         )
         raise AssertionError("expected invariant failure")
@@ -430,6 +521,10 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         Path(artifacts["numerical/incident.json"]["path"]).read_text()
     )
     assert metadata["iteration"] == 2 and metadata["completed_updates"] == 1
+    assert metadata["schema"] == 2
+    assert "packed_actions/offsets" in metadata["tensors"]
+    assert "packed_actions/slots" in metadata["tensors"]
+    assert "packed_actions/log_probabilities" in metadata["tensors"]
     assert metadata["source"]["training_source_sha256"]
     tensors = torch.load(artifacts["numerical/tensors.pt"]["path"], weights_only=True)
     assert torch.isnan(tensors["probabilities"]).any()

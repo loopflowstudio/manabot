@@ -53,6 +53,11 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
     assert {row["player_a_seat"] for row in rows} == {0, 1}
     assert all(row["replay_passed"] for row in rows)
     assert all(MatchRow.model_validate(row) for row in rows)
+    # Without first-legal overflow, rows and their digests gain no cutoff key.
+    assert not any("policy_actions" in row for row in rows)
+    assert "policy_actions" not in MatchRow.model_validate(rows[0]).model_dump()
+    counted = {**rows[0], "policy_actions": {"decisions": 7, "dropped_actions": 1}}
+    assert MatchRow.model_validate(counted).policy_actions is not None
     assert replay["passed"]
     games = read_trace(Path(trace["path"]))
     assert replay_games(games).passed

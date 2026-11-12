@@ -2,8 +2,11 @@
 
 use std::sync::Arc;
 
+use sha2::{Digest, Sha256};
+
 use managym::{
     agent::observation::Observation,
+    flow::event::GameEvent,
     match_fixtures::build_fixture,
     search_state::witness,
     state::{
@@ -11,6 +14,84 @@ use managym::{
         zone::ZoneType,
     },
 };
+
+#[test]
+fn witness_preserves_acting_events_and_fixed_viewer_bytes() {
+    let root = build_fixture("interactive-midgame-48-w4-v1").expect("witness fixture");
+    for with_events in [false, true] {
+        for with_chooser in [false, true] {
+            let mut game = root.clone();
+            game.state.observation_events.clear();
+            if with_events {
+                let turn_number = game.state.turn.turn_number;
+                game.state.observation_events.push(GameEvent::TurnStarted {
+                    player: PlayerId(0),
+                    turn_number,
+                });
+            }
+            if !with_chooser {
+                game.current_action_space = None;
+            }
+            let evidence = witness(&game);
+            let acting = Observation::new(&game, &game.state.observation_events).to_json();
+            assert_eq!(evidence.acting_projection.bytes, acting.as_bytes());
+            assert_eq!(
+                evidence.acting_projection.hash,
+                blake3::hash(acting.as_bytes()).to_hex().to_string()
+            );
+            for (seat, projection) in evidence.viewers.iter().enumerate() {
+                let expected = Observation::for_player(&game, PlayerId(seat)).to_json();
+                assert_eq!(projection.bytes, expected.as_bytes());
+                assert_eq!(
+                    projection.hash,
+                    blake3::hash(expected.as_bytes()).to_hex().to_string()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn semantic_direct_hash_preserves_viewer_bytes_and_event_exclusion() {
+    let root = build_fixture("interactive-midgame-48-w4-v1").expect("hash fixture");
+    for with_events in [false, true] {
+        for (with_chooser, terminal) in [(true, false), (false, false), (false, true)] {
+            let mut game = root.clone();
+            if terminal {
+                game.state.players[1].alive = false;
+            }
+            assert_eq!(game.is_game_over(), terminal);
+            game.state.observation_events.clear();
+            if with_events {
+                let turn_number = game.state.turn.turn_number;
+                game.state.observation_events.push(GameEvent::TurnStarted {
+                    player: PlayerId(0),
+                    turn_number,
+                });
+            }
+            if !with_chooser {
+                game.current_action_space = None;
+            }
+            let before = witness(&game);
+            for viewer in [PlayerId(0), PlayerId(1)] {
+                let bytes = Observation::for_player(&game, viewer).to_json();
+                let expected = format!("{:x}", Sha256::digest(bytes.as_bytes()));
+                assert_eq!(game.semantic_viewer_state_hash(viewer).unwrap(), expected);
+                let composite = game.semantic_observation(viewer).unwrap();
+                assert_eq!(composite.identity.viewer_state_hash, expected);
+                assert!(composite.events.is_empty());
+                let mut without_events = game.clone();
+                without_events.state.observation_events.clear();
+                assert_eq!(
+                    without_events.semantic_viewer_state_hash(viewer).unwrap(),
+                    expected
+                );
+            }
+            assert!(game.semantic_viewer_state_hash(PlayerId(2)).is_err());
+            assert_eq!(witness(&game), before, "hash reads preserve authority/RNG");
+        }
+    }
+}
 
 #[test]
 fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
@@ -68,13 +149,13 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
     let viewer = PlayerId(0);
     let opponent = PlayerId(1);
     let mut first = root.clone();
-    first.determinize(viewer, 1);
+    first.determinize(viewer, 1).unwrap();
     let first_witness = witness(&first);
 
     let second_witness = (2_u64..64)
         .find_map(|seed| {
             let mut candidate = root.clone();
-            candidate.determinize(viewer, seed);
+            candidate.determinize(viewer, seed).unwrap();
             let candidate = witness(&candidate);
             (candidate.authority.hash != first_witness.authority.hash
                 && candidate.viewers[viewer.0] == first_witness.viewers[viewer.0]

@@ -16,7 +16,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
-        ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+        ability::{Ability, Effect, EffectValue, Per, TriggerCondition, TriggerSubject},
         card::{BlockRestriction, CardType, StaticAbility},
         effect::Modification,
         game_object::PlayerId,
@@ -118,14 +118,12 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
         ogre_card,
         Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::CreateToken {
                 token_name: "Ally".to_string(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
-                attach_source: false,
+                tapped: false,
             }],
         },
     );
@@ -163,9 +161,10 @@ fn one_or_more_attack_trigger_fires_once() {
         ogre_a_card,
         Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-            },
+            condition: TriggerCondition::attacks(
+                TriggerSubject::you_control(CardPredicate::creature()),
+                Per::Batch,
+            ),
             effects: vec![Effect::gain_life(1)],
         },
     );
@@ -196,9 +195,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
         goblin_card,
         Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::gain_life(1)],
         },
     );

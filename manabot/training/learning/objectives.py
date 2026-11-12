@@ -7,9 +7,9 @@ import torch
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import (
     NumericalError,
-    check_behavior,
     clipped_surrogate,
     legal_mask,
     policy_logs,
@@ -18,7 +18,7 @@ from manabot.model.policy_distribution import (
 )
 from manabot.training.learning.damped_policy import update_damped_iteration
 from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.learner import AdmittedRollout, Learner
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import (
@@ -68,14 +68,17 @@ def update_iteration(
     dev = learner.device
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
-        obs = observation_tensors(batch.obs, dev)
+        batch.action_data.check(batch.actions, batch.logprobs)
+        admitted = AdmittedRollout(learner.agent, batch)
         values = torch.as_tensor(batch.values, device=dev)
         rewards = torch.as_tensor(batch.rewards, device=dev)
         ends = torch.as_tensor(batch.dones, device=dev)
         with torch.no_grad():
-            next_value = (bootstrap_agent or learner.agent).get_value(
-                observation_tensors(batch.next_obs, dev)
-            )
+            with learner.forward_precision():
+                next_value = (bootstrap_agent or learner.agent).get_value(
+                    admitted.next_observation(dev)
+                )
+            next_value = next_value.float()
             advantages, _ = transition_gae(
                 rewards,
                 values,
@@ -87,16 +90,11 @@ def update_iteration(
             _, returns = transition_gae(
                 rewards, values, ends, next_value, learning.gamma, learning.value_lambda
             )
-        obs = {k: v.flatten(0, 1) for k, v in obs.items()}
+        if batch.assignments is not None:
+            batch.target_residuals = (returns - values).detach().cpu().numpy()
         advantages, returns = advantages.flatten(), returns.flatten()
         actions = torch.as_tensor(batch.actions, device=dev).flatten()
         old_logs = torch.as_tensor(batch.logprobs, device=dev).flatten()
-        behavior = torch.as_tensor(batch.probabilities, device=dev).flatten(0, 1)
-        behavior_logs = torch.as_tensor(batch.log_probabilities, device=dev).flatten(
-            0, 1
-        )
-        valid = legal_mask(obs["actions_valid"])
-        check_behavior(behavior_logs, behavior, actions, old_logs, valid)
         require(
             torch.isfinite(advantages), "nonfinite_advantages", advantages=advantages
         )
@@ -134,9 +132,9 @@ def update_iteration(
             "return_mean": float(returns.mean()),
             "value_residual_abs_mean": float((returns - values.flatten()).abs().mean()),
         }
-        chosen_types = obs["actions"][
-            torch.arange(len(actions), device=dev), actions, :ACTION_TYPE_DIM
-        ].argmax(-1)
+        chosen_types = torch.as_tensor(
+            batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM), device=dev
+        ).flatten()
         diagnostics["action_types"] = torch.bincount(
             chosen_types, minlength=ACTION_TYPE_DIM
         ).tolist()
@@ -151,9 +149,7 @@ def update_iteration(
             chosen_types.reshape_as(ends),
         )
         health = batch_health(
-            behavior_logs,
-            behavior,
-            valid,
+            batch.action_data,
             advantages,
             mask,
             actor_only=learning.filter_scope == "actor",
@@ -174,19 +170,23 @@ def update_iteration(
         ].std(unbiased=False).clamp_min(1e-8)
     for group in learner.optimizer.param_groups:
         group["lr"] = diagnostics["learning_rate"]
-    reference = reference_distribution(obs, learning.reference)
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
     with track("Minibatches"):
+        admitted.admit_rows(training_rows.cpu().numpy(), size)
         for _ in range(learning.epochs):
             order = training_rows[
                 torch.as_tensor(rng.permutation(len(training_rows)), device=dev)
             ]
             for indices in order.split(size):
                 with track("Forward and loss"):
-                    logits, value = learner.agent(
-                        {k: v[indices] for k, v in obs.items()}
-                    )
-                    logs = policy_logs(logits, valid[indices])
+                    obs, rows = admitted.rows(indices.cpu().numpy(), dev)
+                    valid = legal_mask(obs["actions_valid"])
+                    behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
+                    reference = reference_distribution(obs, learning.reference)
+                    with learner.forward_precision():
+                        logits, value = learner.agent(obs)
+                    logits, value = logits.float(), value.float()
+                    logs = policy_logs(logits, valid)
                     log_ratio = (
                         logs.gather(-1, actions[indices, None]).squeeze(-1)
                         - old_logs[indices]
@@ -201,13 +201,13 @@ def update_iteration(
                     kl_ref = selected_mean(
                         reverse_kl(
                             logs,
-                            reference[indices].masked_fill(~valid[indices], 1).log(),
-                            valid[indices],
+                            reference.masked_fill(~valid, 1).log(),
+                            valid,
                         ),
                         actor_mask,
                     )
                     kl_behavior = selected_mean(
-                        reverse_kl(logs, behavior_logs[indices], valid[indices]),
+                        reverse_kl(logs, behavior_logs, valid),
                         actor_mask,
                     )
                     value_loss = (
@@ -215,7 +215,7 @@ def update_iteration(
                     )
                     loss = (
                         policy
-                        + learning.value_weight * value_loss
+                        + learning.value_weight * float64_operand(value_loss)
                         + diagnostics["tau"] * kl_ref
                         + learning.collection_kl * kl_behavior
                     )
@@ -224,16 +224,16 @@ def update_iteration(
                         return {
                             "logits": logits.detach(),
                             "value_logits": value.detach(),
-                            "valid": valid[indices],
+                            "valid": valid,
                             "actions": actions[indices],
-                            "behavior_logs": behavior_logs[indices],
-                            "reference": reference[indices],
+                            "behavior_logs": behavior_logs,
+                            "reference": reference,
                             "advantages": advantages[indices],
                             "value_targets": returns[indices],
                             "actor_selected": actor_mask,
                             "minibatch_indexes": indices,
                             **{
-                                f"minibatch_observation/{key}": value[indices]
+                                f"minibatch_observation/{key}": value
                                 for key, value in obs.items()
                             },
                         }
@@ -250,7 +250,12 @@ def update_iteration(
                     raise
                 with track("Minibatch diagnostics"):
                     health["clip_fraction"] = float(
-                        ((log_ratio.detach().double().exp() - 1).abs() > learning.clip)
+                        (
+                            (
+                                float64_operand(log_ratio.detach()).double().exp() - 1
+                            ).abs()
+                            > learning.clip
+                        )
                         .float()
                         .mean()
                     )
@@ -262,7 +267,7 @@ def update_iteration(
                         policy_loss=float(policy.detach()),
                         value_loss=float(value_loss.detach()),
                         entropy=float(
-                            -(logs.exp() * logs.masked_fill(~valid[indices], 0))
+                            -(logs.exp() * logs.masked_fill(~valid, 0))
                             .sum(-1)
                             .mean()
                             .detach()

@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-7"
+REPRESENTATION_VERSION = "manabot-text-6"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -90,6 +90,7 @@ _STAGES = frozenset(
         "declare_attackers",
         "declare_blockers",
         "mana_payment",
+        "tap_payment",
         "mana_color",
         "resolution_choice",
         "private_search",
@@ -98,8 +99,11 @@ _STAGES = frozenset(
         "scry",
         "resolution_payment",
         "resolution_mode",
+        "name_card",
         "discard",
         "select_milled",
+        "select_cards",
+        "order_replacement",
         "legend_rule",
         "order_triggers",
         "trigger_targets",
@@ -114,6 +118,7 @@ _STAGES = frozenset(
         "resolution_cast",
         "surveil",
         "order_library_bottom",
+        "order_library_top",
     )
 )
 
@@ -198,6 +203,10 @@ _OBLIGATIONS = (
     "choose optional payment X",
     "search named cards",
     "choose a permanent to exile",
+    "order library top",
+    "select cards",
+    "order replacements",
+    "enter as a copy",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
@@ -249,8 +258,9 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
-def _turn_history(history: managym.PlayerTurnHistory) -> str:
+def _turn_history(player: managym.Player) -> str:
     """What a player has done this turn, or empty when nothing yet."""
+    history = player.turn_history
     parts = []
     if history.attacked:
         parts.append("attacked")
@@ -266,11 +276,17 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if amount := history.life_lost:
+        parts.append(f"lost {amount} life")
+    if count := player.spells_cast:
+        parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)
 
 
 def _spending(restricted: managym.RestrictedMana) -> str:
     """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    if restricted.except_nonartifact_spells:
+        return "anything but nonartifact spells"
     parts = []
     if restricted.spells:
         parts.append(" or ".join(restricted.spells) + " spells")
@@ -291,9 +307,15 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     )
     if generic < 0:
         raise TextEncodingError("inconsistent mana value")
-    symbols = (f"{{{generic}}}" if generic else "") + "".join(
-        f"{{{symbol}}}" * count
-        for symbol, count in zip("WUBRGC", cost.cost[:6], strict=True)
+    if cost.x < 0:
+        raise TextEncodingError("unsupported mana cost")
+    symbols = (
+        "{X}" * cost.x
+        + (f"{{{generic}}}" if generic else "")
+        + "".join(
+            f"{{{symbol}}}" * count
+            for symbol, count in zip("WUBRGC", cost.cost[:6], strict=True)
+        )
     )
     colors = {
         name: symbol
@@ -323,6 +345,8 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
 
 def effect_phrase(effect: managym.ContinuousEffect) -> str:
     """What one continuous-effect record does, in the words Academy shows."""
+    if effect.description:
+        return effect.description
     modification = effect.modification
     if modification == "ModifyPt":
         return f"{effect.power:+d}/{effect.toughness:+d}"
@@ -336,6 +360,12 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return "loses " + ", ".join(
             keyword.replace("_", " ") for keyword in effect.keywords
         )
+    if modification == "LoseNonManaAbilities":
+        return "loses all abilities except mana abilities"
+    if modification == "SetCreatureTypes":
+        return f"creature types become {', '.join(effect.subtypes)}"
+    if modification == "SwitchPt":
+        return "power and toughness switched"
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -346,9 +376,19 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
+        "CantActivateAbilities": "its activated abilities can't be activated",
+        "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
+        "NextCreatureCastFlash": (
+            "the next creature card cast can be cast as though it had flash"
+        ),
+        "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
+        "LifeTotalCantChange": "life total can't change",
+        "ProtectionFromEverything": "protection from everything",
+        "PhasedOut": "phased out (treated as though it doesn't exist)",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -533,8 +573,17 @@ class _Renderer:
         ]
         if relation.parent is not None:
             details.append(f"parent R{relation.parent + 1}")
-        if relation.kind == 6 and relation.decision == 25:
+        if relation.kind == 6 and relation.decision == 2 and relation.mode:
+            details.append(f"{relation.mode} tap selections still required")
+            details += _selectors(None, relation.ability)
+        elif relation.kind == 6 and relation.decision == 25:
             details.append(f"may exile up to {relation.mode} more cards")
+        elif relation.kind == 6 and relation.decision == 27:
+            details.append(f"{relation.mode or 0} kept cards already ordered on top")
+        elif relation.kind == 6 and relation.decision == 28:
+            details.append(f"may select up to {relation.mode or 0} more cards")
+        elif relation.kind == 6 and relation.decision == 29:
+            details.append("choose the next event replacement")
         elif relation.kind == 11:
             details.append(f"scheduled turn {(relation.mode or 0) + 1}")
         elif relation.kind in (13, 14):
@@ -612,6 +661,12 @@ class _Renderer:
             details.append(
                 f"source inherits abilities from {self.fact_reference(relation.inherited_from)}"
             )
+        if relation.program_description is not None:
+            details.append(f"captured program: {relation.program_description}")
+        if relation.effect_execution_description is not None:
+            details.append(f"effect execution: {relation.effect_execution_description}")
+        for slot, reference in enumerate(relation.effect_execution_references, 1):
+            details.append(f"E{slot}: {self.fact_reference(reference)}")
         if relation.attackers is not None:
             details.append(f"only {relation.attackers} may attack")
         if relation.source_transforms:
@@ -622,12 +677,10 @@ class _Renderer:
             details.append(
                 f"ability resolutions this turn {relation.resolutions_this_turn}"
             )
-        if relation.mana_taps_remaining:
-            details.append(f"tap {relation.mana_taps_remaining} more permanents to pay")
         for output in relation.mana_outputs:
             for restricted, amounts in (
                 (False, output.mana),
-                (True, output.lesson if not output.restrictions else [0] * 6),
+                (True, output.lesson),
             ):
                 if any(amounts):
                     cost = ManaCost(
@@ -636,15 +689,6 @@ class _Renderer:
                         spend_on_lesson=restricted,
                     )
                     details.append(f"output mode {output.mode + 1}: {_mana(cost)}")
-            for restricted in output.restrictions:
-                amounts = ", ".join(
-                    f"{symbol} {count}"
-                    for symbol, count in zip("WUBRGC", restricted.mana, strict=True)
-                    if count
-                )
-                details.append(
-                    f"output mode {output.mode + 1}: {amounts}, only for {_spending(restricted)}"
-                )
         return "; ".join(details) + "."
 
     def _players_lines(self) -> list[str]:
@@ -697,7 +741,7 @@ class _Renderer:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
-            if history := _turn_history(player.turn_history):
+            if history := _turn_history(player):
                 lines.append(f"This turn: {history}.")
             if player.extra_turns:
                 lines.append(
@@ -769,6 +813,8 @@ class _Renderer:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:
                 optional += f"; announced X {card.x}"
+            if card.from_battlefield_this_turn:
+                optional += "; put into the graveyard from the battlefield this turn"
             if card.cast_permission is not None:
                 optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
@@ -814,6 +860,10 @@ class _Renderer:
             optional = ""
             if permanent.attacking:
                 optional += "; attacking"
+            if permanent.colors is not None:
+                optional += f"; colors {', '.join(permanent.colors) or 'colorless'}"
+            if permanent.keyword_counter_timestamps:
+                optional += f"; keyword counter timestamps {permanent.keyword_counter_timestamps}"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
@@ -915,6 +965,7 @@ class _Renderer:
         until = {
             "EndOfTurn": "until end of turn: ",
             "WhileYouControlSource": "while its source's controller controls it: ",
+            "UntilYourNextTurn": "until its controller's next turn: ",
         }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"

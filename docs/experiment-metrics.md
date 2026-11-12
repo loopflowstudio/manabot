@@ -47,7 +47,8 @@ to include archived training records. A snapshot covers its configured sources,
 not an assumed complete training history.
 
 The accepted cross-project scope is recorded in
-[Training time reports from selected Etude runs](plans/training-time-cohorts.md).
+Training time reports from selected Etude runs (the plan was retired; the
+cohort report in [training time](../experiments/training-time.md) is the record).
 
 ## Experiment notebooks
 
@@ -253,8 +254,8 @@ actions: larger skewed distributions or averages of different supports can have
 the same entropy. Normalizing by log(number of legal actions) requires the actual
 sampled support sizes, which these historical diagnostics did not retain. Entropy
 measures dispersion, not competence; a confident wrong policy can have low entropy.
-See the [saved history investigation](evidence/history-report-learning-2026-10-06.md)
-for measured counts and the remaining explanatory limit.
+The saved history investigation that measured these counts was retired with the
+September world; `git log` keeps it.
 
 ## Scientific studies and software demonstrations
 
@@ -348,24 +349,48 @@ not certainty of winning future games.
 
 ## Self-play
 
+In an existing experiment notebook, add this cell after loading `evidence` and
+creating `sections`, before the HTML export:
+
+```python
+from manabot.reports.self_play import self_play_figures
+
+sections.append((
+    'Self-play balance', 'self-play',
+    self_play_figures(evidence, window_updates=100),
+))
+```
+
+Run All adds deck and play/draw win-rate panels to the saved report. New default
+notebooks already include this section. `window_updates` defaults to 100 and
+must be a positive integer; use 1 to inspect individual updates.
+
 Self-play deck and play/draw win rates describe the training distribution, not
-playing strength. `self_play_figures(evidence, window_updates=100)` plots completed
-outcomes in non-overlapping training-update windows. Each game contributes one
+playing strength. The panels plot completed outcomes in non-overlapping
+training-update windows. Each game contributes one
 observation on the play (seat 0, the engine's first player) and one on the draw
 (seat 1). A drawn game counts in the denominator but not as a win. Rates weight
 completed games, not updates or stream allocations.
 
 Separate panels keep cross-deck and mirror matchups apart. The deck view pools
 both starting seats; the play/draw view pools both decks within that matchup.
-`self_play_points(run)` exposes joint deck, opposing deck, starting position,
-win/loss/draw counts and update coordinates for further notebook analysis.
+`self_play_points(evidence.updates(run), window_updates=1)`, from the same module,
+exposes joint deck, opposing deck, starting position, win/loss/draw counts and
+update coordinates for further notebook analysis.
 In a mirror match, pooled deck win rate is mechanically 50% without draws;
 play/draw imbalance remains informative. Different training seeds and stages
 never share a curve. No uncertainty interval claims independent training seeds.
 
-Historical runs without these counters remain unavailable. New default notebooks
-include this section. Existing editable notebooks can import
-`self_play_figures` from `manabot.reports.self_play` and append
-`('Self-play balance', 'self-play', self_play_figures(evidence))` to `sections`.
-Raw per-update counts are retained under `self_play_outcomes` in each stage's
-diagnostics. This instrumentation does not change losses, actions or schedules.
+Keep the complete Etude metric run when copying evidence, including
+`artifacts/`. Each update references an immutable Etude row table of
+deck/opponent/position counts; Etude resolves those references after selecting
+resumed and duplicate updates. See [update metrics](training.md#update-metrics)
+for storage and reader details. Copying only metric blocks leaves the counts
+unavailable. A missing or damaged referenced table raises an error naming its
+file: restore the original bytes from the run's retained source (or rerun
+`uv run etude sync` after an interrupted delivery) and regenerate the report.
+Do not edit the table or replace missing evidence with zero counts.
+
+Historical scalar metrics and retained stage diagnostics remain readable without
+conversion. Runs without recorded outcomes show them as unavailable. This
+instrumentation does not change losses, actions or schedules.

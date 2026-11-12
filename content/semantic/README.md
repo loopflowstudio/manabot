@@ -21,7 +21,7 @@ key.
 file defines it as a non-token card. Tokens, rules fixtures and unknown cards
 are rejected. Known rules bugs are tracked as Tasks without revoking
 playability; playable does not mean bug-free. Rules tests are ordinary tests;
-they never gate support. See the [TLA notes](../../docs/rules/tla/README.md) for
+they never gate support. See the [TLA notes](https://github.com/loopflowstudio/manabot/blob/cac6fa27d/docs/rules/tla/README.md) for
 the open TLA work.
 
 ## The catalog and identity
@@ -40,7 +40,7 @@ it to chosen sets.
 ## Learning projection
 
 Current execution uses world **w17** and `current/learning_schema.json` (schema
-**10**). `managym.learning_catalog()` walks every catalog definition
+**10**). `managym.catalog_tokens()` walks every catalog definition
 with a `serde` serializer ([`cards/tokens.rs`](../../managym/src/cards/tokens.rs)):
 struct and variant boundaries, field names, `Effect::…` variants, integers,
 booleans and printed categories become tokens, so a new rules variant reaches

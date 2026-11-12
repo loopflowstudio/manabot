@@ -1,3 +1,3 @@
-"""Decode public structured offers and execute learned compound actions.
+"""Decode public structured offers into native Commands.
 
 Native Commands own legality. These adapters do not plan across future states."""

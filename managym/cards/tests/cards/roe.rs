@@ -9,7 +9,7 @@ use managym::{
     agent::action::Action,
     state::{
         game_object::{CardId, PlayerId},
-        mana::{Mana, ManaRestriction},
+        mana::{Mana, ManaUse},
         zone::ZoneType,
     },
 };
@@ -457,8 +457,8 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         let mut s = five_color_setup(&["Prophetic Prism"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
-        let lesson = ManaRestriction::spell(["Lesson"]);
-        let restricted = Mana::restricted_to(lesson.clone(), [0, 1, 0, 0, 0, 0]);
+        let lesson = ManaUse::spell(["Lesson"]);
+        let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
         s.game_mut().state.players[0].mana_pool.add(&restricted);
         s.game_mut().scenario_refresh_priority().unwrap();
         let prism = permanent_named(&s, "Prophetic Prism");
@@ -511,4 +511,33 @@ fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
         }
     }
+}
+
+/// A creature's {6} waterbend ability costs {4}; June's {1} stays {1}; an
+/// artifact's ability and an opponent's creature are unaffected.
+#[test]
+fn training_grounds_reduces_creature_activations_to_no_less_than_one_mana() {
+    let mut s = five_color_setup(&[
+        "Training Grounds",
+        "Katara, Bending Prodigy",
+        "June, Bounty Hunter",
+        "Prophetic Prism",
+    ]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, Bending Prodigy");
+    let june = s.force_permanent_on_battlefield(0, "June, Bounty Hunter");
+    let prism = s.force_permanent_on_battlefield(0, "Prophetic Prism");
+    let rival = s.force_permanent_on_battlefield(1, "Katara, Bending Prodigy");
+    let cost = |s: &Scenario, id| {
+        s.game().characteristics(id).activated_abilities[0]
+            .mana_cost
+            .clone()
+    };
+    let before = [katara, june, prism, rival].map(|id| cost(&s, id));
+    s.force_permanent_on_battlefield(0, "Training Grounds");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert_eq!(cost(&s, katara).generic(), before[0].generic() - 2);
+    assert_eq!(cost(&s, june), before[1]);
+    assert_eq!(cost(&s, june).mana_value, 1);
+    assert_eq!(cost(&s, prism), before[2]);
+    assert_eq!(cost(&s, rival), before[3]);
 }

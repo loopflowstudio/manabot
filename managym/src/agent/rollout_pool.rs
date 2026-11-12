@@ -92,7 +92,7 @@ impl RolloutPool {
         for world_index in 0..worlds {
             let world_seed = mix_seed(seed, world_index as u64);
             let mut world = game.clone();
-            world.determinize(hero, world_seed);
+            world.determinize(hero, world_seed)?;
             for action in 0..num_actions {
                 for rollout in 0..rollouts {
                     let mut sim = world.clone();

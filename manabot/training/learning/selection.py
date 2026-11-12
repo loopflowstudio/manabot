@@ -11,8 +11,10 @@ from typing import Literal, TypedDict
 import torch
 from torch import Tensor
 
+from manabot.model.numerics import float64_operand
 from manabot.training.learning.health import NumericalHealth
-from manabot.training.rollout.self_play import SelfPlayOutcome
+from manabot.training.learning.returns import terminal_distances
+from manabot.training.rollout.adaptive import AdaptiveDiagnostics
 
 
 class SelectionGroup(TypedDict):
@@ -45,11 +47,14 @@ def selected_rows(
     return indices[magnitude[indices] >= minimum]
 
 
+def _magnitude_quantile(advantages: Tensor, quantile: float) -> float:
+    return float(torch.quantile(advantages.detach().abs(), quantile))
+
+
 def selected_moves(advantages: Tensor, quantile: float, minimum: float) -> Tensor:
     """Inclusive magnitude quantile over all [T,E] rows; retain every tie."""
-    magnitude = advantages.detach().abs()
-    threshold = max(float(torch.quantile(magnitude, quantile)), minimum)
-    return magnitude >= threshold
+    threshold = max(_magnitude_quantile(advantages, quantile), minimum)
+    return advantages.detach().abs() >= threshold
 
 
 def selection_mask(
@@ -66,18 +71,9 @@ def selection_mask(
 
 
 def selected_mean(values: Tensor, selected: Tensor) -> Tensor:
-    """Mean over selected rows; empty support yields zero with zero gradient."""
+    """Selected mean, on the host for MPS; empty support has zero gradient."""
+    values, selected = float64_operand(values), float64_operand(selected)
     return values[selected].sum() / selected.sum().clamp_min(1)
-
-
-def terminal_distances(ends: Tensor) -> Tensor:
-    """Return [T,E] distances (terminal=0, censored=-1), reset at each end."""
-    distances = torch.full_like(ends, -1, dtype=torch.long)
-    tail = distances[-1].clone()
-    for step in reversed(range(len(ends))):
-        tail = torch.where(ends[step], 0, torch.where(tail >= 0, tail + 1, -1))
-        distances[step] = tail
-    return distances
 
 
 @torch.no_grad()
@@ -134,10 +130,69 @@ def selection_diagnostics(
     return result
 
 
+class ValueScale(TypedDict):
+    """Critic and advantage scale over every collected row [T,E] of one batch.
+
+    Predictions are collection-time critic outputs; targets are the update's
+    lambda returns (WDL expectations for categorical critics). Explained variance
+    is 1 - Var(target - prediction) / Var(target), a bootstrapped-target fit,
+    not error against final outcomes; None when targets are constant.
+    `selection_threshold` is the magnitude a quantile filter actually applied;
+    `floor_binds` says the absolute floor, not the quantile, set it. `quantile`
+    is the magnitude quantile, as in selected_moves.
+    """
+
+    prediction_mean: float
+    prediction_std: float
+    target_mean: float
+    target_std: float
+    explained_variance: float | None
+    advantage_std: float
+    selection_threshold: float | None
+    floor_binds: bool | None
+
+
+@torch.no_grad()
+def value_scale(
+    predictions: Tensor,
+    targets: Tensor,
+    advantages: Tensor,
+    *,
+    kind: Literal["top_count", "quantile"],
+    quantile: float,
+    minimum: float,
+) -> ValueScale:
+    """Summarize critic/advantage scale; see ValueScale for target semantics."""
+    predictions = float64_operand(predictions).double()
+    targets = float64_operand(targets).double()
+    target_variance = float(targets.var(correction=0))
+    threshold: float | None = None
+    floor_binds: bool | None = None
+    if kind == "quantile":
+        empirical = _magnitude_quantile(advantages, quantile)
+        threshold = max(empirical, minimum)
+        floor_binds = minimum > empirical
+    return ValueScale(
+        prediction_mean=float(predictions.mean()),
+        prediction_std=float(predictions.std(correction=0)),
+        target_mean=float(targets.mean()),
+        target_std=target_variance**0.5,
+        explained_variance=(
+            1 - float((targets - predictions).var(correction=0)) / target_variance
+            if target_variance > 0
+            else None
+        ),
+        advantage_std=float(float64_operand(advantages).double().std(correction=0)),
+        selection_threshold=threshold,
+        floor_binds=floor_binds,
+    )
+
+
 class UpdateDiagnostics(TypedDict, total=False):
     """Per-iteration measurements, logged once as the update's Etude metrics."""
 
-    self_play_outcomes: list[SelfPlayOutcome]
+    adaptive: AdaptiveDiagnostics
+
     numerical: NumericalHealth
     gradient: str
     value_kind: str
@@ -164,6 +219,7 @@ class UpdateDiagnostics(TypedDict, total=False):
     action_types: list[int]
     selected_action_types: list[int]
     selection_groups: list[SelectionGroup]
+    value_scale: ValueScale
     skipped: str
     loss: float
     policy_loss: float

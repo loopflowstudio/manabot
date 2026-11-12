@@ -4,7 +4,7 @@ Academy presents viewer-safe :class:`~managym.decision.Observation` values and
 lowers interaction drafts into atomic revision-bound
 :class:`~managym.decision.Command` values; it never reconstructs rules
 meaning, viewer filtering, or replay. This adapter is the Academy-side vertical
-slice of ``docs/ARCHITECTURE.md`` step 1 / Rules R1: it projects a composite
+slice of the README's one-rules-authority contract: it projects a composite
 viewer-safe Observation for a historical viewer and applies a Command through
 the same authority manabot uses. Match identity remains Academy-owned.
 """

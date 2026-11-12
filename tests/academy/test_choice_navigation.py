@@ -122,6 +122,8 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
             )
             game = server.SESSION_REGISTRY[initial["session_id"]].game
             assert game.env is not None
+            pending = frame["projection"]["decision_context"]["pending"]
+            assert pending
             pending_digest = game.env.state_digest()
             command = {
                 "command_id": "bottom-order",
@@ -141,6 +143,7 @@ def test_accumulate_wisdom_order_survives_reconnect_and_commits_once(
             )
             recovered = socket.receive_json()["recovery"]["frame"]
             assert recovered["offers"] == frame["offers"]
+            assert recovered["projection"]["decision_context"]["pending"] == pending
             assert game.env.state_digest() == pending_digest
             socket.send_json({"type": "command", "command": command})
             assert socket.receive_json()["status"] == "accepted"

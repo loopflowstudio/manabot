@@ -225,6 +225,13 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
 
 
+def test_x_cost_definition_renders_its_x() -> None:
+    """A visible {X} card renders instead of failing capture validation."""
+    env = priority_root(("Black Sun's Zenith",), ("Swamp", "Swamp"))
+    text = capture_text_decision(env).text
+    assert "Black Sun's Zenith. Sorcery; cost {X}{B}{B};" in text
+
+
 def _viewer_observation(decision: TextDecision) -> managym.Observation:
     source = DecisionInput.model_validate_json(decision.capture_json)
     return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
@@ -267,11 +274,10 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
 @pytest.mark.parametrize(
     "config",
     [
-        ObservationConfig(policy_input_version=5),
-        ObservationConfig(policy_input_version=6, max_facts=256),
+        ObservationConfig(max_facts=256),
         ObservationConfig(),
     ],
-    ids=["v5", "v6-pilot", "current-default"],
+    ids=["256-facts", "default"],
 )
 def test_once_each_turn_use_reaches_text_and_both_encoders(
     config: ObservationConfig,
@@ -301,11 +307,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
         if permanent.once_each_turn_used
     )
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
-    native = env.encode_observation(
-        observation,
-        policy_input_version=config.policy_input_version,
-        max_facts=config.max_facts,
-    )
+    native = env.encode_observation(observation, max_facts=config.max_facts)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
 
@@ -512,6 +514,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "used_abilities": "used-up abilities",
         "dealt_damage_this_turn": "dealt damage this turn",
         "transforms": "transformed N times",
+        "colors": "colors",
+        "keyword_counter_timestamps": "keyword counter timestamps",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -534,6 +538,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "face_down": "face down",
         "cast_permission": "may be played from exile by",
         "x": "announced X",
+        "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
         "stack_object_id": "S<n>",
@@ -554,6 +559,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_lost": "lost N life",
     },
     managym.Player: {
         "id": "the player's alias",
@@ -574,6 +580,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
+        "spells_cast": "cast N spells",
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
@@ -581,6 +588,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "effects": "Effect:",
     },
     managym.ContinuousEffect: {
+        "description": "the effect phrase of a rules payload",
+        "program": "the same payload's tokens, stated by its description",
         "modification": "the effect phrase",
         "power": "+P/+T or base power/toughness",
         "toughness": "+P/+T or base power/toughness",
@@ -645,12 +654,17 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
         "extra_turns": 1,
+        "spells_cast": 2,
         "turn_history": {
             "attacked": True,
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_lost": 3,
         },
+        "restricted_mana": [
+            {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
+        ],
     }
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
@@ -663,8 +677,37 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card." in text
+        "their control; drew 1 card; lost 3 life; cast 2 spells." in text
     )
+    assert "Restricted mana for anything but nonartifact spells: C 2." in text
+
+
+def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    mountain, ogre = state["agent_permanents"]
+    ogre |= {
+        "colors": ["Blue", "Black"],
+        "keyword_counter_timestamps": {"flying": 77},
+    }
+    mountain["colors"] = []
+    ogre["effects"] = [
+        {
+            "program": [[3, 1]],
+            "description": "It is blue and black.",
+            "modification": "SetColors",
+            "duration": "Indefinite",
+            "timestamp": 90,
+        }
+    ]
+    state.pop("shared_effects")
+    text = render_decision(_redigest(payload)).text
+    assert "; colors Blue, Black;" in text
+    assert "; colors colorless" in text
+    assert "keyword counter timestamps {'flying': 77}" in text
+    assert "It is blue and black." in text
 
 
 @pytest.mark.parametrize("historical", (False, True))
@@ -1066,9 +1109,30 @@ def test_sozin_search_plays_through_text_policy_and_academy_projection() -> None
         )
         if name is not None:
             decision = capture_text_decision(env)
-            assert len(decision.actions) == len(actions) > 64
+            assert len(decision.actions) == len(actions) <= 64
             submit_response(env, decision, decision.actions[name].reference)
             break
+        group = next(
+            (
+                i
+                for i, action in enumerate(actions)
+                if action.name_group is not None
+                and (action.description or "")
+                .removeprefix("Names ")
+                .split(" through ")[0]
+                <= "Gray Ogre"
+                <= (action.description or "").split(" through ")[-1]
+            ),
+            None,
+        )
+        if group is not None:
+            # Choosing a group of names is an ordinary text decision too.
+            decision = capture_text_decision(env)
+            assert "Choosing a group names nothing" in decision.text
+            assert len(decision.actions) == len(actions) <= 64
+            submit_response(env, decision, decision.actions[group].reference)
+            raw = env.observation_for_player(env.current_agent_index())
+            continue
         cast = next(
             (
                 i
@@ -1133,10 +1197,8 @@ def _assert_native_observation_parity(
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = ObservationSpace(ObservationConfig(policy_input_version=5)).encode(
-        observation
-    )
-    native = env.encode_observation(observation, policy_input_version=5)
+    encoded = ObservationSpace(ObservationConfig()).encode(observation)
+    native = env.encode_observation(observation)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
     return observation
@@ -1192,3 +1254,40 @@ def test_suki_hand_power_reaches_text_and_both_encoders() -> None:
         for line in decision.text.splitlines()
     )
     _assert_native_observation_parity(env, decision)
+
+
+def test_shared_mill_selection_reaches_text_commands_and_both_encoders() -> None:
+    env = priority_root(("Ostrich-Horse",), ("Forest", "Forest", "Forest"))
+    decision = capture_text_decision(env)
+    cast = next(a for a in decision.actions if "Cast" in a.description)
+    submit_response(env, decision, cast.reference)
+    for _ in range(12):
+        decision = capture_text_decision(env)
+        if "Stage: select cards." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("shared selection not reached")
+    assert "; select cards" in decision.text
+    assert "may select up to 1 more cards" in decision.text
+    assert len(decision.actions) >= 2
+    observation = _assert_native_observation_parity(env, decision)
+    assert any(
+        frame.kind == 6 and frame.decision == 28 and frame.can_decline
+        for frame in observation.continuation
+    )
+    assert render_decision(decision.capture_json).text == decision.text
+    before = env.state_digest()
+    outcomes: set[str] = set()
+    for action in decision.actions:
+        branch = env.clone_env()
+        replay = env.clone_env()
+        captured = capture_text_decision(branch)
+        submit_response(branch, captured, action.reference)
+        submit_response(replay, capture_text_decision(replay), action.reference)
+        assert branch.state_digest() == replay.state_digest()
+        outcomes.add(branch.state_digest())
+        with pytest.raises(SemanticContractError):
+            submit_response(branch, captured, action.reference)
+    assert len(outcomes) >= 2
+    assert env.state_digest() == before

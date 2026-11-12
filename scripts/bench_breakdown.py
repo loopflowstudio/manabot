@@ -13,22 +13,26 @@ import torch
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.env.vector_env import VectorEnv
-from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
+from manabot.infra.config import (
+    POLICY_INPUT_VERSION,
+    ModelConfig,
+    ObservationConfig,
+    RewardConfig,
+)
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 
 
-def build_env(num_envs: int, seed: int, policy_input_version: int = 2) -> VectorEnv:
+def build_env(num_envs: int, seed: int) -> VectorEnv:
     return VectorEnv(
         num_envs=num_envs,
         match=Match(),
-        observation_space=ObservationSpace(
-            ObservationConfig(policy_input_version=policy_input_version)
-        ),
+        observation_space=ObservationSpace(ObservationConfig()),
         reward=Reward(RewardConfig()),
         device="cpu",
         seed=seed,
-        opponent_policy="passive",
+        opponent_policy="random",
     )
 
 
@@ -37,10 +41,9 @@ def run_breakdown(
     total_steps: int,
     with_inference: bool,
     seed: int,
-    policy_input_version: int = 2,
 ) -> tuple[dict[str, dict[str, float]], float]:
     profiler = Profiler(enabled=True)
-    env = build_env(num_envs, seed, policy_input_version)
+    env = build_env(num_envs, seed)
 
     agent = None
     if with_inference:
@@ -59,7 +62,9 @@ def run_breakdown(
                 if agent is not None:
                     with profiler.track("inference"):
                         with torch.no_grad():
-                            action, _, _, _ = agent.get_action_and_value(obs)
+                            action, _, _, _ = agent.get_action_and_value(
+                                admit_observation(agent, obs)
+                            )
                         actions = action
 
                 with profiler.track("step_into_buffers"):
@@ -134,7 +139,6 @@ def main() -> None:
         action="store_true",
         help="Include a torch forward pass per step",
     )
-    parser.add_argument("--policy-input-version", type=int, choices=(1, 2), default=2)
     parser.add_argument(
         "--matched-corpus",
         action="store_true",
@@ -153,7 +157,7 @@ def main() -> None:
             )
         torch.set_num_threads(1)
         torch.set_num_interop_threads(1)
-        env = build_env(args.num_envs, args.seed, args.policy_input_version)
+        env = build_env(args.num_envs, args.seed)
         try:
             env.reset()
             before = identity()
@@ -165,7 +169,7 @@ def main() -> None:
                         "identity_after": identity(),
                         "num_envs": args.num_envs,
                         "steps": args.steps,
-                        "policy_input_version": args.policy_input_version,
+                        "policy_input_version": POLICY_INPUT_VERSION,
                         "cases": rows,
                     }
                 )
@@ -179,7 +183,6 @@ def main() -> None:
         total_steps=args.steps,
         with_inference=args.with_inference,
         seed=args.seed,
-        policy_input_version=args.policy_input_version,
     )
     if args.json:
         print(
@@ -189,7 +192,7 @@ def main() -> None:
                     "num_envs": args.num_envs,
                     "steps": args.steps,
                     "warmup_steps": 20,
-                    "policy_input_version": args.policy_input_version,
+                    "policy_input_version": POLICY_INPUT_VERSION,
                     "inference": args.with_inference,
                     "stats": stats,
                     "steps_per_second": sps,

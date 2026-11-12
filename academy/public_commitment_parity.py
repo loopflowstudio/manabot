@@ -11,14 +11,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Command,
-    DecisionFrame,
-    SemanticTransition,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.likelihood import (
@@ -29,6 +21,14 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Command,
+    DecisionFrame,
+    SemanticTransition,
+    apply_semantic_command,
+)
+from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -41,7 +41,7 @@ RECEIPT_PATH = (
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "62265e5ef435eda4539a49b31228231a021078acc69e388b46ec6d8b181455ef"
+    "d6616852ae49aec263baf2443646ee28e0e9b3f2adebe57194f1f866981f60aa"
 )
 COMMAND_COUNT = 135
 COMMITMENT_COUNT = 66
@@ -494,13 +494,13 @@ def _source_manifest() -> dict[str, Any]:
         "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
-        "manabot/managym/experience_projection.py",
+        "managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
         "manabot/belief/tracker.py",
-        "manabot/managym/__init__.pyi",
-        "manabot/managym/decision.py",
-        "manabot/managym/possible_worlds.py",
+        "managym/__init__.pyi",
+        "managym/decision.py",
+        "managym/possible_worlds.py",
         "managym/src/agent/env.rs",
         "managym/src/agent/structured_offer.rs",
         "managym/src/decision.rs",

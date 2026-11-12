@@ -24,6 +24,7 @@ import torch.nn as nn
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,13 +61,13 @@ def agent(
 
 @pytest.fixture
 def real_observation(
-    observation_space: ObservationSpace,
+    observation_space: ObservationSpace, agent: ActorCritic
 ) -> Generator[Dict[str, torch.Tensor], None, None]:
     """
     Create a real observation using a vector env and the real observation encoder.
 
-    Returns a dictionary of torch.Tensors with a batch dimension (here, batch_size=2)
-    as produced by the real environment.
+    Returns the batch (batch_size=2) as produced by the real environment,
+    admitted for `agent`.
     """
     # Local imports
     from manabot.env.match import Match, Reward
@@ -82,10 +83,10 @@ def real_observation(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="passive",
+        opponent_policy="random",
     )
     obs, _ = vec_env.reset()
-    yield obs
+    yield admit_observation(agent, obs)
     vec_env.close()
 
 
@@ -136,7 +137,14 @@ def test_gradient_flow(agent: ActorCritic, real_observation: Dict[str, torch.Ten
     loss = logits.mean() + value.mean()
     loss.backward()
 
+    # Program and shared-effect reducers keep absent (never zero) gradients
+    # until an observation carries a program or an effect record; an opening
+    # observation has neither.
+    unused = ("facts.program_", "shared_effects.")
     for name, param in agent.named_parameters():
+        if name.startswith(unused):
+            assert param.grad is None, f"Unexpected gradient for parameter {name}"
+            continue
         assert param.grad is not None, f"No gradient for parameter {name}"
         assert not torch.isnan(param.grad).any(), f"NaN gradient in parameter {name}"
         assert not torch.isinf(param.grad).any(), (
@@ -158,7 +166,8 @@ def test_object_embeddings(
     Verify that object embeddings maintain proper dimensionality and masking.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
 
     expected_objects = (
         2  # Two players
@@ -198,7 +207,8 @@ def test_attention_mechanism(
     Verify the attention mechanism's behavior and output properties.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     attended = agent.attention(objects, is_agent, key_padding_mask=key_padding_mask)
 
@@ -222,41 +232,33 @@ def test_focus_object_incorporation(
     Verify that focus objects are correctly incorporated into action representations.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     post_attention = agent.attention(
         objects, is_agent, key_padding_mask=key_padding_mask
     )
 
-    actions = agent.action_embedding(obs["actions"][..., :-2])
-    actions_with_focus = agent._add_focus(actions, post_attention, obs["action_focus"])
-
-    batch_size = obs["actions"].shape[0]
-    expected_dim = (1 + agent.max_focus_objects) * agent.config.hidden_dim
-    assert actions_with_focus.shape == (
-        batch_size,
-        obs["actions"].shape[1],
-        expected_dim,
-    ), f"Wrong shape for actions with focus: {actions_with_focus.shape}"
-
-    # Check that invalid focus indices (-1) yield zero embeddings
-    invalid_focus = obs["action_focus"] == -1
-    if invalid_focus.any():
-        focus_start = agent.config.hidden_dim
-        for i in range(agent.max_focus_objects):
-            focus_slice = slice(
-                focus_start + i * agent.config.hidden_dim,
-                focus_start + (i + 1) * agent.config.hidden_dim,
-            )
-            invalid_positions = (
-                invalid_focus[..., i]
-                .unsqueeze(-1)
-                .expand(-1, obs["actions"].shape[1], agent.config.hidden_dim)
-            )
-            focus_embeddings = actions_with_focus[..., focus_slice]
-            assert torch.all(focus_embeddings[invalid_positions] == 0), (
-                f"Invalid focus index {i} produced non-zero embedding"
-            )
+    batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
+    features = agent._gather_informed_actions(
+        obs, post_attention, state, batches, slots
+    )
+    assert features.shape == (len(slots), agent.config.hidden_dim)
+    # Changing a legal focus changes the action feature; absent focus has no
+    # dependence on object row zero (the clamped gather location).
+    changed = {key: value.clone() for key, value in obs.items()}
+    changed["action_focus"].fill_(-1)
+    absent = agent._gather_informed_actions(
+        changed, post_attention, state, batches, slots
+    )
+    mutated = post_attention.clone()
+    mutated[:, 0] += 10
+    torch.testing.assert_close(
+        absent, agent._gather_informed_actions(changed, mutated, state, batches, slots)
+    )
+    changed["action_focus"][batches, slots, 0] = 0
+    focused = agent._gather_informed_actions(changed, mutated, state, batches, slots)
+    assert not torch.allclose(absent, focused)
 
 
 # -----------------------------------------------------------------------------
@@ -340,7 +342,8 @@ def test_attention_stability(
     Verify that the attention mechanism produces stable outputs across multiple forward passes.
     """
     obs = real_observation
-    objects, is_agent, validity, _, _ = agent._gather_object_embeddings(obs)
+    state = agent._gather_object_embeddings(obs)
+    objects, is_agent, validity = state.objects, state.is_agent, state.validity
     key_padding_mask = validity == 0
     outputs = []
     for _ in range(5):

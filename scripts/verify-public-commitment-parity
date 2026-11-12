@@ -5,7 +5,7 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
-uv run --python 3.12 --extra play maturin develop --release \
+uv run --python 3.13 --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 cargo test --manifest-path managym/Cargo.toml public_commitment --no-fail-fast
 uv run --extra dev pytest -q \

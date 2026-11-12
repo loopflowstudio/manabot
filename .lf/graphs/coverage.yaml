@@ -1,0 +1,11 @@
+# Narrow code fork: three domain loops before one publish/demo/deliver/verify.
+# Builtin code/pursue composition inspected 2026-11-04; generic skills stay builtin.
+- graph: coverage-working
+- graph: coverage-scalable
+- graph: engine-optimization
+- pr-publish
+- loop: coverage-working
+  interactive: demo
+- graph: deliver
+- loop: coverage-working
+  interactive: verify

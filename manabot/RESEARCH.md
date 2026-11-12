@@ -8,7 +8,7 @@ fail, repeated until a bounded superhuman claim is earned.
 This document says what we are doing now, what we know, what we plan to do
 later, and how we judge results. Preregistered predictions, results and
 provenance live in [`experiments/`](../experiments/README.md); the system
-design is in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). Live task
+design is in the [README](../README.md#the-system). Live task
 status lives in Linear, not here.
 
 ## What we are doing now
@@ -28,7 +28,8 @@ evaluation complete the recipe, which adapts
 [Ataraxos](https://doi.org/10.1038/s41586-026-11036-y). Each piece is a
 switch we test on Magic rather than adopt by default. Many games step in
 lockstep so inference is batched; the GPU baseline is
-`batched_baseline()` in `experiments/batched_baseline.py`.
+`batched_baseline()` in `experiments/batched_baseline.py`. The mechanics are in
+[How a manabot learns](../docs/learning.md).
 
 ### Current questions
 
@@ -73,8 +74,12 @@ they guide the next experiment rather than settle a method.
 
 Belief sampling and local search run end to end. In their
 pilots, 840 held-out sampled hands had no support violations and local search
-replayed 183 commands with no mismatch. Neither has shown a strength gain over
-the policy alone yet.
+replayed 183 commands with no mismatch. On MTG-183's frozen w13 policy,
+magnetic-mirror local search with playable uniform hand sampling beat the
+policy's own sampled play by +12.5 to +17.4 points from 4 to 16 shuffles, and
+beat PUCT-1024 at lower cost; knowing the true hand added at most +5.2 points
+([mirror search](../experiments/search-mirror.md), exploratory, one policy).
+The learned belief sampler has not yet been tested in search.
 
 ### Earlier: the search era
 
@@ -106,8 +111,7 @@ self-play policy (frozen checkpoint)
        local search at the decision
 ```
 
-The sampler and search exist ([belief sampler](../docs/search-and-beliefs.md#belief-sampler),
-[local policy search](../docs/search-and-beliefs.md#local-policy-search)). The plan is to make
+The sampler and search exist ([beside the loop](../README.md#beside-the-loop)). The plan is to make
 them improve play. Search should adjust a strong learned policy, not replace
 it. At a decision it samples hidden hands from the belief, plays out each
 candidate action with the frozen policy, and applies one regularized update to
@@ -279,8 +283,6 @@ the payoff matrix and exploiters decide whether the gain is robust.
 ## What successful ladders teach
 
 The useful lineage is a set of engineering patterns, not a recipe to copy.
-The detailed source review lives in
-[`docs/research/intelligence-development-ladders.md`](../docs/research/intelligence-development-ladders.md).
 
 | System | How it hill-climbed | What manabot should borrow |
 | --- | --- | --- |
@@ -334,7 +336,7 @@ prerequisites for the first bounded play-policy claim.
 | --- | --- |
 | This document | What we are doing, what we know, what we plan, and how we measure |
 | [`experiments/`](../experiments/README.md) | Preregistrations, immutable reports, raw evidence links, and reproduction |
-| [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) | System design and ownership |
+| [`README.md`](../README.md) | System design, ownership and the enforced contracts |
 | [`WORLDS.md`](../WORLDS.md) | Observation/action worlds and artifact compatibility |
 | Linear | Projects, Tasks, owners, dependencies, and live execution state |
 

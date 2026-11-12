@@ -174,9 +174,9 @@ Compact receipts include exact source commits, original result hashes, Actions
 artifact IDs/digests, all configuration errors, per-family counts, representative
 scores, replay checks and collision controls:
 
-- [Primary receipt](../docs/evidence/learnability/search-primary.json)
-- [Corrected control receipt](../docs/evidence/learnability/search-control.json)
-- [Focused receipt](../docs/evidence/learnability/search-focused.json)
+- Primary receipt: `experiments/data/learnability/search-primary.json`
+- Corrected control receipt: `experiments/data/learnability/search-control.json`
+- Focused receipt: `experiments/data/learnability/search-focused.json`
 
 Full reports, model weights, traces and tensors are retained in the three Actions
 artifacts for 14 days and locally under `.runs/learnability-search-evidence/`.

@@ -3084,7 +3084,7 @@
   "Secret of Bloodbending": {
     "name": "Secret of Bloodbending",
     "mana_cost": "{U}{U}{U}{U}",
-    "type_line": "Sorcery \u2014 Lesson",
+    "type_line": "Sorcery — Lesson",
     "power": null,
     "toughness": null,
     "keywords": [
@@ -4570,28 +4570,1249 @@
       "B"
     ]
   },
-  "Scarecrow Guide": {
-    "name": "Scarecrow Guide",
-    "mana_cost": "{2}",
-    "type_line": "Artifact Creature — Scarecrow",
+  "Kellan, Planar Trailblazer": {
+    "name": "Kellan, Planar Trailblazer",
+    "mana_cost": "{R}",
+    "type_line": "Legendary Creature — Human Faerie Scout",
     "power": "2",
     "toughness": "1",
-    "keywords": [
-      "Reach"
-    ],
-    "oracle_text": "Reach\n{1}: Add one mana of any color. Activate only once each turn.",
-    "colors": []
-  },
-  "Supportive Parents": {
-    "name": "Supportive Parents",
-    "mana_cost": "{2}{G}",
-    "type_line": "Creature — Human Citizen",
-    "power": "3",
-    "toughness": "3",
     "keywords": [],
-    "oracle_text": "Tap two untapped creatures you control: Add one mana of any color.",
+    "oracle_text": "{1}{R}: If Kellan is a Scout, it becomes a Human Faerie Detective and gains \"Whenever Kellan deals combat damage to a player, exile the top card of your library. You may play that card this turn.\"\n{2}{R}: If Kellan is a Detective, it becomes a 3/2 Human Faerie Rogue and gains double strike.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Beorn the Fierce": {
+    "name": "Beorn the Fierce",
+    "mana_cost": "{3}{G}{G}",
+    "type_line": "Legendary Creature — Bear Shapeshifter Warrior",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample\nOther Bears you control get +2/+2.\nAt the beginning of combat on your turn, put a trample counter on up to one target creature you control. It becomes a Bear in addition to its other types. Then if you control three or more Bears, draw two cards.",
     "colors": [
       "G"
     ]
+  },
+  "Caradora, Heart of Alacria": {
+    "name": "Caradora, Heart of Alacria",
+    "mana_cost": "{2}{G}{W}",
+    "type_line": "Legendary Creature — Human Knight",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When Caradora enters, you may search your library for a Mount or Vehicle card, reveal it, put it into your hand, then shuffle.\nIf one or more +1/+1 counters would be put on a creature or Vehicle you control, that many plus one +1/+1 counters are put on it instead.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Doubling Season": {
+    "name": "Doubling Season",
+    "mana_cost": "{4}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "If an effect would create one or more tokens under your control, it creates twice that many of those tokens instead.\nIf an effect would put one or more counters on a permanent you control, it puts twice that many of those counters on that permanent instead.",
+    "colors": [
+      "G"
+    ]
+  },
+  "The Cabbage Merchant": {
+    "name": "The Cabbage Merchant",
+    "mana_cost": "{2}{G}",
+    "type_line": "Legendary Creature — Human Citizen",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "Whenever an opponent casts a noncreature spell, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever a creature deals combat damage to you, sacrifice a Food token.\nTap two untapped Foods you control: Add one mana of any color.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Capital Guard": {
+    "name": "Capital Guard",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Explosive Shot": {
+    "name": "Explosive Shot",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Explosive Shot deals 4 damage to target creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Kindly Customer": {
+    "name": "Kindly Customer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Citizen",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, draw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Koala-Sheep": {
+    "name": "Koala-Sheep",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Bear Sheep",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, you gain 3 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Kyoshi Warrior Guard": {
+    "name": "Kyoshi Warrior Guard",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "W"
+    ]
+  },
+  "Warship Scout": {
+    "name": "Warship Scout",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Human Scout",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Wolf Cove Villager": {
+    "name": "Wolf Cove Villager",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Peasant",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "This creature enters tapped.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Zuko's Offense": {
+    "name": "Zuko's Offense",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Zuko's Offense deals 2 damage to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Aardvark Sloth": {
+    "name": "Aardvark Sloth",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Sloth Beast",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Deer-Dog": {
+    "name": "Deer-Dog",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Elk Dog",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Dragon Moose": {
+    "name": "Dragon Moose",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Dragon Elk",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Elephant-Rat": {
+    "name": "Elephant-Rat",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Elephant Rat",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Nation Ambushers": {
+    "name": "Fire Nation Ambushers",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Nation Soldier": {
+    "name": "Fire Nation Soldier",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Flying Dolphin-Fish": {
+    "name": "Flying Dolphin-Fish",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Whale Fish",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Frog-Squirrels": {
+    "name": "Frog-Squirrels",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Frog Squirrel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Gilacorn": {
+    "name": "Gilacorn",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Lizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Hippo-Cows": {
+    "name": "Hippo-Cows",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Hippo Ox",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Komodo Rhino": {
+    "name": "Komodo Rhino",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Lizard Rhino",
+    "power": "5",
+    "toughness": "2",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "The Terror of Serpent's Pass": {
+    "name": "The Terror of Serpent's Pass",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Hexproof"
+    ],
+    "oracle_text": "Hexproof (This creature can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Tundra Wall": {
+    "name": "Tundra Wall",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Wall",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender (This creature can't attack.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Turtle-Seals": {
+    "name": "Turtle-Seals",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Turtle Seal",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Zhao, the Seething Flame": {
+    "name": "Zhao, the Seething Flame",
+    "mana_cost": "{4}{R}",
+    "type_line": "Legendary Creature — Human Soldier",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Sokka, Wolf Cove's Protector": {
+    "name": "Sokka, Wolf Cove's Protector",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Aang, Air Nomad": {
+    "name": "Aang, Air Nomad",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nVigilance (Attacking doesn't cause this creature to tap.)\nOther creatures you control have vigilance.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Iroh, Firebending Instructor": {
+    "name": "Iroh, Firebending Instructor",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever Iroh attacks, attacking creatures get +1/+1 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Katara, Heroic Healer": {
+    "name": "Katara, Heroic Healer",
+    "mana_cost": "{4}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen Katara enters, put a +1/+1 counter on each other creature you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sledding Otter-Penguin": {
+    "name": "Sledding Otter-Penguin",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Otter Bird",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{3}: Put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Toucan-Puffin": {
+    "name": "Toucan-Puffin",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Bird",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, target creature you control gets +2/+0 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fire Nation's Conquest": {
+    "name": "Fire Nation's Conquest",
+    "mana_cost": "{2}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +1/+0.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Allied Teamwork": {
+    "name": "Allied Teamwork",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a 1/1 white Ally creature token.\nAllies you control get +1/+1.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sokka's Sword Training": {
+    "name": "Sokka's Sword Training",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +2/+2 until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sol Ring": {
+    "name": "Sol Ring",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}{C}.",
+    "colors": []
+  },
+  "Diresight": {
+    "name": "Diresight",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Surveil 2, then draw two cards. You lose 2 life. (To surveil 2, look at the top two cards of your library, then put any number of them into your graveyard and the rest on top of your library in any order.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Consider": {
+    "name": "Consider",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)\nDraw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Fervor": {
+    "name": "Fervor",
+    "mana_cost": "{2}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control have haste. (They can attack and {T} as soon as they come under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Run Amok": {
+    "name": "Run Amok",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target attacking creature gets +3/+3 and gains trample until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Heroic Intervention": {
+    "name": "Heroic Intervention",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dramatic Reversal": {
+    "name": "Dramatic Reversal",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Untap all nonland permanents you control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Entomb": {
+    "name": "Entomb",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a card, put that card into your graveyard, then shuffle.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Eladamri's Call": {
+    "name": "Eladamri's Call",
+    "mana_cost": "{G}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a creature card, reveal that card, put it into your hand, then shuffle.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Black Sun's Zenith": {
+    "name": "Black Sun's Zenith",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put X -1/-1 counters on each creature. Shuffle Black Sun's Zenith into its owner's library.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Scout's Warning": {
+    "name": "Scout's Warning",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "The next creature card you play this turn can be played as though it had flash.\nDraw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Meteorite": {
+    "name": "Meteorite",
+    "mana_cost": "{5}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Sunbaked Canyon": {
+    "name": "Sunbaked Canyon",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}, Pay 1 life: Add {R} or {W}.\n{1}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Treetop Village": {
+    "name": "Treetop Village",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G}.\n{1}{G}: This land becomes a 3/3 green Ape creature with trample until end of turn. It's still a land. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": []
+  },
+  "Cruel Tutor": {
+    "name": "Cruel Tutor",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a card, then shuffle and put that card on top. You lose 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Captain Sisay": {
+    "name": "Captain Sisay",
+    "mana_cost": "{2}{G}{W}",
+    "type_line": "Legendary Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{T}: Search your library for a legendary card, reveal that card, put it into your hand, then shuffle.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Prosperity": {
+    "name": "Prosperity",
+    "mana_cost": "{X}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each player draws X cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Insurrection": {
+    "name": "Insurrection",
+    "mana_cost": "{5}{R}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Untap all creatures and gain control of them until end of turn. They gain haste until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Intruder Alarm": {
+    "name": "Intruder Alarm",
+    "mana_cost": "{2}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures don't untap during their controllers' untap steps.\nWhenever a creature enters, untap all creatures.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Elemental Bond": {
+    "name": "Elemental Bond",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control with power 3 or greater enters, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Beastmaster Ascension": {
+    "name": "Beastmaster Ascension",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control attacks, you may put a quest counter on this enchantment.\nAs long as this enchantment has seven or more quest counters on it, creatures you control get +5/+5.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Valakut, the Molten Pinnacle": {
+    "name": "Valakut, the Molten Pinnacle",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\nWhenever a Mountain you control enters, if you control at least five other Mountains, you may have this land deal 3 damage to any target.\n{T}: Add {R}.",
+    "colors": []
+  },
+  "Humble Defector": {
+    "name": "Humble Defector",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Rogue",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Draw two cards. Target opponent gains control of this creature. Activate only during your turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Visions of Beyond": {
+    "name": "Visions of Beyond",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw a card. If a graveyard has twenty or more cards in it, draw three cards instead.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Standstill": {
+    "name": "Standstill",
+    "mana_cost": "{1}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When a player casts a spell, sacrifice this enchantment. If you do, each of that player's opponents draws three cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Join the Dance": {
+    "name": "Join the Dance",
+    "mana_cost": "{G}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create two 1/1 white Human creature tokens.\nFlashback {3}{G}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Dockside Extortionist": {
+    "name": "Dockside Extortionist",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Pirate",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "When this creature enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Blasphemous Act": {
+    "name": "Blasphemous Act",
+    "mana_cost": "{8}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {1} less to cast for each creature on the battlefield.\nBlasphemous Act deals 13 damage to each creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Agent of Treachery": {
+    "name": "Agent of Treachery",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Creature — Human Rogue",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, gain control of target permanent.\nAt the beginning of your end step, if you control three or more permanents you don't own, draw three cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Return of the Wildspeaker": {
+    "name": "Return of the Wildspeaker",
+    "mana_cost": "{4}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Draw cards equal to the greatest power among non-Human creatures you control.\n• Non-Human creatures you control get +3/+3 until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Warstorm Surge": {
+    "name": "Warstorm Surge",
+    "mana_cost": "{5}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control enters, it deals damage equal to its power to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Noxious Gearhulk": {
+    "name": "Noxious Gearhulk",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace\nWhen this creature enters, you may destroy another target creature. If a creature is destroyed this way, you gain life equal to its toughness.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Searing Blood": {
+    "name": "Searing Blood",
+    "mana_cost": "{R}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Searing Blood deals 2 damage to target creature. When that creature dies this turn, Searing Blood deals 3 damage to the creature's controller.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rending Volley": {
+    "name": "Rending Volley",
+    "mana_cost": "{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell can't be countered.\nRending Volley deals 4 damage to target white or blue creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rites of Flourishing": {
+    "name": "Rites of Flourishing",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of each player's draw step, that player draws an additional card.\nEach player may play an additional land on each of their turns.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Fevered Visions": {
+    "name": "Fevered Visions",
+    "mana_cost": "{1}{U}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of each player's end step, that player draws a card. If the player is your opponent and has four or more cards in hand, this enchantment deals 2 damage to that player.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Drannith Magistrate": {
+    "name": "Drannith Magistrate",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Wizard",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Your opponents can't cast spells from anywhere other than their hands.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Imprisoned in the Moon": {
+    "name": "Imprisoned in the Moon",
+    "mana_cost": "{2}{U}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature, land, or planeswalker\nEnchanted permanent is a colorless land with \"{T}: Add {C}\" and loses all other card types and abilities.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Empty City Ruse": {
+    "name": "Empty City Ruse",
+    "mana_cost": "{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent skips all combat phases of their next turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Koma, Cosmos Serpent": {
+    "name": "Koma, Cosmos Serpent",
+    "mana_cost": "{3}{G}{G}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "This spell can't be countered.\nAt the beginning of each upkeep, create a 3/3 blue Serpent creature token named Koma's Coil.\nSacrifice another Serpent: Choose one —\n• Tap target permanent. Its activated abilities can't be activated this turn.\n• Koma gains indestructible until end of turn.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Training Grounds": {
+    "name": "Training Grounds",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Activated abilities of creatures you control cost {2} less to activate. This effect can't reduce the mana in that cost to less than one mana.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Taunting Challenge": {
+    "name": "Taunting Challenge",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "All creatures able to block target creature this turn do so.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Volcanic Torrent": {
+    "name": "Volcanic Torrent",
+    "mana_cost": "{4}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Cascade"
+    ],
+    "oracle_text": "Cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)\nVolcanic Torrent deals X damage to each creature and planeswalker your opponents control, where X is the number of spells you've cast this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Mystic Remora": {
+    "name": "Mystic Remora",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Cumulative upkeep"
+    ],
+    "oracle_text": "Cumulative upkeep {1} (At the beginning of your upkeep, put an age counter on this permanent, then sacrifice it unless you pay its upkeep cost for each age counter on it.)\nWhenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Dark Depths": {
+    "name": "Dark Depths",
+    "mana_cost": "",
+    "type_line": "Legendary Snow Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Dark Depths enters with ten ice counters on it.\n{3}: Remove an ice counter from Dark Depths.\nWhen Dark Depths has no ice counters on it, sacrifice it. If you do, create Marit Lage, a legendary 20/20 black Avatar creature token with flying and indestructible.",
+    "colors": []
+  },
+  "Clone Legion": {
+    "name": "Clone Legion",
+    "mana_cost": "{7}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "For each creature target player controls, create a token that's a copy of that creature.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Rhys the Redeemed": {
+    "name": "Rhys the Redeemed",
+    "mana_cost": "{G/W}",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{2}{G/W}, {T}: Create a 1/1 green and white Elf Warrior creature token.\n{4}{G/W}{G/W}, {T}: For each creature token you control, create a token that's a copy of that creature.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Three Dreams": {
+    "name": "Three Dreams",
+    "mana_cost": "{4}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for up to three Aura cards with different names, reveal them, put them into your hand, then shuffle.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sundial of the Infinite": {
+    "name": "Sundial of the Infinite",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}, {T}: End the turn. Activate only during your turn. (Exile all spells and abilities from the stack. Discard down to your maximum hand size. Damage wears off, and \"this turn\" and \"until end of turn\" effects end.)",
+    "colors": []
+  },
+  "Mirrorwing Dragon": {
+    "name": "Mirrorwing Dragon",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Creature — Dragon",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever a player casts an instant or sorcery spell that targets only this creature, that player copies that spell for each other creature they control that the spell could target. Each copy targets a different one of those creatures.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Force of Negation": {
+    "name": "Force of Negation",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "If it's not your turn, you may exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target noncreature spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Shattering Spree": {
+    "name": "Shattering Spree",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Replicate"
+    ],
+    "oracle_text": "Replicate {R} (When you cast this spell, copy it for each time you paid its replicate cost. You may choose new targets for the copies.)\nDestroy target artifact.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Bribery": {
+    "name": "Bribery",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search target opponent's library for a creature card and put that card onto the battlefield under your control. Then that player shuffles.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Clone": {
+    "name": "Clone",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Shapeshifter",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [],
+    "oracle_text": "You may have this creature enter as a copy of any creature on the battlefield.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sakashima of a Thousand Faces": {
+    "name": "Sakashima of a Thousand Faces",
+    "mana_cost": "{3}{U}",
+    "type_line": "Legendary Creature — Human Rogue",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Partner"
+    ],
+    "oracle_text": "You may have Sakashima enter as a copy of another creature you control, except it has Sakashima's other abilities.\nThe \"legend rule\" doesn't apply to permanents you control.\nPartner (You can have two commanders if both have partner.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Diaochan, Artful Beauty": {
+    "name": "Diaochan, Artful Beauty",
+    "mana_cost": "{3}{R}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Destroy target creature of your choice, then destroy target creature of an opponent's choice. Activate only during your turn, before attackers are declared.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Teferi's Protection": {
+    "name": "Teferi's Protection",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Until your next turn, your life total can't change and you gain protection from everything. All permanents you control phase out. (While they're phased out, they're treated as though they don't exist. They phase in before you untap during your untap step.)\nExile Teferi's Protection.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Bloodchief Ascension": {
+    "name": "Bloodchief Ascension",
+    "mana_cost": "{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of each end step, if an opponent lost 2 or more life this turn, you may put a quest counter on this enchantment. (Damage causes loss of life.)\nWhenever a card is put into an opponent's graveyard from anywhere, if this enchantment has three or more quest counters on it, you may have that player lose 2 life. If you do, you gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Brought Back": {
+    "name": "Brought Back",
+    "mana_cost": "{W}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose up to two target permanent cards in your graveyard that were put there from the battlefield this turn. Return them to the battlefield tapped.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Cityscape Leveler": {
+    "name": "Cityscape Leveler",
+    "mana_cost": "{8}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Unearth",
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhen you cast this spell and whenever this creature attacks, destroy up to one target nonland permanent. Its controller creates a tapped Powerstone token.\nUnearth {8}",
+    "colors": []
+  },
+  "The Great Henge": {
+    "name": "The Great Henge",
+    "mana_cost": "{7}{G}{G}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {X} less to cast, where X is the greatest power among creatures you control.\n{T}: Add {G}{G}. You gain 2 life.\nWhenever a nontoken creature you control enters, put a +1/+1 counter on it and draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Tarnished Citadel": {
+    "name": "Tarnished Citadel",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. This land deals 3 damage to you.",
+    "colors": []
   }
 }

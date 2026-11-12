@@ -1,7 +1,7 @@
 use smallvec::SmallVec;
 
 use super::{
-    card::{ActivatedAbilityDefinition, Card, Keyword, Keywords},
+    card::{ActivatedAbilityDefinition, Card, Keyword},
     game_object::{CardId, ObjectId, ObjectRef, PlayerId},
 };
 
@@ -28,6 +28,14 @@ pub enum CounterKind {
     Defense,
     /// CR 714.2: a Saga's chapter abilities trigger as these are put on it.
     Lore,
+    Trample,
+    /// CR 122.1a: -1/-1 to power and toughness (layer 7c); annihilates with
+    /// +1/+1 counters as a state-based action (CR 704.5q).
+    MinusOneMinusOne,
+    /// No rules meaning of its own; cumulative upkeep counts it (CR 702.24a).
+    Age,
+    /// No rules meaning of its own; cards count it (Dark Depths).
+    Ice,
 }
 
 impl CounterKind {
@@ -44,10 +52,22 @@ impl CounterKind {
             CounterKind::Lore => "lore",
             CounterKind::Loyalty => "loyalty",
             CounterKind::Defense => "defense",
+            CounterKind::Trample => "trample",
+            CounterKind::MinusOneMinusOne => "minus_one_minus_one",
+            CounterKind::Age => "age",
+            CounterKind::Ice => "ice",
         }
     }
 
-    pub const ALL: [CounterKind; 10] = [
+    pub fn keyword(self) -> Option<Keyword> {
+        match self {
+            Self::DoubleStrike => Some(Keyword::DoubleStrike),
+            Self::Trample => Some(Keyword::Trample),
+            _ => None,
+        }
+    }
+
+    pub const ALL: [CounterKind; 14] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -58,6 +78,10 @@ impl CounterKind {
         CounterKind::Loyalty,
         CounterKind::Defense,
         CounterKind::Lore,
+        CounterKind::Trample,
+        CounterKind::MinusOneMinusOne,
+        CounterKind::Age,
+        CounterKind::Ice,
     ];
 }
 
@@ -136,6 +160,9 @@ pub struct Permanent {
     /// `Game::characteristics`.
     #[serde(skip_serializing_if = "Counters::is_empty")]
     pub counters: Counters,
+    /// Keyword-counter timestamps, renewed on additions (CR 613.7c).
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub keyword_counter_timestamps: std::collections::BTreeMap<CounterKind, ObjectId>,
     /// Its timestamp (CR 613.7d/e): when it entered, renewed when an Aura or
     /// Equipment becomes attached. Static abilities apply in this order among
     /// continuous-effect records.
@@ -195,6 +222,7 @@ impl Permanent {
             dealt_damage_this_turn: false,
             timestamp: id,
             counters: Counters::default(),
+            keyword_counter_timestamps: Default::default(),
             attacking: false,
             was_cast: false,
             cast_x: 0,
@@ -202,18 +230,6 @@ impl Permanent {
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),
         }
-    }
-
-    /// Printed keywords plus keyword counters. An input to
-    /// `Game::characteristics`, which applies continuous effects and static
-    /// grants in layer 6.
-    pub fn intrinsic_keywords(&self, card: &Card) -> Keywords {
-        let mut keywords = card.keywords;
-        // CR 122.1b: a keyword counter grants its keyword while it remains.
-        if self.counters.get(CounterKind::DoubleStrike) > 0 {
-            keywords.insert(Keyword::DoubleStrike);
-        }
-        keywords
     }
 
     /// CR 122.1d: a tapped permanent with a stun counter that would become

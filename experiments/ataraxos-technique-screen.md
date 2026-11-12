@@ -35,7 +35,7 @@ not establish their MTG benefit.
 The [fidelity ledger](../docs/training.md#ataraxos) owns implemented equations
 and unresolved conventions. [Omitted controls](ataraxos-omitted-controls.md),
 [compound contracts](../docs/training.md#regimes-and-stages),
-[sampler reporting](../docs/search-and-beliefs.md#belief-sampler), [local search](../docs/search-and-beliefs.md#local-policy-search),
+[sampler reporting](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#belief-sampler), [local search](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md#local-policy-search),
 [tactical diagnostics](../docs/evaluation.md#checkpoint-scenarios) and
 [recovery/calibration](../docs/training.md#recovery) cover delivered ETU-92–98/100.
 This inventory supersedes their prospective research ownership for learning-rule,

@@ -61,15 +61,30 @@ def save_incident(
         for name in (
             "actions",
             "logprobs",
-            "log_probabilities",
-            "probabilities",
             "values",
             "rewards",
             "dones",
         ):
             batch_tensors[f"batch/{name}"] = torch.as_tensor(getattr(batch, name))
+        # Packed rows remain compact in incident artifacts. Offsets and slots
+        # are required to reconstruct original Commands and full distributions.
+        packed = batch.action_data
+        for name in ("offsets", "slots", "probabilities", "log_probabilities"):
+            batch_tensors[f"packed_actions/{name}"] = torch.as_tensor(
+                getattr(packed, name)
+            )
+        batch_tensors["packed_actions/capacity"] = torch.tensor(packed.capacity)
         batch_tensors.update(
-            {f"observation/{k}": torch.as_tensor(v) for k, v in batch.obs.items()}
+            {
+                f"packed_actions/{key}": torch.as_tensor(value)
+                for key, value in packed.fields.items()
+            }
+        )
+        batch_tensors.update(
+            {
+                f"observation/{k}": torch.as_tensor(v)
+                for k, v in batch.ordered_obs().items()
+            }
         )
         batch_tensors.update(
             {
@@ -150,10 +165,12 @@ def save_incident(
         "numpy_rng": rng.bit_generator.state,
         "python_rng": random.getstate(),
     }
+    if any(p.device.type == "mps" for p in learner.agent.parameters()):
+        state["mps_rng"] = torch.mps.get_rng_state()
     size = _tensor_bytes(state)
     paths = [evidence_path]
     metadata = {
-        "schema": 1,
+        "schema": 2,
         "invariant": error.invariant,
         "health": error.health,
         "run": run.id,

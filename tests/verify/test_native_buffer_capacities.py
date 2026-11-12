@@ -1,5 +1,6 @@
 """Supplied tensor axes govern native encoding, including retained pilot failures."""
 
+from collections.abc import Callable
 import json
 from pathlib import Path
 
@@ -14,10 +15,11 @@ from manabot.env.failures import (
     capture_scope,
     read_failure,
 )
-from manabot.env.observation import ObservationEncoder
+from manabot.env.observation import RELATION_ROWS, ObservationEncoder
 from manabot.infra.config import ObservationConfig
 from manabot.training.rollout.producers import ShardedVectorEnv
 import managym
+from tests.retained_decision import assert_retained_frame
 
 
 def _vector_buffers(
@@ -45,7 +47,7 @@ def _assert_encoding_parity(
     obs: managym.Observation,
     vector_buffers: dict[str, np.ndarray] | None = None,
 ) -> dict[str, np.ndarray]:
-    """Compare every configured input key, including optional versioned blocks."""
+    """Compare every input key of the reference encoder with native writes."""
     reference = encoder.encode(obs)
     into = encoder.allocate()
     scalar.encode_observation_into(obs, into, encoder.config.action_overflow)
@@ -54,6 +56,22 @@ def _assert_encoding_parity(
         if vector_buffers is not None:
             np.testing.assert_array_equal(vector_buffers[key][0], expected, err_msg=key)
     return reference
+
+
+def test_native_encoded_arrays_are_writable_and_independent() -> None:
+    encoder = ObservationEncoder(ObservationConfig())
+    scalar = managym.Env(seed=213, skip_trivial=True)
+    obs, _ = scalar.reset(_players())
+    expected = encoder.encode(obs)
+    first = scalar.encode_observation(obs, encoder.config.max_facts)
+    second = scalar.encode_observation(obs, encoder.config.max_facts)
+    assert first.keys() == second.keys() == expected.keys()
+    for key, value in expected.items():
+        np.testing.assert_array_equal(first[key], value, err_msg=key)
+        assert first[key].dtype == value.dtype
+        assert first[key].flags.writeable and first[key].flags.c_contiguous
+        first[key].fill(19)
+        np.testing.assert_array_equal(second[key], value, err_msg=key)
 
 
 @pytest.mark.parametrize("capacity", [40, 41, 64])
@@ -74,7 +92,6 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
     )
     encoder = ObservationEncoder(
         ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_permanents_per_player=capacity,
             max_actions=64,
@@ -89,8 +106,9 @@ def test_retained_airship_growth_preserves_every_permanent(capacity: int) -> Non
         assert isinstance(action, int)
         scalar.step(action)
         vector.step_into_buffers([action])
-    assert scalar.semantic_decision_frame_json() == game.frame
-    assert vector.semantic_decision_frames_json()[0] == game.frame
+    frame = scalar.semantic_decision_frame_json()
+    assert_retained_frame(frame, game.frame)
+    assert vector.semantic_decision_frames_json()[0] == frame
     last = game.actions[-1]
     assert isinstance(last, int)
     obs, *_ = scalar.step(last)
@@ -122,7 +140,6 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
     (game,) = evidence.games
     encoder = ObservationEncoder(
         ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_permanents_per_player=40,
             max_actions=64,
@@ -141,7 +158,7 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
         for action in game.actions[:-1]:
             vector.step_into_buffers([action, 0], [True, False])
         if isinstance(vector, CapturedVector):
-            assert vector.semantic_decision_frames_json()[0] == game.frame
+            assert_retained_frame(vector.semantic_decision_frames_json()[0], game.frame)
         control = managym.Env(seed=game.seed + 1, skip_trivial=True)
         control.reset(_players())
         obs, *_ = control.step(0)
@@ -152,7 +169,7 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
             failed["game_error"]
             == "observation capacity exceeded: agent_permanents 41 > 40"
         )
-        assert failed["game_error_frame"] == game.frame
+        assert_retained_frame(failed["game_error_frame"], game.frame)
         assert "game_error" not in healthy
         assert not buffers["terminated"].any() and not buffers["truncated"].any()
         assert not buffers["rewards"].any()
@@ -172,14 +189,10 @@ def test_retained_airship_overflow_isolates_only_its_stream(workers: int) -> Non
         vector.close()
 
 
-@pytest.mark.parametrize("version", range(1, 9))
 @pytest.mark.parametrize("history", [0, 1])
-def test_nondefault_axes_match_scalar_vector_and_python(
-    version: int, history: int
-) -> None:
+def test_nondefault_axes_match_scalar_vector_and_python(history: int) -> None:
     config = ObservationConfig(
-        policy_input_version=version,
-        max_facts=17 if version >= 6 else None,
+        max_facts=17,
         max_cards_per_player=33,
         max_permanents_per_player=7,
         max_actions=37,
@@ -214,7 +227,6 @@ def test_historical_256_offer_capture_respects_supplied_capacity(capacity: int) 
     scalar = managym.Env(seed=213)
     encoder = ObservationEncoder(
         ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_actions=capacity,
         )
@@ -254,8 +266,9 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
         assert isinstance(action, int)
         scalar.step(action)
         vector.step([action])
-    assert scalar.semantic_decision_frame_json() == game.frame
-    assert vector.semantic_decision_frames_json()[0] == game.frame
+    frame = scalar.semantic_decision_frame_json()
+    assert vector.semantic_decision_frames_json()[0] == frame
+    assert_retained_frame(frame, game.frame)
     last = game.actions[-1]
     assert isinstance(last, int)
     obs, *_ = scalar.step(last)
@@ -264,7 +277,6 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     assert all(action.mode_index is None for action in obs.action_space.actions)
     encoder = ObservationEncoder(
         ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_actions=capacity,
             max_permanents_per_player=permanents,
@@ -328,14 +340,14 @@ def test_repaired_retained_prefix_has_scalar_vector_python_parity(
     ],
 )
 def test_companion_shapes_rejected_before_scalar_writes(key: str) -> None:
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=7))
+    encoder = ObservationEncoder(ObservationConfig())
     scalar = managym.Env(seed=213, skip_trivial=True)
     obs, _ = scalar.reset(_players())
     buffers = encoder.allocate()
     for value in buffers.values():
         value.fill(-7)
     shape = list(buffers[key].shape)
-    # The first dimension is a companion axis (or a version-fixed axis).
+    # The first dimension is a companion axis (or a fixed axis).
     shape[1 if key == "facts" else 0] += 1
     buffers[key] = np.full(shape, -7, dtype=buffers[key].dtype)
     with pytest.raises(ValueError, match="shape"):
@@ -358,7 +370,7 @@ def test_companion_shapes_rejected_before_scalar_writes(key: str) -> None:
 )
 @pytest.mark.parametrize("batched", [False, True])
 def test_zero_capacity_rejected(key: str, batched: bool) -> None:
-    encoder = ObservationEncoder(ObservationConfig(policy_input_version=7))
+    encoder = ObservationEncoder(ObservationConfig())
     buffers = encoder.allocate()
     shape = list(buffers[key].shape)
     shape[1 if key == "action_focus" else 0] = 0
@@ -485,7 +497,7 @@ def test_first_64_legal_actions_preserve_membership_mapping_and_masks() -> None:
         np.testing.assert_array_equal(
             expected,
             full[key][:64]
-            if key in ("actions", "action_focus", "actions_valid")
+            if key in ("actions", "action_focus", "actions_valid", "name_candidates")
             else full[key],
             err_msg=key,
         )
@@ -562,7 +574,49 @@ def test_captured_vector_records_native_support_before_policy_step(
     assert sample["game"]["frame"] and sample["game"]["players"]
 
 
-def test_default_and_legacy_observation_configs_keep_overflow_errors() -> None:
-    for config in (ObservationConfig(), ObservationConfig.from_checkpoint({})):
+def test_default_and_saved_observation_configs_keep_overflow_errors() -> None:
+    saved = ObservationConfig().model_dump()
+    assert "action_overflow" not in saved
+    for config in (ObservationConfig(), ObservationConfig.from_checkpoint(saved)):
         assert config.action_overflow == "error"
         assert "action_overflow" not in config.model_dump()
+
+
+def _without_name_candidates(buffers: dict[str, np.ndarray]) -> None:
+    del buffers["name_candidates"]
+
+
+def _narrow_relations(buffers: dict[str, np.ndarray]) -> None:
+    buffers["relations"] = np.zeros((RELATION_ROWS, 33), dtype=np.float32)
+
+
+def _short_effect_details(buffers: dict[str, np.ndarray]) -> None:
+    buffers["effect_details"] = np.zeros((512, 3), dtype=np.float32)
+
+
+@pytest.mark.parametrize(
+    "incomplete",
+    [_without_name_candidates, _narrow_relations, _short_effect_details],
+)
+def test_incomplete_buffer_set_is_rejected_before_any_write(
+    incomplete: Callable[[dict[str, np.ndarray]], None],
+) -> None:
+    encoder = ObservationEncoder(ObservationConfig())
+    scalar = managym.Env(seed=213, skip_trivial=True)
+    obs, _ = scalar.reset(_players())
+    buffers = encoder.allocate()
+    incomplete(buffers)
+    for value in buffers.values():
+        value.fill(-7)
+    with pytest.raises(ValueError, match="policy input v9 requires"):
+        scalar.encode_observation_into(obs, buffers)
+    assert all(np.all(value == -7) for value in buffers.values())
+    batched = {key: value[None, ...] for key, value in buffers.items()}
+    batched.update(
+        rewards=np.zeros(1, dtype=np.float64),
+        terminated=np.zeros(1, dtype=np.uint8),
+        truncated=np.zeros(1, dtype=np.uint8),
+    )
+    vector = managym.VectorEnv(num_envs=1, seed=213)
+    with pytest.raises(ValueError, match="policy input v9 requires"):
+        vector.set_buffers(batched)

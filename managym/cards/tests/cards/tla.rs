@@ -41,7 +41,7 @@ use managym::{
         card::{Keyword, Keywords, StaticAbility},
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
+        mana::{Color, Mana, ManaCost, ManaUse},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -124,7 +124,8 @@ fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
             |a| matches!(a, Action::SelectCard { card, .. } if *card == offered[0]),
         );
         if kicked {
-            assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+            // No Shrine matches, so the second search asks nothing.
+            assert_ne!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
             assert!(offered_cards(&s).is_empty());
         }
         settle(&mut s);
@@ -180,7 +181,7 @@ fn hybrid_discard_is_optional_at_resolution_and_draws_exactly_two() {
         cast(&mut s, "Abandon Attachments");
         s.pass_priority();
         s.pass_priority();
-        assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
         let owner = Observation::for_player(s.game(), PlayerId(0));
         let other = Observation::for_player(s.game(), PlayerId(1));
         assert!(owner.agent_cards.iter().any(|c| c.name == "Plains"));
@@ -629,7 +630,7 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
 /// sources, and nothing else.
 #[test]
 fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
-    let ally = ManaRestriction::new(["Ally"], ["Ally"]);
+    let ally = ManaUse::new(["Ally"], ["Ally"]);
     let mut s = five_color_setup(&[
         "Jasmine Dragon Tea Shop",
         "Rebellious Captives",
@@ -639,7 +640,7 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 4);
-    assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
+    assert_eq!(pool(&s).restricted_of(ally), [0, 0, 0, 0, 1, 0]);
     s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
@@ -1129,6 +1130,32 @@ fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
     );
 }
 
+/// CR 205.3: Cave is a land type, so an earthbent Secret Tunnel is a creature
+/// with no creature type, and Honest Work's creature-type replacement
+/// (CR 205.1b) keeps the land's Cave subtype.
+#[test]
+fn an_earthbent_cave_keeps_its_land_type_out_of_its_creature_types() {
+    let mut s = five_color_setup(&["Earthbending Lesson", "Secret Tunnel", "Honest Work"]);
+    let tunnel = s.force_permanent_on_battlefield(1, "Secret Tunnel");
+    s.advance_to_active_step(1, StepKind::Main);
+    let lesson = force_new_card_in_hand(&mut s, 1, "Earthbending Lesson");
+    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
+    cast_card(&mut s, lesson);
+    assert!(s.choose_target(Target::Permanent(tunnel)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, tunnel));
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"));
+    assert!(view.creature_types.is_empty(), "{:?}", view.creature_types);
+
+    s.advance_to_active_step(0, StepKind::Main);
+    enchant(&mut s, "Honest Work", "U", tunnel);
+    let view = s.game().characteristics(tunnel);
+    assert!(view.has_subtype("Cave"), "{:?}", view.subtypes);
+    assert!(view.has_subtype("Citizen"));
+    assert_eq!(view.creature_types, vec!["Citizen".to_string()]);
+}
+
 /// Elemental Teachings reveals up to four differently named lands; the
 /// opponent chooses two for the graveyard and the rest enter tapped.
 #[test]
@@ -1551,7 +1578,7 @@ fn hermitic_herbalist_offers_each_two_color_combination_once() {
     settle(&mut s);
     let player = &s.game().state.players[0].mana_pool;
     assert_eq!(
-        player.restricted_of(&ManaRestriction::spell(["Lesson"])),
+        player.restricted_of(ManaUse::spell(["Lesson"])),
         [1, 1, 0, 0, 0, 0]
     );
     assert_eq!(player.total(), 2);
@@ -2082,13 +2109,17 @@ fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_less
     let first = move_from_library(&mut s, 0, "Forest", ZoneType::Hand);
     let second = move_from_library(&mut s, 0, "Island", ZoneType::Hand);
     cast(&mut s, "Sokka, Bold Boomeranger");
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { card, .. } if *card == first),
     );
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
-    assert_eq!(hand(&s, 0).len(), 2, "no draw before the discards finish");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    assert_eq!(
+        hand(&s, 0).len(),
+        3,
+        "no movement before the discard subset is complete"
+    );
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { card, .. } if *card == second),
@@ -2117,7 +2148,7 @@ fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_less
     let mut s = five_color_setup(&["Sokka, Bold Boomeranger"]);
     move_from_library(&mut s, 0, "Forest", ZoneType::Hand);
     cast(&mut s, "Sokka, Bold Boomeranger");
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     choose(&mut s, |a| matches!(a, Action::Decline { .. }));
     settle(&mut s);
     assert_eq!(hand(&s, 0).len(), 1);
@@ -4092,7 +4123,7 @@ fn scry_revealed_card_is_observation_encodable() {
 fn determinize_pins_scry_revealed_cards_on_top() {
     let mut s = glider_kids_scry_setup(25);
     let top = library_top(&s, 0);
-    s.game_mut().determinize(PlayerId(0), 12345);
+    s.game_mut().determinize(PlayerId(0), 12345).unwrap();
     assert_eq!(library_top(&s, 0), top);
     // The decision is still answerable.
     assert!(s.take_action_by_type(ActionType::ScryBottom));
@@ -4373,7 +4404,7 @@ fn determinize_fills_two_foretold_slots_with_distinct_cards() {
     let mut resampled = false;
     for seed in 0..256 {
         let mut game = s.game().clone();
-        game.determinize(PlayerId(1), seed);
+        game.determinize(PlayerId(1), seed).unwrap();
         let mut seen = BTreeMap::new();
         for player in [PlayerId(0), PlayerId(1)] {
             for zone in zones {
@@ -4744,7 +4775,14 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
     until_end_of_turn(
         &mut s,
         many,
-        Modification::AddSubtypes((0..12).map(|i| format!("Type{i}")).collect()),
+        Modification::AddSubtypes(
+            [
+                "Angel", "Ape", "Archer", "Bear", "Beast", "Bird", "Cat", "Dragon", "Elf", "Fish",
+                "Goblin", "Wolf",
+            ]
+            .map(String::from)
+            .to_vec(),
+        ),
     );
     animate(&mut s, land);
     set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 1);
@@ -5879,10 +5917,10 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     let mut s = five_color_unfunded_setup(&["Ozai, the Phoenix King"]);
     let ozai = s.force_permanent_on_battlefield(0, "Ozai, the Phoenix King");
     s.set_player_mana_pool(0, "WUB");
-    let lesson = ManaRestriction::spell(["Lesson"]);
+    let lesson = ManaUse::spell(["Lesson"]);
     s.game_mut().state.players[0]
         .mana_pool
-        .add(&Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]));
+        .add(&Mana::restricted_to(lesson, [0, 0, 0, 0, 1, 0]));
     assert!(!observed_keywords(&s, ozai).flying);
 
     declare_attackers(&mut s, &[ozai]);
@@ -5896,7 +5934,7 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
 
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     let mut red = Mana::parse("RRRRRRR");
-    red.add(&Mana::restricted_to(lesson.clone(), [0, 0, 0, 1, 0, 0]));
+    red.add(&Mana::restricted_to(lesson, [0, 0, 0, 1, 0, 0]));
     assert_eq!(*pool(&s), red);
     assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
     assert!(observed_keywords(&s, ozai).indestructible);
@@ -7041,7 +7079,7 @@ fn herbalist_restriction_survives_color_selection_and_cannot_pay_abilities() {
     assert_eq!(
         s.game().state.players[0]
             .mana_pool
-            .restricted_of(&ManaRestriction::spell(["Lesson"])),
+            .restricted_of(ManaUse::spell(["Lesson"])),
         [0, 0, 0, 2, 0, 0]
     );
     let lesson = library_card(&s, 0, "Firebending Lesson");
@@ -8238,7 +8276,10 @@ fn phoenix_fleet_airship_is_a_creature_while_you_control_eight() {
     }
     assert!(!observed(&s, rival).is_animated);
     until_end_of_turn(&mut s, fleet[0], Modification::LoseAllAbilities);
-    assert!(!observed(&s, fleet[0]).is_animated);
+    assert!(
+        observed(&s, fleet[0]).is_animated,
+        "CR 613.6: the layer-4 type effect continues past layer-6 ability loss"
+    );
     assert!(
         observed(&s, fleet[1]).is_animated,
         "ability loss keeps the name"
@@ -9904,7 +9945,7 @@ fn waterbending_scroll_draws_for_one_less_per_island() {
 
 #[test]
 fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
-    let lesson_or_shrine = ManaRestriction::spell(["Lesson", "Shrine"]);
+    let lesson_or_shrine = ManaUse::spell(["Lesson", "Shrine"]);
     let mut s = five_color_setup(&[
         "White Lotus Hideout",
         "Firebending Lesson",
@@ -9920,9 +9961,9 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, hideout, 0);
     choose_mode(&mut s, 3);
-    assert_eq!(pool(&s).restricted_of(&lesson_or_shrine), [0, 0, 0, 1, 0, 0]);
+    assert_eq!(pool(&s).restricted_of(lesson_or_shrine), [0, 0, 0, 1, 0, 0]);
     let shrine = ManaCost {
-        purpose: SpendingContext::spell(["Shrine"]),
+        purpose: ManaUse::spell(["Shrine"]),
         ..ManaCost::parse("R")
     };
     assert!(pool(&s).can_pay(&shrine));
@@ -10138,7 +10179,7 @@ fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
         let chosen = library_card(&s, 0, "Gray Ogre");
         s.game_mut().move_card(chosen, ZoneType::Hand);
         cast(&mut s, "Yuyan Archers");
-        pass_until(&mut s, ActionSpaceKind::Discard);
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         let top = *s
             .game()
             .state
@@ -12851,7 +12892,7 @@ fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let object = s.game().current_object_ref(strike).unwrap();
     assert!(s.choose_target(Target::GraveyardCard(object)));
-    pass_until(&mut s, ActionSpaceKind::Discard);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     select_card(&mut s, fodder);
     settle(&mut s);
     assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
@@ -13260,8 +13301,8 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     );
 }
 
-/// Cached land-type candidates follow entry/departure and clone isolation;
-/// the candidate's counter condition and ability loss remain live reads.
+/// Land-type effects follow counters and departure independently in each fork;
+/// layer-6 ability loss cannot erase a type effect already applied in layer 4.
 #[test]
 fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     let mut s = five_color_unfunded_setup(&["Zhao, the Moon Slayer", "Abandoned Air Temple"]);
@@ -13281,6 +13322,11 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
         Modification::LoseAllAbilities,
         EffectDuration::EndOfTurn,
     );
+    assert!(fork.characteristics(zhao).abilities_lost);
+    assert!(!s.game().characteristics(zhao).abilities_lost);
+    assert!(fork.characteristics(temple).has_subtype("Mountain"));
+    let zhao_card = card_of(&s, zhao);
+    fork.move_card(zhao_card, ZoneType::Exile);
     assert!(!fork.characteristics(temple).has_subtype("Mountain"));
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
 
@@ -13288,7 +13334,6 @@ fn zhao_land_type_candidates_follow_state_and_fork_changes() {
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
     set_counters(&mut s, zhao, CounterKind::Conqueror, 1);
     assert!(s.game().characteristics(temple).has_subtype("Mountain"));
-    let zhao_card = card_of(&s, zhao);
     s.game_mut().move_card(zhao_card, ZoneType::Exile);
     assert!(!s.game().characteristics(temple).has_subtype("Mountain"));
 }
@@ -13441,6 +13486,78 @@ fn leaves_from_the_vine_reads_one_chapter_per_lore_counter_then_is_sacrificed() 
         1,
         "CR 714.4 sacrifices it"
     );
+}
+
+/// Chapter II is one placement event even when each target needs an ordering choice.
+#[test]
+fn leaves_from_the_vine_counter_choices_keep_both_targets_in_one_event() {
+    let mut s = five_color_setup(&[
+        "Leaves from the Vine",
+        "Gray Ogre",
+        "Caradora, Heart of Alacria",
+        "Doubling Season",
+    ]);
+    let creatures = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    enter_saga(&mut s, "Leaves from the Vine");
+    // Sources enter after chapter I, so this witness isolates the real chapter
+    // II's simultaneous placement from Doubling Season's entry-lore behavior.
+    s.force_permanent_on_battlefield(0, "Caradora, Heart of Alacria");
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    next_main_phase(&mut s);
+    for creature in creatures {
+        assert!(s.choose_target(Target::Permanent(creature)));
+    }
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let root = s.game().clone();
+    for (mode, expected) in [(0, 4), (1, 3)] {
+        let mut game = root.clone();
+        for index in 0..2 {
+            for creature in creatures {
+                assert_eq!(
+                    game.state.permanents[creature]
+                        .as_ref()
+                        .unwrap()
+                        .counter_count(CounterKind::PlusOnePlusOne),
+                    0,
+                    "no placement commits before both objects' choices finish"
+                );
+            }
+            let frame = game.semantic_decision_frame().unwrap();
+            let action = game.action_space().unwrap().actions.iter().position(|action| {
+                matches!(action, Action::ChooseMode { mode: candidate, .. } if *candidate == mode)
+            }).unwrap();
+            let command = Command {
+                command_id: format!("leaves-counter-{mode}-{index}"),
+                expected_revision: frame.revision,
+                offer_id: frame.offers[action].id.0,
+                answers: vec![],
+                object_preconditions: vec![],
+            };
+            let mut replay = game.clone();
+            game.execute_semantic_command(&command).unwrap();
+            replay.execute_semantic_command(&command).unwrap();
+            assert_eq!(witness(&game), witness(&replay));
+            let after = witness(&game);
+            assert!(game.execute_semantic_command(&command).is_err());
+            assert_eq!(witness(&game), after);
+        }
+        for creature in creatures {
+            assert_eq!(
+                game.state.permanents[creature]
+                    .as_ref()
+                    .unwrap()
+                    .counter_count(CounterKind::PlusOnePlusOne),
+                expected
+            );
+            assert_eq!(game.state.events.iter().filter(|event| matches!(event,
+                GameEvent::CountersPut { permanent, kind: CounterKind::PlusOnePlusOne, count, .. }
+                if *permanent == creature && *count == expected
+            )).count(), 1);
+        }
+    }
 }
 
 /// With a creature card in the graveyard, chapter III draws.
@@ -13890,7 +14007,7 @@ fn foggy_swamp_visions_copies_the_exiled_creature_cards_until_the_end_step() {
         .state
         .delayed_triggers
         .iter()
-        .flat_map(|trigger| trigger.remembered.iter().copied())
+        .flat_map(|trigger| trigger.remembered.iter().map(|binding| binding.object))
         .collect();
     assert_eq!(remembered.len(), 2);
     assert_ne!(
@@ -14157,8 +14274,9 @@ fn the_rise_of_sozin_destroys_names_and_reanimates_as_fire_lord_sozin() {
     next_main_phase(&mut s);
     target_opponent(&mut s);
     pass_until(&mut s, ActionSpaceKind::Modal);
-    let names = s.action_space().actions.len();
-    assert!(names > 200, "every card name in the world: {names}");
+    // Every card name in the world, offered as at most 64 balanced groups.
+    let groups = s.action_space().actions.len();
+    assert!((2..=64).contains(&groups), "naming groups: {groups}");
     sozin_name(&mut s, "Gray Ogre");
     for _ in 0..4 {
         choose(&mut s, |a| matches!(a, Action::SelectCard { .. }));
@@ -14600,17 +14718,36 @@ fn fire_lord_sozin_declining_and_zero_payment_are_distinct() {
     assert_eq!(zone_of(&s, nonzero), Some(ZoneType::Graveyard));
 }
 
+/// Name a card through the ordinary group prompts, then the leaf prompt. Each
+/// prompt fits the fresh policy input; groups span sorted names.
 fn sozin_name(s: &mut Scenario, name: &str) {
-    let observation = Observation::for_player(s.game(), PlayerId(0));
-    managym::agent::observation_encoder::encode(&observation, &Default::default())
-        .expect("all names fit the fresh policy input");
-    let index = observation
-        .action_space
-        .actions
-        .iter()
-        .position(|a| a.description.as_deref() == Some(&format!("Name {name}")))
-        .expect("unrestricted card name");
-    s.step_action(index);
+    loop {
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        managym::agent::observation_encoder::encode(&observation, &Default::default())
+            .expect("every naming prompt fits the fresh policy input");
+        let descriptions = observation
+            .action_space
+            .actions
+            .iter()
+            .map(|a| a.description.clone().unwrap_or_default());
+        if let Some(index) = descriptions
+            .clone()
+            .position(|description| description == format!("Name {name}"))
+        {
+            s.step_action(index);
+            return;
+        }
+        let group = descriptions
+            .clone()
+            .position(|description| {
+                description
+                    .strip_prefix("Names ")
+                    .and_then(|span| span.split_once(" through "))
+                    .is_some_and(|(first, last)| first <= name && name <= last)
+            })
+            .expect("unrestricted card name");
+        s.step_action(group);
+    }
 }
 
 #[test]
@@ -14652,7 +14789,7 @@ fn the_rise_of_sozin_search_chooses_zero_through_four_across_zones_privately() {
         assert!(!offered_cards(&s).contains(&other));
         assert_eq!(offered_cards(&s).len(), 4);
         let mut fork = s.game().clone();
-        fork.determinize(PlayerId(0), 19);
+        fork.determinize(PlayerId(0), 19).unwrap();
         assert_eq!(
             fork.state.zones.zone_of(hand),
             Some(ZoneType::Hand),
@@ -15148,7 +15285,7 @@ fn secret_of_bloodbending_delegated_spell_uses_victims_mana_and_replays_atomical
         .any(|c| c.zone == ZoneType::Hand));
     let before = s.game().semantic_observation(PlayerId(0)).unwrap().identity;
     let mut sampled = s.game().clone();
-    sampled.determinize(PlayerId(0), 31);
+    sampled.determinize(PlayerId(0), 31).unwrap();
     assert_eq!(
         sampled.semantic_observation(PlayerId(0)).unwrap().identity,
         before
@@ -15280,7 +15417,7 @@ fn secret_of_bloodbending_foretold_cards_are_visible_only_during_control() {
         .iter()
         .any(|c| c.id == id && c.zone == ZoneType::Exile));
     let mut sampled = s.game().clone();
-    sampled.determinize(PlayerId(0), 17);
+    sampled.determinize(PlayerId(0), 17).unwrap();
     assert_eq!(
         sampled.semantic_observation(PlayerId(0)).unwrap().identity,
         s.game().semantic_observation(PlayerId(0)).unwrap().identity
@@ -15387,8 +15524,8 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     attack_and_settle(&mut s, &[ogre], None);
     let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
     assert_eq!(
-        s.game().state.delayed_triggers[0].remembered,
-        vec![s.game().permanent_object_ref(boulder).unwrap()]
+        s.game().state.delayed_triggers[0].remembered[0].object,
+        s.game().permanent_object_ref(boulder).unwrap()
     );
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().move_card(source, ZoneType::Graveyard);
@@ -15400,38 +15537,179 @@ fn fire_navy_trebuchet_delayed_sacrifice_outlives_source_and_uses_any_end_step()
     assert!(s.game().state.delayed_triggers.is_empty());
 }
 
+/// The attack occurrence owns the departed incarnation's last power, even if
+/// the physical source returns before the opponent answers its question.
 #[test]
-fn white_lotus_tile_variable_output_pays_a_real_spell_through_commands() {
-    use crate::support::{game::move_to_hand, play::command};
-    let mut s = five_color_unfunded_setup(&["White Lotus Tile", "Gray Ogre"]);
-    let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
-    for _ in 0..3 {
-        s.force_permanent_on_battlefield(0, "Gray Ogre");
-    }
-    let spell = move_to_hand(&mut s, "Gray Ogre");
-    command(
-        &mut s,
-        |action| matches!(action, Action::CastSpell { card, .. } if *card == spell),
+fn combustion_man_uses_departed_source_power_across_a_choice_and_reentry() {
+    let mut s = five_color_setup(&["Combustion Man", "Gray Ogre"]);
+    let man = s.force_permanent_on_battlefield(0, "Combustion Man");
+    let source = card_of(&s, man);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let affected = s.game().affected_permanent(man).unwrap();
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::ModifyPt {
+            power: 3,
+            toughness: 0,
+        },
+        EffectDuration::EndOfTurn,
     );
-    command(
-        &mut s,
-        |action| matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == tile),
-    );
-    command(&mut s, |action| {
-        matches!(action, Action::ChooseMode { mode: 3, .. })
+    clear_summoning_sickness(&mut s, man);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(&mut s, |action| {
+        matches!(action,
+        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == man)
     });
-    if s.action_space()
+    if s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        s.decline_attack();
+    }
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    s.game_mut().move_card(source, ZoneType::Graveyard);
+    s.game_mut().move_card(source, ZoneType::Battlefield);
+    let returned = s.game().state.card_to_permanent[source].unwrap();
+    assert_ne!(returned, man);
+    assert_eq!(s.game().characteristics(returned).power, 4);
+    let mut replay = s.game().clone();
+    let index = s
+        .action_space()
         .actions
         .iter()
-        .any(|action| matches!(action, Action::PayCost { .. }))
-    {
-        command(&mut s, |action| matches!(action, Action::PayCost { .. }));
+        .position(|action| matches!(action, Action::PayCost { .. }))
+        .unwrap();
+    let frame = s.game().semantic_decision_frame().unwrap();
+    let command = Command {
+        command_id: "departed-power".into(),
+        expected_revision: frame.revision,
+        offer_id: frame.offers[index].id.0,
+        answers: vec![],
+        object_preconditions: vec![],
+    };
+    s.game_mut().execute_semantic_command(&command).unwrap();
+    replay.execute_semantic_command(&command).unwrap();
+    assert_eq!(
+        s.life(1),
+        13,
+        "last-known power was seven, returned power is four"
+    );
+    assert_eq!(
+        s.game().state.deterministic_hash(),
+        replay.state.deterministic_hash()
+    );
+}
+
+#[test]
+fn cruel_administrator_entry_raid_reads_the_entering_controller() {
+    for attacked in [PlayerId(0), PlayerId(1)] {
+        let mut s = five_color_setup(&["Cruel Administrator"]);
+        let card = cast(&mut s, "Cruel Administrator");
+        s.game_mut().state.turn.history[attacked.0].attacked = true;
+        let managym::state::stack_object::StackObject::Spell(spell) =
+            s.game_mut().state.stack_objects.last_mut().unwrap()
+        else {
+            panic!("administrator spell expected");
+        };
+        spell.controller = PlayerId(1);
+        resolve_top(&mut s);
+        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        assert_eq!(
+            s.game().state.permanents[permanent]
+                .as_ref()
+                .unwrap()
+                .controller,
+            PlayerId(1)
+        );
+        assert_eq!(counters(&s, permanent), i32::from(attacked == PlayerId(1)));
     }
-    assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
-    assert!(tapped(&s, tile));
+}
+
+/// Surveil is a separate keyword event; Planetarium waits for Joo Dee's
+/// inspection to finish before offering the resulting top card.
+#[test]
+fn planetarium_casts_after_joo_dee_surveillance_finishes() {
+    let mut s = five_color_setup(&[
+        "Planetarium of Wan Shi Tong",
+        "Joo Dee, One of Many",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
+    let joo_dee = s.force_permanent_on_battlefield(0, "Joo Dee, One of Many");
+    clear_summoning_sickness(&mut s, joo_dee);
+    let top = pin_top(&mut s, &["Forest", "Gray Ogre"]);
+    activate(&mut s, joo_dee, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), vec![top[0]]);
+    assert!(s.game().state.pending_triggers.is_empty());
+    select_card(&mut s, top[0]);
+    assert_eq!(zone_of(&s, top[0]), Some(ZoneType::Graveyard));
+    // Joo Dee's remaining instructions still finish before Planetarium's
+    // queued trigger can resolve and inspect the new top.
+    let original = card_of(&s, joo_dee);
+    select_card(&mut s, original);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), vec![top[1]]);
+    select_card(&mut s, top[1]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Battlefield));
+}
+
+#[test]
+fn doubled_battle_fan_tokens_offer_either_attachment_without_an_implicit_choice() {
+    let mut s = five_color_setup(&["Doubling Season", "Kyoshi Battle Fan"]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    let fan_card = cast(&mut s, "Kyoshi Battle Fan");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let fan = s.game().state.card_to_permanent[fan_card].unwrap();
+    let allies = s.battlefield_permanents_named(0, "Ally");
+    assert_eq!(allies.len(), 2);
+    assert_eq!(permanent(&s, fan).attached_to, None);
+    let root = s.game().clone();
+    for ally in allies {
+        let mut branch = root.clone();
+        let card = branch.state.permanents[ally].as_ref().unwrap().card;
+        let action = branch.action_space().unwrap().actions.iter().position(|action|
+            matches!(action, Action::SelectCard { card: candidate, .. } if *candidate == card)
+        ).unwrap();
+        let frame = branch.semantic_decision_frame().unwrap();
+        let command = Command {
+            command_id: format!("fan-attach-{}", card.0),
+            expected_revision: frame.revision,
+            offer_id: frame.offers[action].id.0,
+            answers: vec![],
+            object_preconditions: vec![],
+        };
+        branch.execute_semantic_command(&command).unwrap();
+        assert_eq!(
+            branch.state.permanents[fan].as_ref().unwrap().attached_to,
+            branch.permanent_object_ref(ally)
+        );
+        assert_eq!(branch.characteristics(ally).pt(), (2, 1));
+    }
+    assert_eq!(witness(s.game()), witness(&root));
+}
+
+#[test]
+fn doubled_trebuchet_tokens_keep_attack_terms_and_both_delayed_sacrifices() {
+    let mut s = five_color_setup(&["Doubling Season", "Fire Navy Trebuchet", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Doubling Season");
+    s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    attack_and_settle(&mut s, &[ogre], None);
+    let tokens = s.battlefield_permanents_named(0, "Ballistic Boulder");
+    assert_eq!(tokens.len(), 2);
+    for token in &tokens {
+        assert!(permanent(&s, *token).tapped && permanent(&s, *token).attacking);
+        assert!(s.game().state.delayed_triggers[0]
+            .remembered
+            .iter()
+            .any(|binding| Some(binding.object) == s.game().permanent_object_ref(*token)));
+    }
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
     assert!(s
-        .game()
-        .state
-        .zones
-        .contains(spell, ZoneType::Stack, PlayerId(0)));
+        .battlefield_permanents_named(0, "Ballistic Boulder")
+        .is_empty());
 }

@@ -18,6 +18,7 @@ pub mod content_pack;
 pub mod deck_admission;
 pub mod decklist;
 mod fixtures;
+pub mod names;
 mod pool;
 pub mod setups;
 pub mod tokens;

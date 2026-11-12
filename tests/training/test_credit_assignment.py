@@ -18,9 +18,10 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.learning.damped_policy import _targets
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import AdmittedRollout, Learner
 from manabot.training.learning.objectives import update_iteration
-from manabot.training.regime import DampedPolicyLearning
+from manabot.training.regime import BatchClosure, DampedPolicyLearning
+from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 
 Kind = Literal["scalar", "categorical_wdl"]
@@ -163,6 +164,7 @@ def collector_for(
     second: TableAgent | None = None,
     draw: bool = False,
     truncated: bool = False,
+    closure: BatchClosure = "complete-games",
 ) -> SeatRoutedCollector:
     collector = SeatRoutedCollector(
         agent.observation_space,
@@ -172,6 +174,7 @@ def collector_for(
         opponent_mode="self" if second is None else "learning",
         opponent_agent=second,
         learning_seats=seats,
+        batch_closure=closure,
         games_per_stream=games,
     )
     collector._env = CreditGames(
@@ -181,7 +184,7 @@ def collector_for(
 
 
 def markers(batch: RolloutBatch) -> list[int]:
-    return batch.obs["agent_player"][..., 0, 0].astype(int).ravel().tolist()
+    return batch.ordered_obs()["agent_player"][..., 0, 0].astype(int).ravel().tolist()
 
 
 def learning(**changes: object) -> DampedPolicyLearning:
@@ -217,7 +220,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
     assert batch.actions.size == len(expected_ids)  # no trajectory padding
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning()
-    targets = _targets(trainer, batch, rule)
+    targets = _targets(trainer, AdmittedRollout(trainer.agent, batch), rule)
     torch.testing.assert_close(
         targets.advantages[:, 0], torch.tensor([ADVANTAGES[i] for i in ids])
     )
@@ -233,7 +236,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
         atol=1e-7,
     )
     selected_logs = np.take_along_axis(
-        batch.log_probabilities, batch.actions[..., None], -1
+        batch.observations().log_probabilities, batch.actions[..., None], -1
     )
     np.testing.assert_array_equal(batch.logprobs, selected_logs[..., 0])
 
@@ -285,7 +288,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     kind: Kind,
 ) -> None:
     agent = TableAgent(kind)
-    collector = collector_for(agent, "one", games=None)
+    collector = collector_for(agent, "one", games=None, closure="exact-quota")
     batch = collector.collect(agent, 2)
     # Stream 0 has taken 0,1 and pauses before 3 (after opponent 2).
     # Stream 1 has taken 10,12 and terminated. Its reset value is irrelevant.
@@ -294,7 +297,11 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     np.testing.assert_array_equal(batch.next_obs["agent_player"][:, 0, 0], [3, 30])
     assert not any(collector._pending) and not any(collector._streams)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = _targets(trainer, batch, learning())
+    targets = _targets(
+        trainer,
+        AdmittedRollout(trainer.agent, batch),
+        learning(),
+    )
     torch.testing.assert_close(
         targets.advantages, torch.tensor([[-0.1, 0.55], [0.6, 0.7]])
     )
@@ -312,7 +319,9 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     second = collector.collect(agent, 1)
     assert markers(second)[0] == 3
     assert second.values[0, 0] == pytest.approx(-0.5)
-    np.testing.assert_allclose(second.probabilities[0, 0, :2], [0.8, 0.2])
+    np.testing.assert_allclose(
+        second.observations().probabilities[0, 0, :2], [0.8, 0.2]
+    )
 
 
 @pytest.mark.parametrize("seats", ["one", "both"])
@@ -321,7 +330,11 @@ def test_draw_reset_has_no_previous_game_credit(seats: Seats) -> None:
     collector = collector_for(agent, seats, games=2)
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
-    targets = _targets(trainer, batch, learning(policy_lambda=1.0, value_lambda=1.0))
+    targets = _targets(
+        trainer,
+        AdmittedRollout(trainer.agent, batch),
+        learning(policy_lambda=1.0, value_lambda=1.0),
+    )
     for row, marker in enumerate(markers(batch)):
         outcome = 0 if marker >= 20 else -1 if marker in (0, 1, 3, 11) else 1
         torch.testing.assert_close(targets.values[row, 0], torch.eye(3)[outcome + 1])
@@ -355,7 +368,11 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
     # Second model predicts the opposite signed values: .4,-.6,.6.
     # Its B win gives A4=1.6 and A2=-.6-.4+.5*1.6=-.2;
     # its stream-1 A loss gives A11=-1.6.
-    target = _targets(trainers[1], b, learning())
+    target = _targets(
+        trainers[1],
+        AdmittedRollout(trainers[1].agent, b),
+        learning(),
+    )
     torch.testing.assert_close(target.advantages[:, 0], torch.tensor([-0.2, 1.6, -1.6]))
     expected = (
         [[0.14, 0.04, 0.82], [0, 0, 1], [1, 0, 0]]
@@ -384,7 +401,7 @@ def test_filter_retains_negative_credit_and_critic_coverage(
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning(min_advantage=0.6, filter_scope=scope)
-    targets = _targets(trainer, batch, rule)
+    targets = _targets(trainer, AdmittedRollout(trainer.agent, batch), rule)
     # Magnitude selection includes the losing player's -1.4, not just winners.
     np.testing.assert_array_equal(targets.selected[:, 0], [0, 0, 1, 1, 0, 0, 0, 1])
     old_policy, old_values = (
@@ -426,3 +443,31 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
     assert opponent.offers.grad is None
     torch.testing.assert_close(opponent.offers, before)
     assert collector.stats.opponent_decisions == 3
+
+
+def test_damped_learning_materializes_only_selected_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    agent = TableAgent("categorical_wdl")
+    collector = collector_for(agent, "one", games=None)
+    batch = collector.collect(agent, 2)
+    original = RolloutBatch.observations
+    seen: list[int] = []
+
+    def materialize(
+        self: RolloutBatch, indexes: np.ndarray | None = None
+    ) -> ActionRows:
+        assert indexes is not None and len(indexes) <= 2
+        seen.append(len(indexes))
+        return original(self, indexes)
+
+    monkeypatch.setattr(RolloutBatch, "observations", materialize)
+    update_iteration(
+        Learner(agent, "cpu", minibatch_rows=2),
+        batch,
+        learning(),
+        0.5,
+        np.random.default_rng(243),
+    )
+    # Admission reads every row once; minibatches re-read only selected rows.
+    assert seen and sum(seen) <= 2 * batch.actions.size

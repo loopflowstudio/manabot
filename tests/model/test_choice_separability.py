@@ -23,6 +23,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.verify.action_cases import encode, initial, reach, reorder_objects
 from manabot.verify.trigger_order import ordering_root
 import managym
@@ -349,7 +350,7 @@ def test_shared_policy_can_learn_either_choice(
     agent = ActorCritic(ObservationSpace(), spec)
     optimizer = torch.optim.Adam(agent.parameters(), lr=0.003)
     for _ in range(180):
-        logits, _ = agent(batch)
+        logits, _ = agent(admit_observation(agent, batch))
         # NLL of the selected observable choice; identical copies share mass.
         log_probabilities = logits.log_softmax(-1)
         loss = (
@@ -365,7 +366,7 @@ def test_shared_policy_can_learn_either_choice(
     restored.eval()
     with torch.no_grad():
         for case, obs in zip(choices, observations, strict=True):
-            logits, _ = restored(obs)
+            logits, _ = restored(admit_observation(restored, obs))
             probability = logits.softmax(-1)[0, list(case.groups[preference])].sum()
             assert float(probability) >= 0.95, (case.name, float(probability))
             for group in case.groups:
@@ -374,7 +375,7 @@ def test_shared_policy_can_learn_either_choice(
                         logits[0, index], logits[0, group[0]], atol=1e-5, rtol=1e-5
                     )
             selected_action, _, _, _ = restored.get_action_and_value(
-                obs, deterministic=True
+                admit_observation(restored, obs), deterministic=True
             )
             assert int(selected_action) in case.groups[preference], case.name
             # Reorder the native offers before either encoder, not just a tensor.
@@ -387,14 +388,18 @@ def test_shared_policy_can_learn_either_choice(
             finally:
                 space.actions = original
                 case.raw.action_space = space
-            permuted, _ = restored(reordered)
+            permuted, _ = restored(admit_observation(restored, reordered))
             count = len(original)
             torch.testing.assert_close(permuted[0, :count].flip(0), logits[0, :count])
-            permuted, _ = restored(reorder_objects(obs))
+            permuted, _ = restored(admit_observation(restored, reorder_objects(obs)))
             torch.testing.assert_close(permuted, logits, atol=1e-5, rtol=1e-5)
             assert not logits.softmax(-1)[obs["actions_valid"] == 0].any()
             # A specific dropped channel must recreate the forced tie. These
             # mutations are hypotheses, not historical-version evidence.
             a, b = case.candidates
-            tied, _ = restored(_remove_discriminant(case, obs))
-            torch.testing.assert_close(tied[0, a], tied[0, b], atol=0, rtol=0)
+            tied, _ = restored(
+                admit_observation(restored, _remove_discriminant(case, obs))
+            )
+            # Legal-row GEMMs can differ by float32 rounding across row tiles.
+            # The behavioral requirement above remains >= 0.95 for either choice.
+            torch.testing.assert_close(tied[0, a], tied[0, b], atol=2e-6, rtol=1e-6)

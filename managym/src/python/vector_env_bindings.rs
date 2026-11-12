@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(feature = "python")]
-use std::slice;
+use std::{cell::Cell, slice, time::Instant};
 
 #[cfg(feature = "python")]
 use pyo3::{
@@ -16,9 +16,10 @@ use pyo3::{
 use crate::{
     agent::{
         action::AgentError,
+        env::HandSnapshot,
         observation::Observation,
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
+            encode, encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -43,10 +44,13 @@ struct ObservationBuffers {
     effects: Option<Py<PyAny>>,
     effect_details: Option<Py<PyAny>>,
     effect_members: Option<Py<PyAny>>,
+    name_candidates: Option<Py<PyAny>>,
     facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
     decklists: Option<Py<PyAny>>,
+    player_turn_state: Option<Py<PyAny>>,
+    card_turn_state: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -77,6 +81,23 @@ pub struct PyVectorEnv {
     num_envs: usize,
     buffers: Option<ObservationBuffers>,
     last_info: Vec<InfoDict>,
+    timings: BufferedCallTimings,
+}
+
+/// Cumulative wall time inside buffered calls: every step or reset, split into
+/// stepping (all work in the call except encoding) and observation encoding.
+#[cfg(feature = "python")]
+#[derive(Default)]
+struct BufferedCallTimings {
+    stepping_nanos: u64,
+    encoding_nanos: u64,
+}
+
+// A buffered call stays on its calling thread while the GIL is released, and each
+// stream's row is encoded inside it, so a thread-local counter needs no locks.
+#[cfg(feature = "python")]
+thread_local! {
+    static ENCODING_NANOS: Cell<u64> = const { Cell::new(0) };
 }
 
 #[cfg(feature = "python")]
@@ -122,6 +143,7 @@ impl PyVectorEnv {
             num_envs,
             buffers: None,
             last_info: Vec::new(),
+            timings: BufferedCallTimings::default(),
         })
     }
 
@@ -172,6 +194,18 @@ impl PyVectorEnv {
         Ok(())
     }
 
+    /// Scenario harness only; does not change deck admission or future resets.
+    fn scenario_naming_vocabulary_into_buffers(&mut self, py: Python<'_>) -> PyResult<()> {
+        self.run_into_buffers(py, move |inner, write_buffers, config| {
+            inner.scenario_naming_vocabulary_into(|index, obs| {
+                write_buffers
+                    .write_encoded_row(index, obs, 0.0, false, false, &config)
+                    .map_err(AgentError::from)
+            })?;
+            Ok(vec![InfoDict::new(); inner.len()])
+        })
+    }
+
     fn reset_all_into_buffers(
         &mut self,
         py: Python<'_>,
@@ -203,6 +237,32 @@ impl PyVectorEnv {
                     .write_encoded_row(env_index, obs, reward, terminated, truncated, &config)
                     .map_err(AgentError::from)
             })
+        })
+    }
+
+    fn reassign_roots_into_buffers(
+        &mut self,
+        py: Python<'_>,
+        player_configs: Vec<Option<Vec<PyPlayerConfig>>>,
+    ) -> PyResult<()> {
+        let configs = player_configs
+            .into_iter()
+            .map(|row| row.map(|players| players.into_iter().map(PlayerConfig::from).collect()))
+            .collect();
+        self.run_into_buffers(py, move |inner, buffers, config| {
+            inner.reassign_roots_into(
+                configs,
+                |_, obs| {
+                    encode(obs, &config)
+                        .map(|_| ())
+                        .map_err(|error| AgentError(error.to_string()))
+                },
+                |index, obs, reward, terminated, truncated| {
+                    buffers
+                        .write_encoded_row(index, obs, reward, terminated, truncated, &config)
+                        .map_err(AgentError::from)
+                },
+            )
         })
     }
 
@@ -282,6 +342,14 @@ impl PyVectorEnv {
         self.inner.current_game_seeds()
     }
 
+    fn current_game_generations(&self) -> Vec<u64> {
+        self.inner.current_game_generations()
+    }
+
+    fn hand_snapshots(&self, players: Vec<usize>) -> PyResult<Vec<HandSnapshot>> {
+        self.inner.hand_snapshots(&players).map_err(map_agent_err)
+    }
+
     fn current_action_summaries(&self) -> Vec<(usize, String)> {
         self.inner.current_action_summaries()
     }
@@ -340,19 +408,38 @@ impl PyVectorEnv {
         })
     }
 
+    fn enable_exposure_capture(&mut self) -> PyResult<()> {
+        self.inner.enable_exposure_capture().map_err(map_agent_err)
+    }
+
+    fn take_exposure(&mut self) -> Vec<Vec<String>> {
+        self.inner.take_exposure()
+    }
+
+    fn current_exposure(&self) -> PyResult<Vec<String>> {
+        self.inner.current_exposure().map_err(map_agent_err)
+    }
+
     fn get_last_info(&self, py: Python<'_>) -> Vec<PyObject> {
         self.last_info
             .iter()
             .map(|info| info_dict_to_pydict(py, info).into_any().unbind())
             .collect()
     }
+
+    /// Cumulative `(stepping_seconds, encoding_seconds)` of buffered calls.
+    fn buffered_call_timings(&self) -> (f64, f64) {
+        (
+            self.timings.stepping_nanos as f64 / 1e9,
+            self.timings.encoding_nanos as f64 / 1e9,
+        )
+    }
 }
 
 /// Every configurable axis follows the supplied ObservationSpace on both paths.
 /// Companion shapes, dtypes and storage are checked before buffers are written.
-/// Relation width binds v1-v5 layouts. V6 retains v5 columns and reads its
-/// capacity from the fact axis. At 128 rows their encoding is identical; the
-/// Python configuration/checkpoint still owns the declared version identity.
+/// The buffer set must be policy input v9's: fixed relation, shared-effect and
+/// name-candidate widths, with fact capacity read from the fact axis.
 #[cfg(feature = "python")]
 pub(super) fn input_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -392,57 +479,82 @@ pub(super) fn input_buffer_config(
         policy_history,
         ..ObservationEncoderConfig::default()
     };
-    let mut shared_count = 0;
-    for name in ["effects", "effect_details", "effect_members"] {
-        shared_count += usize::from(buffers.contains(name)?);
+    // One layout: every v9 buffer is present at its fixed width.
+    let fixed = [
+        (
+            "relations",
+            Some(crate::agent::continuation::RELATION_ROWS),
+            crate::agent::continuation::RELATION_DIM,
+        ),
+        ("facts", None, crate::agent::observation_encoder::FACT_DIM),
+        (
+            "effects",
+            Some(crate::agent::shared_effects::EFFECT_ROWS),
+            crate::agent::shared_effects::EFFECT_DIM,
+        ),
+        (
+            "effect_details",
+            Some(crate::agent::shared_effects::DETAIL_ROWS),
+            crate::agent::shared_effects::DETAIL_DIM,
+        ),
+        (
+            "effect_members",
+            Some(crate::agent::shared_effects::MEMBER_ROWS),
+            crate::agent::shared_effects::MEMBER_DIM,
+        ),
+        (
+            "name_candidates",
+            Some(config.max_actions),
+            crate::agent::observation_encoder::NAME_DIM,
+        ),
+    ];
+    for (name, rows, width) in fixed {
+        if !buffers.contains(name)? {
+            return Err(PyValueError::new_err(format!(
+                "policy input v9 requires a {name} buffer"
+            )));
+        }
+        let [actual_rows, actual_width] = shape(name)?;
+        if actual_width != width || rows.is_some_and(|rows| rows != actual_rows) {
+            return Err(PyValueError::new_err(format!(
+                "policy input v9 requires {name} of shape [{}, {width}]",
+                rows.map_or("capacity".to_string(), |rows| rows.to_string())
+            )));
+        }
     }
-    if shared_count != 0 && shared_count != 3 {
+    if !buffers.contains("decklists")? {
         return Err(PyValueError::new_err(
-            "v7 requires all shared-effect buffers",
+            "policy input v9 requires a decklists buffer",
         ));
     }
-    if !buffers.contains("relations")? {
-        if shared_count != 0 {
-            return Err(PyValueError::new_err("v7 requires relations"));
-        }
-        config.policy_input_version = 1;
-        return Ok(config);
-    }
-    let relation_width = shape("relations")?[1];
-    config.policy_input_version = match relation_width {
-        crate::agent::continuation::LEGACY_RELATION_DIM => 3,
-        crate::agent::continuation::RELATION_DIM => 4,
-        crate::agent::continuation::RELATION_DIM_V5
-        | crate::agent::continuation::RELATION_DIM_V8 => {
-            let [rows, width] = shape("facts")?;
-            if width != crate::agent::observation_encoder::FACT_DIM {
-                return Err(PyValueError::new_err("invalid fact buffer shape"));
+    config.max_facts = shape("facts")?[0];
+    // Input v10 is v9 plus both turn-state buffers.
+    config.turn_state = match (
+        buffers.contains("player_turn_state")?,
+        buffers.contains("card_turn_state")?,
+    ) {
+        (false, false) => false,
+        (true, true) => {
+            let player = shape("player_turn_state")?;
+            let card = shape("card_turn_state")?;
+            if player != [2, crate::agent::observation_encoder::TURN_STATE_DIM]
+                || card != [2, config.max_cards_per_player]
+            {
+                return Err(PyValueError::new_err(format!(
+                    "policy input v10 requires player_turn_state of shape [2, {}] and \
+                     card_turn_state of shape [2, {}]",
+                    crate::agent::observation_encoder::TURN_STATE_DIM,
+                    config.max_cards_per_player
+                )));
             }
-            config.max_facts = rows;
-            if shared_count == 3 && relation_width == crate::agent::continuation::RELATION_DIM_V8 {
-                // V9 changes model class aggregation only; v8/v9 wire buffers
-                // are intentionally identical, including their capacity checks.
-                8
-            } else if shared_count == 3 {
-                7
-            } else if config.max_facts == crate::agent::observation_encoder::V5_FACT_ROWS {
-                5
-            } else {
-                6
-            }
+            true
         }
         _ => {
             return Err(PyValueError::new_err(
-                "unsupported continuation relation width",
+                "policy input v10 requires both player_turn_state and card_turn_state",
             ))
         }
     };
-    if relation_width == crate::agent::continuation::RELATION_DIM_V8 && shared_count != 3 {
-        return Err(PyValueError::new_err("v8 requires shared-effect buffers"));
-    }
-    if shared_count != 0 && config.policy_input_version < 7 {
-        return Err(PyValueError::new_err("v7 requires current relation width"));
-    }
     Ok(config)
 }
 
@@ -452,64 +564,56 @@ fn read_observation_buffers(
     n: usize,
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
-    let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
-        if c.policy_input_version < 7 {
-            return Ok(None);
-        }
+    let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
         Ok(Some(
-            require_numpy_array(buffers, name, &[n, rows, width], "float32")?.unbind(),
+            require_numpy_array(buffers, name, shape, "float32")?.unbind(),
         ))
     };
     Ok(ObservationBuffers {
-        relations: if c.policy_input_version >= 2 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "relations",
-                    &[
-                        n,
-                        crate::agent::continuation::RELATION_ROWS,
-                        c.relation_dim(),
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
-        effects: shared_buffer(
+        name_candidates: required(
+            "name_candidates",
+            &[
+                n,
+                c.max_actions,
+                crate::agent::observation_encoder::NAME_DIM,
+            ],
+        )?,
+        relations: required(
+            "relations",
+            &[
+                n,
+                crate::agent::continuation::RELATION_ROWS,
+                crate::agent::continuation::RELATION_DIM,
+            ],
+        )?,
+        effects: required(
             "effects",
-            crate::agent::shared_effects::EFFECT_ROWS,
-            crate::agent::shared_effects::EFFECT_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::EFFECT_ROWS,
+                crate::agent::shared_effects::EFFECT_DIM,
+            ],
         )?,
-        effect_details: shared_buffer(
+        effect_details: required(
             "effect_details",
-            crate::agent::shared_effects::DETAIL_ROWS,
-            crate::agent::shared_effects::DETAIL_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::DETAIL_ROWS,
+                crate::agent::shared_effects::DETAIL_DIM,
+            ],
         )?,
-        effect_members: shared_buffer(
+        effect_members: required(
             "effect_members",
-            crate::agent::shared_effects::MEMBER_ROWS,
-            crate::agent::shared_effects::MEMBER_DIM,
+            &[
+                n,
+                crate::agent::shared_effects::MEMBER_ROWS,
+                crate::agent::shared_effects::MEMBER_DIM,
+            ],
         )?,
-        facts: if c.policy_input_version >= 5 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "facts",
-                    &[
-                        n,
-                        c.fact_rows(),
-                        crate::agent::observation_encoder::FACT_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
-        } else {
-            None
-        },
+        facts: required(
+            "facts",
+            &[n, c.max_facts, crate::agent::observation_encoder::FACT_DIM],
+        )?,
         known_hand: require_numpy_array(
             buffers,
             "known_hand",
@@ -517,24 +621,28 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        decklists: if c.policy_input_version >= 5 {
-            Some(
-                require_numpy_array(
-                    buffers,
-                    "decklists",
-                    &[
-                        n,
-                        2,
-                        c.max_cards_per_player,
-                        crate::agent::observation_encoder::DECKLIST_DIM,
-                    ],
-                    "float32",
-                )?
-                .unbind(),
-            )
+        player_turn_state: if c.turn_state {
+            required(
+                "player_turn_state",
+                &[n, 2, crate::agent::observation_encoder::TURN_STATE_DIM],
+            )?
         } else {
             None
         },
+        card_turn_state: if c.turn_state {
+            required("card_turn_state", &[n, 2, c.max_cards_per_player])?
+        } else {
+            None
+        },
+        decklists: required(
+            "decklists",
+            &[
+                n,
+                2,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::DECKLIST_DIM,
+            ],
+        )?,
         semantic_cards: require_numpy_array(
             buffers,
             "semantic_cards",
@@ -545,42 +653,58 @@ fn read_observation_buffers(
         agent_player: require_numpy_array(
             buffers,
             "agent_player",
-            &[n, 1, c.player_dim()],
+            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
         )?
         .unbind(),
         opponent_player: require_numpy_array(
             buffers,
             "opponent_player",
-            &[n, 1, c.player_dim()],
+            &[n, 1, crate::agent::observation_encoder::PLAYER_DIM],
             "float32",
         )?
         .unbind(),
         agent_cards: require_numpy_array(
             buffers,
             "agent_cards",
-            &[n, c.max_cards_per_player, c.card_dim()],
+            &[
+                n,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         opponent_cards: require_numpy_array(
             buffers,
             "opponent_cards",
-            &[n, c.max_cards_per_player, c.card_dim()],
+            &[
+                n,
+                c.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[
+                n,
+                c.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, c.permanent_dim()],
+            &[
+                n,
+                c.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
             "float32",
         )?
         .unbind(),
@@ -676,10 +800,16 @@ impl PyVectorEnv {
         let config = self.config;
         let inner = &mut self.inner;
 
+        let started = Instant::now();
+        ENCODING_NANOS.set(0);
         let result = with_send_write_buffers(py, &buffers, |write_buffers| {
             py.allow_threads(|| run(inner, write_buffers, config))
                 .map_err(map_agent_err)
         });
+        let encoding = ENCODING_NANOS.get();
+        self.timings.encoding_nanos += encoding;
+        self.timings.stepping_nanos +=
+            (started.elapsed().as_nanos() as u64).saturating_sub(encoding);
         self.buffers = Some(buffers);
         self.last_info = result?;
         Ok(())
@@ -837,7 +967,6 @@ pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
 fn parse_opponent_policy(value: &str) -> PyResult<OpponentPolicy> {
     match value {
         "none" => Ok(OpponentPolicy::None),
-        "passive" => Ok(OpponentPolicy::Passive),
         "random" => Ok(OpponentPolicy::Random),
         _ => Err(PyValueError::new_err(format!(
             "unsupported opponent_policy: {value}"
@@ -943,10 +1072,13 @@ struct SendObservationFieldSlices {
     effects: Option<SendSlice<f32>>,
     effect_details: Option<SendSlice<f32>>,
     effect_members: Option<SendSlice<f32>>,
+    name_candidates: Option<SendSlice<f32>>,
     facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
     decklists: Option<SendSlice<f32>>,
+    player_turn_state: Option<SendSlice<f32>>,
+    card_turn_state: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -982,10 +1114,12 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
+        let agent_player_ptr = self
+            .agent_player
+            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
         let opponent_player_ptr = self
             .opponent_player
-            .row_ptr(env_index, config.player_dim())?;
+            .row_ptr(env_index, crate::agent::observation_encoder::PLAYER_DIM)?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -1046,6 +1180,17 @@ impl SendObservationFieldSlices {
             } else {
                 &mut []
             },
+            name_candidates: if let Some(buffer) = self.name_candidates {
+                // SAFETY: registered buffers partition environments into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.name_candidates_len())?,
+                        config.name_candidates_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             effect_members: if let Some(buffer) = self.effect_members {
                 // SAFETY: registered buffers partition each environment into disjoint rows.
                 unsafe {
@@ -1081,17 +1226,45 @@ impl SendObservationFieldSlices {
             } else {
                 &mut []
             },
+            player_turn_state: if let Some(buffer) = self.player_turn_state {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.player_turn_state_len())?,
+                        config.player_turn_state_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            card_turn_state: if let Some(buffer) = self.card_turn_state {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.card_turn_state_len())?,
+                        config.card_turn_state_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             // SAFETY: each call uses disjoint per-env rows.
             semantic_cards: unsafe {
                 slice::from_raw_parts_mut(semantic_cards_ptr, semantic_cards_len)
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_player: unsafe {
-                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
+                slice::from_raw_parts_mut(
+                    agent_player_ptr,
+                    crate::agent::observation_encoder::PLAYER_DIM,
+                )
             },
             // SAFETY: each call uses disjoint per-env rows.
             opponent_player: unsafe {
-                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
+                slice::from_raw_parts_mut(
+                    opponent_player_ptr,
+                    crate::agent::observation_encoder::PLAYER_DIM,
+                )
             },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
@@ -1199,7 +1372,10 @@ impl SendWriteBuffers {
         truncated: bool,
         config: &ObservationEncoderConfig,
     ) -> Result<(), ObservationWriteError> {
-        self.encode_observation(env_index, observation, config)?;
+        let started = Instant::now();
+        let encoded = self.encode_observation(env_index, observation, config);
+        ENCODING_NANOS.set(ENCODING_NANOS.get() + started.elapsed().as_nanos() as u64);
+        encoded?;
         self.write_step_state(env_index, reward, terminated, truncated)
             .map_err(ObservationWriteError::from)
     }
@@ -1226,6 +1402,11 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "effect_details"))
         .transpose()?;
+    let name_candidates_buffer = buffers
+        .name_candidates
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "name_candidates"))
+        .transpose()?;
     let effect_members_buffer = buffers
         .effect_members
         .as_ref()
@@ -1243,6 +1424,16 @@ fn with_send_write_buffers<R>(
         .decklists
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "decklists"))
+        .transpose()?;
+    let player_turn_state_buffer = buffers
+        .player_turn_state
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "player_turn_state"))
+        .transpose()?;
+    let card_turn_state_buffer = buffers
+        .card_turn_state
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "card_turn_state"))
         .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
@@ -1295,6 +1486,10 @@ fn with_send_write_buffers<R>(
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "effect_details"))
             .transpose()?,
+        name_candidates: name_candidates_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "name_candidates"))
+            .transpose()?,
         effect_members: effect_members_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "effect_members"))
@@ -1307,6 +1502,14 @@ fn with_send_write_buffers<R>(
         decklists: decklists_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))
+            .transpose()?,
+        player_turn_state: player_turn_state_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "player_turn_state"))
+            .transpose()?,
+        card_turn_state: card_turn_state_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "card_turn_state"))
             .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,

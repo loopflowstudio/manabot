@@ -220,7 +220,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
     for viewer in [PlayerId(0), PlayerId(1)] {
         for seed in 0..5 {
             let mut branch = s.game().clone();
-            branch.determinize(viewer, seed);
+            branch.determinize(viewer, seed).unwrap();
             let expected: BTreeSet<_> = branch
                 .state
                 .zones
@@ -247,7 +247,17 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .filter(|card| card.zone == ZoneType::Library)
                 .map(|card| card.id)
                 .collect::<BTreeSet<_>>();
-            assert_eq!(visible, expected);
+            let inspected = branch
+                .state
+                .zones
+                .zone_cards(ZoneType::Library, PlayerId(0))
+                .iter()
+                .map(|card| branch.state.cards[*card].id.0 as i32)
+                .collect::<BTreeSet<_>>();
+            assert_eq!(
+                visible, inspected,
+                "a search may inspect nonmatching library cards too"
+            );
         }
     }
 }

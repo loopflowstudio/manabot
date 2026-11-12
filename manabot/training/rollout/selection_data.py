@@ -19,8 +19,10 @@ import torch
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
+from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.training.learning.references import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
@@ -96,7 +98,7 @@ def collect_selection_game(
     Both seats use the same frozen model and a game-local action RNG. Forced
     native auto-resolution is not a policy row; distance counts surfaced rows.
     """
-    if agent.belief_count_buckets or agent.config.compound_decisions:
+    if agent.belief_count_buckets:
         raise ValueError(
             "selection collection requires ordinary observation-only policy"
         )
@@ -137,7 +139,9 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            tensors = admit_observation(
+                agent, {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            )
             logits, value = agent(tensors)
             probabilities = logits.softmax(-1)
             action = int(torch.multinomial(probabilities[0], 1, generator=generator))
@@ -190,3 +194,39 @@ def collect_selection_game(
         terminal_digest=env.state_digest(),
         rows=tuple(rows),
     )
+
+
+def replay_selection_game(path: Path) -> int:
+    """Replay a retained complete journal without a policy; reject partial logs.
+
+    Returns the number of replayed Commands. Each recorded transition and the
+    terminal winner and state digest must match the native replay exactly.
+    """
+    with path.open() as source:
+        header = json.loads(next(source))
+        env = managym.Env(seed=header["seed"], skip_trivial=header["skip_trivial"])
+        env.reset(Match(MatchConfig(**header["match"])).to_rust())
+        count = 0
+        complete = False
+        for line in source:
+            row = json.loads(line)
+            if complete:
+                raise ValueError("data follows terminal selection receipt")
+            if "command" in row:
+                observed = json.loads(
+                    env.execute_semantic_command_json(json.dumps(row["command"]))
+                )
+                if observed != row["transition"]:
+                    raise ValueError("selection replay transition mismatch")
+                count += 1
+            else:
+                if (
+                    not env.is_game_over()
+                    or env.winner_index() != row["winner"]
+                    or env.state_digest() != row["state_digest"]
+                ):
+                    raise ValueError("selection replay terminal mismatch")
+                complete = True
+        if not complete:
+            raise ValueError("selection attempt is incomplete")
+    return count

@@ -2,6 +2,9 @@
 
 `LocalUpdateTeacher` owns no learning state. It estimates signed root-action
 values using canonical worlds, actor-view policy rollouts and signed leaf values.
+Live branches share one policy/value forward per ply. `Rollout` owns each
+branch's execution state and independent RNG; immutable `RolloutReceipt` values
+carry its evidence into the local-update receipt.
 `LocalUpdatePlayer` maintains viewer history, or an explicitly selected exact
 reference tracker. The closed-form
 update follows Ataraxos supplement S3.7 (7)-(8); model mismatch and truncated
@@ -15,10 +18,10 @@ import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Callable, Literal, Sequence
 
 import managym._managym as native
-from managym.decision import DecisionFrame, Observation, SemanticTransition
+from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
 from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
@@ -38,17 +41,13 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
+from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
-from manabot.sim.search.compound import (
-    CompoundCursor,
-    CompoundPrefixReceipt,
-    CompoundProjection,
-    CompoundRollout,
-    advance_compound,
-    project_compound,
-)
+from manabot.sim.search.rollout import Rollout
+from manabot.sim.search.rollout_receipt import RolloutReceipt
 from manabot.sim.search.sampling import (
     HandBatch,
     HandSample,
@@ -150,18 +149,17 @@ def regularized_update(
 
 
 @dataclass(frozen=True)
-class RolloutReceipt:
-    world_index: int | None
-    world_seed: int
-    action_index: int
-    rollout_seed: int
-    signed_value: float
-    terminal: bool
-    actor_observation_hashes: tuple[str, ...]
-    branch_audit_json: str
-    sampled_hand: HandSample | None = None
-    decoder_factors: int = 0
-    canonical_commands: int = 0
+class CompoundPrefixReceipt:
+    """Decoder prefix retained by receipts from removed compound policies.
+
+    Current searches never write one. The type remains so historical receipts
+    still validate and keep their replay identities.
+    """
+
+    root_observation_json: str
+    projection_json: str
+    tokens: tuple[int, ...]
+    commands: tuple[Command, ...]
 
 
 @dataclass(frozen=True)
@@ -407,10 +405,11 @@ def local_search_source_sha256() -> str:
     root = Path(__file__).resolve().parents[3]
     paths = (
         "manabot/sim/search/local_update.py",
+        "manabot/sim/search/rollout.py",
+        "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
-        "manabot/sim/search/compound.py",
-        "manabot/model/compound.py",
         "manabot/model/actor_critic.py",
+        "manabot/model/facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",
         "manabot/belief/checkpoint.py",
@@ -434,14 +433,9 @@ class LocalUpdateTeacher:
         self.agent = self.likelihood.agent
         if self.agent.belief_count_buckets:
             raise ValueError("local search requires an observation-only policy")
-        if self.agent.config.compound_decisions and config.sampling == "belief":
-            raise ValueError(
-                "compound exact-history likelihood is unsupported; use a direct sampler"
-            )
         metadata = torch.load(checkpoint, map_location="cpu", weights_only=False)
         if (
-            not self.agent.config.compound_decisions
-            and self.agent.config.value_kind != "categorical_wdl"
+            self.agent.config.value_kind != "categorical_wdl"
             and metadata.get("bc", {}).get("value_semantic") != "signed_outcome"
         ):
             raise ValueError(
@@ -488,26 +482,74 @@ class LocalUpdateTeacher:
         self.source_sha256 = local_search_source_sha256()
 
     def predict(self, engine: managym.Env) -> tuple[FloatArray, float]:
-        if self.agent.config.compound_decisions:
-            raise ValueError("compound inference requires a retained prefix projection")
-        actor = int(engine.current_agent_index())
-        raw = engine.observation_for_player(actor)
-        encoded = self.space.encode(raw)
-        count = len(raw.action_space.actions)
-        if int(encoded["actions_valid"].sum()) != count or count == 0:
-            raise ValueError("policy cannot represent complete legal offers")
-        tensors = {
-            key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()
-        }
+        return self.predict_batch([engine])[0]
+
+    def predict_batch(
+        self, engines: Sequence[managym.Env]
+    ) -> list[tuple[FloatArray, float]]:
+        """Evaluate actor views together; each row keeps its complete legal support.
+
+        Float32 matrix kernels can round differently from singleton inference.
+        Probability normalization remains float64, over each row's legal offers.
+        """
+        if not engines:
+            return []
+        # The selected space owns every axis, including historical inputs and
+        # nondefault capacities. Each row is a contiguous view of this call's
+        # fresh batch; no observation buffers survive into the next frontier.
+        encodings = self.space.encoder.allocate(len(engines))
+        counts: list[int] = []
+        for index, engine in enumerate(engines):
+            actor = int(engine.current_agent_index())
+            raw = engine.observation_for_player(actor)
+            encoded = {key: value[index] for key, value in encodings.items()}
+            count = len(raw.action_space.actions)
+            if count == 0 or count > self.space.encoder.max_actions:
+                raise ValueError("policy cannot represent complete legal offers")
+            # Search requires every legal offer, even if a checkpoint permits
+            # first-legal truncation during training.
+            engine.encode_observation_into(raw, encoded)
+            if int(encoded["actions_valid"].sum()) != count:
+                raise ValueError("policy cannot represent complete legal offers")
+            counts.append(count)
+        tensors = admit_observation(
+            self.agent,
+            {key: torch.as_tensor(value) for key, value in encodings.items()},
+        )
         with torch.inference_mode():
-            logits, value = self.agent(tensors)
-            probabilities = logits[0, :count].double().softmax(-1).numpy()
-        signed_value = float(value[0])
-        if not np.isfinite(signed_value):
+            logits, values = self.agent(tensors)
+            predictions = [
+                (logits[i, :count].double().softmax(-1).numpy(), float(values[i]))
+                for i, count in enumerate(counts)
+            ]
+        if any(not np.isfinite(value) for _, value in predictions):
             raise ValueError("nonfinite leaf value")
-        # Scalar PPO heads are unconstrained; retain their actual estimate rather
-        # than silently turning it into a sigmoid probability or clipping it.
-        return probabilities, signed_value
+        # Scalar PPO heads are unconstrained; retain their actual signed estimate.
+        return predictions
+
+    def _run_rollouts(self, rollouts: list[Rollout], check: Callable[[], None]) -> None:
+        """Advance one Command per live branch, then one forward for the frontier.
+
+        The last forward supplies leaf values too. Finished branches leave the
+        frontier immediately; independent RNGs make scheduling immaterial to
+        sampling, apart from floating-point differences in batched inference.
+        """
+        live = [row for row in rollouts if not row.branch.is_game_over()]
+        for ply in range(self.config.depth):
+            pending: list[Rollout] = []
+            for row in live:
+                check()
+                row.advance(ply)
+                if not row.branch.is_game_over():
+                    pending.append(row)
+            if not pending:
+                break
+            check()
+            predictions = self.predict_batch([row.branch for row in pending])
+            check()
+            for row, (probabilities, value) in zip(pending, predictions, strict=True):
+                row.probabilities, row.value = probabilities, value
+            live = pending
 
     def verify_replay(
         self,
@@ -516,29 +558,17 @@ class LocalUpdateTeacher:
         receipt: LocalUpdateReceipt,
         *,
         query: WorldQuery | None = None,
-        compound_cursor: CompoundCursor | None = None,
     ) -> None:
         """Re-execute the sampled branches and compare every retained witness.
 
         The caller supplies the exact historical root and its tracked belief;
         receipts are not a substitute for the canonical source trajectory.
-        Elapsed time is the only excluded field.
+        Elapsed time is the only excluded field. Receipts of removed compound
+        policies are readable but not replayable here.
         """
-        if (
-            receipt.compound_prefix is not None
-            and receipt.compound_prefix.commands
-            and compound_cursor is None
-        ):
-            raise ValueError(
-                "compound replay requires the retained original-root cursor"
-            )
-        replay = self.search(
-            engine,
-            belief,
-            seed=receipt.seed,
-            query=query,
-            compound_cursor=compound_cursor,
-        )
+        if receipt.compound_prefix is not None:
+            raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        replay = self.search(engine, belief, seed=receipt.seed, query=query)
         if replay.replay_identity() != receipt.replay_identity():
             raise ValueError("local update replay differs from retained evidence")
 
@@ -550,7 +580,6 @@ class LocalUpdateTeacher:
         seed: int,
         query: WorldQuery | None = None,
         deadline: float | None = None,
-        compound_cursor: CompoundCursor | None = None,
     ) -> LocalUpdateReceipt:
         started = time.perf_counter()
         limit = min(
@@ -584,16 +613,17 @@ class LocalUpdateTeacher:
                 )
             # Compare against an independent native snapshot before trusting an
             # injected sampler's preparation or executing any branch.
+            constraints = json.loads(prepared.constraints_json)
             if (
                 prepared.distribution_identity != self.hand_sampler.identity
                 or prepared.history_identity != belief.identity
-                or json.loads(prepared.constraints_json)
+                or constraints
                 != json.loads(engine.hidden_hand_constraints_json(viewer))
             ):
                 raise ValueError(
                     "injected sampler preparation differs from source root"
                 )
-            world_identity = _digest(json.loads(prepared.constraints_json))
+            world_identity = _digest(constraints)
             belief_digest = _digest(asdict(prepared))
             belief_model = (
                 f"approximate-learned-hand/sha256:{self.hand_sampler.identity}"
@@ -634,16 +664,11 @@ class LocalUpdateTeacher:
                 belief.model_id,
             )
             sampling_probabilities = tuple(float(p) for p in belief.probabilities)
-        frame = DecisionFrame.from_json(engine.semantic_decision_frame_json())
-        compound = (
-            project_compound(self.agent, engine, compound_cursor, check)
-            if self.agent.config.compound_decisions
-            else None
-        )
-        if compound is not None:
-            base = compound.probabilities
-        else:
-            base, _ = self.predict(engine)
+        # The acting viewer's observation already carries this revision's frame.
+        frame = observation.decision
+        if frame is None:
+            raise ValueError("local search requires an acting-viewer decision")
+        base, _ = self.predict(engine)
         reference = np.full(len(base), 1.0 / len(base))
         if len(frame.offers) != len(base):
             raise ValueError("semantic offers and policy rows differ")
@@ -687,9 +712,8 @@ class LocalUpdateTeacher:
         else:
             assert isinstance(belief, BeliefState)
             indexes = list(belief.sample_indexes(world_count, seed=seed))
-        sums = np.zeros(len(base), dtype=np.float64)
-        counts = np.zeros(len(base), dtype=np.int64)
-        receipts: list[RolloutReceipt] = []
+        supported_actions = [int(action) for action in np.flatnonzero(base > 0)]
+        rollouts: list[Rollout] = []
         for sample_number, index in enumerate(indexes):
             check()
             world_seed = int(rng.integers(0, 2**63))
@@ -708,101 +732,41 @@ class LocalUpdateTeacher:
             # All root actions see the same sampled deal; subsequent decisions
             # use only their own viewer observation, never determinized truth.
             if (
-                Observation.from_json(
-                    world.semantic_observation_json(viewer)
-                ).viewer_state_hash
+                world.semantic_viewer_state_hash(viewer)
                 != observation.viewer_state_hash
             ):
                 raise ValueError("materialization changed acting viewer information")
             world_frame = DecisionFrame.from_json(world.semantic_decision_frame_json())
             if world_frame.offers != frame.offers:
                 raise ValueError("materialization changed semantic root offers")
-            for action in np.flatnonzero(base > 0):
-                action = int(action)
+            for action in supported_actions:
                 check()
                 rollout_seed = int(rng.integers(0, 2**63))
-                policy_rng = np.random.default_rng(rollout_seed)
                 session = SelectedFullCloneBackend().open_session(
-                    match_id=f"local-{seed}-{len(receipts)}", audit=True
+                    match_id=f"local-{seed}-{len(rollouts)}", audit=True
                 )
-                branch = session.fork_exact(world, "world")
-                hashes: list[str] = []
-                probabilities, value = base, 0.0
-                compound_rollout = (
-                    CompoundRollout(self.agent, compound, rollout_seed, check)
-                    if compound is not None
-                    else None
-                )
-                projection = compound
-                for ply in range(self.config.depth):
-                    check()
-                    if branch.is_game_over():
-                        break
-                    actor = int(branch.current_agent_index())
-                    hashes.append(
-                        Observation.from_json(
-                            branch.semantic_observation_json(actor)
-                        ).viewer_state_hash
-                    )
-                    if compound_rollout is not None:
-                        assert projection is not None
-                        choice = (
-                            action if ply == 0 else compound_rollout.choose(projection)
-                        )
-                        compound_rollout.advance(projection, choice)
-                    else:
-                        choice = (
-                            action
-                            if ply == 0
-                            else int(
-                                policy_rng.choice(len(probabilities), p=probabilities)
-                            )
-                        )
-                    _, _, _, truncated, _ = session.apply_policy_choice(
-                        branch, site="child", policy_index=choice
-                    )
-                    if truncated:
-                        raise RuntimeError(
-                            "local rollout truncated before an authoritative outcome"
-                        )
-                    if not branch.is_game_over():
-                        if compound_rollout is not None:
-                            projection = compound_rollout.project(branch)
-                            probabilities, value = (
-                                projection.probabilities,
-                                projection.value,
-                            )
-                        else:
-                            probabilities, value = self.predict(branch)
-                terminal = bool(branch.is_game_over())
-                if terminal:
-                    winner = branch.winner_index()
-                    value = (
-                        0.0 if winner is None else (1.0 if winner == viewer else -1.0)
-                    )
-                elif int(branch.current_agent_index()) != viewer:
-                    value = -value
-                sums[action] += value
-                counts[action] += 1
-                receipts.append(
-                    RolloutReceipt(
-                        canonical_commands=len(hashes),
-                        decoder_factors=compound_rollout.factors
-                        if compound_rollout is not None
-                        else 0,
+                rollouts.append(
+                    Rollout(
+                        branch=session.fork_exact(world, "world"),
+                        session=session,
                         world_index=index,
-                        sampled_hand=sampled_hand,
                         world_seed=world_seed,
                         action_index=action,
                         rollout_seed=rollout_seed,
-                        signed_value=value,
-                        terminal=terminal,
-                        actor_observation_hashes=tuple(hashes),
-                        branch_audit_json=json.dumps(
-                            session.snapshot(), sort_keys=True
-                        ),
+                        sampled_hand=sampled_hand,
+                        probabilities=base,
                     )
                 )
+        self._run_rollouts(rollouts, check)
+        sums = np.zeros(len(base), dtype=np.float64)
+        counts = np.zeros(len(base), dtype=np.int64)
+        receipts: list[RolloutReceipt] = []
+        for row in rollouts:
+            check()
+            receipt = row.receipt(viewer)
+            sums[row.action_index] += receipt.signed_value
+            counts[row.action_index] += 1
+            receipts.append(receipt)
         check()
         values = np.divide(
             sums, counts, out=np.full_like(sums, np.nan), where=counts > 0
@@ -821,7 +785,6 @@ class LocalUpdateTeacher:
             sampling_probabilities=sampling_probabilities,
             learned_belief=learned,
             direct_belief=direct if learned is None else None,
-            compound_prefix=compound.cursor.receipt() if compound is not None else None,
             query_json=json.dumps(selected_query.to_dict(), sort_keys=True),
             condition_mass=mass,
             viewer=viewer,
@@ -865,16 +828,11 @@ class LocalUpdatePlayer(ExactRangePlayer):
         self.deadline: float | None = None
         self._belief_seconds = 0.0
         self.history: ViewerHistory | None = None
-        self.compound_cursor: CompoundCursor | None = None
-        self.compound_projection: CompoundProjection | None = None
-        self._decision_limit: float = float("inf")
 
     def start_game(self, env: Env, seat: int) -> None:
         validate_agent_setup(self.teacher.agent, env.match.to_rust())
         started = time.perf_counter()
         self.last_receipt = None
-        self.compound_cursor = None
-        self.compound_projection = None
         self.history = None
         self.tracker = None
         if self.teacher.hand_sampler is not None:
@@ -902,14 +860,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
             )
 
     def prepare_step(self, env: Env, acting: int, action: int) -> None:
-        if acting == self.seat and self.compound_projection is not None:
-            self.compound_cursor = advance_compound(
-                self.teacher.agent,
-                self.compound_projection,
-                action,
-                self._check_deadline,
-            )
-            self.compound_projection = None
         if self.teacher.hand_sampler is None and self.sampling is RangeSampling.BELIEF:
             super().prepare_step(env, acting, action)
 
@@ -950,10 +900,6 @@ class LocalUpdatePlayer(ExactRangePlayer):
                 )
         super().observe_step(env, acting, transition)
 
-    def _check_deadline(self) -> None:
-        if time.perf_counter() >= self._decision_limit:
-            raise TimeoutError("local search deadline exceeded; target unavailable")
-
     def act(self, env: Env, obs: dict[str, NDArray[np.float32]]) -> int:
         del obs
         if self.tracker is None and self.history is None:
@@ -980,16 +926,7 @@ class LocalUpdatePlayer(ExactRangePlayer):
             belief,
             seed=(self.seed * 1_000_003 + self.calls) % (2**63),
             deadline=limit,
-            compound_cursor=self.compound_cursor,
         )
-        if self.teacher.agent.config.compound_decisions:
-            self._decision_limit = limit
-            self.compound_projection = project_compound(
-                self.teacher.agent,
-                env._engine,
-                self.compound_cursor,
-                self._check_deadline,
-            )
         self.last_receipt = replace(
             self.last_receipt,
             belief_seconds=spent,

@@ -157,7 +157,7 @@ fn determinize_preserves_public_state_and_hand_sizes() {
         })
         .collect();
 
-    game.determinize(hero, 12345);
+    game.determinize(hero, 12345).unwrap();
 
     // Sizes preserved.
     assert_eq!(
@@ -231,7 +231,7 @@ fn determinize_resamples_opponent_hand() {
     let mut changed = false;
     for seed in 0..8u64 {
         let mut world = game.clone();
-        world.determinize(PlayerId(0), seed);
+        world.determinize(PlayerId(0), seed).unwrap();
         if zone_snapshot(&world, ZoneType::Hand, villain) != hand_before {
             changed = true;
             break;
@@ -248,8 +248,8 @@ fn determinize_is_deterministic_in_seed() {
 
     let mut world_a = game.clone();
     let mut world_b = game.clone();
-    world_a.determinize(PlayerId(0), 777);
-    world_b.determinize(PlayerId(0), 777);
+    world_a.determinize(PlayerId(0), 777).unwrap();
+    world_b.determinize(PlayerId(0), 777).unwrap();
     for zone in [ZoneType::Hand, ZoneType::Library] {
         for player in [PlayerId(0), PlayerId(1)] {
             assert_eq!(
@@ -269,16 +269,16 @@ fn determinize_ignores_authority_private_allocation() {
     let viewer = PlayerId(0);
     let mut world_a = game.clone();
     let mut world_b = game.clone();
-    world_a.determinize(viewer, 101);
-    world_b.determinize(viewer, 202);
+    world_a.determinize(viewer, 101).unwrap();
+    world_b.determinize(viewer, 202).unwrap();
     assert_ne!(
         zone_snapshot(&world_a, ZoneType::Hand, PlayerId(1)),
         zone_snapshot(&world_b, ZoneType::Hand, PlayerId(1)),
         "setup must produce distinct authority-private allocations"
     );
 
-    world_a.determinize(viewer, 777);
-    world_b.determinize(viewer, 777);
+    world_a.determinize(viewer, 777).unwrap();
+    world_b.determinize(viewer, 777).unwrap();
     for zone in [ZoneType::Hand, ZoneType::Library] {
         for player in [PlayerId(0), PlayerId(1)] {
             assert_eq!(

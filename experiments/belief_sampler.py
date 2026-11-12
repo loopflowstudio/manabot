@@ -1,4 +1,4 @@
-"""The learned belief sampler (docs/search-and-beliefs.md#belief-sampler).
+"""The learned belief sampler (README.md#beside-the-loop).
 
 Trains a small frozen policy on the Gray Ogre matchup, collects its histories
 and fits the belief sampler.

@@ -16,7 +16,7 @@ use crate::{
         cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
-        event::GameEvent,
+        event::{EventLedger, GameEvent},
         priority::PriorityState,
         statics::DerivedCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
@@ -51,7 +51,8 @@ pub struct GameState {
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub events: Vec<GameEvent>,
+    /// Committed rules events; forks share the sealed history.
+    pub events: EventLedger,
     pub pending_events: Vec<GameEvent>,
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
@@ -104,7 +105,7 @@ pub struct CastChoices {
 }
 
 /// A fully announced spell or activation waiting for selected costs.
-#[derive(Clone, Debug, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Payment {
     Spell {
         card: CardId,
@@ -141,21 +142,33 @@ pub enum PendingChoice {
         cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
-    /// `chosen` holds those already selected for its single clause.
+    /// `chosen` holds those already selected, clause by clause, and
+    /// `requirement` is the clause being chosen. `player` activates; a
+    /// clause the opponent chooses is offered to them.
     ActivatedTarget {
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
         chosen: Vec<Target>,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        requirement: usize,
     },
     /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
     /// control" activation cost.
     TapPayment {
-        remaining: u8,
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        #[serde(skip_serializing_if = "is_single_tap")]
+        remaining: usize,
+    },
+    /// Choosing the card from hand to exile for a spell's alternative cost
+    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
+    /// payment.
+    ExileFromHandPayment {
+        player: PlayerId,
+        payment: Box<Payment>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -238,6 +251,11 @@ pub enum PendingChoice {
 /// - `mana_pools`: both players' pools, which a static condition may read
 ///   ("as long as you have six or more unspent mana"). The cache compares it
 ///   only while a static source with such a condition is on the battlefield.
+/// - `tapped`: tap/untap state. Layers follow it only when a scope,
+///   condition or value predicate reads it. Dynamic activation finalization
+///   refreshes independently; trigger kinds follow the raw board. Removing a
+///   stun counter also advances
+///   `characteristics`.
 /// - `triggers`: the trigger-source index (`TriggerIndex`): which battlefield
 ///   permanents have triggered abilities, printed or granted.
 ///
@@ -250,6 +268,7 @@ pub enum PendingChoice {
 pub(crate) struct Revisions {
     pub characteristics: u64,
     pub mana_pools: u64,
+    pub tapped: u64,
     pub triggers: u64,
 }
 
@@ -291,7 +310,7 @@ impl TrackedState {
         &mut self.state.id_gen
     }
 
-    pub(crate) fn events_mut(&mut self) -> &mut Vec<GameEvent> {
+    pub(crate) fn events_mut(&mut self) -> &mut EventLedger {
         &mut self.state.events
     }
 
@@ -367,7 +386,7 @@ impl TrackedState {
         }
     }
 
-    // Permanent fields no cached derivation reads: tapped state, damage,
+    // Permanent fields no cached derivation reads: damage,
     // summoning sickness and activation limits. Counters, control,
     // attachment, animation and combat status go through `DerefMut`.
 
@@ -380,6 +399,7 @@ impl TrackedState {
 
     /// Returns whether the permanent was untapped.
     pub(crate) fn tap(&mut self, permanent_id: PermanentId) -> bool {
+        self.revisions.tapped += 1;
         match self.permanent_untracked(permanent_id) {
             Some(permanent) if !permanent.tapped => {
                 permanent.tap();
@@ -391,6 +411,7 @@ impl TrackedState {
 
     /// Untap (CR 122.1d): a removed stun counter is a characteristics change.
     pub(crate) fn untap(&mut self, permanent_id: PermanentId) {
+        self.revisions.tapped += 1;
         let Some(permanent) = self.permanent_untracked(permanent_id) else {
             return;
         };
@@ -512,6 +533,7 @@ impl DerefMut for TrackedState {
     fn deref_mut(&mut self) -> &mut GameState {
         self.revisions.characteristics += 1;
         self.revisions.mana_pools += 1;
+        self.revisions.tapped += 1;
         self.revisions.triggers += 1;
         &mut self.state
     }
@@ -576,4 +598,8 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
+}
+
+fn is_single_tap(remaining: &usize) -> bool {
+    *remaining == 1
 }

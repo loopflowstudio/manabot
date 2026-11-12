@@ -5,12 +5,9 @@ policy costs inference and carries no decision value. Native skipping
 (`skip_trivial`) resolves them, so it must be the default everywhere.
 """
 
-import inspect
 from pathlib import Path
 import re
 
-from manabot.training.regime import TrainCompound
-from manabot.training.rollout.compound import collect_game
 from manabot.verify.llm_game import GameConfig
 import managym
 
@@ -55,8 +52,6 @@ def test_vector_default_skips_forced_decisions() -> None:
 
 def test_runner_configuration_defaults_skip() -> None:
     assert GameConfig().skip_trivial
-    assert TrainCompound.model_fields["skip_trivial"].default is True
-    assert inspect.signature(collect_game).parameters["skip_trivial"].default is True
 
 
 def test_no_runner_turns_skipping_off() -> None:

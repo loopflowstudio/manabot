@@ -23,7 +23,6 @@ from manabot.training.regime import (
     ImportPolicy,
     Learning,
     ProducerCost,
-    TrainCompound,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -40,7 +39,7 @@ def reference(path: Path) -> ArtifactReference:
 
 
 def published_fixture(
-    tmp_path: Path, weights: Literal["raw", "ema"] = "raw", *, compound: bool = False
+    tmp_path: Path, weights: Literal["raw", "ema"] = "raw"
 ) -> TrainingRegime:
     """Synthetic producer evidence explicitly records fixed untrained weights."""
     torch.set_num_threads(1)
@@ -61,9 +60,6 @@ def published_fixture(
             )
         ],
     )
-    if compound:
-        recipe.agent.compound_decisions = True
-        recipe.stages = [TrainCompound(id="producer", operation="train_compound")]
     source = TrainingRun(
         id="synthetic-untrained-producer",
         regime=recipe,
@@ -126,13 +122,11 @@ def published_fixture(
     )
 
 
-@pytest.mark.parametrize(
-    "weights,compound", [("raw", False), ("ema", False), ("raw", True)]
-)
+@pytest.mark.parametrize("weights", ["raw", "ema"])
 def test_saved_policy_consumers_and_costs(
-    tmp_path: Path, weights: Literal["raw", "ema"], compound: bool
+    tmp_path: Path, weights: Literal["raw", "ema"]
 ) -> None:
-    recipe = published_fixture(tmp_path, weights, compound=compound)
+    recipe = published_fixture(tmp_path, weights)
     imported = recipe.stages[0]
     assert isinstance(imported, ImportPolicy)
     recipe.stages.extend(

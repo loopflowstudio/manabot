@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -44,9 +44,17 @@ jobs:
           BASELINE_STEPS: ${{ inputs.steps || '' }}
           BASELINE_SEED: ${{ matrix.seed }}
         run: |
-          horizon=()
-          if [ -n "$BASELINE_STEPS" ]; then horizon=(--steps "$BASELINE_STEPS"); fi
-          timeout --signal=TERM 1800s uv run --no-sync manabot train --recipe baseline "${horizon[@]}" --seed "$BASELINE_SEED" --seconds 1680 --out .runs/baseline
+          timeout --signal=TERM 1800s uv run --no-sync python - <<'PY'
+          import os
+          from pathlib import Path
+          from manabot.recipes.baseline import BASELINE_STEPS, baseline_test
+
+          plan = baseline_test(
+              steps=int(os.environ["BASELINE_STEPS"] or BASELINE_STEPS), seconds=1680
+          )
+          result = plan.run(seed=int(os.environ["BASELINE_SEED"]), out=Path(".runs/baseline"))
+          raise SystemExit(result.status != "completed")
+          PY
       - name: Summary
         if: always()
         run: |
@@ -70,7 +78,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:

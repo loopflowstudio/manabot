@@ -246,7 +246,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     let ability = Ability::Triggered {
         intervening_if: None,
         condition: TriggerCondition::Dies {
-            subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+            subject: TriggerSubject::another_you_control(CardPredicate::creature()),
         },
         effects: vec![Effect::gain_life(1)],
     };
@@ -328,6 +328,7 @@ fn cr_400_7_stale_delayed_trigger_reference_is_rejected() {
         source_card: card,
         source_ref: Some(old_ref),
         effects: vec![Effect::Move {
+            library_end: None,
             what: ObjectSelector::This,
             to: ZoneType::Battlefield,
             tapped: true,
