@@ -1,6 +1,7 @@
-"""Validate release inventory and dependency metadata before trusted publishing.
+"""Validate both release inventories before either trusted-publisher upload.
 
-The source archive defines one metadata contract; every wheel must match it.
+Each source archive defines its wheel metadata contract. The packages share a
+version but have disjoint code ownership: the native engine lives in managym.
 """
 
 import argparse
@@ -32,69 +33,85 @@ def _metadata(data: bytes) -> _Metadata:
 def validate(directory: Path, complete: bool) -> None:
     wheels = sorted(directory.glob("*.whl"))
     archives = list(directory.glob("*.tar.gz"))
-    if len(archives) != 1 or not wheels:
-        raise ValueError("expected one Manabot source archive and platform wheels")
-    (source,) = archives
-    root = source.name.removesuffix(".tar.gz")
-    with tarfile.open(source) as archive:
-        package_info = archive.extractfile(f"{root}/PKG-INFO")
-        if package_info is None:
-            raise ValueError("source metadata missing")
-        expected = _metadata(package_info.read())
-        if (
-            f"{root}/content/semantic/current/learning_schema.json"
-            not in archive.getnames()
-        ):
-            raise ValueError(f"missing content in {source.name}")
-
-    if expected.name != "manabot" or root != f"manabot-{expected.version}":
-        raise ValueError("source archive name differs from Manabot metadata")
-    if expected.python != ">=3.12,<3.14":
-        raise ValueError("expected CPython 3.12 and 3.13 support")
-    requirements = {
-        requirement.replace(" ", "").replace('"', "'")
-        for requirement in expected.requirements
-    }
+    expected: dict[str, _Metadata] = {}
+    for source in archives:
+        root = source.name.removesuffix(".tar.gz")
+        with tarfile.open(source) as archive:
+            package_info = archive.extractfile(f"{root}/PKG-INFO")
+            if package_info is None:
+                raise ValueError("source metadata missing")
+            metadata = _metadata(package_info.read())
+            if (
+                metadata.name not in {"managym", "manabot"}
+                or root != f"{metadata.name}-{metadata.version}"
+            ):
+                raise ValueError("source archive name differs from package metadata")
+            if metadata.name in expected:
+                raise ValueError("duplicate source archive")
+            expected[metadata.name] = metadata
+            if (
+                f"{root}/content/semantic/current/learning_schema.json"
+                not in archive.getnames()
+            ):
+                raise ValueError(f"missing content in {source.name}")
+    if set(expected) != {"managym", "manabot"}:
+        raise ValueError("expected both managym and manabot source archives")
+    engine, bot = expected["managym"], expected["manabot"]
+    if engine.version != bot.version:
+        raise ValueError("package versions must match")
+    for metadata in expected.values():
+        if set(metadata.python.split(",")) != {">=3.12", "<3.14"}:
+            raise ValueError("expected CPython 3.12 and 3.13 support")
+    if engine.requirements != frozenset({"numpy>=1.24.0", "pydantic>=2.12.0"}):
+        raise ValueError(
+            "managym must declare only its lightweight runtime dependencies"
+        )
+    requirements = {r.replace(" ", "").replace('"', "'") for r in bot.requirements}
     if not {
+        f"managym=={bot.version}",
         "torch>=2.15.0;sys_platform=='linux'",
         "torch>=2.15.0;sys_platform!='linux'",
         "etude-sdk>=0.2.15",
-    }.issubset(requirements) or any(
-        requirement.startswith("managym") for requirement in requirements
-    ):
-        raise ValueError("Manabot must declare Torch/Etude minimums and bundle managym")
-
+    }.issubset(requirements):
+        raise ValueError(
+            "manabot must declare Torch/Etude minimums and its exact managym version"
+        )
+    seen: set[str] = set()
     for wheel in wheels:
         with zipfile.ZipFile(wheel) as archive:
             files = archive.namelist()
-            (metadata_file,) = [
-                name for name in files if name.endswith(".dist-info/METADATA")
-            ]
-            if _metadata(archive.read(metadata_file)) != expected:
+            (metadata_file,) = [n for n in files if n.endswith(".dist-info/METADATA")]
+            metadata = _metadata(archive.read(metadata_file))
+            if metadata != expected.get(wheel.name.split("-")[0]):
                 raise ValueError(f"source and wheel metadata differ: {wheel.name}")
-            if not any(
-                path.startswith("manabot/managym/_managym.") and path.endswith(".so")
-                for path in files
-            ):
+            seen.add(metadata.name)
+            native = [p for p in files if p.endswith((".so", ".dylib", ".pyd"))]
+            if metadata.name == "managym":
+                if len(native) != 1 or not native[0].startswith("managym/_managym."):
+                    raise ValueError("managym wheel must own its native extension")
+                if any(p.startswith(("manabot/", "academy/")) for p in files):
+                    raise ValueError("engine wheel contains training or Academy")
+                if "managym/Cargo.lock" not in files:
+                    raise ValueError("managym wheel is missing its provenance lockfile")
+            elif native or any(p.startswith("managym/") for p in files):
                 raise ValueError(
-                    "Manabot wheel is missing its bundled native extension"
+                    "manabot wheel must be pure Python without a second engine"
                 )
-            if "content/semantic/current/learning_schema.json" not in files:
-                raise ValueError("Manabot wheel is missing semantic runtime data")
-
+            elif "content/semantic/current/learning_schema.json" not in files:
+                raise ValueError("manabot wheel is missing semantic runtime data")
+    if seen != set(expected):
+        raise ValueError("expected wheels for both packages")
     if complete:
         expected_wheels = {
-            f"manabot-{expected.version}-cp{python}-cp{python}-{target}.whl"
+            f"managym-{bot.version}-cp{python}-cp{python}-{target}.whl"
             for python in ("312", "313")
             for target in ("manylinux_2_28_x86_64", "macosx_11_0_arm64")
-        }
-        if {path.name for path in wheels} != expected_wheels:
+        } | {f"manabot-{bot.version}-py3-none-any.whl"}
+        if {p.name for p in wheels} != expected_wheels:
             raise ValueError(
-                "expected four wheels: CPython 3.12/3.13 on Linux x86_64 and macOS arm64"
+                "expected four wheels for managym and one pure-Python manabot wheel"
             )
-    print(
-        f"validated {len(wheels)} wheels and one source archive for {expected.version}"
-    )
+    print(f"validated {len(wheels)} wheels and two source archives for {bot.version}")
 
 
 if __name__ == "__main__":

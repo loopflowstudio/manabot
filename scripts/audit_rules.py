@@ -18,7 +18,9 @@ import re
 from typing import NotRequired, TypedDict, cast
 
 ROOT = Path(__file__).resolve().parents[1]
-DIRECTORY = ROOT / "experiments/data/rules-audit-2026-10"  # artifact store; fetch with manabot.data
+DIRECTORY = (
+    ROOT / "experiments/data/rules-audit-2026-10"
+)  # artifact store; fetch with manabot.data
 NUMBER = re.compile(r"^([1-9]|[1-9]\d{2}(?:\.\d+[a-z]*)?)\.?\s+\S")
 
 

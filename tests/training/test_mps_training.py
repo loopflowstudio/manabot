@@ -22,12 +22,11 @@ from manabot.env.observation import (
     FACT_EFFECT,
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
-    FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_VALID_INDEX,
     ObservationSpace,
 )
-from manabot.env.shared_effects import shared_effect_shapes
+from manabot.env.shared_effects import SHARED_EFFECT_SHAPES
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import RewardConfig
 from manabot.infra.identity import canonical_sha256
@@ -77,7 +76,7 @@ def test_mps_admitted_without_changing_saved_regimes() -> None:
         packing.runs("HEAD", "d1")[0].job.config or ""
     )
     assert canonical_sha256(saved.regime.model_dump(mode="json")) == (
-        "0366ff8d8548a0540976b7e3bb26b96f9326b82b250bfa11539cf197bc731c3e"
+        "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
     )
     for plan in (local_smoke(device="mps"), baseline(device="mps").regime):
         assert TrainingRegime.model_validate_json(plan.model_dump_json()) == plan
@@ -322,7 +321,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
                 continue
             word = managym.learning_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
-    encoder = FactEncoder(4, 4, kinds=FACT_KINDS_V8, vocabulary="catalog")
+    encoder = FactEncoder(4, 4, vocabulary="catalog")
     with torch.no_grad():
         encoder.output.weight.copy_(torch.eye(4))
     original = torch.nn.ModuleList([cards, encoder])
@@ -487,7 +486,6 @@ def test_mps_w64_single_selected_row_without_program_facts(
     _assert_finite(result)
 
 
-@pytest.mark.parametrize("version", [7, 8])
 @pytest.mark.parametrize(
     "device",
     [
@@ -501,19 +499,19 @@ def test_mps_w64_single_selected_row_without_program_facts(
     ],
 )
 def test_empty_shared_effect_details_backward(
-    version: int, device: str, monkeypatch: pytest.MonkeyPatch
+    device: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A live header/member need not have detail tokens (e.g. a v7 numeric buff)."""
+    """A live header/member need not have detail tokens (e.g. a numeric buff)."""
     torch.manual_seed(19)
     values = {
         key: torch.zeros(1, *shape, device=device)
-        for key, shape in shared_effect_shapes(version).items()
+        for key, shape in SHARED_EFFECT_SHAPES.items()
     }
     values["effects"][0, 0, 10] = 1  # Controller object.
     values["effects"][0, 0, 16:18] = 1  # One member, live header.
     values["effect_members"][0, 0] = 1  # Object 1, ordinal 1.
     objects = torch.ones(1, 2, 4, device=device)
-    encoder = SharedEffectEncoder(4, "typed_gru", version=version).to(device)
+    encoder = SharedEffectEncoder(4).to(device)
     before = deepcopy(encoder)
     loss = (
         encoder(

@@ -101,14 +101,11 @@ simulation retain pending Commands before execution. The same bounded replay com
 handles strict failures without enabling tolerance or process recovery; see the
 linked capture audit for boundaries and supervision limits.
 
-The current prospective TLA trophy pilot uses `experiments/tla_corpus.py`
-for the fixed admitted corpus and `experiments/tla_pilot_v10.py` for Etude
-training and paired evaluation. Its [v10 protocol](../experiments/protocols/tla-trophy-213-v10.md)
-selects 64 permanent rows per player and isolated
-[capacity recovery](../docs/training.md#game-failures), and requires fresh
-initialization. Historical runs retain their original protocols and execute
-from their pinned source; see the [pilot evidence](../experiments/tla-trophy-pilot.md).
-V10 has not yet produced a trained endpoint or completed paired evaluation.
+The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
+corpus and `experiments/tla_frontier.py` for Etude training and paired
+evaluation ([protocol](../experiments/protocols/tla-frontier-c5fba4-v1.md)).
+The earlier trophy pilots execute from their pinned source; see the
+[pilot evidence](../experiments/tla-trophy-pilot.md).
 
 `UniformDecks.sampling` selects
 independent per-seat draws (including mirrors) or the retained distinct-pair
@@ -116,11 +113,11 @@ contract. Stable population entry IDs distinguish events even when lists match;
 checkpoints still bind the world, never the population.
 
 Run its local evaluation from the training run's pinned source and native world.
-Local Etude evaluation needs an explicit directory for the pilot's replay evidence
+Local Etude evaluation needs an explicit directory for its replay evidence
 (rented jobs receive this directory from the launcher):
 
 ```sh
-ETUDE_OUTPUT_DIR="$PWD/.runs/tla-pilot-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_pilot_v10.py --source r2://manabot/jobs
+ETUDE_OUTPUT_DIR="$PWD/.runs/tla-frontier-evaluation" uv run --extra artifacts --extra evaluation etude eval experiments/tla_frontier.py --source r2://manabot/jobs
 ```
 
 ## Local-update search
@@ -223,7 +220,7 @@ For the semantic card model, use `ModelConfig(world="world")`. The ordinary
 model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
-public definition minima, not hidden hand slots, and v5 `decklists` rows hold
+public definition minima, not hidden hand slots, and `decklists` rows hold
 each known decklist's main, unseen, sideboard and remaining-sideboard counts. Selected compiled checkpoints
 without that semantic input fail admission. Generic uncompiled training keeps
 its existing bounded feature model. These models do not certify strength or
@@ -311,14 +308,6 @@ its recipes and anything only it needs to run and report; `manabot/` keeps
 the reusable instruments. The experiment discipline and ledger are in
 [experiments/README.md](../experiments/README.md).
 
-The prospective [growing-pool reference league](../experiments/protocols/growing-pool-245-v1.md)
-freezes authored decks, sampling tickets and held-out experience splits through
-the existing deck source, training job and replay evaluator. Its read-only
-`uv run --extra artifacts --extra evaluation python -m experiments.growing_pool_protocol check`
-checks admission without playing games; v1 rejects the changed engine source.
-Task 04 owns the integrated freeze and actual pilot results. The frozen proxy
-is not evidence of learning.
-
 The reference league's TrainingJob enables private exposure capture through the
 ordinary native vector collector. Digest-bound game receipts preserve actual
 sampled decks, seed/action replay inputs, per-seat nontrivial options and choices,
@@ -355,12 +344,12 @@ and [the calibration command](../docs/experiments.md#freeze-step-targets).
 
 ## Shared effect inputs
 
-`ObservationConfig(policy_input_version=7)` encodes representable resolved effects
-once, before per-holder fact expansion. It cannot encode every composable layer
-payload. `env/shared_effects.py` mirrors the native
-128 × 18 header, 512 × 3 detail and 2,048 × 2 membership buffers. Local counters,
-subtypes, names, used abilities and copy exceptions still use `facts` (default
-128 rows). The model encodes each payload once and routes its contribution into
+The policy input encodes each resolved effect once, before per-holder fact
+expansion. `env/shared_effects.py` mirrors the native 128 × 18 header,
+4,096 × 3 detail and 2,048 × 2 membership buffers. Details carry structured
+granted, copy-exception and continuation programs, changed colors and
+keyword-counter timestamps. Local counters, subtypes, names, used abilities and
+copy exceptions use `facts` (default 512 rows). The model encodes each payload once and routes its contribution into
 named objects before attention; action focus remains addressable. Sum reduction
 preserves edge multiplicity and shared gradients; it is learned compression,
 not a proof of injective embeddings or improved play.
@@ -372,20 +361,10 @@ the unnormalized sum. Input features, object joins and encoder parameters retain
 their gradients, including duplicate memberships. An unused continuation module
 keeps absent gradients so Adam does not update its momentum spuriously.
 
-For new runs requiring structured granted, copy-exception or continuation
-programs, changed colors or keyword-counter timestamps, explicitly select
-`ObservationConfig(policy_input_version=8)` before constructing the model and
-collector. V8 keeps v7's header/member layouts, expands details to 4,096 × 3
-and defaults to 512 local fact rows. Both encoders reject unrepresentable
-v1–v7 layer payloads before inference, naming v8 as the required input.
-Defined-card eligibility does not guarantee policy-input compatibility. See
-[input v8](../docs/observation-and-model.md#composable-layer-input-v8) for a recipe
-example and the separate saved-checkpoint/world admission requirements.
-
-The version is explicit in saved observation/configuration identities. Fresh
-construction remains v6/512; frozen v1–v7 inputs and omitted historical fields
-retain their meanings. Historical captures without shared provenance cannot be
-promoted to v7 by guessing a source/controller. Text representation
+The input version is explicit in saved observation and configuration
+identities, and main loads only v9; see
+[policy inputs](../docs/observation-and-model.md#policy-inputs) for the layout
+and the saved-checkpoint and world admission requirements. Text representation
 `manabot-text-6` renders each native payload once with exact public source and
 member labels and timestamp ranks. Its within-observation token reducer is not
 persistent game memory.
@@ -507,7 +486,7 @@ or caching trainable outputs across updates. Completed states return to their
 original definition rows. These counts describe representation cost, not
 observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
-On explicit inputs v8 and v9, fresh models (`ModelConfig.record_vocabulary`,
+Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
 embedding. Native `learning_record_names` lists every counter kind, color,
 subtype, keyword, modification, set name and combat restriction the encoders
@@ -516,13 +495,12 @@ hash. Each reads the row of the card token for the same concept (a granted
 the card tokens. Captured program tokens read their card-token rows; integers
 and booleans read one row per kind plus their exact value. Fact and effect
 sources read the card encoder's row for that definition, and ability or frame
-ordinals are numbers. An id outside the vocabulary fails. V8+ world checkpoints
+ordinals are numbers. An id outside the vocabulary fails. World checkpoints
 that omit the field load the `hashed` layout through `ModelConfig.from_checkpoint`
 (elsewhere both values build the same model and omission reads as the default): 4096
-learned rows per id column, which held 80% of a w64 L2 v9 model (1,958,402
+learned rows per id column, which held 80% of a w64 L2 model (1,958,402
 parameters; 412,482 with catalog ids) and 42% at w160 L8 h8 (9,470,402;
-5,605,602). Inputs before v8 and models without a world keep only the hashed
-layout.
+5,605,602). Models without a world keep only the hashed layout.
 
 `manabot.semantic.policy_catalog` owns explicit native admission. Policy
 construction checks the engine's learning catalog against the world pool's
@@ -639,7 +617,7 @@ atomically checks origin, reset generation and current captured facts before
 executing the ordinary Command. A cloned Env needs its own capture. Retained
 JSON can be rendered with `render_decision` but cannot authorize submission.
 Capture/text v4 labels each ordered target’s retained “Legal when resolution
-began” fact; historical v3 captures retain unknown eligibility. Policy input v4
+began” fact; historical v3 captures retain unknown eligibility. The policy input
 uses the same native fact, separately from current object presence.
 
 Run the local response-stub proof with

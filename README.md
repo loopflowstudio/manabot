@@ -82,7 +82,7 @@ from real trophy decks: 134 seven-win Premier Draft lists admitted whole from
 the [17Lands public dataset](https://www.17lands.com/public_datasets) (CC BY
 4.0), built by [`experiments/tla_corpus.py`](experiments/tla_corpus.py) and
 frozen in the pilot's corpus and
-[regime](experiments/regimes/tla-trophy-213-v10.json)
+[regime](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/regimes/tla-trophy-213-v10.json)
 ([protocol](experiments/protocols/tla-trophy-213-v10.md)).
 
 The pilot's question is whether the recipe learns on a population of real
@@ -125,9 +125,10 @@ deals. A rule-based `heuristic` bot and frozen checkpoints anchor the scale,
 ratings are fit across the whole population, and tactical scenarios and
 bounded attacks probe what a win rate hides ([evaluation](docs/evaluation.md)).
 
-A result counts as evidence only when its question, numeric prediction, kill
-criteria and cost cap were committed to git before the run, and claims about a
-method need independent training seeds. Refutations stay on the record
+Most runs are exploratory and need no prediction. A result cited as a finding
+commits its question, numeric prediction, refuting result and cost cap to git
+before the run, and claims about a method need independent training seeds.
+Refutations stay on the record
 ([experiments](docs/experiments.md)).
 
 ## Contracts the code enforces
@@ -193,9 +194,10 @@ deals, and a seat-aware Bradley-Terry fit gives local Elo coordinates with
 `heuristic` and frozen checkpoints as working anchors. No win rate, rating or
 report promotes a checkpoint; scores never enter the loss.
 
-**Evidence is preregistered.** The question, prediction, kill criteria and
-cost cap are committed before a run; the training seed is the unit of
-evidence for a method; refutations stay on the record.
+**Findings are preregistered.** A result cited as a finding commits its
+question, prediction, refuting result and cost cap before the run; everything
+else is exploratory and says so. The training seed is the unit of evidence for
+a method; refutations stay on the record.
 
 ## Beside the loop
 
@@ -253,8 +255,8 @@ dollars or hours. We add a row when a run sets a new high.
 The parameter count of a 64×2 network depends on its inputs, not only its
 width and depth. The card encoder's token vocabulary adds 64 parameters per
 distinct learning token, card names among them, which is the 8,000 between the
-two-deck and ten-deck runs. The fact encoder (input v5 and later) and the shared-effect encoder
-(input v7) each hold about 0.8M parameters in hash-bucket embedding tables, so
+two-deck and ten-deck runs. The fact encoder and the shared-effect encoder
+each hold about 0.8M parameters in hash-bucket embedding tables, so
 the current TLA recipe has 1,883,650 with the same 64×2 attention core.
 The first two rows predate the current world and
 encoding, so they record scale only. The one-seat ladder's $10 checkpoint
@@ -366,9 +368,11 @@ There is also a local browser table (`./scripts/play`, needs Node) for playing
 one game against a checkpoint or stepping through a replay. It is for
 inspecting what a bot does, not a way to play Magic.
 
-For use in another project, see [installation and dependency choices](docs/development.md#install).
+For an engine-only project, start with [installing managym](docs/engine-python.md).
+For training, see [installation and dependency choices](docs/development.md#install).
 The release guide also covers supported platforms and CPU/CUDA selection.
-The [0.2.1 release notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
+The [0.2.2 release notes](release/v0.2.2/NOTES.md) cover the separate engine
+package; the [0.2.1 notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
 support and collector API migrations. The historical
 [0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires CPython 3.12.
 
@@ -404,7 +408,7 @@ know and where the code lives.
 | Guide | What |
 |---|---|
 | [engine.md](docs/engine.md) | The rules engine: one decision, forced choices, who chooses, observations, forks, replay, cards as programs, decks, worlds |
-| [observation-and-model.md](docs/observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, policy input versions |
+| [observation-and-model.md](docs/observation-and-model.md) | What the policy sees, how it scores legal actions and estimates value, the policy input layout |
 | [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
 | [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
@@ -418,7 +422,7 @@ know and where the code lives.
 |---|---|
 | `managym/` | Rust rules engine, vectorized env, and PyO3 bindings ([README](managym/README.md)) |
 | `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
-| `experiments/` | Preregistered experiment reports, protocols, and data |
+| `experiments/` | Experiment modules, their reports, and data |
 | `content/` | Deck lists and card content notes |
 | `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
 | `docs/` | The guides above and their diagrams |

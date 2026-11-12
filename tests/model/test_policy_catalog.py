@@ -122,7 +122,7 @@ def test_research_checkpoint_binds_common_catalog(
     payload = {
         "model_state_dict": agent.state_dict(),
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),

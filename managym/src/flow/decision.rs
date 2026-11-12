@@ -382,24 +382,13 @@ pub enum ResolutionCastOffer {
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
 /// The retained input meaning of migrated selections. This records their
-/// original domain, never an alternate executor. New domains require v8.
+/// original domain, never an alternate executor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum SelectionOrigin {
     Milled,
     Library,
     Hand,
     Other,
-}
-
-impl SelectionOrigin {
-    pub(crate) fn legacy_code(self) -> Option<u8> {
-        match self {
-            Self::Milled => Some(5),
-            Self::Library => Some(6),
-            Self::Hand => Some(7),
-            Self::Other => None,
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

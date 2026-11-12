@@ -68,7 +68,7 @@ from experiments.tla_frontier import (
     tagged_runs,
     with_launcher_ends,
 )
-from experiments.tla_pilot_analysis import stored_game_columns
+from experiments.tla_frontier_analysis import stored_game_columns
 from manabot.infra.identity import StrictModel
 from manabot.recipes.builders import fitted_horizon
 from manabot.training.regime import TrainingRegime
