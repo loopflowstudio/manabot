@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint", type=Path)
     args = parser.parse_args(argv)
+    if args.checkpoint.suffix == ".safetensors":
+        parser.error(f"{args.checkpoint} is already a container; pass its .pt")
     try:
         target, tensors = convert(args.checkpoint)
     except (FileNotFoundError, UnsupportedPolicy) as error:

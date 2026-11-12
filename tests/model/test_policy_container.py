@@ -3,9 +3,12 @@
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from manabot.policy.checkpoint import (
+    NotAContainer,
     canonical_name,
+    read_container,
     read_safetensors,
     write_safetensors,
 )
@@ -46,3 +49,16 @@ def test_canonical_names_rename_only_framework_idioms() -> None:
         canonical_name("attention.mha.out_proj.weight")
         == "attention.mha.out_proj.weight"
     )
+
+
+def test_reading_a_file_that_is_not_a_container_says_to_convert(
+    tmp_path: Path,
+) -> None:
+    torch_file = tmp_path / "checkpoint.pt"
+    torch_file.write_bytes(b"PK\x03\x04" + bytes(range(256)) * 4)
+    with pytest.raises(NotAContainer, match="manabot.backends.convert"):
+        read_container(torch_file)
+    bare = tmp_path / "checkpoint.mlx.safetensors"
+    write_safetensors(bare, {"w": np.zeros(2, dtype=np.float32)}, {})
+    with pytest.raises(NotAContainer, match="no hypers, world_binding"):
+        read_container(bare)

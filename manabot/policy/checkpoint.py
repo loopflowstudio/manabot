@@ -61,6 +61,11 @@ _METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 _BUFFER = "buffer/"
 
 
+class NotAContainer(ValueError):
+    """The file is not a policy checkpoint container (for example a PyTorch
+    `.pt` file, or a conversion that predates the container metadata)."""
+
+
 class UnsupportedPolicy(ValueError):
     """The checkpoint enables something the framework backends do not implement."""
 
@@ -244,8 +249,23 @@ def write_container(path: Path, checkpoint: PolicyCheckpoint) -> None:
 
 
 def read_container(path: str | Path) -> PolicyCheckpoint:
-    """Read a container, validating its world binding and supported features."""
-    arrays, metadata = read_safetensors(Path(path))
+    """Read a container, validating its world binding and supported features.
+
+    Raises `NotAContainer` for a file that is not safetensors or lacks the
+    container metadata; convert its PyTorch checkpoint again.
+    """
+    path = Path(path)
+    remedy = "convert the PyTorch .pt with `python -m manabot.backends.convert`"
+    try:
+        arrays, metadata = read_safetensors(path)
+    except (struct.error, ValueError, KeyError) as error:
+        raise NotAContainer(f"{path} is not a safetensors file; {remedy}") from error
+    missing = [key for key in _METADATA_KEYS if key not in metadata]
+    if missing:
+        raise NotAContainer(
+            f"{path} has no {', '.join(missing)} metadata, so it is not a policy "
+            f"checkpoint container; {remedy}"
+        )
     meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
     hypers = meta["hypers"]
     space = ObservationSpace(
@@ -313,7 +333,7 @@ def read_safetensors(path: Path) -> tuple[dict[str, np.ndarray], dict[str, str]]
     data = path.read_bytes()
     (length,) = struct.unpack("<Q", data[:8])
     header = json.loads(data[8 : 8 + length])
-    metadata = header.pop("__metadata__", {})
+    metadata = header.pop("__metadata__", None) or {}
     body = memoryview(data)[8 + length :]
     arrays = {}
     for name, entry in header.items():

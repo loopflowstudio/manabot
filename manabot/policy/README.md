@@ -13,7 +13,8 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   canonical float32 parameters, lookup buffers and the checkpoint's
   configuration, world binding and source record. It validates the world
   binding as `manabot.model.checkpoint.load_checkpoint` does and refuses
-  configurations the backends do not implement (`UnsupportedPolicy`).
+  configurations the backends do not implement (`UnsupportedPolicy`) and
+  files that are not containers (`NotAContainer`).
 - `protocol.py` states what a backend provides (`BackendPolicy`,
   `BackendLearner`, `Backend`) and the learner's per-minibatch inputs
   (`Targets`, `Settings`). Values are `[B]`.

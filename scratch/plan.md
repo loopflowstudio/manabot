@@ -83,3 +83,8 @@ Concept review, third pass (2026-11-12, headless, after the backend layout): pub
 learner, for parity) serve different callers and both stay. Provenance fix carried into the container
 (`read_container` validates world binding). Nothing to change, no open product choice.
 scratch/concept-review.html regenerated with the current paths.
+
+QA after backend layout (2026-11-12, headless, on the M2): convert / load_mlx_policy+evaluate in live games /
+parity on the published subset all match the guides. Fixed: `read_container` raises `NotAContainer` for a .pt or a
+pre-layout `.mlx.safetensors` (was TypeError / UnicodeDecodeError); `convert` refuses a `.safetensors` input (its
+output path would be its input). M2: 20 passed. scratch/qa.html rewritten.
