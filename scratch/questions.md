@@ -17,8 +17,8 @@ explicit model successor that joins mana classes over byte-identical v8 wire
 rows, so native buffer binding needs no new width discriminator. Saved v8 keeps
 its original model. This does not settle MTG-244's conflicting schema; its
 published PR #427 at `6165e0fe48e7c4d500e724b030b6dc11fce749f6` is a pinned
-schema reference, not combined acceptance. The 2026-11-04 Task refresh reports
-renewed implementation for CI performance/integration repairs; the plan retains
+schema reference, not combined acceptance. The 2026-11-04 reconciliation refresh
+reports an active repair/acceleration Graph at compress; the plan retains
 the reported failures. No repaired handoff or authority to copy live work is
 inferred from publication.
 
@@ -28,6 +28,11 @@ at `d83376181`; integration must adapt shared completion to post-cost variable
 output, selected taps and the original parent. The synchronous witness here
 at `68a2094dc` is distinct. No replacement frame protocol or missing product
 judgment is inferred from that dependency.
+
+The shared 2026-11-04 update reports MTG-241 integrated published layer code at
+`d77bc8676`; its full retained projection still awaits causal counter/token
+proposal work. MTG-244 also has Jack Heart's explicit broader acceleration
+direction. Neither supplies combined acceptance or a superseding handoff here.
 
 ## Measurement assumptions
 
@@ -60,21 +65,24 @@ v8 native/Python buffer parity coverage.
 
 After reviewing the remaining +6.7% step / +8.0% search cost versus main,
 Jack Heart said that was not good enough and requested: "make it stupidly fast".
-Continue an aggressive, measured optimization pass in this Task. Aim to erase
-the net regression and deliver a substantial speedup on equivalent work; the
-previous within-10% stopping target is no longer sufficient by itself. Do not
-invent a guaranteed percentage. Profile the remaining ordinary-path and tail
-costs, make structural improvements within mana ownership, and remeasure against
-pinned main and original base. Include the expensive new model aggregation path.
-Preserve exact rules, complete strategic choices, model distinctions, frozen
-inputs and debug oracles. No training run, merge, stress workload or speculative
-whole-engine storage rewrite is authorized. Completion/schema integration remains
-required, but independent acceleration work should proceed while it is pending.
+The accepted aim is to erase the net regression and deliver a substantial
+speedup on equivalent work; the previous within-10% stopping target is no longer
+sufficient by itself. No percentage was promised. The bounded pass covered
+ordinary-path and tail profiles, structural improvements within mana ownership,
+pinned main/base comparisons and the expensive model aggregation path. Exact
+rules, complete strategic choices, model distinctions, frozen inputs and debug
+oracles remain constraints. No training run, merge, stress workload or
+speculative whole-engine storage rewrite is authorized. Completion/schema
+integration remains required independently of that acceleration work.
 
 The acceleration pass retains source-order witnesses and full state equality;
 `Rc` sharing is confined to one synchronous search, never a live Game cache.
 Bounded engine measurements recover near-original-base performance, but a
 substantial net speedup and a dedicated wall-time-budget pass are unproven.
+No additional mana optimization is selected from the retained profile; the
+dominant layer work already has a live owner. This is an evidence limit, not
+acceptance of near-base performance under the superseding request. That judgment
+remains open for review; no decision blocks the specified integration work.
 Further broad allocator/layer changes are not inferred from the request; the
 remaining profile and dependency integration are recorded in the plan. Model
 results are CPU forward/backward probes only, with saved semantics preserved.

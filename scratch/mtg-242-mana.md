@@ -4,14 +4,17 @@ Accepted outcome and constraints: Jack Heart's 2026-11-04 Task directive;
 the implementation approach below is derived from it, not a separately accepted
 design. One reviewable PR, stopping at review; no merge or training launch.
 Original base: `4463e57f5a92ebd3b60e2fb50c046b84ac2c0372`.
-Reconciled 2026-11-04 at `b4ac66e4e`, which integrates main `51b4bd274`.
+Reconciled 2026-11-04 against `42f67f40f`, which retains the acceleration
+implementation and its later simplification over `b4ac66e4e` (main `51b4bd274`).
 The main-comparison mitigations are `0c6eef111` and `6519f3f75`; subsequent
 payment simplification is retained at `91a533b86`. Original risk implementation
 and simplification remain at `5e7b60047` and `f9f55efb1`. The independent
 main comparison pins `fe83a6b06` and candidate `6519f3f75`; it is not a timing
 measurement of the reconciled checkout.
-The bounded risk work is implemented; the outcome remains incomplete pending
-shared event completion, cross-Task schema integration and final validation.
+The bounded risk and acceleration passes are implemented. The requested
+substantial net speedup is unproven; shared event completion, cross-Task schema
+integration and final validation also remain incomplete. The acceleration
+receipts pin their measured source patch, not the later simplified checkout.
 This Task has no Wave.
 
 ## Intended outcome
@@ -164,16 +167,18 @@ Commands. MTG-241 records passing debug evidence at `301877ea1`, then focused
 checks after simplification at `7b381909e`. This evidence is for its fixed-output
 engine, not this branch or a combined implementation.
 
-The 2026-11-04 Task status refresh still reports MTG-241 in implementation,
+The 2026-11-04 reconciliation refresh still reports MTG-241 in implementation,
 with no PR or superseding integration handoff. Its request against copying live work remains in force;
 no work was copied or modified there. The dependency is stable integration and
 adaptation of an existing mechanism, not implementation of replacement
-suspension from scratch. MTG-244 has separately published PR #427 and resumed
-implementation for CI repairs; its pinned schema and current limits are below.
+suspension from scratch. MTG-244 has separately published PR #427 and is now at
+compress in its continuing repair/acceleration Graph; its pinned schema and
+current limits are below.
 
 The integration must retain MTG-242's post-cost `mana_outputs` evaluation,
-selected-tap obligations, exact source and original parent. MTG-241 currently
-constructs a fixed `ability.mana_choices()` output before its sacrifice child.
+selected-tap obligations, exact source and original parent. MTG-241 at the
+inspected `d83376181` constructs a fixed `ability.mana_choices()` output before
+its sacrifice child.
 That fixed-output caller cannot simply replace this branch's variable-output
 path: the shared completion must retain the output calculation until all cost
 work, including a suspended linked return, finishes. Only then can it expose
@@ -182,7 +187,17 @@ required to prove single cost commitment, no early output and exactly one
 parent resumption; the synchronous witness above remains useful regression evidence.
 Payment resources/search remain MTG-242's; completion/events remain MTG-241's.
 
-MTG-244's current layer work also invalidates characteristics on taps/untaps and
+New shared evidence in MTG-244 comment `cc08a059-50cb-419f-b18f-4e53cbe2ee63`
+(2026-11-04) reports MTG-241 integrated published layer checkpoint `1930146b0`
+at `d77bc8676`. It also reports exact `ObjectBinding` captures at `91517292c`,
+with ten hidden-selection and six retained-batch debug tests passing there.
+Its full retained projection still needs causal counter provenance and a logical
+token-creation proposal; no combined numeric input version was committed.
+Thus the combined schema depends on MTG-241's completed payload as well as the
+layer schema. These are reported dependency results, not inspected combined-code
+acceptance or permission to copy its live work.
+
+MTG-244's inspected layer code also invalidates characteristics on taps/untaps and
 conditionally rebuilds its raw board when a layer reads unspent mana. This
 qualifies the local optimization's current assumption that taps preserve layer
 caches (`transition_outputs`). Combined code must use the layer owner's typed
@@ -210,7 +225,7 @@ MTG-242's v9 retains the v8 wire layout in the table and changes only model
 aggregation; it does not resolve this collision. Publication supplies a pinned
 schema reference, not an accepted replacement for MTG-242's schema.
 
-The 2026-11-04 Task refresh reports PR #427 open with implementation resumed.
+The 2026-11-04 reconciliation refresh reports PR #427 open with repair work live.
 Jack Heart's repair directive (comment `2029bc84-f1b5-4c9f-afc9-7006f9ad3c4d`)
 records matched CI digests but search total 168.192 → 453.756 seconds,
 worst reply 4.909 → 15.349 seconds and steps 12,817 → 5,654.8/s. It also
@@ -220,6 +235,13 @@ not measurements of MTG-242 or the combined engine. The layer Task owns repair
 and remeasurement without a baseline reset; no superseding repaired handoff is
 established here. Its published schema remains inspectable, while its live
 repair work is not an integration source.
+
+Jack Heart's later 2026-11-04 direction in comment
+`8ace2ed8-38d0-4ffe-8c8e-1b39995c0e95` authorizes a more ambitious layer/search
+redesign aimed at outperforming its pinned pre-layer engine. The 10% budget is
+only its floor too. Allocation and layered-view reads dominate this Task's
+remaining profile, so related optimization is already owned by MTG-244; that
+work is an integration opportunity, not a measured speedup available here.
 
 Remaining integration includes a distinct successor contract combining mana,
 layer and MTG-241 continuation payloads without reinterpreting existing v8
@@ -244,7 +266,10 @@ active-training checks; merged recovery and resource-limit receipt checks
 post-sync conformance replay; and same-runner Engine Budget, including reference
 adoption if the curated decision digest moves. Browser evidence unavailable
 headless remains with gate/CI or demo. Review must resolve the MTG-241 integration
-boundary before claiming completion; no new product decision is otherwise needed.
+boundary and assess the still-unproven acceleration target before claiming
+completion. No new product decision blocks the specified integration; accepting
+near-base performance as sufficient would change Jack Heart's latest direction
+and has not been approved.
 Publication and review remain later Graph steps.
 
 Prior focused debug, rebuilt-extension, projection/model, Clippy and formatting
@@ -256,97 +281,62 @@ Broader suites and post-integration Engine Budget remain with gate.
 
 ## Accepted risk measurement and mitigation — 2026-11-04
 
+Jack Heart authorized bounded engine and model risk measurements and targeted
+mitigation before dependency integration. That work now has instrumentation,
+main/base comparisons, retained attempts and concrete fixes; the sections below
+preserve their results and limits. Earlier detailed worklists remain at
+`42f67f40f:scratch/mtg-242-mana.md`; they are not outstanding implementation steps.
+
 ### Superseding acceleration direction
 
-After seeing the final main comparison, Jack Heart rejected the remaining
-6.7–8.0% median cost as insufficient and requested "make it stupidly fast".
-This supersedes the earlier no-major-slowdown stopping target below. The goal is
-to erase that regression and pursue a substantial measured speedup, without
-promising an unmeasured percentage or weakening behavior. New independent work:
+After the first main comparison, Jack Heart rejected the remaining 6.7–8.0%
+median cost and requested "make it stupidly fast". The accepted aim is to erase
+the regression and pursue a substantial measured speedup. This supersedes the
+prior no-major-slowdown stopping target; the standing 10% Engine Budget remains
+a guardrail, not sufficient evidence of that goal. No percentage was promised.
 
-- Reprofile the current optimized engine on bounded ordinary step/search and
-  representative complex payments. Attribute remaining CPU, allocation and tail
-  costs rather than repeatedly rerunning wall clocks until a favorable sample.
-- Investigate a structurally verified ordinary-payment path that avoids general
-  search bookkeeping when unnecessary, inside the shared payment authority.
-  Compare it against the exact general witness oracle in debug. No card-specific
-  shortcut, choice pruning or separate restriction implementation.
-- Examine compact resource states, reusable per-enumeration scratch storage,
-  incremental/backtracking search state, continuation sharing and repeated source
-  queries. Change only demonstrated hot costs; preserve full equality after hash
-  collisions, exact identity and nested-parent obligations. If memoization is
-  useful, scope/invalidate it for every relevant resource and rules revision,
-  including new layer reads; retain debug recomputation. No whole-engine rewrite.
-- Address the measured model aggregation overhead as well: profile and attempt
-  batched/vectorized class joins and reductions without per-class interpreter
-  loops or unnecessary synchronization. Preserve arbitrary-label invariance,
-  purpose/amount/mode/parent distinctions, policy gradients, saved semantics and
-  native/Python parity. Measure model cost separately from engine timings; do not
-  restore the faster representation that lost the required invariants.
-- Keep before/after main/base comparisons on the same runner and equivalent
-  workload, retaining count/digest checks, distributions, CPU diagnostics and
-  raw failures. Track new-mechanic absolute costs separately. Recheck the accepted
-  Command/fork/remainder cases and affected debug suites after algorithm changes.
-  Stop unproductive micro-tuning once evidence supports that judgment, and report
-  the remaining dominant cost candidly; do not claim success from the old 10% bar.
+The resulting pass profiles ordinary step/search and complex payments, adds a
+verified fixed-payment path inside the shared authority, shares immutable search
+state, reduces hashing and allocation, and compacts/vectorizes the v9 class join.
+Complete witnesses, full equality after hash collisions, parent obligations,
+model invariance and gradient paths remain required. Reuse is per enumeration;
+there is no live-state cache, card-specific shortcut, arbitrary cutoff, removed
+choice, frozen-schema change or speculative whole-engine rewrite.
 
-Proceed with this work before returning to the unchanged integration dependency.
-Reassess stable handoffs but do not copy live MTG-241 work. No merge, training
-experiment or artificial load. The full Engine Budget and post-integration
-validation remain required; existing reference evidence must not be rewritten.
+The accepted evidence contract remains:
 
-Jack Heart requested measurement and active mitigation of performance and learning
-risks. This authorized independent work before completion/schema integration;
-its implemented results and limits are recorded below. The earlier no-net-speedup
-stopping target is superseded by the acceleration direction above. The standing
-10% Engine Budget remains a guardrail, not sufficient evidence of that goal.
-Delivery remains
-review-only: no merge, training experiment or artificial load. Bounded
-actual-workload timings and model forward/backward unit probes are in scope;
-they do not establish RL learnability or playing-strength improvement.
+- Equivalent-work comparisons pin original base/main/candidate sources and
+  binaries on one runner, retain counts, full score/decision digests, distributions
+  and failed tails, and separate instrumented new-mechanic costs from throughput.
+- Actual model probes distinguish purpose, amount assignment, combined/separate
+  classes, output mode/frame and remaining taps; they check label/row invariance,
+  intentional zero gates and gradients. Native/Python, scalar/vector, text,
+  checkpoint semantics and fresh v6 remain aligned. CPU unit probes do not prove
+  RL learnability, GPU performance or playing strength.
+- Fact occupancy, capacity failures and retained/skipped decision counts remain
+  explicit. Additional same-player decisions affect gamma/lambda sampling and
+  traces; no learning algorithm or strategic choice was changed to hide that cost.
+- Completion and combined-schema integration still require exactly-once costs,
+  delayed output, one parent resumption, unambiguous input/world identities and
+  renewed affected measurements. Full suites and dedicated Engine Budget remain
+  acceptance work. No baseline reset to hide regressions, merge, training run or
+  artificial load is authorized; delivery remains review-only.
 
-1. Use bounded representative fixtures: fixed sources, mixed restriction classes,
-   repeated shared taps, Prism/Treasure nesting and variable producers, each with
-   payable/unpayable obligations. Instrument explored/deduplicated/pruned states,
-   dynamic evaluations/game clones and maximum obligation depth without production
-   hot-path overhead. Retain before/after code versions and identical cases.
-   Measure offer generation and existing step/search workloads on one runner,
-   including distributions, sample counts and tail cases. No stress boards or
-   contention generation; honor TESTING.md.
-2. Attempt targeted mitigation of measured costs: unconditional pruning bypass
-   for dynamic producers, cloned-game output evaluation, duplicate resource paths
-   and restriction remainder growth. Keep demonstrably useful changes. Bounds
-   must remain optimistic when sacrifices change characteristics. No arbitrary
-   search cutoff, removed legal choices, card-specific shortcut or unsound cache.
-   Preserve debug witness oracles, exact outcomes and resource remainders.
-3. Test the actual model path, beyond raw tensor inequality. Matched observations
-   must distinguish spending purpose, amount-to-restriction assignment, combined
-   versus separate classes, pending output mode/frame and remaining selected taps.
-   Check representation/action separability and gradient paths; distinguish
-   intentional zero-initialized adapters from structural information loss. Test
-   harmless row/class reordering separately. If aggregation loses joins or relies
-   unnecessarily on arbitrary group IDs, repair it within an explicit successor
-   input, preserving native/Python, scalar/vector, text and checkpoint contracts.
-4. Measure fact occupancy, encoding/model cost and nontrivial payment-decision
-   counts on these positions. Inspect whether extra decision steps alter discount
-   or return semantics; report before changing learning algorithms. Preserve real
-   strategic choices and native trivial skipping. Exercise old-input rejection
-   and new-input acceptance; do not silently change frozen schemas or fresh v6.
-5. Completion/schema integration remains required: prove suspended costs commit
-   once, output waits, parent resumes once, and combined schema identities are
-   unambiguous when dependencies are ready. Recheck affected measurements after
-   integration. Retain a risk/evidence table with baseline, attempted mitigation,
-   measured effect and residual limitation. Broader suites and same-runner Engine
-   Budget still apply. Do not infer training benefit from engine timings or
-   model separability.
+Near-base engine performance and cheaper fact aggregation are supported by the
+bounded receipts. A substantial net engine speedup, a whole-model speedup and a
+wall-time-budget pass are not established. No evidence-supported additional
+mana optimization is selected after the retained profile; the remaining layer
+hot path has a live owner. That limit does not waive the acceleration aim or
+allow the old 10% threshold to establish completion. Any decision to accept the
+current residual result belongs at review and remains unmade.
 
 ## Acceleration pass — 2026-11-04
 
 The superseding request is implemented as another bounded pass from `b4ac66e4e`;
 `research/mana-risk-2026-11/acceleration/final/source.patch` pins the measured
 runtime changes over that parent. No dependency code was copied. A fresh shared
-status read still reports MTG-241 and MTG-244 in implementation; MTG-241 has no
-PR and MTG-244's PR #427 remains open. Their handoff boundaries above persist.
+status read at measurement time reported both dependencies in implementation.
+The current dependency refresh is recorded above; no combined handoff is inferred.
 
 Retained changes stream first-result pool remainders, use one `try_pay` for a
 terminal cost, walk independent fixed taps in source order (complete witness
@@ -468,7 +458,7 @@ Search-64 decisions per round, per revision. All counts and digests agree:
 | Search process CPU seconds | 8.049 | 7.896 | 8.580 |
 
 The final medians are +6.7% steps / +8.0% search / +5.9% worst reply versus
-current main. Cumulative CPU cost versus original base is +5.6% steps / +6.6%
+pinned main `fe83a6b06`. Cumulative CPU cost versus original base is +5.6% steps / +6.6%
 search. This is a bounded reduction of the measured regression, not a speedup
 claim or policy/training measurement. That checkpoint selected no further optimization; the superseding pass above replaces that decision.
 
@@ -504,7 +494,8 @@ remainders, Commands/fork traces, configurations and initial attempts. The first
 fixture accidentally consumed its hand spell while placing a same-named source;
 that attempt is retained separately, and final before/after fixtures both use a
 fresh library copy. That earlier measurement checked both dependencies while they were live writers;
-PR #427 is now the published layer handoff described above.
+PR #427 is the published schema reference described above, not a repaired
+integration handoff.
 
 V9 is an explicit model-input successor, not a combined MTG-244 schema. It keeps
 v8 wire bytes, kinds and capacities, but removes mana rows from independent-row
@@ -513,6 +504,10 @@ The class identifier is never embedded. Frozen v8 keeps its prior aggregation;
 v1–v7 rejection, v8/v9 acceptance, native/Python and scalar/vector parity, text,
 learning-token definitions, saved configurations and fresh v6 remain intact.
 A future combined input must still reconcile the cross-Task collision above.
+
+The following table describes the initial risk pass at `5e7b60047`. Later
+main-comparison and acceleration results above supersede its timing endpoints;
+its behavioral evidence and contrary results remain relevant.
 
 | Risk | Baseline / attempt | Retained mitigation and measured effect | Residual limit |
 | --- | --- | --- | --- |
@@ -538,12 +533,18 @@ fixture (10.7%; 55/128 would be 43%). Each default input is 165,616 bytes,
 including 24,576 bytes of fact capacity. Exact-fit and one-row-short buffers
 prove explicit admission/overflow, not capacity safety for arbitrary boards.
 
-Remaining acceptance is integration of MTG-241's now-existing retained batches
-with post-cost variable output and selected taps, the combined MTG-244 successor
-schema/world identity, post-integration measurement rechecks and gate suites/
-Engine Budget. The main-comparison receipts now quantify cumulative cost and retained
-mitigations; their bounded, host-noisy results do not replace dedicated gate
-acceptance. No training claim follows, and no product decision is missing. The authorized delivery boundary
-remains review; publication and landing are not part of this checkpoint.
+Remaining acceptance comprises the unproven acceleration aim, integration of
+MTG-241's retained batches with post-cost variable output and selected taps,
+combined MTG-244/241 successor payloads and world identity, affected measurement
+rechecks, gate suites and dedicated Engine Budget. The combined implementation
+is substantial remaining work, not a documentation repair. Near-base bounded
+measurements do not satisfy the stronger target by themselves. No product choice
+blocks that implementation; a reduced performance target would need review.
 
-Check after simplification (2026-11-04): focused debug Rust mana/state/CR-106/Prism/shared-tap/filter/variable tests — 42 passed (`CARGO_PROFILE_DEV_OPT_LEVEL=1 cargo test -j 2`, filters `mana::tests`, `cr_106_mana`, `roe::`, `supportive_parents`, `scarecrow_guide`, `white_lotus_tile`); rebuilt cp312 extension installed atomically; `uv run --extra dev pytest tests/verify/test_mana_payment_projection.py tests/model/test_mana_input.py tests/model/test_mana_separability.py -q` — 14 passed (model and rebuilt-extension projection runs); bounded `uv run python` comparison against the pre-edit FactEncoder — 18 paired v8/v9 output/parameter-gradient cases passed, including empty facts; Rust formatting, changed-file Ruff, `git diff --check` and `lf context` pass. Full suites, all-target Clippy, dedicated Engine Budget and post-integration acceptance remain gate-owned.
+Focused implementation validation is retained at
+`42f67f40f:scratch/mtg-242-mana.md`: 42 debug Rust cases, rebuilt cp312 extension,
+14 projection/model cases, 18 paired v8/v9 output/parameter-gradient comparisons
+(including empty facts), formatting and changed-file lint. Reconciliation changes
+only working context and does not rerun those suites or extend their scope.
+
+Check (2026-11-04): retained-receipt audit via `uv run python -` — all nine comparison pairs reproduced, count/digest checks agree and six raw timing failures preserved; `git diff --check` and `lf context` pass (within both targets). Full suites, all-target Clippy, dedicated Engine Budget and post-integration acceptance remain gate-owned.
