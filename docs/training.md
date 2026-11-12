@@ -345,8 +345,8 @@ phase seconds under `time/` (`time/collection`,
 outcomes are a row table, logged once per update with Etude's
 `run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`
 and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
-`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude stores the table as an
-immutable JSON file under the metric run's `artifacts/` and carries it with the
+`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
+stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
 metrics, including for launched jobs; keep `artifacts/` when copying a run for
 offline analysis. Read the rows directly through Etude:
 
@@ -371,8 +371,8 @@ updates before fetching tables; unreferenced tables supply no results, and a
 missing or damaged selected table raises, naming the file to restore. Historical
 scalar outcome metrics remain readable unchanged. Runs that recorded
 `self_play_outcomes/table` references (written from `1659b0e29`) are refused;
-read them from a revision before this change, such as `bf4e280f7`. Selection and belief
-summaries stay in their stage's `diagnostics`.
+read them from a revision that still reads that format, such as `bf4e280f7`.
+Selection and belief summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:
 `environment_step_and_encoding`, which compares a run to retained ones, divides by

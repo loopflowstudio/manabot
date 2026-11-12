@@ -203,8 +203,8 @@ def _updates(data: RunData) -> Updates:
     if any(_RETIRED_OUTCOME_REFERENCE in row for row in selected.values()):
         raise ValueError(
             f"run {data.name} records self-play outcomes in the retired "
-            f"{_RETIRED_OUTCOME_REFERENCE!r} format; read it from manabot "
-            "revision bf4e280f7"
+            f"{_RETIRED_OUTCOME_REFERENCE!r} format; read it from a manabot "
+            "revision that still reads it, such as bf4e280f7"
         )
     # `log_table` indexes its table's digest as a metric of the same name;
     # the rows replace it.
