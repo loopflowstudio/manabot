@@ -1,33 +1,32 @@
 ---
-requires: scientific question, accepted constraints and available integrated snapshot
-produces: one executable protocol design with controls and unresolved judgments
+requires: a question and the current integrated source
+produces: the experiment module and the opening of its report
 ---
-Design one experiment encompassing the training and evaluation needed to answer its question.
+Design the smallest experiment that answers the question.
 
-1. Read the supplied protocol, prior evidence and intended claim. Choose useful
-   architecture, regime and card-pool lenses; these are not three required arms.
-   Hold non-intervened factors fixed, state confounds and choose a matching clock
-   (transitions, time or cost). Existing checkpoints need no placeholder fitting.
-2. Specify source/world/input/checkpoint identities, independent seeds, evaluation
-   anchors/opponents/deals, controls, paired analysis and uncertainty. Keep held-out
-   cards, combinations/decks and unseen mechanics distinct. Screens, opponents
-   and curriculum design obey the same leakage exclusions.
-3. For growing pools, use the accepted reference league and
-   `experiments/protocols/growing-pool-245-v1.md` with its JSON and existing
-   protocol/training/evaluation owners. Integrated validation authors the actual
-   functional decks: mana, curve, interaction, synergy, split membership and
-   frozen sampling tickets. Read the card author's committed interaction evidence.
-   Proxy lists and illustrative shares are proposals, not the integrated batch.
-4. Declare games, updates, wall/compute/cost bounds, stop criteria, failure and
-   recovery evidence, and what counts as inconclusive. Define training exposure
-   separately from evaluation draws/actions; name the required capture and any
-   missing instruments for review. A tiny run can prove execution without learning.
-5. Update one design in scratch and the protocol's owning artifact. Identify
-   software actually needed before final freeze, with deletions and acceptance
-   checks; do not require a PR when the admitted software already suffices.
-   Record the source of execution authority separately from proposed budgets.
+1. Decide whether the result is a finding or exploratory. A finding is a result
+   that will be cited as a claim about a method or about playing strength: in
+   the README's "What we know", the research program or the paper. Everything
+   else is exploratory: calibration, throughput, capacity, pilots, smoke runs
+   and any run whose purpose is to make later work possible. When unsure, it is
+   exploratory; a finding that grows out of it gets its own run.
+2. Exploratory: write `experiments/<name>.py` and one line at the top of
+   `experiments/<name>.md` saying what the run is for. It needs no prediction.
+3. Finding: open `experiments/<name>.md` with one paragraph holding the
+   question, a numeric prediction, the result that would refute it and a cost
+   cap, and commit it before any scored run. That paragraph is the whole
+   preregistration. Name the control, the matching clock (learner decisions,
+   hours or dollars), independent training seeds, paired evaluation deals and
+   the strongest confound.
+4. An experiment is its Python module at a commit: `runs()`, `eval(state)` and
+   `report()`, with recipes from `manabot.recipes.builders`, launched through
+   Etude. Existing checkpoints need no placeholder training. Do not write a
+   protocol document, a serialized regime, a digest check or a test suite for
+   one experiment's schedule. Machinery a second experiment would reuse belongs
+   in `manabot/` or Etude, tested once there.
+5. When the experiment needs software beyond its module, deliver that as an
+   ordinary PR from this checkout, then continue here.
 
-No experiment is launched by this design. Task 04 owns the first growing-pool
-campaign's measured results; Task 08 owns Validation B on the expanded mechanism
-cohort. The deeper strength/generalization track begins after full FDN under a
-separately frozen protocol and execution authority.
+Design has no separate review. Ask in the conversation about a judgment that
+changes what the result would mean; otherwise choose, and record the choice in
+the report as an assumption.

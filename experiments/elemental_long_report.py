@@ -715,5 +715,6 @@ def main() -> None:
     (args.out / "report.md").write_text(markdown(summary))
     print(args.out / "report.md")
 
+
 if __name__ == "__main__":
     main()

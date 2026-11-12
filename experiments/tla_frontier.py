@@ -28,9 +28,8 @@ A pass's launcher id is a digest of its pending matches, and the launcher refuse
 a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
 keys exclude that name, so a relaunch plays only what no pass attempted.
 
-The MTG-213 v10 runner (`experiments.tla_pilot_v10`) is executed evidence and
-stays unchanged, so its evaluation callback, whose identities name that
-pilot's source and artifacts, is mirrored here rather than shared.
+The MTG-213 v10 pilot's runner, which this protocol's evaluation callback
+mirrors, exists at revisions up to ac601834d.
 """
 
 from __future__ import annotations
@@ -46,7 +45,7 @@ from pathlib import Path
 import shutil
 from statistics import median
 from tempfile import TemporaryDirectory
-from typing import Any, Literal
+from typing import Any, Literal, TypedDict
 
 from etude.eval.match import Row, Tables
 from etude.eval.records import (
@@ -65,10 +64,10 @@ from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Report, Score
 from etude.run.storage import Storage
 from etude.train.read import RunData
+from pydantic import Field
 import torch
 
 from experiments import tla_frontier
-from experiments.tla_pilot_v10 import HeuristicSpec, Pair, RuntimeWorld
 from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
@@ -108,6 +107,14 @@ PASS_ATTEMPT = "C5FBA4_PASS_ATTEMPT"
 # different sizes compare directly. Update 1 carries warm-up.
 STEP_PHASE = "time/collection/environment_step_and_encoding"
 HOST_UPDATES = range(2, 7)
+
+
+class HeuristicSpec(TypedDict):
+    kind: Literal["heuristic"]
+    max_actions: int
+    action_overflow: Literal["first-legal"]
+
+
 HEURISTIC: HeuristicSpec = {
     "kind": "heuristic",
     "max_actions": 64,
@@ -121,6 +128,19 @@ SIZES: tuple[SizeLabel, SizeLabel] = (SMALL, LARGE)
 
 
 # -- Frozen contract ----------------------------------------------------------
+
+
+class Pair(StrictModel):
+    """Two corpus decks and the deal their four legs share."""
+
+    first: int = Field(ge=0)
+    second: int = Field(ge=0)
+    deal: int = Field(ge=0)
+
+
+class RuntimeWorld(StrictModel):
+    world_version: str
+    card_digest: str
 
 
 class LargeSize(StrictModel):
@@ -306,7 +326,6 @@ def _source() -> list[Path]:
     return [
         *sorted((ROOT / "manabot").rglob("*.py")),
         Path(__file__),
-        ROOT / "experiments/tla_pilot_v10.py",
         REGIME,
         PROTOCOL,
     ]
