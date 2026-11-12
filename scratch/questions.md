@@ -60,5 +60,5 @@
   `require_supported` no longer reads `token_stream`.
 - Steer aeac5366 answered (bc2e6bd3, Jack Heart 2026-11-12: "thats fine"):
   ship this PR as it stands; Remaining 1 and 2 go to a separate Task stacked
-  on MTG-325, filed as 1fd444 (not started; Linear sync pending). The $10
+  on MTG-325, MTG-333 (filed from Jack's session; this session's duplicate MTG-332 abandoned, its notes copied to MTG-333). The $10
   speed check still runs here before gate.

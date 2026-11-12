@@ -484,5 +484,5 @@ leaves it open. Items 1 and 2 above are needed on either answer.
 - Speed check queued: Etude run 47636a275a9e (cohort `mtg325-speed`,
   `--max-usd 10`, revision d035ae750) waiting for `mtg325-l4` stock; the
   first launch was refused (no machines, no cost).
-- Scope settled (steer bc2e6bd3): ship as is; Remaining 1 and 2 are Task
-  1fd444. Remaining for this PR: the speed result, then gate.
+- Scope settled (steer bc2e6bd3): ship as is; Remaining 1 and 2 are MTG-333
+  (named in the PR body). Remaining for this PR: the speed result, then gate.
