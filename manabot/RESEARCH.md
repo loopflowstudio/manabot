@@ -74,8 +74,12 @@ they guide the next experiment rather than settle a method.
 
 Belief sampling and local search run end to end. In their
 pilots, 840 held-out sampled hands had no support violations and local search
-replayed 183 commands with no mismatch. Neither has shown a strength gain over
-the policy alone yet.
+replayed 183 commands with no mismatch. On MTG-183's frozen w13 policy,
+magnetic-mirror local search with playable uniform hand sampling beat the
+policy's own sampled play by +12.5 to +17.4 points from 4 to 16 shuffles, and
+beat PUCT-1024 at lower cost; knowing the true hand added at most +5.2 points
+([mirror search](../experiments/search-mirror.md), exploratory, one policy).
+The learned belief sampler has not yet been tested in search.
 
 ### Earlier: the search era
 
