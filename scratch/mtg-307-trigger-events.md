@@ -113,12 +113,14 @@ the four named constructors and both tests call it. Debug nextest
 Re-checked at 17768efe2: only that fold and a docs reflow touched code or
 docs since; nothing further to reduce, scratch under budget.
 
-## Status (realign, 2026-11-12, head f9b297fc8)
+## Status (realign, 2026-11-12, head 6fe2d75b9)
 
-Nothing remains to build. The latest base merge (7ef6ce588) only adds TLE
-spells to `tests/sim/test_heuristic.py`; no trigger code moved. Remaining:
-parent PR #469 lands first (open, blocked), then PR #484 CI (preflight pending
-at this pass) and the Engine Budget digest adoption noted under Gate.
+Nothing remains to build. The latest base merge (59cf727bc) only moves
+`managym/perf/baseline.json` to PR #469's Engine Budget run and documents that
+in `docs/development.md`; no trigger code moved. Remaining: parent PR #469
+lands first (open, blocked), then PR #484 CI (only preflight reported, pending,
+at this pass). This branch changes definitions, so its Engine Budget digest
+likely moves again: adopt #484's own run against the new reference.
 
 QA re-run (head da964c606): catalog trigger text byte-identical to 0c2ce18e1
 (276 lines); 1332 random games 0 errors; Academy game to Game Over with a
