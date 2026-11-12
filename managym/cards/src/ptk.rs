@@ -9,7 +9,11 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![corrupt_court_official(), empty_city_ruse()]
+    vec![
+        corrupt_court_official(),
+        empty_city_ruse(),
+        taunting_challenge(),
+    ]
 }
 
 fn corrupt_court_official() -> CardDefinition {
@@ -55,6 +59,25 @@ fn empty_city_ruse() -> CardDefinition {
                 modification: Modification::SkipsCombatPhasesNextTurn,
                 duration: EffectDuration::Indefinite,
             }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn taunting_challenge() -> CardDefinition {
+    let text_box = "All creatures able to block target creature this turn do so.";
+    CardDefinition {
+        key: "ptk.taunting_challenge",
+        scryfall_id: "4620867c-a3a6-4c81-b923-24007367132e",
+        name: "Taunting Challenge".into(),
+        mana_cost: Some(ManaCost::parse("{1}{G}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+        spell_effects: vec![Effect::ApplyContinuous {
+            affected: ObjectSelector::Target(TargetSpec::Creature),
+            modification: Modification::MustBeBlockedByAllAble,
+            duration: EffectDuration::EndOfTurn,
         }],
         text_box: text_box.into(),
         ..Default::default()

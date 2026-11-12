@@ -362,6 +362,8 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
         "DoesntUntap": "doesn't untap during its controller's untap step",
+        "CantActivateAbilities": "its activated abilities can't be activated",
+        "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",

@@ -135,6 +135,9 @@ impl Game {
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
+            EffectValue::SpellsCastThisTurn => {
+                self.state.turn.spells_cast[controller.0].len() as i32
+            }
             EffectValue::OwnedPermanentsOpponentsControl => self
                 .battlefield_permanents(PlayerId(1 - controller.0))
                 .into_iter()
@@ -1146,6 +1149,40 @@ impl Game {
                 }
                 self.reveal_card_to_hand(card, player);
                 None
+            }
+            Effect::Cascade => {
+                let player = frame.controller;
+                let below = frame.source.map_or(0, |card| self.card_mana_value(card));
+                let mut exiled = Vec::new();
+                let mut hit = None;
+                while let Some(&top) = self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Library, player)
+                    .last()
+                {
+                    self.move_card(top, ZoneType::Exile);
+                    exiled.push(top);
+                    if !self.state.cards[top].types.is_land() && self.card_mana_value(top) < below {
+                        hit = Some(top);
+                        break;
+                    }
+                }
+                let decision = hit
+                    .map(|card| Decision::CastDuringResolution {
+                        player,
+                        paid: false,
+                        offer: ResolutionCastOffer::Cascade {
+                            card,
+                            exiled: exiled.clone(),
+                        },
+                        spends: None,
+                    })
+                    .filter(|decision| !self.resolution_cast_candidates(decision).is_empty());
+                if decision.is_none() {
+                    self.put_exiled_on_bottom_in_random_order(exiled);
+                }
+                decision
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {
                 let Some(Target::Player(owner)) = self.present_primary_target(frame) else {

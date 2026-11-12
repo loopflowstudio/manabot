@@ -239,6 +239,9 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
+            if self.activations_prohibited(permanent_id) {
+                continue;
+            }
             for (ability_index, ability) in self
                 .characteristics(permanent_id)
                 .activated_abilities

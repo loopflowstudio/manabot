@@ -685,14 +685,16 @@ impl Game {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = self.permanent_can_tap(permanent);
-                let fixed = (can_tap && !characteristics.mana_abilities.is_empty())
+                let prohibited = self.activations_prohibited(permanent);
+                let fixed = (can_tap && !prohibited && !characteristics.mana_abilities.is_empty())
                     .then(|| self.fixed_source_mana(permanent, &characteristics, &bonus_sources));
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
                     .enumerate()
                     .filter(|(index, ability)| {
-                        (!ability.tap_source || can_tap)
+                        !prohibited
+                            && (!ability.tap_source || can_tap)
                             && (!ability.own_turn_only || self.active_player() == player)
                             && !source.activation_used(*index, ability)
                     })
@@ -1381,7 +1383,10 @@ impl Game {
         let mut total = Mana::default();
         let bonus_sources = self.tap_bonus_sources(player);
         for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
-            if view.mana_abilities.is_empty() || !self.permanent_can_tap(permanent_id) {
+            if view.mana_abilities.is_empty()
+                || !self.permanent_can_tap(permanent_id)
+                || self.activations_prohibited(permanent_id)
+            {
                 continue;
             }
             total.add(&self.fixed_source_mana(permanent_id, &view, &bonus_sources));

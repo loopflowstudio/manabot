@@ -60,6 +60,9 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// "When you cast this spell" (CR 603.2): functions while the source is
+    /// a spell on the stack, and its caster controls the trigger.
+    YouCastThis,
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
     WhileSourceAttacking {
@@ -454,6 +457,8 @@ pub enum EffectValue {
     },
     /// Permanents `controller` has sacrificed this turn.
     PermanentsSacrificedThisTurn,
+    /// "The number of spells you've cast this turn."
+    SpellsCastThisTurn,
     /// The power of the permanent whose event fired the trigger, from its
     /// last known information once it has left ("where X is that
     /// creature's power").
@@ -897,6 +902,12 @@ pub enum Effect {
     /// card; you may cast it without paying its mana cost if its mana value
     /// is less than `below`, otherwise put it into your hand.
     ExileUntilNonlandCastFree { below: EffectValue },
+    /// Cascade (CR 702.85a): exile cards from the top of your library until
+    /// you exile a nonland card with lesser mana value than the source spell;
+    /// you may cast it without paying its mana cost. Every other card exiled
+    /// this way, and that one if not cast, goes on the bottom in a random
+    /// order.
+    Cascade,
     /// "Look at the top card of your library. You may cast that card without
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
@@ -1521,6 +1532,7 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::Cascade
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }

@@ -734,6 +734,14 @@ pub enum StaticAbility {
     /// "Each player may play an additional land on each of their turns"
     /// (CR 305.2): one more land play per such permanent, for every player.
     AdditionalLandPlayEachPlayer,
+    /// "Activated abilities of [predicate] you control cost {generic} less to
+    /// activate. This effect can't reduce the mana in that cost to less than
+    /// one mana" (Training Grounds); applies to the generic part, mana
+    /// abilities included.
+    ActivatedAbilitiesCostLess {
+        predicate: CardPredicate,
+        generic: u8,
+    },
     /// A continuous P/T effect (layer 7c).
     PtBuff(StaticPtBuff),
     /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is

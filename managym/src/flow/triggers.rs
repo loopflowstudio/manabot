@@ -91,6 +91,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
         TriggerCondition::YouCastSpell { .. }
+        | TriggerCondition::YouCastThis
         | TriggerCondition::YouCastNthSpellThisTurn { .. }
         | TriggerCondition::OpponentCastsSpell { .. }
         | TriggerCondition::PlayerCastsSpell { .. } => EventKinds::of(EventKind::SpellCast),
@@ -873,6 +874,7 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
+        self.cast_triggers(event);
         self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources {
@@ -1295,6 +1297,30 @@ impl Game {
             .expect("enqueued trigger")
     }
 
+    /// "When you cast this spell" abilities of the spell just cast; the spell
+    /// is the source and its caster controls the trigger.
+    fn cast_triggers(&mut self, event: &GameEvent) {
+        let GameEvent::SpellCast { card, .. } = event else {
+            return;
+        };
+        let card = *card;
+        let caster = self.spell_caster(card);
+        let fired: Vec<Vec<Effect>> = self.state.cards[card]
+            .abilities
+            .iter()
+            .filter(|ability| {
+                let Ability::Triggered { condition, .. } = ability;
+                *condition == TriggerCondition::YouCastThis
+                    && self.trigger_condition_fires(condition, card, caster, false, event)
+            })
+            .map(|ability| ability.effects().to_vec())
+            .collect();
+        let source_ref = self.current_object_ref(card);
+        for effects in fired {
+            self.enqueue_inline_trigger(card, source_ref, caster, effects, None);
+        }
+    }
+
     /// Abilities that function from their owner's graveyard (CR 113.6k):
     /// the exact graveyard object is the source, and its owner controls it.
     fn graveyard_triggers(&mut self, event: &GameEvent) {
@@ -1547,6 +1573,11 @@ impl Game {
                         .iter()
                         .position(|cast| cast == card)
                         == Some(*n as usize - 1)
+            }
+            // Only `cast_triggers` asks this of the spell itself; a
+            // battlefield source is never the card being cast.
+            (TriggerCondition::YouCastThis, GameEvent::SpellCast { card, .. }) => {
+                *card == source_card
             }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller

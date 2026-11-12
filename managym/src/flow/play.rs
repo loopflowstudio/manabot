@@ -967,6 +967,11 @@ impl Game {
                 "ability does not function on the battlefield".into(),
             ));
         }
+        if self.activations_prohibited(permanent_id) {
+            return Err(AgentError(
+                "its activated abilities can't be activated".into(),
+            ));
+        }
         if ability.mana_choices().is_some() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }

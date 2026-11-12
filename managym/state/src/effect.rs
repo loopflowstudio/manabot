@@ -89,6 +89,11 @@ pub enum Modification<N = i32> {
     /// Rules effect: doesn't untap during its controller's untap step
     /// (CR 502.3).
     DoesntUntap,
+    /// Rules effect: its activated abilities, mana abilities included, can't
+    /// be activated (CR 602.5).
+    CantActivateAbilities,
+    /// Rules effect: every creature able to block it does so (CR 509.1c).
+    MustBeBlockedByAllAble,
     /// Layer 6: loses these keywords, whatever grants them.
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
@@ -160,6 +165,8 @@ impl<N> Modification<N> {
             Self::CantBeBlocked => Modification::CantBeBlocked,
             Self::CantBlock => Modification::CantBlock,
             Self::DoesntUntap => Modification::DoesntUntap,
+            Self::CantActivateAbilities => Modification::CantActivateAbilities,
+            Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
@@ -218,6 +225,8 @@ impl Modification {
             | Self::CantBeBlocked
             | Self::CantBlock
             | Self::DoesntUntap
+            | Self::CantActivateAbilities
+            | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)
             | Self::ExileIfWouldDie
             | Self::KeepUnspentMana(_)

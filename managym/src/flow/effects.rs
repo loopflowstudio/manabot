@@ -170,6 +170,17 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::DoesntUntap)
     }
 
+    /// "Its activated abilities can't be activated this turn", mana
+    /// abilities and fixed mana taps included.
+    pub fn activations_prohibited(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::CantActivateAbilities)
+    }
+
+    /// "All creatures able to block [it] this turn do so."
+    pub fn must_be_blocked_by_all_able(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::MustBeBlockedByAllAble)
+    }
+
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)

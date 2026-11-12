@@ -394,11 +394,21 @@ impl Game {
                         });
                     }
                 }
-                actions.push(Action::DeclareBlocker {
-                    player: defending,
-                    blocker,
-                    attacker: None,
-                });
+                // CR 509.1c: a blocker able to block an attacker every able
+                // creature must block declares one of those blocks.
+                let required = |action: &Action| {
+                    matches!(action, Action::DeclareBlocker { attacker: Some(attacker), .. }
+                        if self.must_be_blocked_by_all_able(*attacker))
+                };
+                if actions.iter().any(required) {
+                    actions.retain(required);
+                } else {
+                    actions.push(Action::DeclareBlocker {
+                        player: defending,
+                        blocker,
+                        attacker: None,
+                    });
+                }
 
                 Some(ActionSpace {
                     player: Some(defending),

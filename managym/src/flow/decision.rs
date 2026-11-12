@@ -376,6 +376,9 @@ pub enum ResolutionCastOffer {
         source: ObjectRef,
         predicate: CardPredicate,
     },
+    /// Cascade's hit `card`, among every card the cascade `exiled`; those not
+    /// cast go on the bottom of the library in a random order.
+    Cascade { card: CardId, exiled: Vec<CardId> },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -2307,6 +2310,14 @@ impl Game {
                     suspended.decision,
                     Decision::CastDuringResolution { paid: true, .. }
                 );
+                if let Decision::CastDuringResolution {
+                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                    ..
+                } = &suspended.decision
+                {
+                    let rest = exiled.iter().copied().filter(|other| other != &card);
+                    self.put_exiled_on_bottom_in_random_order(rest.collect());
+                }
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
@@ -2340,8 +2351,14 @@ impl Game {
                 Ok(())
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
-                if let ResolutionCastOffer::Exiled { card } = offer {
-                    self.reveal_card_to_hand(*card, *player);
+                match offer {
+                    ResolutionCastOffer::Exiled { card } => {
+                        self.reveal_card_to_hand(*card, *player);
+                    }
+                    ResolutionCastOffer::Cascade { exiled, .. } => {
+                        self.put_exiled_on_bottom_in_random_order(exiled.clone());
+                    }
+                    _ => {}
                 }
                 self.run_frame(suspended.frame);
                 Ok(())
@@ -2651,13 +2668,14 @@ impl Game {
                         && self.card_matches_predicate(*card, predicate)
                 })
                 .collect(),
-            ResolutionCastOffer::Exiled { card } => self
-                .state
-                .zones
-                .contains(*card, ZoneType::Exile, *player)
-                .then_some(*card)
-                .into_iter()
-                .collect(),
+            ResolutionCastOffer::Exiled { card } | ResolutionCastOffer::Cascade { card, .. } => {
+                self.state
+                    .zones
+                    .contains(*card, ZoneType::Exile, *player)
+                    .then_some(*card)
+                    .into_iter()
+                    .collect()
+            }
             ResolutionCastOffer::ExiledWith { source, predicate } => self
                 .state
                 .exile_links
@@ -2682,6 +2700,12 @@ impl Game {
             .into_iter()
             .collect(),
         };
+        // Casting from exile or a library is casting from outside the hand
+        // (Drannith Magistrate).
+        if !matches!(offer, ResolutionCastOffer::Hand { .. }) && self.casts_only_from_hand(*player)
+        {
+            candidates.clear();
+        }
         candidates.retain(|card| self.can_cast_with(*player, *card, free));
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
@@ -2848,6 +2872,17 @@ impl Game {
 
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
+    /// Put each of `cards` still in exile on the bottom of its owner's
+    /// library, in a random order (cascade, CR 702.85a).
+    pub(crate) fn put_exiled_on_bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
+        cards.retain(|card| self.state.zones.zone_of(*card) == Some(ZoneType::Exile));
+        cards.shuffle(self.state.rng_mut());
+        for card in cards {
+            self.move_card(card, ZoneType::Library);
+            self.put_on_bottom_of_library(card);
+        }
+    }
+
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         self.reorder_in_library(card, LibraryEnd::Bottom);
     }

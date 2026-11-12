@@ -39,6 +39,10 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return "can't be blocked";
     case 'CantBlock':
       return "can't block";
+    case 'CantActivateAbilities':
+      return "activated abilities can't be activated";
+    case 'MustBeBlockedByAllAble':
+      return 'all creatures able to block it do so';
     case 'DoesntUntap':
       return "doesn't untap during its controller's untap step";
     case 'LoseKeywords':

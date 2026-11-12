@@ -47,6 +47,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "bind result",
     "caller frame",
     "captured activation",
+    "cascade exiled",
     "cast choices",
     "cast from exile",
     "cast from hand",
@@ -1058,6 +1059,12 @@ pub(crate) fn project_decision(
             match offer {
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
                 ResolutionCastOffer::Exiled { card } => out.card("cast from exile", *card),
+                ResolutionCastOffer::Cascade { card, exiled } => {
+                    out.card("cast from exile", *card);
+                    for exiled in exiled {
+                        out.card("cascade exiled", *exiled);
+                    }
+                }
                 ResolutionCastOffer::LibraryTop { card } => out.card("cast from library", *card),
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
                     out.object("exiled with", *source);

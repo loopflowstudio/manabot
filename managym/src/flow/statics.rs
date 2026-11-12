@@ -345,9 +345,11 @@ impl Game {
             return view;
         };
         let purpose = ManaUse::ability(view.subtypes.iter().map(String::as_str));
+        let reduction = self.activated_cost_reduction(id, permanent.controller, &view);
         // Most fixed activations already have an ordinary payment purpose.
         // Preserve the shared allocation when finalization would write nothing.
-        if !view.has_dynamic_activations()
+        if reduction == 0
+            && !view.has_dynamic_activations()
             && view
                 .activated_abilities
                 .iter()
@@ -363,8 +365,36 @@ impl Game {
                 }
             }
             self.price_activation(permanent.controller, purpose, ability);
+            let floor = ability.mana_cost.mana_value.saturating_sub(1);
+            ability.mana_cost = ability.mana_cost.reduced_generic(reduction.min(floor));
         }
         view
+    }
+
+    /// Generic mana the controller's "activated abilities of [predicate] you
+    /// control cost less" statics take off each activation of `id`.
+    fn activated_cost_reduction(
+        &self,
+        id: PermanentId,
+        controller: PlayerId,
+        view: &Characteristics,
+    ) -> u8 {
+        self.layer_views(self.iter_battlefield_permanents(controller))
+            .flat_map(|(_, source)| {
+                source
+                    .static_abilities
+                    .iter()
+                    .filter_map(|ability| match ability {
+                        StaticAbility::ActivatedAbilitiesCostLess { predicate, generic }
+                            if matches_view(self, id, predicate, view, None) =>
+                        {
+                            Some(*generic)
+                        }
+                        _ => None,
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .fold(0u8, u8::saturating_add)
     }
     pub(crate) fn effective_pt(&self, id: PermanentId) -> (i32, i32) {
         self.layer_view(id).pt()

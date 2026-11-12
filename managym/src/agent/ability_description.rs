@@ -72,6 +72,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
                 "is"
             }
         ),
+        TriggerCondition::YouCastThis => "When you cast this spell".into(),
         TriggerCondition::YouCastSpell { predicate } => format!(
             "When you cast a {}",
             predicate_description(predicate, "spell")
@@ -668,6 +669,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::PermanentsSacrificedThisTurn => {
             "the number of permanents you have sacrificed this turn".into()
         }
+        EffectValue::SpellsCastThisTurn => "the number of spells you've cast this turn".into(),
     }
 }
 
@@ -777,6 +779,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             }
         ),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
+        Cascade => "Cascade: exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order".into(),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
         TriggerModes { modes, up_to, unchosen } => format!(
             "Choose {} — {}",
@@ -1021,6 +1024,15 @@ pub(super) fn continuous_description(
         Modification::CantBlock => format!("{subject} can't block{until}"),
         Modification::DoesntUntap => {
             format!("{subject} doesn't untap during its controller's untap step{until}")
+        }
+        Modification::CantActivateAbilities => {
+            format!("{subject}'s activated abilities can't be activated{until}")
+        }
+        Modification::MustBeBlockedByAllAble => {
+            format!(
+                "All creatures able to block {}{until} do so",
+                subject.to_lowercase()
+            )
         }
         Modification::LoseKeywords(keywords) => {
             format!("{subject} loses {}{until}", keywords_description(keywords))

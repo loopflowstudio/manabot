@@ -299,6 +299,14 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::DoesntUntap",
             Seen::Via("its effect fact row and the tapped column after the untap step"),
         ),
+        Modification::CantActivateAbilities => (
+            "Modification::CantActivateAbilities",
+            Seen::Via("its effect fact row; the action tensor omits its activations"),
+        ),
+        Modification::MustBeBlockedByAllAble => (
+            "Modification::MustBeBlockedByAllAble",
+            Seen::Via("its effect fact row; the action tensor offers only its blocks"),
+        ),
         Modification::LoseKeywords(_) => (
             "Modification::LoseKeywords",
             Seen::Via("keyword_columns: effective keywords"),
@@ -383,6 +391,8 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::CantBeBlocked),
         permanent(Modification::CantBlock),
         permanent(Modification::DoesntUntap),
+        permanent(Modification::CantActivateAbilities),
+        permanent(Modification::MustBeBlockedByAllAble),
         permanent(Modification::LoseKeywords(Keywords::of(&[
             Keyword::Hexproof,
         ]))),
@@ -399,7 +409,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 30;
+const MODIFICATION_VARIANTS: usize = 32;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -660,6 +670,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileTopCardsToPlay { .. } => "Effect::ExileTopCardsToPlay",
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
+        Effect::Cascade => "Effect::Cascade",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
         Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
@@ -691,7 +702,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 78;
+const EFFECT_VARIANTS: usize = 79;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -845,6 +856,7 @@ fn effect_witnesses() -> Vec<Effect> {
                 },
             },
         },
+        Effect::Cascade,
         Effect::CastFromHandFree {
             predicate: CardPredicate {
                 not_card_types: vec![CardType::Creature, CardType::Land],
@@ -959,6 +971,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
+        TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
         TriggerCondition::CreatureDealsCombatDamageToYou => {
             "TriggerCondition::CreatureDealsCombatDamageToYou"
         }
@@ -1091,6 +1104,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfEachUpkeep,
         TriggerCondition::BeginningOfEachDrawStep,
         TriggerCondition::BeginningOfEachEndStep,
+        TriggerCondition::YouCastThis,
         TriggerCondition::YouBend,
         TriggerCondition::WhileSourceAttacking {
             condition: Box::new(TriggerCondition::YouCastSpell {
@@ -1285,6 +1299,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "Rites of Flourishing",
             "fut",
             "rites_of_flourishing_draws_for_each_player_and_grants_a_land_play",
+        ),
+        StaticAbility::ActivatedAbilitiesCostLess { .. } => witnessed(
+            "StaticAbility::ActivatedAbilitiesCostLess",
+            Seen::Actions("the activation becomes affordable at the reduced cost"),
+            "Training Grounds",
+            "roe",
+            "training_grounds_reduces_creature_activations_to_no_less_than_one_mana",
         ),
         StaticAbility::CantBeCountered => witnessed(
             "StaticAbility::CantBeCountered",
@@ -1549,6 +1570,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::ActivatedAbilitiesCostLess {
+            predicate: creature(),
+            generic: 2,
+        },
         StaticAbility::OpponentsCastOnlyFromHand,
         StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,

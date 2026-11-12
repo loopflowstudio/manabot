@@ -22,6 +22,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         food(),
         human(),
         human_soldier(),
+        komas_coil(),
         monk(),
         soldier(),
         spirit(),
@@ -194,6 +195,18 @@ fn human_soldier() -> CardDefinition {
         "",
     );
     creature(base, 1, 1, [Color::White])
+}
+
+fn komas_coil() -> CardDefinition {
+    let base = token(
+        "token.komas_coil",
+        "54a1c6a9-3531-4432-9157-e4400dbc89fd",
+        "Koma's Coil",
+        [CardType::Creature],
+        &["Serpent"],
+        "",
+    );
+    creature(base, 3, 3, [Color::Blue])
 }
 
 fn monk() -> CardDefinition {

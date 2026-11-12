@@ -18,6 +18,8 @@ mod blb;
 mod bng;
 #[path = "cards/c19.rs"]
 mod c19;
+#[path = "cards/cmr.rs"]
+mod cmr;
 #[path = "cards/definitions.rs"]
 mod definitions;
 #[path = "cards/dft.rs"]
@@ -46,6 +48,8 @@ mod iko;
 mod inv;
 #[path = "cards/isd.rs"]
 mod isd;
+#[path = "cards/khm.rs"]
+mod khm;
 #[path = "cards/kld.rs"]
 mod kld;
 #[path = "cards/ktk.rs"]

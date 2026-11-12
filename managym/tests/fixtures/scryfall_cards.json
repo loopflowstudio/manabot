@@ -5531,5 +5531,56 @@
     "colors": [
       "W"
     ]
+  },
+  "Koma, Cosmos Serpent": {
+    "name": "Koma, Cosmos Serpent",
+    "mana_cost": "{3}{G}{G}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "This spell can't be countered.\nAt the beginning of each upkeep, create a 3/3 blue Serpent creature token named Koma's Coil.\nSacrifice another Serpent: Choose one —\n• Tap target permanent. Its activated abilities can't be activated this turn.\n• Koma gains indestructible until end of turn.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Training Grounds": {
+    "name": "Training Grounds",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Activated abilities of creatures you control cost {2} less to activate. This effect can't reduce the mana in that cost to less than one mana.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Taunting Challenge": {
+    "name": "Taunting Challenge",
+    "mana_cost": "{1}{G}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "All creatures able to block target creature this turn do so.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Volcanic Torrent": {
+    "name": "Volcanic Torrent",
+    "mana_cost": "{4}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Cascade"
+    ],
+    "oracle_text": "Cascade (When you cast this spell, exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order.)\nVolcanic Torrent deals X damage to each creature and planeswalker your opponents control, where X is the number of spells you've cast this turn.",
+    "colors": [
+      "R"
+    ]
   }
 }
