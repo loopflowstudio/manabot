@@ -20,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         clue(),
         dragon(),
         food(),
+        human(),
         human_soldier(),
         monk(),
         soldier(),
@@ -169,6 +170,18 @@ fn food() -> CardDefinition {
             "{2}, {T}, Sacrifice this token: You gain 3 life.",
         )
     }
+}
+
+fn human() -> CardDefinition {
+    let base = token(
+        "token.human",
+        "7d13a93a-a43d-4cf5-8300-8341f3b7f1b1",
+        "Human",
+        [CardType::Creature],
+        &["Human"],
+        "",
+    );
+    creature(base, 1, 1, [Color::White])
 }
 
 fn human_soldier() -> CardDefinition {

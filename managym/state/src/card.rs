@@ -707,6 +707,9 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] you control"
     /// (CR 601.2f); functions while casting, generic floor 0.
     CostsLessPerPermanent(CardPredicate),
+    /// "This spell costs {1} less to cast for each [predicate] on the
+    /// battlefield", whoever controls them (Blasphemous Act); generic floor 0.
+    CostsLessPerPermanentOnBattlefield(CardPredicate),
     /// "This spell costs {1} less to cast for each [predicate] card in your
     /// graveyard"; functions while casting, generic floor 0.
     CostsLessPerGraveyardCard(CardPredicate),

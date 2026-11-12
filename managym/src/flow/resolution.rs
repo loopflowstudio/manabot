@@ -111,10 +111,13 @@ impl Game {
             EffectValue::GreatestSharedCreatureType => {
                 self.greatest_shared_creature_type(controller) as i32
             }
-            EffectValue::GreatestPowerYouControl => self
+            EffectValue::GreatestPowerYouControl { predicate } => self
                 .battlefield_permanents(controller)
                 .into_iter()
-                .filter(|id| self.permanent_is_battlefield_creature(*id))
+                .filter(|id| {
+                    self.permanent_is_battlefield_creature(*id)
+                        && self.permanent_matches_predicate(*id, predicate)
+                })
                 .map(|id| self.effective_pt(id).0)
                 .max()
                 .unwrap_or(0)

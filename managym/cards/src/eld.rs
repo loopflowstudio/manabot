@@ -2,13 +2,18 @@
 use managym_state::{
     ability::{Condition, Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
     zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![epic_downfall(), fabled_passage()]
+    vec![
+        epic_downfall(),
+        fabled_passage(),
+        return_of_the_wildspeaker(),
+    ]
 }
 
 fn epic_downfall() -> CardDefinition {
@@ -70,6 +75,37 @@ fn fabled_passage() -> CardDefinition {
                 if_declined: vec![Effect::ShuffleLibrary],
             }],
             ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn return_of_the_wildspeaker() -> CardDefinition {
+    let text_box = "Choose one —\n• Draw cards equal to the greatest power among non-Human creatures you control.\n• Non-Human creatures you control get +3/+3 until end of turn.";
+    let non_human = || CardPredicate {
+        card_type: Some(CardType::Creature),
+        not_subtypes: vec!["Human".into()],
+        ..Default::default()
+    };
+    CardDefinition {
+        key: "eld.return_of_the_wildspeaker",
+        scryfall_id: "b88a4943-bd1b-4d10-9cd3-b2ab91b25c10",
+        name: "Return of the Wildspeaker".into(),
+        mana_cost: Some(ManaCost::parse("{4}{G}")),
+        types: CardTypes::new([CardType::Instant]),
+        spell_effects: vec![Effect::Modal {
+            modes: vec![
+                vec![Effect::DrawCards {
+                    count: EffectValue::GreatestPowerYouControl {
+                        predicate: non_human(),
+                    },
+                }],
+                vec![Effect::until_end_of_turn(
+                    ObjectSelector::each_you_control(non_human()),
+                    Modification::pump(3, 3),
+                )],
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()

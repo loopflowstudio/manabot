@@ -230,6 +230,11 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if you control `count` or more permanents you don't own" (Agent of
+    /// Treachery).
+    ControlsUnownedAtLeast {
+        count: usize,
+    },
     /// "as long as you have `count` or more unspent mana" (both pools).
     UnspentManaAtLeast {
         count: u32,
@@ -342,6 +347,7 @@ impl Condition {
             | Condition::GraveyardAtLeast { .. }
             | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
+            | Condition::ControlsUnownedAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
@@ -444,9 +450,11 @@ pub enum EffectValue {
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
-    /// The greatest power among creatures `controller` controls (0 with
-    /// none).
-    GreatestPowerYouControl,
+    /// The greatest power among creatures `controller` controls that match
+    /// [predicate] ("non-Human creatures you control"); 0 with none.
+    GreatestPowerYouControl {
+        predicate: CardPredicate,
+    },
     /// Cards in `controller`'s hand.
     CardsInHand,
     /// Number of objects still named by a resolution result or selector.

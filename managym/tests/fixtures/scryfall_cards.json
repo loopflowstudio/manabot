@@ -5353,5 +5353,70 @@
     "colors": [
       "U"
     ]
+  },
+  "Join the Dance": {
+    "name": "Join the Dance",
+    "mana_cost": "{G}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create two 1/1 white Human creature tokens.\nFlashback {3}{G}{W} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Dockside Extortionist": {
+    "name": "Dockside Extortionist",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Goblin Pirate",
+    "power": "1",
+    "toughness": "2",
+    "keywords": [
+      "Treasure"
+    ],
+    "oracle_text": "When this creature enters, create X Treasure tokens, where X is the number of artifacts and enchantments your opponents control. (Treasure tokens are artifacts with \"{T}, Sacrifice this token: Add one mana of any color.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Blasphemous Act": {
+    "name": "Blasphemous Act",
+    "mana_cost": "{8}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {1} less to cast for each creature on the battlefield.\nBlasphemous Act deals 13 damage to each creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Agent of Treachery": {
+    "name": "Agent of Treachery",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Creature — Human Rogue",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "When this creature enters, gain control of target permanent.\nAt the beginning of your end step, if you control three or more permanents you don't own, draw three cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Return of the Wildspeaker": {
+    "name": "Return of the Wildspeaker",
+    "mana_cost": "{4}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Draw cards equal to the greatest power among non-Human creatures you control.\n• Non-Human creatures you control get +3/+3 until end of turn.",
+    "colors": [
+      "G"
+    ]
   }
 }

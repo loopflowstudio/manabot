@@ -27,3 +27,62 @@ fn spectral_sailor_draw_ability_survives_the_sources_destruction() {
     assert!(s.game().state.permanents[sailor].is_none());
     assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
 }
+
+#[test]
+fn agent_of_treachery_steals_and_draws_three_with_three_unowned_permanents() {
+    use crate::support::{inspect::permanent, play::resolve_everything};
+    use managym::{flow::turn::StepKind, state::game_object::PlayerId};
+    let mut s = five_color_setup(&["Agent of Treachery", "Gray Ogre"]);
+    s.set_player_mana_pool(0, "30UUUUUUUU");
+    let ogres: Vec<_> = (0..3)
+        .map(|_| s.force_permanent_on_battlefield(1, "Gray Ogre"))
+        .collect();
+    for (stolen, ogre) in ogres.iter().enumerate() {
+        cast(&mut s, "Agent of Treachery");
+        settle_until_target(&mut s, Target::Permanent(*ogre));
+        assert_eq!(permanent(&s, *ogre).controller, PlayerId(0));
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Gray Ogre").len(),
+            stolen + 1
+        );
+    }
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.advance_to_step(StepKind::End);
+    resolve_everything(&mut s);
+    // Each of the three Agents triggers.
+    s.assert_zone_size(0, ZoneType::Hand, hand + 9);
+}
+
+#[test]
+fn agent_of_treachery_draws_nothing_with_two_unowned_permanents() {
+    use crate::support::play::resolve_everything;
+    use managym::flow::turn::StepKind;
+    let mut s = five_color_setup(&["Agent of Treachery", "Gray Ogre"]);
+    s.set_player_mana_pool(0, "30UUUUUUUU");
+    for _ in 0..2 {
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        cast(&mut s, "Agent of Treachery");
+        settle_until_target(&mut s, Target::Permanent(ogre));
+    }
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.advance_to_step(StepKind::End);
+    resolve_everything(&mut s);
+    s.assert_zone_size(0, ZoneType::Hand, hand);
+}
+
+/// Resolve the cast creature, aiming its entry trigger at `target`.
+fn settle_until_target(s: &mut crate::support::game::Scenario, target: Target) {
+    for _ in 0..20 {
+        if s.action_space().kind == managym::agent::action::ActionSpaceKind::ChooseTarget {
+            assert!(s.choose_target(target));
+        } else if s.action_space().kind == managym::agent::action::ActionSpaceKind::Priority
+            && s.game().state.stack_objects.is_empty()
+            && s.game().state.pending_triggers.is_empty()
+        {
+            return;
+        } else {
+            s.pass_priority();
+        }
+    }
+    panic!("entry trigger did not settle");
+}

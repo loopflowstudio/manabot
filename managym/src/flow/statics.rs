@@ -646,6 +646,17 @@ impl Game {
                     .count()
                     == *count
             }
+            Condition::ControlsUnownedAtLeast { count } => {
+                self.iter_battlefield_permanents(controller)
+                    .filter(|&id| {
+                        self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                            self.state.cards[permanent.card].owner != controller
+                        })
+                    })
+                    .take(*count)
+                    .count()
+                    == *count
+            }
             Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }

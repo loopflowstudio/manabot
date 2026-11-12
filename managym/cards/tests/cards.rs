@@ -14,6 +14,8 @@ mod aer;
 mod afr;
 #[path = "cards/blb.rs"]
 mod blb;
+#[path = "cards/c19.rs"]
+mod c19;
 #[path = "cards/definitions.rs"]
 mod definitions;
 #[path = "cards/dft.rs"]
@@ -36,6 +38,8 @@ mod ice;
 mod iko;
 #[path = "cards/inv.rs"]
 mod inv;
+#[path = "cards/isd.rs"]
+mod isd;
 #[path = "cards/kld.rs"]
 mod kld;
 #[path = "cards/ktk.rs"]

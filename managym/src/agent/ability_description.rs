@@ -234,6 +234,9 @@ fn condition_text(condition: &Condition) -> String {
             "you control {count} or more {}s",
             predicate_description(predicate, "permanent")
         ),
+        Condition::ControlsUnownedAtLeast { count } => {
+            format!("you control {count} or more permanents you don't own")
+        }
         Condition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")
         }
@@ -615,9 +618,10 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::GreatestSharedCreatureType => {
             "the greatest number of creatures you control that share a creature type".into()
         }
-        EffectValue::GreatestPowerYouControl => {
-            "the greatest power among creatures you control".into()
-        }
+        EffectValue::GreatestPowerYouControl { predicate } => format!(
+            "the greatest power among {} you control",
+            predicate_description(predicate, "creatures")
+        ),
         EffectValue::CardsInHand => "the number of cards in your hand".into(),
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")

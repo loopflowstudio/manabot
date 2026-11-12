@@ -179,6 +179,12 @@ impl Game {
                 StaticAbility::CostsLessPerPermanent(predicate) => {
                     self.count_battlefield_matching(player, predicate)
                 }
+                StaticAbility::CostsLessPerPermanentOnBattlefield(predicate) => {
+                    [player, PlayerId(1 - player.0)]
+                        .into_iter()
+                        .map(|controller| self.count_battlefield_matching(controller, predicate))
+                        .sum()
+                }
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
                 }
