@@ -92,7 +92,7 @@ def recipe(size: Size, precision: Precision, updates: int) -> TrainingRegime:
         feedforward=shape.feedforward,
     )
     self_play_stage(regime).execution.precision = precision
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 @dataclass(frozen=True)
