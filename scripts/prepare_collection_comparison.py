@@ -40,6 +40,35 @@ from scripts.collection_comparison import (
 )
 
 
+def _bound_rental(job: Job) -> Job:
+    """Keep bootstrap, admission and training inside the original rental deadline."""
+    assert job.setup is not None
+    # The worker deadline is rental deadline minus delivery. Recover the
+    # original startup cutoff from it, rather than granting another 900 s
+    # after bootstrap. GNU date/timeout are present in the pinned Linux image.
+    offset = RENTAL_SECONDS - DELIVERY_SECONDS - STARTUP_SECONDS
+    setup = (
+        "set -eu\n"
+        f'left=$(( $(date -d "$ETUDE_DEADLINE" +%s) - {offset} - $(date +%s) ))\n'
+        'test "$left" -gt 10\n'
+        'timeout --signal=TERM --kill-after=10 "$((left - 10))s" sh -c '
+        + shlex.quote(job.setup)
+        + "\n"
+    )
+    # Job's own admission checks watchdog + finalization, before numerics.
+    # This extra guard reserves numerics (300) and admission/slack (600),
+    # without editing either pinned worker or silently shortening training.
+    required = TRAINING_SECONDS + FINALIZATION_SECONDS + 900
+    command = (
+        "set -eu\n"
+        f'test "$(( $(date -d "$ETUDE_DEADLINE" +%s) - $(date +%s) ))" -ge {required}\n'
+        + job.command
+    )
+    return Job.model_validate(
+        {**job.model_dump(), "setup": setup, "command": command, "stop_seconds": 30}
+    )
+
+
 def prepare(repo: Path, out: Path) -> Preparation:
     """Freeze original recipe bytes with only identity and stopping bounds edited."""
     out.mkdir(parents=True, exist_ok=False)
@@ -92,32 +121,9 @@ def prepare(repo: Path, out: Path) -> Preparation:
             max_usd=Decimal("7.20"),
         )
         spec = TrainingJob.model_validate_json(job.config or "")
-        assert spec.source_bundle is not None and job.setup is not None
+        assert spec.source_bundle is not None
         bundles[arm] = spec.source_bundle.files
-        # The worker deadline is rental deadline minus delivery. Recover the
-        # original startup cutoff from it, rather than granting another 900 s
-        # after bootstrap. GNU date/timeout are present in the pinned Linux image.
-        offset = RENTAL_SECONDS - DELIVERY_SECONDS - STARTUP_SECONDS
-        setup = (
-            "set -eu\n"
-            f'left=$(( $(date -d "$ETUDE_DEADLINE" +%s) - {offset} - $(date +%s) ))\n'
-            'test "$left" -gt 10\n'
-            'timeout --signal=TERM --kill-after=10 "$((left - 10))s" sh -c '
-            + shlex.quote(job.setup)
-            + "\n"
-        )
-        # Job's own admission checks watchdog + finalization, before numerics.
-        # This extra guard reserves numerics (300) and admission/slack (600),
-        # without editing either pinned worker or silently shortening training.
-        required = TRAINING_SECONDS + FINALIZATION_SECONDS + 900
-        command = (
-            "set -eu\n"
-            f'test "$(( $(date -d "$ETUDE_DEADLINE" +%s) - $(date +%s) ))" -ge {required}\n'
-            + job.command
-        )
-        job = Job.model_validate(
-            {**job.model_dump(), "setup": setup, "command": command, "stop_seconds": 30}
-        )
+        job = _bound_rental(job)
         (out / f"{arm}.json").write_text(
             job.runs(SEED)[0].model_dump_json(indent=2) + "\n"
         )

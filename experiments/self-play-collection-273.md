@@ -367,11 +367,15 @@ One seed on separate hosts still cannot isolate causality or supply the
 same-machine speed evidence described in `docs/workflows.md`. No result at 500
 establishes behavior at 850–1700 updates.
 
-For preparation review, use the manifest-published `prepared/` directory.
-To reproduce preparation separately, first follow the
-[development setup](../docs/development.md) to install the project and build
-its native extension; the reporting-only environment above is insufficient.
-Both pinned source commits must be available in local Git history. Run:
+For preparation review or execution, use the manifest-published `prepared/`
+directory. Preparation does not need to be repeated for a fresh provider quote.
+To reproduce it separately, use an isolated source environment at
+`8037b78d4a6ff485c4ec50747a4e5072b2281f15`, which contains the preparation script
+and matches both arms' protected runtime sources. Follow the
+[development setup](../docs/development.md) there to install the project and
+build its matching native extension; the reporting-only environment above is
+insufficient. Both pinned source commits must be available in its Git history.
+From that source root, run:
 
 ```sh
 PYTHONPATH=. uv run --no-sync python scripts/prepare_collection_comparison.py \
@@ -384,5 +388,8 @@ quote. Preparation rejects changed recipe bytes, incompatible native world or
 observation shapes, and differences in protected runtime sources. Preserve a
 failed directory for diagnosis and use a new destination after correcting the
 environment; do not replace the pinned sources with current defaults.
+The later hand-snapshot merge changes protected native sources, so rebuilding
+the latest checkout is insufficient to reproduce this admission. Its rejection
+is intentional and does not invalidate the already-published prepared inputs.
 The published preparation includes the exact analysis sources and their
 digests, so later edits cannot silently redefine the pre-execution interpretation.

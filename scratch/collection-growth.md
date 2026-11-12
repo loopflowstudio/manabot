@@ -38,12 +38,21 @@ criteria recorded in `scratch/questions.md`. All three baseline primaries must
 grow; incomplete or materially mismatched evidence withholds the verdict. The
 500-update horizon cannot certify the later 850–1700-update regime.
 
-The 2026-11-11 reconciliation read (`git ls-remote origin refs/heads/main`)
-again returned `830161795f3ae65563ae07128f14e90dfaf90235`, already integrated. Its
-`docs/workflows.md` adds same-machine comparison guidance and separates software
-delivery from scientific completion. The prepared separate serial L4 allocations
-remain descriptive: matching `HostFacts` cannot establish identical physical
-hosts or isolate contention. Material host differences withhold the verdict.
+The latest 2026-11-11 reconciliation read
+(`git ls-remote origin refs/heads/main`) returned
+`0b296e617a87017c4cca71227749eddac0a0481b`, already integrated through
+`37ffe26657f394b10f69256555ff45b3c58e82e4`. Its hand snapshots, game-generation
+tracking and reset changes alter five protected native source files. The
+published preparation still passes all ten file digests and both arm bindings;
+regenerating it from this newer runtime must reject, not refresh the frozen
+sources. Preparation-compatible revision
+`8037b78d4a6ff485c4ec50747a4e5072b2281f15` contains the scripts and has no
+protected-source differences from the pinned arms.
+
+`docs/workflows.md` requires same-machine software performance evidence and
+separates delivery from scientific completion. The prepared separate serial L4
+allocations remain descriptive: matching `HostFacts` cannot establish identical
+physical hosts or isolate contention. Material host differences withhold the verdict.
 
 ## Execution blocker and remaining work
 
@@ -59,14 +68,23 @@ provider. Neither command requested a rental. No launch, quote or additional
 spend occurred; published preflight stayed unchanged. Preparation is complete
 and needs no repetition while availability and fresh quotes remain missing.
 The provider read failed; it did not establish a capacity or price refusal.
-The next missing input is a successful provider read and affordable quotes,
-not another software change or preparation run.
+Paid execution needs a successful provider read and affordable quotes; repeating
+preparation supplies neither.
 
 The same bounded availability command at 2026-11-11 23:47:57 UTC exited 1
 with `etude: GET catalog/gpus: no reply`. It requested no rental; no quote,
 run or spending resulted. Published preparation and preflight bytes remain
-unchanged. Implementation has no remaining code change; execution still needs
-provider visibility and fresh affordable quotes.
+unchanged. Provider visibility and fresh affordable quotes remain missing.
+No provider read or rental was requested in this reconciliation.
+
+The preparation test now separates synthetic declaration/budget admission from
+unpatched current-runtime rejection and an injected world mismatch. The fixture
+uses pinned source hashes and offline regime validation; real job bundles,
+archives, observation shapes and output hashes remain checked. No games or
+training use the fixture. Production source/world guards and published inputs
+remain unchanged. The matching native extension was rebuilt and installed
+atomically; this fixes collection without making current sources compatible
+with the frozen pair. Gate still owns broader validation.
 
 1. Obtain fresh capacity and individual whole-rental quotes for both arms.
    Reserve at most $7.20 each plus $0.60 ancillary, cumulatively $15 including
@@ -94,8 +112,25 @@ provider visibility and fresh affordable quotes.
 
 ## Retained checks (2026-11-11)
 
-- Latest blocker-note check: `git diff --check` passed; `lf context` reports
-  scratch and Wave memory within both token and byte limits. No code changed.
+- Rental-wrapper compression:
+  `PYTHONPATH=. uv run --no-sync pytest tests/training/test_collection_comparison_preparation.py tests/infra/test_collection_comparison_report.py tests/infra/test_collection_growth_capture.py tests/infra/test_experiment_data_untracked.py -q --basetemp=.runs/collection-growth/compress-budget-after-tests`
+  — 22 passed in 20.57s. Both generated job declarations match the pre-edit
+  `compress-budget-before-tests/` bytes; all 19 published files match the manifest.
+  Python compilation, changed-file Ruff check/format and `git diff --check` passed.
+  No games, training, provider reads or rentals ran; the existing extension sufficed.
+- Preparation fixture repair: CPython 3.13 release wheel rebuilt and matching
+  extension installed atomically.
+  `PYTHONPATH=. uv run --no-sync pytest tests/training/test_collection_comparison_preparation.py tests/infra/test_collection_comparison_report.py -q`
+  — 13 passed in 16.70s, including unpatched current-runtime rejection.
+  No game, training, provider read or rental ran.
+- Post-sync reconciliation: `prepared_runs` verified ten digest-bound prepared
+  files and both pinned arms. Comparing protected sources found five changed
+  native files; the older preparation-compatible revision has zero differences.
+  `PYTHONPATH=. uv run --no-sync pytest tests/training/test_collection_comparison_preparation.py -q`
+  stopped during collection: `AttributeError: module 'manabot.managym' has no
+  attribute 'HandSnapshot'`. It executed no test, game or rental. The local
+  extension predates the merged Python API; this supersedes the earlier local
+  collection success as evidence about the current checkout.
 - Shipping docs: `experiments/self-play-collection-273.md` now leads with
   retained-plot reproduction; `experiments/README.md` links directly to the
   distinct paired inputs. Existing commands, criteria and evidence are preserved.
@@ -120,9 +155,11 @@ provider visibility and fresh affordable quotes.
   collected 172 tests in 1.56s. This closes collection only; gate/CI still owns
   broader suite execution. No games, training or rentals ran in those checks.
 
-Reconciliation and the latest blocker note change documentation only; existing
-checks remain applicable. No paired execution occurred. Earlier preparation
-and compression detail remains at
+The fixture-repair check above closes the post-sync preparation test gap; earlier
+checks remain historical evidence. No paired execution occurred.
+`git diff --check` passed; `lf context` kept scratch and Wave memory within both
+limits. The complete Wave memory was read; it has no immediate child directories.
+Earlier preparation and compression detail remains at
 `c995c00e719398a0f328ee4f9b3cf1050acb6625:scratch/collection-growth.md`.
 
 ## Delete — do not maintain
@@ -130,4 +167,14 @@ and compression detail remains at
 No production path is replaced by these measurement tools. The redundant
 capture subcommand was removed; do not restore a parallel CLI. Keep published
 snapshots, frozen analysis, source archives and historical metric compatibility.
-No further deletion is needed for the remaining execution work.
+The declaration test's assumption that the live checkout equals the frozen
+runtime is removed. Preserve its recipe, archive and budget assertions on the
+explicit fixture, plus real-runtime rejection coverage. No further deletion is
+needed for the remaining execution work.
+
+The rental shell wrapper now belongs to
+`scripts/prepare_collection_comparison.py::_bound_rental`; its controlled-clock
+test runs independently of source archives and native admission. This removes
+the repeated shell checks nested inside each arm's archive test. Keep preparation
+focused on recipe/source admission and serialization; deadline arithmetic and
+generated job bytes are unchanged. No further code deletion targets remain.

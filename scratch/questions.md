@@ -41,3 +41,10 @@ validation remain at
 `37ffe26657f394b10f69256555ff45b3c58e82e4:scratch/questions.md`.
 Main's implementation and conventions merge unchanged; the pinned experiment
 sources and published preparation remain frozen.
+
+Fixture choice (2026-11-11): declaration/budget tests inject pinned source
+digests and the frozen world identity, and validate the recipe offline. They
+never run games or training; temporary outputs are synthetic. Separate
+unpatched runtime rejection prevents this fixture from serving as admission
+evidence for the current checkout. Production guards and published bytes stay
+unchanged.

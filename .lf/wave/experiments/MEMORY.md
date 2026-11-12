@@ -61,10 +61,10 @@ provenance and the report; the projection avoids cumulative manifest expansion.
 Jack Heart's MTG-281 directive, 2026-11-11: "do 1 and 2. You have $15".
 Both pinned 500-update TrainingJobs, source bundles/archives, local world/shape
 admission and pre-execution paired analysis are now manifest-published. This
-closes preparation, not execution: provider reads at 22:42:24, 23:15:36 and
-23:36:06 UTC failed with `GET catalog/gpus: no reply` before any new rental or
-spending. The published preflight retains the 23:15 failure; the later CLI
-failure is recorded in the Task plan. Failed reads establish neither a capacity
+closes preparation, not execution: provider reads at 22:42:24, 23:15:36,
+23:36:06 and 23:47:57 UTC failed with `GET catalog/gpus: no reply` before any
+new rental or spending. The published preflight retains the 23:15 failure; the later CLI
+failures are recorded in the Task plan. Failed reads establish neither a capacity
 nor a price refusal. Prepared sources need no repetition to recover provider
 visibility; fresh quotes remain required. The prepared bounds include startup,
 training, delivery and teardown within each whole-rental envelope; deletion is
@@ -81,6 +81,15 @@ Remote CUDA admission, execution, measured analysis, receipts and whole-rental
 accounting remain with the Task plan. Neither retrospective plots nor software
 shipment supplies a repaired-arm verdict. Residual-cause profiling is outside
 this Task; a follow-up depends on what the repaired arm actually shows.
+
+The subsequent hand-snapshot merge (`0b296e617`) changes five protected native
+source files. The ten published preparation-file digests and both arm bindings
+still verify, but regenerating their local admission from current sources must
+reject. Preserve that distinction in tests: frozen declaration/budget fixtures
+and current-runtime rejection have separate purposes. Rebuilding an extension
+does not make changed source compatible; use the retained preparation for launch
+and the matching historical source for reproduction. The Task plan owns the
+post-sync validation gap, not a new scientific freeze.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 
