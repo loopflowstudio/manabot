@@ -17,14 +17,14 @@ horizon is `UPDATES` in both arms, so learning rate and τ stand at the same
 point at every matched update. Only `id` and `execution.precision` differ
 (`require_single_axis`).
 
-Evaluation (`eval`): each run's checkpoints at updates 20 and 40 and at its end
+Evaluation (`eval`): each run's checkpoints at updates 20, 40, 75 and 150 and at its end
 against the frozen heuristic over 07c490's fifty held-out Elemental pairings
 (`learning_signal.ELEMENTAL_PAIRS`, four cross legs each), and each BF16 run
 against each float32 run at the last update both checkpointed.
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
-        experiments/precision_ladder.py --rent l4 --parallel 4 \\
-        --max-usd 10 --revision COMMIT
+        experiments/precision_ladder.py --rent mtg324-l4 --parallel 4 \\
+        --cohort NAME --max-usd 32 --revision COMMIT
     uv run etude eval experiments/precision_ladder.py --rent cpu32 --source r2://manabot/jobs
     uv run etude report experiments/precision_ladder.py --source r2://manabot/jobs --open
 """
@@ -60,23 +60,23 @@ EXPERIMENT = Path(__file__).stem
 # float32 first: the reference arm and the report's dotted baseline.
 ARMS: tuple[Precision, ...] = ("float32", "bf16")
 SEEDS = (32401, 32402)
-# Checkpoints at learning_signal's scheduled updates below this (20 and 40) and
+# Checkpoints at learning_signal's scheduled updates (20, 40, 75 and 150) and
 # at each run's end are scored.
-UPDATES = 64
+UPDATES = 300
 WIDTH, LAYERS, HEADS = 384, 8, 8
 # Expected float32 seconds per update at w384l8 on an L4: the A40 measured
 # 100.6 s solo at a384l8 (experiments/training-update-time.md) and the L4 is
 # slower. Sizes the watchdog only; the damping horizon is `UPDATES` either way.
 FLOAT32_PACE_SECONDS = 150.0
-# 64 × 150 s plus setup and the final export: 3 h per run. Etude reserves the
-# window plus setup at the L4's USD 0.60/h ceiling, USD 1.95 per run, 7.80 for four.
+# 300 × 150 s plus setup and the final export: 12.8 h per run. Etude reserves the
+# window plus setup at the L4's USD 0.60/h ceiling, USD 7.85 per run, 31.40 for four.
 HOURS = (UPDATES * FLOAT32_PACE_SECONDS + SETUP_SECONDS + FINALIZATION_SECONDS) / 3600
-USD_PER_RUN = 1.95
+USD_PER_RUN = 7.85
 EVALUATION = "precision-ladder-v1"
-# 12 heuristic matchups and 4 head-to-heads × 50 pairings × 4 legs: 3,200 games,
-# about a third of value_readout_252's pass (9,000 games in 1.25 h on cpu32).
-EVALUATION_HOURS = 0.75
-EVALUATION_USD = 1.5
+# 20 heuristic matchups and 4 head-to-heads × 50 pairings × 4 legs: 4,800 games,
+# about half of value_readout_252's pass (9,000 games in 1.25 h on cpu32).
+EVALUATION_HOURS = 1.0
+EVALUATION_USD = 2.0
 
 
 def regime_id(precision: Precision) -> str:
