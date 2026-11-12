@@ -12,4 +12,4 @@
   gets Etude's "no recorded updates within the schedule" note.
 - Docs corrected rather than left aspirational where Etude 0.2.16 lacks the
   behavior (earlier-self side, setup pooling, build errors); Etude Tasks
-  eb0db3 and 9f66c2 carry the gaps.
+  EXP-52 and EXP-53 carry the gaps.

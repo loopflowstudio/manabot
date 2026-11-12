@@ -250,7 +250,7 @@ def report() -> Report:
 ```
 
 `uv run etude report <experiment file> --source r2://manabot/jobs --serve`
-draws it. Over the frontier's retained evaluations it shows four charts under Evals, each with one line for Small (width 64)
+draws it. Rebuilt over the frontier's retained evaluations, it shows four charts under Evals, each with one line for Small (width 64)
 and one for Large (width 160, 8 layers), scored from 0 to 1 with 0.5 drawn as
 even. Hovering a point reads like `0.62 · 95% interval 0.53–0.72 · 64 games · 16 matches`.
 The learning schedule opens ML details.

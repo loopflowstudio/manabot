@@ -12,9 +12,10 @@ Already in Etude 0.2.16 (EXP-44, #90): hidden Matches control when every panel
 names matches, two-decimal tooltip with named interval, `Curve.subject`,
 `Report.labels`, `Schedule`.
 
-Etude Tasks filed (pending Linear sync, in ../etude):
-- eb0db3 Pool one comparison's games across execution setups in reports.
-- 9f66c2 Curve opponent "whichever earlier checkpoint of its line it met".
+Etude Tasks filed (unstarted, unowned on 2026-11-12):
+- EXP-52 (eb0db3) Pool one comparison's games across execution setups.
+- EXP-53 (9f66c2) Curve scores each checkpoint against whichever earlier
+  checkpoint of its line it met (the later-side-only self chart).
 
 Check: `pytest tests/training/test_report_helpers.py tests/eval/test_experiment_files.py` 8 passed (compress: dropped helper tag validation; Etude `Curve` already rejects empty matches).
 Demo: rebuilt the frontier page from its retained runs (result below).
@@ -30,7 +31,7 @@ peak, 418 cells, no notes. Against `experiments/data/tla-frontier-c5fba4/report/
 - Model vs itself at half training time: identical where a checkpoint was only
   the later side (u400+ for Small, u200+ for Large); differs at u75–300 (128
   games: both roles mixed) and adds earlier-partner-only points (u25, u50, …).
-  Needs Etude 9f66c2. The previous per-size report() mixed roles the same way.
+  Needs EXP-53. The previous per-size report() mixed roles the same way.
 
 Found while building:
 - `etude report experiments/tla_frontier.py` from this revision refuses the
@@ -41,5 +42,15 @@ Found while building:
   unscoped `--source r2://manabot/jobs` scan ran >15 min, 3.9 GB.
 - Steer (Etude #98, merged, unreleased): launch-name subjects/labels/schedules
   and Refresh of repository helper modules. Not needed by these helpers (job
-  names equal launch names here); no Etude release cut. eb0db3 narrowed to
+  names equal launch names here); no Etude release cut. EXP-52 narrowed to
   eval-environment pooling, which #98 does not cover.
+
+## Remaining
+
+- Self chart later-side-only and setup pooling wait on EXP-53 / EXP-52;
+  docs state today's behavior. Nothing else in the Task outcome is open.
+- Open, not this Task's outcome: a finished experiment's `report()` cannot be
+  run from a later revision when its `eval(state)` re-derives matchups from
+  the current source digest (`tla_frontier._source`, Etude
+  `records.py` `tournament_conflict`). Whether to fix that in manabot
+  experiment files or Etude is undecided; no Task filed.
