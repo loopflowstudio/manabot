@@ -49,6 +49,11 @@
   (initial_raw/raw/ema), two models end to end, argument checks, smoke,
   resume at an update boundary bit-exact, saved-regime smoke.
 - Docs rewritten for partials, smoke and the positioning steer.
+- Main merged at `e5897c7ab`: MTG-312 `Execution.bucketed_shapes` and MTG-311
+  per-update `experiment.log_table("self_play_outcomes", ...)` live in
+  `stages.py`, so function `self_play` takes both through `execution=` and
+  the shared stage body; `test_bucketed_execution` now patches the stage
+  bodies (`8093e1bc3`).
 
 ## Remaining
 
@@ -60,7 +65,8 @@
    `binding_mismatch` (diff touches no env/, game_errors, managym, sim or
    fixtures); test_training_throughput::test_a_packed_seed_digests_as_it_does_solo
    (checkpoint `source/etude_run`, added in #464, is not in the packing
-   digest's volatile list). Re-run these on a quiet host before landing.
+   digest's volatile list). Re-run these on a quiet host before landing, plus
+   test_bucketed_execution and the regime suites after the main merge.
 2. `TrainingJob(regime=callable)`: jobs are built around one saved
    self-play stage (Etude `until=updates=N`, continuations, stop reserve);
    a function job needs a declared update target. Docs say not yet.
@@ -70,4 +76,7 @@
 
 ## Not in scope / deferred
 
-- Per-game result rows (MTG-282): docs do not promise them.
+- Per-game result rows: #466 (MTG-282) merged without them ("Take the
+  training-side result rows out of deck-building foundations"), so nothing
+  exists to route through `Run`. Per-update outcome rows go through Etude
+  `log_table`; docs do not promise per-game rows.
