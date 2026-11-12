@@ -381,6 +381,8 @@ impl Game {
     ) -> CardId {
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
+        // Token status is the object's kind, not a copiable value; only an
+        // exception's write detaches the shared definition (`DerefMut`).
         let mut copy = copy.with_kind(ObjectKind::Token);
         for exception in &exceptions {
             let copiable = exception.apply_copiable(&mut copy);

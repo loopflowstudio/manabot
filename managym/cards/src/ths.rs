@@ -1,6 +1,6 @@
 use managym_state::{
     ability::{Effect, ObjectSelector, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -14,14 +14,17 @@ fn lightning_strike() -> CardDefinition {
     CardDefinition {
         key: "ths.lightning_strike",
         scryfall_id: "bbb03f2e-2b92-4aa1-afae-301ed5d151d3",
-        name: "Lightning Strike".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::deal_damage(
-            3,
-            ObjectSelector::Target(TargetSpec::AnyTarget),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Lightning Strike".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::deal_damage(
+                3,
+                ObjectSelector::Target(TargetSpec::AnyTarget),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

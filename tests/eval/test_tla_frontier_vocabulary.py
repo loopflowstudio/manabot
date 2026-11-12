@@ -41,6 +41,9 @@ from manabot.eval.results import RateInterval
 from manabot.infra.config import RuntimeConfig
 from manabot.infra.runtime import RunContext, regime_tag
 
+# Scheduling and analysis read the frozen world; see `conftest.py`.
+pytestmark = pytest.mark.usefixtures("frontier_world")
+
 
 @pytest.fixture(autouse=True)
 def launcher(monkeypatch: pytest.MonkeyPatch) -> None:

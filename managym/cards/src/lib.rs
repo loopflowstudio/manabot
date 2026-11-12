@@ -2,7 +2,8 @@
 //! the set of its first printing.
 //!
 //! Each card is one function returning the engine's own [`CardDefinition`]
-//! (written in the `managym-state` rules types), listed in its set module's
+//! (a key, a Scryfall id and its `PrintedCharacteristics`, written in the
+//! `managym-state` rules types), listed in its set module's
 //! `cards()`; [`catalog`] gathers every set and is the only way the engine
 //! reaches them. New behavior is a new `Effect` (or other rules-type) variant,
 //! never card-specific logic. Tokens are not cards: each is a

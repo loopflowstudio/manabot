@@ -1,6 +1,6 @@
 //! Stronghold.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -14,14 +14,17 @@ fn youthful_knight() -> CardDefinition {
     CardDefinition {
         key: "sth.youthful_knight",
         scryfall_id: "fcd3b7a7-c5e8-4179-ade3-31625620f3a9",
-        name: "Youthful Knight".into(),
-        mana_cost: Some(ManaCost::parse("{1}{W}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Knight".into()],
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::FirstStrike]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Youthful Knight".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Knight".into()],
+            power: Some(2),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::FirstStrike]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

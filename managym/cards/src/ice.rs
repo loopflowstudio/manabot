@@ -1,7 +1,7 @@
 //! Ice Age.
 use managym_state::{
     ability::{Effect, ObjectSelector, Scope},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -16,14 +16,17 @@ fn pyroclasm() -> CardDefinition {
     CardDefinition {
         key: "ice.pyroclasm",
         scryfall_id: "88040748-ad76-4b9a-bd4e-87e5980e9816",
-        name: "Pyroclasm".into(),
-        mana_cost: Some(ManaCost::parse("{1}{R}")),
-        types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::deal_damage(
-            2,
-            ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
-        )],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Pyroclasm".into(),
+            mana_cost: Some(ManaCost::parse("{1}{R}")),
+            types: CardTypes::new([CardType::Sorcery]),
+            spell_effects: vec![Effect::deal_damage(
+                2,
+                ObjectSelector::each(Scope::Battlefield, CardPredicate::creature()),
+            )],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

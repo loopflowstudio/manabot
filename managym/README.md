@@ -31,10 +31,12 @@ are in the [README](../README.md#contracts-the-code-enforces).
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). Tokens are not cards: each is a
-`TokenDefinition` in `cards/src/tokens.rs`, keyed `token.*` and created by that
-key, with a Scryfall id unless it has no printing. In a game every object has a kind
+`cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
+`PrintedCharacteristics`) in its rules types (`Effect`, `Ability`, `TargetSpec`,
+…). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
+with the same `PrintedCharacteristics`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine registers both
+as `ObjectDefinition` rows with token status. In a game every object has a kind
 (`ObjectKind::Card`, `Token` or `SpellCopy`): a token is never a card, and
 each zone holds only the objects the Comprehensive Rules allow it
 ([objects and zones](../docs/engine.md#objects-and-zones)). The engine runs these values

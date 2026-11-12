@@ -1,6 +1,6 @@
 //! Portal.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -15,14 +15,17 @@ fn raging_goblin() -> CardDefinition {
     CardDefinition {
         key: "por.raging_goblin",
         scryfall_id: "fed57a17-7847-4e60-bc40-4452880f12a3",
-        name: "Raging Goblin".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Goblin".into(), "Berserker".into()],
-        power: Some(1),
-        toughness: Some(1),
-        keywords: Keywords::of(&[Keyword::Haste]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Raging Goblin".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Goblin".into(), "Berserker".into()],
+            power: Some(1),
+            toughness: Some(1),
+            keywords: Keywords::of(&[Keyword::Haste]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -33,14 +36,17 @@ fn wind_drake() -> CardDefinition {
     CardDefinition {
         key: "por.wind_drake",
         scryfall_id: "5486d2dc-9a5d-4f58-a5ec-d94de54b852f",
-        name: "Wind Drake".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Drake".into()],
-        power: Some(2),
-        toughness: Some(2),
-        keywords: Keywords::of(&[Keyword::Flying]),
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Wind Drake".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Drake".into()],
+            power: Some(2),
+            toughness: Some(2),
+            keywords: Keywords::of(&[Keyword::Flying]),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

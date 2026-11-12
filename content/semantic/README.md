@@ -11,9 +11,12 @@ definition carries its key (`<set>.<card>`) and the Scryfall id of that
 printing; Oracle text, rulings and images are reachable from the id, while the
 printed `text_box` stays in the definition so play works offline.
 
-Tokens are not cards. Each is a `TokenDefinition` in
-[`managym/cards/src/tokens.rs`](../../managym/cards/src/tokens.rs), written in
-the same rules types and keyed `token.*`. Effects create a token by key
+Cards and tokens share one `PrintedCharacteristics` (name, cost, types,
+colors, keywords, abilities, text, power/toughness); a `CardDefinition` adds a
+card's key and required Scryfall id. Tokens are not cards. Each is a
+`TokenDefinition` in
+[`managym/cards/src/tokens.rs`](../../managym/cards/src/tokens.rs): a `token.*`
+key, an optional Scryfall id and its `PrintedCharacteristics`. Effects create a token by key
 (`Effect::create_tokens("token.spirit", 1)`), so two tokens may share a printed
 name. A token's Scryfall id is its first token printing's, and is absent only
 for a token that was never printed.
@@ -40,7 +43,8 @@ match runs on it. Its identity is its `content_digest`, which is the world
 identity's card digest. Authored setups are decklists over it
 ([`cards/setups.rs`](../../managym/src/cards/setups.rs)), named by preset or
 by the `pack_key` frozen evidence records; they are not packs.
-Token definitions have native IDs and learning rows so created tokens can be
+Each row is an `ObjectDefinition`: identity, printed characteristics and token
+status. Token rows have native IDs and learning rows so created tokens can be
 observed, but are never eligible for deck entry.
 `managym.content_pool("world")` exposes the world pool's native IDs, keys and
 eligibility without starting a game; `managym.set_cards(["tla", "lea"])` narrows

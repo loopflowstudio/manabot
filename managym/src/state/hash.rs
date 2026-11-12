@@ -9,7 +9,7 @@ use crate::{
     cards::content_pack::{default_content_pack, ContentPack},
     flow::{combat::CombatState, game::GameState, turn::TurnState},
     state::{
-        card::{CardDefId, CardDefinition},
+        card::CardDefId,
         game_object::{
             CardVec, Incarnation, ObjectId, ObjectLki, ObjectRef, PermanentId, PermanentVec,
             PlayerId,
@@ -55,7 +55,7 @@ struct CanonicalCard {
     /// A token's or spell copy's characteristics, which can differ from its
     /// registered source definition. They carry `is_token: true`, which
     /// encodes the object being no card rather than a row fact.
-    copied_characteristics: Option<super::card::CardDefinition>,
+    copied_characteristics: Option<super::card::ObjectDefinition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     copy: Option<super::effect::CopyEffect>,
     object_id: ObjectId,
@@ -218,10 +218,7 @@ impl<'a> CanonicalMatchState<'a> {
         let cards = cards
             .iter()
             .map(|card| CanonicalCard {
-                copied_characteristics: (!card.is_card()).then(|| CardDefinition {
-                    is_token: true,
-                    ..(**card).clone()
-                }),
+                copied_characteristics: (!card.is_card()).then(|| content.object_row(card)),
                 copy: card.copy.clone(),
                 object_id: card.id,
                 definition_id: card.definition_id,

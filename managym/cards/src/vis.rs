@@ -1,7 +1,7 @@
 //! Visions.
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -15,22 +15,25 @@ fn man_o_war() -> CardDefinition {
     CardDefinition {
         key: "vis.man_o_war",
         scryfall_id: "4dbf9bf9-75cd-4b25-a3a1-43b7e029700b",
-        name: "Man-o'-War".into(),
-        mana_cost: Some(ManaCost::parse("{2}{U}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Jellyfish".into()],
-        power: Some(2),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::return_to_hand(ObjectSelector::Target(
-                TargetSpec::Creature,
-            ))],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Man-o'-War".into(),
+            mana_cost: Some(ManaCost::parse("{2}{U}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Jellyfish".into()],
+            power: Some(2),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::return_to_hand(ObjectSelector::Target(
+                    TargetSpec::Creature,
+                ))],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

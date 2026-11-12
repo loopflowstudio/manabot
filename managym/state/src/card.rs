@@ -791,16 +791,14 @@ pub enum AdditionalCost {
     RequiredWaterbend(ManaCost),
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
-pub struct CardDefinition {
-    /// `<set>.<card>`: the set file of the card's first printing and its slug.
-    /// Identity metadata, not rules: excluded from content digests and tokens.
-    #[serde(skip)]
-    pub key: &'static str,
-    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
-    /// rulings and images are reachable from it. Play never reads it.
-    #[serde(skip)]
-    pub scryfall_id: &'static str,
+/// An object as printed (CR 108.4, 111.3): what cards and tokens share,
+/// before any continuous effect. It is the input to the layer system;
+/// `Game::characteristics(id)` is the layered view computed from it. Identity
+/// (key, Scryfall id) belongs to the [`CardDefinition`] or [`TokenDefinition`]
+/// that prints it, and token status to its [`ObjectDefinition`] and game
+/// objects, so a copy effect copies these values and nothing else.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PrintedCharacteristics {
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
@@ -808,7 +806,6 @@ pub struct CardDefinition {
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
     /// Static abilities (CR 604), in printed order.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub statics: Vec<StaticAbility>,
     pub mana_abilities: Vec<ManaAbility>,
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
@@ -819,49 +816,35 @@ pub struct CardDefinition {
     /// targeted spell effect.
     pub targeting: Vec<TargetRequirement>,
     /// Additional costs of casting this spell (CR 601.2b, 601.2f).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub additional_costs: Vec<AdditionalCost>,
     pub keywords: Keywords,
-    /// Explicit color identity for cards without a mana cost (tokens).
+    /// Explicit color identity for objects without a mana cost (tokens).
     pub color_override: Option<Colors>,
-    /// Set on a [`TokenDefinition`]'s catalog row, never by a card. An
-    /// object's kind ([`Card::kind`]) says whether it is a token; this only
-    /// says which rows instantiate as tokens.
-    pub is_token: bool,
     /// Replacement/prevention definitions consumed by the proposed-event
-    /// pipeline. Empty vectors are omitted so existing content-pack digests
-    /// remain stable until production content actually adopts the feature.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    /// pipeline.
     pub replacement_effects: Vec<ReplacementEffect>,
     pub text_box: String,
     pub power: Option<i32>,
     pub toughness: Option<i32>,
-    /// The back face of a transforming double-faced card (CR 712.1): its own
-    /// characteristics, registered by the content pack as its own row after
-    /// this one. Serialized as its name, a reference to that row, so the
-    /// front's digest and tokens name it without repeating it.
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_back_face"
-    )]
-    pub back_face: Option<Box<CardDefinition>>,
 }
 
-fn serialize_back_face<S: serde::Serializer>(
-    face: &Option<Box<CardDefinition>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
-    match face {
-        Some(face) => serializer.serialize_some(&face.name),
-        None => serializer.serialize_none(),
-    }
+/// A card (CR 108.1), as its set file writes it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CardDefinition {
+    /// `<set>.<card>`: the set file of the card's first printing and its slug.
+    pub key: &'static str,
+    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
+    /// rulings and images are reachable from it. Play never reads it.
+    pub scryfall_id: &'static str,
+    pub printed: PrintedCharacteristics,
+    /// The back face of a transforming double-faced card (CR 712.1),
+    /// registered by the content pack as its own row after the front.
+    pub back_face: Option<Box<PrintedCharacteristics>>,
 }
 
 /// A token definition (CR 111.1): not a card, so it has its own catalog,
 /// keyed `token.<name>`. Effects create tokens by key, so two tokens may
-/// share a printed name. Its characteristics and abilities are written in the
-/// same rules types as a card's; the engine registers them as an object
-/// definition with token status ([`TokenDefinition::object_definition`]).
+/// share a printed name.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenDefinition {
     /// `token.<name>`, unique in the token catalog.
@@ -869,26 +852,165 @@ pub struct TokenDefinition {
     /// Scryfall card-object id of the token's first token printing; `None`
     /// only for a token with no printing.
     pub scryfall_id: Option<&'static str>,
-    /// The printed characteristics and abilities every token created from
-    /// this definition starts with. Identity (`key`, `scryfall_id`) and
-    /// token status live on the token definition, not here.
-    pub characteristics: CardDefinition,
+    /// What every token created from this definition starts with.
+    pub printed: PrintedCharacteristics,
 }
 
-impl TokenDefinition {
-    /// The object definition the engine runs: the characteristics with this
-    /// token's key, Scryfall id (empty when unprinted) and token status.
-    pub fn object_definition(&self) -> CardDefinition {
-        CardDefinition {
-            key: self.key,
-            scryfall_id: self.scryfall_id.unwrap_or(""),
+/// A registered row of the engine's catalog, the definition a [`CardDefId`]
+/// names: a card face, a back face, a token or a rules fixture. Token status
+/// is not a printed characteristic, so it lives here and on game objects.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ObjectDefinition {
+    /// The card's or token's key; empty for a back face or rules fixture.
+    pub key: &'static str,
+    pub scryfall_id: Option<&'static str>,
+    /// Shared with every object instantiated from this row.
+    pub printed: Arc<PrintedCharacteristics>,
+    /// Token status (CR 111.1): rows from a [`TokenDefinition`].
+    pub is_token: bool,
+    /// The printed name of this front face's back face, registered as the
+    /// next row.
+    pub back_face: Option<String>,
+}
+
+impl ObjectDefinition {
+    /// The front face of `card` as a row; its back face is registered apart.
+    pub fn card(card: &CardDefinition) -> Self {
+        Self {
+            key: card.key,
+            scryfall_id: (!card.scryfall_id.is_empty()).then_some(card.scryfall_id),
+            printed: Arc::new(card.printed.clone()),
+            is_token: false,
+            back_face: card.back_face.as_ref().map(|face| face.name.clone()),
+        }
+    }
+
+    /// A row with no identity of its own: a back face.
+    pub fn face(printed: PrintedCharacteristics) -> Self {
+        Self {
+            key: "",
+            scryfall_id: None,
+            printed: Arc::new(printed),
+            is_token: false,
+            back_face: None,
+        }
+    }
+
+    pub fn token(token: &TokenDefinition) -> Self {
+        Self {
+            key: token.key,
+            scryfall_id: token.scryfall_id,
+            printed: Arc::new(token.printed.clone()),
             is_token: true,
-            ..self.characteristics.clone()
+            back_face: None,
         }
     }
 }
 
-impl CardDefinition {
+/// The serialized row, field for field as the content digest, learning
+/// tokens and match-state hashes have always read it (struct name included):
+/// printed characteristics with token status between `color_override` and
+/// `replacement_effects`, and the back face by name. Identity is never
+/// serialized.
+#[derive(serde::Serialize)]
+#[serde(rename = "CardDefinition")]
+struct DefinitionWire<'a> {
+    name: &'a String,
+    mana_cost: &'a Option<ManaCost>,
+    types: &'a CardTypes,
+    supertypes: &'a Vec<String>,
+    subtypes: &'a Vec<String>,
+    abilities: &'a Vec<Ability>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    statics: &'a Vec<StaticAbility>,
+    mana_abilities: &'a Vec<ManaAbility>,
+    triggered_mana_abilities: &'a Vec<TriggeredManaAbility>,
+    activated_abilities: &'a Vec<ActivatedAbilityDefinition>,
+    spell_effects: &'a Vec<Effect>,
+    targeting: &'a Vec<TargetRequirement>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    additional_costs: &'a Vec<AdditionalCost>,
+    keywords: &'a Keywords,
+    color_override: &'a Option<Colors>,
+    is_token: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    replacement_effects: &'a Vec<ReplacementEffect>,
+    text_box: &'a String,
+    power: &'a Option<i32>,
+    toughness: &'a Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    back_face: Option<&'a str>,
+}
+
+impl PrintedCharacteristics {
+    fn wire<'a>(&'a self, is_token: bool, back_face: Option<&'a str>) -> DefinitionWire<'a> {
+        DefinitionWire {
+            name: &self.name,
+            mana_cost: &self.mana_cost,
+            types: &self.types,
+            supertypes: &self.supertypes,
+            subtypes: &self.subtypes,
+            abilities: &self.abilities,
+            statics: &self.statics,
+            mana_abilities: &self.mana_abilities,
+            triggered_mana_abilities: &self.triggered_mana_abilities,
+            activated_abilities: &self.activated_abilities,
+            spell_effects: &self.spell_effects,
+            targeting: &self.targeting,
+            additional_costs: &self.additional_costs,
+            keywords: &self.keywords,
+            color_override: &self.color_override,
+            is_token,
+            replacement_effects: &self.replacement_effects,
+            text_box: &self.text_box,
+            power: &self.power,
+            toughness: &self.toughness,
+            back_face,
+        }
+    }
+}
+
+impl serde::Serialize for ObjectDefinition {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.printed
+            .wire(self.is_token, self.back_face.as_deref())
+            .serialize(serializer)
+    }
+}
+
+/// Copiable values alone, in the row's shape: not a token, no back face.
+impl serde::Serialize for PrintedCharacteristics {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.wire(false, None).serialize(serializer)
+    }
+}
+
+/// Reads of a card's, token's or row's printed characteristics.
+impl std::ops::Deref for CardDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl std::ops::Deref for TokenDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl std::ops::Deref for ObjectDefinition {
+    type Target = PrintedCharacteristics;
+
+    fn deref(&self) -> &Self::Target {
+        &self.printed
+    }
+}
+
+impl PrintedCharacteristics {
     /// A Saga (CR 714.1): an enchantment with the Saga subtype.
     pub fn is_saga(&self) -> bool {
         self.types.is_enchantment() && self.subtypes.iter().any(|subtype| subtype == "Saga")
@@ -1027,10 +1149,10 @@ pub struct Card {
     /// The copy effect that made this object a copy (CR 707.2); its
     /// definition is then the copiable values that effect produced.
     pub copy: Option<crate::effect::CopyEffect>,
-    definition: Arc<CardDefinition>,
+    definition: Arc<PrintedCharacteristics>,
     /// The front face's row while the back face is up (CR 712.8): set by
     /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
-    front: Option<(CardDefId, Arc<CardDefinition>)>,
+    front: Option<(CardDefId, Arc<PrintedCharacteristics>)>,
 }
 
 impl Card {
@@ -1040,11 +1162,12 @@ impl Card {
         id: ObjectId,
         owner: PlayerId,
         definition_id: CardDefId,
-        definition: Arc<CardDefinition>,
+        definition: Arc<PrintedCharacteristics>,
+        is_token: bool,
     ) -> Self {
         Self {
             id,
-            kind: if definition.is_token {
+            kind: if is_token {
                 ObjectKind::Token
             } else {
                 ObjectKind::Card
@@ -1097,17 +1220,20 @@ impl Card {
     }
 
     /// The front face's row while the back face is up.
-    pub fn front_face(&self) -> Option<&(CardDefId, Arc<CardDefinition>)> {
+    pub fn front_face(&self) -> Option<&(CardDefId, Arc<PrintedCharacteristics>)> {
         self.front.as_ref()
     }
 
     /// Carry a copied object's front face, keeping its mana value (CR 712.8).
-    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<CardDefinition>)>) {
+    pub fn set_front_face(&mut self, front: Option<(CardDefId, Arc<PrintedCharacteristics>)>) {
         self.front = front;
     }
 
     /// Show the back face, a row of the engine catalog’s `ContentPack::back_face`.
-    pub fn turn_back_face_up(&mut self, (id, definition): (CardDefId, Arc<CardDefinition>)) {
+    pub fn turn_back_face_up(
+        &mut self,
+        (id, definition): (CardDefId, Arc<PrintedCharacteristics>),
+    ) {
         let front = (self.definition_id, Arc::clone(&self.definition));
         self.show(id, definition);
         self.front = Some(front);
@@ -1123,7 +1249,7 @@ impl Card {
     /// Show one face. Its kind stays (a double-faced token is a token on
     /// either face), and a copy's exceptions are in the copiable values of
     /// each (CR 707.8a, 707.9b).
-    fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
+    fn show(&mut self, id: CardDefId, definition: Arc<PrintedCharacteristics>) {
         self.definition_id = id;
         self.registry_key = ObjectId(id.0);
         self.definition = definition;
@@ -1137,7 +1263,7 @@ impl Card {
     }
 
     /// Snapshot the current copiable face without copying its ability programs.
-    pub fn copiable_definition(&self) -> Arc<CardDefinition> {
+    pub fn copiable_definition(&self) -> Arc<PrintedCharacteristics> {
         Arc::clone(&self.definition)
     }
 
@@ -1211,7 +1337,7 @@ impl Card {
 }
 
 impl std::ops::Deref for Card {
-    type Target = CardDefinition;
+    type Target = PrintedCharacteristics;
 
     fn deref(&self) -> &Self::Target {
         &self.definition
@@ -1233,8 +1359,8 @@ impl std::fmt::Display for Card {
     }
 }
 
-pub fn basic_land(name: &str, color: Color) -> CardDefinition {
-    CardDefinition {
+pub fn basic_land(name: &str, color: Color) -> PrintedCharacteristics {
+    PrintedCharacteristics {
         name: name.to_string(),
         types: CardTypes::new([CardType::Land]),
         supertypes: vec!["basic".to_string()],

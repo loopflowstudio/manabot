@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use managym::{
     cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
-        card::{CardDefinition, TokenDefinition},
+        card::{ObjectKind, PrintedCharacteristics, TokenDefinition},
         game_object::{CardId, ObjectId, PlayerId},
         player::PlayerConfig,
         zone::{ZoneManager, ZoneType},
@@ -156,7 +156,7 @@ fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
     pack.register_token(&TokenDefinition {
         key: "token.plain_spirit",
         scryfall_id: None,
-        characteristics: CardDefinition {
+        printed: PrintedCharacteristics {
             name: "Spirit".into(),
             power: Some(1),
             toughness: Some(1),
@@ -171,11 +171,14 @@ fn tokens_sharing_a_printed_name_stay_distinct_by_key() {
             .instantiate_token(key, PlayerId(0), ObjectId(1))
             .unwrap();
         assert_eq!(token.definition_id, row);
-        assert!(token.is_token && token.name == "Spirit", "{key}");
+        assert!(
+            token.kind() == ObjectKind::Token && token.name == "Spirit",
+            "{key}"
+        );
     }
     assert_eq!(pack.definition(printed).unwrap().statics.len(), 2);
     assert!(pack.definition(plain).unwrap().statics.is_empty());
-    assert_eq!(pack.definition(plain).unwrap().scryfall_id, "");
+    assert_eq!(pack.definition(plain).unwrap().scryfall_id, None);
 }
 
 #[test]

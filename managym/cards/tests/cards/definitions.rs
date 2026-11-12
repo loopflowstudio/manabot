@@ -9,7 +9,10 @@
 
 use managym::state::{
     ability::{Ability, Condition, Effect, TriggerCondition},
-    card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
+    card::{
+        CardDefinition, CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
+        StaticTypeGrant,
+    },
     permanent::CounterKind,
     predicate::CardPredicate,
     subtype::subtype_category,
@@ -32,7 +35,7 @@ enum Place {
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
 /// condition, an intervening-if clause or a type grant's / land-type
 /// overwrite's own condition.
-fn misplaced_resolution_conditions(definition: &CardDefinition) -> Vec<String> {
+fn misplaced_resolution_conditions(definition: &PrintedCharacteristics) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
     walk(&value, String::new(), Place::Elsewhere, &mut found);
@@ -94,83 +97,99 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     }
 }
 
-/// Every card definition and every token's characteristics.
-fn authored_definitions() -> impl Iterator<Item = &'static CardDefinition> {
+/// The printed characteristics of every card face and token.
+fn authored_definitions() -> impl Iterator<Item = &'static PrintedCharacteristics> {
     catalog()
         .iter()
-        .chain(token_catalog().iter().map(|token| &token.characteristics))
+        .flat_map(|card| std::iter::once(&card.printed).chain(card.back_face.as_deref()))
+        .chain(token_catalog().iter().map(|token| &token.printed))
 }
 
 #[test]
 fn resolution_only_conditions_appear_only_in_effect_if() {
     for definition in authored_definitions() {
         let misplaced = misplaced_resolution_conditions(definition);
-        assert!(misplaced.is_empty(), "{}: {misplaced:?}", definition.key);
+        assert!(misplaced.is_empty(), "{}: {misplaced:?}", definition.name);
     }
 }
 
 #[test]
 fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     let allowed = CardDefinition {
-        name: "Witness".into(),
-        spell_effects: vec![Effect::If {
-            condition: Condition::AnyOf(vec![
-                Condition::Kicked,
-                Condition::TargetMatches(CardPredicate::creature()),
-            ]),
-            then: vec![Effect::discard()],
-            otherwise: vec![],
-        }],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            spell_effects: vec![Effect::If {
+                condition: Condition::AnyOf(vec![
+                    Condition::Kicked,
+                    Condition::TargetMatches(CardPredicate::creature()),
+                ]),
+                then: vec![Effect::discard()],
+                otherwise: vec![],
+            }],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&allowed).is_empty());
 
     let intervening = CardDefinition {
-        name: "Witness".into(),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            intervening_if: Some(Condition::TargetDealtDamageThisTurn),
-            effects: vec![Effect::discard()],
-        }],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::BeginningOfYourEndStep,
+                intervening_if: Some(Condition::TargetDealtDamageThisTurn),
+                effects: vec![Effect::discard()],
+            }],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&intervening).len(), 1);
 
     let active = CardDefinition {
-        name: "Witness".into(),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: Condition::Kicked,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
-            },
-            intervening_if: None,
-            effects: vec![Effect::discard()],
-        }],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::Kicked,
+                    condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                },
+                intervening_if: None,
+                effects: vec![Effect::discard()],
+            }],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&active).len(), 1);
 
     let source_intervening = CardDefinition {
-        name: "Witness".into(),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
-            intervening_if: Some(Condition::SourceTapped),
-            effects: vec![Effect::discard()],
-        }],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::BeginningOfYourEndStep,
+                intervening_if: Some(Condition::SourceTapped),
+                effects: vec![Effect::discard()],
+            }],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_intervening).is_empty());
 
     let source_active = CardDefinition {
-        name: "Witness".into(),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: Condition::SourceTapped,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
-            },
-            intervening_if: None,
-            effects: vec![Effect::discard()],
-        }],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            abilities: vec![Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: Condition::SourceTapped,
+                    condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                },
+                intervening_if: None,
+                effects: vec![Effect::discard()],
+            }],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&source_active).len(), 1);
@@ -180,28 +199,34 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         count: 3,
     };
     let source_type_grant = CardDefinition {
-        name: "Witness".into(),
-        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
-            scope: StaticScope::This,
-            types: vec![CardType::Creature],
-            subtypes: Vec::new(),
-            condition: Some(fire.clone()),
-        })],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+                scope: StaticScope::This,
+                types: vec![CardType::Creature],
+                subtypes: Vec::new(),
+                condition: Some(fire.clone()),
+            })],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_type_grant).is_empty());
 
     let source_buff = CardDefinition {
-        name: "Witness".into(),
-        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-            scope: StaticScope::This,
-            condition: Some(fire),
-            power: 1,
-            toughness: 1,
-            per_creature_type_max: None,
-            per_color_among: None,
-            per_graveyard_matching: None,
-        })],
+        printed: PrintedCharacteristics {
+            name: "Witness".into(),
+            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::This,
+                condition: Some(fire),
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: None,
+            })],
+            ..Default::default()
+        },
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&source_buff).len(), 1);
@@ -242,7 +267,7 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
                 tokens += 1;
                 let token = token_catalog()
                     .iter()
-                    .find(|token| token.characteristics.name == name)
+                    .find(|token| token.name == name)
                     .unwrap_or_else(|| panic!("undefined allocated token {name}"));
                 let id = catalog.token_id(token.key).unwrap();
                 assert!(catalog.definition(id).unwrap().is_token, "{name}");

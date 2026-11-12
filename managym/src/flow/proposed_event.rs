@@ -101,10 +101,11 @@ pub(crate) enum TokenSource {
     Registered(String),
     Copy {
         definition_id: crate::state::card::CardDefId,
-        definition: std::sync::Arc<crate::state::card::CardDefinition>,
+        /// The copied object as it stood; the token takes its `printed`.
+        definition: crate::state::card::ObjectDefinition,
         front: Option<(
             crate::state::card::CardDefId,
-            std::sync::Arc<crate::state::card::CardDefinition>,
+            std::sync::Arc<crate::state::card::PrintedCharacteristics>,
         )>,
         copy: Option<crate::state::effect::CopyEffect>,
         exceptions: Vec<crate::state::effect::Modification>,
@@ -645,7 +646,8 @@ impl Game {
                         crate::state::game_object::ObjectId(0),
                         controller,
                         *definition_id,
-                        std::sync::Arc::clone(definition),
+                        std::sync::Arc::clone(&definition.printed),
+                        true,
                     );
                     template.set_front_face(front.clone());
                     template.copy = copy.clone();

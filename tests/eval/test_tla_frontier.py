@@ -43,12 +43,14 @@ from experiments.tla_frontier import (
     HEURISTIC,
     LARGE,
     PASS_ATTEMPT,
+    PROTOCOL,
     REGIME,
     ROOT,
     SMALL,
     CheckpointHours,
     GameErrorCounts,
     HostSpeed,
+    RuntimeWorld,
     ScheduledComparison,
     SizeLabel,
     comparison_schedule,
@@ -100,6 +102,10 @@ from manabot.training.execution import cuda_peak_metrics, execute_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.state.game_errors import GameErrorState
 from manabot.verify.store import VerifyStore
+import managym
+
+# Scheduling and analysis read the frozen world; see `conftest.py`.
+pytestmark = pytest.mark.usefixtures("frontier_world")
 
 CALIBRATION_FILE = ROOT / "experiments/tla_frontier_calibration.py"
 # What a launcher hands a worker: `uuid4().hex[:12]`, never the job's name.
@@ -382,6 +388,15 @@ def test_frozen_rejects_a_changed_regime(
     )
     monkeypatch.setattr(tla_frontier, "REGIME", changed)
     with pytest.raises(ValueError, match="regime differs"):
+        frozen()
+
+
+def test_frozen_rejects_another_runtime_world(
+    frontier_world: RuntimeWorld, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = frontier_world.model_copy(update={"card_digest": "0" * 64})
+    monkeypatch.setattr(managym, "world_identity", other.model_dump)
+    with pytest.raises(ValueError, match="runtime world differs"):
         frozen()
 
 
@@ -1449,7 +1464,7 @@ def test_a_finished_receipt_names_the_cpu_and_game_errors_by_label(
 
 
 def test_one_real_update_writes_every_key_calibration_reads(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    frontier_runtime: RuntimeWorld, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A real `execute_regime` run, shrunk only so it finishes in a test."""
     regime = calibration_regime(frozen()[0][SMALL], SMALL)
@@ -1525,7 +1540,7 @@ def test_arena_journal_stays_off_disk_and_is_retained_after_failure(
 
 
 def test_play_carries_a_real_games_cutoff_counts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    frontier_runtime: RuntimeWorld, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Real games through the evaluation path; four slots force actual overflow."""
     regimes, protocol = frozen()
@@ -1561,6 +1576,9 @@ def test_play_carries_a_real_games_cutoff_counts(
     monkeypatch.setattr(
         tla_frontier, "frozen", lambda: ({SMALL: narrow, LARGE: narrow}, protocol)
     )
+    # `play` registers the experiment's own source files, the frozen protocol
+    # among them, rather than the current-world copy `frozen` was patched past.
+    monkeypatch.setattr(tla_frontier, "PROTOCOL", PROTOCOL)
 
     games = tla_frontier.play(match)["games"]
 

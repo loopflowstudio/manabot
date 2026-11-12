@@ -27,7 +27,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::default_content_pack;
-use managym::state::card::{AdditionalCost, CardDefinition, CardType, Keyword};
+use managym::state::card::{AdditionalCost, CardType, Keyword, PrintedCharacteristics};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -100,7 +100,7 @@ fn canonical_cost(cost: &str) -> Vec<String> {
     tokens
 }
 
-fn render_type_line(def: &CardDefinition) -> String {
+fn render_type_line(def: &PrintedCharacteristics) -> String {
     let mut words: Vec<String> = def
         .supertypes
         .iter()

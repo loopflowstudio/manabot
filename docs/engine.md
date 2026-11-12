@@ -512,19 +512,30 @@ fn lightning_bolt() -> CardDefinition {
     CardDefinition {
         key: "lea.lightning_bolt",
         scryfall_id: "d573ef03-4730-45aa-93dd-e45ac1dbaf4a",
-        name: "Lightning Bolt".into(),
-        mana_cost: Some(ManaCost::parse("{R}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::deal_damage(
-            3,
-            ObjectSelector::Target(TargetSpec::AnyTarget),
-        )],
-        targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Lightning Bolt".into(),
+            mana_cost: Some(ManaCost::parse("{R}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::deal_damage(
+                3,
+                ObjectSelector::Target(TargetSpec::AnyTarget),
+            )],
+            targeting: vec![TargetRequirement::one(TargetSpec::AnyTarget)],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
 ```
+
+`PrintedCharacteristics` is what a card and a token share: name, cost, types,
+colors, keywords, abilities, text and power/toughness as printed. It is the
+input to the layer system; `Game::characteristics(id)` returns the layered
+view of a game object after continuous effects. A `CardDefinition` adds the
+card's identity (`key` and a required `scryfall_id`) and, for a transforming
+card, its back face's `PrintedCharacteristics` (`back_face`; the outer
+`..Default::default()` leaves it empty).
 
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
@@ -540,8 +551,9 @@ fn lightning_bolt() -> CardDefinition {
   printing's Scryfall id; `cargo test` in `managym/` covers all three crates.
 - Tokens are not cards. A token is a `TokenDefinition` in
   [`managym/cards/src/tokens.rs`](../managym/cards/src/tokens.rs), in its own
-  catalog under `token.*` keys, written in the same rules types. Effects name
-  the token by key, so tokens that share a printed name stay distinct:
+  catalog under `token.*` keys: a key, an optional Scryfall id and the same
+  `PrintedCharacteristics`. Effects name the token by key, so tokens that
+  share a printed name stay distinct:
 
   ```rust
   Effect::create_tokens("token.spirit", 1)
@@ -549,6 +561,11 @@ fn lightning_bolt() -> CardDefinition {
 
   A token carries the Scryfall id of its first token printing, or none when it
   was never printed. Tokens are never deck entries or part of the card pool.
+- The engine registers each card, back face and token as one
+  `ObjectDefinition`, the row a `CardDefId` names: its identity, its
+  `PrintedCharacteristics` and whether it is a token. Token status is not a
+  printed characteristic, so copy effects copy `printed` and never token
+  status; a token copy of a card is a token because it was created as one.
 
 ## Objects and zones
 

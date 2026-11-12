@@ -1,6 +1,9 @@
 //! The Brothers' War.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords, StaticAbility},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, PrintedCharacteristics,
+        StaticAbility,
+    },
     mana::ManaCost,
 };
 
@@ -14,15 +17,18 @@ fn giant_cindermaw() -> CardDefinition {
     CardDefinition {
         key: "bro.giant_cindermaw",
         scryfall_id: "1349465f-d29f-4d4b-a653-f4388574c336",
-        name: "Giant Cindermaw".into(),
-        mana_cost: Some(ManaCost::parse("{2}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Dinosaur".into(), "Beast".into()],
-        power: Some(4),
-        toughness: Some(3),
-        keywords: Keywords::of(&[Keyword::Trample]),
-        statics: vec![StaticAbility::PlayersCantGainLife],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Giant Cindermaw".into(),
+            mana_cost: Some(ManaCost::parse("{2}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Dinosaur".into(), "Beast".into()],
+            power: Some(4),
+            toughness: Some(3),
+            keywords: Keywords::of(&[Keyword::Trample]),
+            statics: vec![StaticAbility::PlayersCantGainLife],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

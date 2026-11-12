@@ -1,6 +1,6 @@
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
 };
 
@@ -14,23 +14,26 @@ fn corrupt_court_official() -> CardDefinition {
     CardDefinition {
         key: "ptk.corrupt_court_official",
         scryfall_id: "9d3ba2e3-e680-47cd-81c5-555deea7d00f",
-        name: "Corrupt Court Official".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Human".into(), "Advisor".into()],
-        power: Some(1),
-        toughness: Some(1),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::Discard {
-                what: ObjectSelector::Target(TargetSpec::Opponent),
-                count: 1,
+        printed: PrintedCharacteristics {
+            name: "Corrupt Court Official".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Advisor".into()],
+            power: Some(1),
+            toughness: Some(1),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::Discard {
+                    what: ObjectSelector::Target(TargetSpec::Opponent),
+                    count: 1,
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

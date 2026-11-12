@@ -1,7 +1,9 @@
 //! Adventures in the Forgotten Realms.
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
-    card::{AdditionalCost, CardDefinition, CardType, CardTypes, SacrificeCost},
+    card::{
+        AdditionalCost, CardDefinition, CardType, CardTypes, PrintedCharacteristics, SacrificeCost,
+    },
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -16,24 +18,27 @@ fn deadly_dispute() -> CardDefinition {
     CardDefinition {
         key: "afr.deadly_dispute",
         scryfall_id: "7373fe95-ad1c-44b9-8c7f-464ce8cbffc6",
-        name: "Deadly Dispute".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
-            predicate: CardPredicate {
-                card_types_any: vec![CardType::Artifact, CardType::Creature],
-                ..Default::default()
-            },
-            another: false,
-            or_mana: None,
-        }))],
-        spell_effects: vec![
-            Effect::DrawCards {
-                count: EffectValue::Fixed(2),
-            },
-            Effect::create_tokens("token.treasure", 1),
-        ],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Deadly Dispute".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            additional_costs: vec![AdditionalCost::Sacrifice(Box::new(SacrificeCost {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Artifact, CardType::Creature],
+                    ..Default::default()
+                },
+                another: false,
+                or_mana: None,
+            }))],
+            spell_effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                },
+                Effect::create_tokens("token.treasure", 1),
+            ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }
@@ -44,24 +49,27 @@ fn power_word_kill() -> CardDefinition {
     CardDefinition {
         key: "afr.power_word_kill",
         scryfall_id: "395b6ce4-143f-4eed-b565-98aa3d6208ef",
-        name: "Power Word Kill".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}")),
-        types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::destroy(ObjectSelector::Target(
-            TargetSpec::Permanent {
-                predicate: CardPredicate {
-                    not_subtypes: vec![
-                        "Angel".into(),
-                        "Demon".into(),
-                        "Devil".into(),
-                        "Dragon".into(),
-                    ],
-                    card_type: Some(CardType::Creature),
-                    ..Default::default()
+        printed: PrintedCharacteristics {
+            name: "Power Word Kill".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}")),
+            types: CardTypes::new([CardType::Instant]),
+            spell_effects: vec![Effect::destroy(ObjectSelector::Target(
+                TargetSpec::Permanent {
+                    predicate: CardPredicate {
+                        not_subtypes: vec![
+                            "Angel".into(),
+                            "Demon".into(),
+                            "Devil".into(),
+                            "Dragon".into(),
+                        ],
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    },
                 },
-            },
-        ))],
-        text_box: text_box.into(),
+            ))],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

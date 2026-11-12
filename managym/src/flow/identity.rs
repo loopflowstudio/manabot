@@ -6,7 +6,7 @@ use crate::{
     cards::content_pack::default_content_pack,
     flow::{event::ObjectEventRef, game::Game},
     state::{
-        card::CardDefinition,
+        card::ObjectDefinition,
         game_object::{
             CardId, EntityId, ObjectLki, ObjectLookupError, ObjectRef, PermanentId, PlayerId,
         },
@@ -143,7 +143,7 @@ impl Game {
     /// Resolve a departed object's immutable meaning through the match's
     /// shared content pack. LKI stores only `CardDefId`, never a definition
     /// clone.
-    pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&CardDefinition> {
+    pub fn object_lki_definition(&self, object_ref: ObjectRef) -> Option<&ObjectDefinition> {
         let lki = self.object_lki(object_ref)?;
         default_content_pack().definition(lki.definition_id)
     }
