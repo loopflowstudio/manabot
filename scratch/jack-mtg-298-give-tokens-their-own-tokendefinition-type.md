@@ -10,6 +10,8 @@ Built:
   Rows stay in name order (ties by key), so every CardDefId is unchanged.
 - `Effect::CreateToken { token }` holds the key, serialized as `token_name` so learning tokens keep
   their field hash; `Game::create_token(key, ..)`; internal `proposed_event::TokenSource`.
+- Shared printed names: `content_pack_tests.rs::tokens_sharing_a_printed_name_stay_distinct_by_key`;
+  `register_token` panics on a duplicate key.
 - Offline `scryfall.rs`: card ids required, token ids optional, uniqueness across both, key shapes.
   `check_scryfall.py` skips rows without an id.
 
