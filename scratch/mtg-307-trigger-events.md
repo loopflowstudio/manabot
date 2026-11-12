@@ -143,3 +143,7 @@ changes and merges cleanly (`git merge-tree`).
 
 QA re-run (head bc35142da): 1332 random games, 0 errors, output identical to
 da964c606; two Academy games to Game Over, no page errors. No fixes.
+
+Gate (head aaa6dd564): since b206873cd only the `docs/engine.md` reflow, the
+base merge (`managym/perf/baseline.json`, `docs/development.md`) and scratch
+changed; no suite inputs moved, so no reruns. PR #484 CI pending at this pass.
