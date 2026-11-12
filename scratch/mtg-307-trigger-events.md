@@ -100,3 +100,8 @@ still say "When" (fix moves the w17 authored-match receipt).
 Shipping docs: `docs/engine.md` (card definitions: prowess example, event list)
 and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
 in docs. This pass only reworded the event list in `docs/engine.md`.
+
+## Implement re-entry (2026-11-12, head e5bfb15ed)
+
+No new Task comments, steers or PR reviews; nothing remains to build. PR #484
+CI was pending at this pass.
