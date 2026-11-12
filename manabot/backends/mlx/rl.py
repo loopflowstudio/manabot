@@ -1,7 +1,7 @@
 """The damped update's loss terms over MLX arrays.
 
 Each function is the MLX form of its PyTorch counterpart in
-`manabot.training.learning` (`damped_policy`, `selection`), term for term, so
+`manabot.training.updates.damped_policy` and `manabot.rl.selection`, term for term, so
 the parity check can compare them on the same minibatch. Rows are minibatch
 samples [B]; distributions are over action slots [B,A] with `valid` marking
 the legal support.
