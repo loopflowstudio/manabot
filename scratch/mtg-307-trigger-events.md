@@ -67,6 +67,8 @@ Concept review 4 (head eeb9af27e): no change. Since review 3 only the
 `TriggerSubject::matching` constructor (same model) and a base merge landed.
 Concept review 5 (head 80d3d80af): no change. Since review 4 only the
 engine-guide reflow, the Engine Budget reference move and base docs landed.
+Concept review 6 (head 9991e7088): no change. Since review 5 only scratch
+changed; main's two new commits touch no `managym/` or docs.
 
 ## Checks
 
