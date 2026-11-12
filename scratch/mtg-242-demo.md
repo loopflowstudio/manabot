@@ -60,3 +60,10 @@ times out again on any branch, profile its worker log before rerunning.
 Since `36196e1f5`, only this note changed. PR #496 shows 23 checks passed and 2 skipped,
 and `tests/semantic/test_restricted_mana_input.py` passes again (7 passed). The
 decision was advance to the review stop. Questions 1 and 2 stay with a person.
+
+## Gate pass 2 (2026-11-12, at `e31c0b5bb`)
+
+No code changed since `36196e1f5` (scratch only), so no suite was rerun; PR #496
+checks are all pass or skipped. Main is now 4 commits ahead (MLX backend,
+live-token attention, pooled token stream removal, MTG-318 report); none touches
+`managym/` or `manabot/env/observation.py`, and `git merge-tree` is clean. No sync.
