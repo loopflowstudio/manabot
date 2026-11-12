@@ -25,9 +25,7 @@ behavior or construction rules, or moving split assignments. Expanding MTG-282's
 saved corpus is subsequent work.
 
 Retained assumptions: the current 1v1 development format with correct
-no-commander behavior (Commander/multiplayer is a demo question); the shipping
-guide (`docs/engine.md#tla-decks-with-tle-bonus-sheet-cards`) keeps its
-planned-support wording until gate/demo; open world w17; frozen evidence unchanged.
+no-commander behavior (Commander/multiplayer is a demo question); open world w17; frozen evidence unchanged.
 Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
@@ -122,8 +120,8 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
 | Cards | Disposition |
 |---|---|
-| Release to Memory; Lita, Mechanical Engineer | Wait for Task 6c0248 (TokenDefinition, tokens by key, scryfall_id optional only on tokens); allocation rows marked blocked on it |
-| Heartbeat of Spring | Split out to Task e698a9; don't implement `scratch/tle-production-design.md` here |
+| Release to Memory; Lita, Mechanical Engineer | Wait for MTG-298 (TokenDefinition, tokens by key, scryfall_id optional only on tokens); allocation rows marked blocked on it |
+| Heartbeat of Spring | Split out to MTG-297; don't implement `scratch/tle-production-design.md` here |
 
 Gate on 58 of 61. Corpus admission reports the exact count of events failing
 on Release to Memory, Lita or Heartbeat of Spring, and lists any other failure.
@@ -148,7 +146,7 @@ CR 605.1a/605.3b: Henge and Citadel needed no production occurrence. When the
 production occurrence lands, the `mana_suffix` frame becomes its suffix step,
 not a second path. The full direction is in git at 53231b511.
 
-## Production boundary (split out to Task e698a9): Heartbeat of Spring
+## Production boundary (split out to MTG-297): Heartbeat of Spring
 
 Heartbeat needs the land's actual produced types and either player's bonus
 sources; `state/card.rs::TriggeredManaAbility` holds a fixed `Mana`,
@@ -189,5 +187,6 @@ buffers (open question on the one-input rule in `scratch/questions.md`).
   `managym.admit_decklists` (not `Corpus.eligible` or saved `Trophy.deck`).
   Record input digest and per-event results: 1,000 passes, no dropped cards.
   Publish before tracking any receipt under `experiments/data/`.
-- Run the shipping guide's Scout's Warning example on the rebuilt engine; then
-  replace its planned-support wording. CI's Engine Budget covers speed.
+- The guide's Scout's Warning example prints `[[]]` on the thirteenth-pass
+  extension (wording now present tense); its "expected to fail" corpus
+  sentence awaits the admission run. CI's Engine Budget covers speed.

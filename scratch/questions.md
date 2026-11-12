@@ -51,11 +51,11 @@ Jack Heart, answering the four blockers: token identity "Resolve by key";
 Lita's Zeppelin "Optional for unprinted"; turn history and Powerstone "New v10
 input" ("v1-v9 stay frozen and reject positions that need it before buffers are
 written, fresh defaults stay v6, and w17 checkpoints keep loading. Same pattern
-as v8/v9"); Heartbeat of Spring "Split it out" to e698a9.
+as v8/v9"); Heartbeat of Spring "Split it out" to e698a9 (MTG-297).
 Revision of the first two: "I think calling tokens cards is techncially wrong in
 mtg, and the scryfall id thing is probably reason enough to make the split now"
 and "so that scryfall id is only optional for tokens". Tokens move to Task
-6c0248 (TokenDefinition), which lands first; MTG-286 changes neither token
+6c0248 (MTG-298, TokenDefinition), which lands first; MTG-286 changes neither token
 identity nor scryfall_id. Build Bloodchief Ascension, Brought Back and
 Cityscape Leveler on explicit v10; Release to Memory and Lita wait on 6c0248
 (allocation rows marked blocked on it). Gate on 58 of 61; report corpus

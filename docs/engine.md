@@ -528,10 +528,7 @@ to an authored setup refuse imported decks even when shapes agree
 
 TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
 Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
-importer, with no extra pack or flag. Support for 58 of the 61 is planned; the
-current catalog still lacks Scout's Warning and other bonus-sheet names. The
-example below describes the intended admission result once those definitions
-are added:
+importer, with no extra pack or flag. The engine defines 58 of the 61:
 
 ```python
 import managym
@@ -542,15 +539,15 @@ decklist = managym.Decklist(
 )
 admitted, = managym.admit_decklists([("hero", decklist)])
 print(managym.check_decks([admitted.deck]))
-# Expected after TLE support: [[]] — no admission issues
+# [[]] — no admission issues
 ```
 
 Every defined non-token card belongs to the world pool. This small example
 checks `development-v1` admission, not Limited construction or booster
 contents; use a complete deck for play.
 
-Three bonus-sheet cards stay undefined after this support lands, so a deck
-listing one of them raises `managym.DeckImportError` naming it as unknown:
+Three bonus-sheet cards are not yet defined, so a deck listing one of them
+raises `managym.DeckImportError` naming it as unknown:
 
 | Card | Waits for |
 | --- | --- |
