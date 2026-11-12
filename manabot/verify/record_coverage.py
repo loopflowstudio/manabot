@@ -2,7 +2,7 @@
 
 Catalog models (`ModelConfig.record_vocabulary="catalog"`) embed fact and
 effect ids through the card encoder's exact vocabulary and reject an id outside
-it. That vocabulary is native `learning_record_names`, a list maintained beside
+it. That vocabulary is native `record_vocabulary`, a list maintained beside
 the encoders, so an encoder that starts hashing a new name without listing it
 would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input

@@ -27,7 +27,7 @@ def shared_effect_shapes(version: int) -> dict[str, tuple[int, int]]:
 
 
 def _token(name: str) -> tuple[float, float]:
-    value = managym.learning_token_value(name) & 0xFFFFFFFF
+    value = managym.catalog_token_value(name) & 0xFFFFFFFF
     return float(value >> 16), float(value & 0xFFFF)
 
 

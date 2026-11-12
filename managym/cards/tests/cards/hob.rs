@@ -56,7 +56,7 @@ fn beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types() {
         let fork = s.game().clone();
         let obs = Observation::for_player(s.game(), PlayerId(0));
         let config = ObservationEncoderConfig {
-            policy_input_version: 8,
+            encoding_version: 8,
             ..Default::default()
         };
         assert_eq!(
@@ -67,7 +67,7 @@ fn beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types() {
             assert!(encode(
                 &obs,
                 &ObservationEncoderConfig {
-                    policy_input_version: version,
+                    encoding_version: version,
                     ..Default::default()
                 }
             )

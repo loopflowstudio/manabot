@@ -5,6 +5,7 @@ import os
 from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
 
 import numpy as np
+from typing_extensions import deprecated
 
 class ObservationValueLayout(TypedDict):
     kind: Literal["id", "reference", "category", "flag", "count", "number", "rank", "tagged"]
@@ -23,7 +24,7 @@ class ObservationArrayLayout(TypedDict):
     element: NotRequired[ObservationValueLayout]
 
 def observation_layout(
-    policy_input_version: int, *, policy_history_version: int = 0
+    encoding_version: int, *, history_version: int = 0
 ) -> dict[str, ObservationArrayLayout]:
     """Native column names, encodings and fixed extents; None extents are caller capacities.
 
@@ -31,11 +32,14 @@ def observation_layout(
     No game or policy buffers are allocated. Seats are viewer-relative.
     """
 
-def recommended_policy_input_version() -> int:
-    """The input version a new consumer should pin, resolved once and saved.
+def recommended_encoding_version() -> int:
+    """The encoding version a new consumer should pin, resolved once and saved.
 
     Does not change implicit defaults or saved versions.
     """
+
+def latest_encoding_version() -> int:
+    """The newest encoding version this engine supports; layouts exist for 1 to it."""
 
 class PoolDefinition(TypedDict):
     card_def_id: int
@@ -66,7 +70,7 @@ def set_cards(sets: list[str]) -> list[PoolDefinition]:
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
-class LearningCatalog(TypedDict):
+class CatalogTokens(TypedDict):
     content_digest: str
     registry_names: list[str]
     token_kind: list[int]
@@ -78,19 +82,28 @@ class LearningCatalog(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-def learning_catalog() -> LearningCatalog:
-    """Learning tokens for every catalog definition, rows by CardDefId."""
+LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
+
+def catalog_tokens() -> CatalogTokens:
+    """Tokenized rules text of every catalog definition, rows by CardDefId."""
 
 def card_definitions_json() -> str:
-    """Every catalog definition as the JSON its learning tokens serialize."""
+    """Every catalog definition as the JSON its catalog tokens serialize."""
 
-def learning_token_value(name: str) -> int:
-    """The learning catalog's stable token value for a Rust or printed name."""
+def catalog_token_value(name: str) -> int:
+    """The catalog's stable token value for a Rust or printed name."""
 
-def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]:
+def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same
     concept. Namespaces: `token`, `name`, `restriction`."""
+
+@deprecated("use catalog_tokens; removed in 0.3.0")
+def learning_catalog() -> CatalogTokens: ...
+@deprecated("use catalog_token_value; removed in 0.3.0")
+def learning_token_value(name: str) -> int: ...
+@deprecated("use record_vocabulary; removed in 0.3.0")
+def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]: ...
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -236,9 +249,15 @@ class Env:
     def encode_observation(
         self,
         obs: Observation,
-        policy_input_version: int = 6,
+        encoding_version: int | None = None,
         max_facts: int | None = None,
-    ) -> Dict[str, np.ndarray]: ...
+        *,
+        policy_input_version: int | None = None,
+    ) -> Dict[str, np.ndarray]:
+        """Encode at `encoding_version` (omitted: v6).
+
+        `policy_input_version` is its deprecated alias, removed in 0.3.0.
+        """
     def encode_observation_into(
         self,
         obs: Observation,

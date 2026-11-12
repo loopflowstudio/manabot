@@ -120,7 +120,7 @@ bindings that can change future behavior.
 ## Policy inputs
 
 The engine guide covers [reading these arrays by name](engine.md#reading-arrays-by-name)
-and [choosing an input version](engine.md#choosing-an-input-version) for
+and [choosing an encoding version](engine.md#choosing-an-encoding-version) for
 consumers outside manabot. The versions below are what each input adds.
 
 ### Catalog naming input
@@ -237,7 +237,7 @@ trains on v7.
 ### Composable layer input v8
 
 V8 introduced composable layer programs. For new consumers, follow
-[choosing an input version](engine.md#choosing-an-input-version). To pin a run to v8,
+[choosing an encoding version](engine.md#choosing-an-encoding-version). To pin a run to v8,
 this prepares a recipe and its model input without starting training:
 
 ```python

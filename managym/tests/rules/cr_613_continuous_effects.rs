@@ -267,7 +267,7 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
         for viewer in [PlayerId(0), PlayerId(1)] {
             let obs = Observation::for_player(s.game(), viewer);
             let config = ObservationEncoderConfig {
-                policy_input_version: version,
+                encoding_version: version,
                 max_facts: capacity,
                 ..Default::default()
             };
@@ -286,7 +286,7 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
             let encoded = encode(
                 &obs,
                 &ObservationEncoderConfig {
-                    policy_input_version: 7,
+                    encoding_version: 7,
                     ..config
                 },
             )
@@ -403,7 +403,7 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
             .each_ref()
             .map(|game| Observation::for_player(game, viewer));
         let old = ObservationEncoderConfig {
-            policy_input_version: 6,
+            encoding_version: 6,
             ..Default::default()
         };
         assert_eq!(
@@ -411,7 +411,7 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
             encode(&observations[1], &old).unwrap()
         );
         let new = ObservationEncoderConfig {
-            policy_input_version: 7,
+            encoding_version: 7,
             ..old
         };
         let encoded = observations
@@ -1264,7 +1264,7 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
     crate::support::play::activate(&mut s, source, 0);
     assert!(s.game().state.permanents[source].is_none());
     let config = ObservationEncoderConfig {
-        policy_input_version: 8,
+        encoding_version: 8,
         ..Default::default()
     };
     let obs = Observation::for_player(s.game(), PlayerId(0));

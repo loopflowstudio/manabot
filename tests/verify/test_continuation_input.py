@@ -33,7 +33,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
         space = ObservationSpace(ObservationConfig(policy_input_version=version))
         encoded = [space.encode(obs) for obs in observations]
         for env, obs, expected in zip(branches, observations, encoded, strict=True):
-            actual = env.encode_observation(obs, policy_input_version=version)
+            actual = env.encode_observation(obs, encoding_version=version)
             assert actual.keys() == expected.keys()
             for key in actual:
                 np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)

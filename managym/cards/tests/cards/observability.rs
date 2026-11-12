@@ -64,7 +64,7 @@ use managym::{
 };
 use managym::{
     cards::content_pack::default_content_pack,
-    cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
+    cards::tokens::{catalog_tokens, definition_tokens, name_value, TokenKind},
     state::{
         ability::{
             Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
@@ -2352,7 +2352,7 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 #[test]
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
-    let catalog = learning_catalog(pack).unwrap();
+    let catalog = catalog_tokens(pack).unwrap();
     let tokens = managym_cards::catalog()
         .iter()
         .filter(|definition| definition.key.starts_with("token."))
@@ -2493,7 +2493,7 @@ macro_rules! encoding {
 }
 
 const HISTORY: &str = "zone and incarnation metadata belong to the public history rows \
-    (policy_history_version 1); the v0 event tensor is frozen";
+    (history_version 1); the v0 event tensor is frozen";
 
 fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     use Buffer::*;
@@ -3078,7 +3078,7 @@ fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
 
 fn config(version: u8) -> ObservationEncoderConfig {
     ObservationEncoderConfig {
-        policy_input_version: version,
+        encoding_version: version,
         ..ObservationEncoderConfig::default()
     }
 }

@@ -620,7 +620,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             let legacy = encode(
                 &obs,
                 &ObservationEncoderConfig {
-                    policy_input_version: 2,
+                    encoding_version: 2,
                     ..Default::default()
                 },
             )
@@ -3488,7 +3488,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
         let obs = Observation::for_player(game, player);
         let config = ObservationEncoderConfig {
-            policy_input_version: 8,
+            encoding_version: 8,
             max_facts: 4096,
             ..Default::default()
         };
@@ -3666,7 +3666,7 @@ fn frozen_operation_obligations_admit_their_implied_completion_events() {
             encode(
                 &observation,
                 &ObservationEncoderConfig {
-                    policy_input_version: version,
+                    encoding_version: version,
                     ..Default::default()
                 },
             )
@@ -3794,7 +3794,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             game.publish_action_space(game.suspended_decision_action_space().unwrap());
             let obs = Observation::for_player(&game, player);
             let config = ObservationEncoderConfig {
-                policy_input_version: 8,
+                encoding_version: 8,
                 ..Default::default()
             };
             let input = encode(&obs, &config).unwrap();
@@ -3829,7 +3829,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 let frozen = encode(
                     &obs,
                     &ObservationEncoderConfig {
-                        policy_input_version: version,
+                        encoding_version: version,
                         ..config
                     },
                 );

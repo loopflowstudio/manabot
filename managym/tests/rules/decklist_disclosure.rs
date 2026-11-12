@@ -159,7 +159,7 @@ fn decklist_rows_encode_known_lists_and_zero_for_a_closed_opponent() {
         }
     }
     let legacy = ObservationEncoderConfig {
-        policy_input_version: 4,
+        encoding_version: 4,
         ..config
     };
     let game = Game::new(configs(DecklistDisclosure::Open), 7, true);

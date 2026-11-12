@@ -303,7 +303,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
     native = env.encode_observation(
         observation,
-        policy_input_version=config.policy_input_version,
+        encoding_version=config.policy_input_version,
         max_facts=config.max_facts,
     )
     for key, value in encoded.items():
@@ -1189,7 +1189,7 @@ def _assert_native_observation_parity(
     encoded = ObservationSpace(ObservationConfig(policy_input_version=5)).encode(
         observation
     )
-    native = env.encode_observation(observation, policy_input_version=5)
+    native = env.encode_observation(observation, encoding_version=5)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
     return observation

@@ -113,7 +113,7 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
-    if config.policy_input_version >= 9 {
+    if config.encoding_version >= 9 {
         dict.set_item(
             "name_candidates",
             to_numpy_array_f32(
@@ -124,7 +124,7 @@ fn encoded_to_dict<'py>(
             )?,
         )?;
     }
-    if config.policy_input_version >= 7 {
+    if config.encoding_version >= 7 {
         for (name, values, shape) in [
             (
                 "effects",
@@ -135,7 +135,7 @@ fn encoded_to_dict<'py>(
                 "effect_details",
                 &encoded.effect_details,
                 [
-                    shared_effects::detail_rows(config.policy_input_version),
+                    shared_effects::detail_rows(config.encoding_version),
                     shared_effects::DETAIL_DIM,
                 ],
             ),
@@ -148,7 +148,7 @@ fn encoded_to_dict<'py>(
             dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
         }
     }
-    if config.policy_input_version >= 5 {
+    if config.encoding_version >= 5 {
         dict.set_item(
             "facts",
             to_numpy_array_f32(
@@ -162,7 +162,7 @@ fn encoded_to_dict<'py>(
             )?,
         )?;
     }
-    if config.policy_input_version >= 2 {
+    if config.encoding_version >= 2 {
         dict.set_item(
             "relations",
             to_numpy_array_f32(
@@ -315,7 +315,7 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
-    if config.policy_input_version >= 5 {
+    if config.encoding_version >= 5 {
         dict.set_item(
             "decklists",
             to_numpy_array_f32(
@@ -4247,26 +4247,47 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=6, max_facts=None))]
+    /// `policy_input_version` is the deprecated spelling of `encoding_version`.
+    #[pyo3(signature = (obs, encoding_version=None, max_facts=None, *, policy_input_version=None))]
     fn encode_observation(
         &self,
         py: Python<'_>,
         obs: PyObservation,
-        policy_input_version: u8,
+        encoding_version: Option<u8>,
         max_facts: Option<usize>,
+        policy_input_version: Option<u8>,
     ) -> PyResult<PyObject> {
+        let encoding_version = match (encoding_version, policy_input_version) {
+            (Some(_), Some(_)) => {
+                return Err(pyo3::exceptions::PyTypeError::new_err(
+                    "pass encoding_version, not also its deprecated alias policy_input_version",
+                ))
+            }
+            (None, Some(version)) => {
+                PyErr::warn_bound(
+                    py,
+                    &py.get_type_bound::<pyo3::exceptions::PyDeprecationWarning>(),
+                    "encode_observation(policy_input_version=) is deprecated; use encoding_version=",
+                    1,
+                )?;
+                version
+            }
+            (version, None) => version.unwrap_or(6),
+        };
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=9) {
-            return Err(PyValueError::new_err("unsupported policy input version"));
+        if !(1..=crate::agent::observation_layout::LATEST_ENCODING_VERSION)
+            .contains(&encoding_version)
+        {
+            return Err(PyValueError::new_err("unsupported encoding version"));
         }
-        if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
+        if max_facts == Some(0) || (encoding_version < 6 && max_facts.is_some()) {
             return Err(PyValueError::new_err(
                 "max_facts requires v6 and a positive capacity",
             ));
         }
         let config = ObservationEncoderConfig {
-            policy_input_version,
-            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
+            encoding_version,
+            max_facts: max_facts.unwrap_or(if encoding_version == 7 {
                 crate::agent::observation_encoder::V5_FACT_ROWS
             } else {
                 ObservationEncoderConfig::default().max_facts
@@ -4372,9 +4393,9 @@ fn naming_catalog() -> Vec<crate::cards::names::NameCandidate> {
 /// encode.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_catalog(py: Python<'_>) -> PyResult<PyObject> {
+fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
     let content = crate::cards::content_pack::default_content_pack();
-    let catalog = crate::cards::tokens::learning_catalog(content)
+    let catalog = crate::cards::tokens::catalog_tokens(content)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("content_digest", content.content_digest())?;
@@ -4421,7 +4442,7 @@ fn card_definitions_json() -> PyResult<String> {
 /// (`"Effect::DealDamage"`, a field, or a printed category such as `"Ally"`).
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_token_value(name: &str) -> i32 {
+fn catalog_token_value(name: &str) -> i32 {
     crate::cards::tokens::name_value(name)
 }
 
@@ -4433,7 +4454,7 @@ type RecordNameRow = (&'static str, String, i32, Option<u16>, Option<i32>);
 /// learning token card text uses for the same concept, or `None`.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_record_names() -> Vec<RecordNameRow> {
+fn record_vocabulary() -> Vec<RecordNameRow> {
     crate::agent::record_vocabulary::record_names()
         .into_iter()
         .map(|name| {
@@ -4663,12 +4684,12 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(world_identity, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
     m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_record_names, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
+    m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;

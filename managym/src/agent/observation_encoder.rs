@@ -203,7 +203,7 @@ pub const DECKLIST_DIM: usize = decklist::WIDTH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
-    pub policy_input_version: u8,
+    pub encoding_version: u8,
     pub max_facts: usize,
     pub max_cards_per_player: usize,
     pub max_permanents_per_player: usize,
@@ -224,7 +224,7 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
-            policy_input_version: 6,
+            encoding_version: 6,
             max_facts: 512,
         }
     }
@@ -240,14 +240,14 @@ impl ObservationEncoderConfig {
     /// rows (+ 1) of a naming group choice. Earlier inputs carry no name
     /// identity and see naming prompts as anonymous modal choices.
     pub fn name_dim(&self) -> usize {
-        match self.policy_input_version {
+        match self.encoding_version {
             9.. => NAME_DIM_V9,
             _ => 0,
         }
     }
 
     pub fn relation_dim(&self) -> usize {
-        match self.policy_input_version {
+        match self.encoding_version {
             5.. => super::continuation::RELATION_DIM_V5,
             4 => super::continuation::RELATION_DIM,
             _ => super::continuation::LEGACY_RELATION_DIM,
@@ -255,7 +255,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn player_dim(&self) -> usize {
-        if self.policy_input_version >= 5 {
+        if self.encoding_version >= 5 {
             PLAYER_DIM
         } else {
             LEGACY_PLAYER_DIM
@@ -263,7 +263,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn card_dim(&self) -> usize {
-        if self.policy_input_version >= 5 {
+        if self.encoding_version >= 5 {
             CARD_DIM
         } else {
             LEGACY_CARD_DIM
@@ -271,7 +271,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn permanent_dim(&self) -> usize {
-        if self.policy_input_version >= 5 {
+        if self.encoding_version >= 5 {
             PERMANENT_DIM
         } else {
             LEGACY_PERMANENT_DIM
@@ -279,7 +279,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn relations_len(&self) -> usize {
-        if self.policy_input_version >= 2 {
+        if self.encoding_version >= 2 {
             super::continuation::RELATION_ROWS * self.relation_dim()
         } else {
             0
@@ -288,7 +288,7 @@ impl ObservationEncoderConfig {
 
     /// Two seats of decklist rows at v5; absent before.
     pub fn decklists_len(&self) -> usize {
-        if self.policy_input_version >= 5 {
+        if self.encoding_version >= 5 {
             2 * self.max_cards_per_player * DECKLIST_DIM
         } else {
             0
@@ -297,7 +297,7 @@ impl ObservationEncoderConfig {
 
     /// V5 is frozen; v6 changes capacity only, not row meanings.
     pub fn fact_rows(&self) -> usize {
-        match self.policy_input_version {
+        match self.encoding_version {
             0..=4 => 0,
             5 => V5_FACT_ROWS,
             _ => self.max_facts,
@@ -305,7 +305,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn effects_len(&self) -> usize {
-        if self.policy_input_version >= 7 {
+        if self.encoding_version >= 7 {
             super::shared_effects::EFFECT_ROWS * super::shared_effects::EFFECT_DIM
         } else {
             0
@@ -313,8 +313,8 @@ impl ObservationEncoderConfig {
     }
 
     pub fn effect_details_len(&self) -> usize {
-        if self.policy_input_version >= 7 {
-            super::shared_effects::detail_rows(self.policy_input_version)
+        if self.encoding_version >= 7 {
+            super::shared_effects::detail_rows(self.encoding_version)
                 * super::shared_effects::DETAIL_DIM
         } else {
             0
@@ -322,7 +322,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn effect_members_len(&self) -> usize {
-        if self.policy_input_version >= 7 {
+        if self.encoding_version >= 7 {
             super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
         } else {
             0
@@ -479,13 +479,13 @@ impl fmt::Display for ObservationEncodeError {
             Self::UnsupportedEffectExecutionInput(version) => write!(
                 f,
                 "policy input v{version} cannot represent effect execution; select v8 or later (recommended for new consumers: v{})",
-                super::observation_layout::RECOMMENDED_POLICY_INPUT_VERSION
+                super::observation_layout::RECOMMENDED_ENCODING_VERSION
             ),
             Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
             Self::UnsupportedLayerInput(version) => write!(
                 f,
                 "policy input v{version} cannot represent layer payload; select v8 or later (recommended for new consumers: v{})",
-                super::observation_layout::RECOMMENDED_POLICY_INPUT_VERSION
+                super::observation_layout::RECOMMENDED_ENCODING_VERSION
             ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
@@ -617,7 +617,7 @@ pub fn encode_into(
     config: &ObservationEncoderConfig,
     out: EncodedObservationMut<'_>,
 ) -> Result<(), ObservationEncodeError> {
-    validate_policy_input(obs, config.policy_input_version)?;
+    validate_policy_input(obs, config.encoding_version)?;
     validate_buffer_len(
         "semantic_cards",
         out.semantic_cards.len(),
@@ -749,10 +749,10 @@ pub fn encode_into(
         }
 
         if let Some(index) = action.continuation_index {
-            if config.policy_input_version < 2 || index >= obs.continuation.len() {
+            if config.encoding_version < 2 || index >= obs.continuation.len() {
                 return Err(ObservationEncodeError::Capacity {
                     field: "action continuation reference",
-                    capacity: if config.policy_input_version >= 2 {
+                    capacity: if config.encoding_version >= 2 {
                         obs.continuation.len()
                     } else {
                         0
@@ -831,7 +831,7 @@ pub fn encode_into(
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
     }
-    if config.policy_input_version >= 5 {
+    if config.encoding_version >= 5 {
         for (seat, player) in [&obs.agent, &obs.opponent].into_iter().enumerate() {
             let rows = decklist_rows(player);
             if rows.len() > config.max_cards_per_player {
@@ -929,9 +929,9 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
-    if config.policy_input_version >= 5 {
+    if config.encoding_version >= 5 {
         // Hosts may be listed after their attachments, so links follow indexing.
-        let ranks = timestamp_ranks(obs, config.policy_input_version >= 7);
+        let ranks = timestamp_ranks(obs, config.encoding_version >= 7);
         let link = |object: Option<i32>| {
             object
                 .and_then(|object| object_to_index.get(&object))
@@ -957,10 +957,10 @@ pub fn encode_into(
             &object_to_index,
             &ranks,
             out.facts,
-            config.policy_input_version >= 7,
-            config.policy_input_version >= 8,
+            config.encoding_version >= 7,
+            config.encoding_version >= 8,
         )?;
-        if config.policy_input_version >= 7 {
+        if config.encoding_version >= 7 {
             super::shared_effects::encode(
                 obs,
                 &object_to_index,
@@ -972,11 +972,11 @@ pub fn encode_into(
         }
     }
 
-    if config.policy_input_version >= 2 {
+    if config.encoding_version >= 2 {
         super::continuation::encode_into(
             &obs.continuation,
             obs.agent.player_index as usize,
-            config.policy_input_version,
+            config.encoding_version,
             &object_to_index,
             out.relations,
         )?;
@@ -1780,7 +1780,7 @@ mod tests {
             })
             .collect();
         let legacy = ObservationEncoderConfig {
-            policy_input_version: 5,
+            encoding_version: 5,
             ..Default::default()
         };
         assert!(matches!(
@@ -2088,7 +2088,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 2,
             policy_history: false,
-            policy_input_version: 4,
+            encoding_version: 4,
             ..ObservationEncoderConfig::default()
         };
 
@@ -2207,7 +2207,7 @@ mod tests {
             max_focus_objects: 2,
             max_events: 1,
             policy_history: false,
-            policy_input_version: 4,
+            encoding_version: 4,
             ..ObservationEncoderConfig::default()
         };
 

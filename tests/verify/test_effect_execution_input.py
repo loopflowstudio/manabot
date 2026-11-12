@@ -74,7 +74,7 @@ def test_real_fetch_search_keeps_frozen_input_admission_and_encoder_parity() -> 
         expected = ObservationSpace(
             ObservationConfig(policy_input_version=version)
         ).encode(observation)
-        actual = env.encode_observation(observation, policy_input_version=version)
+        actual = env.encode_observation(observation, encoding_version=version)
         for key, value in expected.items():
             np.testing.assert_array_equal(
                 actual[key], value, err_msg=f"v{version}: {key}"

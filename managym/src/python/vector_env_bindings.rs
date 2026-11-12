@@ -492,10 +492,10 @@ pub(super) fn input_buffer_config(
         if shared_count != 0 || naming {
             return Err(PyValueError::new_err("v7 requires relations"));
         }
-        config.policy_input_version = 1;
+        config.encoding_version = 1;
         return Ok(config);
     }
-    config.policy_input_version = match shape("relations")?[1] {
+    config.encoding_version = match shape("relations")?[1] {
         crate::agent::continuation::LEGACY_RELATION_DIM => 3,
         crate::agent::continuation::RELATION_DIM => 4,
         crate::agent::continuation::RELATION_DIM_V5 => {
@@ -528,12 +528,12 @@ pub(super) fn input_buffer_config(
             ))
         }
     };
-    if shared_count != 0 && config.policy_input_version < 7 {
+    if shared_count != 0 && config.encoding_version < 7 {
         return Err(PyValueError::new_err("v7 requires current relation width"));
     }
     if naming {
         // Naming composes the v8 layer layout with name and group-span rows.
-        if config.policy_input_version != 8 {
+        if config.encoding_version != 8 {
             return Err(PyValueError::new_err(
                 "v9 requires the v8 shared-effect layout",
             ));
@@ -541,7 +541,7 @@ pub(super) fn input_buffer_config(
         if shape("name_candidates")?[1] != crate::agent::observation_encoder::NAME_DIM_V9 {
             return Err(PyValueError::new_err("invalid name candidate width"));
         }
-        config.policy_input_version = 9;
+        config.encoding_version = 9;
     }
     Ok(config)
 }
@@ -553,7 +553,7 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     let shared_buffer = |name: &str, rows: usize, width: usize| -> PyResult<Option<Py<PyAny>>> {
-        if c.policy_input_version < 7 {
+        if c.encoding_version < 7 {
             return Ok(None);
         }
         Ok(Some(
@@ -561,7 +561,7 @@ fn read_observation_buffers(
         ))
     };
     Ok(ObservationBuffers {
-        name_candidates: if c.policy_input_version >= 9 {
+        name_candidates: if c.encoding_version >= 9 {
             Some(
                 require_numpy_array(
                     buffers,
@@ -574,7 +574,7 @@ fn read_observation_buffers(
         } else {
             None
         },
-        relations: if c.policy_input_version >= 2 {
+        relations: if c.encoding_version >= 2 {
             Some(
                 require_numpy_array(
                     buffers,
@@ -598,7 +598,7 @@ fn read_observation_buffers(
         )?,
         effect_details: shared_buffer(
             "effect_details",
-            crate::agent::shared_effects::detail_rows(c.policy_input_version),
+            crate::agent::shared_effects::detail_rows(c.encoding_version),
             crate::agent::shared_effects::DETAIL_DIM,
         )?,
         effect_members: shared_buffer(
@@ -606,7 +606,7 @@ fn read_observation_buffers(
             crate::agent::shared_effects::MEMBER_ROWS,
             crate::agent::shared_effects::MEMBER_DIM,
         )?,
-        facts: if c.policy_input_version >= 5 {
+        facts: if c.encoding_version >= 5 {
             Some(
                 require_numpy_array(
                     buffers,
@@ -630,7 +630,7 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        decklists: if c.policy_input_version >= 5 {
+        decklists: if c.encoding_version >= 5 {
             Some(
                 require_numpy_array(
                     buffers,

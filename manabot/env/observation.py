@@ -544,7 +544,7 @@ class ObservationEncoder:
             row[FACT_VALID_INDEX] = 1.0
             rows.append(row)
 
-        token = managym.learning_token_value
+        token = managym.catalog_token_value
         permanents = [*obs.agent_permanents, *obs.opponent_permanents]
         for perm in permanents:
             if perm.plus1_counters > 0:
@@ -775,7 +775,9 @@ class ObservationEncoder:
                     _reference(context_row, reference)
                     rows.append(context_row)
             if self.config.policy_input_version >= 8:
-                for ordinal, reference in enumerate(frame.effect_execution_references, 1):
+                for ordinal, reference in enumerate(
+                    frame.effect_execution_references, 1
+                ):
                     retained = row.copy()
                     retained[0], retained[22], retained[29] = 10, 1, ordinal
                     _reference(retained, reference)

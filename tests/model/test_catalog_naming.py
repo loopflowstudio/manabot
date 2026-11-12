@@ -133,7 +133,7 @@ def _command(frame: dict, offer: int, tag: str) -> str:
 def _assert_scalar_parity(env: managym.Env, space: ObservationSpace) -> dict:
     raw = env.observation_for_player(env.current_agent_index())
     reference = space.encode(raw)
-    native = env.encode_observation(raw, policy_input_version=9)
+    native = env.encode_observation(raw, encoding_version=9)
     into = space.encoder.allocate()
     env.encode_observation_into(raw, into)
     for key in reference:
@@ -171,7 +171,7 @@ def test_catalog_naming_v9_groups_then_names_with_scalar_parity_and_private_text
     assert not naming_root.observation_for_player(1).action_space.actions
     # Inputs without name identity see anonymous modal choices.
     for version in (6, 7, 8):
-        legacy = naming_root.encode_observation(raw, policy_input_version=version)
+        legacy = naming_root.encode_observation(raw, encoding_version=version)
         assert "name_candidates" not in legacy
         np.testing.assert_array_equal(
             legacy["actions"][: len(groups), ACTION_MODE_INDEX],

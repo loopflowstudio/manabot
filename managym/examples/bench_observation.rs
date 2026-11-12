@@ -171,7 +171,7 @@ fn encoded_digest(encoded: &EncodedObservation) -> String {
 
 fn main() {
     let config = ObservationEncoderConfig {
-        policy_input_version: if std::env::args().any(|arg| arg == "--legacy") {
+        encoding_version: if std::env::args().any(|arg| arg == "--legacy") {
             1
         } else {
             2

@@ -1,4 +1,4 @@
-//! Named policy-array columns shared by native writes and public discovery.
+//! Named observation-array columns shared by native writes and public discovery.
 //! Frozen prefixes retain their indices; legacy card/permanent validity replaces
 //! the first appended column. Capacities remain the caller's allocation contract.
 
@@ -417,14 +417,14 @@ columns! { relation {
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
 } }
 
-/// The newest policy-input version this engine encodes; layouts exist for 1..=it.
-pub const LATEST_POLICY_INPUT_VERSION: u8 = 9;
+/// The newest encoding version this engine supports; layouts exist for 1..=it.
+pub const LATEST_ENCODING_VERSION: u8 = 9;
 
 /// The version a new consumer with no saved configuration should pin, resolved
-/// once. It can trail `LATEST_POLICY_INPUT_VERSION` while a new version is
+/// once. It can trail `LATEST_ENCODING_VERSION` while a new version is
 /// unproven, and does not change implicit defaults or saved configurations.
-pub const RECOMMENDED_POLICY_INPUT_VERSION: u8 = 9;
-const _: () = assert!(RECOMMENDED_POLICY_INPUT_VERSION <= LATEST_POLICY_INPUT_VERSION);
+pub const RECOMMENDED_ENCODING_VERSION: u8 = 9;
+const _: () = assert!(RECOMMENDED_ENCODING_VERSION <= LATEST_ENCODING_VERSION);
 
 #[derive(Clone, Debug)]
 pub struct ArrayLayout {
@@ -477,11 +477,11 @@ pub fn observation_layout(
     version: u8,
     history: u8,
 ) -> Result<BTreeMap<String, ArrayLayout>, &'static str> {
-    if !(1..=LATEST_POLICY_INPUT_VERSION).contains(&version) {
-        return Err("unsupported policy input version; expected 1..9");
+    if !(1..=LATEST_ENCODING_VERSION).contains(&version) {
+        return Err("unsupported encoding version; expected 1..9");
     }
     if history > 1 {
-        return Err("unsupported policy history version; expected 0 or 1");
+        return Err("unsupported history version; expected 0 or 1");
     }
     let mut layout = BTreeMap::new();
     let player_columns = if version >= 5 {
@@ -691,10 +691,10 @@ mod tests {
 
     #[test]
     fn named_layout_preserves_every_frozen_width_and_column() {
-        for version in 1..=LATEST_POLICY_INPUT_VERSION {
+        for version in 1..=LATEST_ENCODING_VERSION {
             for history in 0..=1 {
                 let config = ObservationEncoderConfig {
-                    policy_input_version: version,
+                    encoding_version: version,
                     policy_history: history == 1,
                     ..Default::default()
                 };
@@ -760,8 +760,8 @@ mod tests {
 
     #[test]
     fn recommended_input_keeps_defaults_and_names_recovery() {
-        assert_eq!(RECOMMENDED_POLICY_INPUT_VERSION, 9);
-        assert_eq!(ObservationEncoderConfig::default().policy_input_version, 6);
+        assert_eq!(RECOMMENDED_ENCODING_VERSION, 9);
+        assert_eq!(ObservationEncoderConfig::default().encoding_version, 6);
         for error in [
             ObservationEncodeError::UnsupportedLayerInput(6),
             ObservationEncodeError::UnsupportedEffectExecutionInput(7),

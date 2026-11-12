@@ -36,7 +36,7 @@ def test_named_layout_matches_native_buffers_and_python_values(
         max_events=7,
     )
     space = ObservationSpace(config)
-    layout = managym.observation_layout(version, policy_history_version=history)
+    layout = managym.observation_layout(version, history_version=history)
     native = space.encoder.allocate()
     env.encode_observation_into(obs, native)
     reference = space.encode(obs)
@@ -82,7 +82,7 @@ def test_named_layout_distinguishes_tagged_rows_and_history() -> None:
     v4 = managym.observation_layout(4)
     v5 = managym.observation_layout(5)
     v7 = managym.observation_layout(7)
-    v9 = managym.observation_layout(9, policy_history_version=1)
+    v9 = managym.observation_layout(9, history_version=1)
     assert "permission" not in v4["agent_cards"]["columns"]
     assert v4["agent_cards"]["columns"]["valid"]["index"] == 40
     assert v5["agent_cards"]["columns"]["valid"]["index"] == 55
@@ -102,14 +102,14 @@ def test_named_layout_distinguishes_tagged_rows_and_history() -> None:
 
 @pytest.mark.parametrize("version", [-1, 0, 10, 256])
 def test_named_layout_rejects_unsupported_input(version: int) -> None:
-    with pytest.raises(ValueError, match="policy input version"):
+    with pytest.raises(ValueError, match="encoding version"):
         managym.observation_layout(version)
 
 
 @pytest.mark.parametrize("history", [-1, 2, 256])
 def test_named_layout_rejects_unsupported_history(history: int) -> None:
-    with pytest.raises(ValueError, match="policy history version"):
-        managym.observation_layout(9, policy_history_version=history)
+    with pytest.raises(ValueError, match="history version"):
+        managym.observation_layout(9, history_version=history)
 
 
 def test_named_layout_discovery_is_torch_free() -> None:
@@ -126,7 +126,7 @@ class NoTorch(importlib.abc.MetaPathFinder):
             raise AssertionError('layout discovery imported Torch')
 sys.meta_path.insert(0, NoTorch())
 from manabot import managym
-assert managym.recommended_policy_input_version() == 9
+assert managym.recommended_encoding_version() == 9
 assert managym.observation_layout(9)['agent_permanents']['columns']['definition']['index'] == 24
 assert 'torch' not in sys.modules
 """,
@@ -142,7 +142,7 @@ assert 'torch' not in sys.modules
 def test_recommended_input_admits_payload_and_keeps_defaults(
     board: tuple[managym.Env, managym.Observation],
 ) -> None:
-    version = managym.recommended_policy_input_version()
+    version = managym.recommended_encoding_version()
     assert version == 9
     assert ObservationConfig().policy_input_version == 6
     assert ObservationConfig.from_checkpoint({}).policy_input_version == 1
@@ -160,3 +160,35 @@ def test_recommended_input_admits_payload_and_keeps_defaults(
     accepted = env.encode_observation(obs, version)
     assert (accepted["effect_details"][:, 0] >= 11).any()
     assert "name_candidates" in accepted
+
+
+def test_latest_encoding_version_bounds_layouts() -> None:
+    latest = managym.latest_encoding_version()
+    assert managym.recommended_encoding_version() <= latest
+    assert managym.observation_layout(latest)
+    with pytest.raises(ValueError, match="encoding version"):
+        managym.observation_layout(latest + 1)
+
+
+def test_deprecated_engine_names_warn_and_delegate(
+    board: tuple[managym.Env, managym.Observation],
+) -> None:
+    env, obs = board
+    with pytest.warns(DeprecationWarning, match="encoding_version"):
+        legacy = env.encode_observation(obs, policy_input_version=5)
+    current = env.encode_observation(obs, encoding_version=5)
+    assert legacy.keys() == current.keys()
+    for key in current:
+        np.testing.assert_array_equal(legacy[key], current[key])
+    with pytest.raises(TypeError, match="deprecated alias"):
+        env.encode_observation(obs, 5, policy_input_version=5)
+
+    aliases = {
+        "learning_catalog": managym.catalog_tokens,
+        "learning_token_value": managym.catalog_token_value,
+        "learning_record_names": managym.record_vocabulary,
+    }
+    for old, new in aliases.items():
+        args = ("Ally",) if old == "learning_token_value" else ()
+        with pytest.warns(DeprecationWarning, match=new.__name__):
+            assert getattr(managym, old)(*args) == new(*args)

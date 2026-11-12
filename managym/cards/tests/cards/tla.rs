@@ -2913,7 +2913,7 @@ fn assert_every_input_admits_effect_execution(s: &Scenario) {
     let obs = Observation::for_player(s.game(), PlayerId(0));
     for version in 1..=9 {
         let config = ObservationEncoderConfig {
-            policy_input_version: version,
+            encoding_version: version,
             ..Default::default()
         };
         assert!(

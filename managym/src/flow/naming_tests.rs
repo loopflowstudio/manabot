@@ -141,7 +141,7 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
     // Policy inputs: v9 encodes group spans at ordinary capacity; earlier
     // inputs see anonymous modal choices.
     let v9 = ObservationEncoderConfig {
-        policy_input_version: 9,
+        encoding_version: 9,
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };
@@ -154,7 +154,7 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         );
     }
     let v8 = ObservationEncoderConfig {
-        policy_input_version: 8,
+        encoding_version: 8,
         ..v9
     };
     assert!(encode(&obs, &v8).unwrap().name_candidates.is_empty());
@@ -347,7 +347,7 @@ fn catalog_naming_cost_attribution() {
     });
     let obs = Observation::for_player(&game, PlayerId(0));
     let config = ObservationEncoderConfig {
-        policy_input_version: 9,
+        encoding_version: 9,
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };

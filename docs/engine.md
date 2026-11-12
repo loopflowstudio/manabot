@@ -396,18 +396,20 @@ player may observe, and requires no policy-input version or checkpoint migration
 ## Encoded observations
 
 The native encoder turns an observation into NumPy arrays for a selected
-policy-input version. What each version adds, and how manabot's network reads
-it, is in [observations and the policy network](observation-and-model.md#policy-inputs).
+encoding version. manabot stores the same number as
+`ObservationConfig.policy_input_version`, because there the arrays are its
+policy's input. What each version adds, and how manabot's network reads it, is
+in [observations and the policy network](observation-and-model.md#policy-inputs).
 
 ### Reading arrays by name
 
 To read a permanent's card definition without hard-coding column 24, select an
-input version and ask the native API for its layout:
+encoding version and ask the native API for its layout:
 
 ```python
 from manabot import managym
 
-version = managym.recommended_policy_input_version()
+version = managym.recommended_encoding_version()
 layout = managym.observation_layout(version)
 definition = layout["agent_permanents"]["columns"]["definition"]
 print(version, definition["index"], definition["kind"])
@@ -426,7 +428,7 @@ observation, info = game.reset([
     managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
     managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
 ])
-arrays = game.encode_observation(observation, policy_input_version=version)
+arrays = game.encode_observation(observation, encoding_version=version)
 valid = arrays["agent_permanents_valid"].astype(bool)
 references = arrays["agent_permanents"][valid, definition["index"]]
 definition_ids = [int(reference) - 1 for reference in references if reference != 0]
@@ -437,9 +439,9 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(policy_input_version, *, policy_history_version=0)` returns
+`observation_layout(encoding_version, *, history_version=0)` returns
 a mapping keyed by the encoder's array names. It requires an explicit supported
-input version (1–9). Each array describes its `axes`, `shape` and stored `dtype`;
+encoding version, 1 to `managym.latest_encoding_version()`. Each array describes its `axes`, `shape` and stored `dtype`;
 a `None` extent in `shape` is a caller-selected capacity, not a default. The seat axis
 is viewer-relative (agent first, opponent second). Feature arrays have a
 `columns` mapping keyed by column name. Each column gives its
@@ -463,17 +465,17 @@ not a blanket normalization to apply to every column.
 
 The layout comes from the native encoder's layout authority, for the selected
 version, without starting a game or importing Torch. It includes only that
-version's arrays. `policy_history_version=1` selects the 12-column public-event
+version's arrays. `history_version=1` selects the 12-column public-event
 layout; the default 0 selects the legacy 7-column events. Unsupported versions
 raise `ValueError`. Row capacities are a separate allocation choice: use the
 selected `ObservationSpace.shapes` when allocating caller-owned buffers, and
 retain all its keys. A layout lookup neither allocates buffers nor changes an
 observation or saved configuration.
 
-### Choosing an input version
+### Choosing an encoding version
 
 For a new consumer with no saved configuration, use
-`managym.recommended_policy_input_version()` and save the returned integer with
+`managym.recommended_encoding_version()` and save the returned integer with
 the model and observation configuration. The recommendation is v9: it carries
 v8's composable layer and effect-execution programs plus card-name identities
 and group spans. V8 remains sufficient for those programs but presents naming
@@ -483,14 +485,14 @@ creating new work, not on each observation or checkpoint load.
 
 The recommendation does not change the existing defaults:
 `ObservationConfig()` and `Env.encode_observation(obs)` select v6. Choose
-explicitly for new work, for example
-`ObservationConfig(policy_input_version=version)`, and construct the collector
+explicitly for new work: pass `encoding_version=version` to the encoder, or in
+manabot `ObservationConfig(policy_input_version=version)`, and construct the collector
 and model with that same configuration. Keep saved versions and use
 `ObservationConfig.from_checkpoint` when loading; a missing saved version means
 v1. Changing a version changes the model's input contract, so never upgrade a
 checkpoint by editing its version or reshaping its weights.
 
-A legal game state can exceed an older input's representational vocabulary.
+A legal game state can exceed an older encoding's representational vocabulary.
 Admission errors identify the selected version and a version that represents
 the rejected payload, for example `policy input v6 cannot represent layer
 payload; select v8 or later (recommended for new consumers: v9)`. Preserve the
@@ -514,9 +516,21 @@ stable only within one installed build. Do not key a saved embedding table or
 dataset by raw IDs. Join each ID to a stable identity for the installed build:
 `managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
 `registry_name`, definition `key` and `scryfall_id` (back faces have a name but
-no key). For card features rather than identities, `managym.learning_catalog()`
-gives each definition's learning tokens, rows by `CardDefId`, derived from its
-rules text, so they describe cards a model has not seen.
+no key). For card features rather than identities, `managym.catalog_tokens()`
+gives each definition's tokenized rules text, rows by `CardDefId`, so the
+tokens describe cards a model has not seen.
+
+### Deprecated names
+
+Engine names describe what managym produces. These earlier spellings, named for
+manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
+
+| Deprecated | Use |
+|---|---|
+| `Env.encode_observation(obs, policy_input_version=…)` | `encoding_version=…` |
+| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
+| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
+| `managym.learning_record_names()` | `managym.record_vocabulary()` |
 
 ## Cards as programs
 
