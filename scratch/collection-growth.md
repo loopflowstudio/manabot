@@ -121,6 +121,7 @@ with limitations, inventories and rental accounting once execution is possible).
 - Compress 2026-11-12: `report_collection_growth.py` shares one phase/RSS series
   helper; regenerated `summary.json`, `phases.png`, `growth.png` byte-identical.
   Frozen comparison reader (`e9adf766…`, bound by `reader-erratum.json`) untouched.
+  A second compress pass found no code change since `db3298be8` and nothing to reduce.
 
 ## Docs
 
