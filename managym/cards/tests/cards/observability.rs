@@ -20,7 +20,9 @@ use crate::support::{
     inspect::{card_of, library_card},
     play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
 };
-use managym::agent::observation_layout::{action, card, fact, permanent, player, relation};
+use managym::agent::observation_layout::{
+    action, card, fact, permanent, player, relation, turn_state,
+};
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
@@ -36,8 +38,7 @@ use managym::{
         },
         observation_encoder::{
             encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM,
-            PERMANENT_DIM, PLAYER_DIM, TURN_STATE_DIM, TURN_STATE_LIFE_LOST_INDEX,
-            TURN_STATE_NONARTIFACT_MANA_INDEX, TURN_STATE_SPELLS_CAST_INDEX,
+            PERMANENT_DIM, PLAYER_DIM, TURN_STATE_DIM,
         },
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -2757,7 +2758,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         no_maximum_hand_size => [column(Player, player::NO_MAXIMUM_HAND_SIZE)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
-        spells_cast => [column(PlayerTurnState, TURN_STATE_SPELLS_CAST_INDEX)],
+        spells_cast => [column(PlayerTurnState, turn_state::SPELLS_CAST)],
         extra_turns => [column(Player, player::EXTRA_TURNS)],
         additional_combats => [column(Player, player::ADDITIONAL_COMBATS)],
     }));
@@ -2767,7 +2768,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         land_entered => [column(Player, player::LAND_ENTERED)],
         cards_drawn => [column(Player, player::CARDS_DRAWN)],
         bent => [Columns(Player, player::BENT_WATER, 4)],
-        life_lost => [column(PlayerTurnState, TURN_STATE_LIFE_LOST_INDEX)],
+        life_lost => [column(PlayerTurnState, turn_state::LIFE_LOST)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
@@ -2809,11 +2810,11 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
         abilities => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
-        except_nonartifact_spells => [Columns(PlayerTurnState, TURN_STATE_NONARTIFACT_MANA_INDEX, 6)],
+        except_nonartifact_spells => [Columns(PlayerTurnState, turn_state::NONARTIFACT_MANA_WHITE, 6)],
         mana => [
             Columns(Player, player::RESTRICTED_LESSON_WHITE, 18),
             Columns(Player, player::LESSON_MANA_WHITE, 6),
-            Columns(PlayerTurnState, TURN_STATE_NONARTIFACT_MANA_INDEX, 6),
+            Columns(PlayerTurnState, turn_state::NONARTIFACT_MANA_WHITE, 6),
         ],
     }));
     fields.extend(encoding!(CardTypeData {
@@ -4630,11 +4631,11 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
     assert_eq!(refusal(&s), Some("life lost this turn"));
     let row = encoded(&s).player_turn_state;
-    assert_eq!(row[TURN_STATE_LIFE_LOST_INDEX], 0.0);
-    assert_eq!(row[TURN_STATE_DIM + TURN_STATE_LIFE_LOST_INDEX], 3.0 / 20.0);
+    assert_eq!(row[turn_state::LIFE_LOST], 0.0);
+    assert_eq!(row[TURN_STATE_DIM + turn_state::LIFE_LOST], 3.0 / 20.0);
     // Spells cast this turn, per seat; v9 does not refuse it.
-    assert_eq!(row[TURN_STATE_SPELLS_CAST_INDEX], 0.1);
-    assert_eq!(row[TURN_STATE_DIM + TURN_STATE_SPELLS_CAST_INDEX], 0.0);
+    assert_eq!(row[turn_state::SPELLS_CAST], 0.1);
+    assert_eq!(row[TURN_STATE_DIM + turn_state::SPELLS_CAST], 0.0);
 
     // A graveyard card put there from the battlefield, read by Brought Back
     // in the viewer's hand.
@@ -4673,5 +4674,5 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
         Some("mana that can't be spent to cast nonartifact spells")
     );
     let row = encoded(&s).player_turn_state;
-    assert_eq!(row[TURN_STATE_NONARTIFACT_MANA_INDEX + 5], 0.1);
+    assert_eq!(row[turn_state::NONARTIFACT_MANA_COLORLESS], 0.1);
 }

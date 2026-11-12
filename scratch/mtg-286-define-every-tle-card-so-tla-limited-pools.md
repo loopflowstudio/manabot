@@ -178,16 +178,12 @@ schema and protocol 16 passed; rebuilt cp313 extension (atomic); pytest
 `test_experience_protocol` 99 passed; schedule recovery, server, decklist
 disclosure 19 passed. Academy vitest/svelte-check not run (no `node_modules`).
 
-## Remaining implement work: v10 in the named layout
+## v10 in the named layout (done)
 
-Main's `managym.observation_layout(*, policy_history)` (`agent/observation_layout.rs`)
-lists only v9 buffers, so v10's `player_turn_state` / `card_turn_state` have no
-published names; their columns are bare `TURN_STATE_*` constants in
-`observation_encoder.rs`. Move them to a `columns! { turn_state { .. } }` module
-(life_lost /20, spells_cast /10, six nonartifact-restricted mana /10), add a
-`turn_state` argument mirroring `ObservationEncoderConfig.turn_state`, and extend
-`tests/env/test_named_observation_layout.py` to v10 (keys equal native, Python
-and `ObservationSpace.shapes`). Rebuild cp313 after.
+`observation_layout::turn_state` names the eight `player_turn_state` columns;
+`managym.observation_layout(*, policy_history, turn_state)` publishes both v10
+buffers. Check: named-layout, input-v10 and parity pytest 35 passed; debug
+`cards` 684 passed; cp313 rebuilt and swapped atomically.
 
 ## Acceptance checks (gate)
 

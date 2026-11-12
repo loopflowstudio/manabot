@@ -15,13 +15,18 @@ fn value_dict<'py>(py: Python<'py>, layout: &ValueLayout) -> PyResult<Bound<'py,
 /// Column names, value encodings and fixed extents of each encoded array.
 ///
 /// Keys are the encoder's array names; `policy_history` selects the public
-/// history rows of `events`. A `None` extent is a caller-selected capacity.
+/// history rows of `events`; `turn_state` adds the input v10
+/// `player_turn_state` and `card_turn_state` arrays. A `None` extent is a caller-selected capacity.
 /// Seats are viewer-relative. No game or buffer is created.
 #[pyfunction]
-#[pyo3(signature = (*, policy_history=false))]
-fn observation_layout(py: Python<'_>, policy_history: bool) -> PyResult<PyObject> {
+#[pyo3(signature = (*, policy_history=false, turn_state=false))]
+fn observation_layout(
+    py: Python<'_>,
+    policy_history: bool,
+    turn_state: bool,
+) -> PyResult<PyObject> {
     let out = PyDict::new_bound(py);
-    for (key, array) in native_layout::observation_layout(policy_history) {
+    for (key, array) in native_layout::observation_layout(policy_history, turn_state) {
         let value = PyDict::new_bound(py);
         value.set_item("axes", array.axes)?;
         value.set_item("shape", array.shape)?;

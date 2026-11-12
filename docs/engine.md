@@ -439,7 +439,7 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(*, policy_history=False)` returns a mapping keyed by the
+`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
 encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
@@ -456,7 +456,9 @@ without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public
 history rows of `events` instead of the 7-column raw events; public history is
 bounded to 32 rows, even though its allocated event capacity is selected
-separately.
+separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
+`life_lost`, `spells_cast`, then `nonartifact_mana_white` through
+`nonartifact_mana_colorless`) and `card_turn_state`.
 
 Read the stored encoding before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.

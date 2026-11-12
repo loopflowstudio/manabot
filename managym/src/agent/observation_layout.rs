@@ -47,6 +47,11 @@ impl ValueLayout {
         "Spend-restricted mana admitting this subtype / 10; subtype totals can overlap",
         "nonnegative; no fixed bound",
     );
+    const NONARTIFACT_MANA: Self = Self::new(
+        "count",
+        "Mana of this color that can't be spent to cast nonartifact spells / 10",
+        "nonnegative; no fixed bound",
+    );
     const NUMBER_TENTHS: Self = Self::new("number", "Value / 10", "signed; no fixed bound");
     const DEFINITION: Self = Self::new(
         "id",
@@ -158,6 +163,18 @@ columns! { player {
     70: BENT_AIR => ("bent_air", ValueLayout::FLAG),
     71: EXTRA_TURNS => ("extra_turns", ValueLayout::COUNT),
     72: ADDITIONAL_COMBATS => ("additional_combats", ValueLayout::COUNT),
+} }
+
+// Input v10 player turn state, one row per seat (agent first).
+columns! { turn_state {
+    0: LIFE_LOST => ("life_lost", ValueLayout::new("count", "Life lost this turn / 20", "nonnegative; no fixed bound")),
+    1: SPELLS_CAST => ("spells_cast", ValueLayout::new("count", "Spells cast this turn / 10", "nonnegative; no fixed bound")),
+    2: NONARTIFACT_MANA_WHITE => ("nonartifact_mana_white", ValueLayout::NONARTIFACT_MANA),
+    3: NONARTIFACT_MANA_BLUE => ("nonartifact_mana_blue", ValueLayout::NONARTIFACT_MANA),
+    4: NONARTIFACT_MANA_BLACK => ("nonartifact_mana_black", ValueLayout::NONARTIFACT_MANA),
+    5: NONARTIFACT_MANA_RED => ("nonartifact_mana_red", ValueLayout::NONARTIFACT_MANA),
+    6: NONARTIFACT_MANA_GREEN => ("nonartifact_mana_green", ValueLayout::NONARTIFACT_MANA),
+    7: NONARTIFACT_MANA_COLORLESS => ("nonartifact_mana_colorless", ValueLayout::NONARTIFACT_MANA),
 } }
 
 columns! { card {
@@ -493,8 +510,10 @@ fn fact_row_kind(kind: FactKind) -> &'static str {
 }
 
 /// Every array `encode` writes, keyed by its buffer name, without allocating
-/// game buffers. `policy_history` selects the public history rows of `events`.
-pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout> {
+/// game buffers. `policy_history` selects the public history rows of `events`;
+/// `turn_state` adds the input v10 turn-state buffers, as
+/// `ObservationEncoderConfig::turn_state` does.
+pub fn observation_layout(policy_history: bool, turn_state: bool) -> BTreeMap<String, ArrayLayout> {
     let mut layout = BTreeMap::new();
     for side in ["agent", "opponent"] {
         for (suffix, axis, capacity, columns) in [
@@ -608,6 +627,25 @@ pub fn observation_layout(policy_history: bool) -> BTreeMap<String, ArrayLayout>
         "name_candidates".into(),
         ArrayLayout::features(&["action"], &[None], name::COLUMNS),
     );
+    if turn_state {
+        layout.insert(
+            "player_turn_state".into(),
+            ArrayLayout::features(&["viewer_relative_seat"], &[Some(2)], turn_state::COLUMNS),
+        );
+        layout.insert(
+            "card_turn_state".into(),
+            ArrayLayout::elements(
+                &["viewer_relative_seat", "card"],
+                &[Some(2), None],
+                "float32",
+                ValueLayout::new(
+                    "flag",
+                    "1 for a graveyard card put there from the battlefield this turn; rows align with semantic_cards",
+                    "0 or 1",
+                ),
+            ),
+        );
+    }
     layout
 }
 
@@ -621,12 +659,15 @@ mod tests {
 
     #[test]
     fn named_layout_matches_every_encoder_width() {
-        for policy_history in [false, true] {
+        for (policy_history, turn_state) in [(false, false), (true, false), (true, true)] {
             let config = ObservationEncoderConfig {
                 policy_history,
+                turn_state,
                 ..Default::default()
             };
-            let layout = observation_layout(policy_history);
+            let layout = observation_layout(policy_history, turn_state);
+            assert_eq!(layout.contains_key("player_turn_state"), turn_state);
+            assert_eq!(layout.contains_key("card_turn_state"), turn_state);
             for array in layout.values() {
                 assert_eq!(array.axes.len(), array.shape.len());
                 let names: std::collections::BTreeSet<_> =
@@ -668,6 +709,13 @@ mod tests {
                 config.cards_len(),
                 config.max_cards_per_player * layout["agent_cards"].columns.len()
             );
+            if turn_state {
+                assert_eq!(
+                    config.player_turn_state_len(),
+                    2 * layout["player_turn_state"].columns.len()
+                );
+                assert_eq!(turn_state::WIDTH, 8);
+            }
             assert_eq!(
                 config.relations_len(),
                 super::super::continuation::RELATION_ROWS * relation::WIDTH

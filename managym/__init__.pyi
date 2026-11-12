@@ -23,13 +23,16 @@ class ObservationArrayLayout(TypedDict):
     row_kinds: dict[int, str]
     element: NotRequired[ObservationValueLayout]
 
-def observation_layout(*, policy_history: bool = False) -> dict[str, ObservationArrayLayout]:
+def observation_layout(
+    *, policy_history: bool = False, turn_state: bool = False
+) -> dict[str, ObservationArrayLayout]:
     """Column names, value encodings and fixed extents of each encoded array.
 
     Keys match `encode_observation` and the vector env buffers; a None extent
     is a caller-selected capacity. `policy_history` selects the public history
-    rows of `events` instead of raw events. Seats are viewer-relative. No game
-    or buffer is created.
+    rows of `events` instead of raw events; `turn_state` adds policy input
+    v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
+    No game or buffer is created.
     """
 
 class PoolDefinition(TypedDict):

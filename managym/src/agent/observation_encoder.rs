@@ -1,5 +1,5 @@
 use super::observation_layout::{
-    action, card, decklist, event, fact, known_hand, name, permanent, player,
+    action, card, decklist, event, fact, known_hand, name, permanent, player, turn_state,
 };
 
 use std::{
@@ -132,14 +132,10 @@ pub const DECKLIST_DIM: usize = decklist::WIDTH;
 
 // Input v10 adds turn state v9 has no place for, in two buffers whose
 // presence selects it. `player_turn_state` has one row per seat (agent
-// first): life lost this turn / 20, spells cast this turn / 10, then mana
-// that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10.
+// first), columns named by `observation_layout::turn_state`.
 // `card_turn_state` aligns with the seats' card rows like `semantic_cards`:
 // 1 for a graveyard card put there from the battlefield this turn.
-pub const TURN_STATE_LIFE_LOST_INDEX: usize = 0;
-pub const TURN_STATE_SPELLS_CAST_INDEX: usize = 1;
-pub const TURN_STATE_NONARTIFACT_MANA_INDEX: usize = 2;
-pub const TURN_STATE_DIM: usize = TURN_STATE_NONARTIFACT_MANA_INDEX + 6;
+pub const TURN_STATE_DIM: usize = turn_state::WIDTH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
@@ -857,15 +853,15 @@ fn encode_turn_state(
     .enumerate()
     {
         let row = &mut players[seat * TURN_STATE_DIM..(seat + 1) * TURN_STATE_DIM];
-        row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost as f32 / 20.0;
-        row[TURN_STATE_SPELLS_CAST_INDEX] = player.spells_cast as f32 / 10.0;
+        row[turn_state::LIFE_LOST] = player.turn_history.life_lost as f32 / 20.0;
+        row[turn_state::SPELLS_CAST] = player.spells_cast as f32 / 10.0;
         for class in player
             .restricted_mana
             .iter()
             .filter(|class| class.except_nonartifact_spells)
         {
             for slot in 0..6 {
-                row[TURN_STATE_NONARTIFACT_MANA_INDEX + slot] += class.mana[slot] as f32 / 10.0;
+                row[turn_state::NONARTIFACT_MANA_WHITE + slot] += class.mana[slot] as f32 / 10.0;
             }
         }
         for (slot, card) in seat_cards.iter().enumerate() {
