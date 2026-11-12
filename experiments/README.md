@@ -11,7 +11,7 @@ built from [`manabot.recipes.builders`](../manabot/recipes/builders.py), and
 anything only it needs to run and report. `manabot/` keeps the reusable
 instruments.
 
-| module | recipes (`--regime-name`) | runs and reports |
+| module | recipes (`--recipe`) | runs and reports |
 | --- | --- | --- |
 | [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
@@ -32,9 +32,9 @@ uv run etude launch experiments/seat_comparison.py --revision COMMIT --cohort se
 ```
 
 A file defining `report()` or `eval(state)` is an Etude experiment, named for
-its stem. Its training runs track under that stem (`TrainingJob.experiment`),
-so `etude eval` and `etude report` find them; Etude's launcher does not pass
-the name itself yet.
+its stem. Etude tells each run it launches from the file that stem, and the
+recipe's `track` records the run under it, so `etude eval` and `etude report`
+find them.
 
 | file | `runs()` | `eval(state)` | `report()` |
 | --- | --- | --- | --- |

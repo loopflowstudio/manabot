@@ -96,7 +96,7 @@ including semantic-kernel conformance, and focused browser interactions. Also:
 
 - `uv run --extra dev pytest tests/semantic/test_elemental_world.py -q`
   for Elemental roster or training-admission changes; its PPO smoke reloads the
-  final checkpoint written by the recipe's `execute_regime` after tracking closes.
+  final checkpoint the recipe's loop writes.
 - `uv run pytest tests/academy/test_choice_navigation.py -q`: browser coverage
   replays only two of its retained positions. Bind refreshed positions to a new
   world file and retain prior evidence.
@@ -536,7 +536,7 @@ In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 
-`--regime-name`, experiment drivers and data-ledger tools need a
+Experiment recipes (`--recipe <experiment>`), experiment drivers and data-ledger tools need a
 source checkout. Never change a running experiment's pinned source to install a
 release.
 

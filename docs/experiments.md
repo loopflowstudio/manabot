@@ -179,7 +179,7 @@ bounds additive learner plus evaluator time. The full monitoring allocation
 is reserved before each learner; jobs that do not fit stay pending rather than
 shrink. Failed learners keep their exported checkpoints; stopped evaluations
 are not retried; resume grants no extra budget. `active_runtime=True` requires
-the [current-game recovery policy](training.md#current-game-recovery) on every
+the [current-game recovery policy](training.md#what-resume-does-not-promise) on every
 learner. A `pause.request` file in the output directory requests a pause at
 the next learning boundary.
 

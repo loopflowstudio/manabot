@@ -179,12 +179,13 @@ and materialization; `manabot.belief` owns probability over that domain. A
 query never reveals whether the actual hidden hand satisfies it, and empty
 support is an explicit result.
 
-**Training is declared data.** A `TrainingRegime` (one module per experiment
-under `experiments/`) names the world, decks, model and ordered stages; one
-runner executes it, writes world-bound raw and EMA checkpoints, records every
-attempt in `VerifyStore`, and ships metrics through Etude. Regimes refuse
-belief inputs; the trained model sees the current observation only
-([training](docs/training.md)).
+**A recipe is a function.** An update learns from one batch, a loop keeps
+playing and updating until it is done, and a recipe calls our loops with our
+settings. A loop saves its learner atomically and resumes from that file when
+it is run again, and writes world-bound raw and EMA checkpoints. Etude
+launches, tracks, retries and evaluates a recipe; nothing else runs it.
+Self-play refuses belief inputs; the trained model sees the current
+observation only ([training](docs/training.md)).
 
 **Evaluation never promotes.** A player is an immutable `PlayerRegistration`;
 a rating belongs to one `EvaluationKey` (world, content suite, viewer
@@ -218,12 +219,12 @@ These exist and run, and none of them is on the training path today.
   hidden-hand domain; `manabot.belief` puts probability on it: `BeliefState`
   over one `PossibleWorldSpace`, a tracker fed by viewer observations, and the
   `AutoregressiveBeliefSampler`, which learns opponent hand counts from a
-  frozen policy's games. The `collect_belief` and `train_belief` stages fit it
-  on an immutable dataset (`uv run manabot train --regime-name belief_sampler
-  --seed 421 --out .runs/belief-pilot` is the bounded pilot), and
+  frozen policy's games. The `collect_belief` and `train_belief` steps fit it
+  on an immutable dataset (`uv run manabot train --recipe belief --seed 421
+  --out .runs/belief-pilot` is the bounded pilot), and
   `python -m manabot.reports.belief` scores a sampler by held-out joint NLL,
   Brier and calibration. Consumers are search players and a demo seam only;
-  `ActorCritic` has an optional belief channel that regimes reject, and
+  `ActorCritic` has an optional belief channel that self-play rejects, and
   Academy's live belief tracking was removed. Detail:
   [search-and-beliefs.md at 055dddab1](https://github.com/loopflowstudio/manabot/blob/055dddab1/docs/search-and-beliefs.md).
 - **Academy Study** (`academy/study_branch.py`, the replay page) forks a
@@ -358,11 +359,12 @@ CPU. `--device cpu|mps|cuda` overrides local selection; baseline accepts only
 CUDA or MPS. MPS is never selected automatically: it was not faster than CPU in
 our measurements. MPS training uses float32 and requires Torch 2.15 or newer.
 This makes no speed or strength claim.
-Training recipes are typed *regimes* composed in Python, one module per
-current experiment in [experiments/](experiments/), from reusable parts in
-[manabot/recipes/builders.py](manabot/recipes/builders.py). The current GPU
-baseline is
-`uv run manabot train --regime-name batched_baseline --out .runs/batched/run`.
+Training recipes are Python functions: ours in [manabot/recipes/](manabot/recipes/),
+built from the settings in
+[manabot/recipes/builders.py](manabot/recipes/builders.py), and one module per
+current experiment in [experiments/](experiments/). The current recipe is
+`uv run manabot train --recipe elemental --seed 197 --out .runs/elemental`;
+run the same command again to resume it.
 [docs/training.md](docs/training.md) covers running, monitoring and recovering
 runs, and [manabot/README.md](manabot/README.md) covers the package.
 
@@ -414,7 +416,7 @@ know and where the code lives.
 | [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
 | [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
-| [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
+| [training.md](docs/training.md) | Running training: recipes, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
 | [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |
 | [development.md](docs/development.md) | Environment, validation by change area, CI, releases, clean-machine play, retained evidence |

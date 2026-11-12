@@ -2,18 +2,23 @@
 
 import importlib
 import inspect
+import os
 from pathlib import Path
 import pkgutil
 from typing import Literal, Optional, Sequence
 
+import torch
 import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
 from manabot.infra.config import MatchConfig
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
+from manabot.recipes.belief_sampler import BeliefConfig, belief
+from manabot.recipes.elemental import ElementalConfig, elemental
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
+from manabot.training.loops.self_play import Stopped
 from manabot.training.regime import TrainingRegime
 import managym
 
@@ -64,13 +69,58 @@ def named_regime(name: str) -> TrainingRegime:
     return regime
 
 
+# Recipes written as functions over a self-play loop (`manabot.recipes`).
+LOOP_RECIPES = ("elemental", "belief")
+
+
+def _run_loop_recipe(
+    name: str,
+    *,
+    seed: int | None,
+    steps: int | None,
+    device: Literal["cpu", "mps", "cuda"] | None,
+    out: str | None,
+) -> None:
+    """Call a loop recipe with its default config; rerunning resumes `--out`."""
+    chosen = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    config = ElementalConfig() if name == "elemental" else BeliefConfig()
+    if seed is not None:
+        config.seed = seed
+    if steps is not None:
+        config.updates = steps
+    settings = (
+        config.self_play if isinstance(config, ElementalConfig) else config.policy
+    )
+    settings.device = chosen
+    directory = out or f".runs/{name}-{config.seed}"
+    # The launch names the run's directory and experiment; here the CLI is the launch.
+    launch = {"ETUDE_OUT": directory, "ETUDE_EXPERIMENT": name}
+    previous = {key: os.environ.get(key) for key in launch}
+    os.environ.update(launch)
+    try:
+        if isinstance(config, ElementalConfig):
+            elemental(config)
+        else:
+            belief(config)
+    except Stopped as stopped:
+        typer.echo(f"{name}: {stopped}", err=True)
+        raise typer.Exit(1) from stopped
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+    typer.echo(f"{name}: completed in {directory}")
+
+
 @app.command("train")
 def train_command(
     preset: Optional[str] = typer.Option(
         None, help="Retired; select --recipe or --regime"
     ),
     recipe: str | None = typer.Option(
-        None, help="Training recipe: local (default) or baseline"
+        None, help="Training recipe: local (default), baseline, elemental or belief"
     ),
     learning_seats: Literal["one", "both"] | None = typer.Option(
         None, help="Learning seats for local/baseline recipes (default: both)"
@@ -126,8 +176,10 @@ def train_command(
     if recipe is None and regime is None and regime_name is None:
         recipe = "local"
     if recipe is not None:
-        if recipe not in {"local", "baseline"}:
-            raise typer.BadParameter("unknown recipe; available: local, baseline")
+        if recipe not in {"local", "baseline", *LOOP_RECIPES}:
+            raise typer.BadParameter(
+                "unknown recipe; available: local, baseline, " + ", ".join(LOOP_RECIPES)
+            )
         if any(
             value is not None
             for value in (
@@ -143,6 +195,14 @@ def train_command(
             raise typer.BadParameter(
                 "--recipe cannot be combined with regime inputs or resume/cadence controls"
             )
+        if recipe in LOOP_RECIPES:
+            if seconds is not None or learning_seats is not None or bucketed_shapes:
+                raise typer.BadParameter(
+                    "--seconds, --learning-seats and --bucketed-shapes require "
+                    "local or baseline; configure loop recipes in Python"
+                )
+            _run_loop_recipe(recipe, seed=seed, steps=steps, device=device, out=out)
+            return
         if recipe == "local":
             result = run_local(
                 steps=LOCAL_STEPS if steps is None else steps,

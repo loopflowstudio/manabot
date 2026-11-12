@@ -18,6 +18,7 @@ from manabot.infra.config import (
     ValueAggregation,
 )
 from manabot.training.decks import UniformDecks
+from manabot.training.loops.self_play import SelfPlay, every
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -28,6 +29,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.state.game_errors import GameErrorPolicy
+import managym
 
 # Semantic pack of the selected Allies/Lessons matchup that current recipes train on.
 PACK = "ur-lessons-vs-gw-allies"
@@ -349,3 +351,59 @@ def value_outputs(
             name = f"{regime.id}-{output.replace('_', '-')}"
             result[name] = with_value_output(regime, id=name, output=output)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Self-play loop settings
+
+
+def elemental_self_play() -> SelfPlay:
+    """The current Elemental settings: damped-policy self-play over the ten decks.
+
+    Both seats learn, each game draws its pair uniformly from the authored
+    Elemental roster, and an engine failure ends one game within a 10% rolling
+    limit. Model, observation, learning and streams are the frozen
+    `elemental-long-183-v1` recipe's; the world is the installed one.
+    Milestones fall every 50 updates. CPU unless the caller changes `device`.
+    """
+    pack = "elemental-world-v2"
+    first, second = managym.authored_deck_keys(pack)[:2]
+    return SelfPlay(
+        match=MatchConfig.authored(pack, first, second).model_copy(
+            update={"content_pack": pack}
+        ),
+        observation=ObservationConfig(
+            max_cards_per_player=60,
+            max_permanents_per_player=40,
+            max_actions=64,
+            max_focus_objects=2,
+            max_events=32,
+        ),
+        model=ModelConfig(
+            semantic_pack=pack,
+            hidden_dim=64,
+            attention_layers=2,
+            num_attention_heads=4,
+        ),
+        learning=move_learning(),
+        behavior="current-self",
+        streams=256,
+        transitions=64,
+        learning_seats="both",
+        matchup_curriculum="elemental-uniform",
+        game_errors=GameErrorPolicy(
+            threshold=0.1, window=100, warmup=100, max_game_actions=40000
+        ),
+        milestones=every(50),
+    )
+
+
+def gray_ogre_self_play() -> SelfPlay:
+    """A tiny PPO self-play policy on the Gray Ogre matchup, for belief pilots."""
+    return SelfPlay(
+        match=gray_ogre_match(),
+        model=ModelConfig(hidden_dim=16, num_attention_heads=2),
+        learning=Learning(epochs=1, minibatches=1),
+        streams=2,
+        transitions=16,
+    )

@@ -524,11 +524,11 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 
 | Step | Code |
 | --- | --- |
-| Iteration loop, EMA, checkpoints | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
+| Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages | `transition_gae` in [`training/learning/returns.py`](../manabot/training/learning/returns.py) |
 | Value targets, loss, update | `_targets`, `damped_policy_loss`, `update_damped_iteration` in [`training/learning/damped_policy.py`](../manabot/training/learning/damped_policy.py) |
 | Filter | [`training/learning/selection.py`](../manabot/training/learning/selection.py) |
 | Magnet | [`training/learning/references.py`](../manabot/training/learning/references.py) |
-| Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
+| Defaults | `DampedPolicyLearning` in [`training/regime.py`](../manabot/training/regime.py), `SelfPlay` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |
