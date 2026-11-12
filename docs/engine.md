@@ -18,6 +18,7 @@ cross-package contract is in the
 - [Hand snapshots](#hand-snapshots)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
+- [Decks](#decks)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -521,6 +522,36 @@ to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and
 `--villain-deck-file` ([Academy](academy.md)).
+
+### TLA decks with TLE bonus-sheet cards
+
+TLA Limited decks containing Avatar: The Last Airbender Eternal (TLE) cards
+use the same importer, with no extra pack or flag:
+
+```python
+import managym
+
+decklist = managym.Decklist(
+    "1 Avatar Enthusiasts\n1 Scout's Warning\n17 Plains\n",
+    filename="tla-with-bonus-sheet.txt",
+)
+admitted, = managym.admit_decklists([("hero", decklist)])
+print(managym.check_decks([admitted.deck]))
+# [[]] — no admission issues
+```
+
+All TLE non-token cards belong to the world pool. This small example checks
+`development-v1` admission, not Limited construction or booster contents;
+use a complete deck for play.
+
+`managym.set_cards(["tla"])` selects definitions by their first-printing set.
+Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
+actual counted decklist against the world to include its bonus-sheet cards.
+
+For unknown names in `DeckImportError`, check spelling and the installed
+engine's definitions. Engine and checkpoint worlds must remain compatible;
+keep frozen runs on their recorded world. New card support does not expand
+saved training corpora or change their split assignments.
 
 ## What we know
 
