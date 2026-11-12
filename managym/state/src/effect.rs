@@ -102,6 +102,10 @@ pub enum Modification<N = i32> {
     /// cast as though it had flash (Scout's Warning). Casting any creature
     /// card ends every such record, whether or not it needed the timing.
     NextCreatureCastFlash,
+    /// Rules effect on a player: they skip every combat phase of their next
+    /// turn, additional ones included (CR 500.11). It ends in the cleanup step
+    /// of a turn that player takes.
+    SkipsCombatPhasesNextTurn,
     /// Layer 2 (CR 613.1b): the record's controller controls the object;
     /// when the record ends with the object still theirs, control returns
     /// to `previous`. Only resolutions create it (`Effect::GainControl`).
@@ -161,6 +165,7 @@ impl<N> Modification<N> {
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
+            Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
             Self::ControlChanged { previous } => Modification::ControlChanged {
                 previous: *previous,
             },
@@ -218,6 +223,7 @@ impl Modification {
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
             | Self::NextCreatureCastFlash
+            | Self::SkipsCombatPhasesNextTurn
             | Self::ControlChanged { .. }
             | Self::ModeChosen { .. }
             | Self::HasAbilitiesOfSource => return false,

@@ -7,7 +7,7 @@ use crate::{
         combat::CombatState,
         event::GameEvent,
         game::Game,
-        turn::{StepKind, TurnState},
+        turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
     state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind},
 };
@@ -173,8 +173,21 @@ impl Game {
         self.on_step_end(step);
         self.remember_controlled_hands();
         self.state.advance_step();
+        self.skip_combat_phases_if_required();
 
         None
+    }
+
+    /// A player skipping their combat phases passes from the precombat main
+    /// phase to the postcombat one, past any additional combat (CR 500.11).
+    fn skip_combat_phases_if_required(&mut self) {
+        while self.state.turn.current_phase_kind() == PhaseKind::Combat
+            && self.state.turn.current_step == 0
+            && self.skips_combat_phases(self.active_player())
+        {
+            self.state.turn.current_step = PHASE_STEPS[PhaseKind::Combat as usize].len() - 1;
+            self.state.advance_step();
+        }
     }
 
     /// Give the active player priority with no passes yet in the round, as

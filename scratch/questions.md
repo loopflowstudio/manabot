@@ -266,7 +266,7 @@ Musings and Animal Attendant are non-bonus. Plan rewritten to the 61-card scope.
 
 ## Seventh pass — 13 bonus cards, 2026-11-12 UTC
 
-Defined: Join the Dance, Dockside Extortionist, Blasphemous Act, Agent of
+Defined: Empty City Ruse, Join the Dance, Dockside Extortionist, Blasphemous Act, Agent of
 Treachery, Return of the Wildspeaker, Warstorm Surge, Noxious Gearhulk, Searing
 Blood, Rending Volley, Rites of Flourishing, Fevered Visions, Drannith
 Magistrate, Imprisoned in the Moon. Shells fetched by first-printing id through
@@ -300,8 +300,13 @@ so no `scryfall_id` exists for it. Both wait for a token-identity decision.
 Not run before commits: the `/verify` skill (it verifies a merged change and
 finishes the Task, so it does not fit mid-implementation checkpoints).
 
-Results (debug unless stated): full cards target 645 passed; `rules_tests` 169
+- Empty City Ruse's record applies while its player is active and ends at
+  their cleanup; created at sorcery speed it is always "their next turn". A
+  copy or flash grant during that player's own turn would wrongly apply at once.
+  The Academy note was added but no frontend check ran (gate).
+
+Results (debug unless stated): full cards target 646 passed; `rules_tests` 169
 passed (2 ignored); `conformance_tests` 2 passed; lib 192 passed; fmt applied.
 Rebuilt cp313 extension (atomic replace); `check_tle_coverage.py --bonus-sheet`
-34 of 61, 27 missing, no other issues; pytest text observation, observation
+35 of 61, 26 missing, no other issues; pytest text observation, observation
 parity, TLE allocation and policy catalog 101 passed.

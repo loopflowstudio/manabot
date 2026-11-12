@@ -1045,6 +1045,9 @@ pub(super) fn continuous_description(
                 "the next creature card {subject} cast{this_turn} can be cast as though it had flash"
             )
         }
+        Modification::SkipsCombatPhasesNextTurn => {
+            format!("{subject}: skip all combat phases of the next turn")
+        }
         Modification::ControlChanged { .. } => {
             format!("You control {}{until}", subject.to_lowercase())
         }

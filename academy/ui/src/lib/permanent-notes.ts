@@ -51,6 +51,8 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return 'no maximum hand size';
     case 'NextCreatureCastFlash':
       return 'the next creature card cast can be cast as though it had flash';
+    case 'SkipsCombatPhasesNextTurn':
+      return 'skips all combat phases of their next turn';
     case 'ControlChanged':
       return `control changed from seat ${(effect.amount ?? 0) + 1}`;
     case 'ModeChosen':

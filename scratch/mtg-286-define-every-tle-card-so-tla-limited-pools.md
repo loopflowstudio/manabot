@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 34 of 61 defined,
-27 missing, no other issues (rebuilt extension, seventh pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 35 of 61 defined,
+26 missing, no other issues (rebuilt extension, seventh pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -53,7 +53,7 @@ Rules added on this branch, each with directed tests and observation parity
 - `Condition::AnyGraveyardAtLeast` (Visions of Beyond);
   `PlayerSelector::TriggeringPlayersOpponents` (Standstill).
 - Sheep creature subtype.
-- Seventh pass (13 cards; evidence in `scratch/questions.md`): Human token;
+- Seventh pass (14 cards; evidence in `scratch/questions.md`): Human token;
   `StaticAbility::CostsLessPerPermanentOnBattlefield`, `CantBeCountered`,
   `AdditionalLandPlayEachPlayer`, `OpponentsCastOnlyFromHand`;
   `Condition::ControlsUnownedAtLeast`, `CardsInHandAtLeast`;
@@ -62,12 +62,15 @@ Rules added on this branch, each with directed tests and observation parity
   `Destroy` answers `Condition::Moved`; `CardPredicate::colors_any`;
   `TriggerCondition::BeginningOfEachDrawStep`/`BeginningOfEachEndStep` with the
   active player as "that player"; an earlier incarnation of a real card is a
-  known damage source (a resolved spell's delayed trigger).
+  known damage source (a resolved spell's delayed trigger);
+  `Modification::SkipsCombatPhasesNextTurn` player record (Empty City Ruse),
+  skipped in `tick.rs`, ended at that player's cleanup, seen as a shared-effect
+  row with LLM text and Academy note.
 
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 27 bonus-sheet names by rule family
+## Remaining: 26 bonus-sheet names by rule family
 
 Grouping from the allocation ledger; each family lands with its cards.
 
@@ -78,7 +81,7 @@ Grouping from the allocation ledger; each family lands with its cards.
 | Cascade (new variant; keep `ExileUntilNonlandCastFree`) | Volcanic Torrent |
 | End the turn (turn/stack owner, cleanup, surviving delayed triggers) | Sundial of the Infinite |
 | Phasing and life lock (object presence, not exile; attachments, no leave/enter triggers) | Teferi's Protection |
-| Combat skip and requirements | Empty City Ruse, Taunting Challenge |
+| Combat requirements | Taunting Challenge |
 | Counter and zone-history triggers | Bloodchief Ascension, Dark Depths, Brought Back |
 | Cast-time costs (alternate exile cost, replicate, unearth, cumulative upkeep) | Force of Negation, Shattering Spree, Cityscape Leveler, Mystic Remora |
 | Scoped costs | Training Grounds (activated-cost reduction, floor one) |

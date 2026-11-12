@@ -213,6 +213,20 @@ impl Game {
         });
     }
 
+    /// Whether `player` skips the combat phases of this turn of theirs.
+    pub(crate) fn skips_combat_phases(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::SkipsCombatPhasesNextTurn)
+    }
+
+    /// The turn `player` skipped combat in is over, so its records end.
+    pub(crate) fn end_skipped_combat_phases(&mut self, player: PlayerId) {
+        self.end_effects(|effect| {
+            effect.affects_player(player)
+                && effect.modification == Modification::SkipsCombatPhasesNextTurn
+        });
+    }
+
     /// CR 514.2: "until end of turn" effects end in the cleanup step.
     pub(crate) fn end_turn_effects(&mut self) {
         self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn);

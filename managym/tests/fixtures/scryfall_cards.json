@@ -5519,5 +5519,17 @@
     "colors": [
       "U"
     ]
+  },
+  "Empty City Ruse": {
+    "name": "Empty City Ruse",
+    "mana_cost": "{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target opponent skips all combat phases of their next turn.",
+    "colors": [
+      "W"
+    ]
   }
 }

@@ -368,6 +368,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "NextCreatureCastFlash": (
             "the next creature card cast can be cast as though it had flash"
         ),
+        "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (

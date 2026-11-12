@@ -220,6 +220,7 @@ impl Game {
     /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        self.end_skipped_combat_phases(self.active_player());
         if self
             .state
             .delayed_triggers

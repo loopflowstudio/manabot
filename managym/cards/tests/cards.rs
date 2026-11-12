@@ -78,6 +78,8 @@ mod ori;
 mod pls;
 #[path = "cards/por.rs"]
 mod por;
+#[path = "cards/ptk.rs"]
+mod ptk;
 #[path = "cards/rav.rs"]
 mod rav;
 #[path = "cards/roe.rs"]

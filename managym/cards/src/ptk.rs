@@ -1,11 +1,15 @@
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes},
+    effect::{EffectDuration, Modification},
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![corrupt_court_official()]
+    vec![corrupt_court_official(), empty_city_ruse()]
 }
 
 fn corrupt_court_official() -> CardDefinition {
@@ -28,6 +32,28 @@ fn corrupt_court_official() -> CardDefinition {
             effects: vec![Effect::Discard {
                 what: ObjectSelector::Target(TargetSpec::Opponent),
                 count: 1,
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn empty_city_ruse() -> CardDefinition {
+    let text_box = "Target opponent skips all combat phases of their next turn.";
+    CardDefinition {
+        key: "ptk.empty_city_ruse",
+        scryfall_id: "4d37c84c-80e5-453d-bd2e-4f77ff864c89",
+        name: "Empty City Ruse".into(),
+        mana_cost: Some(ManaCost::parse("{W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        targeting: vec![TargetRequirement::one(TargetSpec::Opponent)],
+        spell_effects: vec![Effect::ForPlayer {
+            player: PlayerSelector::Target(Box::new(TargetSpec::Opponent)),
+            effects: vec![Effect::ApplyContinuous {
+                affected: ObjectSelector::You,
+                modification: Modification::SkipsCombatPhasesNextTurn,
+                duration: EffectDuration::Indefinite,
             }],
         }],
         text_box: text_box.into(),
