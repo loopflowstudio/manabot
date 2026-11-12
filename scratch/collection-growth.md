@@ -115,7 +115,7 @@ Earlier blocker history, procedure, concept review and check detail:
 `scratch/concept-review.html` (no product change; show the actual paired report
 with limitations, inventories and rental accounting once execution is possible).
 
-- Implement (×5), realign (×3) and write-docs (×3) passes on 2026-11-12 found no Task
+- Implement (×5), realign (×3) and write-docs (×4) passes on 2026-11-12 found no Task
   comment or budget choice and main unchanged past base; RunPod listed only
   `etude-8a95fe6d04e9` (not an MTG-281 rental, untouched). No code or doc change.
 - Compress 2026-11-12: `report_collection_growth.py` shares one phase/RSS series
