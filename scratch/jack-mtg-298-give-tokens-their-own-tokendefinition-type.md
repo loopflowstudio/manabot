@@ -32,3 +32,13 @@ Remaining for gate: CLAUDE.md world-change pytest list with all extras; Engine B
 (no gameplay change expected).
 
 Compress pass: no reductions found; the diff has no obsolete path left (token lookup by name is gone, `register` is the one row path, `TokenSource` avoids a second `TokenDefinition`). No rerun needed.
+
+Concept review (2026-11-12): no change to implement. Authors now write a card (`CardDefinition`, required id)
+or a token (`TokenDefinition`, key + optional id). The engine's pack row stays a `CardDefinition` with
+`is_token`; that row is the object definition shared by cards, tokens and token copies, so it keeps that
+name. Renaming it would churn every set file without changing behavior. An unprinted token's row carries
+`scryfall_id: ""`; its public row and `check_scryfall.py` treat "" as absent.
+Known consequence, out of scope: Academy curated-pack identities (`academy/curated_pack.py`,
+`academy/ui/src/lib/curated-pack.ts`, `matchup.reachable_tokens`) key token art by printed name. Two
+tokens sharing a name would share one identity there. No such pair exists yet (MTG-286's Zeppelin
+has a unique name); key them by `token.*` key when the first pair lands.

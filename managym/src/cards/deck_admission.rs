@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{world_pool, ContentError, ContentPool, Eligibility};
+use super::{world_pool, ContentError, ContentPool, Eligibility, PoolDefinition};
 use crate::state::{deck::Deck, player::PlayerConfig};
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
@@ -115,20 +115,21 @@ pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> 
         (DeckSection::Sideboard, &deck.sideboard),
     ] {
         for name in cards.keys() {
-            let mut rows = pool
+            let rows: Vec<_> = pool
                 .definitions
                 .iter()
-                .filter(|row| &row.registry_name == name);
-            let (code, reason) = match (rows.next(), rows.next()) {
-                (None, _) => ("unknown", "card is not defined in this world"),
-                (Some(row), None) if row.eligibility == Eligibility::Eligible => continue,
-                (Some(row), None) => (
+                .filter(|row| &row.registry_name == name)
+                .collect();
+            let (code, reason) = match (rows.as_slice(), named_definition(&rows)) {
+                ([], _) => ("unknown", "card is not defined in this world"),
+                (_, None) => ("ambiguous", "card name identifies multiple definitions"),
+                (_, Some(row)) if row.eligibility == Eligibility::Eligible => continue,
+                (_, Some(row)) => (
                     "unsupported",
                     row.reason
                         .as_deref()
                         .unwrap_or("card is not supported in this world"),
                 ),
-                _ => ("ambiguous", "card name identifies multiple definitions"),
             };
             issues.push(DeckIssue {
                 line: None,
@@ -140,6 +141,19 @@ pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> 
         }
     }
     issues
+}
+
+/// The definition a deck entry names among the rows sharing its name: the only
+/// row, or the first of several that are all unsupported for one reason, as
+/// when tokens share a printed name. `None` when the name is ambiguous.
+pub(crate) fn named_definition<'a>(rows: &[&'a PoolDefinition]) -> Option<&'a PoolDefinition> {
+    let (&first, rest) = rows.split_first()?;
+    let same_rejection = |row: &&PoolDefinition| {
+        row.eligibility == Eligibility::Unsupported
+            && first.eligibility == Eligibility::Unsupported
+            && row.reason == first.reason
+    };
+    (rest.is_empty() || rest.iter().all(same_rejection)).then_some(first)
 }
 
 /// Why a player's submitted deck fails development admission, or `None` when it
