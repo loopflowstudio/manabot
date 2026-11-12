@@ -238,6 +238,82 @@ def test_function_regime_resumes_at_an_update_boundary(
     )
 
 
+def two_stages(run: Run, *, updates: int) -> None:
+    """One model trained in two consecutive self-play stages."""
+    model = run.model("policy", AGENT, ObservationConfig(), seed=run.seed)
+    for _ in range(2):
+        self_play(run, model, decks=MatchConfig(), **_settings(updates))  # type: ignore[arg-type]
+
+
+def test_a_resumed_continuation_records_and_trains_as_uninterrupted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    torch.set_num_threads(1)
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SECONDS", 0.0)
+    monkeypatch.setattr(run_handle, "PROGRESS_EXPORT_SHARE", float("inf"))
+    regime = partial(two_stages, updates=2)
+    recovery = RecoveryPolicy(checkpoint_updates=1)
+    export = run_handle.export_training_run
+
+    def fail_in_second_stage(
+        run_id: str, owner: VerifyStore, path: str | Path
+    ) -> TrainingRun:
+        run = export(run_id, owner, path)
+        if (
+            run.status == "running"
+            and run.stages
+            and run.stages[-1].id == "self-play-2"
+            and run.stages[-1].updates == 1
+        ):
+            raise KeyboardInterrupt("stopped inside the continued stage")
+        return run
+
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        whole = execute(
+            regime, out=tmp_path / "whole", seed=5, store=store, recovery=recovery
+        )
+        with monkeypatch.context() as patch:
+            patch.setattr(run_handle, "export_training_run", fail_in_second_stage)
+            with pytest.raises(KeyboardInterrupt):
+                execute(
+                    regime,
+                    out=tmp_path / "failed",
+                    seed=5,
+                    store=store,
+                    recovery=recovery,
+                )
+        failed_id = store.con.execute(
+            "SELECT id FROM training_runs ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()[0]
+        resumed = execute(
+            regime,
+            out=tmp_path / "resumed",
+            seed=5,
+            store=store,
+            recovery=recovery,
+            resume_from=failed_id,
+        )
+    assert resumed.status == "completed"
+    assert [s.id for s in resumed.record.stages] == ["self-play", "self-play-2"]
+    for left, right in zip(whole.record.stages, resumed.record.stages, strict=True):
+        assert left.arguments == right.arguments
+        _assert_same(left.artifacts["raw"]["path"], right.artifacts["raw"]["path"])
+    assert resumed.record.stages[1].arguments["settings"]["initial"] == "self-play"
+
+
+def orphaned_continuation(run: Run) -> None:
+    model = run.model("policy", AGENT, ObservationConfig())
+    model.trained_by = "self-play"
+    self_play(run, model, decks=MatchConfig(), **_settings(1))  # type: ignore[arg-type]
+
+
+def test_a_continuation_without_learner_or_snapshot_is_refused(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(ValueError, match="neither its live learner"):
+        execute(orphaned_continuation, out=tmp_path / "run", seed=5)
+
+
 def test_a_saved_regime_smokes_through_the_same_stages(tmp_path: Path) -> None:
     torch.set_num_threads(1)
     regime = TrainingRegime(

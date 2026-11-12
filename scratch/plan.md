@@ -153,16 +153,17 @@ raw weights bit-equal to the uninterrupted run, but stage 2
 `arguments.settings.initial` was `"self-play"` uninterrupted and `None`
 resumed. That breaks Outcome 7's comparable resolved arguments.
 
-Next implement direction:
-
-1. Lineage is a fact of the model: `Model` keeps the id of the last
-   self-play stage that trained it (set by `self_play` and by
-   `_restore_model`), and `self_play` derives `initial` from it. The live
-   session only decides how the stage continues: live (session is the run's
-   latest), from the recovery snapshot, or refuse. A continuing stage with
-   neither a live session nor a snapshot for it refuses by name instead of
-   silently starting a fresh learner from the weights.
-2. A regression test in `test_regime_functions.py`: the probe above, asserting
-   equal stage arguments and weights.
+Done since: `Model.trained_by` holds the last self-play stage that trained
+the model; `self_play` and `_restore_model` set it and `initial` reads it.
+A model that has `trained_by` but no live session continues from this
+stage's recovery snapshot, or is refused by name. Continuation was already
+checked by the parent attempt at the same revision, so the snapshot path
+does not check it again. Tests:
+`test_a_resumed_continuation_records_and_trains_as_uninterrupted` (the
+probe: equal stage arguments, bit-equal raw weights; fails with the old
+derivation) and `test_a_continuation_without_learner_or_snapshot_is_refused`.
+Check: test_regime_functions (8), test_regimes (18), test_recovery (15),
+test_active_recovery (4), test_belief_stages (7), test_package_boundaries (9)
+all pass.
 
 Unchanged: the open Etude budget choice and the `run.stage` resume limit.
