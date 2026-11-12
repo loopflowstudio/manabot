@@ -194,7 +194,7 @@ impl ContinuationFrame {
             .iter()
             .map(|pair| [pair[0] as u8, pair[1] as u8])
             .collect();
-        self.lesson = !cost.purpose.is_ordinary();
+        self.lesson = !cost.purpose.is_resolving();
     }
 }
 

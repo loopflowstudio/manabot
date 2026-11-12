@@ -108,6 +108,8 @@ mod scryfall;
 mod shm;
 #[path = "cards/soi.rs"]
 mod soi;
+#[path = "cards/spm.rs"]
+mod spm;
 #[path = "cards/sth.rs"]
 mod sth;
 #[path = "cards/stx.rs"]
@@ -124,6 +126,8 @@ mod ulg;
 mod vis;
 #[path = "cards/war.rs"]
 mod war;
+#[path = "cards/woe.rs"]
+mod woe;
 #[path = "cards/wth.rs"]
 mod wth;
 #[path = "cards/zen.rs"]

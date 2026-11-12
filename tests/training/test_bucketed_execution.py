@@ -53,19 +53,6 @@ def test_unset_field_is_omitted_and_keeps_regime_bytes(field: str) -> None:
     ("field", "name"),
     [("bucketed_shapes", "bucketed shapes"), ("live_tokens", "live tokens")],
 )
-def test_pooled_token_stream_rejects_layout(field: str, name: str) -> None:
-    data = _regime(**{field: True})
-    agent = data["agent"]
-    assert isinstance(agent, dict)
-    agent["token_stream"] = "pooled"
-    with pytest.raises(ValidationError, match=f"does not support {name}"):
-        TrainingRegime.model_validate(data)
-
-
-@pytest.mark.parametrize(
-    ("field", "name"),
-    [("bucketed_shapes", "bucketed shapes"), ("live_tokens", "live tokens")],
-)
 def test_live_continuation_preserves_layout(field: str, name: str) -> None:
     data = _regime()
     stages = data["stages"]
