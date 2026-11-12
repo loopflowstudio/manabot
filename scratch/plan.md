@@ -73,3 +73,8 @@ one reader preserves saved layout, seat and closure defaults. No pending cuts.
 
 Check: `uv run --extra dev --extra artifacts pytest tests/training/test_bucketed_execution.py tests/training/test_builders.py -q` — 23 passed.
 Check: `uv run --extra dev --extra artifacts --extra notebook --extra reports pytest tests/training/test_regimes.py -q` — 18 passed; focused Ruff lint/format and `git diff --check` pass.
+
+Compress pass (2026-11-12): no cuts left. `experiment/config.py` `Baseline.capture`
+keeps `model_dump` on purpose (a snapshot freezes resolved values). Shortened the
+observation-and-model "resolved value" paragraph to point at training.md's stage
+operations. Check: `pytest tests/training/test_bucketed_execution.py -q` — 15 passed.

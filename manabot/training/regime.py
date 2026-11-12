@@ -812,9 +812,9 @@ class TrainingRegime(Strict):
         stages = []
         for stage in self.stages:
             execution = stage.execution
-            auto = frozenset(
+            auto = [
                 name for name in LAYOUT_FIELDS if getattr(execution, name) == "auto"
-            )
+            ]
             if auto:
                 on = isinstance(stage, TrainSelfPlay) and execution.device == "cuda"
                 execution = execution.model_copy(update=dict.fromkeys(auto, on))

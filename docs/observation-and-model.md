@@ -174,18 +174,15 @@ execution = regime.stages[0].execution
 execution.bucketed_shapes, execution.live_tokens  # (True, True)
 ```
 
-The resolved value is what the regime keeps: a stage that resolves on records
-`"bucketed_shapes": true, "live_tokens": true` in `run.json`, and one that
-resolves off omits both fields, so CPU and MPS regimes keep their hashes. A
-saved regime or `run.json` that omits them reads as off, the layout it trained
-in. Fresh stages default to `auto`; JSON may also request it explicitly.
-Builders that rebuild a regime (`with_capacity`, `with_agent`) resolve `auto`
-again; a value written explicitly, including an edit after resolution, is kept
-as written.
-To compare the paths on CUDA, write
+The regime keeps the resolved value: a stage that resolves on records both
+fields as `true` in `run.json`; one that resolves off omits them, so CPU and
+MPS regimes keep their hashes, and a saved regime that omits them reads as off
+([stage operations](training.md#stage-operations)). Builders that rebuild a
+regime (`with_capacity`, `with_agent`) resolve `auto` again and keep explicit
+values. To compare the paths on CUDA, write
 `Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
 `--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
-Bucketed shapes may still be written explicitly on CPU or MPS; there they are
+Bucketed shapes may still be written explicitly on CPU or MPS, where they are
 slower to learn, as described above.
 
 The stage's collection and learner policies, including a frozen opponent,
