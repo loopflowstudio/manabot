@@ -94,8 +94,12 @@ Grouping from the allocation ledger; each family lands with its cards.
 | End the turn | Sundial of the Infinite |
 | Phasing and life lock | Teferi's Protection |
 
-Order for the unblocked families: cast-time costs, copy entry, selection
-constraints and split choosers, then end-turn and phasing.
+Eight of the 20 are blocked (production review, token identity, observed
+history layout, restricted mana shape); the other twelve are unblocked. Order for
+the unblocked families: cast-time costs (Force of Negation, Shattering Spree),
+copy entry, selection constraints and split choosers, then end-turn and phasing.
+Mystic Remora, Dark Depths and the eighth-pass cards are done; Bloodchief
+Ascension and Brought Back are not next work while their layout question is open.
 
 Force of Negation needs two cast pending choices: whether to use the
 alternative cost (offered only when it is not your turn and another blue card is
@@ -147,6 +151,10 @@ waits for a world freeze (the production review's v10 question).
 - Bonus-sheet coverage reports 61/61; every name has a unique key,
   first-printing Scryfall id, learning tokens and a directed debug test. Debug
   Rust suite (`cargo nextest --profile ci`), conformance, observability, fmt, clippy.
+- Regenerate `conformance/semantic-kernel-w17-v2` evidence: the pack
+  `content_digest` moves with every added definition, so
+  `checked_semantic_conformance_evidence_reproduces` fails until it is
+  regenerated (eighth-pass compress run: 1131 passed, this one failed).
 - World-change Python suites from `CLAUDE.md` and
   `docs/development.md#validation-by-change-area`; Academy pending choices,
   stale Commands, reconnect and replay/fork for each new decision. Browser
