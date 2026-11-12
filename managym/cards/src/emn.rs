@@ -18,7 +18,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
 }
 
 fn mirrorwing_dragon() -> CardDefinition {
-    let text_box = "Flying\nWhenever a player casts an instant or sorcery spell that targets only Mirrorwing Dragon, that player copies that spell for each other creature they control that the spell could target. Each copy targets a different one of those creatures.";
+    let text_box = "Flying\nWhenever a player casts an instant or sorcery spell that targets only this creature, that player copies that spell for each other creature they control that the spell could target. Each copy targets a different one of those creatures.";
     CardDefinition {
         key: "emn.mirrorwing_dragon",
         scryfall_id: "4b7e33a8-765b-4909-a5c6-5fe8f8774a51",

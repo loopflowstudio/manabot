@@ -829,6 +829,14 @@ pub enum AdditionalCost {
     /// otherwise the life is paid as it is cast (CR 119.4: only from a life
     /// total of at least that much).
     PayLifeOrMana { life: u32, mana: ManaCost },
+    /// "[If it's not your turn,] you may exile a [predicate] card from your
+    /// hand rather than pay this spell's mana cost" (CR 118.9): chosen like
+    /// kicker, which marks the spell kicked; it then costs no mana, and its
+    /// caster exiles another matching card from hand as it is paid.
+    ExileFromHandAlternative {
+        predicate: crate::predicate::CardPredicate,
+        not_your_turn: bool,
+    },
     /// "As an additional cost to cast this spell, waterbend [cost]": required,
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
@@ -912,7 +920,21 @@ impl CardDefinition {
             AdditionalCost::Kicker(kicker)
             | AdditionalCost::Waterbend(kicker)
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
-            AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
+            AdditionalCost::Sacrifice(_)
+            | AdditionalCost::RequiredWaterbend(_)
+            | AdditionalCost::ExileFromHandAlternative { .. } => None,
+        })
+    }
+
+    /// The exile-from-hand alternative cost and whether it is offered only
+    /// outside its caster's turn.
+    pub fn exile_alternative(&self) -> Option<(&crate::predicate::CardPredicate, bool)> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::ExileFromHandAlternative {
+                predicate,
+                not_your_turn,
+            } => Some((predicate, *not_your_turn)),
+            _ => None,
         })
     }
 

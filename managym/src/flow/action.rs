@@ -126,6 +126,11 @@ impl Game {
                 }
             }
             Action::PayCost { .. } => match &self.pending_choice {
+                Some(PendingChoice::KickerChoice { card, .. })
+                    if self.state.cards[*card].exile_alternative().is_some() =>
+                {
+                    Some("Exile a card from your hand instead of paying the mana cost".into())
+                }
                 Some(PendingChoice::SacrificePayment { cost, .. }) => {
                     cost.or_mana.as_ref().map(|alternative| {
                         let mut label = String::new();
@@ -145,7 +150,12 @@ impl Game {
                 _ => None,
             },
             Action::SelectCard { card, .. } => {
-                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ExileFromHandPayment { .. })
+                ) {
+                    Some(format!("Exile {} to pay", self.state.cards[*card].name))
+                } else if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
                     Some(format!("Tap {} to crew", self.state.cards[*card].name))
                 } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
                     Some(format!("Tap {} to pay", self.state.cards[*card].name))
@@ -198,6 +208,15 @@ impl Game {
                 } else {
                     None
                 }
+            }
+            Action::Decline { .. }
+                if matches!(
+                    &self.pending_choice,
+                    Some(PendingChoice::KickerChoice { card, .. })
+                        if self.state.cards[*card].exile_alternative().is_some()
+                ) =>
+            {
+                Some("Pay the mana cost".into())
             }
             Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
                 Decision::SearchNamed { .. } => Some("Stop searching and shuffle".into()),
@@ -445,7 +464,16 @@ impl Game {
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = card.sacrifice_cost() else {
-            return self.can_pay_cast(player, card_id, cast);
+            return self.can_pay_cast(player, card_id, cast)
+                || (card.exile_alternative().is_some()
+                    && self.can_pay_cast(
+                        player,
+                        card_id,
+                        CastChoices {
+                            kicked: true,
+                            ..cast
+                        },
+                    ));
         };
         let payment = Payment::Spell {
             card: card_id,
@@ -550,6 +578,21 @@ impl Game {
                     .map(|permanent| Action::SelectCard {
                         player: *player,
                         card: permanent.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
+            PendingChoice::ExileFromHandPayment { player, payment } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .payment_source_card(payment)
+                    .map(|card| self.exile_alternative_cards(*player, card))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -846,6 +889,14 @@ impl Game {
                 ) =>
             {
                 self.sacrifice_payment_action(*player, Some(*card))
+            }
+            Action::SelectCard { player, card }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ExileFromHandPayment { .. })
+                ) =>
+            {
+                self.exile_payment_action(*player, *card)
             }
             Action::SelectCard { player, card }
                 if matches!(

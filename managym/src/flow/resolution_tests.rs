@@ -669,6 +669,7 @@ fn counter_spell_cannot_affect_an_ability() {
         player: None,
         inline_effects: Some(vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
+            exile: false,
         }]),
         x: 0,
     }));

@@ -319,6 +319,8 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::ExileFromHandPayment { .. }) =>
+                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
             Some(PendingChoice::DiscardPayment { .. }) =>
                 ("additional_cost", "Choose a card to discard as an activation cost."),
             Some(PendingChoice::TapPayment { .. }) =>
@@ -331,6 +333,7 @@ impl Game {
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
+            Some(PendingChoice::KickerChoice { card, .. }) if self.state.cards[*card].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {

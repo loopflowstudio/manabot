@@ -228,9 +228,10 @@ impl Game {
         });
     }
 
-    /// Counter a spell by an effect (CR 701.6a); a spell that can't be
-    /// countered stays on the stack (CR 101.2).
-    pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
+    /// Counter a spell by an effect (CR 701.6a), putting it into `to` (its
+    /// owner's graveyard unless the effect says otherwise); a spell that
+    /// can't be countered stays on the stack (CR 101.2).
+    pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>, to: ZoneType) {
         let Some(_) = self.find_spell_on_stack_index(card) else {
             return;
         };
@@ -241,7 +242,7 @@ impl Game {
         {
             return;
         }
-        self.move_card(card, ZoneType::Graveyard);
+        self.move_card(card, to);
         self.emit(GameEvent::SpellCountered { card, by });
     }
 
@@ -1401,7 +1402,7 @@ impl Game {
                 self.shuffle_library(frame.controller);
                 None
             }
-            Effect::CounterSpell { what } => {
+            Effect::CounterSpell { what, exile } => {
                 // Spells only: countering an ability is a different effect.
                 let spells: Vec<_> = self
                     .select(what, frame)
@@ -1410,7 +1411,12 @@ impl Game {
                     .filter(|card| self.find_spell_on_stack_index(*card).is_some())
                     .collect();
                 for spell in spells {
-                    self.counter_spell(spell, frame.source);
+                    let to = if *exile {
+                        ZoneType::Exile
+                    } else {
+                        ZoneType::Graveyard
+                    };
+                    self.counter_spell(spell, frame.source, to);
                 }
                 None
             }
@@ -2263,6 +2269,9 @@ impl Game {
                 self.find_spell_on_stack_index(card).is_some()
                     && match spec {
                         TargetSpec::Spell | TargetSpec::CreatureOrSpell => true,
+                        TargetSpec::SpellMatching { predicate } => {
+                            self.card_matches_predicate(card, predicate)
+                        }
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
                             self.card_mana_value(card) >= *min_mana_value
                         }

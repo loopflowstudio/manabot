@@ -159,6 +159,13 @@ pub enum PendingChoice {
         #[serde(skip_serializing_if = "is_single_tap")]
         remaining: usize,
     },
+    /// Choosing the card from hand to exile for a spell's alternative cost
+    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
+    /// payment.
+    ExileFromHandPayment {
+        player: PlayerId,
+        payment: Box<Payment>,
+    },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
         player: PlayerId,

@@ -2021,6 +2021,10 @@ impl Observation {
                         Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
                             game.payment_source_card(payment)
                         }
+                        Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
+                            payment,
+                            ..
+                        }) => game.payment_source_card(payment),
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
                             | crate::flow::game::PendingChoice::ManaPayment { .. },

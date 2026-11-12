@@ -668,7 +668,8 @@ impl Game {
                     sacrifice.map(|id| self.target_reference(Target::Permanent(id), viewer));
                 frame.cost(&self.payment_mana_cost(*player, payment, alternative.as_ref()));
             }
-            PendingChoice::SacrificePayment { payment, .. } => {
+            PendingChoice::SacrificePayment { payment, .. }
+            | PendingChoice::ExileFromHandPayment { payment, .. } => {
                 self.payment_frame(payment, viewer, &mut frame)
             }
             PendingChoice::ChooseTargets {

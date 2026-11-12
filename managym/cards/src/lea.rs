@@ -61,6 +61,7 @@ fn counterspell() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
+            exile: false,
         }],
         text_box: text_box.into(),
         ..Default::default()

@@ -999,7 +999,13 @@ pub enum Effect {
     },
     /// Counter each spell `what` names (CR 701.6a); abilities are not
     /// affected.
-    CounterSpell { what: ObjectSelector },
+    CounterSpell {
+        what: ObjectSelector,
+        /// "If that spell is countered this way, exile it instead of
+        /// putting it into its owner's graveyard."
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        exile: bool,
+    },
     /// "Counter target activated or triggered ability" (CR 701.6b): the
     /// ability leaves the stack and does nothing; spells are not affected.
     /// A stack ability is no card object, so the clause's chosen target is
@@ -1283,6 +1289,10 @@ pub enum TargetSpec {
     },
     /// "target creature or spell".
     CreatureOrSpell,
+    /// "target [predicate] spell" ("noncreature spell").
+    SpellMatching {
+        predicate: CardPredicate,
+    },
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".
@@ -1424,7 +1434,7 @@ impl Effect {
             | Effect::GainControl { what, .. }
             | Effect::ControlPlayer { what, .. }
             | Effect::DealDamage { what, .. }
-            | Effect::CounterSpell { what }
+            | Effect::CounterSpell { what, .. }
             | Effect::CounterAbility { what }
             | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }

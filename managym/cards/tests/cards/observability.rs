@@ -783,6 +783,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::deal_damage(value(), ObjectSelector::Target(target())),
         Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
+            exile: true,
         },
         Effect::DrawCards { count: value() },
         Effect::LoseLife {
@@ -1544,6 +1545,13 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "tla",
             "redirect_lightning_moves_a_spell_to_another_target",
         ),
+        AdditionalCost::ExileFromHandAlternative { .. } => witnessed(
+            "AdditionalCost::ExileFromHandAlternative",
+            Seen::Actions("the alternative is offered only while another matching card is in hand outside your turn, then its exile choices"),
+            "Force of Negation",
+            "mh1",
+            "force_of_negation_offers_its_alternative_only_outside_your_turn",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1674,6 +1682,10 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::PayLifeOrMana {
             life: 5,
             mana: ManaCost::parse("{2}"),
+        },
+        AdditionalCost::ExileFromHandAlternative {
+            predicate: CardPredicate::default(),
+            not_your_turn: true,
         },
     ]
 }

@@ -171,7 +171,7 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Option<ManaCost> {
-        if cast.free {
+        if cast.free || (cast.kicked && self.state.cards[card].exile_alternative().is_some()) {
             Some(ManaCost::default())
         } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             self.state.cards[card].mana_cost.clone()
@@ -390,6 +390,12 @@ impl Game {
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> bool {
+        if cast.kicked
+            && self.state.cards[card].exile_alternative().is_some()
+            && self.exile_alternative_cards(player, card).is_empty()
+        {
+            return false;
+        }
         let Some(cost) = self.effective_spell_cost(player, card, cast, targets) else {
             return false;
         };
@@ -466,6 +472,20 @@ impl Game {
             kicked: true,
             ..cast
         };
+        // A spell cast without paying its mana cost can't also take an
+        // alternative cost (CR 118.9a).
+        if !cast.free
+            && self.state.cards[card].exile_alternative().is_some()
+            && self.can_pay_cast(player, card, kicked)
+        {
+            // The mana cost or the alternative: asked only when both are
+            // payable.
+            if !self.can_pay_cast(player, card, cast) {
+                return self.begin_mode_selection(player, card, kicked);
+            }
+            self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
+            return Ok(());
+        }
         if self.state.cards[card].optional_cost().is_some()
             && self.can_pay_cast(player, card, kicked)
         {
@@ -869,17 +889,73 @@ impl Game {
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
         let cost = self.state.cards[card].sacrifice_cost().cloned();
-        self.begin_payment(
-            player,
-            Payment::Spell {
-                card,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-            },
-            cost,
-        )
+        let payment = Payment::Spell {
+            card,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+        };
+        if cast.kicked && self.state.cards[card].exile_alternative().is_some() {
+            self.pending_choice = Some(PendingChoice::ExileFromHandPayment {
+                player,
+                payment: Box::new(payment),
+            });
+            return Ok(());
+        }
+        self.begin_payment(player, payment, cost)
+    }
+
+    /// The cards `player` may exile for `card`'s exile-from-hand alternative
+    /// cost: other matching cards in hand while `card` is cast from hand,
+    /// paying its costs, and, if the cost says so, outside `player`'s turn.
+    pub(crate) fn exile_alternative_cards(&self, player: PlayerId, card: CardId) -> Vec<CardId> {
+        let Some((predicate, not_your_turn)) = self.state.cards[card].exile_alternative() else {
+            return Vec::new();
+        };
+        if (not_your_turn && self.active_player() == player)
+            || !self.state.zones.contains(card, ZoneType::Hand, player)
+        {
+            return Vec::new();
+        }
+        self.state
+            .zones
+            .zone_cards(ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .filter(|other| *other != card && self.card_matches_predicate(*other, predicate))
+            .collect()
+    }
+
+    /// Exile `exiled` for the pending alternative cost, then pay the rest of
+    /// the spell's cost.
+    pub(crate) fn exile_payment_action(
+        &mut self,
+        player: PlayerId,
+        exiled: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::ExileFromHandPayment {
+            player: payer,
+            payment,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no exile payment pending".into()));
+        };
+        let Payment::Spell { card, .. } = payment.as_ref() else {
+            unreachable!("an exile alternative pays for a spell");
+        };
+        if payer != player
+            || !self
+                .exile_alternative_cards(player, *card)
+                .contains(&exiled)
+        {
+            return Err(AgentError(
+                "not a card this alternative cost can exile".into(),
+            ));
+        }
+        self.move_card(exiled, ZoneType::Exile);
+        let cost = self.state.cards[*card].sacrifice_cost().cloned();
+        self.begin_payment(player, *payment, cost)
     }
 
     pub(crate) fn cast_spell(

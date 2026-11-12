@@ -8001,6 +8001,7 @@ fn sokka_s_haiku() -> CardDefinition {
                 requirement: TargetRequirement::one(TargetSpec::Spell),
                 effects: vec![Effect::CounterSpell {
                     what: ObjectSelector::Target(TargetSpec::Spell),
+                    exile: false,
                 }],
             },
             Effect::DrawCards {

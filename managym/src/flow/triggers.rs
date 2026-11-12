@@ -772,6 +772,7 @@ impl Game {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
+            | TargetSpec::SpellMatching { .. }
             | TargetSpec::SpellOrPermanent { .. }
             | TargetSpec::CreatureOrSpell => self
                 .state

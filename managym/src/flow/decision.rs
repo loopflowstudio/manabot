@@ -1879,7 +1879,7 @@ impl Game {
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
                 match payment.counters_on_decline {
                     Some(Target::StackSpell(card)) => {
-                        self.counter_spell(card, suspended.frame.source)
+                        self.counter_spell(card, suspended.frame.source, ZoneType::Graveyard)
                     }
                     Some(Target::StackAbility(id)) => {
                         self.counter_ability(id, suspended.frame.source)

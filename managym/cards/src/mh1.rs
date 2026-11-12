@@ -1,14 +1,51 @@
 //! Modern Horizons.
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
-    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    card::{
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords,
+    },
     effect::Modification,
-    mana::{Mana, ManaCost},
+    mana::{Color, Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fists_of_flame(), prismatic_vista(), sunbaked_canyon()]
+    vec![
+        fists_of_flame(),
+        force_of_negation(),
+        prismatic_vista(),
+        sunbaked_canyon(),
+    ]
+}
+
+fn force_of_negation() -> CardDefinition {
+    let text_box = "If it's not your turn, you may exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target noncreature spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.";
+    CardDefinition {
+        key: "mh1.force_of_negation",
+        scryfall_id: "e9be371c-c688-44ad-ab71-bd4c9f242d58",
+        name: "Force of Negation".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+        types: CardTypes::new([CardType::Instant]),
+        additional_costs: vec![AdditionalCost::ExileFromHandAlternative {
+            predicate: CardPredicate {
+                colors_any: vec![Color::Blue],
+                ..Default::default()
+            },
+            not_your_turn: true,
+        }],
+        spell_effects: vec![Effect::CounterSpell {
+            what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                predicate: CardPredicate {
+                    not_card_types: vec![CardType::Creature],
+                    ..Default::default()
+                },
+            }),
+            exile: true,
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn fists_of_flame() -> CardDefinition {

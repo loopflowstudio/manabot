@@ -489,6 +489,7 @@ fn target_description(t: &TargetSpec) -> String {
         TargetSpec::Creature => "creature".into(),
         TargetSpec::AnyTarget => "any target".into(),
         TargetSpec::Spell => "spell".into(),
+        TargetSpec::SpellMatching { predicate } => predicate_description(predicate, "spell"),
         TargetSpec::CreatureOrSpell => "creature or spell".into(),
         TargetSpec::SpellOrAbilityWithSingleTarget => {
             "spell or ability with a single target".into()
@@ -874,7 +875,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DealDamage { amount, what, by: Some(by) } => format!("{} deals X damage to {}, where X is {}",selector_description(by),selector_description(what),value_description(amount)),
         DealDamage { amount: EffectValue::Fixed(amount), what, by: None } => format!("Deal {amount} damage to {}",selector_description(what)),
         DealDamage { amount, what, by: None } => format!("Deal X damage to {}, where X is {}",selector_description(what),value_description(amount)),
-        CounterSpell { what } => format!("Counter {}",selector_description(what)),
+        CounterSpell { what, exile } => format!("Counter {}{}", selector_description(what), if *exile { ". If it is countered this way, exile it instead of putting it into its owner's graveyard" } else { "" }),
         CounterAbility { what } => format!("Counter {}",selector_description(what)),
         DrawCards { count } => format!("Draw {} cards", value_description(count)),
         LoseLife { player, amount } => format!("{} loses {} life",player_description(player),value_description(amount)),
