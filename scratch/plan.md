@@ -63,32 +63,10 @@ Found while building:
 
 The concepts hold: a report asks questions (earlier self, a fixed player,
 head-to-head, schedule), each a helper returning a plain Etude panel, and jobs
-get names a reader knows them by. No helper hides a choice the experiment
-should make. `against_earlier_self` and `against_fixed` are both thin over
-`Curve`, but they stay separate: once EXP-53 lands, the self question is the one
-that asks for the later side only.
-
-Biggest mismatch: what a reader does with the docs. `docs/experiments.md`
-§ "Writing a report" says `uv run etude report <experiment file> --source
-r2://manabot/jobs --serve` draws the frontier page. From this revision the
-frontier file is refused (`tournament_conflict`): `eval(state)` re-derives its
-matchups with today's `_source()` digest. The unscoped source scan also ran
-more than 15 min and used 3.9 GB. The demo only worked through a wrapper with no `eval` and
-scoped run prefixes.
-
-Next implement direction:
-1. Make the docs paragraph true: give the command for a report whose
-   evaluations come from the same revision, and say that a finished
-   experiment's page is rebuilt from the revision that ran it, or with scoped
-   prefixes, until reading held evidence stops re-deriving matchups. Leave the
-   rest of the section as it is.
-2. Reading retained evidence should not require `eval(state)` to agree with
-   the current source. Per "Etude is ours", that gap belongs in Etude (the
-   report path through `records.py` tournament check), not in a manabot
-   `_source` workaround or an edit to the frozen frontier file. Loop-or-next or
-   implement files it as an Etude Task beside EXP-52/EXP-53 (filed: EXP-55).
-
-Kept as is: `job_labels` names layers relative to the first job. That
-reproduces the requested "Small (width 64)" / "Large (width 160, 8 layers)",
-and its docstring says the order matters (scratch/questions.md keeps the
-alternative). No open product choice.
+get names a reader knows them by. `against_earlier_self` stays separate from
+`against_fixed`: once EXP-53 lands it is the one that asks for the later side
+only. `job_labels` naming layers relative to the first job is kept (docstring
+states the order dependence; scratch/questions.md keeps the alternative).
+Its two actions (docs command true to what runs; Etude Task for re-deriving
+matchups) are done: docs pass 2 and EXP-55. No manabot `_source` workaround,
+no edit to the frozen `experiments/tla_frontier.py` eval.
