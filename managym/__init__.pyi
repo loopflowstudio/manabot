@@ -2,9 +2,35 @@ from __future__ import annotations
 
 from enum import IntEnum
 import os
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
 
 import numpy as np
+from typing_extensions import deprecated
+
+class ObservationValueLayout(TypedDict):
+    kind: Literal["id", "reference", "category", "flag", "count", "number", "rank", "tagged"]
+    encoding: str
+    range: str
+
+class ObservationColumnLayout(ObservationValueLayout):
+    index: int
+
+class ObservationArrayLayout(TypedDict):
+    axes: list[str]
+    shape: list[int | None]
+    dtype: Literal["float32", "int32"]
+    columns: dict[str, ObservationColumnLayout]
+    row_kinds: dict[int, str]
+    element: NotRequired[ObservationValueLayout]
+
+def observation_layout(*, policy_history: bool = False) -> dict[str, ObservationArrayLayout]:
+    """Column names, value encodings and fixed extents of each encoded array.
+
+    Keys match `encode_observation` and the vector env buffers; a None extent
+    is a caller-selected capacity. `policy_history` selects the public history
+    rows of `events` instead of raw events. Seats are viewer-relative. No game
+    or buffer is created.
+    """
 
 class PoolDefinition(TypedDict):
     card_def_id: int
@@ -35,7 +61,7 @@ def set_cards(sets: list[str]) -> list[PoolDefinition]:
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
-class LearningCatalog(TypedDict):
+class CatalogTokens(TypedDict):
     content_digest: str
     registry_names: list[str]
     token_kind: list[int]
@@ -47,19 +73,28 @@ class LearningCatalog(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-def learning_catalog() -> LearningCatalog:
-    """Learning tokens for every catalog definition, rows by CardDefId."""
+LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
+
+def catalog_tokens() -> CatalogTokens:
+    """Tokenized rules text of every catalog definition, rows by CardDefId."""
 
 def card_definitions_json() -> str:
-    """Every catalog definition as the JSON its learning tokens serialize."""
+    """Every catalog definition as the JSON its catalog tokens serialize."""
 
-def learning_token_value(name: str) -> int:
-    """The learning catalog's stable token value for a Rust or printed name."""
+def catalog_token_value(name: str) -> int:
+    """The catalog's stable token value for a Rust or printed name."""
 
-def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]:
+def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same
     concept. Namespaces: `token`, `name`, `restriction`."""
+
+@deprecated("use catalog_tokens; removed in 0.3.0")
+def learning_catalog() -> CatalogTokens: ...
+@deprecated("use catalog_token_value; removed in 0.3.0")
+def learning_token_value(name: str) -> int: ...
+@deprecated("use record_vocabulary; removed in 0.3.0")
+def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]: ...
 
 class PreparedPossibleWorldMaterializer:
     @property

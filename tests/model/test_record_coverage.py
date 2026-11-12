@@ -29,10 +29,10 @@ def test_a_name_missing_from_the_vocabulary_fails_the_sweep(
     missing_prefix: str,
 ) -> None:
     torch.set_num_threads(1)
-    names = managym.learning_record_names()
+    names = managym.record_vocabulary()
     monkeypatch.setattr(
         managym,
-        "learning_record_names",
+        "record_vocabulary",
         lambda: [n for n in names if not n[1].startswith(missing_prefix)],
     )
     with pytest.raises(ValueError, match="outside the catalog record vocabulary"):

@@ -350,7 +350,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
 
 def _token_low(name: str) -> int:
     """The low 16 bits of a learning-token value, as fact rows store it."""
-    return managym.learning_token_value(name) & 0xFFFF
+    return managym.catalog_token_value(name) & 0xFFFF
 
 
 # The policy input encodes every Observation fact. These states reach its
