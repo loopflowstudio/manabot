@@ -128,3 +128,12 @@ receipt id-to-name, capacity-failure text). Academy `curated_pack` identities
 are still keyed by printed name with a card/token kind, so a matchup cannot
 hold a card and a token of one name; that is the out-of-scope follow-up above.
 No open product choice.
+
+## Gate (2026-11-12, HEAD 4bc48211e)
+Diff review: no debug code, TODOs or shims; nothing to polish. Rust is
+unchanged since the debug decklist run except main's merged commits.
+- `cargo fmt --all --check`: clean.
+- `pytest tests/semantic/test_learning_projection.py tests/semantic/test_current_content.py tests/belief/test_state.py`: 43 passed.
+- `ruff check` on changed Python: 4 findings (E402 in `managym/__init__.pyi`,
+  import order in two tests), identical on origin/main; ruff is not a CI gate.
+- CI on 4bc48211e: every required check passed (Tests Result green; Rust Tests 5m18s, Engine Budget 15m, Integration core 28m51s); publish/github-release skipped as on any PR.
