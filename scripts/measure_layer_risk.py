@@ -284,7 +284,7 @@ def model(out: Path, leg: str, inventory: bool) -> None:
         (extension,) = [
             name
             for name in archive.namelist()
-            if name.startswith("manabot/managym/_managym.") and name.endswith(".so")
+            if Path(name).name.startswith("_managym.") and name.endswith(".so")
         ]
         dest = tree / extension
         temporary = dest.with_suffix(".new")

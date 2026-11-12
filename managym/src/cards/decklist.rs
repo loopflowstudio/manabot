@@ -31,10 +31,7 @@ pub const MAX_SOURCE_BYTES: usize = 65_536;
 /// One counted line. Resolution replaces `name` with the world's registry name
 /// and fills the definition identity; parsing alone leaves them empty.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct DeckEntry {
     pub line: usize,
@@ -46,10 +43,7 @@ pub struct DeckEntry {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct Decklist {
     pub dialect: String,
@@ -61,10 +55,7 @@ pub struct Decklist {
 
 /// One document's admission: its resolved source record and the admitted deck.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct DeckImport {
     pub decklist: Decklist,

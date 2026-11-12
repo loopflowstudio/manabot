@@ -860,8 +860,8 @@ ADVISOR_SOURCE_PATHS = (
     REPO_ROOT / "manabot" / "sim" / "mcts.py",
     REPO_ROOT / "manabot" / "sim" / "search_branch.py",
     REPO_ROOT / "manabot" / "sim" / "search_runtime.py",
-    REPO_ROOT / "manabot" / "managym" / "decision.py",
-    REPO_ROOT / "manabot" / "managym" / "possible_worlds.py",
+    REPO_ROOT / "managym" / "decision.py",
+    REPO_ROOT / "managym" / "possible_worlds.py",
 )
 
 

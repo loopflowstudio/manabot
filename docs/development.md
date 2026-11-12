@@ -21,12 +21,14 @@ uv run manabot --help
 ```
 
 This prepares the development environment and displays the CLI commands. The
-root project is both that environment and the single `manabot` distribution.
+root project owns that environment and the `manabot` distribution; the uv
+workspace installs its matching `managym` member from this source tree.
 Development uses ordinary CPython 3.13; consumer compatibility includes 3.12.
 Keep shared Python source compatible with 3.12. Free-threaded builds and newer
 interpreters are outside the supported contract.
 
-Every Python command runs through uv (`uv run ...`). `uv sync` builds the bundled extension; CI and existing scripts
+Every Python command runs through uv (`uv run ...`). `uv sync` builds the local
+engine extension; CI and existing scripts
 also use `uv run --extra play maturin develop --manifest-path managym/Cargo.toml`
 (add `--features python`, and `--release` for timing-sensitive use). After
 changing Rust, rebuild as described in AGENTS.md and replace the `.so`
@@ -39,8 +41,8 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-Public dependency requirements are `etude-sdk>=0.2.15` (also for its `eval` and
-`s3` extras) and `torch>=2.10.0`. All extras, including `llm`, inherit the core
+The `manabot` public dependency requirements are `etude-sdk>=0.2.15` (also for
+its `eval` and `s3` extras) and `torch>=2.10.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
 groups retain exact Torch/backend choices. Those development pins are not
@@ -414,10 +416,14 @@ locally only as a smoke check:
 
 ## Releases
 
-Manabot ships as one PyPI distribution, `manabot`, containing the Python library
-and the native engine at `manabot.managym`; `import managym` is a compatibility
-alias. Versions are `X.Y.Z`, tagged `vX.Y.Z`, shared by Python metadata and the
-bundled crate; the first public release is
+One release contains two PyPI distributions at the same `X.Y.Z` version:
+`managym`, the native engine and its Python API, and `manabot`, the Python
+training library and clients. `manabot` requires `managym==X.Y.Z`.
+`import managym` owns the engine; `manabot.managym` remains a compatibility
+alias when `manabot` is installed. One `vX.Y.Z` tag builds and publishes both;
+neither package has an independent release cadence. The Python projects and
+Rust workspace crates share that version, checked before building. The first
+public release, before this split, is
 [0.2.0](https://pypi.org/project/manabot/0.2.0/). Package versions do not replace
 world, content, observation or checkpoint identities, and an upgrade does not
 make old checkpoints compatible. Releases are research releases, not
@@ -425,24 +431,27 @@ certification of playing strength or rules coverage.
 
 ### Install
 
-Install 0.2.1 in a fresh directory outside this checkout:
+For the rules engine alone, follow [installing managym](engine-python.md).
+For training, install `manabot` in a fresh directory outside this checkout:
 
 ```bash
 mkdir manabot-example
 cd manabot-example
 uv venv --python 3.13
-uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu 'manabot==0.2.1'
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
 uv run --no-project --python .venv/bin/python manabot --help
 ```
 
-This installs the library and bundled engine into `.venv`; the last command
-lists CLI commands without starting training. No repository dependency groups
+This installs the library and its exact-version engine dependency into `.venv`;
+the last command lists CLI commands without starting training. No repository dependency groups
 are installed. For CPython 3.12, create the environment with
-`--python 3.12`; installation selects the matching wheel. See the
-[0.2.1 release notes](../release/v0.2.1/NOTES.md) for API migration guidance.
+`--python 3.12`; installation selects the matching engine wheel. Pin both
+distributions to the same published version in reproducible projects. See the
+[0.2.1 release notes](../release/v0.2.1/NOTES.md) for that version's API migration
+guidance.
 The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
 environment when reproducing that release. To verify an unpublished build,
-replace `'manabot==0.2.1'` with the path to its matching wheel; see
+install both local wheel paths together; see
 [Build and verify](#build-and-verify).
 
 For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
@@ -457,9 +466,11 @@ Evaluation and search run on CPU for this workflow. GPU-less tests use
 No speed or strength claim is implied. Windows,
 Intel Mac, Linux ARM and musl are not supplied or tested.
 
-Wheels contain the compiled engine; the sdist needs Rust and a C linker
-(`--only-binary :all:` refuses source builds). Both forms declare the same
-runtime requirements, including `torch>=2.10.0` and `etude-sdk>=0.2.15`.
+The platform-specific `managym` wheels contain the compiled engine; its sdist
+needs Rust and a C linker (`--only-binary :all:` refuses source builds).
+`manabot` is a pure-Python wheel and gets the engine through its exact dependency.
+The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
+training requirements, including `torch>=2.10.0` and `etude-sdk>=0.2.15`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
@@ -482,7 +493,8 @@ Choose extras for the features you use:
 | `llm` | Local transformer inference |
 | `openrouter` | OpenRouter inference |
 
-For notebook work, use `'manabot[notebook]==0.2.1'` in the install command.
+For notebook work, use `'manabot[notebook]'` in the install command and retain
+the resolved versions in your lockfile.
 In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
@@ -498,6 +510,7 @@ From a clean checkout, with a fresh staging path and empty output directory:
 ```bash
 uv run --no-project python scripts/release/check.py
 uv run --no-project python scripts/release/prepare.py .runs/release/staging
+uv build --no-sources .runs/release/staging/managym --out-dir dist
 uv build --no-sources .runs/release/staging --out-dir dist
 uv run --no-project python scripts/release/validate.py dist
 uv run --no-project --with twine twine check --strict dist/*
@@ -505,18 +518,35 @@ uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/te
 ```
 
 Staging copies tracked files, refuses to overwrite a prior build and excludes
-experiment drivers and build products; published artifacts must use it. Staged
+experiment drivers and build products; published artifacts must use it. The
+engine staging project places its crate and shared content beneath one root,
+so the source archive preserves Rust asset paths without the checkout. Staged
 metadata must preserve the source project's public minimum requirements rather
-than replacing them with development pins. CI builds one source archive for all
-four wheels, so checkout files cannot hide missing content. The complete release inventory is
-four wheels (3.12 and 3.13 on each supported platform) and one source archive.
+than replacing them with development pins. CI builds each distribution's wheels
+from its source archive, so checkout files cannot hide missing content. The
+complete release inventory is seven files at one version: four `managym` wheels
+(3.12 and 3.13 on each supported platform), one pure-Python `manabot` wheel and
+two source archives. Validate both inventories and the exact `manabot`
+dependency before either upload.
 
-Clean-install proof, using only the wheel matching this interpreter and host:
+Clean-install proof, replacing the filename placeholders with built artifacts:
 
 ```bash
 uv venv --python 3.13 /tmp/manabot-release-venv
 uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
-  --torch-backend cpu "$PWD/dist/manabot-<version>-cp313-cp313-<platform>.whl"
+  "$PWD/dist/managym-<version>-cp313-cp313-<platform>.whl"
+```
+
+From outside the checkout, run the [engine example](engine-python.md) with
+that environment and confirm Torch, Gymnasium and Etude were not installed.
+CI additionally completes a game in the engine-only environment, without a
+Rust toolchain. Then, from the build directory, add training with both wheel
+paths so resolution uses the candidate engine rather than PyPI:
+
+```bash
+uv pip install --python /tmp/manabot-release-venv/bin/python --only-binary :all: \
+  --torch-backend cpu "$PWD/dist/managym-<version>-cp313-cp313-<platform>.whl" \
+  "$PWD/dist/manabot-<version>-py3-none-any.whl"
 cp scripts/release/smoke.py /tmp/manabot-release-smoke.py
 cd /tmp
 export PATH="/tmp/manabot-release-venv/bin:$PATH"
@@ -524,8 +554,8 @@ unset PYTHONPATH
 uv run --no-project --python /tmp/manabot-release-venv/bin/python manabot-release-smoke.py
 ```
 
-The smoke checks one shared engine behind both import paths, catalog binding,
-gradients and a tiny CPU training update. Repeat in a separate environment with
+The training smoke checks one shared engine behind both import paths, catalog
+binding, gradients and a tiny CPU training update. Repeat in a separate environment with
 3.12 and its wheel. `release.yml` covers both interpreters on Linux and macOS,
 then installs and imports the optional extras. Consumer checks run outside the
 checkout with default dependency groups disabled, including the minimum
@@ -537,32 +567,65 @@ check.
 
 `release.yml` builds and validates relevant PRs, manual runs and `v*` tags; only
 tags publish. Tag builds reject inconsistent versions and commits not on main.
-A release is complete only when its PyPI artifacts and matching GitHub Release
-both exist. The GitHub entry uses the same `vX.Y.Z` tag and that version's
-checked-in `release/vX.Y.Z/NOTES.md`, with a link to that version on PyPI.
+A release is complete only when both packages' full PyPI inventories and the
+matching GitHub Release exist. The GitHub entry uses the same `vX.Y.Z` tag and
+that version's checked-in `release/vX.Y.Z/NOTES.md`, with links to both packages
+at that version on PyPI.
 Only the PyPI job gets OIDC `id-token: write`; only the GitHub Release job gets
 `contents: write`. No PyPI token is stored, and uploads carry attestations.
-The trusted publisher is project `manabot`, owner `loopflowstudio`, repository
-`manabot`, workflow `release.yml`, environment `pypi`. The pending publisher
-was used successfully on 2026-10-22; the GitHub `pypi` environment restricts
-tags to `v*`. Recheck its required reviewers and trusted publisher settings before
-tagging.
+Before the first paired release, the PyPI account owner configures two
+publishers with these exact fields:
 
-Per release: update `pyproject.toml`, Cargo.toml/Cargo.lock, `uv.lock`, examples
-and write `release/vX.Y.Z/NOTES.md`; merge the reviewed release PR; confirm the workflow
-is green; push `vX.Y.Z` at that main commit; review the `pypi` job's artifacts
-and approve it. A PR alone does not authorize a tag or upload.
+| Field | Engine | Training |
+|---|---|---|
+| PyPI project | `managym` | `manabot` |
+| Repository owner | `loopflowstudio` | `loopflowstudio` |
+| Repository name | `manabot` | `manabot` |
+| Workflow filename | `release.yml` | `release.yml` |
+| Environment | `pypi` | `pypi` |
+
+For `managym`, use account **Publishing** to add a pending publisher if the
+project does not exist. This does not reserve the name; the first successful
+upload creates the project. See [PyPI's pending publisher instructions](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+For the existing `manabot` project, verify its publisher under **Manage →
+Publishing**, following [PyPI's existing-project instructions](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+The GitHub `pypi` environment restricts tags to `v*`; verify its required
+reviewers and both publisher identities before tagging. Configuring a publisher
+does not authorize a release.
+
+Per release:
+
+1. Align both Python project versions, the Rust crate versions and lockfiles,
+   and the exact `manabot` requirement on `managym`. Write one
+   `release/vX.Y.Z/NOTES.md` covering both packages and update install examples
+   that pin versions. Merge the reviewed release PR and confirm its checks.
+2. With explicit publication authorization, tag that main commit `vX.Y.Z`.
+   Review the retained seven-file inventory and the engine-only and combined
+   consumer checks before approving the `pypi` deployment.
+3. Publish `managym` first and confirm its full inventory, then publish
+   `manabot` from the same run. Both builds, version checks and validations
+   must pass before either upload begins. If either package cannot pass those
+   checks, publish neither.
+4. Verify both PyPI inventories, attestations and the GitHub Release. Install
+   from PyPI in clean environments on both platforms and interpreters: first
+   the engine alone, then the training package at the same version.
+
+A PR alone does not authorize a tag or upload. Uploads to two projects are not
+one atomic operation: a failure after the engine upload can leave an incomplete
+paired release. Do not report success or advance one package to another version
+to hide that partial state.
 
 If PyPI succeeds but GitHub completion fails, retry the failed completion job
 for the same tag. It creates or verifies the matching entry without uploading
 again. An entry with matching tag and notes makes the retry a no-op. Retrying
-the PyPI job checks the complete inventory and SHA-256 digests against retained
-build artifacts and skips upload only when they match. Rebuilding can change
-archive bytes; retry failed jobs with the original artifacts instead of rebuilding
-a published version. Partial or different publication fails for inspection.
+the PyPI job checks each project's inventory and SHA-256 digests against retained
+build artifacts and skips an already complete package only when they match.
+If `managym` completed and `manabot` has no files yet, verify the engine's
+digests, then resume the missing training upload with the original artifacts.
+Partial files within either package, or different bytes, stop for inspection.
+Rebuilding can change archive bytes; retry failed jobs with the original artifacts instead of rebuilding
+a published version.
 Never overwrite PyPI files, delete a release or move a used tag to repair it.
-Afterwards, install from PyPI on both supported platforms and interpreters and
-confirm the version, attestations and GitHub Release link.
 
 0.2.0 was published on 2026-10-22 from `v0.2.0` at
 `29ab4fa0ddcc759ddb2b699ce3d08ccfe51ad757`

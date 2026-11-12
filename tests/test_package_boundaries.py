@@ -79,16 +79,15 @@ def test_manabot_entry_points_import_without_academy() -> None:
     )
 
 
-def test_managym_legacy_import_is_the_bundled_engine() -> None:
-    from managym.decision import Command as LegacyCommand
+def test_manabot_compatibility_import_is_the_separate_engine() -> None:
+    from manabot import managym as compatibility
+    from manabot.managym.decision import Command as CompatibilityCommand
+    import managym
+    from managym.decision import Command
 
-    from manabot import managym as engine
-    from manabot.managym.decision import Command
-    import managym as legacy
-
-    assert legacy is engine
-    assert LegacyCommand is Command
-    assert Path(engine._managym.__file__).parent == REPO_ROOT / "manabot/managym"
+    assert compatibility is managym
+    assert CompatibilityCommand is Command
+    assert Path(managym._managym.__file__).parent == REPO_ROOT / "managym"
 
 
 class _RefuseTraining(importlib.abc.MetaPathFinder):
@@ -215,3 +214,32 @@ def test_evaluation_child_modules_import_without_torch() -> None:
 def test_retired_arena_package_is_absent() -> None:
     assert importlib.util.find_spec("manabot.arena") is None
     assert not (REPO_ROOT / "manabot" / "arena").exists()
+
+
+class _RefuseEngineClients(_RefuseAcademy):
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        if fullname.split(".")[0] in {"manabot", "torch", "gymnasium", "etude"}:
+            raise ImportError(fullname)
+        return super().find_spec(fullname, path, target)
+
+
+def test_engine_imports_without_training_or_academy() -> None:
+    probe = textwrap.dedent(
+        """
+        import importlib
+        import pkgutil
+        import sys
+        from tests.test_package_boundaries import _RefuseEngineClients
+        sys.meta_path.insert(0, _RefuseEngineClients())
+        import managym
+        for module in pkgutil.iter_modules(managym.__path__, 'managym.'):
+            importlib.import_module(module.name)
+        assert 'manabot' not in sys.modules
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

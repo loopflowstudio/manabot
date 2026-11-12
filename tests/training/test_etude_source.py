@@ -18,13 +18,10 @@ def test_archive_binding(
     monkeypatch.setattr(
         source_bundle, "__file__", str(tmp_path / "manabot/infra/source.py")
     )
-    (tmp_path / "manabot" / "managym").mkdir(parents=True)
+    (tmp_path / "managym").mkdir(parents=True)
     (tmp_path / "source.py").write_bytes(b"changed" if altered else b"source")
     native = (
-        tmp_path
-        / "manabot"
-        / "managym"
-        / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
+        tmp_path / "managym" / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
     )
     native.write_bytes(b"native fixture")
     config = tmp_path / "config.json"

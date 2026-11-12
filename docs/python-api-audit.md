@@ -32,8 +32,8 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
   [`python/vector_env_bindings.rs`](../managym/src/python/vector_env_bindings.rs):
   scalar lock/Command checks; vector active-state clearing, buffer validation,
   GIL release around buffered calls, and Python result conversion.
-- [`__init__.pyi`](../manabot/managym/__init__.pyi) is the installed type surface;
-  [`managym/__init__.py`](../managym/__init__.py) owns the compatibility alias.
+- [`__init__.pyi`](../managym/__init__.pyi) is the installed type surface;
+  [`manabot/managym/__init__.py`](../manabot/managym/__init__.py) owns the compatibility alias.
 - [`env.py`](../manabot/env/env.py),
   [`vector_env.py`](../manabot/env/vector_env.py), and
   [`failures.py`](../manabot/env/failures.py): wrapper rewards, reset policies,

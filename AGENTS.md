@@ -40,9 +40,12 @@ identifiers stay unchanged.
 The shared Etude experiment services retain their names. "Sepia Etude" remains
 the name of the visual language.
 
-Code dependencies flow Academy → manabot → the engine in `manabot.managym`.
-PyPI distributes them in one `manabot` package; `import managym` is a compatibility
-alias, not a separate distribution. manabot never imports
+Code dependencies flow Academy → manabot → the engine in `managym`.
+PyPI distributes the engine as `managym` and training as `manabot`, released
+together at the same version. Release builds use `scripts/release/prepare.py`
+to stage self-contained source archives; direct engine sdists from the workspace
+do not preserve shared asset paths. `manabot` requires that exact `managym` version;
+`manabot.managym` is a compatibility alias to the same engine. manabot never imports
 Academy, eagerly or lazily (`tests/test_package_boundaries.py` enforces it).
 
 ## Academy's shared decision surface
@@ -221,7 +224,7 @@ checkpoints or experiment evidence.
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the matching interpreter/platform `.so` from the wheel in
-  `manabot/managym/`, preserving its filename (for example,
+  `managym/`, preserving its filename (for example,
   `_managym.cpython-313-darwin.so` for the macOS development interpreter).
   Never copy a cp312 extension into a cp313 environment or vice versa.
   Replace it atomically (write a new
