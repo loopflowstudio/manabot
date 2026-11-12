@@ -63,12 +63,9 @@ consumer: `BecomesTargeted` (Ward's "an opponent controls", CR 702.21),
 more" trigger in the card sets is an `Attacks`, `DealsCombatDamage` or
 `PutsCounters` field, so `Per` needs no other home yet.
 
-Concept review 4 (head eeb9af27e): no change. Since review 3 only the
-`TriggerSubject::matching` constructor (same model) and a base merge landed.
-Concept review 5 (head 80d3d80af): no change. Since review 4 only the
-engine-guide reflow, the Engine Budget reference move and base docs landed.
-Concept review 6 (head 9991e7088): no change. Since review 5 only scratch
-changed; main's two new commits touch no `managym/` or docs.
+Concept reviews 4–6 (through head 9991e7088): no change; only the
+`matching` constructor, docs reflows, the Engine Budget reference move and
+scratch landed.
 
 ## Checks
 
@@ -101,71 +98,37 @@ base→head (91 changed, all closer to printed text); 1332 random full games ove
 every authored setup, 0 errors; Academy table played to Game Over twice with
 triggers (incl. Tiger-Seal upkeep) on the stack. Pre-existing: non-self ETB/dies
 still say "When" (fix moves the w17 authored-match receipt).
+Re-runs at da964c606, bc35142da and abeab7a87: catalog trigger text
+byte-identical, 1332 games 0 errors, Academy games to Game Over (a draw-event
+trigger-order decision; Tiger-Seal upkeep on the stack), no page errors.
 
-## Docs (write-docs, 2026-11-12)
+## Docs
 
 Shipping docs: `docs/engine.md` (card definitions: prowess example, event list)
-and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
-in docs. This pass only reworded the event list in `docs/engine.md`.
-Re-checked at d002b743b against `ability.rs` (variants, constructors, links): no edits.
-Re-checked at 27eb17aab: since d002b743b only `docs/development.md` (base) moved; no stale variant names; no edits.
-Re-checked at e95481614: only scratch changed since 27eb17aab; no stale variant names; no edits.
+and the trigger rule in `AGENTS.md`/`CLAUDE.md`. Re-checked against
+`ability.rs` through e95481614: no stale variant names.
 
-## Compress (2026-11-12, head 079a8de32)
+## Compress (head 079a8de32)
 
 `TriggerSubject::matching(controlled_by, predicate, another)` owns the box;
 the four named constructors and both tests call it. Debug nextest
-`trigger|description|observability|token` 149/149.
-Re-checked at 17768efe2: only that fold and a docs reflow touched code or
-docs since; nothing further to reduce, scratch under budget.
+`trigger|description|observability|token` 149/149. Re-checked at 17768efe2,
+5a7ab52ea and 21e161b2a: no code or docs changed since; nothing to reduce.
 
-## Status (realign, 2026-11-12, head 6fe2d75b9)
-
-Nothing remains to build. The latest base merge (59cf727bc) only moves
-`managym/perf/baseline.json` to PR #469's Engine Budget run and documents that
-in `docs/development.md`; no trigger code moved. Remaining: parent PR #469
-lands first (open, blocked), then PR #484 CI. Realign at 0fa09f9e4: main has
-not moved past 59cf727bc; #484 passes Python unit, Semantic Kernel, Academy,
-Clean-machine Play and packaging so far, with Rust Tests, Integration, Protocol
-v1 and Engine Budget still pending. This branch changes definitions, so its Engine Budget digest
-likely moves again: adopt #484's own run against the new reference.
-
-QA re-run (head da964c606): catalog trigger text byte-identical to 0c2ce18e1
-(276 lines); 1332 random games 0 errors; Academy game to Game Over with a
-draw-event trigger-order decision. No fixes. See `scratch/qa.html`.
-
-## Gate (head b206873cd, 2026-11-12)
+## Gate (head b206873cd)
 
 Rust changed since the publish gate only through the `matching` constructor
 (serde-transparent `Box`, no token or digest change). `cargo fmt --check` clean;
 debug nextest `trigger|description|attack|combat_damage|dies|sacrific|observability|token`
-249/249; clippy `--workspace --all-targets` no findings. Base merges since then
-are Python token-stream work this branch doesn't touch; full matrix left to CI.
-Reflowed the event paragraph in `docs/engine.md`.
+249/249; clippy `--workspace --all-targets` no findings. Later gates
+(aaa6dd564, 9479b26a5): no suite inputs moved, no reruns.
 
-Implement pass (head d002b743b): nothing to build. Main's only new commit,
-c32b321b0 (#480), is Python policy-input admission with no `managym/` or docs
-changes and merges cleanly (`git merge-tree`).
-Implement pass (head d230b3173): nothing to build. Main's new f4c948f4a
-(MTG-301) adds only `experiments/` files and merges cleanly.
+## Status (head 21e161b2a)
 
-QA re-run (head bc35142da): 1332 random games, 0 errors, output identical to
-da964c606; two Academy games to Game Over, no page errors. No fixes.
-
-Gate (head aaa6dd564): since b206873cd only the `docs/engine.md` reflow, the
-base merge (`managym/perf/baseline.json`, `docs/development.md`) and scratch
-changed; no suite inputs moved, so no reruns. PR #484 CI pending at this pass.
-Compress (head 5a7ab52ea): since 17768efe2 only the base merge and scratch
-changed; no code to reduce. Dropped inherited MTG-286 notes from
-`scratch/questions.md` (at `5a7ab52ea:scratch/questions.md`); scratch 2651 tokens.
-
-QA re-run (head abeab7a87): only scratch changed since bc35142da. 1332 random
-games, 0 errors, output identical; one Academy game to Game Over (63 clicks, no
-page errors) with Tiger-Seal's upkeep trigger on the stack. No fixes.
-
-Gate (head 9479b26a5): since aaa6dd564 only scratch changed and main has not
-moved past 59cf727bc; no suite inputs moved, no reruns. PR #484 CI pending
-(re-run on the latest push).
-Implement pass (head 5565d8086): nothing to build. Main's c32b321b0 and
-f4c948f4a touch no `managym/` and only `docs/observation-and-model.md`
-(no trigger text); `git merge-tree` clean. Base merge left to realign.
+Nothing remains to build. Since 17768efe2 only base merge 59cf727bc
+(`managym/perf/baseline.json` moved to PR #469's Engine Budget run,
+`docs/development.md`) and scratch changed. Main's c32b321b0 (#480) and
+f4c948f4a (MTG-301) touch no `managym/` or trigger docs; `git merge-tree`
+clean; merging them is left to realign. Remaining: parent PR #469 lands first,
+then PR #484 CI. This branch changes definitions, so its Engine Budget digest
+likely moves: adopt #484's own run against the new reference.
