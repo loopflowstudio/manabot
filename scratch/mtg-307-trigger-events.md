@@ -94,3 +94,9 @@ base→head (91 changed, all closer to printed text); 1332 random full games ove
 every authored setup, 0 errors; Academy table played to Game Over twice with
 triggers (incl. Tiger-Seal upkeep) on the stack. Pre-existing: non-self ETB/dies
 still say "When" (fix moves the w17 authored-match receipt).
+
+## Docs (write-docs, 2026-11-12)
+
+Shipping docs: `docs/engine.md` (card definitions: prowess example, event list)
+and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
+in docs. This pass only reworded the event list in `docs/engine.md`.
