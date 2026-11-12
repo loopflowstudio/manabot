@@ -77,8 +77,12 @@ was rented, once the larger budget was approved; it produced no data. Limits:
 
 ## Status
 
-Scored run queued 2026-11-12 on this Task's own on-demand `mtg324-l4`
-(`--max-usd 32`), waiting for L4 stock at or under USD 0.60/h.
+Dated line, 2026-11-12: RunPod listed L4s at USD 0.69/h, above the 0.60
+ceiling, so the scored run moved to on-demand `mtg324-l4-ab` (ceiling USD 0.70/h)
+with the watchdog shortened to 10.9 h per run (`--hours 10.9`), keeping USD 7.85
+per run and USD 31.40 for four. The horizon stays 300 updates; at 150 s per
+update the window covers about 250, so *M* is likely below 300. The question is
+unchanged.
 
 ## Answer
 
