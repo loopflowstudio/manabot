@@ -5418,5 +5418,55 @@
     "colors": [
       "G"
     ]
+  },
+  "Warstorm Surge": {
+    "name": "Warstorm Surge",
+    "mana_cost": "{5}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control enters, it deals damage equal to its power to any target.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Noxious Gearhulk": {
+    "name": "Noxious Gearhulk",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace\nWhen this creature enters, you may destroy another target creature. If a creature is destroyed this way, you gain life equal to its toughness.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Searing Blood": {
+    "name": "Searing Blood",
+    "mana_cost": "{R}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Searing Blood deals 2 damage to target creature. When that creature dies this turn, Searing Blood deals 3 damage to the creature's controller.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rending Volley": {
+    "name": "Rending Volley",
+    "mana_cost": "{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell can't be countered.\nRending Volley deals 4 damage to target white or blue creature.",
+    "colors": [
+      "R"
+    ]
   }
 }

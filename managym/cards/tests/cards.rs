@@ -14,6 +14,8 @@ mod aer;
 mod afr;
 #[path = "cards/blb.rs"]
 mod blb;
+#[path = "cards/bng.rs"]
+mod bng;
 #[path = "cards/c19.rs"]
 mod c19;
 #[path = "cards/definitions.rs"]
@@ -22,6 +24,8 @@ mod definitions;
 mod dft;
 #[path = "cards/dom.rs"]
 mod dom;
+#[path = "cards/dtk.rs"]
+mod dtk;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/fdn.rs"]

@@ -142,6 +142,9 @@ impl ReadSet {
         if p.supertype.is_some() {
             self.fields |= SUPERTYPES;
         }
+        if !p.colors_any.is_empty() {
+            self.fields |= COLORS;
+        }
         if p.flying {
             self.fields |= KEYWORDS;
         }
@@ -1196,6 +1199,7 @@ pub(super) fn matches_view(
             .all(|t| !view.types.types.contains(t))
         && p.subtype.as_ref().is_none_or(|s| view.subtypes.contains(s))
         && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| view.subtypes.contains(s)))
+        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
         && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
         && p.min_power.is_none_or(|min| view.power >= min)
         && p.max_power.is_none_or(|max| view.power <= max)

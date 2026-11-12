@@ -707,6 +707,10 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] you control"
     /// (CR 601.2f); functions while casting, generic floor 0.
     CostsLessPerPermanent(CardPredicate),
+    /// "This spell can't be countered" (CR 101.2): an effect that would
+    /// counter it does nothing to it; it may still be targeted, and still
+    /// leaves the stack when all its targets are illegal (CR 608.2b).
+    CantBeCountered,
     /// "This spell costs {1} less to cast for each [predicate] on the
     /// battlefield", whoever controls them (Blasphemous Act); generic floor 0.
     CostsLessPerPermanentOnBattlefield(CardPredicate),

@@ -20,3 +20,15 @@ fn visions_of_beyond_draws_three_when_any_graveyard_has_twenty_cards() {
         s.assert_zone_size(0, ZoneType::Hand, hand + draws);
     }
 }
+
+/// The entering creature deals the damage, so its lifelink applies.
+#[test]
+fn warstorm_surge_has_the_entering_creature_deal_its_power() {
+    use crate::support::play::{cast, settle_targeting_opponent};
+    let mut s = five_color_setup(&["Warstorm Surge", "Aardvark Sloth"]);
+    s.force_permanent_on_battlefield(0, "Warstorm Surge");
+    cast(&mut s, "Aardvark Sloth");
+    settle_targeting_opponent(&mut s);
+    s.assert_life(1, 17);
+    s.assert_life(0, 23);
+}

@@ -3,6 +3,7 @@
 // blocking restrictions, and zone counting (no scattered string compares).
 
 use super::card::{Card, CardType, Keyword};
+use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
@@ -38,6 +39,10 @@ pub struct CardPredicate {
     pub tapped: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
+    /// Has at least one of these colors ("white or blue"), as its
+    /// characteristics are now (layer 5).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors_any: Vec<Color>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -133,6 +138,12 @@ impl CardPredicate {
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
             return false;
+        }
+        if !self.colors_any.is_empty() {
+            let colors = card.colors();
+            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+                return false;
+            }
         }
         if !self.any_of.is_empty()
             && !self

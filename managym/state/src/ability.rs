@@ -289,8 +289,9 @@ pub enum Condition {
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
     TargetCardExiled(CardPredicate),
-    /// Resolution only: the resolution's latest `Move` or `Sacrifice`
-    /// moved at least one object ("If you do").
+    /// Resolution only: the resolution's latest `Move`, `Sacrifice` or
+    /// `Destroy` moved at least one object ("If you do", "if a creature is
+    /// destroyed this way").
     Moved,
     /// Resolution only: the frame's primary target is a permanent the
     /// resolving player controls, or last controlled once it has left ("If
@@ -446,6 +447,10 @@ pub enum EffectValue {
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// The toughness of the frame's primary target, from its last known
+    /// information once it has left ("you gain life equal to its
+    /// toughness").
+    TargetToughness,
     /// Permanents `controller` owns that an opponent controls.
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
@@ -925,10 +930,14 @@ pub enum Effect {
     /// The source deals `amount` damage to each creature, permanent or
     /// player `what` names (a `Target` selector may name a player),
     /// `amount` read as the instruction resolves; the excess dealt to the
-    /// last creature is kept for a following "the excess damage".
+    /// last creature is kept for a following "the excess damage". `by`
+    /// names another object as the source of the damage (CR 120.2: "it deals
+    /// damage equal to its power"), as it is or last existed.
     DealDamage {
         amount: EffectValue,
         what: ObjectSelector,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        by: Option<ObjectSelector>,
     },
     /// Counter each spell `what` names (CR 701.6a); abilities are not
     /// affected.
@@ -1597,6 +1606,7 @@ impl Effect {
         Effect::DealDamage {
             amount: amount.into(),
             what,
+            by: None,
         }
     }
 

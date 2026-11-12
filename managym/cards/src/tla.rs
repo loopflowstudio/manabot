@@ -1883,6 +1883,7 @@ fn bumi_bash() -> CardDefinition {
         spell_effects: vec![Effect::Modal {
             modes: vec![
                 vec![Effect::DealDamage {
+                    by: None,
                     amount: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
@@ -2154,6 +2155,7 @@ fn cat_gator() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::DealDamage {
+                by: None,
                 amount: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         subtype: Some("Swamp".into()),
@@ -2253,6 +2255,7 @@ fn combustion_technique() -> CardDefinition {
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
             Effect::DealDamage {
+                by: None,
                 amount: EffectValue::GraveyardMatching {
                     base: 2,
                     predicate: CardPredicate {
@@ -5209,6 +5212,7 @@ fn jet_freedom_fighter() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::DealDamage {
+                    by: None,
                     amount: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Creature),
@@ -8441,6 +8445,7 @@ fn team_avatar() -> CardDefinition {
             discard_source: true,
             mana_cost: ManaCost::parse("{2}{W}"),
             effects: vec![Effect::DealDamage {
+                by: None,
                 amount: EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),

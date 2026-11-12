@@ -512,9 +512,10 @@ impl<'a> Projection<'a> {
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}; counters {:?}.",
+                "Last known {}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object_ref, viewer)),
                 lki.power,
+                lki.toughness,
                 lki.counters
             )
         });
@@ -529,6 +530,7 @@ impl<'a> Projection<'a> {
             abilities_lost,
             dealt_damage_this_turn,
             power,
+            toughness,
             counters,
             object_ref: _,
             card: _,
@@ -555,6 +557,7 @@ impl<'a> Projection<'a> {
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,
+                    toughness,
                     counter_values,
                     from_zone,
                     owner,

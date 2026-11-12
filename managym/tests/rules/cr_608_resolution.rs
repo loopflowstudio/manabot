@@ -403,6 +403,7 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
                 Modification::AddKeywords(Keywords::of(&[Keyword::Hexproof])),
             ),
             Effect::DealDamage {
+                by: None,
                 amount: EffectValue::Fixed(1),
                 what: ObjectSelector::Target(TargetSpec::Creature),
             },

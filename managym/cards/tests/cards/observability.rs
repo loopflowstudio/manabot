@@ -1261,6 +1261,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "allies_at_last_affinity_and_two_attackers",
         ),
+        StaticAbility::CantBeCountered => witnessed(
+            "StaticAbility::CantBeCountered",
+            Seen::Via("the spell's learning tokens; a counter leaves it on the stack"),
+            "Rending Volley",
+            "dtk",
+            "rending_volley_targets_white_or_blue_creatures_and_cannot_be_countered",
+        ),
         StaticAbility::CostsLessPerPermanentOnBattlefield(_) => witnessed(
             "StaticAbility::CostsLessPerPermanentOnBattlefield",
             Seen::Actions("the cast becomes affordable at the reduced cost"),
@@ -1510,6 +1517,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         }),
         StaticAbility::CostsLessPerPermanent(creature()),
         StaticAbility::CostsLessPerPermanentOnBattlefield(creature()),
+        StaticAbility::CantBeCountered,
         StaticAbility::CostsLessPerGraveyardCard(creature()),
         StaticAbility::FlashIf(Condition::YourTurn),
         StaticAbility::Flashback(ManaCost::parse("{2}")),

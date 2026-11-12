@@ -23,7 +23,7 @@ use crate::{
             LinkedChooser, LinkedExile, ObjectSelector, PaymentCost, PlayerSelector, Scope,
             TargetRequirement, TargetSpec,
         },
-        card::{CardDefId, CardDefinition, Keyword},
+        card::{CardDefId, CardDefinition, Keyword, StaticAbility},
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Counters, Permanent},
@@ -49,6 +49,15 @@ impl Game {
                 Some(Target::Permanent(id)) => {
                     self.departed_permanent_lki(id).map_or(0, |lki| lki.power)
                 }
+                _ => 0,
+            },
+            EffectValue::TargetToughness => match frame.primary_target() {
+                Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
+                    self.characteristics(id).toughness
+                }
+                Some(Target::Permanent(id)) => self
+                    .departed_permanent_lki(id)
+                    .map_or(0, |lki| lki.toughness),
                 _ => 0,
             },
             EffectValue::ExcessDamage => frame.excess_damage,
@@ -87,6 +96,7 @@ impl Game {
             | EffectValue::ExcessDamage
             | EffectValue::SourcePower
             | EffectValue::TriggeringPower
+            | EffectValue::TargetToughness
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
@@ -215,10 +225,19 @@ impl Game {
         });
     }
 
+    /// Counter a spell by an effect (CR 701.6a); a spell that can't be
+    /// countered stays on the stack (CR 101.2).
     pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
         let Some(_) = self.find_spell_on_stack_index(card) else {
             return;
         };
+        if self.state.cards[card]
+            .statics
+            .iter()
+            .any(|ability| matches!(ability, StaticAbility::CantBeCountered))
+        {
+            return;
+        }
         self.move_card(card, ZoneType::Graveyard);
         self.emit(GameEvent::SpellCountered { card, by });
     }
@@ -822,7 +841,16 @@ impl Game {
                     .filter_map(|id| self.permanent_object_ref(id))
                     .map(|target| ProposedEvent::Destroy { target })
                     .collect();
-                frame.batch = Some(self.event_batch(events));
+                // What was destroyed answers "destroyed this way"
+                // (`Condition::Moved`).
+                let mut batch = self.event_batch(events);
+                batch.binding = EventBinding::Moved {
+                    linked: None,
+                    shuffle: false,
+                    library_end: None,
+                    reveal: false,
+                };
+                frame.batch = Some(batch);
                 None
             }
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
@@ -1194,13 +1222,17 @@ impl Game {
                 self.shuffle_library(player);
                 None
             }
-            Effect::DealDamage { amount, what } => {
+            Effect::DealDamage { amount, what, by } => {
                 let amount = self.effect_value(amount, frame);
+                let source = match by {
+                    Some(by) => self.damage_source(by, frame),
+                    None => frame.source_ref,
+                };
                 let events = self
                     .resolve_affected(what, frame)
                     .into_iter()
                     .map(|affected| ProposedEvent::Damage {
-                        source: frame.source_ref,
+                        source,
                         target: match affected {
                             Affected::Player(player) => ProposedDamageTarget::Player(player),
                             Affected::Object(object) => ProposedDamageTarget::Object(object),
@@ -1866,6 +1898,25 @@ impl Game {
     /// The objects a selector names as the instruction resolves. A `Chosen`
     /// selector names the object the resolving player chose for this
     /// instruction (`execute_frame_effect` suspended on the choice first).
+    /// The object a `DealDamage { by }` names as the damage's source: the
+    /// exact current object, else the departed one through its last known
+    /// information (CR 608.2h).
+    fn damage_source(&self, by: &ObjectSelector, frame: &EffectFrame) -> Option<ObjectRef> {
+        self.select(by, frame)
+            .into_iter()
+            .next()
+            .or_else(|| match by {
+                ObjectSelector::Triggering => match frame.context_target {
+                    Some(Target::Permanent(id)) => {
+                        self.departed_permanent_lki(id).map(|lki| lki.object_ref)
+                    }
+                    _ => None,
+                },
+                ObjectSelector::This => frame.source_ref,
+                _ => None,
+            })
+    }
+
     pub(crate) fn select(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<ObjectRef> {
         let permanent = |id: Option<PermanentId>| {
             id.and_then(|id| self.permanent_object_ref(id))

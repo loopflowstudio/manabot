@@ -713,6 +713,7 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::DealDamage {
+                by: None,
                 amount: EffectValue::Fixed(2),
                 what: ObjectSelector::Target(TargetSpec::Creature),
             }],

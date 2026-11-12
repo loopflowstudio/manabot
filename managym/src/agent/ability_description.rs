@@ -10,7 +10,7 @@ use crate::state::{
     },
     card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
-    mana::{Mana, ManaCost},
+    mana::{Color, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -301,6 +301,18 @@ fn card_type(t: CardType) -> &'static str {
     }
 }
 
+fn color_word(color: Color) -> &'static str {
+    match color {
+        Color::White => "white",
+        Color::Blue => "blue",
+        Color::Black => "black",
+        Color::Red => "red",
+        Color::Green => "green",
+        Color::Colorless => "colorless",
+        Color::Generic => "generic",
+    }
+}
+
 pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         namesake,
@@ -312,6 +324,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         attacking,
         tapped,
         subtypes_any,
+        colors_any,
         not_subtypes,
         supertype,
         nonbasic,
@@ -328,6 +341,15 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let mut terms = Vec::new();
     if *tapped {
         terms.push("tapped".into());
+    }
+    if !colors_any.is_empty() {
+        terms.push(
+            colors_any
+                .iter()
+                .map(|color| color_word(*color))
+                .collect::<Vec<_>>()
+                .join(" or "),
+        );
     }
     if *flying {
         terms.push("flying".into());
@@ -629,6 +651,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
         EffectValue::TriggeringPower => "that creature's power".into(),
+        EffectValue::TargetToughness => "its toughness".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",
             predicate_description(predicate, "creatures")
@@ -820,8 +843,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         If { condition: Condition::Always, then, .. } => effects_description(then),
         If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text(condition),effects_description(then)),
         If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text(condition),effects_description(then),effects_description(otherwise)),
-        DealDamage { amount: EffectValue::Fixed(amount), what } => format!("Deal {amount} damage to {}",selector_description(what)),
-        DealDamage { amount, what } => format!("Deal X damage to {}, where X is {}",selector_description(what),value_description(amount)),
+        DealDamage { amount, what, by: Some(by) } => format!("{} deals X damage to {}, where X is {}",selector_description(by),selector_description(what),value_description(amount)),
+        DealDamage { amount: EffectValue::Fixed(amount), what, by: None } => format!("Deal {amount} damage to {}",selector_description(what)),
+        DealDamage { amount, what, by: None } => format!("Deal X damage to {}, where X is {}",selector_description(what),value_description(amount)),
         CounterSpell { what } => format!("Counter {}",selector_description(what)),
         CounterAbility { what } => format!("Counter {}",selector_description(what)),
         DrawCards { count } => format!("Draw {} cards", value_description(count)),

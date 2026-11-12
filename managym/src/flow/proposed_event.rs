@@ -779,11 +779,20 @@ impl Game {
         }
     }
 
+    /// A damage source is the current object, a departed one with last known
+    /// information, or an earlier incarnation of a real card: a resolved
+    /// spell is the source of the delayed triggers it created (CR 603.7d)
+    /// though no battlefield record of it exists.
     fn object_ref_is_known(&self, object_ref: ObjectRef) -> bool {
         let card = CardId::from(object_ref.entity);
         self.state.cards.get(card.0).is_some()
             && (self.current_object_ref(card) == Some(object_ref)
-                || self.object_lki(object_ref).is_some())
+                || self.object_lki(object_ref).is_some()
+                || self
+                    .state
+                    .object_incarnations
+                    .get(card.0)
+                    .is_some_and(|current| object_ref.incarnation < *current))
     }
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
