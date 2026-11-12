@@ -70,34 +70,10 @@ class _Built(Exception):
     pass
 
 
-def test_stage_execution_builds_the_trained_policy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The self-play learner is built with the stage's setting."""
-    regime = TrainingRegime.model_validate(_regime(bucketed_shapes=True))
-    assert isinstance(regime.stages[0], TrainSelfPlay)
-    built: list[bool] = []
-
-    def build(
-        observation_space: ObservationSpace,
-        config: ModelConfig,
-        *,
-        bucketed_shapes: bool = False,
-    ) -> ActorCritic:
-        built.append(bucketed_shapes)
-        raise _Built
-
-    monkeypatch.setattr(execution, "ActorCritic", build)
-    with VerifyStore(tmp_path / "training.sqlite") as store:
-        with pytest.raises(_Built):
-            execution.execute_regime(regime, 197, tmp_path / "run", store)
-    assert built == [True]
-
-
 def test_frozen_opponent_runs_the_stage_setting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The frozen opponent's collection policy follows the learner's setting."""
+    """The learner and the frozen opponent are both built with the stage's setting."""
     model = ModelConfig(hidden_dim=8, num_attention_heads=2)
     space = ObservationSpace()
     path = tmp_path / "opponent.pt"
