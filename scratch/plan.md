@@ -35,13 +35,14 @@ needs a live controller loop; a booted one is kept to its window by its guardian
    dated section in `experiments/cuda_precision.md`, evidence published. Machine terminated.
    Same host's w160 capture update took 352 s (264 s collection), so the w384 float32 pace is
    probably above the assumed 150 s, and *M* will likely be below 300.
-2. Learning A/B, scored: cohort `mtg324-precision-ab-300c` at 783ccdba1, 300-update horizon,
-   `--hours 10.9 --usd-per-run 7.85 --max-usd 32`, runs 07f84834e617 / aa9518f6fc4b (float32),
-   2be568a65518 / 27416907ad6c (bf16). `etude launch` was refused (no 4 L4s at once), so it is
-   queued; check `status mtg324-precision-ab-300c` and re-run `wait` if any are still queued.
+2. Learning A/B, scored, running since 2026-11-12 ~19:50 UTC; windows end ~06:47 UTC
+   2026-11-13. 300-update horizon, `--hours 10.9 --usd-per-run 7.85`, on `mtg324-l4-ab`:
+   float32 07f84834e617 (s32401) / aa9518f6fc4b (s32402); bf16 2be568a65518 (s32401) /
+   6aa5ba4d5fac (s32402, re-queued alone after `capacity_refused`, source 1 commit later,
+   identical config). Cohort `mtg324-precision-ab-300c` at 783ccdba1. No local controller runs.
    After all end: `etude terminate` each machine, check `runpodctl pod list`, then
    `etude eval experiments/precision_ladder.py --rent cpu32 --source r2://manabot/jobs` (USD 2),
-   and fill the report's Answer/Cost. Spent so far ~USD 0.35 of the USD 35 Task cap.
+   and fill the report's Answer/Cost with *M*. Spent ~USD 0.35 before the A/B; A/B reserve 31.40.
 3. Apply the A/B decision. Accepted: keep the docs sentence and fill the report. Rejected or
    unresolved: `ladder_precision` returns float32 everywhere and the docs paragraph says what
    separated. The docs' learning-comparison sentence (`docs/training.md` § Reduced precision)
