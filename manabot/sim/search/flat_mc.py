@@ -191,7 +191,7 @@ def make_player(
          "checkpoint_sha256": "...", "epsilon": 0.05}
         {"kind": "uniform_range", ...same fields...}
         {"kind": "local_update", "checkpoint": "/abs/policy.pt",
-         "checkpoint_sha256": "...", "config": {...}, "native_encoder": True}
+         "checkpoint_sha256": "...", "config": {...}, "native_encoder": False}
     Returns (player, observation_space_or_None). Checkpoint players carry the
     ObservationSpace their encoder was trained with.
     """
@@ -214,7 +214,7 @@ def make_player(
             sampler=SamplerArtifact.model_validate(spec["sampler"])
             if spec.get("sampler")
             else None,
-            native_encoder=bool(spec.get("native_encoder", False)),
+            native_encoder=bool(spec.get("native_encoder", True)),
         )
         return LocalUpdatePlayer(teacher, seed=seed), teacher.space
     if kind == "search":

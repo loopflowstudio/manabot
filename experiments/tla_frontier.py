@@ -62,7 +62,7 @@ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch import client
 from etude.launch.records import Job, Run
-from etude.report import Curve, Matches, Report, Score
+from etude.report import Report, Score
 from etude.run.storage import Storage
 from etude.train.read import RunData
 from pydantic import Field
@@ -80,11 +80,19 @@ from manabot.infra.runtime import regime_tag
 from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.training.panels import ML, PERF
 from manabot.training.regime import (
     DampedPolicyLearning,
     IterationSchedule,
     TrainingRegime,
     TrainSelfPlay,
+)
+from manabot.training.report import (
+    against_earlier_self,
+    against_fixed,
+    head_to_head,
+    job_labels,
+    learning_schedule,
 )
 from manabot.training.state.game_errors import GameErrorState
 import managym
@@ -1095,34 +1103,35 @@ def report() -> Report:
     equal-hours curve is drawn at w160l8's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
+    regimes, _ = frozen()
+    jobs = {_regime_id(label): regimes[label] for label in SIZES}
+    small, large = jobs
     return Report(
-        score=Score(table="games", value="score", reference=0.5),
+        score=Score(table="games", value="score", reference=0.5, unit="games"),
         clock="updates",
+        labels=job_labels(
+            {small: ("Small", jobs[small]), large: ("Large", jobs[large])}
+        ),
         evals=(
-            Curve(
-                title="Width 64 vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{SMALL}"),
+            against_earlier_self(
+                "Model vs itself at half training time",
+                tags=tuple(f"half-training-{label}" for label in SIZES),
             ),
-            Curve(
-                title="Width 160, 8 layers vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{LARGE}"),
-            ),
-            Curve(
-                title="Width 64 vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{SMALL}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{LARGE}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal updates",
-                matches=Matches(tag="head-to-head"),
+            against_fixed(
+                "Model vs heuristic",
+                "heuristic",
+                tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
             # Drawn at w160l8's updates; each pair's two hours are in analysis.
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal training hours",
-                matches=Matches(tag="equal-hours"),
+            head_to_head(
+                "Large vs Small at fixed training time",
+                subject=large,
+                tag="equal-hours",
+            ),
+            head_to_head(
+                "Large vs Small at fixed # updates", subject=large, tag="head-to-head"
             ),
         ),
+        perf=PERF,
+        ml=(*learning_schedule(jobs), *ML),
     )

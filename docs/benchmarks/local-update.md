@@ -62,12 +62,15 @@ Retained native comparisons additionally require the original receipt directory
 described in the complete record. Games and evaluations for this work run on
 the Mac mini or CI.
 
-The same script compares the opt-in paths against the defaults:
+The same script compares full evidence and the Python per-branch encoder against
+the defaults, compact evidence with native frontier encoding:
 
 ```sh
 uv run --extra dev python scripts/bench_local_update.py --worlds 16 \
   --rollout-evidence full compact --native-encoder off on --inference-threads 1
 ```
+
+An arm flag that is omitted holds that setting at its default.
 
 Each arm runs the same roots and seeds. The script checks that the arms choose
 identical Commands, write identical tensors and produce values within the
@@ -75,7 +78,7 @@ tolerances above before it reports latencies. It fails if they differ. Change
 `--inference-threads` between invocations, never within one, because the
 thread count is fixed when the process starts.
 
-On the frozen w13 mirror checkout, compact evidence with native batch encoding
+On the frozen w13 mirror checkout, where both were opt-in, compact evidence with native batch encoding
 reduced one depth-20, 16-world decision at a fixed midgame root from 9.7 s to
 1.7 s at one thread (about 5× faster), and was about 9× faster at three
 threads. Commands, tensors and values were identical. Those numbers come from a different world and engine, so
