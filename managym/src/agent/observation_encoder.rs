@@ -13,7 +13,6 @@ use crate::{
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
-    state::mana::SPEND_SUBTYPES,
 };
 
 // Feature widths. Column indices, names and value encodings live in
@@ -361,6 +360,9 @@ pub enum ObservationEncodeError {
     },
     /// A v9 observation that needs state only input v10 holds.
     RequiresInputV10(&'static str),
+    /// State the policy input has no columns or rows for; encoding it would
+    /// hide a distinction the game makes.
+    Unrepresentable(String),
 }
 
 impl fmt::Display for ObservationEncodeError {
@@ -372,6 +374,9 @@ impl fmt::Display for ObservationEncodeError {
                 "policy input v10 required: this observation needs {state}, which v9 cannot hold"
             ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
+            Self::Unrepresentable(state) => {
+                write!(f, "the policy input cannot represent {state}")
+            }
             Self::Capacity {
                 field,
                 capacity,
@@ -469,6 +474,9 @@ pub fn encode_into(
         if let Some(state) = input_v10_state(obs) {
             return Err(ObservationEncodeError::RequiresInputV10(state));
         }
+    }
+    if let Some(state) = unrepresentable_state(obs) {
+        return Err(ObservationEncodeError::Unrepresentable(state));
     }
     validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
@@ -931,6 +939,41 @@ fn turn_state_reads(registry_key: i32) -> TurnStateReads {
         .unwrap_or_default()
 }
 
+/// The subtypes with restricted-mana columns, in column order, and whether a
+/// column's mana also pays for abilities of that subtype's sources. Each
+/// column has exactly this meaning; mana restricted any other way has none.
+const RESTRICTED_SUBTYPE_COLUMNS: [(&str, bool); 3] =
+    [("Lesson", false), ("Shrine", false), ("Ally", true)];
+
+/// Restricted mana in `obs` that the player columns cannot state exactly, if
+/// any. Encoders refuse it before writing a buffer; its subtypes stay
+/// complete in `RestrictedManaData` and the text observation.
+pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
+    for class in obs
+        .agent
+        .restricted_mana
+        .iter()
+        .chain(&obs.opponent.restricted_mana)
+    {
+        if class.except_nonartifact_spells {
+            continue;
+        }
+        let exact = class.spells.iter().chain(&class.abilities).all(|name| {
+            RESTRICTED_SUBTYPE_COLUMNS
+                .iter()
+                .find(|(subtype, _)| subtype == name)
+                .is_some_and(|(subtype, abilities)| {
+                    class.spells.iter().any(|s| s == subtype)
+                        && class.abilities.iter().any(|s| s == subtype) == *abilities
+                })
+        });
+        if !exact {
+            return Some(format!("mana restricted to {}", class.describe()));
+        }
+    }
+    None
+}
+
 /// The v10-only state this observation needs, if any: a definition visible
 /// to the viewer reads it and it is present. V9 refuses such an observation
 /// before writing a buffer rather than hide state a visible card reads.
@@ -1048,10 +1091,10 @@ fn encode_player_features(
         out[player::MANA_WHITE + slot] = player.mana[slot] as f32 / 10.0;
         out[player::LESSON_MANA_WHITE + slot] = player.lesson_mana[slot] as f32 / 10.0;
     }
-    // Restricted mana each spending subtype may use, by color. A class
+    // Restricted mana each column's subtype may use, by color. A class
     // admitting several subtypes counts under each, so these columns
     // overlap and need not sum to the total above.
-    for (index, subtype) in SPEND_SUBTYPES.iter().enumerate() {
+    for (index, (subtype, _)) in RESTRICTED_SUBTYPE_COLUMNS.iter().enumerate() {
         for class in player
             .restricted_mana
             .iter()

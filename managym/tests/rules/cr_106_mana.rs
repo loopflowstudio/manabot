@@ -121,17 +121,17 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost, ManaUse};
+    use managym::state::mana::{Mana, ManaCost, ManaRestriction, SpendingContext};
 
-    let lesson = ManaUse::spell(["Lesson"]);
+    let lesson = ManaRestriction::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
             let mut amounts = [0; 6];
             amounts[slot] = 1;
-            let mut pool = Mana::restricted_to(lesson, amounts);
+            let mut pool = Mana::restricted_to(lesson.clone(), amounts);
             let mut cost = ManaCost::parse("1");
             if eligible {
-                cost.purpose = lesson;
+                cost.purpose = SpendingContext::cast(["Lesson"], []);
             }
             assert_eq!(pool.can_pay(&cost), eligible);
             if eligible {
@@ -140,6 +140,79 @@ fn audit_restricted_mana_never_pays_unrelated_costs() {
             }
             pool.clear();
             assert_eq!(pool, Mana::default());
+        }
+    }
+}
+
+/// CR 106.6: a restriction may name any subtype. Mana for Ogre spells casts
+/// Gray Ogre and nothing else; mana for abilities of Scarecrow sources pays
+/// Scarecrow Guide's activation but not a Scarecrow spell. The observation
+/// keeps each restriction whole, and the policy input, whose columns name
+/// only Lesson, Shrine and Ally purposes, refuses it rather than drop it.
+#[test]
+fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
+    use managym::{
+        agent::{
+            action::Action,
+            observation::Observation,
+            observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
+        },
+        state::{
+            game_object::PlayerId,
+            mana::{Mana, ManaRestriction},
+        },
+    };
+
+    use crate::support::{inspect::can_cast, play::command};
+
+    let ogre_spells = ManaRestriction::spell(["Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Gray Ogre", "Lightning Strike"]);
+    let ogre = move_to_hand(&mut s, "Gray Ogre");
+    let strike = move_to_hand(&mut s, "Lightning Strike");
+    s.game_mut().state.players[0].mana_pool =
+        Mana::restricted_to(ogre_spells.clone(), [0, 0, 0, 3, 0, 0]);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, ogre));
+    assert!(!can_cast(&s, strike));
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let restricted = &observation.agent.restricted_mana;
+    assert_eq!(restricted.len(), 1);
+    assert_eq!(restricted[0].spells, ["Ogre"]);
+    assert_eq!(restricted[0].mana, [0, 0, 0, 3, 0, 0]);
+    assert!(matches!(
+        encode(&observation, &ObservationEncoderConfig::default()),
+        Err(ObservationEncodeError::Unrepresentable(state)) if state == "mana restricted to Ogre spells"
+    ));
+    command(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == ogre),
+    );
+    // The restricted pool pays the whole cost, so payment is automatic.
+    assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Stack));
+
+    for (restriction, activates) in [
+        (ManaRestriction::only([], ["Scarecrow"]), true),
+        (ManaRestriction::spell(["Scarecrow"]), false),
+    ] {
+        let mut s = five_color_unfunded_setup(&["Scarecrow Guide"]);
+        let guide = s.force_permanent_on_battlefield(0, "Scarecrow Guide");
+        s.game_mut().state.players[0].mana_pool =
+            Mana::restricted_to(restriction.clone(), [0, 0, 0, 0, 0, 1]);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let offered =
+            s.action_space().actions.iter().any(
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == guide),
+            );
+        assert_eq!(offered, activates, "{}", restriction.describe());
+        if activates {
+            command(
+                &mut s,
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == guide),
+            );
+            assert_eq!(s.game().state.players[0].mana_pool, Mana::default());
+            command(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
+            assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("W"));
         }
     }
 }

@@ -963,6 +963,10 @@ def input_v10_state(obs: Observation) -> str | None:
     """The state only policy input v10 holds that `obs` needs, if any."""
     ...
 
+def unrepresentable_state(obs: Observation) -> str | None:
+    """State in `obs` that no policy input version can represent, if any."""
+    ...
+
 class CardPool:
     """The cards available to a build: supported names and positive counts."""
     def __init__(self, cards: dict[str, int]) -> None: ...
