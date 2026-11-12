@@ -263,3 +263,45 @@ steer; current `check_tle_coverage.py --bonus-sheet` is 21/61 with 40 missing
 (66/242 on the full ledger). For this Task the production open question blocks
 only Heartbeat of Spring, The Great Henge and Tarnished Citadel; Toph, Uncle's
 Musings and Animal Attendant are non-bonus. Plan rewritten to the 61-card scope.
+
+## Seventh pass — 13 bonus cards, 2026-11-12 UTC
+
+Defined: Join the Dance, Dockside Extortionist, Blasphemous Act, Agent of
+Treachery, Return of the Wildspeaker, Warstorm Surge, Noxious Gearhulk, Searing
+Blood, Rending Volley, Rites of Flourishing, Fevered Visions, Drannith
+Magistrate, Imprisoned in the Moon. Shells fetched by first-printing id through
+`https://api.scryfall.com/cards/collection` on 2026-11-12 UTC; Human token id
+`7d13a93a-a43d-4cf5-8300-8341f3b7f1b1` from Join the Dance's `all_parts`.
+
+Found and taken (reversible):
+- Searing Blood's delayed damage was silently dropped: the damage proposal
+  rejected the resolved spell's stack incarnation (no battlefield LKI).
+  `proposed_event.rs::object_ref_is_known` now accepts an earlier incarnation of
+  a real card (CR 603.7d source of a delayed trigger). Rules/lib/cards suites pass.
+- Step-start triggers now carry the active player as the trigger's player
+  (`PlayerSelector::TriggeringPlayer`), for Rites and Fevered Visions.
+- `Destroy` now binds its results like `Move`, so `Condition::Moved` reads
+  "destroyed this way" (Gearhulk); no earlier card read `Moved` after `Destroy`.
+- Imprisoned in the Moon uses the existing `SetTypes { [Land], [] }` modeling
+  (the rules witness in `cr_613_continuous_effects.rs`), which also drops land
+  subtypes; whether a land keeps its land types under it is unverified.
+- Drannith Magistrate shares the hand-only gate (`zone_cast_cost`); like the
+  existing until-next-turn restriction it does not stop free casts from exile or
+  library during resolution (`ExileUntilNonlandCastFree`, `CastLibraryTopFree`).
+  Cascade will need that gate. The player `hand_only` column still shows only the
+  temporary restriction; the static is seen through card tokens and actions.
+
+Open (token identity; blocks two cards): Release to Memory makes a plain 1/1
+colorless Spirit, but the content pack registers tokens by unique name and
+`Spirit` is the TLA token with block restrictions. Lita's Zeppelin has no
+token printing on Scryfall (searches `name:Zeppelin include:extras`, `set:tj22`),
+so no `scryfall_id` exists for it. Both wait for a token-identity decision.
+
+Not run before commits: the `/verify` skill (it verifies a merged change and
+finishes the Task, so it does not fit mid-implementation checkpoints).
+
+Results (debug unless stated): full cards target 645 passed; `rules_tests` 169
+passed (2 ignored); `conformance_tests` 2 passed; lib 192 passed; fmt applied.
+Rebuilt cp313 extension (atomic replace); `check_tle_coverage.py --bonus-sheet`
+34 of 61, 27 missing, no other issues; pytest text observation, observation
+parity, TLE allocation and policy catalog 101 passed.

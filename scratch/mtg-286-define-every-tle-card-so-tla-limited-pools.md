@@ -32,9 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 21 of 61 defined,
-40 missing, no other issues. Without the option (242-name ledger): 66 defined,
-176 missing. `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 34 of 61 defined,
+27 missing, no other issues (rebuilt extension, seventh pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -54,11 +53,21 @@ Rules added on this branch, each with directed tests and observation parity
 - `Condition::AnyGraveyardAtLeast` (Visions of Beyond);
   `PlayerSelector::TriggeringPlayersOpponents` (Standstill).
 - Sheep creature subtype.
+- Seventh pass (13 cards; evidence in `scratch/questions.md`): Human token;
+  `StaticAbility::CostsLessPerPermanentOnBattlefield`, `CantBeCountered`,
+  `AdditionalLandPlayEachPlayer`, `OpponentsCastOnlyFromHand`;
+  `Condition::ControlsUnownedAtLeast`, `CardsInHandAtLeast`;
+  `EffectValue::GreatestPowerYouControl { predicate }`, `TargetToughness`
+  (LKI now keeps toughness); `DealDamage { by }` names the damage source;
+  `Destroy` answers `Condition::Moved`; `CardPredicate::colors_any`;
+  `TriggerCondition::BeginningOfEachDrawStep`/`BeginningOfEachEndStep` with the
+  active player as "that player"; an earlier incarnation of a real card is a
+  known damage source (a resolved spell's delayed trigger).
 
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 40 bonus-sheet names by rule family
+## Remaining: 27 bonus-sheet names by rule family
 
 Grouping from the allocation ledger; each family lands with its cards.
 
@@ -72,11 +81,11 @@ Grouping from the allocation ledger; each family lands with its cards.
 | Combat skip and requirements | Empty City Ruse, Taunting Challenge |
 | Counter and zone-history triggers | Bloodchief Ascension, Dark Depths, Brought Back |
 | Cast-time costs (alternate exile cost, replicate, unearth, cumulative upkeep) | Force of Negation, Shattering Spree, Cityscape Leveler, Mystic Remora |
-| Scoped counts and costs | Blasphemous Act, Dockside Extortionist, Return of the Wildspeaker, Training Grounds, Agent of Treachery |
-| New tokens (Human, Spirit, Zeppelin, Coil, Elf Warrior, Marit Lage) | Join the Dance, Release to Memory, Lita, Mechanical Engineer, Koma, Cosmos Serpent (Rhys and Dark Depths above) |
-| Damage source and LKI | Warstorm Surge, Noxious Gearhulk, Searing Blood |
-| Uncounterable and color predicates | Rending Volley (Koma also) |
-| Others per ledger | Drannith Magistrate, Three Dreams, Bribery, Imprisoned in the Moon, Fevered Visions, Rites of Flourishing, Diaochan, Artful Beauty |
+| Scoped costs | Training Grounds (activated-cost reduction, floor one) |
+| Token identity (open, `scratch/questions.md`) | Release to Memory (plain Spirit vs the TLA Spirit name), Lita, Mechanical Engineer (no Zeppelin token printing) |
+| Modal activation, activation prohibition, Coil token | Koma, Cosmos Serpent (uncounterable now exists) |
+| Selection constraints and chooser/owner separation | Three Dreams (distinct names), Bribery (opponent's library, your battlefield) |
+| Split target choosers | Diaochan, Artful Beauty |
 
 Cascade test cases: continue past expensive nonlands, decline, no qualifying
 card, illegal targets, random bottom order after the cast decision, replay/fork at
