@@ -12,7 +12,7 @@ import pytest
 import torch
 
 from experiments.tla_corpus import Corpus, GameEvidence, Source, Trophy
-from experiments.tla_pools import derive_pools
+from experiments.tla_pools import derive_pools, main as pools_main
 from manabot import managym
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import StrictModel, file_sha256
@@ -43,11 +43,9 @@ def test_limited_python_choices_and_malformed_prefixes() -> None:
             managym.LimitedRules(pool={"Forest": count})
 
 
-def test_pool_derivation_preserves_events_references_and_frozen_split(
-    tmp_path: Path,
-) -> None:
-    source = Corpus(
-        target=3,
+def _pool_source(event_ids: tuple[str, ...] = ("a", "b", "c")) -> Corpus:
+    return Corpus(
+        target=len(event_ids),
         source=Source(
             retrieved_at="2026-11-11",
             etag=None,
@@ -77,9 +75,16 @@ def test_pool_derivation_preserves_events_references_and_frozen_split(
                 ),
                 deck=None,  # Earlier admission must not gate current-world rebuilding.
             )
-            for name in ("a", "b", "c")
+            for name in event_ids
         ),
     )
+
+
+def test_pool_derivation_preserves_events_references_and_frozen_split(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _pool_source()
     path = tmp_path / "source.json"
     payload = source.model_dump(mode="json")
     payload["trophies"][0]["decklist"]["issues"] = [
@@ -106,8 +111,13 @@ def test_pool_derivation_preserves_events_references_and_frozen_split(
     ]
     assert corpus.entries[0].reference == corpus.entries[1].reference
     assert corpus.entries[0].entry_id != corpus.entries[1].entry_id
-    output = tmp_path / "pools.json"
-    output.write_text(corpus.model_dump_json())
+    output = tmp_path / "pools-v1" / "corpus.json"
+    monkeypatch.setattr(
+        sys, "argv", ["tla_pools", str(path), str(output), "--held-out", "1"]
+    )
+    pools_main()
+    with pytest.raises(ValueError, match="frozen"):
+        pools_main()
     restored = PoolCorpus.read(output)
     assert restored.digest == corpus.digest
     assert len(restored.population("train").decks) == 2
@@ -116,6 +126,57 @@ def test_pool_derivation_preserves_events_references_and_frozen_split(
     damaged["held_out_event_ids"] = ["missing"]
     with pytest.raises(ValueError, match="held-out"):
         PoolCorpus.model_validate(damaged)
+
+
+def test_pool_exclusions_preserve_source_split_without_backfilling(
+    tmp_path: Path,
+) -> None:
+    source = _pool_source(("a", "b", "c", "d"))
+    path = tmp_path / "source.json"
+    path.write_text(source.model_dump_json())
+    complete = derive_pools(path, held_out=2)
+    excluded = {
+        complete.held_out_event_ids[0],
+        next(e.event_id for e in complete.entries if e.split == "train"),
+    }
+    payload = source.model_dump(mode="json")
+    for trophy in payload["trophies"]:
+        if trophy["event_id"] in excluded:
+            trophy["decklist"] = managym.Decklist(
+                "Main\n40 Forest\n1 Unknown main card\nSideboard\n1 Unknown sideboard card\n"
+            ).to_dict()
+    path.write_text(json.dumps(payload))
+    before = path.read_bytes()
+    corpus = derive_pools(path, held_out=2)
+    assert path.read_bytes() == before
+    assert len(corpus.entries) == 2
+    assert corpus.held_out_event_ids == complete.held_out_event_ids[1:]
+    assert {e.event_id: e.split for e in corpus.entries} == {
+        e.event_id: e.split for e in complete.entries if e.event_id not in excluded
+    }
+    assert corpus.provenance.source_event_count == 4
+    assert corpus.provenance.held_out_count == 2
+    assert {e.event_id for e in corpus.provenance.excluded_events} == excluded
+    assert all(
+        e.unknown_names == ("Unknown main card", "Unknown sideboard card")
+        for e in corpus.provenance.excluded_events
+    )
+    output = tmp_path / "pools.json"
+    output.write_text(corpus.model_dump_json())
+    assert PoolCorpus.read(output) == corpus
+    damaged = corpus.model_dump(mode="json")
+    damaged["provenance"]["excluded_events"].pop()
+    with pytest.raises(ValueError, match="cover the source"):
+        PoolCorpus.model_validate(damaged)
+
+
+def test_pool_derivation_does_not_exclude_malformed_lists(tmp_path: Path) -> None:
+    payload = _pool_source().model_dump(mode="json")
+    payload["trophies"][0]["decklist"] = managym.Decklist("Main\n0 Forest\n").to_dict()
+    path = tmp_path / "source.json"
+    path.write_text(json.dumps(payload))
+    with pytest.raises(managym.DeckImportError):
+        derive_pools(path, held_out=1)
 
 
 def _tiny_regime() -> TrainingRegime:

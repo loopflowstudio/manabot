@@ -26,11 +26,29 @@ Deck building happens before a game; its picks are not in-game Commands.
 
 ## Pools and reference builds
 
-The derivation and loader are implemented. Publication is blocked as of
-2026-11-11: current-world re-admission rejects 78 of the retained 1,000 events,
-covering 41 unsupported card names. No derived corpus or split has been
-published. The population must remain intact; resolving this requires card
-support or an explicit revision of the population contract.
+Restore the frozen corpus from the repository root:
+
+```sh
+uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg282/pools-v1/corpus.json
+```
+
+Then load its saved training and evaluation populations:
+
+```python
+from pathlib import Path
+
+from manabot.training.pools import PoolCorpus
+
+corpus = PoolCorpus.read(Path("experiments/data/mtg282/pools-v1/corpus.json"))
+assert len(corpus.entries) == 922
+training = corpus.population("train")
+evaluation = corpus.population("held_out")
+assert len(training.decks) == 827
+assert len(evaluation.decks) == 95
+```
+
+Both populations contain human reference decks with their population entry
+IDs. Loading does not download a fresh 17Lands dump or launch training.
 
 The TLA pool corpus pairs each trophy event with its human reference build.
 The pool is the selected build's main deck plus sideboard, with basic lands
@@ -45,11 +63,14 @@ match; an event identity answers which human build and pool to compare with.
 
 The source is the retained 17Lands trophy corpus produced by
 [`experiments/tla_corpus.py`](../experiments/tla_corpus.py): the first 1,000
-events with seven observed wins, using each event's seventh-win build. Select
-the events before admission; an unsupported card does not authorize replacing
-an event or repairing its list. Re-admit the retained source against the
-current world for a new corpus version. The historical v10 pilot's 134-entry
-population and its evidence keep their original identities.
+events with seven observed wins, using each event's seventh-win build. The
+pool corpus includes the 922 events admitted by the derivation world. Its
+provenance records the other 78 event IDs and their unknown card names: 41
+distinct names from the TLE bonus sheet. An excluded event contributes neither
+a pool nor a reference build; no cards are removed to make it eligible and no
+replacement event is selected. Source digests, attribution and license remain
+with the derived corpus. The historical v10 pilot's 134-entry population and
+its evidence keep their original identities.
 
 Freeze the held-out event IDs with the pool corpus before training. Consumers
 load that saved partition; they do not make a fresh random split on each run.
@@ -57,34 +78,47 @@ Training draws from the training partition. To evaluate a builder, compare its
 deck with the human reference from the **same held-out pool**, using a fixed
 reference pilot. Evaluate pilot changes separately on fixed trophy lists.
 
-The derivation defaults to 100 held-out events, ranked by SHA256 of
-`mtg-282-held-out-v1:<event_id>` with event ID as the tie-breaker. It records the
-explicit partition and source digests. Rebuild from retained source text with:
+The split ranks **all 1,000 source events** by SHA256 of
+`mtg-282-held-out-v1:<event_id>`, with event ID as the tie-breaker, and reserves
+the first 100 for evaluation. The saved held-out partition contains only the
+admitted events among those 100; exclusions are not backfilled. The remaining
+admitted events are training entries: this corpus has 95 held-out and 827
+training events. Provenance saves the source count and reserved count alongside
+the exclusions; loading checks that the entries and exclusions cover the source
+and that the partition matches its hash ranking. Adding support for the 78 excluded
+events therefore moves no existing assignment. Keep the source population,
+hash rule and held-out count unchanged when deriving that expanded corpus.
+
+To derive from retained source text instead of restoring the artifact:
 
 ```sh
 uv run --extra artifacts python -m manabot.data fetch experiments/data/mtg213/corpus-v1/corpus.json
 uv run python -m experiments.tla_pools experiments/data/mtg213/corpus-v1/corpus.json experiments/data/mtg282/pools-v1/corpus.json
 ```
 
-The second command currently rejects the unsupported events above. It does not
-write a partial population. Once a corpus is available, load it with
-`PoolCorpus.read(path)` from `manabot.training.pools`; `population("train")`
-and `population("held_out")` return human reference deck sources with event IDs.
+Derivation reparses the unchanged source decklists before current-world
+admission and saves the admitted entries, exclusions and explicit partition.
+`--held-out` defaults to 100 and sets the number reserved from the full source
+population, not a target count after admission. Changing it defines a different
+split. An existing output file is never overwritten: choose a new versioned
+path. Later TLE support requires a new corpus version; retain this version and
+its exclusions with the runs that used it.
 
-Published corpus files live in the experiment artifact store. Restore the
-manifest-listed corpus directory from the repository root with:
+Publish a derived corpus to the experiment artifact store with:
 
 ```sh
-uv run --extra artifacts python -m manabot.data fetch <corpus-directory>
+uv run --extra artifacts python -m manabot.data publish experiments/data/mtg282/pools-v1/corpus.json
 ```
 
-Replace `<corpus-directory>` with its path under `experiments/data/` in
-`experiments/data.manifest.json`. The command restores the recorded bytes and
-checks their digest. It requires artifact-store access or an existing local
-cache. If a local file differs, preserve it separately and restore the frozen
-file; do not edit the manifest to bless different bytes. Retain source
-provenance and attribution alongside derived pools. Loading a corpus does not
-download a fresh 17Lands dump or launch training.
+Commit `experiments/data.manifest.json`, keeping the corpus bytes in the
+artifact store rather than tracking them in Git. Fetching uses that manifest
+and checks the restored bytes' digest; it requires artifact-store access or an
+existing local cache. If a local file differs, preserve it separately and
+restore the frozen file; do not edit the manifest to bless different bytes.
+`PoolCorpus.read` validates reference legality and the saved partition, and
+rejects a corpus whose world identity differs from the installed runtime.
+Use the matching runtime to consume frozen evidence, or derive a new corpus
+version for the new world.
 
 ## Legal picks and stopping
 

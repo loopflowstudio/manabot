@@ -30,8 +30,10 @@ are in the [README](../README.md#contracts-the-code-enforces).
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
    and their tests, reached by the engine only through `managym_cards::catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
-5. **`src/infra/`**: Logging and profiler infrastructure
-6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+5. **`src/format/`**: Format construction rules and picking interfaces;
+   `limited.rs` adds Limited pool counts and deck size rules to world admission
+6. **`src/infra/`**: Logging and profiler infrastructure
+7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
 `cards/src/`, returning the engine's own `CardDefinition` in its rules types

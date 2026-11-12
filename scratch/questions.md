@@ -32,8 +32,29 @@ unsupported names. Examples: Scout's Warning (7 occurrences), Volcanic Torrent
 Historical Decklist issues must be removed by reparsing the unchanged source
 text before explicit re-admission; the counts above use that path.
 
-This contradicts the Task's premise that the current world admits all 1,000.
-Corpus publication is stopped: no smaller population, replacement events,
-removed cards, or new card mechanics are authorized by this implementation.
-Resolve card support or revise the population contract before deriving and
-publishing the corpus. No split has been published or used for training.
+This contradicted the Task's premise that the current world admits all 1,000
+and stopped publication pending a population decision (recorded below).
+At that point no split had been published or used for training.
+
+Jack Heart (2026-11-11), on the 41 rejected names: "oh these, are the tla
+bonus cards". All 41 are reprints outside the defined TLA set (Scout's Warning
+7 events, Blasphemous Act 5, Volcanic Torrent 5, Black Sun's Zenith 4, Humble
+Defector 4, ...); 22 of them appear only in sideboards.
+
+Decision (Jack Heart, 2026-11-11): "(1) is fine" — publish from the 922
+admitted events, recording the 78 exclusions and their names in provenance.
+The rejected names are TLE ("which are techincally part of TLE"); Task ed9b1d
+covers defining all of TLE. The split must stay stable when those 78 are added.
+
+Documentation choice (2026-11-11): use the steer's first permitted split rule,
+retaining the existing ranking across all 1,000 source events and restricting
+its first 100 to admitted events, without backfilling. This is the simpler
+extension of the existing derivation and preserves assignments as TLE support
+expands. The admitted held-out count is not assumed to equal 100; publication
+must record the actual saved membership.
+
+Publication (2026-11-11): saved membership is 827 training and 95 held out.
+The 78 exclusions contain 41 distinct unknown names. Publishing with the
+documented Doppler `manabot/prd` environment succeeded; an empty-cache remote
+restore matched the manifest and loaded both populations. No open question
+remains for implementation; broad validation belongs to gate.

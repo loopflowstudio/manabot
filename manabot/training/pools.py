@@ -4,6 +4,8 @@ The corpus owns the split. Loading validates the saved partition and native
 construction rules; it never fetches data, repairs lists or resamples events.
 """
 
+from collections.abc import Iterable
+from hashlib import sha256
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -17,12 +19,33 @@ Count = Annotated[int, Field(strict=True, gt=0)]
 PoolSplit = Literal["train", "held_out"]
 
 
+def held_out_events(event_ids: Iterable[str], count: int) -> tuple[str, ...]:
+    """Reserve evaluation events from the full source, before world admission."""
+    return tuple(
+        sorted(
+            event_ids,
+            key=lambda event: (
+                sha256(f"mtg-282-held-out-v1:{event}".encode()).hexdigest(),
+                event,
+            ),
+        )[:count]
+    )
+
+
+class PoolExclusion(StrictModel):
+    event_id: str = Field(min_length=1)
+    unknown_names: tuple[str, ...] = Field(min_length=1)
+
+
 class PoolProvenance(StrictModel):
     source_corpus_sha256: str = Field(pattern=SHA256_PATTERN)
     source_dump_sha256: str = Field(pattern=SHA256_PATTERN)
     url: str
     attribution: str
     license: str
+    source_event_count: Count
+    held_out_count: Count
+    excluded_events: tuple[PoolExclusion, ...]
 
 
 class PoolEntry(StrictModel):
@@ -74,6 +97,17 @@ class PoolCorpus(StrictModel):
             )
         if held_out != {e.event_id for e in self.entries if e.split == "held_out"}:
             raise ValueError("entry splits differ from frozen held-out event IDs")
+        excluded = {e.event_id for e in self.provenance.excluded_events}
+        if len(excluded) != len(self.provenance.excluded_events) or events & excluded:
+            raise ValueError("excluded events must be unique and not admitted")
+        source_events = events | excluded
+        if len(source_events) != self.provenance.source_event_count:
+            raise ValueError("admitted and excluded events must cover the source")
+        if self.provenance.held_out_count >= len(source_events):
+            raise ValueError("held-out reservation must leave training events")
+        reserved = held_out_events(source_events, self.provenance.held_out_count)
+        if self.held_out_event_ids != tuple(e for e in reserved if e in events):
+            raise ValueError("held-out partition differs from the source hash ranking")
         return self
 
     @property
