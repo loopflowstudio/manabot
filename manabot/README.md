@@ -192,6 +192,84 @@ remain independent, but a probability at a sampling threshold can turn that
 rounding into a different trajectory; replay uses the retained allocation and
 implementation identity.
 
+### Compact rollout evidence
+
+Full evidence is the default. To keep the same search but retain less per
+rollout, select compact evidence in the search config:
+
+```python
+player, observation_space = make_player(
+    {
+        "kind": "local_update",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": file_sha256(checkpoint),
+        "config": {
+            "worlds": 16,
+            "depth": 20,
+            "decision_seconds": 30,
+            "rollout_evidence": "compact",
+        },
+    },
+    seed=42,
+)
+```
+
+`player.last_receipt.schema` is then `regularized-local-update/v4`. Every
+rollout keeps its seed, signed value, terminal flag and Command count. Its
+`actor_observation_hashes` list is empty, and its branch audit records
+`audit: false` with empty tapes. During rollouts, search records no native
+witness for each Command and computes no viewer hash for each actor. Each
+Command it applies still increments a count, and the receipt checks that count
+against the native session's counters. Search still checks the root viewer,
+validates every sampled world, checks Command preconditions and keeps the same
+policy inputs and rollout budgets. For the same checkpoint, root, history and
+seed, compact and full evidence choose the same Commands and produce the same
+tensors and values. Compact receipts cannot show that each rollout step matches
+the witness that full evidence would have recorded. `verify_replay` checks only
+the evidence a receipt retains.
+
+`rollout_evidence="full"` is the default and still writes
+`regularized-local-update/v3` receipts with the same `config_json` bytes as
+before. Readers still accept historical v1–v3 receipts. The evidence mode is
+part of the implementation and receipt identity: a registered player selecting
+compact evidence must declare `search_semantics.branch_audit: false`, and
+switching modes never relabels an existing experiment's receipts.
+
+### Native frontier encoding
+
+By default, each frontier forward allocates a fresh batch and fills its rows one
+branch at a time. `LocalUpdateTeacher(..., native_encoder=True)` instead keeps
+frontier buffers from `ObservationEncoder.allocate(capacity)` for the life of the
+teacher. Native code writes every live branch's acting-player observation into
+these buffers with one call, `managym.encode_observations_into(envs, buffers,
+capacity)`, which returns each row's legal-action count. The buffers grow only
+when a frontier exceeds their capacity, and rows past the live frontier are left
+untouched. The tensor layout is the checkpoint's own, and every legal action is
+still required. The option leaves inference threads, rollout depth, legal
+support and the search config unchanged, and is not recorded in the receipt.
+Python callers of `make_player` enable it with a top-level
+`"native_encoder": true` beside `"config"`. Registered evaluation players keep
+the default.
+
+A teacher with native encoding reuses its buffers between calls, so only one
+search may use it at a time; give each concurrent search its own teacher. An
+extension without the batch writer, or a buffer whose shape, dtype or
+writability does not match the selected observation space, raises before any
+inference.
+
+### Inference threads
+
+Search never changes Torch's thread settings. A process chooses its intra-op
+thread count once, before constructing a teacher, with
+`torch.set_num_threads(n)`. Evaluation game children always use one thread.
+`scripts/bench_local_update.py --inference-threads N` (default 1) sets the
+count before loading the model and records the requested and effective intra-op
+counts, plus the inter-op count, which it leaves unchanged. A single-process
+measurement with more threads does not predict throughput when several workers
+share the machine.
+
+### Budgets and failures
+
 The decision budget includes viewer-history work. Exceeding it raises
 `TimeoutError` with no target; increase `decision_seconds` or reduce `worlds` or
 `depth` before retrying. The 30-second example is an explicit budget, not a
