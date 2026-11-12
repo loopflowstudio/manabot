@@ -45,7 +45,8 @@ use managym::{
             PLAYER_BENT_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX,
             PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
-            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
+            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TURN_STATE_DIM, TURN_STATE_LIFE_LOST_INDEX,
+            TURN_STATE_NONARTIFACT_MANA_INDEX,
         },
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -312,6 +313,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             Seen::Via("keyword_columns: effective keywords"),
         ),
         Modification::ExileIfWouldDie => ("Modification::ExileIfWouldDie", Seen::Permanent(23)),
+        Modification::ExileIfWouldLeave => (
+            "Modification::ExileIfWouldLeave",
+            Seen::Via("its shared-effect row (modification id)"),
+        ),
         Modification::KeepUnspentMana(_) => (
             "Modification::KeepUnspentMana",
             Seen::Player(PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_KEEPS_RED_MANA_INDEX + 1),
@@ -411,6 +416,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
             Keyword::Hexproof,
         ]))),
         permanent(Modification::ExileIfWouldDie),
+        permanent(Modification::ExileIfWouldLeave),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
         (true, Modification::NextCreatureCastFlash),
@@ -426,7 +432,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 35;
+const MODIFICATION_VARIANTS: usize = 36;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -533,7 +539,7 @@ fn player_selector_witnesses() -> [PlayerSelector; 7] {
 }
 
 /// Turn-scoped state. Per-player turn history reaches each player's row.
-fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
     let TurnState {
         player_controls: _,
         active_player: _,
@@ -541,6 +547,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         lands_played: _,
         spells_cast: _,
         history,
+        graveyard_from_battlefield: _,
         ability_triggers_this_turn: _,
         ability_resolutions_this_turn: _,
         extra_turns: _,
@@ -559,6 +566,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         land_entered: _,
         cards_drawn: _,
         bent: _,
+        life_lost: _,
     } = history[0];
     [
         ("player_controls", Seen::Via("v5 relations kind 13: controller, affected player, duration, active/pending, creation order")),
@@ -605,6 +613,14 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         (
             "history.bent",
             Seen::Player(PLAYER_BENT_INDEX, PLAYER_BENT_INDEX + 4),
+        ),
+        (
+            "history.life_lost",
+            Seen::Via("input v10 player_turn_state column 0; v9 refuses it once a visible card reads it"),
+        ),
+        (
+            "graveyard_from_battlefield",
+            Seen::Via("input v10 card_turn_state of each graveyard card row (CardData.from_battlefield_this_turn)"),
         ),
         (
             "history.attacked",
@@ -1017,6 +1033,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
         TriggerCondition::OpponentSearchesLibrary => "TriggerCondition::OpponentSearchesLibrary",
+        TriggerCondition::CardPutIntoOpponentsGraveyard => {
+            "TriggerCondition::CardPutIntoOpponentsGraveyard"
+        }
         TriggerCondition::CreatureDealsCombatDamageToPlayer { .. } => {
             "TriggerCondition::CreatureDealsCombatDamageToPlayer"
         }
@@ -1124,6 +1143,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::CreatureDealsCombatDamageToYou,
         TriggerCondition::AttacksWithAnother,
         TriggerCondition::OpponentSearchesLibrary,
+        TriggerCondition::CardPutIntoOpponentsGraveyard,
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),
@@ -1179,6 +1199,9 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
         Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
         Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
+        Condition::OpponentLostLifeThisTurnAtLeast { .. } => {
+            "Condition::OpponentLostLifeThisTurnAtLeast"
+        }
         Condition::AnyOf(_) => "Condition::AnyOf",
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
@@ -1217,6 +1240,7 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::LandEnteredThisTurn,
         Condition::BentAllFourThisTurn,
         Condition::SacrificedThisTurnAtLeast { count: 2 },
+        Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 },
         Condition::AnyOf(vec![Condition::YourTurn]),
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
@@ -2562,6 +2586,10 @@ enum Buffer {
     Relation,
     Action,
     Facts,
+    /// Input v10 `player_turn_state`: one row per seat.
+    PlayerTurnState,
+    /// Input v10 `card_turn_state`: one value per card row.
+    CardTurnState,
 }
 
 impl Buffer {
@@ -2574,13 +2602,15 @@ impl Buffer {
             Buffer::Relation => RELATION_DIM,
             Buffer::Action => managym::agent::observation_encoder::ACTION_DIM,
             Buffer::Facts => FACT_DIM,
+            Buffer::PlayerTurnState => TURN_STATE_DIM,
+            Buffer::CardTurnState => 1,
         }
     }
 
     /// The row's validity column; player validity is a buffer of its own.
     fn validity(self) -> Option<usize> {
         match self {
-            Buffer::Player => None,
+            Buffer::Player | Buffer::PlayerTurnState | Buffer::CardTurnState => None,
             Buffer::Relation => Some(31),
             Buffer::Facts => Some(FACT_VALID_INDEX),
             _ => Some(self.width() - 1),
@@ -2725,6 +2755,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         land_entered => [column(Player, PLAYER_LAND_ENTERED_INDEX)],
         cards_drawn => [column(Player, PLAYER_CARDS_DRAWN_INDEX)],
         bent => [Columns(Player, PLAYER_BENT_INDEX, 4)],
+        life_lost => [column(PlayerTurnState, TURN_STATE_LIFE_LOST_INDEX)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, 0, 7)],
@@ -2748,6 +2779,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         face_down => [column(Card, PERMISSION + 11)],
         cast_permission => [Rows("cast permission below")],
         x => [Columns(Card, CARD_X_INDEX, 2)],
+        from_battlefield_this_turn => [column(CardTurnState, 0)],
     }));
     fields.extend(encoding!(CastPermissionData {
         player_id => [Columns(Card, PERMISSION, 2)],
@@ -2765,7 +2797,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
         abilities => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
-        mana => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Columns(Player, 34, 6)],
+        except_nonartifact_spells => [Columns(PlayerTurnState, TURN_STATE_NONARTIFACT_MANA_INDEX, 6)],
+        mana => [
+            Columns(Player, PLAYER_RESTRICTED_INDEX, 18),
+            Columns(Player, 34, 6),
+            Columns(PlayerTurnState, TURN_STATE_NONARTIFACT_MANA_INDEX, 6),
+        ],
     }));
     fields.extend(encoding!(CardTypeData {
         is_castable => [Definition],
@@ -3029,6 +3066,8 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
         Buffer::Relation,
         Buffer::Action,
         Buffer::Facts,
+        Buffer::PlayerTurnState,
+        Buffer::CardTurnState,
     ] {
         for index in (0..buffer.width()).filter(|i| Some(*i) != buffer.validity()) {
             assert!(
@@ -3087,6 +3126,7 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
         face_down => Printed("viewer state"),
         cast_permission => Printed("a permission to play the card from exile"),
         x => Printed("announced when cast"),
+        from_battlefield_this_turn => Printed("turn history of the graveyard object"),
     })
 }
 
@@ -4544,4 +4584,79 @@ fn merchant_counted_tap_cost_reaches_learning_tokens() {
         + cost;
     assert_eq!(tokens[count + 1], (TokenKind::Integer, 2));
     assert!(tokens[cost..count].contains(&(TokenKind::Text, name_value("Food"))));
+}
+
+#[test]
+fn input_v10_carries_turn_state_that_v9_refuses() {
+    use crate::support::{
+        game::force_new_card_in_hand,
+        inspect::card_of,
+        play::{cast, settle},
+    };
+    use managym::agent::observation_encoder::ObservationEncodeError;
+    let v9 = ObservationEncoderConfig::default();
+    let v10 = ObservationEncoderConfig {
+        turn_state: true,
+        ..ObservationEncoderConfig::default()
+    };
+    let refusal = |s: &Scenario| match encode(&Observation::for_player(s.game(), PlayerId(0)), &v9)
+    {
+        Err(ObservationEncodeError::RequiresInputV10(state)) => Some(state),
+        Ok(_) => None,
+        Err(error) => panic!("{error}"),
+    };
+    let encoded = |s: &Scenario| {
+        encode(&Observation::for_player(s.game(), PlayerId(0)), &v10).expect("v10 encodes")
+    };
+
+    // Life lost is refused only once a visible card reads it.
+    let mut s = five_color_setup(&["Bloodchief Ascension", "Lightning Strike"]);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(refusal(&s), None);
+    s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
+    assert_eq!(refusal(&s), Some("life lost this turn"));
+    let row = encoded(&s).player_turn_state;
+    assert_eq!(row[TURN_STATE_LIFE_LOST_INDEX], 0.0);
+    assert_eq!(row[TURN_STATE_DIM + TURN_STATE_LIFE_LOST_INDEX], 3.0 / 20.0);
+
+    // A graveyard card put there from the battlefield, read by Brought Back
+    // in the viewer's hand.
+    let mut s = five_color_setup(&["Brought Back", "Gray Ogre", "Lightning Strike"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(refusal(&s), None);
+    force_new_card_in_hand(&mut s, 0, "Brought Back");
+    assert_eq!(
+        refusal(&s),
+        Some("a card put into a graveyard from the battlefield this turn")
+    );
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let slot = observation
+        .agent_cards
+        .iter()
+        .position(|card| card.id == s.game().state.cards[ogre_card].id.0 as i32)
+        .expect("graveyard row");
+    let cards = encoded(&s).card_turn_state;
+    assert_eq!(cards[slot], 1.0);
+    assert_eq!(cards.iter().sum::<f32>(), 1.0);
+
+    // Powerstone mana in a pool (its production is exercised by the
+    // castability test in `tests/cards/bro.rs`).
+    let mut s = five_color_setup(&["Gray Ogre"]);
+    assert_eq!(refusal(&s), None);
+    s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
+        managym::state::mana::ManaUse::except_nonartifact_spells(),
+        [0, 0, 0, 0, 0, 1],
+    );
+    assert_eq!(
+        refusal(&s),
+        Some("mana that can't be spent to cast nonartifact spells")
+    );
+    let row = encoded(&s).player_turn_state;
+    assert_eq!(row[TURN_STATE_NONARTIFACT_MANA_INDEX + 5], 0.1);
 }

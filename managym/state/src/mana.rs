@@ -41,10 +41,21 @@ pub const SPEND_SUBTYPES: [&str; 3] = ["Lesson", "Shrine", "Ally"];
 /// every purpose the mana may pay for. Bit `i` of `spells` is "cast a spell
 /// with subtype `SPEND_SUBTYPES[i]`"; of `abilities`, "activate an ability of a
 /// source with that subtype". The empty use is an ordinary payment.
+///
+/// `except_nonartifact_spells` is the one restriction stated by exclusion
+/// (a Powerstone's "can't be spent to cast a nonartifact spell"): such mana
+/// pays for anything but a purpose marked `casting_nonartifact`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 pub struct ManaUse {
     pub spells: u8,
     pub abilities: u8,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
+    /// As a purpose: casting a spell that isn't an artifact. Derived from
+    /// the spell whenever it is priced, so never serialized: a cost's
+    /// identity stays what its card and choices already state.
+    #[serde(skip)]
+    pub casting_nonartifact: bool,
 }
 
 impl ManaUse {
@@ -62,6 +73,23 @@ impl ManaUse {
         Self {
             spells: Self::mask(spell_subtypes),
             abilities: Self::mask(ability_source_subtypes),
+            ..Self::default()
+        }
+    }
+
+    /// Mana that can't be spent to cast nonartifact spells (Powerstone).
+    pub fn except_nonartifact_spells() -> Self {
+        Self {
+            except_nonartifact_spells: true,
+            ..Self::default()
+        }
+    }
+
+    /// Casting a spell with these subtypes, an artifact or not.
+    pub fn cast<'a>(subtypes: impl IntoIterator<Item = &'a str>, artifact: bool) -> Self {
+        Self {
+            casting_nonartifact: !artifact,
+            ..Self::spell(subtypes)
         }
     }
 
@@ -75,17 +103,26 @@ impl ManaUse {
         Self::new([], subtypes)
     }
 
+    /// No subtype purpose or restriction; whether the spell is an artifact
+    /// matters only against Powerstone mana.
     pub fn is_ordinary(&self) -> bool {
-        *self == Self::default()
+        self.spells == 0 && self.abilities == 0 && !self.except_nonartifact_spells
     }
 
     /// Whether mana restricted to `self` may pay for `purpose`.
     pub fn allows(self, purpose: ManaUse) -> bool {
+        if self.except_nonartifact_spells {
+            return !purpose.casting_nonartifact;
+        }
         self.spells & purpose.spells != 0 || self.abilities & purpose.abilities != 0
     }
 
-    /// How many purposes a restriction admits; narrower mana is spent first.
+    /// How many purposes a restriction admits; narrower mana is spent first,
+    /// and mana restricted only by exclusion is broadest.
     fn breadth(self) -> u32 {
+        if self.except_nonartifact_spells {
+            return u32::MAX;
+        }
         self.spells.count_ones() + self.abilities.count_ones()
     }
 
@@ -100,6 +137,9 @@ impl ManaUse {
                 .collect::<Vec<_>>()
                 .join(" or ")
         };
+        if self.except_nonartifact_spells {
+            return "anything but nonartifact spells".into();
+        }
         let mut parts = Vec::new();
         if self.spells != 0 {
             parts.push(format!("{} spells", names(self.spells)));

@@ -5755,5 +5755,64 @@
     "colors": [
       "W"
     ]
+  },
+  "Bloodchief Ascension": {
+    "name": "Bloodchief Ascension",
+    "mana_cost": "{B}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "At the beginning of each end step, if an opponent lost 2 or more life this turn, you may put a quest counter on this enchantment. (Damage causes loss of life.)\nWhenever a card is put into an opponent's graveyard from anywhere, if this enchantment has three or more quest counters on it, you may have that player lose 2 life. If you do, you gain 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Brought Back": {
+    "name": "Brought Back",
+    "mana_cost": "{W}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose up to two target permanent cards in your graveyard that were put there from the battlefield this turn. Return them to the battlefield tapped.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Cityscape Leveler": {
+    "name": "Cityscape Leveler",
+    "mana_cost": "{8}",
+    "type_line": "Artifact Creature — Construct",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Unearth",
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhen you cast this spell and whenever this creature attacks, destroy up to one target nonland permanent. Its controller creates a tapped Powerstone token.\nUnearth {8}",
+    "colors": []
+  },
+  "The Great Henge": {
+    "name": "The Great Henge",
+    "mana_cost": "{7}{G}{G}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This spell costs {X} less to cast, where X is the greatest power among creatures you control.\n{T}: Add {G}{G}. You gain 2 life.\nWhenever a nontoken creature you control enters, put a +1/+1 counter on it and draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Tarnished Citadel": {
+    "name": "Tarnished Citadel",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. This land deals 3 damage to you.",
+    "colors": []
   }
 }

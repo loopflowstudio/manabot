@@ -1582,6 +1582,7 @@ impl Game {
                 token_name,
                 count,
                 tapped_and_attacking,
+                tapped,
             } => {
                 let count = self.effect_value(count, frame).max(0);
                 let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
@@ -1589,7 +1590,7 @@ impl Game {
                     controller: frame.controller,
                     count,
                     entry: ZoneEntry {
-                        tapped: *tapped_and_attacking,
+                        tapped: *tapped || *tapped_and_attacking,
                         ..Default::default()
                     },
                 }]);

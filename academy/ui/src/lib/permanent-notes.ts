@@ -50,6 +50,8 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
     case 'ExileIfWouldDie':
       return 'exiled instead if it would die';
+    case 'ExileIfWouldLeave':
+      return 'exiled instead if it would leave the battlefield';
     case 'KeepUnspentMana':
       return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
     case 'NoMaximumHandSize':

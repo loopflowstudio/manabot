@@ -98,6 +98,9 @@ pub enum Modification<N = i32> {
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
+    /// Replacement: if it would leave the battlefield, exile it instead of
+    /// putting it anywhere else (unearth, CR 702.84a).
+    ExileIfWouldLeave,
     /// Rules effect on a player: unspent mana of this color stays as steps
     /// and phases end (CR 106.4).
     KeepUnspentMana(Color),
@@ -183,6 +186,7 @@ impl<N> Modification<N> {
             Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
+            Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
@@ -247,6 +251,7 @@ impl Modification {
             | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)
             | Self::ExileIfWouldDie
+            | Self::ExileIfWouldLeave
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
             | Self::NextCreatureCastFlash

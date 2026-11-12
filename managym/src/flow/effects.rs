@@ -188,6 +188,11 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
     }
 
+    /// "If it would leave the battlefield, exile it instead" (unearth).
+    pub fn exiled_if_it_would_leave(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldLeave)
+    }
+
     /// The modes the permanent's "choose one that hasn't been chosen"
     /// ability has chosen.
     pub(crate) fn chosen_modes(&self, permanent_id: PermanentId) -> Vec<usize> {

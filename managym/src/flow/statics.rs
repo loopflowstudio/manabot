@@ -430,6 +430,20 @@ impl Game {
     /// Contextual predicates must read CDA power rather than a printed star's
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn card_matches_predicate(&self, card: CardId, predicate: &CardPredicate) -> bool {
+        if predicate.from_battlefield_this_turn {
+            let Some(object) = self.current_object_ref(card) else {
+                return false;
+            };
+            return self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                && self.state.turn.graveyard_from_battlefield.contains(&object)
+                && self.card_matches_predicate(
+                    card,
+                    &CardPredicate {
+                        from_battlefield_this_turn: false,
+                        ..predicate.clone()
+                    },
+                );
+        }
         if let Some(permanent) = self.state.card_to_permanent[card] {
             return self.permanent_matches_predicate(permanent, predicate);
         }
@@ -693,6 +707,10 @@ impl Game {
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
+            }
+            // Two players: the one opponent, as `PlayerSelector::EachOpponent`.
+            Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
+                self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)

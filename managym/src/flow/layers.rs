@@ -1172,7 +1172,9 @@ pub(super) fn matches_view(
     };
     let card = &game.state.cards[permanent.card];
     let mana_value = card.mana_value_cost().map_or(0, |m| m.mana_value);
-    (!p.namesake || source_name == Some(view.name.as_str()))
+    // A permanent is on the battlefield, never a graveyard card.
+    !p.from_battlefield_this_turn
+        && (!p.namesake || source_name == Some(view.name.as_str()))
         && (!p.flying || view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))

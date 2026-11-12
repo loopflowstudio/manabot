@@ -449,6 +449,13 @@ impl Game {
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
+        // Every life total change is a LifeChanged event, so this is the one
+        // place loss this turn is counted (CR 119.3).
+        if let GameEvent::LifeChanged { player, old, new } = &event {
+            if new < old {
+                self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
+            }
+        }
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);
@@ -631,6 +638,11 @@ impl Game {
             _ => owner,
         };
         self.state.move_card(card, holder, to_zone);
+        if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
+            if let Some(object) = self.current_object_ref(card) {
+                self.state.turn.graveyard_from_battlefield.push(object);
+            }
+        }
 
         if to_zone == ZoneType::Battlefield {
             if entry.transformed {

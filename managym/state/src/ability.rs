@@ -133,6 +133,10 @@ pub enum TriggerCondition {
     /// "Whenever an opponent searches their library" (CR 701.23), even when
     /// the search finds nothing.
     OpponentSearchesLibrary,
+    /// "Whenever a card is put into an opponent's graveyard from anywhere"
+    /// (Bloodchief Ascension): once per card, never a token; "that player"
+    /// is the graveyard's owner.
+    CardPutIntoOpponentsGraveyard,
     /// "Whenever [subject] deals combat damage to a player": once for each
     /// creature that does (`AnyYouControl`: "a creature you control").
     CreatureDealsCombatDamageToPlayer {
@@ -276,6 +280,11 @@ pub enum Condition {
     SacrificedThisTurnAtLeast {
         count: u32,
     },
+    /// "if an opponent lost `amount` or more life this turn" (Bloodchief
+    /// Ascension): any one opponent's total loss this turn.
+    OpponentLostLifeThisTurnAtLeast {
+        amount: u32,
+    },
     /// At least one alternative holds ("as long as you control a land
     /// creature or a land entered the battlefield under your control this
     /// turn").
@@ -379,7 +388,8 @@ impl Condition {
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
             | Condition::BentAllFourThisTurn
-            | Condition::SacrificedThisTurnAtLeast { .. } => false,
+            | Condition::SacrificedThisTurnAtLeast { .. }
+            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => false,
         }
     }
 }
@@ -1039,6 +1049,9 @@ pub enum Effect {
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
+        /// "create a tapped [token]": enters tapped, not attacking.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        tapped: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
@@ -1770,6 +1783,7 @@ impl Effect {
             token_name: token_name.into(),
             count: count.into(),
             tapped_and_attacking: false,
+            tapped: false,
         }
     }
 

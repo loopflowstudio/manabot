@@ -189,6 +189,16 @@ pub const NAME_DIM: usize = 4;
 /// remaining-sideboard counts (`PlayerData` decklist maps).
 pub const DECKLIST_DIM: usize = 5;
 
+// Input v10 adds turn state v9 has no place for, in two buffers whose
+// presence selects it. `player_turn_state` has one row per seat (agent
+// first): life lost this turn / 20, then mana that can't be spent to cast
+// nonartifact spells by W/U/B/R/G/C / 10. `card_turn_state` aligns with the
+// seats' card rows like `semantic_cards`: 1 for a graveyard card put there
+// from the battlefield this turn.
+pub const TURN_STATE_LIFE_LOST_INDEX: usize = 0;
+pub const TURN_STATE_NONARTIFACT_MANA_INDEX: usize = 1;
+pub const TURN_STATE_DIM: usize = TURN_STATE_NONARTIFACT_MANA_INDEX + 6;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
     pub max_facts: usize,
@@ -199,6 +209,9 @@ pub struct ObservationEncoderConfig {
     pub max_focus_objects: usize,
     pub max_events: usize,
     pub policy_history: bool,
+    /// Policy input v10: write `player_turn_state` and `card_turn_state`.
+    /// Without them, an observation that needs that state is refused.
+    pub turn_state: bool,
 }
 
 impl Default for ObservationEncoderConfig {
@@ -211,6 +224,7 @@ impl Default for ObservationEncoderConfig {
             max_focus_objects: 2,
             max_events: 32,
             policy_history: false,
+            turn_state: false,
             max_facts: 512,
         }
     }
@@ -241,6 +255,24 @@ impl ObservationEncoderConfig {
 
     pub fn effect_members_len(&self) -> usize {
         super::shared_effects::MEMBER_ROWS * super::shared_effects::MEMBER_DIM
+    }
+
+    /// Two seat rows of v10 player turn state; empty for v9.
+    pub fn player_turn_state_len(&self) -> usize {
+        if self.turn_state {
+            2 * TURN_STATE_DIM
+        } else {
+            0
+        }
+    }
+
+    /// Two seats of v10 card turn state; empty for v9.
+    pub fn card_turn_state_len(&self) -> usize {
+        if self.turn_state {
+            2 * self.max_cards_per_player
+        } else {
+            0
+        }
     }
 
     pub fn facts_len(&self) -> usize {
@@ -287,6 +319,8 @@ pub struct EncodedObservation {
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
     pub decklists: Vec<f32>,
+    pub player_turn_state: Vec<f32>,
+    pub card_turn_state: Vec<f32>,
     pub agent_player: Vec<f32>,
     pub opponent_player: Vec<f32>,
     pub agent_cards: Vec<f32>,
@@ -316,6 +350,8 @@ pub struct EncodedObservationMut<'a> {
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
     pub decklists: &'a mut [f32],
+    pub player_turn_state: &'a mut [f32],
+    pub card_turn_state: &'a mut [f32],
     pub agent_player: &'a mut [f32],
     pub opponent_player: &'a mut [f32],
     pub agent_cards: &'a mut [f32],
@@ -348,6 +384,8 @@ impl EncodedObservation {
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
             decklists: &mut self.decklists,
+            player_turn_state: &mut self.player_turn_state,
+            card_turn_state: &mut self.card_turn_state,
             agent_player: &mut self.agent_player,
             opponent_player: &mut self.opponent_player,
             agent_cards: &mut self.agent_cards,
@@ -383,12 +421,18 @@ pub enum ObservationEncodeError {
         expected: usize,
         actual: usize,
     },
+    /// A v9 observation that needs state only input v10 holds.
+    RequiresInputV10(&'static str),
 }
 
 impl fmt::Display for ObservationEncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
+            Self::RequiresInputV10(state) => write!(
+                f,
+                "policy input v10 required: this observation needs {state}, which v9 cannot hold"
+            ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
                 field,
@@ -428,6 +472,8 @@ pub fn encode(
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
         decklists: vec![0.0; config.decklists_len()],
+        player_turn_state: vec![0.0; config.player_turn_state_len()],
+        card_turn_state: vec![0.0; config.card_turn_state_len()],
         agent_player: vec![0.0; PLAYER_DIM],
         opponent_player: vec![0.0; PLAYER_DIM],
         agent_cards: vec![0.0; config.cards_len()],
@@ -471,6 +517,21 @@ pub fn encode_into(
         4 * config.max_cards_per_player,
     )?;
     validate_buffer_len("decklists", out.decklists.len(), config.decklists_len())?;
+    validate_buffer_len(
+        "player_turn_state",
+        out.player_turn_state.len(),
+        config.player_turn_state_len(),
+    )?;
+    validate_buffer_len(
+        "card_turn_state",
+        out.card_turn_state.len(),
+        config.card_turn_state_len(),
+    )?;
+    if !config.turn_state {
+        if let Some(state) = input_v10_state(obs) {
+            return Err(ObservationEncodeError::RequiresInputV10(state));
+        }
+    }
     validate_buffer_len("agent_player", out.agent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("opponent_player", out.opponent_player.len(), PLAYER_DIM)?;
     validate_buffer_len("agent_cards", out.agent_cards.len(), config.cards_len())?;
@@ -617,6 +678,8 @@ pub fn encode_into(
         }
     }
     out.semantic_cards.fill(0.0);
+    out.player_turn_state.fill(0.0);
+    out.card_turn_state.fill(0.0);
     out.known_hand.fill(0.0);
     out.decklists.fill(0.0);
     out.agent_player.fill(0.0);
@@ -664,6 +727,9 @@ pub fn encode_into(
     }
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
+    }
+    if config.turn_state {
+        encode_turn_state(obs, config, out.player_turn_state, out.card_turn_state);
     }
     for (seat, player) in [&obs.agent, &obs.opponent].into_iter().enumerate() {
         let rows = decklist_rows(player);
@@ -829,6 +895,148 @@ pub fn encode_into(
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Input v10: turn state
+// ---------------------------------------------------------------------------
+
+fn encode_turn_state(
+    obs: &Observation,
+    config: &ObservationEncoderConfig,
+    players: &mut [f32],
+    cards: &mut [f32],
+) {
+    for (seat, (player, seat_cards)) in [
+        (&obs.agent, &obs.agent_cards),
+        (&obs.opponent, &obs.opponent_cards),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let row = &mut players[seat * TURN_STATE_DIM..(seat + 1) * TURN_STATE_DIM];
+        row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost as f32 / 20.0;
+        for class in player
+            .restricted_mana
+            .iter()
+            .filter(|class| class.except_nonartifact_spells)
+        {
+            for slot in 0..6 {
+                row[TURN_STATE_NONARTIFACT_MANA_INDEX + slot] += class.mana[slot] as f32 / 10.0;
+            }
+        }
+        for (slot, card) in seat_cards.iter().enumerate() {
+            cards[seat * config.max_cards_per_player + slot] =
+                bool_to_f32(card.from_battlefield_this_turn);
+        }
+    }
+}
+
+/// Which v10-only state a definition's rules read, found by walking its
+/// serialized value for the rules terms that ask for it.
+#[derive(Clone, Copy, Debug, Default)]
+struct TurnStateReads {
+    life_lost: bool,
+    from_battlefield: bool,
+}
+
+impl TurnStateReads {
+    fn of(definition: &crate::state::card::CardDefinition) -> Self {
+        fn walk(value: &serde_json::Value, reads: &mut TurnStateReads) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    for (key, value) in map {
+                        match key.as_str() {
+                            "OpponentLostLifeThisTurnAtLeast" => reads.life_lost = true,
+                            "from_battlefield_this_turn" if value == &true => {
+                                reads.from_battlefield = true
+                            }
+                            _ => {}
+                        }
+                        walk(value, reads);
+                    }
+                }
+                serde_json::Value::Array(values) => {
+                    values.iter().for_each(|value| walk(value, reads))
+                }
+                _ => {}
+            }
+        }
+        let mut reads = Self::default();
+        if let Ok(value) = serde_json::to_value(definition) {
+            walk(&value, &mut reads);
+        }
+        reads
+    }
+}
+
+/// Per definition of the world's pack, by `CardDefId`; computed once.
+fn turn_state_reads(registry_key: i32) -> TurnStateReads {
+    static READS: std::sync::OnceLock<Vec<TurnStateReads>> = std::sync::OnceLock::new();
+    let reads = READS.get_or_init(|| {
+        let pack = crate::cards::content_pack::default_content_pack();
+        let mut reads = Vec::new();
+        for (id, definition) in pack.definition_entries() {
+            let index = id.0 as usize;
+            if reads.len() <= index {
+                reads.resize(index + 1, TurnStateReads::default());
+            }
+            reads[index] = TurnStateReads::of(definition);
+        }
+        reads
+    });
+    usize::try_from(registry_key)
+        .ok()
+        .and_then(|key| reads.get(key))
+        .copied()
+        .unwrap_or_default()
+}
+
+/// The v10-only state this observation needs, if any: a definition visible
+/// to the viewer reads it and it is present. V9 refuses such an observation
+/// before writing a buffer rather than hide state a visible card reads.
+pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
+    let cards = obs.agent_cards.iter().chain(&obs.opponent_cards);
+    let visible = cards
+        .clone()
+        .map(|card| card.registry_key)
+        .chain(
+            obs.agent_permanents
+                .iter()
+                .chain(&obs.opponent_permanents)
+                .map(|permanent| permanent.registry_key),
+        )
+        .chain(
+            obs.stack_objects
+                .iter()
+                .map(|object| object.source_card_registry_key),
+        )
+        .map(turn_state_reads)
+        .fold(TurnStateReads::default(), |all, reads| TurnStateReads {
+            life_lost: all.life_lost || reads.life_lost,
+            from_battlefield: all.from_battlefield || reads.from_battlefield,
+        });
+    if visible.life_lost
+        && [&obs.agent, &obs.opponent]
+            .iter()
+            .any(|player| player.turn_history.life_lost > 0)
+    {
+        return Some("life lost this turn");
+    }
+    if visible.from_battlefield && cards.clone().any(|card| card.from_battlefield_this_turn) {
+        return Some("a card put into a graveyard from the battlefield this turn");
+    }
+    // Only a Powerstone-like source produces it, so its presence alone is
+    // the need.
+    if [&obs.agent, &obs.opponent].iter().any(|player| {
+        player
+            .restricted_mana
+            .iter()
+            .any(|class| class.except_nonartifact_spells && class.mana.iter().any(|n| *n > 0))
+    }) {
+        return Some("mana that can't be spent to cast nonartifact spells");
+    }
+    None
 }
 
 /// One row per definition in the union of a known player's main deck and
@@ -1800,6 +2008,7 @@ mod tests {
             face_down: false,
             cast_permission: None,
             x: None,
+            from_battlefield_this_turn: false,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,
@@ -2010,6 +2219,8 @@ mod tests {
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
             decklists: &mut decklists,
+            player_turn_state: &mut [],
+            card_turn_state: &mut [],
             agent_player: &mut agent_player,
             opponent_player: &mut opponent_player,
             agent_cards: &mut agent_cards,

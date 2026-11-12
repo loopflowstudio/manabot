@@ -134,3 +134,87 @@ fn valakut_deals_three_when_a_sixth_mountain_enters() {
         s.assert_life(1, if others == 5 { 17 } else { 20 });
     }
 }
+
+/// Drive the stack to rest, accepting each "you may" (an optional payment of
+/// no mana) when `accept`, declining it otherwise.
+fn settle_choosing(s: &mut crate::support::game::Scenario, accept: bool) {
+    use managym::agent::action::{Action, ActionSpaceKind};
+    for _ in 0..40 {
+        let space = s.action_space();
+        if space.kind == ActionSpaceKind::Priority
+            && s.game().state.stack_objects.is_empty()
+            && s.game().state.pending_triggers.is_empty()
+        {
+            return;
+        }
+        let pay = space
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::PayCost { .. }));
+        let decline = space
+            .actions
+            .iter()
+            .position(|a| matches!(a, Action::Decline { .. }));
+        match (pay, decline) {
+            (Some(index), _) if accept => s.step_action(index),
+            (_, Some(index)) => s.step_action(index),
+            _ if space.kind == ActionSpaceKind::OrderTriggers => s.step_action(0),
+            _ => s.pass_priority(),
+        }
+    }
+    panic!("stack did not settle");
+}
+
+#[test]
+fn bloodchief_ascension_counts_life_lost_this_turn_at_each_end_step() {
+    use crate::support::{inspect::counters_of, play::cast};
+    use managym::{
+        flow::turn::StepKind,
+        state::{
+            game_object::{PlayerId, Target},
+            permanent::CounterKind,
+        },
+    };
+    for (strike, expected) in [(false, 0), (true, 1)] {
+        let mut s = five_color_setup(&["Bloodchief Ascension", "Lightning Strike"]);
+        let ascension = s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        if strike {
+            cast(&mut s, "Lightning Strike");
+            assert!(s.choose_target(Target::Player(PlayerId(1))));
+            settle_choosing(&mut s, true);
+            assert_eq!(s.game().state.turn.history[1].life_lost, 3);
+        }
+        s.advance_to_step(StepKind::End);
+        settle_choosing(&mut s, true);
+        assert_eq!(
+            counters_of(&s, ascension, CounterKind::Quest),
+            expected,
+            "opponent struck: {strike}"
+        );
+    }
+}
+
+#[test]
+fn bloodchief_ascension_drains_for_each_card_put_into_an_opponents_graveyard() {
+    use crate::support::{
+        game::{move_from_library, set_counters},
+        inspect::counters_of,
+    };
+    use managym::state::permanent::CounterKind;
+    for (quests, accept, drained) in [(3, true, true), (3, false, false), (2, true, false)] {
+        let mut s = five_color_setup(&["Bloodchief Ascension", "Gray Ogre"]);
+        let ascension = s.force_permanent_on_battlefield(0, "Bloodchief Ascension");
+        set_counters(&mut s, ascension, CounterKind::Quest, quests);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        let (mine, theirs) = (s.life(0), s.life(1));
+        // A card of the Ascension's controller triggers nothing.
+        move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+        move_from_library(&mut s, 1, "Gray Ogre", ZoneType::Graveyard);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        settle_choosing(&mut s, accept);
+        let delta = if drained { 2 } else { 0 };
+        assert_eq!((s.life(0), s.life(1)), (mine + delta, theirs - delta));
+        assert_eq!(counters_of(&s, ascension, CounterKind::Quest), quests);
+    }
+}

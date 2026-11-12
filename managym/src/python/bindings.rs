@@ -144,6 +144,26 @@ fn encoded_to_dict<'py>(
     ] {
         dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
     }
+    if config.turn_state {
+        dict.set_item(
+            "player_turn_state",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.player_turn_state,
+                &[2, crate::agent::observation_encoder::TURN_STATE_DIM],
+            )?,
+        )?;
+        dict.set_item(
+            "card_turn_state",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.card_turn_state,
+                &[2, config.max_cards_per_player],
+            )?,
+        )?;
+    }
     dict.set_item(
         "facts",
         to_numpy_array_f32(
@@ -1316,6 +1336,9 @@ pub struct PyPlayerTurnHistory {
     /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     #[pyo3(get, set)]
     pub bent: u8,
+    /// Life lost this turn (CR 119.3).
+    #[pyo3(get, set)]
+    pub life_lost: u32,
 }
 
 #[cfg(feature = "python")]
@@ -1336,6 +1359,7 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
             bent: value.bent,
+            life_lost: value.life_lost,
         }
     }
 }
@@ -1349,6 +1373,7 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
             bent: value.bent,
+            life_lost: value.life_lost,
         }
     }
 }
@@ -1398,7 +1423,8 @@ impl From<PyCopyEffect> for CopyData {
     }
 }
 
-/// Mana spendable only on the named spell or ability-source subtypes.
+/// Mana spendable only on the named spell or ability-source subtypes, or
+/// (`except_nonartifact_spells`) on anything but nonartifact spells.
 #[cfg(feature = "python")]
 #[pyclass(name = "RestrictedMana")]
 #[derive(Clone)]
@@ -1407,6 +1433,8 @@ pub struct PyRestrictedMana {
     pub spells: Vec<String>,
     #[pyo3(get)]
     pub abilities: Vec<String>,
+    #[pyo3(get)]
+    pub except_nonartifact_spells: bool,
     #[pyo3(get)]
     pub mana: [i32; 6],
 }
@@ -1417,6 +1445,7 @@ impl From<RestrictedManaData> for PyRestrictedMana {
         Self {
             spells: value.spells,
             abilities: value.abilities,
+            except_nonartifact_spells: value.except_nonartifact_spells,
             mana: value.mana,
         }
     }
@@ -1428,6 +1457,7 @@ impl From<PyRestrictedMana> for RestrictedManaData {
         Self {
             spells: value.spells,
             abilities: value.abilities,
+            except_nonartifact_spells: value.except_nonartifact_spells,
             mana: value.mana,
         }
     }
@@ -1775,6 +1805,9 @@ pub struct PyCard {
     /// Announced X of a spell on the stack whose cost has X.
     #[pyo3(get)]
     pub x: Option<i32>,
+    /// A graveyard card put there from the battlefield this turn.
+    #[pyo3(get, set)]
+    pub from_battlefield_this_turn: bool,
 }
 
 /// A public permission to play an exiled card; see `CastPermissionData`.
@@ -1868,6 +1901,7 @@ impl From<CardData> for PyCard {
             face_down: value.face_down,
             cast_permission: value.cast_permission.map(Into::into),
             x: value.x,
+            from_battlefield_this_turn: value.from_battlefield_this_turn,
         }
     }
 }
@@ -1896,6 +1930,7 @@ impl From<PyCard> for CardData {
             face_down: value.face_down,
             cast_permission: value.cast_permission.map(Into::into),
             x: value.x,
+            from_battlefield_this_turn: value.from_battlefield_this_turn,
         }
     }
 }

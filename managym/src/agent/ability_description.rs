@@ -133,6 +133,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::OpponentSearchesLibrary => {
             "When an opponent searches their library".into()
         }
+        TriggerCondition::CardPutIntoOpponentsGraveyard => {
+            "When a card is put into an opponent's graveyard from anywhere".into()
+        }
         TriggerCondition::FromZone { zone, condition } => format!(
             "{} (from {})",
             condition_description(condition),
@@ -267,6 +270,9 @@ fn condition_text(condition: &Condition) -> String {
         Condition::SacrificedThisTurnAtLeast { count } => {
             format!("you have sacrificed {count} or more permanents this turn")
         }
+        Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
+            format!("an opponent lost {amount} or more life this turn")
+        }
         Condition::AnyOf(conditions) => conditions
             .iter()
             .map(condition_text)
@@ -340,6 +346,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         with_counter,
         attacking,
         tapped,
+        from_battlefield_this_turn,
         subtypes_any,
         colors_any,
         not_subtypes,
@@ -438,6 +445,9 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if *with_counter {
         terms.push("with a +1/+1 counter on it".into());
+    }
+    if *from_battlefield_this_turn {
+        terms.push("put into a graveyard from the battlefield this turn".into());
     }
     if *attacking {
         terms.insert(0, "attacking".into());
@@ -884,8 +894,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CounterAbility { what } => format!("Counter {}",selector_description(what)),
         DrawCards { count } => format!("Draw {} cards", value_description(count)),
         LoseLife { player, amount } => format!("{} loses {} life",player_description(player),value_description(amount)),
-        CreateToken { token_name, count: EffectValue::Fixed(count), tapped_and_attacking } => format!("Create {count} {token_name} token{}{}",if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" }),
-        CreateToken { token_name, count, tapped_and_attacking } => format!("Create X {token_name} tokens, where X is {}{}",value_description(count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
+        CreateToken { token_name, count: EffectValue::Fixed(count), tapped_and_attacking, tapped } => format!("Create {count} {}{token_name} token{}{}",if *tapped { "tapped " } else { "" },if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" }),
+        CreateToken { token_name, count, tapped_and_attacking, .. } => format!("Create X {token_name} tokens, where X is {}{}",value_description(count),if *tapped_and_attacking { ". They enter tapped and attacking" } else { "" }),
         GainLife { amount: EffectValue::Fixed(amount) } => format!("You gain {amount} life"),
         GainLife { amount } => format!("You gain life equal to {}", value_description(amount)),
         FightLastTarget => "The first target fights the last target".into(),
@@ -1063,6 +1073,10 @@ pub(super) fn continuous_description(
         Modification::LoseKeywords(keywords) => {
             format!("{subject} loses {}{until}", keywords_description(keywords))
         }
+        Modification::ExileIfWouldLeave => format!(
+            "If {} would leave the battlefield{until}, exile it instead",
+            subject.to_lowercase()
+        ),
         Modification::ExileIfWouldDie => {
             format!(
                 "If {} would die{until}, exile it instead",

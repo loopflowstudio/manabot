@@ -366,6 +366,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "CantActivateAbilities": "its activated abilities can't be activated",
         "MustBeBlockedByAllAble": "all creatures able to block it do so",
         "ExileIfWouldDie": "exiled instead if it would die",
+        "ExileIfWouldLeave": "exiled instead if it would leave the battlefield",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
         "NextCreatureCastFlash": (

@@ -3684,6 +3684,7 @@ fn fire_navy_trebuchet() -> CardDefinition {
                     token_name: "Ballistic Boulder".into(),
                     count: EffectValue::Fixed(1),
                     tapped_and_attacking: true,
+                    tapped: false,
                 },
                 Effect::CreateDelayedTrigger {
                     remember: Some(ObjectSelector::CreatedThisWay),
@@ -8294,6 +8295,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                 token_name: "Ally".into(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
+                tapped: false,
             }],
         }],
         statics: vec![StaticAbility::CharacteristicPower(

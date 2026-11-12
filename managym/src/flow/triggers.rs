@@ -106,6 +106,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::AttacksWithAnother
         | TriggerCondition::AttacksAlone { .. } => EventKinds::of(EventKind::AttackersDeclared),
         TriggerCondition::OpponentSearchesLibrary => EventKinds::of(EventKind::LibrarySearched),
+        TriggerCondition::CardPutIntoOpponentsGraveyard => EventKinds::of(EventKind::CardMoved),
         TriggerCondition::CreatureDealsCombatDamageToYou
         | TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
         | TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
@@ -1012,6 +1013,12 @@ impl Game {
             let player = match event {
                 GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
                 GameEvent::LibrarySearched { player } => Some(*player),
+                // "that player": whose graveyard the card was put into.
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                } => Some(self.state.cards[*card].owner),
                 // "that player": whose step it is.
                 GameEvent::StepStarted { .. } => Some(self.active_player()),
                 _ => None,
@@ -1581,6 +1588,17 @@ impl Game {
             }
             (TriggerCondition::OpponentSearchesLibrary, GameEvent::LibrarySearched { player }) => {
                 *player != source_controller
+            }
+            (
+                TriggerCondition::CardPutIntoOpponentsGraveyard,
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                },
+            ) => {
+                let card = &self.state.cards[*card];
+                !card.is_token && card.owner != source_controller
             }
             (TriggerCondition::FromZone { zone, condition }, _) => {
                 self.event_origin(event) == Some(*zone)

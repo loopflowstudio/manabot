@@ -372,6 +372,17 @@ impl Game {
             ..
         } = event
         {
+            // CR 702.84a: an unearthed permanent leaving for anywhere but
+            // exile is exiled instead.
+            if *to != ZoneType::Exile
+                && *to != ZoneType::Battlefield
+                && self
+                    .lookup_current_permanent(*object)
+                    .is_ok_and(|id| self.exiled_if_it_would_leave(id))
+            {
+                *to = ZoneType::Exile;
+                return;
+            }
             if *to == ZoneType::Graveyard
                 && self
                     .lookup_current_permanent(*object)

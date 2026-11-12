@@ -1,8 +1,8 @@
 //! Zendikar.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         CardDefinition, CardType, CardTypes, ManaAbility, ReplacementEffect, StaticAbility,
@@ -16,6 +16,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         beastmaster_ascension(),
+        bloodchief_ascension(),
         lotus_cobra(),
         valakut_the_molten_pinnacle(),
     ]
@@ -85,6 +86,50 @@ fn beastmaster_ascension() -> CardDefinition {
             per_color_among: None,
             per_graveyard_matching: None,
         })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn bloodchief_ascension() -> CardDefinition {
+    let text_box = "At the beginning of each end step, if an opponent lost 2 or more life this turn, you may put a quest counter on this enchantment. (Damage causes loss of life.)\nWhenever a card is put into an opponent's graveyard from anywhere, if this enchantment has three or more quest counters on it, you may have that player lose 2 life. If you do, you gain 2 life.";
+    // "You may" with nothing to pay is an optional payment of no mana.
+    let may = |if_paid: Vec<Effect>| Effect::OptionalPayment {
+        cost: PaymentCost::Mana(ManaCost::default()),
+        if_paid,
+        if_declined: vec![],
+    };
+    CardDefinition {
+        key: "zen.bloodchief_ascension",
+        scryfall_id: "aa213dbb-c52a-4084-92aa-d0b5d97a97d9",
+        name: "Bloodchief Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{B}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 }),
+                condition: TriggerCondition::BeginningOfEachEndStep,
+                effects: vec![may(vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Quest,
+                    1,
+                )])],
+            },
+            Ability::Triggered {
+                intervening_if: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Quest,
+                    count: 3,
+                }),
+                condition: TriggerCondition::CardPutIntoOpponentsGraveyard,
+                effects: vec![may(vec![
+                    Effect::LoseLife {
+                        player: PlayerSelector::TriggeringPlayer,
+                        amount: EffectValue::Fixed(2),
+                    },
+                    Effect::gain_life(2),
+                ])],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

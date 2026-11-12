@@ -37,6 +37,11 @@ pub struct CardPredicate {
     /// "tapped": only permanents are tapped.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tapped: bool,
+    /// "card in a graveyard that was put there from the battlefield this
+    /// turn" (Brought Back): game history, so card-only matching refuses it
+    /// and `Game::card_matches_predicate` answers it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_battlefield_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     /// Has at least one of these colors ("white or blue"), as its
@@ -129,6 +134,7 @@ impl CardPredicate {
             || self.with_counter
             || self.attacking
             || self.tapped
+            || self.from_battlefield_this_turn
             || (self.flying && !card.keywords.has(Keyword::Flying))
         {
             return false;

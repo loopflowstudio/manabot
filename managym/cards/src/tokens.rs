@@ -8,7 +8,7 @@ use managym_state::{
         Keywords, StaticAbility,
     },
     effect::Modification,
-    mana::{Color, Colors, Mana, ManaCost},
+    mana::{Color, Colors, Mana, ManaCost, ManaUse},
     predicate::CardPredicate,
 };
 
@@ -26,6 +26,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         komas_coil(),
         marit_lage(),
         monk(),
+        powerstone(),
         soldier(),
         spirit(),
         treasure(),
@@ -313,6 +314,28 @@ fn spirit() -> CardDefinition {
             StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(non_spirit())),
         ],
         ..creature(base, 1, 1, [])
+    }
+}
+
+/// Cityscape Leveler's token (first token printing, BRO).
+fn powerstone() -> CardDefinition {
+    CardDefinition {
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![Effect::add_mana(Mana::restricted_to(
+                ManaUse::except_nonartifact_spells(),
+                [0, 0, 0, 0, 0, 1],
+            ))],
+            ..Default::default()
+        }],
+        ..token(
+            "token.powerstone",
+            "d45fe4b6-aeaf-4f84-b660-c7b482ed8512",
+            "Powerstone",
+            [CardType::Artifact],
+            &["Powerstone"],
+            "{T}: Add {C}. This mana can't be spent to cast a nonartifact spell.",
+        )
     }
 }
 

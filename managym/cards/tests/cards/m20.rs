@@ -86,3 +86,48 @@ fn settle_until_target(s: &mut crate::support::game::Scenario, target: Target) {
     }
     panic!("entry trigger did not settle");
 }
+
+#[test]
+fn brought_back_returns_only_cards_put_into_the_graveyard_from_the_battlefield_this_turn() {
+    use crate::support::{
+        game::{move_from_library, set_counters},
+        inspect::{card_of, offered_targets, permanent},
+    };
+    use managym::state::permanent::CounterKind;
+    let mut s = five_color_setup(&["Brought Back", "Gray Ogre", "Lightning Strike"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    let died = card_of(&s, ogre);
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let left = card_of(&s, other);
+    let milled = move_from_library(&mut s, 0, "Gray Ogre", ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    // The second Ogre leaves the battlefield and comes back to its owner's
+    // graveyard by another route: graveyard to exile to graveyard is a new
+    // object, so it no longer qualifies.
+    s.game_mut().move_card(left, ZoneType::Graveyard);
+    s.game_mut().move_card(left, ZoneType::Exile);
+    s.game_mut().move_card(left, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Brought Back");
+    let offered = offered_targets(&s);
+    let graveyard = |card| s.game().current_object_ref(card).map(Target::GraveyardCard);
+    assert!(offered.contains(&graveyard(died).unwrap()));
+    assert!(!offered.contains(&graveyard(milled).unwrap()));
+    assert!(!offered.contains(&graveyard(left).unwrap()));
+    assert!(s.choose_target(graveyard(died).unwrap()));
+    settle(&mut s);
+    let returned = s.game().state.card_to_permanent[died].expect("returned");
+    assert!(permanent(&s, returned).tapped);
+    // A new object: no counters and no damage carried over.
+    assert_eq!(permanent(&s, returned).counters.iter().count(), 0);
+    for card in [milled, left] {
+        assert_eq!(
+            s.game().state.zones.zone_of(card),
+            Some(ZoneType::Graveyard)
+        );
+    }
+}

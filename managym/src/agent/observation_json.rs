@@ -147,6 +147,9 @@ impl Serialize for CardJson<'_> {
         if value.face_down {
             map.serialize_entry("face_down", &true)?;
         }
+        if value.from_battlefield_this_turn {
+            map.serialize_entry("from_battlefield_this_turn", &true)?;
+        }
         map.serialize_entry("id", &value.id)?;
         map.serialize_entry("is_ally", &value.is_ally)?;
         map.serialize_entry("is_legendary", &value.is_legendary)?;

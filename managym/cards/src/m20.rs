@@ -1,17 +1,18 @@
 //! Core Set 2020.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
     effect::EffectDuration,
     mana::ManaCost,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![agent_of_treachery(), spectral_sailor()]
+    vec![agent_of_treachery(), brought_back(), spectral_sailor()]
 }
 
 fn spectral_sailor() -> CardDefinition {
@@ -72,6 +73,44 @@ fn agent_of_treachery() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn brought_back() -> CardDefinition {
+    let text_box = "Choose up to two target permanent cards in your graveyard that were put there from the battlefield this turn. Return them to the battlefield tapped.";
+    let spec = TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate {
+            card_types_any: vec![
+                CardType::Artifact,
+                CardType::Battle,
+                CardType::Creature,
+                CardType::Enchantment,
+                CardType::Land,
+                CardType::Planeswalker,
+            ],
+            from_battlefield_this_turn: true,
+            ..Default::default()
+        },
+    };
+    CardDefinition {
+        key: "m20.brought_back",
+        scryfall_id: "aecdc315-95e5-450c-bedc-998eea46cf8c",
+        name: "Brought Back".into(),
+        mana_cost: Some(ManaCost::parse("{W}{W}")),
+        types: CardTypes::new([CardType::Instant]),
+        spell_effects: vec![Effect::Move {
+            library_end: None,
+            what: ObjectSelector::Target(spec.clone()),
+            to: ZoneType::Battlefield,
+            tapped: true,
+            transformed: false,
+            under: None,
+            with_counter: None,
+            linked: None,
+        }],
+        targeting: vec![TargetRequirement::up_to(2, spec)],
         text_box: text_box.into(),
         ..Default::default()
     }

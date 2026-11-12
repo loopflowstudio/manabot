@@ -205,7 +205,10 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
         let mut cost = self.casting_mana_cost(player, card, cast)?.with_x(cast.x);
-        cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
+        cost.purpose = ManaUse::cast(
+            card_ref.subtypes.iter().map(String::as_str),
+            card_ref.types.is_artifact(),
+        );
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }

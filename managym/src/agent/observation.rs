@@ -106,7 +106,8 @@ pub struct PlayerData {
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
 /// one of `spells`' subtypes, or abilities of sources with one of
-/// `abilities`' subtypes. Amounts are W/U/B/R/G/C.
+/// `abilities`' subtypes; or, with `except_nonartifact_spells`, on anything
+/// but casting a nonartifact spell (Powerstone). Amounts are W/U/B/R/G/C.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RestrictedManaData {
@@ -114,6 +115,8 @@ pub struct RestrictedManaData {
     pub spells: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub abilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
     pub mana: [i32; 6],
 }
 
@@ -130,6 +133,7 @@ impl RestrictedManaData {
         Self {
             spells: names(restriction.spells),
             abilities: names(restriction.abilities),
+            except_nonartifact_spells: restriction.except_nonartifact_spells,
             mana: amounts.map(i32::from),
         }
     }
@@ -286,6 +290,10 @@ pub struct CardData {
     /// when its mana cost has X.
     #[serde(default)]
     pub x: Option<i32>,
+    /// A graveyard card that was put there from the battlefield this turn
+    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    #[serde(default)]
+    pub from_battlefield_this_turn: bool,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -527,7 +535,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 35] = [
+pub const MODIFICATION_NAMES: [&str; 36] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -553,6 +561,7 @@ pub const MODIFICATION_NAMES: [&str; 35] = [
     "MustBeBlockedByAllAble",
     "LoseKeywords",
     "ExileIfWouldDie",
+    "ExileIfWouldLeave",
     "KeepUnspentMana",
     "NoMaximumHandSize",
     "NextCreatureCastFlash",
@@ -659,6 +668,7 @@ impl ContinuousEffectData {
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
@@ -1516,6 +1526,10 @@ impl Observation {
                     foretold: grant.foretold,
                 }),
             x: None,
+            from_battlefield_this_turn: zone == ZoneType::Graveyard
+                && game.current_object_ref(card_id).is_some_and(|object| {
+                    game.state.turn.graveyard_from_battlefield.contains(&object)
+                }),
         }
     }
 
