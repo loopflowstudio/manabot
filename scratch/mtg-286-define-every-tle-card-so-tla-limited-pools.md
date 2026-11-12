@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 35 of 61 defined,
-26 missing, no other issues (rebuilt extension, seventh pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 41 of 61 defined,
+20 missing, no other issues (rebuilt extension, eighth pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -67,43 +67,47 @@ Rules added on this branch, each with directed tests and observation parity
   skipped in `tick.rs`, ended at that player's cleanup, seen as a shared-effect
   row with LLM text and Academy note.
 
+- Eighth pass (6 cards): activation prohibition and must-be-blocked-by-all
+  records; `ActivatedAbilitiesCostLess` (floor one); `YouCastThis` cast
+  triggers; `Effect::Cascade` (random bottom order); `SpellsCastThisTurn`;
+  `CumulativeUpkeep`; Age/Ice counters; `EntersWithCounters`; the `NoCounters`
+  state trigger; Koma's Coil and Marit Lage. Free casts from exile or library
+  now respect hand-only casting. Detail in `scratch/questions.md`.
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 26 bonus-sheet names by rule family
+## Remaining: 20 bonus-sheet names by rule family
 
 Grouping from the allocation ledger; each family lands with its cards.
 
 | Family | Cards |
 |---|---|
-| Production/spending (blocked, below) | Heartbeat of Spring, The Great Henge, Tarnished Citadel |
+| Production/spending (blocked, review) | Heartbeat of Spring, The Great Henge, Tarnished Citadel |
+| Token identity (blocked, decision) | Release to Memory, Lita, Mechanical Engineer |
+| Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
+| Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
+| Cast-time costs | Force of Negation (alternative exile-from-hand cost), Shattering Spree (replicate) |
 | Copy entry, token copies, spell copies | Clone, Clone Legion, Sakashima of a Thousand Faces, Rhys the Redeemed, Mirrorwing Dragon |
-| Cascade (new variant; keep `ExileUntilNonlandCastFree`) | Volcanic Torrent |
-| End the turn (turn/stack owner, cleanup, surviving delayed triggers) | Sundial of the Infinite |
-| Phasing and life lock (object presence, not exile; attachments, no leave/enter triggers) | Teferi's Protection |
-| Combat requirements | Taunting Challenge |
-| Counter and zone-history triggers | Bloodchief Ascension, Dark Depths, Brought Back |
-| Cast-time costs (alternate exile cost, replicate, unearth, cumulative upkeep) | Force of Negation, Shattering Spree, Cityscape Leveler, Mystic Remora |
-| Scoped costs | Training Grounds (activated-cost reduction, floor one) |
-| Token identity (decision open, below) | Release to Memory (plain Spirit vs the TLA Spirit name), Lita, Mechanical Engineer (no Zeppelin token printing) |
-| Modal activation, activation prohibition, Coil token | Koma, Cosmos Serpent (uncounterable now exists) |
 | Selection constraints and chooser/owner separation | Three Dreams (distinct names), Bribery (opponent's library, your battlefield) |
 | Split target choosers | Diaochan, Artful Beauty |
+| End the turn | Sundial of the Infinite |
+| Phasing and life lock | Teferi's Protection |
 
-Order: rule families that need no new state layout come first: Koma (modal activation,
-activation prohibition, Coil token), Training Grounds, Taunting Challenge,
-Volcanic Torrent, then the cast-time costs. After those: counter and
-zone-history triggers, copy entry, then end-turn and phasing.
+Order for the unblocked families: cast-time costs, copy entry, selection
+constraints and split choosers, then end-turn and phasing.
 
-Cascade's free cast from exile must respect the hand-only gate (`zone_cast_cost`;
-Drannith Magistrate). The existing `ExileUntilNonlandCastFree` and
-`CastLibraryTopFree` casts skip that gate today, which is a known gap.
-Cascade test cases: continue past expensive nonlands, decline, no qualifying
-card, illegal targets, random bottom order after the cast decision, replay/fork at
-each suspended choice. End-turn and phasing need their state/observation
-contracts written before the writer. Non-bonus families in the ledger (player
-experience counters, the Masters, Toph, Uncle's Musings, Animal Attendant) are
-outside this Task.
+Force of Negation needs two cast pending choices: whether to use the
+alternative cost (offered only when it is not your turn and another blue card is
+in hand) and which card to exile, paid as the cast's cost with no mana. Each new
+pending choice needs action space, `decision_context`, continuation observation
+and Academy reconnect/stale-Command proofs. Shattering Spree announces a
+replicate count like X, then copies the spell that many times with new targets.
+Three Dreams can generalize `SearchDistinctLands` (predicate and destination),
+which changes its continuation encoding. End-turn and phasing need their
+state/observation contracts written before the writer. Non-bonus families in the
+ledger (player experience counters, the Masters, Toph, Uncle's Musings, Animal
+Attendant) are outside this Task.
 
 ## Token identity (decision open)
 
