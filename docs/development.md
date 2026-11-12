@@ -42,7 +42,7 @@ atomically.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
 The `manabot` public dependency requirements are `etude-sdk>=0.2.15` (also for
-its `eval` and `s3` extras) and `torch>=2.10.0`. All extras, including `llm`, inherit the core
+its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
 groups retain exact Torch/backend choices. Those development pins are not
@@ -466,12 +466,14 @@ for API migration guidance.
 The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
 environment when reproducing that release.
 
-For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
-explicitly. CI validates CPU, not GPU, execution.
+For Linux NVIDIA training use `--torch-backend cu132`; always select the backend
+explicitly. Torch 2.15 publishes no CUDA 12 wheels, so the CUDA 13.2 build needs
+an NVIDIA driver from the 580 series or newer and a Turing or newer GPU
+(compute capability 7.5+). CI validates CPU, not GPU, execution.
 
 Supported: ordinary CPython 3.12 and 3.13 (no free-threaded ABI) on Linux x86-64 with glibc
-2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
-MPS is admitted for float32 self-play training with Torch 2.10. Baseline requires
+2.28+ (CPU or CUDA 13.2 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
+MPS is admitted for float32 self-play training with Torch 2.15 or newer. Baseline requires
 CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
 `baseline_test()`, which shares baseline construction and changes only the device.
@@ -482,7 +484,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.10.0` and `etude-sdk>=0.2.15`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.2.15`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact
