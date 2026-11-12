@@ -89,7 +89,7 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 | Family | Cards |
 |---|---|
 | Production/spending (blocked, review) | Heartbeat of Spring, The Great Henge, Tarnished Citadel |
-| Token identity (blocked, decision) | Release to Memory, Lita, Mechanical Engineer |
+| Token identity (blocked, decision) | Release to Memory; Lita, Mechanical Engineer |
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
 | Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
 | Replicate | Shattering Spree |

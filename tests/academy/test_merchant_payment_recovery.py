@@ -30,9 +30,8 @@ def _command(
     }
 
 
-@pytest.mark.parametrize("version", [5, 6, 8, 9])
 def test_merchant_payment_reconnect_vector_and_fork(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, version: int
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
     server.SESSION_REGISTRY.clear()
@@ -112,7 +111,7 @@ def test_merchant_payment_reconnect_vector_and_fork(
             frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
         assert game.env is not None and game.trace is not None
-        space = ObservationSpace(ObservationConfig(policy_input_version=version))
+        space = ObservationSpace(ObservationConfig())
         vector = managym.VectorEnv(num_envs=1, seed=seed)
         buffers = space.encoder.allocate(1)
         buffers.update(

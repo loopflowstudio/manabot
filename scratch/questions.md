@@ -171,3 +171,8 @@ alternative rule once (play.rs); distinct-name search finish is one match; the
 stale "distinct land" error reads "distinct-name search candidate". Debug: cards
 663, lib 192, `rules_tests` 169 passed. No behavior change, so the extension was
 not rebuilt.
+
+Realign after the ninth pass: `test_merchant_payment_recovery` now checks only
+the current policy input (its v5/v6/v8 cases predated main's v9-only input);
+1 passed. The three `test_decision_surface.py` precision demo failures remain
+gate work with the conformance evidence.
