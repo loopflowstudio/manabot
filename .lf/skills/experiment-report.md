@@ -17,6 +17,14 @@ report.
    confound and keep refutations.
 4. Keep learned skill apart from deck strength, rules changes and exposure,
    and policy-only compute apart from search-assisted compute.
+5. Write for a reader, as science rather than a process log. Answer each
+   question in plain words before any table: the effect in points with its
+   interval and what it means. Use one chart or small table per question,
+   labelled in words ("Uniform hands, 16 shuffles"), not condition keys. Give
+   cost in plain units (seconds per decision, games per hour) beside strength.
+   Ledgers, admission checks, run state, hashes and receipts go in a closing
+   appendix, never in the opening. Read the rendered result before handing it
+   over.
 
 Result files go to the artifact store; the report and manifest go in git. The
 report starts no new run.
