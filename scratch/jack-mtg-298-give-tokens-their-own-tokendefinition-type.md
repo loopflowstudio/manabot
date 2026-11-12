@@ -80,4 +80,7 @@ Checks (one line each):
 
 - After sync: debug nextest 1170 passed; belief/academy/semantic/env pytest 402 passed.
 
+Compress pass 2 (definitions split): no reductions. `impl Serialize for PrintedCharacteristics` is needed
+(`TokenSource::Copy.front` serializes it); `Row`, `object_row`, `token_name` each have live callers.
+
 Remaining: CI green on the pushed merge (no auto-merge), then stop at review.
