@@ -57,6 +57,8 @@ export interface CastPermission {
 export interface RestrictedMana {
   spells?: string[];
   abilities?: string[];
+  /** Spendable on anything but casting nonartifact spells (Powerstone). */
+  except_nonartifact_spells?: boolean;
   mana: number[];
 }
 
@@ -70,7 +72,7 @@ export interface ContinuousEffect {
   keywords?: string[];
   subtypes?: string[];
   color?: string;
-  /** `EndOfTurn`, `Indefinite` or `WhileYouControlSource`. */
+  /** `EndOfTurn`, `Indefinite`, `WhileYouControlSource` or `UntilYourNextTurn`. */
   duration: string;
   /** The source's printed name. */
   source?: string;
@@ -147,6 +149,8 @@ export interface PlayerTurnHistory {
   cards_drawn?: number;
   /** Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8. */
   bent?: number;
+  /** Life lost this turn (CR 119.3). */
+  life_lost?: number;
 }
 
 export interface PlayerState {
@@ -179,6 +183,8 @@ export interface PlayerState {
   keeps_red_mana?: boolean;
   /** What this player has done this turn. */
   turn_history?: PlayerTurnHistory;
+  /** Spells this player cast this turn. */
+  spells_cast?: number;
   /** Extra turns this player will take after this one. */
   extra_turns?: number;
   /** Additional combat phases still to come this turn. */

@@ -201,6 +201,7 @@ fn restricted_trigger_rejects_low_value_spell_and_counters_legal_spell() {
         bolt,
         vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+            exile: false,
         }],
         0,
     ));
@@ -224,6 +225,7 @@ fn departed_only_target_prevents_even_untargeted_gain_life() {
         vec![
             Effect::CounterSpell {
                 what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+                exile: false,
             },
             Effect::gain_life(7),
         ],
@@ -250,6 +252,7 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         vec![
             Effect::CounterSpell {
                 what: ObjectSelector::Target(TargetSpec::SpellOrPermanent { min_mana_value: 2 }),
+                exile: false,
             },
             Effect::gain_life(7),
         ],

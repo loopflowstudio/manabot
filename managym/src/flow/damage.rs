@@ -72,11 +72,20 @@ impl Game {
 
         match target {
             ProposedDamageTarget::Player(player) => {
+                // Protection from everything prevents all damage (CR 702.16e).
+                if self.has_protection_from_everything(player) {
+                    return false;
+                }
+                // Damage is still dealt to a player whose life total can't
+                // change; only the life loss doesn't happen (CR 119.7).
+                let locked = self.life_total_cant_change(player);
                 let Some(life) = self.state.life_mut(player) else {
                     return false;
                 };
                 let old_life = *life;
-                *life = life.saturating_sub(amount);
+                if !locked {
+                    *life = life.saturating_sub(amount);
+                }
                 let new_life = *life;
 
                 self.emit(GameEvent::DamageDealt {
@@ -91,11 +100,13 @@ impl Game {
                         amount: amount as u32,
                     });
                 }
-                self.emit(GameEvent::LifeChanged {
-                    player,
-                    old: old_life,
-                    new: new_life,
-                });
+                if old_life != new_life {
+                    self.emit(GameEvent::LifeChanged {
+                        player,
+                        old: old_life,
+                        new: new_life,
+                    });
+                }
             }
             ProposedDamageTarget::Object(object_ref) => {
                 let event_target = self.object_event_ref(object_ref);
@@ -146,6 +157,9 @@ impl Game {
     }
 
     pub(crate) fn commit_life_change(&mut self, player: PlayerId, delta: i32) -> bool {
+        if self.life_total_cant_change(player) {
+            return false;
+        }
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
                 self.battlefield_permanents(owner).into_iter().any(|id| {
@@ -220,6 +234,7 @@ impl Game {
     /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        self.end_skipped_combat_phases(self.active_player());
         if self
             .state
             .delayed_triggers

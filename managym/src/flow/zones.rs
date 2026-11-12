@@ -158,7 +158,20 @@ impl Game {
     }
 
     /// Borrowed traversal for readers; mutation paths use the owned snapshot.
+    /// Phased-out permanents are treated as though they don't exist
+    /// (CR 702.26b), so every rules reader skips them here.
     pub(crate) fn iter_battlefield_permanents(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = PermanentId> + '_ {
+        self.iter_battlefield_including_phased_out(player)
+            .filter(|&id| !self.is_phased_out(id))
+    }
+
+    /// Every permanent in `player`'s battlefield zone, phased out or not:
+    /// the observation's rows, which show phased-out permanents with their
+    /// record (they are public, CR 702.26b).
+    pub(crate) fn iter_battlefield_including_phased_out(
         &self,
         player: PlayerId,
     ) -> impl Iterator<Item = PermanentId> + '_ {
@@ -436,6 +449,13 @@ impl Game {
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
+        // Every life total change is a LifeChanged event, so this is the one
+        // place loss this turn is counted (CR 119.3).
+        if let GameEvent::LifeChanged { player, old, new } = &event {
+            if new < old {
+                self.state.turn.history[player.0].life_lost += old.abs_diff(*new);
+            }
+        }
         self.state.pending_events_mut().push(event.clone());
         self.state.observation_events_mut().push(event.clone());
         self.state.events_mut().push(event);
@@ -593,8 +613,10 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
+            // A card that entered as a copy is its printed card again, and
             // CR 712.8a: a double-faced card is front face up outside the
             // battlefield.
+            self.state.cards[card].restore_printed();
             self.state.cards[card].turn_front_face_up();
         }
 
@@ -616,6 +638,11 @@ impl Game {
             _ => owner,
         };
         self.state.move_card(card, holder, to_zone);
+        if old_zone == Some(ZoneType::Battlefield) && to_zone == ZoneType::Graveyard {
+            if let Some(object) = self.current_object_ref(card) {
+                self.state.turn.graveyard_from_battlefield.push(object);
+            }
+        }
 
         if to_zone == ZoneType::Battlefield {
             if entry.transformed {

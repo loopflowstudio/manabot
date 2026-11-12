@@ -60,6 +60,15 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// "When [this] has no [kind] counters on it": a state trigger (CR 603.8)
+    /// of a battlefield source. It triggers whenever the state holds and
+    /// not again while its last occurrence waits or is on the stack.
+    NoCounters {
+        kind: CounterKind,
+    },
+    /// "When you cast this spell" (CR 603.2): functions while the source is
+    /// a spell on the stack, and its caster controls the trigger.
+    YouCastThis,
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
     WhileSourceAttacking {
@@ -75,6 +84,17 @@ pub enum TriggerCondition {
     PlayerCastsSpell {
         predicate: CardPredicate,
     },
+    OpponentCastsSpell {
+        predicate: CardPredicate,
+    },
+    /// "Whenever a player casts a [predicate] spell that targets only this
+    /// [permanent]": every target of the spell is this permanent. The spell
+    /// is the context and its caster "that player".
+    SpellTargetsOnlyThis {
+        predicate: CardPredicate,
+    },
+    /// Each creature dealing combat damage to this ability's controller.
+    CreatureDealsCombatDamageToYou,
     /// "When [subject] enters the battlefield."
     EntersTheBattlefield {
         subject: TriggerSubject,
@@ -113,6 +133,10 @@ pub enum TriggerCondition {
     /// "Whenever an opponent searches their library" (CR 701.23), even when
     /// the search finds nothing.
     OpponentSearchesLibrary,
+    /// "Whenever a card is put into an opponent's graveyard from anywhere"
+    /// (Bloodchief Ascension): once per card, never a token; "that player"
+    /// is the graveyard's owner.
+    CardPutIntoOpponentsGraveyard,
     /// "Whenever [subject] deals combat damage to a player": once for each
     /// creature that does (`AnyYouControl`: "a creature you control").
     CreatureDealsCombatDamageToPlayer {
@@ -141,6 +165,12 @@ pub enum TriggerCondition {
     BeginningOfYourUpkeep,
     /// "At the beginning of each upkeep."
     BeginningOfEachUpkeep,
+    /// "At the beginning of each player's draw step": the active player is
+    /// "that player" (`PlayerSelector::TriggeringPlayer`).
+    BeginningOfEachDrawStep,
+    /// "At the beginning of each [player's] end step": the active player is
+    /// "that player".
+    BeginningOfEachEndStep,
     /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
     /// bending instruction or waterbend payment.
     YouBend,
@@ -214,11 +244,25 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if a graveyard has `count` or more cards in it": any player's
+    /// graveyard (Visions of Beyond).
+    AnyGraveyardAtLeast {
+        count: usize,
+    },
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
         count: usize,
         predicate: CardPredicate,
+    },
+    /// "if you control `count` or more permanents you don't own" (Agent of
+    /// Treachery).
+    ControlsUnownedAtLeast {
+        count: usize,
+    },
+    /// "if you have `count` or more cards in hand".
+    CardsInHandAtLeast {
+        count: usize,
     },
     /// "as long as you have `count` or more unspent mana" (both pools).
     UnspentManaAtLeast {
@@ -235,6 +279,11 @@ pub enum Condition {
     /// "if you've sacrificed `count` or more permanents this turn".
     SacrificedThisTurnAtLeast {
         count: u32,
+    },
+    /// "if an opponent lost `amount` or more life this turn" (Bloodchief
+    /// Ascension): any one opponent's total loss this turn.
+    OpponentLostLifeThisTurnAtLeast {
+        amount: u32,
     },
     /// At least one alternative holds ("as long as you control a land
     /// creature or a land entered the battlefield under your control this
@@ -274,8 +323,9 @@ pub enum Condition {
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
     TargetCardExiled(CardPredicate),
-    /// Resolution only: the resolution's latest `Move` or `Sacrifice`
-    /// moved at least one object ("If you do").
+    /// Resolution only: the resolution's latest `Move`, `Sacrifice` or
+    /// `Destroy` moved at least one object ("If you do", "if a creature is
+    /// destroyed this way").
     Moved,
     /// Resolution only: the frame's primary target is a permanent the
     /// resolving player controls, or last controlled once it has left ("If
@@ -330,12 +380,16 @@ impl Condition {
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
             | Condition::GraveyardAtLeast { .. }
+            | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
+            | Condition::ControlsUnownedAtLeast { .. }
+            | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn
             | Condition::BentAllFourThisTurn
-            | Condition::SacrificedThisTurnAtLeast { .. } => false,
+            | Condition::SacrificedThisTurnAtLeast { .. }
+            | Condition::OpponentLostLifeThisTurnAtLeast { .. } => false,
         }
     }
 }
@@ -364,6 +418,9 @@ pub enum PlayerSelector {
     EachOpponent,
     /// The trigger's player ("they": the caster of the triggering spell).
     TriggeringPlayer,
+    /// "each of that player's opponents" (Standstill): the opponents of the
+    /// trigger's player, whoever controls the effect.
+    TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
     /// The controller of the frame's primary target permanent, as it is or
@@ -381,6 +438,7 @@ impl PlayerSelector {
             Self::You
             | Self::EachOpponent
             | Self::TriggeringPlayer
+            | Self::TriggeringPlayersOpponents
             | Self::TargetController
             | Self::Owner => None,
         }
@@ -421,17 +479,25 @@ pub enum EffectValue {
     },
     /// Permanents `controller` has sacrificed this turn.
     PermanentsSacrificedThisTurn,
+    /// "The number of spells you've cast this turn."
+    SpellsCastThisTurn,
     /// The power of the permanent whose event fired the trigger, from its
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// The toughness of the frame's primary target, from its last known
+    /// information once it has left ("you gain life equal to its
+    /// toughness").
+    TargetToughness,
     /// Permanents `controller` owns that an opponent controls.
     OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
-    /// The greatest power among creatures `controller` controls (0 with
-    /// none).
-    GreatestPowerYouControl,
+    /// The greatest power among creatures `controller` controls that match
+    /// [predicate] ("non-Human creatures you control"); 0 with none.
+    GreatestPowerYouControl {
+        predicate: CardPredicate,
+    },
     /// Cards in `controller`'s hand.
     CardsInHand,
     /// Number of objects still named by a resolution result or selector.
@@ -453,6 +519,16 @@ impl PaymentCost {
             Self::Waterbend { generic } => ManaCost::default().with_generic(*generic),
         }
     }
+}
+
+/// Where the revealed cards of a distinct-name search go.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DistinctSearchEnd {
+    /// An opponent chooses `picks` of them for the graveyard; the rest enter
+    /// the battlefield tapped, then the searcher shuffles.
+    OpponentSplits { picks: usize },
+    /// Into the searcher's hand, then the searcher shuffles.
+    Hand,
 }
 
 /// Which end of a library receives a moved or ordered card.
@@ -504,6 +580,13 @@ pub enum ObjectSelector {
     /// Cards the resolving player owns in a zone. Hidden selection retains
     /// the zone provenance across sampled worlds.
     Zone(ZoneType),
+    /// Cards the clause's chosen target player owns in a zone ("search target
+    /// opponent's library"); `spec` declares that player target. The
+    /// resolving player selects, and only that zone is revealed to them.
+    TargetPlayersZone {
+        spec: Box<TargetSpec>,
+        zone: ZoneType,
+    },
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -599,6 +682,7 @@ impl ObjectSelector {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Self::Target(spec) | Self::Targets(spec) => Some(spec),
+            Self::TargetPlayersZone { spec, .. } => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..
@@ -731,8 +815,11 @@ pub enum Effect {
     Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
     RemoveAllCounters { from: ObjectSelector },
-    /// Create a token that's a copy of the source, or of the target `of`
-    /// names (CR 707.2, 111.1). The token copies the copiable values: the
+    /// Create a token that's a copy of each object `of` names (CR 707.2,
+    /// 111.1): the source (`This`), the target, or every permanent of an
+    /// `Each` ("for each creature target player controls, create a token
+    /// that's a copy of that creature"), all copied as the instruction
+    /// resolves and created simultaneously. The token copies the copiable values: the
     /// definition of the face that's up, including any copy effect already
     /// applied, and never counters, damage, tapped state or non-copy
     /// effects. A copy of a double-faced permanent has both faces and enters
@@ -742,8 +829,7 @@ pub enum Effect {
     /// the token's own copiable values (CR 707.9b), so a copy of it inherits
     /// them.
     CreateTokenCopy {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        of: Option<TargetSpec>,
+        of: ObjectSelector,
         exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
@@ -751,6 +837,10 @@ pub enum Effect {
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     },
+    /// Cumulative upkeep's payment (CR 702.24a): sacrifice this unless you
+    /// pay `each` for each age counter on it. The age counter is put on by a
+    /// preceding instruction.
+    CumulativeUpkeep { each: ManaCost },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife { amount: EffectValue },
     MillCards {
@@ -823,6 +913,10 @@ pub enum Effect {
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
+    /// "End the turn" (CR 723.1): every object on the stack is exiled,
+    /// waiting triggered abilities cease to exist, and the turn skips to its
+    /// cleanup step, which proceeds as usual.
+    EndTheTurn,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -858,6 +952,12 @@ pub enum Effect {
     /// card; you may cast it without paying its mana cost if its mana value
     /// is less than `below`, otherwise put it into your hand.
     ExileUntilNonlandCastFree { below: EffectValue },
+    /// Cascade (CR 702.85a): exile cards from the top of your library until
+    /// you exile a nonland card with lesser mana value than the source spell;
+    /// you may cast it without paying its mana cost. Every other card exiled
+    /// this way, and that one if not cast, goes on the bottom in a random
+    /// order.
+    Cascade,
     /// "Look at the top card of your library. You may cast that card without
     /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
     /// option.
@@ -876,10 +976,14 @@ pub enum Effect {
         target: TargetSpec,
         predicate: CardPredicate,
     },
-    /// Search for up to `count` land cards with different names; an
-    /// opponent puts `opponent_picks` of them into the graveyard and the rest
-    /// enter tapped (Elemental Teachings).
-    SearchLandsOpponentSplits { count: usize, opponent_picks: usize },
+    /// Search your library for up to `count` [predicate] cards with
+    /// different names, revealing each, then `end` places them (Elemental
+    /// Teachings, Three Dreams).
+    SearchDistinctNames {
+        predicate: CardPredicate,
+        count: usize,
+        end: DistinctSearchEnd,
+    },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
     PlaceTargetInLibrary { second_from_top: bool },
@@ -902,14 +1006,24 @@ pub enum Effect {
     /// The source deals `amount` damage to each creature, permanent or
     /// player `what` names (a `Target` selector may name a player),
     /// `amount` read as the instruction resolves; the excess dealt to the
-    /// last creature is kept for a following "the excess damage".
+    /// last creature is kept for a following "the excess damage". `by`
+    /// names another object as the source of the damage (CR 120.2: "it deals
+    /// damage equal to its power"), as it is or last existed.
     DealDamage {
         amount: EffectValue,
         what: ObjectSelector,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        by: Option<ObjectSelector>,
     },
     /// Counter each spell `what` names (CR 701.6a); abilities are not
     /// affected.
-    CounterSpell { what: ObjectSelector },
+    CounterSpell {
+        what: ObjectSelector,
+        /// "If that spell is countered this way, exile it instead of
+        /// putting it into its owner's graveyard."
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        exile: bool,
+    },
     /// "Counter target activated or triggered ability" (CR 701.6b): the
     /// ability leaves the stack and does nothing; spells are not affected.
     /// A stack ability is no card object, so the clause's chosen target is
@@ -935,6 +1049,9 @@ pub enum Effect {
         count: EffectValue,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         tapped_and_attacking: bool,
+        /// "create a tapped [token]": enters tapped, not attacking.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        tapped: bool,
     },
     /// Attach the source Equipment to the target creature (CR 701.3). A
     /// resolving Aura spell instead enters attached to it (CR 303.4f).
@@ -1005,6 +1122,12 @@ pub enum Effect {
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
+    /// "Copy that spell for each [each] the spell could target. Each copy
+    /// targets a different one of those" (Mirrorwing Dragon): the triggering
+    /// spell is copied under the resolving player once per selected
+    /// permanent that is a legal new target for it, and each copy's targets
+    /// become that permanent; nobody chooses.
+    CopyTriggeringSpellForEach { each: ObjectSelector },
     /// "Change the target of target spell or ability with a single target"
     /// (CR 115.7): to another legal target, if there is one.
     ChangeTarget { target: TargetSpec },
@@ -1105,7 +1228,7 @@ pub enum DelayedEvent {
         your_turn: bool,
     },
     /// The matching spell supplies event context, separate from captured subjects.
-    YouCastSpell(CardPredicate),
+    YouCastSpell(Box<CardPredicate>),
     Upkeep,
 }
 
@@ -1187,6 +1310,10 @@ pub enum TargetSpec {
     },
     /// "target creature or spell".
     CreatureOrSpell,
+    /// "target [predicate] spell" ("noncreature spell").
+    SpellMatching {
+        predicate: CardPredicate,
+    },
     /// "target creature you control" — relative to the caster/controller.
     CreatureYouControl,
     /// "target creature an opponent controls".
@@ -1221,6 +1348,11 @@ pub struct TargetRequirement {
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
+    /// "Target creature of an opponent's choice": the controller's opponent
+    /// chooses this clause's targets as the ability is activated; legality
+    /// is still from the controller's side (CR 115.4).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub opponent_chooses: bool,
 }
 
 impl TargetRequirement {
@@ -1237,6 +1369,7 @@ impl TargetRequirement {
             another: false,
             max_x: false,
             total_mana_value_x: false,
+            opponent_chooses: false,
         }
     }
 
@@ -1328,7 +1461,7 @@ impl Effect {
             | Effect::GainControl { what, .. }
             | Effect::ControlPlayer { what, .. }
             | Effect::DealDamage { what, .. }
-            | Effect::CounterSpell { what }
+            | Effect::CounterSpell { what, .. }
             | Effect::CounterAbility { what }
             | Effect::AttachSourceTo { what }
             | Effect::Earthbend { what, .. }
@@ -1373,7 +1506,8 @@ impl Effect {
                 effects.iter().any(Effect::asks_triggering_spell)
             }
             // "Copy that spell": the cast spell is the context.
-            Effect::CopyTriggeringObject => true,
+            Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
+            Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
             _ => false,
         }
     }
@@ -1454,7 +1588,7 @@ impl Effect {
             Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateTokenCopy { of, .. } => of.as_ref(),
+            Effect::CreateTokenCopy { of, .. } => of.target_spec(),
             Effect::PutCounters { .. }
             | Effect::PutCountersFrom { .. }
             | Effect::Sacrifice { .. }
@@ -1478,17 +1612,20 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::Cascade
+            | Effect::CumulativeUpkeep { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }
             | Effect::TriggerModes { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
-            | Effect::SearchLandsOpponentSplits { .. }
+            | Effect::SearchDistinctNames { .. }
             | Effect::DrawCards { .. }
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }
             | Effect::EachPlayerChoosesToExile { .. }
@@ -1500,6 +1637,7 @@ impl Effect {
             | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
+            | Effect::CopyTriggeringSpellForEach { .. }
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }
@@ -1574,6 +1712,7 @@ impl Effect {
         Effect::DealDamage {
             amount: amount.into(),
             what,
+            by: None,
         }
     }
 
@@ -1644,6 +1783,7 @@ impl Effect {
             token_name: token_name.into(),
             count: count.into(),
             tapped_and_attacking: false,
+            tapped: false,
         }
     }
 

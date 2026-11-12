@@ -111,6 +111,7 @@ fn stack(
                 source_ref,
                 ability_index: 0,
                 targets,
+                target_req_indices: Vec::new(),
                 attached: None,
                 x: 0,
                 granted_by: None,
@@ -147,10 +148,7 @@ fn clause(spec: TargetSpec, effects: Vec<Effect>) -> Effect {
 }
 
 fn damage() -> Effect {
-    Effect::DealDamage {
-        amount: EffectValue::Fixed(1),
-        what: ObjectSelector::Target(TargetSpec::Creature),
-    }
+    Effect::deal_damage(1, ObjectSelector::Target(TargetSpec::Creature))
 }
 
 fn hexproof_keywords() -> Keywords {
@@ -672,6 +670,7 @@ fn counter_spell_cannot_affect_an_ability() {
         player: None,
         inline_effects: Some(vec![Effect::CounterSpell {
             what: ObjectSelector::Target(TargetSpec::Spell),
+            exile: false,
         }]),
         x: 0,
     }));
@@ -867,7 +866,7 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
             Entry::Triggered,
             controller,
             vec![Effect::CreateDelayedTrigger {
-                event: DelayedEvent::YouCastSpell(CardPredicate::default()),
+                event: DelayedEvent::YouCastSpell(Box::default()),
                 frequency: DelayedFrequency::Once,
                 expiry: DelayedExpiry::ThisTurn,
                 remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
@@ -3443,7 +3442,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         player,
         vec![
             Effect::CreateTokenCopy {
-                of: None,
+                of: ObjectSelector::This,
                 exceptions: vec![Modification::SetBasePt {
                     power: Some(EffectValue::Fixed(4)),
                     toughness: Some(EffectValue::Fixed(5)),

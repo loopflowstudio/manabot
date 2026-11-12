@@ -144,6 +144,26 @@ fn encoded_to_dict<'py>(
     ] {
         dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
     }
+    if config.turn_state {
+        dict.set_item(
+            "player_turn_state",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.player_turn_state,
+                &[2, crate::agent::observation_encoder::TURN_STATE_DIM],
+            )?,
+        )?;
+        dict.set_item(
+            "card_turn_state",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.card_turn_state,
+                &[2, config.max_cards_per_player],
+            )?,
+        )?;
+    }
     dict.set_item(
         "facts",
         to_numpy_array_f32(
@@ -1194,6 +1214,9 @@ pub struct PyPlayer {
     /// What this player has done this turn.
     #[pyo3(get, set)]
     pub turn_history: PyPlayerTurnHistory,
+    /// Spells this player cast this turn.
+    #[pyo3(get, set)]
+    pub spells_cast: u32,
     #[pyo3(get, set)]
     pub extra_turns: u32,
     #[pyo3(get, set)]
@@ -1316,6 +1339,9 @@ pub struct PyPlayerTurnHistory {
     /// Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     #[pyo3(get, set)]
     pub bent: u8,
+    /// Life lost this turn (CR 119.3).
+    #[pyo3(get, set)]
+    pub life_lost: u32,
 }
 
 #[cfg(feature = "python")]
@@ -1336,6 +1362,7 @@ impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
             bent: value.bent,
+            life_lost: value.life_lost,
         }
     }
 }
@@ -1349,6 +1376,7 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
             bent: value.bent,
+            life_lost: value.life_lost,
         }
     }
 }
@@ -1398,7 +1426,8 @@ impl From<PyCopyEffect> for CopyData {
     }
 }
 
-/// Mana spendable only on the named spell or ability-source subtypes.
+/// Mana spendable only on the named spell or ability-source subtypes, or
+/// (`except_nonartifact_spells`) on anything but nonartifact spells.
 #[cfg(feature = "python")]
 #[pyclass(name = "RestrictedMana")]
 #[derive(Clone)]
@@ -1407,6 +1436,8 @@ pub struct PyRestrictedMana {
     pub spells: Vec<String>,
     #[pyo3(get)]
     pub abilities: Vec<String>,
+    #[pyo3(get)]
+    pub except_nonartifact_spells: bool,
     #[pyo3(get)]
     pub mana: [i32; 6],
 }
@@ -1417,6 +1448,7 @@ impl From<RestrictedManaData> for PyRestrictedMana {
         Self {
             spells: value.spells,
             abilities: value.abilities,
+            except_nonartifact_spells: value.except_nonartifact_spells,
             mana: value.mana,
         }
     }
@@ -1428,6 +1460,7 @@ impl From<PyRestrictedMana> for RestrictedManaData {
         Self {
             spells: value.spells,
             abilities: value.abilities,
+            except_nonartifact_spells: value.except_nonartifact_spells,
             mana: value.mana,
         }
     }
@@ -1451,6 +1484,7 @@ impl From<PlayerData> for PyPlayer {
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
+            spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,
@@ -1487,6 +1521,7 @@ impl From<PyPlayer> for PlayerData {
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
+            spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,
@@ -1678,6 +1713,9 @@ pub struct PyManaCost {
     pub cost: Vec<i32>,
     #[pyo3(get, set)]
     pub mana_value: i32,
+    /// Number of {X} symbols; `mana_value` counts none of them (CR 202.3e).
+    #[pyo3(get)]
+    pub x: u8,
 }
 
 #[cfg(feature = "python")]
@@ -1691,6 +1729,7 @@ impl From<ManaCost> for PyManaCost {
                 .collect(),
             cost: value.cost[..6].iter().map(|v| i32::from(*v)).collect(),
             mana_value: i32::from(value.mana_value),
+            x: value.x,
         }
     }
 }
@@ -1710,7 +1749,7 @@ impl From<PyManaCost> for ManaCost {
             purpose: Default::default(),
             cost,
             mana_value,
-            x: 0,
+            x: value.x,
             hybrid: value
                 .hybrid
                 .into_iter()
@@ -1775,6 +1814,9 @@ pub struct PyCard {
     /// Announced X of a spell on the stack whose cost has X.
     #[pyo3(get)]
     pub x: Option<i32>,
+    /// A graveyard card put there from the battlefield this turn.
+    #[pyo3(get, set)]
+    pub from_battlefield_this_turn: bool,
 }
 
 /// A public permission to play an exiled card; see `CastPermissionData`.
@@ -1868,6 +1910,7 @@ impl From<CardData> for PyCard {
             face_down: value.face_down,
             cast_permission: value.cast_permission.map(Into::into),
             x: value.x,
+            from_battlefield_this_turn: value.from_battlefield_this_turn,
         }
     }
 }
@@ -1896,6 +1939,7 @@ impl From<PyCard> for CardData {
             face_down: value.face_down,
             cast_permission: value.cast_permission.map(Into::into),
             x: value.x,
+            from_battlefield_this_turn: value.from_battlefield_this_turn,
         }
     }
 }
@@ -4319,6 +4363,14 @@ fn policy_action_count(count: usize, capacity: usize, action_overflow: &str) -> 
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// The state only policy input v10 holds that `obs` needs, if any (see
+/// `observation_encoder::input_v10_state`); a v9 encoder refuses it.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn input_v10_state(obs: PyObservation) -> Option<&'static str> {
+    crate::agent::observation_encoder::input_v10_state(&Observation::from(obs))
+}
+
 #[cfg(feature = "python")]
 fn authored_setup(name: &str) -> PyResult<&'static crate::cards::setups::AuthoredSetup> {
     crate::cards::setups::authored_setup(name)
@@ -4664,6 +4716,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
+    m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<crate::agent::continuation::VisibleReference>()?;

@@ -688,7 +688,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     # Both names share one leaf prompt; choices are its offer rows.
     choices = [
         next(i for i, action in enumerate(offers) if action.description == f"Name {n}")
-        for n in ("Gray Ogre", "Hill Giant")
+        for n in ("Gray Ogre", "Glory Seeker")
     ]
     definitions: list[int] = []
     for choice in choices:

@@ -153,12 +153,16 @@ checkpoints or experiment evidence.
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries one policy input, v9 (`ObservationConfig.policy_input_version`);
-  it is always serialized. A checkpoint, replay or saved configuration bound to
-  any other version, or omitting it, raises `UnsupportedPolicyInput`, which
-  names the revision to run it from (`ac601834d` is the last revision
-  supporting v1-v8). Do not add version branches to the encoders or the model;
-  a new layout replaces this one at a world freeze.
+- Main carries policy input v9, the fresh default, and explicit v10
+  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
+  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
+  presence selects it natively; a v9 encoder refuses an observation that needs
+  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+  replay or saved configuration bound to any other version, or omitting it,
+  raises `UnsupportedPolicyInput`, which names the revision to run it from
+  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
+  append is the only version branch in the encoders and the model; add no
+  others, and a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -226,6 +230,8 @@ checkpoints or experiment evidence.
   Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
+- Format all Rust workspace members with `cargo fmt --manifest-path managym/Cargo.toml --all`;
+  formatting only the root package does not format the `state` and `cards` crates.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
@@ -440,7 +446,9 @@ max_mana_value }`), never a `<Verb><Object>` or `<Verb>All` variant:
 the instruction on `Decision::ChooseObject` for any verb ("tap a creature you
 control"); a verb that depends on which object it hit is an `If` composition,
 and "if you do" is `Condition::Moved` over the frame's latest `Move` or
-`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Amounts are
+`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. A `Move` to the
+library a card is already in, with a stated `library_end`, reorders it without a
+zone change ("then shuffle and put that card on top"). Amounts are
 `EffectValue` (`Fixed(n)` or read at resolution); a verb never has a
 `<Verb>Value` twin. Use the constructors (`Effect::exile`, `return_to_hand`,
 `put_counters`, `destroy`, `deal_damage`, `gain_life`, `discard`,
@@ -459,7 +467,10 @@ Activated abilities that function from hand or graveyard set
 Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana ability, not multiple fixed mana abilities. Verify each
-choice by paying a real cost and checking the remaining mana.
+choice by paying a real cost and checking the remaining mana. A mana ability
+with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
+the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
+the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 
