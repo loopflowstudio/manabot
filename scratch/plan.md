@@ -35,12 +35,15 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
    --revision COMMIT`, then `etude eval ... --rent cpu32`. Check: `read_experiment` loads it,
    `runs('HEAD')` gives 4 runs at 3.0 h, `evaluation_matchups` on a fake state (one run
    stopped at 57, one unended) gives 11 heuristic + 2 head-to-heads (u64, u40); ruff clean.
-3. If BF16 is rejected: `ladder_precision` returns float32 everywhere and the docs
-   paragraph says what separated. The docs' learning-comparison sentence currently states
-   the accepted outcome and is unverified until (2) runs.
+3. Apply the A/B decision. Accepted: keep the docs sentence and fill the report. Rejected or
+   unresolved: `ladder_precision` returns float32 everywhere and the docs paragraph says what
+   separated. The docs' learning-comparison sentence (`docs/training.md` § Reduced precision,
+   "In a learning comparison at w384l8 ... against the heuristic") states the accepted outcome
+   and is unverified until (2) runs.
 
 Both runs (step run and A/B) are deferred: they wait for the L4: the Task says not to start until MTG-318 and MTG-319 have had
-their L4 time. Rechecked 2026-11-12 (realign): both still active/moving. PR #489 has landed
+their L4 time. Rechecked 2026-11-12 (second realign): MTG-318 at pr-publish with PR #493 open; MTG-319 at
+implement (loop 1 pass 2). origin/main has nothing new since the last merge. PR #489 has landed
 and the branch contains current main, so no upstream change affects the plan.
 
 ## Compress (2026-11-12)
