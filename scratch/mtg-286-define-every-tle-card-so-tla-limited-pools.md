@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 41 of 61 defined,
-20 missing, no other issues (rebuilt extension, eighth pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 47 of 61 defined,
+14 missing, no other issues (rebuilt extension, ninth pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -74,12 +74,17 @@ Rules added on this branch, each with directed tests and observation parity
   state trigger; Koma's Coil and Marit Lage. Free casts from exile or library
   now respect hand-only casting. Detail in `scratch/questions.md`.
 
+- Ninth pass (6 cards): `CreateTokenCopy { of: ObjectSelector }`;
+  `SearchDistinctNames` with predicate and end (replaces
+  `SearchDistinctLands`); `Effect::EndTheTurn`; `SpellTargetsOnlyThis` and
+  `CopyTriggeringSpellForEach`; the exile-from-hand alternative cost with its
+  payment choice and Academy proof; `TargetSpec::SpellMatching`,
+  `CounterSpell { exile }`; Elf Warrior token. Detail in `scratch/questions.md`.
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 20 bonus-sheet names by rule family
-
-Grouping from the allocation ledger; each family lands with its cards.
+## Remaining: 14 bonus-sheet names by rule family
 
 | Family | Cards |
 |---|---|
@@ -87,31 +92,30 @@ Grouping from the allocation ledger; each family lands with its cards.
 | Token identity (blocked, decision) | Release to Memory, Lita, Mechanical Engineer |
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
 | Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
-| Cast-time costs | Force of Negation (alternative exile-from-hand cost), Shattering Spree (replicate) |
-| Copy entry, token copies, spell copies | Clone, Clone Legion, Sakashima of a Thousand Faces, Rhys the Redeemed, Mirrorwing Dragon |
-| Selection constraints and chooser/owner separation | Three Dreams (distinct names), Bribery (opponent's library, your battlefield) |
-| Split target choosers | Diaochan, Artful Beauty |
-| End the turn | Sundial of the Infinite |
+| Replicate | Shattering Spree |
+| Enter as a copy | Clone, Sakashima of a Thousand Faces |
+| Another player's library | Bribery |
+| Multi-clause activation, opponent chooser | Diaochan, Artful Beauty |
 | Phasing and life lock | Teferi's Protection |
 
-Eight of the 20 are blocked (production review, token identity, observed
-history layout, restricted mana shape); the other twelve are unblocked. Order for
-the unblocked families: cast-time costs (Force of Negation, Shattering Spree),
-copy entry, selection constraints and split choosers, then end-turn and phasing.
-Mystic Remora, Dark Depths and the eighth-pass cards are done; Bloodchief
-Ascension and Brought Back are not next work while their layout question is open.
+Eight are blocked; six are unblocked, each needing new machinery:
 
-Force of Negation needs two cast pending choices: whether to use the
-alternative cost (offered only when it is not your turn and another blue card is
-in hand) and which card to exile, paid as the cast's cost with no mana. Each new
-pending choice needs action space, `decision_context`, continuation observation
-and Academy reconnect/stale-Command proofs. Shattering Spree announces a
-replicate count like X, then copies the spell that many times with new targets.
-Three Dreams can generalize `SearchDistinctLands` (predicate and destination),
-which changes its continuation encoding. End-turn and phasing need their
-state/observation contracts written before the writer. Non-bonus families in the
-ledger (player experience counters, the Masters, Toph, Uncle's Musings, Animal
-Attendant) are outside this Task.
+- Shattering Spree: a replicate count announced like X, then that many copies
+  with new targets (`copy_stack_object` + `next_retarget` exist).
+- Clone, Sakashima: an entry-copy choice inside the replacement batch (a new
+  decision before the `ZoneMove` commits; the copied definition's own entry
+  replacements then apply, CR 614.12), and the card's printed definition kept
+  and restored when it leaves the battlefield. Sakashima also needs a
+  legend-rule exemption static, "except it has Sakashima's other abilities"
+  as copy exceptions, and the Partner keyword (no 1v1 effect).
+- Bribery: `searches_private_zones` grants hand and library together, and
+  determinization then keeps the opponent's hand exact; Bribery needs a
+  library-only private search, its observation and possible-worlds handling.
+- Diaochan: activated abilities hold one target clause
+  (`PendingChoice::ActivatedTarget`); it needs two clauses, the second chosen
+  by an opponent, and a "before attackers are declared" timing.
+- Teferi's Protection: phasing and a life-total lock; write the state and
+  observation contract first.
 
 ## Token identity (decision open)
 
@@ -154,7 +158,9 @@ waits for a world freeze (the production review's v10 question).
 - Regenerate `conformance/semantic-kernel-w17-v2` evidence: the pack
   `content_digest` moves with every added definition, so
   `checked_semantic_conformance_evidence_reproduces` fails until it is
-  regenerated (eighth-pass compress run: 1131 passed, this one failed).
+  regenerated (eighth-pass compress run: 1131 passed, this one failed). The
+  Academy precision demos in `tests/academy/test_decision_surface.py` pin a
+  content/setup identity that moves the same way (three fail, ninth pass).
 - World-change Python suites from `CLAUDE.md` and
   `docs/development.md#validation-by-change-area`; Academy pending choices,
   stale Commands, reconnect and replay/fork for each new decision. Browser

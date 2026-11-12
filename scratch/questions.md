@@ -132,3 +132,36 @@ the pack `content_digest` moved (evidence `0798b2c7…`, regenerated `cd7a91d1�
 as the branch added definitions; the earlier passes did not run this target.
 Gate regenerates `conformance/semantic-kernel-w17-v2` evidence. Extension not
 rebuilt (no behavior change).
+
+## Ninth pass — six bonus cards, 2026-11-12 UTC
+
+Defined: Clone Legion (dtk), Rhys the Redeemed (new `shm.rs`), Three Dreams
+(new `psal.rs`), Sundial of the Infinite (m12), Mirrorwing Dragon (emn), Force
+of Negation (mh1); Elf Warrior token `49180301-f72f-48ca-8be1-df295e89cdd7`
+(Rhys's `all_parts`). Card data fetched 2026-11-12 UTC by pinned id from
+`https://api.scryfall.com/cards/collection`.
+
+Assumptions taken (reversible):
+- Force of Negation's alternative reuses `CastChoices::kicked` (no v9
+  column): kicked means the alternative is used, as it already means the mana
+  for `PayLifeOrMana`. The LLM relation text still says "kicker included" for
+  it; native offer labels and decision context name the alternative.
+- `EndTheTurn` moves stack spells (and copies) to exile, drops abilities and
+  pending triggers, ends combat, empties mana, and jumps to cleanup; the game
+  loop then starts cleanup without priority (`tick_priority` and `turn_tick`
+  return when a resolution reset the step).
+- Mirrorwing: legality of each new target is slot 0's retarget candidates
+  from the caster's view; every target slot of a copy becomes its creature.
+- Three Dreams' set file is `psal.rs` (Scryfall set `psal`, Salvat 2005).
+
+Results (debug): cards target 663 passed; lib + `rules_tests` +
+`conformance_tests` 363 passed (2 skipped); fmt applied. Rebuilt cp313
+extension (atomic replace); `check_tle_coverage.py --bonus-sheet` 47 of 61,
+14 missing; `--allocation-only` no issues. Pytest observation parity, text
+observation, TLE allocation, policy catalog, record vocabulary, Academy
+optional/merchant payment and the new
+`tests/academy/test_alternative_cost_recovery.py`: 116 passed, 6 failed, none
+from this pass: three `test_decision_surface.py` precision demos ("content/setup
+identity differs from this runtime", the pinned demo identity moved with the
+added definitions, like the conformance evidence; gate) and
+`test_merchant_payment_recovery` for v5/v6/v8 (main supports only v9).
