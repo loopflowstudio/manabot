@@ -1,0 +1,14 @@
+step 242 of 425: action 2 took 0.70 s
+step 243 of 425: action 2 took 0.34 s
+slowest step: 0.70 s
+Traceback (most recent call last):
+  File "<string>", line 16, in <module>
+    (output / f"pre-step-426-viewer-{viewer}.json").write_text(env.capture_decision(viewer).to_json())
+                                                               ~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+_managym.PyAgentError: no active decision to project
+Traceback (most recent call last):
+  File "<stdin>", line 22, in <module>
+  File "/Users/jack/.local/share/uv/python/cpython-3.13.15-macos-aarch64-none/lib/python3.13/subprocess.py", line 577, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['/Users/jack/.cache/uv/builds-v0/.tmpaSnie0/bin/python', '-I', '-u', '-c', 'import ast\nfrom pathlib import Path\nfrom manabot import managym\nassert "/site-packages/" in managym.__file__\nsource = Path("/Users/jack/Downloads/manabot-slow-step/manabot_slow_step.py")\ntree = ast.parse(source.read_text())\nfor node in tree.body:\n    if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "ACTIONS" for target in node.targets):\n        assert isinstance(node.value, ast.List) and len(node.value.elts) == 426\n        node.value.elts = node.value.elts[:425]\nexec(compile(tree, str(source), "exec"))\noutput = Path("/Users/jack/src/manabot.ryan-bug/scratch/ryan-slow-step")\nframe = env.semantic_decision_frame_json()\n(output / "pre-step-426-decision.json").write_text(frame)\nfor viewer in range(2):\n    (output / f"pre-step-426-viewer-{viewer}.json").write_text(env.capture_decision(viewer).to_json())\nprint(frame)\n']' returned non-zero exit status 1.

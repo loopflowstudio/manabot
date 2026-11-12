@@ -1,0 +1,22 @@
+Installed 38 packages in 543ms
+macOS-26.0.1-arm64-arm-64bit-Mach-O 3.13.15
+Traceback (most recent call last):
+  File "/Users/jack/.local/share/uv/python/cpython-3.13.15-macos-aarch64-none/lib/python3.13/importlib/metadata/__init__.py", line 407, in from_name
+    return next(iter(cls.discover(name=name)))
+StopIteration
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import importlib.metadata, platform, subprocess, sys; print(platform.platform(), platform.python_version(), flush=True); print("manabot", importlib.metadata.version("manabot"), "managym", importlib.metadata.version("managym"), flush=True); subprocess.run([sys.executable, "-u", "/Users/jack/Downloads/manabot-slow-step/manabot_slow_step.py"], timeout=180, check=True)
+                                                                                                                                                                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/jack/.local/share/uv/python/cpython-3.13.15-macos-aarch64-none/lib/python3.13/importlib/metadata/__init__.py", line 987, in version
+    return distribution(distribution_name).version
+           ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jack/.local/share/uv/python/cpython-3.13.15-macos-aarch64-none/lib/python3.13/importlib/metadata/__init__.py", line 960, in distribution
+    return Distribution.from_name(distribution_name)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/Users/jack/.local/share/uv/python/cpython-3.13.15-macos-aarch64-none/lib/python3.13/importlib/metadata/__init__.py", line 409, in from_name
+    raise PackageNotFoundError(name)
+importlib.metadata.PackageNotFoundError: No package metadata was found for managym
