@@ -135,6 +135,13 @@ public encoder boundary, before the retained action list reaches row encoding.
 includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
+`tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
+and native frontier encoding, against full evidence and the Python per-branch
+encoder: the same roots and seeds must choose identical Commands and write
+identical tensors. It also checks that v3 receipts and registrations omitting
+`rollout_evidence` still read as full evidence. A change to
+`managym.encode_observations_into` also runs `tests/env/test_observation.py`
+and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
 `SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
 `collect(model, 1)` can play a complete game.

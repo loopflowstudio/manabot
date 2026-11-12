@@ -62,13 +62,14 @@ from etude.experiment import Checkpoint, ExperimentState, TrainingRun
 from etude.jobs import evaluation
 from etude.launch import client
 from etude.launch.records import Job, Run
-from etude.report import Curve, Matches, Report, Score
+from etude.report import Report, Score
 from etude.run.storage import Storage
 from etude.train.read import RunData
 from pydantic import Field
 import torch
 
 from experiments import tla_frontier
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
@@ -76,14 +77,22 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
-from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
+from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.training.panels import ML, PERF
 from manabot.training.regime import (
     DampedPolicyLearning,
     IterationSchedule,
     TrainingRegime,
     TrainSelfPlay,
+)
+from manabot.training.report import (
+    against_earlier_self,
+    against_fixed,
+    head_to_head,
+    job_labels,
+    learning_schedule,
 )
 from manabot.training.state.game_errors import GameErrorState
 import managym
@@ -941,25 +950,26 @@ def _registration(
     observation: ObservationConfig,
 ) -> tuple[PlayerRegistration, Path | None]:
     setup = matchup.match()
-    fingerprints = runtime_fingerprints(match_config=setup)
-    common = dict(
-        player_id=name,
-        display_name=player.name,
-        role="challenger" if name == "candidate" else "anchor",
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
-        matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id="policy-cpu-one-thread-one-pass",
+    role: Literal["challenger", "anchor"] = (
+        "challenger" if name == "candidate" else "anchor"
     )
     if isinstance(player, Code):
         if player.config != HEURISTIC:
             raise ValueError("heuristic support differs from frontier protocol")
+        # Code players read no policy input; their ABI fields name the fresh space.
+        fingerprints = runtime_fingerprints(match_config=setup)
         return PlayerRegistration(
-            **common,
+            player_id=name,
+            display_name=player.name,
+            role=role,
+            world=managym.WORLD_VERSION,
+            content_suite=matchup.content_suite,
+            information_boundary="acting-viewer",
+            observation_abi_sha256=fingerprints["observation_abi_sha256"],
+            action_abi_sha256=fingerprints["action_abi_sha256"],
+            matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
+            player_seed_derivation_id="arena-pair-deal-player-v1",
+            compute_class_id="policy-cpu-one-thread-one-pass",
             runner_kind="code",
             player_spec=dict(HEURISTIC),
             source_sha256=canonical_sha256(
@@ -967,25 +977,19 @@ def _registration(
             ),
         ), None
     path = local_checkpoint_file(player)
-    agent, space = load_checkpoint(str(path))
-    if space.encoder.config != observation:
+    admission = register_checkpoint(
+        path,
+        match=setup,
+        content_suite=matchup.content_suite,
+        player_id=name,
+        display_name=player.name,
+        role=role,
+        artifact_prefix="c5fba4",
+        allow_deck_repetition=True,
+    )
+    if admission.space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")
-    digest = file_sha256(path)
-    return PlayerRegistration(
-        **common,
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
-        checkpoint_sha256=digest,
-        checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
-        artifact_id=f"c5fba4/{digest}",
-    ), path
+    return admission.registration, path
 
 
 @contextmanager
@@ -1099,34 +1103,35 @@ def report() -> Report:
     equal-hours curve is drawn at w160l8's update; a pair that is also an
     equal-update or endpoint pair is played once, under that tag.
     """
+    regimes, _ = frozen()
+    jobs = {_regime_id(label): regimes[label] for label in SIZES}
+    small, large = jobs
     return Report(
-        score=Score(table="games", value="score", reference=0.5),
+        score=Score(table="games", value="score", reference=0.5, unit="games"),
         clock="updates",
+        labels=job_labels(
+            {small: ("Small", jobs[small]), large: ("Large", jobs[large])}
+        ),
         evals=(
-            Curve(
-                title="Width 64 vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{SMALL}"),
+            against_earlier_self(
+                "Model vs itself at half training time",
+                tags=tuple(f"half-training-{label}" for label in SIZES),
             ),
-            Curve(
-                title="Width 160, 8 layers vs itself at half the training hours (primary)",
-                matches=Matches(tag=f"half-training-{LARGE}"),
-            ),
-            Curve(
-                title="Width 64 vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{SMALL}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs fixed heuristic",
-                matches=Matches(tag=f"heuristic-{LARGE}"),
-            ),
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal updates",
-                matches=Matches(tag="head-to-head"),
+            against_fixed(
+                "Model vs heuristic",
+                "heuristic",
+                tags=tuple(f"heuristic-{label}" for label in SIZES),
             ),
             # Drawn at w160l8's updates; each pair's two hours are in analysis.
-            Curve(
-                title="Width 160, 8 layers vs width 64 at equal training hours",
-                matches=Matches(tag="equal-hours"),
+            head_to_head(
+                "Large vs Small at fixed training time",
+                subject=large,
+                tag="equal-hours",
+            ),
+            head_to_head(
+                "Large vs Small at fixed # updates", subject=large, tag="head-to-head"
             ),
         ),
+        perf=PERF,
+        ml=(*learning_schedule(jobs), *ML),
     )

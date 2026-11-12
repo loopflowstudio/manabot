@@ -107,7 +107,7 @@ def checkpoint_manifest(
         player_id="monitor-checkpoint",
         display_name="Monitored checkpoint",
         training_seed=run.seed,
-        artifact_id=f"monitor/{artifact['sha256']}",
+        artifact_prefix="monitor",
         expected_sha256=artifact["sha256"],
         expected_bytes=artifact["bytes"],
         allow_deck_repetition=protocol.include_mirrors,
