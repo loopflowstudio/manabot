@@ -49,8 +49,10 @@ Delete `scratch/` entirely in the final commit before landing.
 
 Built on main's v9-only encoder:
 - `observation_layout.rs` has no version argument: `observation_layout(policy_history)`.
-  Encoder, continuation, shared-effect and history writes index by layout names;
-  the old `*_INDEX`/`*_DIM` constants are aliases of layout constants.
+  Encoder, continuation, shared-effect and history writes index by layout names.
+  Compress pass deleted every column `*_INDEX` alias (encoder, continuation,
+  observability guard, cr_602 test now use `observation_layout::<axis>::<NAME>`);
+  `*_DIM` stay as buffer-width names equal to `<axis>::WIDTH`.
 - Python `managym.observation_layout(*, policy_history=False)`; renames with warning
   aliases in `managym/__init__.py(i)`; docs in `docs/engine.md#encoded-observations`,
   linked from `docs/engine-python.md` and `docs/observation-and-model.md`.
@@ -59,5 +61,11 @@ Built on main's v9-only encoder:
 Checks: `cargo test --lib agent::` 50 passed; cards `observability` 58 passed;
 clippy `-D warnings` clean; layout + rename-affected pytest (10 files) 151 passed,
 layout test 8 passed; academy parity + MPS 22 passed; guide example run verbatim.
+
+Compress checks: `cargo test --lib agent::` 50 passed; cards `observability` 58
+passed; rules `cr_602_policy` 1 passed; clippy `-D warnings` clean.
+
+Steer (2026-11-12), Jack Heart: "i dont need to review again". Ship the rebuild at
+demo: remove scratch/, mark ready, enable squash auto-merge.
 
 Remaining: gate; delete `scratch/` in the final commit before landing.

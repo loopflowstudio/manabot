@@ -23,17 +23,12 @@ use crate::{
     },
 };
 
-/// Up to 64 relation rows of 49 floats. Overflow is an admission error,
-/// never truncation. Zero is padding/absence for selectors. Validity is
-/// column 31 and target eligibility column 32, followed by the frame's X
-/// (33), its granted keywords (34..48, in `KeywordData` field order) and a
-/// waiting delayed trigger's "this turn" (48).
+/// Up to 64 relation rows, columns named by `observation_layout::relation`.
+/// Overflow is an admission error, never truncation. Zero is padding/absence
+/// for selectors. Granted keywords follow `KeywordData` field order.
 pub const RELATION_ROWS: usize = 64;
 pub const RELATION_DIM: usize = relation::WIDTH;
-pub const RELATION_X_INDEX: usize = relation::X;
-pub const RELATION_KEYWORDS_INDEX: usize = relation::FLYING;
-pub const RELATION_THIS_TURN_INDEX: usize = relation::THIS_TURN;
-const _: () = assert!(RELATION_THIS_TURN_INDEX == RELATION_KEYWORDS_INDEX + KEYWORD_COUNT);
+const _: () = assert!(relation::THIS_TURN == relation::FLYING + KEYWORD_COUNT);
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -146,7 +141,7 @@ pub struct ContinuationFrame {
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_keywords: [bool; KEYWORD_COUNT],
     /// Waiting frequency: 1 once, 2 each match. Missing historical data is unknown.
-    /// Encoded as a kind-9 relation row with the code in column 28.
+    /// Encoded as a kind-9 relation row with the code in `relation::DECISION`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delayed_frequency: Option<u8>,
     /// A waiting delayed trigger that ends in this turn's cleanup step.

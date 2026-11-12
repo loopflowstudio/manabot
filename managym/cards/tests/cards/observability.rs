@@ -20,13 +20,13 @@ use crate::support::{
     inspect::{card_of, library_card},
     play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
 };
-use managym::agent::observation_layout::{action, card, permanent, player, relation};
+use managym::agent::observation_layout::{action, card, fact, permanent, player, relation};
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
         continuation::{
             delayed_event_code, ClauseTarget, ContinuationFrame, ManaOutput, VisibleReference,
-            RELATION_DIM, RELATION_KEYWORDS_INDEX, RELATION_THIS_TURN_INDEX, RELATION_X_INDEX,
+            RELATION_DIM,
         },
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
@@ -35,18 +35,8 @@ use managym::{
             KEYWORD_COUNT,
         },
         observation_encoder::{
-            encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, CARD_X_INDEX,
-            FACT_DETAIL_INDEX, FACT_DIM, FACT_DURATION_INDEX, FACT_ID_INDEX, FACT_KIND_INDEX,
-            FACT_OBJECT_INDEX, FACT_ORDER_INDEX, FACT_SOURCE_INDEX, FACT_VALID_INDEX,
-            FACT_VALUE_INDEX, PERMANENT_ABILITIES_LOST_INDEX, PERMANENT_ATTACHED_INDEX,
-            PERMANENT_BLOCKING_INDEX, PERMANENT_DEALT_DAMAGE_INDEX, PERMANENT_DIM,
-            PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX, PERMANENT_GRANTED_LAND_INDEX,
-            PERMANENT_ONCE_EACH_TURN_INDEX, PERMANENT_TIMESTAMP_INDEX,
-            PLAYER_ADDITIONAL_COMBATS_INDEX, PLAYER_ATTACKED_INDEX, PLAYER_BENT_INDEX,
-            PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_EXTRA_TURNS_INDEX, PLAYER_HAND_ONLY_INDEX,
-            PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
-            PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
-            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
+            encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM,
+            PERMANENT_DIM, PLAYER_DIM,
         },
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -170,9 +160,9 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
         ),
         (
             "dealt_damage_this_turn",
-            Seen::Permanent(PERMANENT_DEALT_DAMAGE_INDEX),
+            Seen::Permanent(permanent::DEALT_DAMAGE_THIS_TURN),
         ),
-        ("timestamp", Seen::Permanent(PERMANENT_TIMESTAMP_INDEX)),
+        ("timestamp", Seen::Permanent(permanent::TIMESTAMP)),
         ("counters", Seen::Fact(FactKind::Counter)),
         (
             "keyword_counter_timestamps",
@@ -187,7 +177,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
             "cast_x",
             Seen::Transient("copied into its own entering trigger's X as it fires"),
         ),
-        ("attached_to", Seen::Permanent(PERMANENT_ATTACHED_INDEX)),
+        ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),
         ("activated_this_turn", Seen::Fact(FactKind::UsedAbility)),
     ]
@@ -295,11 +285,11 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         ),
         Modification::LoseAllAbilities => (
             "Modification::LoseAllAbilities",
-            Seen::Permanent(PERMANENT_ABILITIES_LOST_INDEX),
+            Seen::Permanent(permanent::ABILITIES_LOST),
         ),
         Modification::Firebending(_) => (
             "Modification::Firebending",
-            Seen::Permanent(PERMANENT_FIREBENDING_INDEX),
+            Seen::Permanent(permanent::GRANTED_FIREBENDING),
         ),
         Modification::SetBasePt { .. } => {
             ("Modification::SetBasePt", Seen::Permanent(permanent::POWER))
@@ -329,7 +319,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         ),
         Modification::KeepUnspentMana(_) => (
             "Modification::KeepUnspentMana",
-            Seen::Player(PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_KEEPS_RED_MANA_INDEX + 1),
+            Seen::Player(player::KEEPS_RED_MANA, player::KEEPS_RED_MANA + 1),
         ),
         Modification::ControlChanged { .. } => (
             "Modification::ControlChanged",
@@ -346,8 +336,8 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
-                PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
-                PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1,
+                player::NO_MAXIMUM_HAND_SIZE,
+                player::NO_MAXIMUM_HAND_SIZE + 1,
             ),
         ),
     }
@@ -543,7 +533,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         ("active_player", Seen::Player(player::IS_ACTIVE, player::LIBRARY_COUNT)),
         (
             "turn_number",
-            Seen::Player(PLAYER_TURN_INDEX, PLAYER_TURN_INDEX + 1),
+            Seen::Player(player::TURN, player::TURN + 1),
         ),
         (
             "lands_played",
@@ -559,13 +549,13 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         ),
         (
             "extra_turns",
-            Seen::Player(PLAYER_EXTRA_TURNS_INDEX, PLAYER_EXTRA_TURNS_INDEX + 1),
+            Seen::Player(player::EXTRA_TURNS, player::EXTRA_TURNS + 1),
         ),
         (
             "additional_combats",
             Seen::Player(
-                PLAYER_ADDITIONAL_COMBATS_INDEX,
-                PLAYER_ADDITIONAL_COMBATS_INDEX + 1,
+                player::ADDITIONAL_COMBATS,
+                player::ADDITIONAL_COMBATS + 1,
             ),
         ),
         (
@@ -578,23 +568,23 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 22] {
         ),
         (
             "history.cards_drawn",
-            Seen::Player(PLAYER_CARDS_DRAWN_INDEX, PLAYER_CARDS_DRAWN_INDEX + 1),
+            Seen::Player(player::CARDS_DRAWN, player::CARDS_DRAWN + 1),
         ),
         (
             "history.bent",
-            Seen::Player(PLAYER_BENT_INDEX, PLAYER_BENT_INDEX + 4),
+            Seen::Player(player::BENT_WATER, player::BENT_WATER + 4),
         ),
         (
             "history.attacked",
-            Seen::Player(PLAYER_ATTACKED_INDEX, PLAYER_ATTACKED_INDEX + 1),
+            Seen::Player(player::ATTACKED, player::ATTACKED + 1),
         ),
         (
             "history.permanents_sacrificed",
-            Seen::Player(PLAYER_SACRIFICED_INDEX, PLAYER_SACRIFICED_INDEX + 1),
+            Seen::Player(player::PERMANENTS_SACRIFICED, player::PERMANENTS_SACRIFICED + 1),
         ),
         (
             "history.land_entered",
-            Seen::Player(PLAYER_LAND_ENTERED_INDEX, PLAYER_LAND_ENTERED_INDEX + 1),
+            Seen::Player(player::LAND_ENTERED, player::LAND_ENTERED + 1),
         ),
         (
             "ability_triggers_this_turn",
@@ -2038,7 +2028,7 @@ fn turn_history_moves_each_players_named_column() {
         let Seen::Player(start, end) = seen else {
             continue;
         };
-        if start < PLAYER_KEEPS_RED_MANA_INDEX && field != "turn_number" {
+        if start < player::KEEPS_RED_MANA && field != "turn_number" {
             continue; // Phase, step and the active player: the turn structure itself.
         }
         let mut game = base_game.clone();
@@ -2426,7 +2416,7 @@ impl Buffer {
         match self {
             Buffer::Player => None,
             Buffer::Relation => Some(relation::VALID),
-            Buffer::Facts => Some(FACT_VALID_INDEX),
+            Buffer::Facts => Some(fact::VALID),
             _ => Some(self.width() - 1),
         }
     }
@@ -2530,14 +2520,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         order => [Rows("v7 effect_members column 1: reversible native record order")],
     }));
     fields.extend(encoding!(TurnData {
-        turn_number => [column(Player, PLAYER_TURN_INDEX)],
+        turn_number => [column(Player, player::TURN)],
         phase => [Columns(Player, player::PHASE_BEGINNING, 5)],
         step => [Columns(Player, player::STEP_UNTAP, 12)],
         active_player_id => [column(Player, player::IS_ACTIVE)],
         agent_player_id => [Side],
     }));
     fields.extend(encoding!(PlayerData {
-        player_index => [column(Player, PLAYER_SEAT_INDEX)],
+        player_index => [column(Player, player::SEAT)],
         id => [Identity],
         is_agent => [Side],
         is_active => [column(Player, player::IS_ACTIVE)],
@@ -2548,25 +2538,25 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         mana => [Columns(Player, player::MANA_WHITE, 6)],
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
-        hand_only_until => [column(Player, PLAYER_HAND_ONLY_INDEX)],
+        hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         main_counts => [Rows("decklists")],
         unseen_counts => [Rows("decklists")],
         sideboard_counts => [Rows("decklists")],
         remaining_sideboard_counts => [Rows("decklists")],
-        keeps_red_mana => [column(Player, PLAYER_KEEPS_RED_MANA_INDEX)],
-        no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
+        keeps_red_mana => [column(Player, player::KEEPS_RED_MANA)],
+        no_maximum_hand_size => [column(Player, player::NO_MAXIMUM_HAND_SIZE)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
-        extra_turns => [column(Player, PLAYER_EXTRA_TURNS_INDEX)],
-        additional_combats => [column(Player, PLAYER_ADDITIONAL_COMBATS_INDEX)],
+        extra_turns => [column(Player, player::EXTRA_TURNS)],
+        additional_combats => [column(Player, player::ADDITIONAL_COMBATS)],
     }));
     fields.extend(encoding!(PlayerTurnHistory {
-        attacked => [column(Player, PLAYER_ATTACKED_INDEX)],
-        permanents_sacrificed => [column(Player, PLAYER_SACRIFICED_INDEX)],
-        land_entered => [column(Player, PLAYER_LAND_ENTERED_INDEX)],
-        cards_drawn => [column(Player, PLAYER_CARDS_DRAWN_INDEX)],
-        bent => [Columns(Player, PLAYER_BENT_INDEX, 4)],
+        attacked => [column(Player, player::ATTACKED)],
+        permanents_sacrificed => [column(Player, player::PERMANENTS_SACRIFICED)],
+        land_entered => [column(Player, player::LAND_ENTERED)],
+        cards_drawn => [column(Player, player::CARDS_DRAWN)],
+        bent => [Columns(Player, player::BENT_WATER, 4)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, card::ZONE_LIBRARY, 7)],
@@ -2589,7 +2579,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         // Face-down cards are foretold, and only their owner sees them.
         face_down => [column(Card, card::PERMISSION_FORETOLD)],
         cast_permission => [Rows("cast permission below")],
-        x => [Columns(Card, CARD_X_INDEX, 2)],
+        x => [Columns(Card, card::HAS_X, 2)],
     }));
     fields.extend(encoding!(CastPermissionData {
         player_id => [Columns(Card, card::PERMISSION, 2)],
@@ -2605,9 +2595,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
     }));
     fields.extend(encoding!(RestrictedManaData {
-        spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
-        abilities => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
-        mana => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Columns(Player, player::LESSON_MANA_WHITE, 6)],
+        spells => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
+        abilities => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
+        mana => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18), Columns(Player, player::LESSON_MANA_WHITE, 6)],
     }));
     fields.extend(encoding!(CardTypeData {
         is_castable => [Definition],
@@ -2648,34 +2638,34 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         has_exile_link => [column(Permanent, permanent::HAS_EXILE_LINK)],
         exile_if_dies_this_turn => [column(Permanent, permanent::EXILE_IF_DIES_THIS_TURN)],
         attacking => [column(Permanent, permanent::ATTACKING)],
-        exhausted_abilities => [column(Permanent, PERMANENT_EXHAUSTED_INDEX)],
-        once_each_turn_used => [column(Permanent, PERMANENT_ONCE_EACH_TURN_INDEX)],
-        granted_firebending => [column(Permanent, PERMANENT_FIREBENDING_INDEX)],
+        exhausted_abilities => [column(Permanent, permanent::EXHAUSTED_ABILITIES)],
+        once_each_turn_used => [column(Permanent, permanent::ONCE_EACH_TURN_USED)],
+        granted_firebending => [column(Permanent, permanent::GRANTED_FIREBENDING)],
         temp_subtypes => [
             column(Permanent, permanent::ADDED_AVATAR),
             Fact(FactKind::AddedSubtype),
-            Columns(Facts, FACT_ID_INDEX, 2),
+            Columns(Facts, fact::ID_HIGH, 2),
         ],
         keywords => [Rows("keywords below")],
         counters => [
             Fact(FactKind::Counter),
-            Columns(Facts, FACT_ID_INDEX, 2),
-            column(Facts, FACT_VALUE_INDEX),
+            Columns(Facts, fact::ID_HIGH, 2),
+            column(Facts, fact::VALUE),
         ],
-        attached_to => [Join(Permanent, PERMANENT_ATTACHED_INDEX)],
+        attached_to => [Join(Permanent, permanent::ATTACHED_TO)],
         name => [Fact(FactKind::SetName)],
         creature_types => [Fact(FactKind::SetCreatureType)],
-        is_granted_land => [column(Permanent, PERMANENT_GRANTED_LAND_INDEX)],
-        blocking => [Join(Permanent, PERMANENT_BLOCKING_INDEX)],
-        abilities_lost => [column(Permanent, PERMANENT_ABILITIES_LOST_INDEX)],
-        dealt_damage_this_turn => [column(Permanent, PERMANENT_DEALT_DAMAGE_INDEX)],
+        is_granted_land => [column(Permanent, permanent::GRANTED_LAND)],
+        blocking => [Join(Permanent, permanent::BLOCKING)],
+        abilities_lost => [column(Permanent, permanent::ABILITIES_LOST)],
+        dealt_damage_this_turn => [column(Permanent, permanent::DEALT_DAMAGE_THIS_TURN)],
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
-        timestamp => [column(Permanent, PERMANENT_TIMESTAMP_INDEX)],
+        timestamp => [column(Permanent, permanent::TIMESTAMP)],
         copy => [Fact(FactKind::Copy)],
     }));
     fields.extend(encoding!(CopyData {
-        registry_key => [Join(Facts, FACT_SOURCE_INDEX)],
+        registry_key => [Join(Facts, fact::SOURCE_DEFINITION)],
         name => [Definition],
         exceptions => [Fact(FactKind::CopyException)],
     }));
@@ -2684,18 +2674,18 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         description => [Definition],
         modification => [
             Rows("effects columns 0-1; a copy exception's fact id"),
-            Columns(Facts, FACT_ID_INDEX, 2),
+            Columns(Facts, fact::ID_HIGH, 2),
         ],
-        power => [column(Facts, FACT_VALUE_INDEX)],
-        toughness => [column(Facts, FACT_VALUE_INDEX + 1)],
-        amount => [column(Facts, FACT_VALUE_INDEX)],
-        keywords => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
-        subtypes => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
-        color => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
-        duration => [column(Facts, FACT_DURATION_INDEX)],
-        source_registry_key => [Join(Facts, FACT_SOURCE_INDEX)],
+        power => [column(Facts, fact::VALUE)],
+        toughness => [column(Facts, fact::VALUE + 1)],
+        amount => [column(Facts, fact::VALUE)],
+        keywords => [Columns(Facts, fact::DETAIL_HIGH, 2)],
+        subtypes => [Columns(Facts, fact::DETAIL_HIGH, 2)],
+        color => [Columns(Facts, fact::DETAIL_HIGH, 2)],
+        duration => [column(Facts, fact::DURATION)],
+        source_registry_key => [Join(Facts, fact::SOURCE_DEFINITION)],
         source_name => [Definition],
-        timestamp => [column(Facts, FACT_ORDER_INDEX)],
+        timestamp => [column(Facts, fact::TIMESTAMP)],
     }));
     fields.extend(encoding!(StackObjectData {
         description => [Definition],
@@ -2707,8 +2697,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         chosen_mode => [column(Relation, relation::MODE)],
         ability_index => [column(Relation, relation::ABILITY)],
         targets => [Rows("relations")],
-        x => [column(Relation, RELATION_X_INDEX)],
-        granted_keywords => [Columns(Relation, RELATION_KEYWORDS_INDEX, KEYWORD_COUNT)],
+        x => [column(Relation, relation::X)],
+        granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
     }));
     fields.extend(encoding!(StackTargetData {
         kind => [column(Relation, relation::REFERENCE_PLAYER), Join(Relation, relation::REFERENCE)],
@@ -2747,9 +2737,9 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         can_decline => [column(Relation, relation::CAN_DECLINE)],
         mana_outputs => [column(Relation, relation::MODE), Columns(Relation, relation::MANA_WHITE, 6), column(Relation, relation::RESTRICTED)],
         resolutions_this_turn => [column(Relation, relation::RESOLUTIONS_THIS_TURN)],
-        x => [column(Relation, RELATION_X_INDEX)],
-        granted_keywords => [Columns(Relation, RELATION_KEYWORDS_INDEX, KEYWORD_COUNT)],
-        this_turn => [column(Relation, RELATION_THIS_TURN_INDEX)],
+        x => [column(Relation, relation::X)],
+        granted_keywords => [Columns(Relation, relation::FLYING, KEYWORD_COUNT)],
+        this_turn => [column(Relation, relation::THIS_TURN)],
         delayed_frequency => [Rows("v5/v6 delayed frequency relation kind 9, code in column 28")],
     }));
     fields.extend(encoding!(ClauseTarget {
@@ -2801,7 +2791,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
 }
 
 /// Structural fact columns: the object join and the row kind.
-const FACT_STRUCTURE: [usize; 2] = [FACT_OBJECT_INDEX, FACT_KIND_INDEX];
+const FACT_STRUCTURE: [usize; 2] = [fact::OBJECT, fact::KIND];
 
 /// Structural relation columns: row kind, frame index and reference ordinal.
 const RELATION_STRUCTURE: [usize; 3] = [relation::KIND, relation::FRAME, relation::ORDINAL];
@@ -2851,7 +2841,7 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
         }
     }
     for offset in 0..KEYWORD_COUNT {
-        claimed.insert((Buffer::Relation, RELATION_KEYWORDS_INDEX + offset));
+        claimed.insert((Buffer::Relation, relation::FLYING + offset));
     }
     assert_eq!(
         fact_kinds,
@@ -3211,9 +3201,7 @@ fn facts_about(s: &Scenario, viewer: usize, object_index: usize) -> Vec<Vec<f32>
         .as_chunks::<FACT_DIM>()
         .0
         .iter()
-        .filter(|row| {
-            row[FACT_VALID_INDEX] == 1.0 && row[FACT_OBJECT_INDEX] == (object_index + 1) as f32
-        })
+        .filter(|row| row[fact::VALID] == 1.0 && row[fact::OBJECT] == (object_index + 1) as f32)
         .map(|row| row.to_vec())
         .collect()
 }
@@ -3228,8 +3216,8 @@ fn id_columns(id: i32) -> [f32; 2] {
 fn fact_row(rows: &[Vec<f32>], kind: FactKind, id: i32) -> Vec<f32> {
     rows.iter()
         .find(|row| {
-            row[FACT_KIND_INDEX] == kind as u8 as f32
-                && row[FACT_ID_INDEX..FACT_ID_INDEX + 2] == id_columns(id)
+            row[fact::KIND] == kind as u8 as f32
+                && row[fact::ID_HIGH..fact::ID_HIGH + 2] == id_columns(id)
         })
         .unwrap_or_else(|| panic!("no {kind:?} fact {id}: {rows:?}"))
         .clone()
@@ -3279,7 +3267,7 @@ fn each_counter_kind_reaches_a_fact_row() {
         let index = object_index(&changed, 0, ogre);
         let id = name_value(&format!("CounterKind::{}", kind.name()));
         let row = fact_row(&facts_about(&changed, 0, index), FactKind::Counter, id);
-        assert_eq!(row[FACT_VALUE_INDEX], 0.1, "{kind:?}");
+        assert_eq!(row[fact::VALUE], 0.1, "{kind:?}");
         if kind == CounterKind::PlusOnePlusOne {
             continue; // Columns see +1/+1 counters and the power they add.
         }
@@ -3318,20 +3306,14 @@ fn equipment_on_one_creature_differs_from_equipment_on_another() {
     let (on_first, boomerang, [first, second]) = equipped(true);
     let (on_second, ..) = equipped(false);
     assert_eq!(
-        permanent_value(&on_first, 0, boomerang, PERMANENT_ATTACHED_INDEX),
+        permanent_value(&on_first, 0, boomerang, permanent::ATTACHED_TO),
         (object_index(&on_first, 0, first) + 1) as f32
     );
     assert_eq!(
-        permanent_value(&on_second, 0, boomerang, PERMANENT_ATTACHED_INDEX),
+        permanent_value(&on_second, 0, boomerang, permanent::ATTACHED_TO),
         (object_index(&on_second, 0, second) + 1) as f32
     );
-    assert_column_alone_sees(
-        &on_first,
-        &on_second,
-        0,
-        boomerang,
-        PERMANENT_ATTACHED_INDEX,
-    );
+    assert_column_alone_sees(&on_first, &on_second, 0, boomerang, permanent::ATTACHED_TO);
 }
 
 fn united_front_with_x(x: usize) -> Scenario {
@@ -3347,10 +3329,10 @@ fn united_front_with_x(x: usize) -> Scenario {
 fn stack_x_one_and_three_differ() {
     let one = united_front_with_x(1);
     let three = united_front_with_x(3);
-    let x = |s: &Scenario| encoded(s, 0).relations[RELATION_X_INDEX];
+    let x = |s: &Scenario| encoded(s, 0).relations[relation::X];
     assert_eq!((x(&one), x(&three)), (1.0, 3.0), "the stack frame is row 0");
     // The opponent sees the announced X of a spell on the stack too.
-    let opponent_x = |s: &Scenario| encoded(s, 1).relations[RELATION_X_INDEX];
+    let opponent_x = |s: &Scenario| encoded(s, 1).relations[relation::X];
     assert_eq!((opponent_x(&one), opponent_x(&three)), (1.0, 3.0));
 }
 
@@ -3387,7 +3369,7 @@ fn a_toph_granted_land_shows_in_its_card_row_and_the_granted_column() {
         let observation = Observation::for_player(s.game(), PlayerId(0));
         card_row(s.game(), &observation, &encoded(s, 0), tile)[11]
     };
-    let granted_land = |s: &Scenario| permanent_value(s, 0, tile, PERMANENT_GRANTED_LAND_INDEX);
+    let granted_land = |s: &Scenario| permanent_value(s, 0, tile, permanent::GRANTED_LAND);
     assert_eq!(
         (land(&plain), land(&granted), land(&abilityless)),
         (0.0, 1.0, 1.0)
@@ -3409,12 +3391,12 @@ fn granted_firebending_reaches_its_permanent_column_and_an_effect_row() {
     let affected = on_permanent(&changed, ogre);
     apply(&mut changed, affected, Modification::Firebending(4));
     assert_eq!(
-        permanent_value(&changed, 0, ogre, PERMANENT_FIREBENDING_INDEX),
+        permanent_value(&changed, 0, ogre, permanent::GRANTED_FIREBENDING),
         0.4
     );
     let (encoded, row) = effect_row(&changed, 0, "Modification::Firebending");
     assert!(encoded.effects[18 * row + 2..18 * row + 5].contains(&0.4));
-    assert_column_alone_sees(&baseline, &changed, 0, ogre, PERMANENT_FIREBENDING_INDEX);
+    assert_column_alone_sees(&baseline, &changed, 0, ogre, permanent::GRANTED_FIREBENDING);
 }
 
 #[test]
@@ -3453,7 +3435,7 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
             .filter(|row| {
                 [FactKind::SetName, FactKind::SetCreatureType]
                     .map(|kind| kind as u8 as f32)
-                    .contains(&row[FACT_KIND_INDEX])
+                    .contains(&row[fact::KIND])
             })
             .count()
     };
@@ -3469,7 +3451,7 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
     fact_row(&rows, FactKind::SetCreatureType, name_value("Citizen"));
     assert_eq!(set_facts(&s), 2, "the name and its creature type");
     assert_eq!(
-        permanent_value(&s, 0, work, PERMANENT_ATTACHED_INDEX),
+        permanent_value(&s, 0, work, permanent::ATTACHED_TO),
         (object_index(&s, 0, drake) + 1) as f32
     );
 }
@@ -3494,7 +3476,7 @@ fn every_keyword_reaches_its_relation_column() {
         frame.controller = 0;
         changed.continuation = vec![frame];
         let encoded = encode(&changed, &ObservationEncoderConfig::default()).unwrap();
-        let relation = &encoded.relations[RELATION_KEYWORDS_INDEX..][..KEYWORD_COUNT];
+        let relation = &encoded.relations[relation::FLYING..][..KEYWORD_COUNT];
         assert_eq!(relation.iter().position(|v| *v == 1.0), Some(position));
         assert_eq!(relation.iter().sum::<f32>(), 1.0, "{position}");
     }
@@ -3502,7 +3484,7 @@ fn every_keyword_reaches_its_relation_column() {
 
 #[test]
 fn lo_and_li_grant_lifelink_to_a_lesson_on_the_stack() {
-    let lifelink = RELATION_KEYWORDS_INDEX + 9;
+    let lifelink = relation::FLYING + 9;
     let lesson = |with_lo_and_li: bool| {
         let mut s = five_color_unfunded_setup(&[
             "Lo and Li, Twin Tutors",
@@ -3585,7 +3567,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
             .find(|row| row[0] == 3.0 && row[3] == 10.0)
             .map_or(0.0, |row| row[24]);
         let row = rows[header];
-        Some((row[4], row[28], row[RELATION_THIS_TURN_INDEX], context))
+        Some((row[4], row[28], row[relation::THIS_TURN], context))
     };
     let setup = || {
         let mut s = five_color_setup(&["Fatal Fissure", "Lightning Strike", "Gray Ogre"]);
@@ -3650,9 +3632,9 @@ fn turn_number_and_seat_reach_the_player_rows() {
     let turn = |s: &Scenario, viewer: usize| {
         let encoded = encoded(s, viewer);
         (
-            encoded.agent_player[PLAYER_TURN_INDEX],
-            encoded.agent_player[PLAYER_SEAT_INDEX],
-            encoded.opponent_player[PLAYER_SEAT_INDEX],
+            encoded.agent_player[player::TURN],
+            encoded.agent_player[player::SEAT],
+            encoded.opponent_player[player::SEAT],
         )
     };
     let first = s.game().state.turn.turn_number;
@@ -3791,10 +3773,10 @@ fn blocking_one_attacker_differs_from_blocking_another() {
     declare(&mut on_first, &[first, second], Some((first, blocker)));
     declare(&mut on_second, &[first, second], Some((second, blocker)));
     assert_eq!(
-        permanent_value(&on_first, 0, blocker, PERMANENT_BLOCKING_INDEX),
+        permanent_value(&on_first, 0, blocker, permanent::BLOCKING),
         (object_index(&on_first, 0, first) + 1) as f32
     );
-    assert_column_alone_sees(&on_first, &on_second, 0, blocker, PERMANENT_BLOCKING_INDEX);
+    assert_column_alone_sees(&on_first, &on_second, 0, blocker, permanent::BLOCKING);
 }
 
 #[test]
@@ -3803,7 +3785,7 @@ fn a_creature_that_lost_its_abilities_differs() {
     let (mut changed, _) = ogre_state();
     let affected = on_permanent(&changed, ogre);
     apply(&mut changed, affected, Modification::LoseAllAbilities);
-    assert_column_alone_sees(&baseline, &changed, 0, ogre, PERMANENT_ABILITIES_LOST_INDEX);
+    assert_column_alone_sees(&baseline, &changed, 0, ogre, permanent::ABILITIES_LOST);
 }
 
 fn mai(exhausted: bool) -> (Scenario, PermanentId) {
@@ -3827,22 +3809,19 @@ fn a_spent_exhaust_ability_differs_from_an_unused_one() {
     // Mai's only activated ability is exhaust: index 0.
     fact_row(&rows, FactKind::UsedAbility, 0);
     assert_eq!(
-        permanent_value(&spent, 0, mai_id, PERMANENT_EXHAUSTED_INDEX),
+        permanent_value(&spent, 0, mai_id, permanent::EXHAUSTED_ABILITIES),
         1.0,
         "the exhausted count moves with it"
     );
-    assert_column_alone_sees(&unused, &spent, 0, mai_id, PERMANENT_EXHAUSTED_INDEX);
+    assert_column_alone_sees(&unused, &spent, 0, mai_id, permanent::EXHAUSTED_ABILITIES);
 }
 
 #[test]
 fn kept_red_mana_and_no_hand_size_reach_the_player_rows() {
-    for column in [
-        PLAYER_KEEPS_RED_MANA_INDEX,
-        PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
-    ] {
+    for column in [player::KEEPS_RED_MANA, player::NO_MAXIMUM_HAND_SIZE] {
         let (baseline, _) = ogre_state();
         let (mut changed, _) = ogre_state();
-        let modification = if column == PLAYER_KEEPS_RED_MANA_INDEX {
+        let modification = if column == player::KEEPS_RED_MANA {
             Modification::KeepUnspentMana(Color::Red)
         } else {
             Modification::NoMaximumHandSize
@@ -3870,8 +3849,8 @@ fn sacrifices_this_turn_reach_the_player_row() {
     let (before, after) = (encoded(&baseline, 0), encoded(&changed, 0));
     assert_eq!(
         (
-            before.opponent_player[PLAYER_SACRIFICED_INDEX],
-            after.opponent_player[PLAYER_SACRIFICED_INDEX]
+            before.opponent_player[player::PERMANENTS_SACRIFICED],
+            after.opponent_player[player::PERMANENTS_SACRIFICED]
         ),
         (0.0, 0.1)
     );
@@ -3952,7 +3931,7 @@ fn hand_only_lock_reaches_both_viewers_tensors() {
     let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
     let wurm_id = object_id(&s, card_of(&s, wurm));
     let baseline = encoded_default(&Observation::for_player(s.game(), PlayerId(0)));
-    assert_eq!(baseline.opponent_player[PLAYER_HAND_ONLY_INDEX], 0.0);
+    assert_eq!(baseline.opponent_player[player::HAND_ONLY], 0.0);
     cast(&mut s, "Avatar's Wrath");
     assert!(s.choose_target(Target::Permanent(spared)));
     settle(&mut s);
@@ -3960,16 +3939,16 @@ fn hand_only_lock_reaches_both_viewers_tensors() {
     let caster = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(caster.opponent.hand_only_until, Some(caster.agent.id));
     assert_eq!(
-        encoded_default(&caster).opponent_player[PLAYER_HAND_ONLY_INDEX],
+        encoded_default(&caster).opponent_player[player::HAND_ONLY],
         1.0
     );
     assert_eq!(
-        encoded_default(&caster).agent_player[PLAYER_HAND_ONLY_INDEX],
+        encoded_default(&caster).agent_player[player::HAND_ONLY],
         0.0
     );
     let locked = Observation::for_player(s.game(), PlayerId(1));
     assert_eq!(
-        encoded_default(&locked).agent_player[PLAYER_HAND_ONLY_INDEX],
+        encoded_default(&locked).agent_player[player::HAND_ONLY],
         1.0
     );
     assert_eq!(
@@ -3995,7 +3974,7 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     assert_eq!(classes[0].abilities, ["Ally"]);
     assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
     let player = encoded_default(&observation).agent_player;
-    let by_subtype = &player[PLAYER_RESTRICTED_INDEX..PLAYER_HAND_ONLY_INDEX];
+    let by_subtype = &player[player::RESTRICTED_LESSON_WHITE..player::HAND_ONLY];
     let mut expected = [0.0; 18];
     expected[12 + 4] = 0.1; // Ally, green
     assert_eq!(by_subtype, expected);
@@ -4013,7 +3992,7 @@ fn announced_x_reaches_the_stack_card_row() {
     let card = observation.agent_cards.iter().find(|c| c.id == id).unwrap();
     assert_eq!(card.x, Some(3));
     let row = listed_card_row(&observation, id).unwrap();
-    assert_eq!(&row[CARD_X_INDEX..CARD_X_INDEX + 2], &[1.0, 0.3]);
+    assert_eq!(&row[card::HAS_X..card::HAS_X + 2], &[1.0, 0.3]);
 }
 
 // --- Viewer safety -------------------------------------------------------
@@ -4119,12 +4098,12 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
         let rows = facts_about(&s, viewer, object_index(&s, viewer, token));
         let copy = fact_row(&rows, FactKind::Copy, name_value("CopyEffect"));
         assert_eq!(
-            copy[FACT_SOURCE_INDEX],
+            copy[fact::SOURCE_DEFINITION],
             key + 1.0,
             "joined to the copied definition"
         );
         assert!(
-            copy[FACT_ORDER_INDEX] > 0.0,
+            copy[fact::TIMESTAMP] > 0.0,
             "ordered by the copy's timestamp"
         );
         let exception = fact_row(
@@ -4132,12 +4111,12 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
             FactKind::CopyException,
             name_value("Modification::Nonlegendary"),
         );
-        assert_eq!(exception[FACT_SOURCE_INDEX], key + 1.0);
+        assert_eq!(exception[fact::SOURCE_DEFINITION], key + 1.0);
         let original = facts_about(&s, viewer, object_index(&s, viewer, source));
         assert!(
             original
                 .iter()
-                .all(|row| row[FACT_KIND_INDEX] != FactKind::Copy as u8 as f32),
+                .all(|row| row[fact::KIND] != FactKind::Copy as u8 as f32),
             "the original is not a copy"
         );
     }
@@ -4159,7 +4138,7 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
     };
     assert!(order("Modification::AddKeywords") > order("Modification::LoseAllAbilities"));
     assert!(
-        permanent_value(&s, 0, ogre, PERMANENT_TIMESTAMP_INDEX)
+        permanent_value(&s, 0, ogre, permanent::TIMESTAMP)
             < order("Modification::LoseAllAbilities")
     );
     // CR 613.7: the later grant survives the earlier loss.
@@ -4342,7 +4321,7 @@ fn delayed_lifetime_reaches_tokens_and_relation_rows_independently() {
             assert_eq!(rows[RELATION_DIM], 9.0);
             assert_eq!(rows[RELATION_DIM + 28], f32::from(code));
             assert_eq!(
-                rows[RELATION_DIM + RELATION_THIS_TURN_INDEX],
+                rows[RELATION_DIM + relation::THIS_TURN],
                 f32::from(expiry == DelayedExpiry::ThisTurn)
             );
         }

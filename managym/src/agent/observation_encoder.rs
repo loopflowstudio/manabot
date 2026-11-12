@@ -16,73 +16,14 @@ use crate::{
     state::mana::SPEND_SUBTYPES,
 };
 
-/// Player columns from here: restricted mana each spending subtype may use
-/// (`SPEND_SUBTYPES` × W/U/B/R/G/C), then the hand-only casting lock, the
-/// hand-size freedom, the turn number, the seat (0 is on the play), kept
-/// red mana, then turn history: attacked, permanents sacrificed, a land
-/// entered and cards drawn this turn.
-pub const PLAYER_RESTRICTED_INDEX: usize = player::RESTRICTED_LESSON_WHITE;
-pub const PLAYER_HAND_ONLY_INDEX: usize = player::HAND_ONLY;
-pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = player::NO_MAXIMUM_HAND_SIZE;
-pub const PLAYER_TURN_INDEX: usize = player::TURN;
-pub const PLAYER_SEAT_INDEX: usize = player::SEAT;
-pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = player::KEEPS_RED_MANA;
-pub const PLAYER_ATTACKED_INDEX: usize = player::ATTACKED;
-pub const PLAYER_SACRIFICED_INDEX: usize = player::PERMANENTS_SACRIFICED;
-pub const PLAYER_LAND_ENTERED_INDEX: usize = player::LAND_ENTERED;
-pub const PLAYER_CARDS_DRAWN_INDEX: usize = player::CARDS_DRAWN;
-/// Bending done this turn: water, earth, fire, air.
-pub const PLAYER_BENT_INDEX: usize = player::BENT_WATER;
-pub const PLAYER_EXTRA_TURNS_INDEX: usize = player::EXTRA_TURNS;
-pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = player::ADDITIONAL_COMBATS;
+// Feature widths. Column indices, names and value encodings live in
+// `observation_layout`; open-ended vocabularies (counter kinds, subtypes, set
+// characteristics, used abilities) are fact rows, not columns. Fact vocabulary
+// ids are the learning tokens' values (`cards::tokens::name_value` of the same
+// Rust or printed name), split into 16-bit halves so f32 keeps them exact.
 pub const PLAYER_DIM: usize = player::WIDTH;
-/// 13 cast-permission terms, then announced X; validity is the last column.
-/// A face-down card is foretold, so its permission's foretold term marks it.
-pub const CARD_PERMISSION_INDEX: usize = card::PERMISSION;
-pub const CARD_X_INDEX: usize = card::HAS_X;
 pub const CARD_DIM: usize = card::WIDTH;
-pub const PERMANENT_DEFINITION_INDEX: usize = permanent::DEFINITION;
-// Validity is the last column. Open-ended vocabularies (counter kinds,
-// subtypes, set characteristics, used abilities, continuous-effect records)
-// are fact rows, not columns.
-pub const PERMANENT_EXHAUSTED_INDEX: usize = permanent::EXHAUSTED_ABILITIES;
-pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = permanent::ONCE_EACH_TURN_USED;
-pub const PERMANENT_FIREBENDING_INDEX: usize = permanent::GRANTED_FIREBENDING;
-/// Object index + 1 of the permanent this Aura or Equipment is attached to;
-/// zero when unattached. A join like action focus, never a numeric feature.
-pub const PERMANENT_ATTACHED_INDEX: usize = permanent::ATTACHED_TO;
-pub const PERMANENT_GRANTED_LAND_INDEX: usize = permanent::GRANTED_LAND;
-/// Object index + 1 of the attacker this creature blocks; a join.
-pub const PERMANENT_BLOCKING_INDEX: usize = permanent::BLOCKING;
-pub const PERMANENT_ABILITIES_LOST_INDEX: usize = permanent::ABILITIES_LOST;
-/// Its timestamp's rank among this observation's timestamps (`FACT_ORDER_INDEX`).
-pub const PERMANENT_TIMESTAMP_INDEX: usize = permanent::TIMESTAMP;
-/// It was dealt damage this turn, whether or not that damage is still marked.
-pub const PERMANENT_DEALT_DAMAGE_INDEX: usize = permanent::DEALT_DAMAGE_THIS_TURN;
 pub const PERMANENT_DIM: usize = permanent::WIDTH;
-
-// Fact rows: one open-vocabulary fact about a player or permanent, joined
-// to it like relation references. Vocabulary ids are the learning tokens'
-// values (`cards::tokens::name_value` of the same Rust or printed name), split
-// into 16-bit halves so f32 keeps them exact.
-/// Object index + 1 of the player or permanent the fact is about.
-pub const FACT_OBJECT_INDEX: usize = fact::OBJECT;
-/// `FactKind` value.
-pub const FACT_KIND_INDEX: usize = fact::KIND;
-/// Vocabulary id (high, low halves): the counter kind, subtype, name,
-/// creature type, ability index or `Modification` variant.
-pub const FACT_ID_INDEX: usize = fact::ID_HIGH;
-/// Effect detail id (high, low): a keyword, subtype or color it names.
-pub const FACT_DETAIL_INDEX: usize = fact::DETAIL_HIGH;
-/// Amounts / 10: a count, power or firebending N, then toughness.
-pub const FACT_VALUE_INDEX: usize = fact::VALUE;
-/// Effect duration: 1 until end of turn, 2 indefinite.
-pub const FACT_DURATION_INDEX: usize = fact::DURATION;
-/// Effect timestamp rank among this observation's timestamps (1-based).
-pub const FACT_ORDER_INDEX: usize = fact::TIMESTAMP;
-/// Effect source definition + 1.
-pub const FACT_SOURCE_INDEX: usize = fact::SOURCE_DEFINITION;
-pub const FACT_VALID_INDEX: usize = fact::VALID;
 pub const FACT_DIM: usize = fact::WIDTH;
 
 /// What a fact row states.
@@ -138,10 +79,6 @@ impl FactKind {
 pub const ACTION_TYPE_DIM: usize = action::DECLARED;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
-pub const ACTION_DECLARED_INDEX: usize = action::DECLARED;
-pub const ACTION_MODE_INDEX: usize = action::MODE;
-pub const ACTION_ABILITY_INDEX: usize = action::ABILITY;
-pub const ACTION_CONTINUATION_INDEX: usize = action::CONTINUATION;
 pub const ACTION_DIM: usize = action::WIDTH;
 /// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
 pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
@@ -781,9 +718,9 @@ pub fn encode_into(
             .iter_mut()
             .zip(permanents)
         {
-            row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
-            row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
-            row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp()];
+            row[permanent::ATTACHED_TO] = link(permanent.attached_to);
+            row[permanent::BLOCKING] = link(permanent.blocking);
+            row[permanent::TIMESTAMP] = ranks[&permanent.timestamp()];
         }
     }
     encode_facts(obs, &object_to_index, &ranks, out.facts)?;
@@ -915,26 +852,27 @@ fn encode_player_features(
             .filter(|class| class.admits(subtype))
         {
             for slot in 0..6 {
-                out[PLAYER_RESTRICTED_INDEX + 6 * index + slot] += class.mana[slot] as f32 / 10.0;
+                out[player::RESTRICTED_LESSON_WHITE + 6 * index + slot] +=
+                    class.mana[slot] as f32 / 10.0;
             }
         }
     }
-    out[PLAYER_HAND_ONLY_INDEX] = bool_to_f32(player.hand_only_until.is_some());
-    out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
-    out[PLAYER_TURN_INDEX] = turn.turn_number as f32 / 20.0;
+    out[player::HAND_ONLY] = bool_to_f32(player.hand_only_until.is_some());
+    out[player::NO_MAXIMUM_HAND_SIZE] = bool_to_f32(player.no_maximum_hand_size);
+    out[player::TURN] = turn.turn_number as f32 / 20.0;
     // Seat 0 is on the play.
-    out[PLAYER_SEAT_INDEX] = player.player_index as f32;
-    out[PLAYER_KEEPS_RED_MANA_INDEX] = bool_to_f32(player.keeps_red_mana);
+    out[player::SEAT] = player.player_index as f32;
+    out[player::KEEPS_RED_MANA] = bool_to_f32(player.keeps_red_mana);
     let history = &player.turn_history;
-    out[PLAYER_ATTACKED_INDEX] = bool_to_f32(history.attacked);
-    out[PLAYER_SACRIFICED_INDEX] = history.permanents_sacrificed as f32 / 10.0;
-    out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
-    out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
+    out[player::ATTACKED] = bool_to_f32(history.attacked);
+    out[player::PERMANENTS_SACRIFICED] = history.permanents_sacrificed as f32 / 10.0;
+    out[player::LAND_ENTERED] = bool_to_f32(history.land_entered);
+    out[player::CARDS_DRAWN] = history.cards_drawn as f32 / 10.0;
     for (index, kind) in crate::flow::turn::Bending::ALL.into_iter().enumerate() {
-        out[PLAYER_BENT_INDEX + index] = bool_to_f32(history.bent & kind as u8 != 0);
+        out[player::BENT_WATER + index] = bool_to_f32(history.bent & kind as u8 != 0);
     }
-    out[PLAYER_EXTRA_TURNS_INDEX] = player.extra_turns as f32;
-    out[PLAYER_ADDITIONAL_COMBATS_INDEX] = player.additional_combats as f32;
+    out[player::EXTRA_TURNS] = player.extra_turns as f32;
+    out[player::ADDITIONAL_COMBATS] = player.additional_combats as f32;
 
     object_to_index.insert(player.id, *current_object_index);
     *current_object_index += 1;
@@ -1097,16 +1035,16 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[permanent::ADDED_AVATAR] =
         bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
     out[permanent::ATTACKING] = bool_to_f32(permanent.attacking);
-    out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
+    out[permanent::DEFINITION] = (permanent.registry_key + 1) as f32;
     // Ability-use limits and granted firebending.
-    out[PERMANENT_EXHAUSTED_INDEX] = permanent.exhausted_abilities as f32;
-    out[PERMANENT_ONCE_EACH_TURN_INDEX] = permanent.once_each_turn_used as f32;
-    out[PERMANENT_FIREBENDING_INDEX] = permanent.granted_firebending as f32 / 10.0;
-    // PERMANENT_ATTACHED_INDEX and PERMANENT_BLOCKING_INDEX are written
-    // once every object is indexed; PERMANENT_TIMESTAMP_INDEX with facts.
-    out[PERMANENT_GRANTED_LAND_INDEX] = bool_to_f32(permanent.is_granted_land);
-    out[PERMANENT_ABILITIES_LOST_INDEX] = bool_to_f32(permanent.abilities_lost);
-    out[PERMANENT_DEALT_DAMAGE_INDEX] = bool_to_f32(permanent.dealt_damage_this_turn);
+    out[permanent::EXHAUSTED_ABILITIES] = permanent.exhausted_abilities as f32;
+    out[permanent::ONCE_EACH_TURN_USED] = permanent.once_each_turn_used as f32;
+    out[permanent::GRANTED_FIREBENDING] = permanent.granted_firebending as f32 / 10.0;
+    // permanent::ATTACHED_TO and permanent::BLOCKING are written
+    // once every object is indexed; permanent::TIMESTAMP with facts.
+    out[permanent::GRANTED_LAND] = bool_to_f32(permanent.is_granted_land);
+    out[permanent::ABILITIES_LOST] = bool_to_f32(permanent.abilities_lost);
+    out[permanent::DEALT_DAMAGE_THIS_TURN] = bool_to_f32(permanent.dealt_damage_this_turn);
     out[out.len() - 1] = 1.0;
 }
 
@@ -1367,19 +1305,19 @@ fn encode_facts(
     }
     out.fill(0.0);
     for (row, fact) in out.as_chunks_mut::<FACT_DIM>().0.iter_mut().zip(&facts) {
-        row[FACT_OBJECT_INDEX] = object_to_index
+        row[fact::OBJECT] = object_to_index
             .get(&fact.object)
             .map_or(0.0, |index| (index + 1) as f32);
-        row[FACT_KIND_INDEX] = fact.kind as u8 as f32;
-        row[FACT_ID_INDEX..FACT_ID_INDEX + 2].copy_from_slice(&split_id(fact.id));
-        row[FACT_DETAIL_INDEX..FACT_DETAIL_INDEX + 2].copy_from_slice(&split_id(fact.detail));
-        row[FACT_VALUE_INDEX..FACT_VALUE_INDEX + 2].copy_from_slice(&fact.values);
+        row[fact::KIND] = fact.kind as u8 as f32;
+        row[fact::ID_HIGH..fact::ID_HIGH + 2].copy_from_slice(&split_id(fact.id));
+        row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2].copy_from_slice(&split_id(fact.detail));
+        row[fact::VALUE..fact::VALUE + 2].copy_from_slice(&fact.values);
         if let Some((duration, timestamp, source)) = fact.effect {
-            row[FACT_DURATION_INDEX] = duration;
-            row[FACT_ORDER_INDEX] = ranks[&timestamp];
-            row[FACT_SOURCE_INDEX] = source.map_or(0.0, |key| (key + 1) as f32);
+            row[fact::DURATION] = duration;
+            row[fact::TIMESTAMP] = ranks[&timestamp];
+            row[fact::SOURCE_DEFINITION] = source.map_or(0.0, |key| (key + 1) as f32);
         }
-        row[FACT_VALID_INDEX] = 1.0;
+        row[fact::VALID] = 1.0;
     }
     Ok(())
 }
@@ -1409,7 +1347,7 @@ fn encode_actions(
         if action_type_index < ACTION_TYPE_DIM {
             row[action_type_index] = 1.0;
         }
-        row[ACTION_DECLARED_INDEX] = bool_to_f32(action.declared.unwrap_or(false));
+        row[action::DECLARED] = bool_to_f32(action.declared.unwrap_or(false));
         let name_row = &mut out_names[NAME_DIM * action_index..NAME_DIM * (action_index + 1)];
         match (action.name_index, action.name_group) {
             // A name is categorical; its position is never a numeric mode feature.
@@ -1424,11 +1362,11 @@ fn encode_actions(
                 name_row[name::GROUP_LAST] = (last + 1) as f32;
             }
             _ => {
-                row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
+                row[action::MODE] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
             }
         }
-        row[ACTION_ABILITY_INDEX] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
-        row[ACTION_CONTINUATION_INDEX] = action
+        row[action::ABILITY] = action.ability_index.map_or(0.0, |index| (index + 1) as f32);
+        row[action::CONTINUATION] = action
             .continuation_index
             .map_or(0.0, |index| (index + 1) as f32);
         row[action::VALID] = 1.0;
@@ -1514,25 +1452,22 @@ mod tests {
     };
 
     use super::{
-        encode, encode_into, EncodedObservationMut, ObservationEncodeError,
-        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, FACT_ORDER_INDEX,
-        FACT_SOURCE_INDEX, FACT_VALID_INDEX, PERMANENT_DIM, PLAYER_DIM, ZONE_DIM,
+        encode, encode_into, fact, EncodedObservationMut, ObservationEncodeError,
+        ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, FACT_DIM, PERMANENT_DIM,
+        PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
     fn selector_encoding_is_exact_and_rejects_overflow() {
-        use super::{ACTION_ABILITY_INDEX, ACTION_MODE_INDEX, MAX_ACTION_SELECTOR};
+        use super::{action, MAX_ACTION_SELECTOR};
         let mut obs = sample_observation();
         obs.action_space.actions[0].mode_index = Some(0);
         obs.action_space.actions[1].ability_index = Some(MAX_ACTION_SELECTOR);
         let config = ObservationEncoderConfig::default();
         let encoded = encode(&obs, &config).unwrap();
-        assert_eq!(encoded.actions[ACTION_MODE_INDEX], 1.0);
-        assert_eq!(encoded.actions[ACTION_ABILITY_INDEX], 0.0);
-        assert_eq!(
-            encoded.actions[ACTION_DIM + ACTION_ABILITY_INDEX],
-            16777216.0
-        );
+        assert_eq!(encoded.actions[action::MODE], 1.0);
+        assert_eq!(encoded.actions[action::ABILITY], 0.0);
+        assert_eq!(encoded.actions[ACTION_DIM + action::ABILITY], 16777216.0);
         for mode in [false, true] {
             let mut obs = sample_observation();
             let action = &mut obs.action_space.actions[0];
@@ -1571,11 +1506,11 @@ mod tests {
         assert_eq!(encoded.facts.len(), 512 * FACT_DIM);
         for (index, row) in encoded.facts.as_chunks::<FACT_DIM>().0.iter().enumerate() {
             if index < 140 {
-                assert_eq!(row[FACT_VALID_INDEX], 1.0);
-                assert_eq!(row[super::FACT_KIND_INDEX], 5.0);
-                assert_eq!(row[super::FACT_ID_INDEX + 1], index as f32);
-                assert_eq!(row[FACT_ORDER_INDEX], 0.0);
-                assert_eq!(row[FACT_SOURCE_INDEX], 0.0);
+                assert_eq!(row[fact::VALID], 1.0);
+                assert_eq!(row[fact::KIND], 5.0);
+                assert_eq!(row[fact::ID_HIGH + 1], index as f32);
+                assert_eq!(row[fact::TIMESTAMP], 0.0);
+                assert_eq!(row[fact::SOURCE_DEFINITION], 0.0);
             } else {
                 assert!(row.iter().all(|value| *value == 0.0));
             }
