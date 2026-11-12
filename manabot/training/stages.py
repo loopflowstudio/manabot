@@ -937,7 +937,8 @@ def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
             stage.id,
             stage.execution,
             self_play=isinstance(stage, TrainSelfPlay),
-            keep_restored=bool(following) and following[0].initial is not None,
+            keep_restored=bool(following)
+            and getattr(following[0], "initial", None) is not None,
         )
         if scope is None:
             continue

@@ -72,11 +72,12 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
         clock.charge(stages.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(stages.update_iteration, 10)
+        stages, "update_iteration", clock.charge(stages.update_iteration, 10)
     )
-    monkeypatch.setattr(
-        execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
-    )
+    for module in (stages, run_handle):
+        monkeypatch.setattr(
+            module, "save_checkpoint", clock.charge(module.save_checkpoint, 100)
+        )
     with VerifyStore(tmp_path / "store.sqlite") as store:
         if expected == "failed":
             with pytest.raises(RuntimeError, match="safety ceiling"):
@@ -149,7 +150,7 @@ def test_initial_admission_precedes_collection(
         clock.charge(stages.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(stages.update_iteration, 10)
+        stages, "update_iteration", clock.charge(stages.update_iteration, 10)
     )
     gate = tmp_path / "initial-admission"
     out = tmp_path / "run"

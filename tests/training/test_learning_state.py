@@ -13,6 +13,7 @@ from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
+from manabot.infra.files import atomic_json
 from manabot.training import execution
 from manabot.training.decks import UniformDecks
 from manabot.training.records import TrainingRun
@@ -266,7 +267,7 @@ def test_rejects_incomplete_or_mismatched_learning_state(
         torch.save(payload, path)
         setattr(spec, role, reference(path))
         producer.stages[0].artifacts[role] = reference(path)
-        execution.atomic_json(
+        atomic_json(
             tmp_path / "producer/run.json", producer.model_dump(mode="json")
         )
         spec.source_run = reference(tmp_path / "producer/run.json")
@@ -299,7 +300,7 @@ def test_historical_wire_digest_and_next_iteration(
             weights["bc"]["averaging"]["iteration"] = 26000
         torch.save(weights, path)
         payload["stages"][0]["artifacts"][role] = reference(path)
-    execution.atomic_json(export, payload)
+    atomic_json(export, payload)
     parent = TrainingRun.model_validate(payload)
     recipe = continuation(parent, export, 100000)
     stage = recipe.stages[0]
@@ -331,7 +332,7 @@ def interrupted(tmp_path: Path) -> TrainingRun:
     payload = json.loads(export.read_text())
     payload["status"] = payload["stages"][0]["status"] = "interrupted"
     payload["error"] = "TimeoutError: training resource wall deadline exceeded"
-    execution.atomic_json(export, payload)
+    atomic_json(export, payload)
     return TrainingRun.model_validate(payload)
 
 
@@ -421,7 +422,7 @@ def test_raw_only_import_requires_the_declared_monitoring_export(
     else:
         payload = json.loads(parent.read_text())
         payload["status"] = payload["stages"][0]["status"] = "failed"
-        execution.atomic_json(parent, payload)
+        atomic_json(parent, payload)
         stage.learning_state.source_run = reference(parent)
     out = tmp_path / "admit"
     out.mkdir()
