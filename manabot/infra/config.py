@@ -290,6 +290,16 @@ class ModelConfig(BaseConfig):
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
+    # What object attention runs over. `tables` attends over the fixed object
+    # tables (players, cards, permanents at their capacities). `pooled` packs
+    # each observation's valid objects, continuation relations and legal
+    # actions into one typed token sequence, padded per batch to a bucket at or
+    # above its longest observation (`manabot.model.token_stream`); logits read
+    # the action tokens. Omitted is `tables`, so existing recipes keep their
+    # identities.
+    token_stream: Literal["tables", "pooled"] = Field(
+        default="tables", exclude_if=lambda value: value == "tables"
+    )
     # Canonical belief rows are an opt-in checkpoint ABI. A positive bucket
     # count requires explicit belief tensors on every forward pass; there is
     # no neutral or positional-condition fallback on this path.
@@ -345,6 +355,15 @@ class ModelConfig(BaseConfig):
             or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
+        if self.token_stream == "pooled" and (
+            not self.attention_on
+            or self.value_aggregation == "value_token"
+            or self.belief_count_buckets > 0
+        ):
+            raise ValueError(
+                "a pooled token stream needs attention and supports neither a "
+                "value token nor belief rows"
+            )
         return self
 
 

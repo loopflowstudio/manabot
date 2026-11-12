@@ -43,6 +43,11 @@ frozen input version never silently falls behind the rules.
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
+   With `token_stream="pooled"` (an experimental option, off by default), one
+   attention sequence holds each observation's valid objects, continuation
+   relations and legal actions, padded per batch to a 32-token bucket; action
+   tokens carry their focus objects in and their attended output is scored
+   ([comparison](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
