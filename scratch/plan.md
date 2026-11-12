@@ -143,3 +143,44 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    observations carry `live_token_count` beside admitted buckets.
 6. Rebase/merge onto #474 when it moves (unchanged at 05c1203e9 on
    2026-11-12); delete `scratch/` before landing.
+
+## Concept review (2026-11-12): next implement direction
+
+The three layers hold, but three framework-free facts still live behind torch,
+so a second backend would reach through `manabot.backends.torch` or copy them.
+None needs #495; none touches MTG-321's files. Do them before review/gate.
+
+1. Verified checkpoint bytes are not a backend concern.
+   `fetch_etude_checkpoint` and `local_checkpoint_file` (verify a digest, download
+   S3/R2 to a partial and rename) moved into `backends/torch/checkpoint.py`, so
+   `eval/benchmark.py` and `eval/card_evaluation.py` import the torch backend
+   only to verify a file. Move both beside `verify_file`/`materialize_artifact`
+   in `manabot/infra/artifacts.py`; `load_etude_checkpoint` (it loads torch
+   weights) stays in the backend. Re-point the `manabot.model.checkpoint`
+   aliases to the new home. Unchanged behaviour; the eval modules may then drop
+   off `_TORCH_NOT_YET_MOVED` if nothing else there imports torch.
+2. The architecture receipt is policy contract, not torch.
+   `model/architecture.py` imports `ActorCritic` only to walk
+   `named_parameters()`. `architecture_identity` is already framework-free.
+   Make the counting take parameter sizes by name (`Mapping[str, tuple[int,
+   bool]]`, size and trainable); torch passes its named parameters. Canonical
+   names change only the leaf (`canonical_name`), so owner = first segment and
+   sizes are identical either way: existing receipts must verify byte-for-byte
+   (test on a saved `.pt` receipt). Keep the module where it is (it is
+   released under `manabot.model.architecture`); only its torch import goes.
+3. A backend's file set is a minimum, not the whole package. `live_tokens.py`
+   already sits beside the five matched files, and the forward's components
+   (`model/semantic_cards`, `facts`, `shared_effects`, `name_candidates`,
+   `continuation`, `recent_events`, `token_stream`, `records`, `catalog`) are
+   torch `nn.Module`s exempted as "not yet moved", though the Outcome reserves
+   that list for training/eval. State in `backends/README.md` that the five
+   files are required and a backend may add private modules its `policy.py`
+   uses. Move each component into `backends/torch/` (with 0.3.0 aliases where
+   0.2 released it) in Remaining 1, as its host lookups move onto `Prepared`:
+   moving them now would be churn on files Remaining 1 rewrites.
+
+Settled, no change: `.pt` save until the container carries every config; one
+`BACKEND` per backend in `checkpoint.py`; `Retained` as the torch prepare
+until Remaining 1. Bucket sizes on `AdmittedObservation` beside
+`live_token_count` on `PreparedObservation` are two host shape facts in two
+places (see questions.md); unify when Remaining 1 rewrites prepare, not before.
