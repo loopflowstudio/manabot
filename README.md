@@ -454,6 +454,12 @@ guides are in each package README.
 - **Loopflow**: the agent development tool
   ([`loopflowstudio/loopflow`](https://github.com/loopflowstudio/loopflow)).
 
+## Licence
+
+Manabot's original source code is licensed under the [MIT licence](LICENSE).
+Third-party material retains its own licences; see the
+[17Lands fixture licence](tests/fixtures/seventeenlands/LICENSE).
+
 Manabot is an independent research project and unofficial Fan Content
 permitted under the Wizards of the Coast
 [Fan Content Policy](https://company.wizards.com/en/legal/fancontentpolicy).
