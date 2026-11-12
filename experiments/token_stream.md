@@ -1,15 +1,27 @@
 # One pooled typed-token stream against the v9 object tables — MTG-306
 
-Exploratory pilot (USD 15 cap; USD 25 until 2026-11-12): does a policy that attends over one pooled,
-typed token sequence per observation learn as well as the current v9 table model
-at matched updates while costing less GPU time per update?
+## Question
+
+Exploratory pilot (USD 15 cap; USD 25 until 2026-11-12). Does a policy that
+attends over one pooled, typed token sequence per observation learn as well as
+the current v9 table model at matched updates while costing less GPU time per
+update? No prediction: the numbers open or close a design Task for an
+accelerator-first token architecture.
+
+Decision rule (from the Task): open that design Task if the pooled arm is
+within noise of tables at matched updates and at least 1.5× faster per update
+on the L4, or if fill shows pooled budgets beat per-axis bucketing by more than
+2× in padded work. Otherwise report the numbers and recommend MTG-302-style
+bucketing.
+
+## Method
 
 Module: `experiments/token_stream.py`. Model option:
 `ModelConfig.token_stream="pooled"` (`manabot/model/token_stream.py`); omitted,
 it is `tables` and every existing recipe, checkpoint and architecture identity
 is unchanged.
 
-## Arms
+### Arms
 
 Both arms share every embedding and join of the current model: typed player,
 card and permanent projections with catalog card programs, permanent links,
@@ -26,9 +38,11 @@ objects, then the same attention blocks, policy head and `masked_mean` critic.
   host read per forward). Action tokens join their focus objects' pre-attention
   embeddings through the existing action layer; logits read the attended action
   token. Objects scatter back to table coordinates for the critic. Parameters:
-  +5·width (449,474 against 449,154 at w64l2 on TLA inputs).
+  +5·width (449,474 against 449,154 at w64l2 on TLA inputs). The exact
+  pack/unpack round trip (`tests/model/test_token_stream.py`) checks that the
+  stream loses nothing.
 
-## Plan
+### Stages
 
 1. **Fill** (laptop, counts only). Per-observation entity rows, and padded input
    elements under (a) the declared capacities, (b) MTG-302's per-axis
@@ -46,59 +60,27 @@ objects, then the same attention blocks, policy head and `masked_mean` critic.
    CUDA-event wall time, profiled kernel time and launches, synchronizing calls
    (`set_sync_debug_mode("warn")`), peak memory. Fill also runs on these
    Elemental captures.
-3. **Learning** (`--stage learning`). Elemental recipe (`elemental_recipe`:
-   ten decks, both seats, 256 streams, w64l2, one producer), seeds 30601 and
-   30602 shared by both arms, 400 updates, exports at 50/100/200. Scored at
-   50/100/200/400 against the heuristic on the 50 held-out closure-lambda
-   Elemental pairings (four legs each, 200 games per checkpoint), and pooled
-   against tables at 200 and 400 updates, every pooled run against every tables
-   run (200 games each). Run only if timing shows both arms reach 400 updates
-   inside the budget.
-
-| Line | Reserved |
-|---|---:|
-| Timing, one L4 run | $0.75 |
-| Learning, 4 runs × $3.45 (5.5 h windows at the $.60 ceiling) | $13.80 |
-| Evaluation, up to two passes × $3.00 / $1.50 | $4.50 |
-| Reserve for a failed attempt | $5.95 |
-| **Total** | **$25.00** |
+3. **Learning** (`--stage learning`, planned, not run). Elemental recipe
+   (`elemental_recipe`: ten decks, both seats, 256 streams, w64l2, one
+   producer), seeds 30601 and 30602 shared by both arms, 400 updates, scored
+   at 50/100/200/400 against the heuristic on the 50 held-out closure-lambda
+   Elemental pairings and pooled against tables at 200 and 400 updates.
 
 2026-11-12: the cap is now USD 15 in total, including rental idle, evaluation
-and cleanup. Timing keeps its USD .75; learning gets what remains (about
-USD 10–12) and is sized from the timing run's in-situ seconds per update. If
-that cannot cover a meaningful number of updates for both arms at w64, the
-pilot stops after timing and states what learning would cost.
+and cleanup. Learning would be sized from the timing run's in-situ seconds per
+update, and the pilot stops after timing if that cannot cover both arms at w64.
 
-Decision rule (from the Task): open a design Task for an accelerator-first
-token architecture if the pooled arm is within noise of tables at matched
-updates and at least 1.5× faster per update on the L4, or if fill shows pooled
-budgets beat per-axis bucketing by more than 2× in padded work. Otherwise
-report the numbers and recommend MTG-302-style bucketing.
+### Runs
 
-## Assumptions
+| Stage | Commit | Run | Cost |
+|---|---|---|---:|
+| Fill, TLA captures | `7ac8c9b6f` | laptop, no run ID | $0 |
+| L4 timing (+ Elemental fill) | `7ac8c9b6f` | Etude `a1bcb3bf17a2` | ~$0.16 (launcher) |
+| Learning | — | not run | — |
 
-- Exploratory: no prediction; the numbers motivate or close a design Task.
-- Tokens pack on the device after per-type embedding rather than through a host
-  conversion of the v9 dictionaries. References (links, facts, effects,
-  relations, action focus) are resolved by the existing joins before packing, so
-  no host remapping is needed, and collection, admission and the native encoder
-  are untouched. The exact pack/unpack round trip (`tests/model/test_token_stream.py`)
-  is the check that the stream loses nothing; there is no host tokens→tables
-  inverse.
-- Facts and shared effects stay joins onto their objects in both arms; their
-  encoders run unchanged. Events, known hands and decklists are counted by fill
-  but do not enter the pooled sequence (events are off in this recipe; known
-  hands and decklists reach the players through the card encoder in both arms).
-- Learner-step timing uses a stand-in loss (legal-action log-likelihood plus
-  value MSE) with the damped loss's gradient support; the model's forward and
-  backward are the measured cost.
-- Timing captures come from fresh-initialization updates: early-training
-  observations.
-- "Per update" in the decision rule is the learning runs' update wall time on
-  the L4; replay timings separate the GPU forward and learner step from
-  collection's CPU environment work.
-- The 187 captured learner minibatches the Task names were not found; fill uses
-  the 8 + 8 retained from the same captures.
+The timing machine `mtg306-l4-31e6e7676515` ended with the run. Data:
+`experiments/data/token_stream/fill-tla-e1.json` and
+`timing-a1bcb3bf17a2.json` (artifact store; manifest in git).
 
 ## Results
 
@@ -136,11 +118,9 @@ fewer query–key pairs than the 450 table slots, but only 1.0–1.5× fewer tha
 MTG-302's bucketed objects (194 collection, 130 learner median), while also
 carrying relations and actions.
 
-### L4 timing (Etude run `a1bcb3bf17a2`, commit `7ac8c9b6f`, ~$0.16)
+### L4 timing (Etude run `a1bcb3bf17a2`)
 
-One RunPod L4 (Torch 2.15.0+cu132), 2026-11-12. Data:
-`experiments/data/token_stream/timing-a1bcb3bf17a2.json`; the laptop fill above
-is `fill-tla-e1.json` beside it.
+One RunPod L4 (Torch 2.15.0+cu132), 2026-11-12.
 
 End to end, two in-situ Elemental updates per arm from a fresh initialization
 (256 streams, w64l2):
@@ -179,21 +159,56 @@ observations) repeats the TLA result: pow2 / pooled 0.58 and 0.61.
 Not run. Neither arm of the decision rule can pass: fill already failed, and
 the speed arm needs ≥1.5× per update on the L4, while the w64 recipe measured
 1.07× end to end. Even at w160l8, whose GPU calls are 1.3–1.5× faster, the
-CPU collection share keeps the per-update gain well under 1.5×. A strength
-result therefore cannot change the decision. At the measured ~57 s per
-update, the planned comparison (two seeds × two arms × 400 updates) needs four
-~6.5 h L4 windows, about $15.50, plus about $4.50 of evaluation: roughly
-$20, over the $15 cap. One seed per arm (about $11) would fit but has no
-power to detect "within noise".
+CPU collection share (about 60% of an update) keeps the per-update gain well
+under 1.5×. A strength result therefore cannot change the decision. At the
+measured ~57 s per update, the planned comparison (two seeds × two arms × 400
+updates) needs four ~6.5 h L4 windows, about $15.50, plus about $4.50 of
+evaluation: roughly $20, over the $15 cap. One seed per arm (about $11) would
+fit but has no power to detect "within noise".
 
-## Conclusion
+## Verdict
 
-Recommend MTG-302-style per-axis power-of-two bucketing. One pooled budget at
-a common row width pads 1.7× more input than per-axis buckets. The pooled
-attention stream is 1.07× faster per update on the w64 Elemental recipe,
-whose cost is CPU collection plus launch-bound GPU calls. The stream is worth
-revisiting only for wider models (w160l8: 1.3–1.5× on GPU calls, 25–28% less
-peak memory), and with ragged or bucketed rows rather than one common width.
+**Exploratory.** Recommend MTG-302-style per-axis power-of-two bucketing; no
+design Task for a token architecture. What was learned:
 
-Spend: timing run `a1bcb3bf17a2` ~$0.16 (launcher figure); its machine
-`mtg306-l4-31e6e7676515` ended with the run.
+- One pooled budget at a common row width pads **1.7× more** input than
+  per-axis buckets (pow2 / pooled 0.58–0.61 on TLA and Elemental captures),
+  because row widths range from 2 to 73 floats. The fill arm fails.
+- The pooled attention stream is **1.07×** faster per update on the w64
+  Elemental recipe, whose cost is CPU collection plus launch-bound GPU calls.
+  The speed arm fails.
+- What changes next: MTG-302's bucketing is the padding path. The stream is
+  worth revisiting only for wider models (w160l8: 1.3–1.5× on GPU calls,
+  25–28% less peak memory), and then with ragged or bucketed rows rather than
+  one common width.
+
+No strength claim is made for either arm; learning was not run.
+
+## Caveats
+
+- Strongest confound for the speed numbers: the end-to-end figure is two
+  updates per arm in one run on one L4, from a fresh initialization, so it
+  carries rental-machine noise and early-training observation sizes (short
+  games, few permanents). Later-training boards are larger, which fills more
+  of the fixed table slots and narrows the pooled stream's attention saving;
+  the w64 conclusion rests on collection being CPU-bound, which board size
+  does not change.
+- Tokens pack on the device after per-type embedding rather than through a
+  host conversion of the v9 dictionaries, departing from the Task's design.
+  References (links, facts, effects, relations, action focus) are resolved by
+  the existing joins before packing, so no host remapping exists and
+  collection, admission and the native encoder are untouched. There is no
+  host tokens→tables inverse; the pack/unpack round trip is the check.
+- Facts and shared effects stay joins onto their objects in both arms; their
+  encoders run unchanged. Events, known hands and decklists are counted by fill
+  but do not enter the pooled sequence (events are off in this recipe; known
+  hands and decklists reach the players through the card encoder in both arms).
+- Learner-step timing uses a stand-in loss (legal-action log-likelihood plus
+  value MSE) with the damped loss's gradient support; the model's forward and
+  backward are the measured cost, not the full damped objective.
+- "Per update" in the decision rule is read from the in-situ update wall time
+  on the L4; replay timings separate the GPU forward and learner step from
+  collection's CPU environment work.
+- The 187 captured learner minibatches the Task names were not found; TLA fill
+  uses the 8 + 8 retained from the same captures, so its learner rows rest on
+  few batches. The Elemental captures (24 learner minibatches) agree.
