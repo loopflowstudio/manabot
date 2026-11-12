@@ -276,8 +276,7 @@ written), under the USD 10 cap.
    diagnostic reads. Each arm runs at w160l8 (the in-situ initial weights) and at
    w384l8, a random initialization with 31.4M parameters, which fit the L4.
    Labels on every top-level module attribute kernels to their launching code.
-3. **Bounds.** Wall time, GPU busy and host waits per window, as defined
-   under (a).
+   Each window's bounds are read as defined under (a).
 
 ### Runs and cost
 
