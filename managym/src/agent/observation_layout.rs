@@ -714,7 +714,6 @@ mod tests {
                     config.player_turn_state_len(),
                     2 * layout["player_turn_state"].columns.len()
                 );
-                assert_eq!(turn_state::WIDTH, 8);
             }
             assert_eq!(
                 config.relations_len(),

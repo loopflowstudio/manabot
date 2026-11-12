@@ -159,31 +159,21 @@ LLM text and learning tokens in the change that adds it; hashed names go in
 v10 is explicit, and v9 refuses positions needing v10 state before writing
 buffers (open question on the one-input rule in `scratch/questions.md`).
 
-## Spells cast this turn in v10 (fourteenth pass, done)
+## v10 spells cast and named layout (fourteenth pass, done)
 
-`PlayerData.spells_cast` (derived from `TurnState.spells_cast`, the one owner)
-is v10 `player_turn_state` column 1 (/ 10), so the row is 2 × 8 (life lost,
-spells cast, six Powerstone-class mana values) in the native scalar/vector and
-Python encoders; LLM text "cast N spells" on the "This turn:" line; the guard's
-`spells_cast` row and the `PlayerData` column claim name the column. Academy:
-`LegacyPlayerView.spells_cast` (Rust, Python model, projection, five protocol
-schemas regenerated, TS type, `PlayerArea` turn-history sentence). The
-projection and Python `PlayerTurnHistoryView` also lacked `life_lost`, so
-Academy never showed it; both now carry it. V9 adds no refusal (reversible
-assumption, `scratch/questions.md`).
+`PlayerData.spells_cast` (from `TurnState.spells_cast`, the one owner) is v10
+`player_turn_state` column 1 (/ 10): row 2 × 8 (life lost, spells cast, six
+Powerstone-class mana), columns named by `observation_layout::turn_state` and
+published by `managym.observation_layout(*, policy_history, turn_state)`, in
+native scalar/vector and Python encoders, LLM text ("cast N spells") and the
+guard. Academy `LegacyPlayerView` gains `spells_cast` and the missing
+`life_lost` (Rust, Python, projection, five schemas, TS, `PlayerArea`). V9 adds
+no refusal (reversible assumption, `scratch/questions.md`).
 
-Result: debug cards observability/turn-state 60 passed; managym encoder,
-schema and protocol 16 passed; rebuilt cp313 extension (atomic); pytest
-`test_input_v10`, `test_observation_parity`, `test_text_observation`,
-`test_experience_protocol` 99 passed; schedule recovery, server, decklist
-disclosure 19 passed. Academy vitest/svelte-check not run (no `node_modules`).
-
-## v10 in the named layout (done)
-
-`observation_layout::turn_state` names the eight `player_turn_state` columns;
-`managym.observation_layout(*, policy_history, turn_state)` publishes both v10
-buffers. Check: named-layout, input-v10 and parity pytest 35 passed; debug
-`cards` 684 passed; cp313 rebuilt and swapped atomically.
+Result: debug cards 684 passed; managym encoder/schema/protocol 16 passed;
+pytest named-layout, input-v10, parity, text observation, experience protocol
+passed; cp313 rebuilt atomically. Academy vitest/svelte-check not run (no
+`node_modules`).
 
 ## Acceptance checks (gate)
 
