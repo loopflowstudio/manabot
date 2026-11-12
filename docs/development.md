@@ -350,7 +350,23 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `ea316ff14` is adopted from
+**Current reference.** Commit `7ef6ce588` is adopted from
+[PR #469 CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403)
+(2026-11-12 UTC, AMD EPYC 7763) as an accepted cost. MTG-286's TLE rules
+additions (mana payment, casting, proposed events and triggers) leave every
+search digest, the step digest and the 101,650-step count unchanged, but slow
+headless steps by 9.2%. Both candidate step samples (8.79 s, 8.64 s) were slower
+than both reference samples (7.98 s, 7.84 s), with user CPU time matching wall
+time, so the gap is engine cost rather than scheduling. Search stayed within
+budget.
+
+| Metric | Previous reference `ea316ff14` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.913 s | 4.944 s |
+| Total search | 167.486 s | 169.186 s |
+| Step throughput | 12,880.0/s | 11,693.6/s |
+
+**Previous reference: MTG-239 rules.** Commit `ea316ff14` was adopted from
 [PR #415 CI run 41711692234](https://github.com/loopflowstudio/manabot/actions/runs/41711692234)
 (2026-11-03 UTC, AMD EPYC 7763). MTG-239 gives Accumulate Wisdom explicit
 bottom-order decisions and makes Rallier evaluate Suki's power in the library.
