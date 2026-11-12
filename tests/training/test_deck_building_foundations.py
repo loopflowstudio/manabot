@@ -116,7 +116,7 @@ def test_pool_derivation_preserves_events_references_and_frozen_split(
         sys, "argv", ["tla_pools", str(path), str(output), "--held-out", "1"]
     )
     pools_main()
-    with pytest.raises(ValueError, match="frozen"):
+    with pytest.raises(SystemExit, match="choose a new versioned path"):
         pools_main()
     restored = PoolCorpus.read(output)
     assert restored.digest == corpus.digest

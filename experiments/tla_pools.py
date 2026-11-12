@@ -102,7 +102,9 @@ def main() -> None:
     parser.add_argument("--held-out", type=int, default=100)
     args = parser.parse_args()
     if args.out.exists():
-        raise ValueError("pool corpus is frozen; choose a new output path")
+        raise SystemExit(
+            f"No corpus written: {args.out} exists; choose a new versioned path"
+        )
     try:
         corpus = derive_pools(args.source, args.held_out)
     except managym.DeckImportError as error:

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-282 QA</title>
+<style>
+body{font:15px/1.5 system-ui,sans-serif;max-width:960px;margin:2rem auto;padding:0 1rem;color:#222}
+h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #ddd}
+pre{background:#f6f4ef;padding:.7rem;overflow-x:auto;font-size:12.5px;border-radius:4px}
+.ok{color:#1a6b2f;font-weight:600}.fix{color:#8a5a00;font-weight:600}.open{color:#9b1c1c;font-weight:600}
+td,th{border:1px solid #ddd;padding:.3rem .5rem;vertical-align:top}table{border-collapse:collapse}
+</style></head><body>
+<h1>MTG-282 deck-building foundations: QA (2026-11-11)</h1>
+<p>These are libraries and CLIs, so I used them through the documented commands and public Python APIs: <code>manabot train --regime</code>,
+<code>python -m manabot.data fetch</code>, <code>python -m experiments.tla_pools</code>, <code>managym.LimitedRules</code>,
+<code>PoolCorpus.read</code> and <code>read_game_results</code>. All runs used the native extension rebuilt from this checkout. Scripts and run outputs are in <code>/tmp/qa282</code>.</p>
+
+<h2>1. Limited picking (docs example, then wrong input)</h2>
+<p class="ok">Docs example passes unchanged.</p>
+<pre>empty picks: can_stop False, 6 choices (5 basics + Llanowar Elves)
+54 Forest + 6 Elves (at cap 60): can_stop True, cards []
+overdrawn   -> ValueError Llanowar Elves: picks exceed the pool count of 6
+not in pool -> ValueError Lightning Bolt: not in the pool
+unknown     -> ValueError Not A Card: card is not defined in this world; Not A Card: not in the pool
+zero        -> ValueError quantity must be positive
+cap 39      -> ValueError pick cap must be in 40..=1000
+66 picks    -> ValueError picks exceed the episode cap</pre>
+<p class="fix">Fixed:</p>
+<ul>
+<li>A card missing from the pool said "picks exceed the pool count". It now says "not in the pool", and an overdraw names the available count.</li>
+<li><code>print(choices)</code> showed <code>&lt;LimitedChoices object at 0x…&gt;</code>. It now prints <code>LimitedChoices(cards=[…], can_stop=True)</code>.</li>
+<li>The docs did not say that picks beyond the cap are an error from <code>choices</code>. They do now.</li>
+</ul>
+<p>Left alone: a negative count shows the shared serde message (<code>invalid value: integer `-1`, expected usize</code>), which comes from the binding layer every deck API shares.</p>
+
+<h2>2. Restoring the corpus as a new user</h2>
+<p>I moved the local corpus aside and pointed <code>MANABOT_DATA_CACHE</code> at an empty directory. The documented fetch without credentials fails with <code>RuntimeError: R2 access needs R2_ACCOUNT_ID</code>. That is the existing artifact-store behaviour, and the docs say access is required. With Doppler <code>manabot/prd</code>: <code>fetched 1 files … 1 downloaded (1954642 bytes)</code>, byte-identical to the published file.</p>
+<p class="ok">The docs' load example passes: 922 entries, 827 train, 95 held out, digest <code>7c38fa5d…</code>, loaded in 0.05 s.</p>
+<p>Builder walk-through: for a held-out entry, I replayed the human reference one copy at a time through <code>LimitedRules(pool=entry.pool).choices</code>. Every pick was offered, and <code>can_stop</code> became true exactly at 40 cards.</p>
+<p>Reference sizes: 40 (880), 41 (37), 42 (2), 43 (2), 60 (1). The 60-card reference fits the default 60-pick cap exactly. A larger one would be legal under <code>check</code> but unreachable within an episode under the default cap.</p>
+
+<h2>3. Re-deriving from source</h2>
+<pre>$ uv run python -m experiments.tla_pools experiments/data/mtg213/corpus-v1/corpus.json /tmp/qa282/derived.json
+922 events; 95 held out; 78 excluded; sha256=7c38fa5dcec3a400550ca49210f3febc42cd2618d39559601652e5fbdb0acfe0
+cmp → byte-identical to the published corpus</pre>
+<p class="fix">Fixed: running it again onto an existing path printed a <code>ValueError</code> traceback. It now exits with <code>No corpus written: &lt;path&gt; exists; choose a new versioned path</code>, matching the malformed-list exit.</p>
+
+<h2>4. Self-play on the training population, no recovery policy</h2>
+<p>Regime: schema 2, <code>deck_source=corpus.population("train")</code>, 4 streams, run through <code>manabot train --regime</code>.</p>
+<pre>status completed; play: games 8
+rows 8; (stream, game) = (0,1),(0,2),…,(3,2); joined to corpus entries 8/8; held-out used 0
+{"schema_version":1,"stream":2,"game":1,"seats":[{"entry_id":"TLA:PremierDraft:0cd7…:1","build_episode":null},
+ {"entry_id":"TLA:PremierDraft:0a65…:1","build_episode":null}],"on_play":0,"winner":1}</pre>
+<p class="open">Found: with the fresh default policy input (v6), a 400-update run failed after 2 updates:
+<code>PyAgentError: policy input v6 cannot represent layer payload; select v8</code>. Its 8 completed games were still sealed as results, so the failure-retention path works on a real run.
+The same recipe with <code>ObservationConfig(policy_input_version=8)</code> plays normally. I documented the v8 requirement in <code>docs/deck-building.md</code>. The defaults are unchanged, because changing them is a product decision.</p>
+
+<h2>5. Interrupting a run</h2>
+<ul>
+<li>Ctrl-C (SIGINT to the process group): exit 130, run <code>interrupted</code>, 12 rows sealed under <code>artifacts/game-results/&lt;sha256&gt;.jsonl</code>, stage <code>games</code> = 8.
+That counter only counts games in completed updates. <span class="fix">The docs now say so.</span></li>
+<li>SIGTERM (abrupt): the journal stays <code>…-play-game-results.jsonl.partial</code> (20 lines) and <code>run.json</code> stays <code>running</code>. This is the documented abrupt-death behaviour.</li>
+<li>Note for anyone repeating this: a background job started with <code>&amp;</code> from a non-interactive shell ignores SIGINT. Restore the handler (or use a new session) to simulate Ctrl-C.</li>
+</ul>
+
+<h2>6. Two named models</h2>
+<ul>
+<li>Docs example (module inventory) via CLI: completed; <code>selected_models.builder</code> → <code>inspect/raw.pt</code>; <code>selected_artifact</code> null.</li>
+<li>Schema 3, self-play trains <code>pilot</code> on corpus decks (v8), then inventory trains <code>builder</code> with <code>pilot</code> frozen: completed, 8 rows, both named checkpoints selected.</li>
+<li>Typed chain using my own trusted modules (on PYTHONPATH): count → double (input <code>count</code>) → count2 trains pilot. Results <code>{"n":225026}</code>, <code>{"n":450052}</code>, <code>{"n":225026}</code>.
+<code>double</code> zeroed every parameter of its frozen pilot. The pilot exported afterwards keeps its weights (31 zero tensors, the same as a fresh model), so isolation holds.</li>
+<li>Recipe errors: forward reference, wrong artifact type, undeclared or duplicate frozen model, trained-and-frozen, schema 2 with a module, schema 3 with <code>agent</code>. All are rejected.
+<span class="fix">Fixed: the new named-model and module messages did not say which stage was wrong. They now start with <code>stage &lt;id&gt;:</code> and name the input.</span></li>
+</ul>
+
+<h2>Checks after fixes</h2>
+<pre>cargo test (debug) format::limited::tests — 2 passed
+release extension rebuilt, installed atomically (cp313-darwin)
+pytest tests/training/test_deck_building_foundations.py tests/training/test_regimes.py — 27 passed
+ruff check/format on changed Python — clean</pre>
+
+<h2>Summary</h2>
+<p><b>What works:</b> restoring and loading the corpus, byte-identical re-derivation, Limited picking that matches human references, public result rows without recovery (including after a native failure and after Ctrl-C), schema-3 named self-play, typed module chains and frozen isolation.</p>
+<p><b>Not reached:</b> a fresh-clone build (<code>verify-clean-machine</code>), wheel consumer installs, and the full debug Rust suite, Clippy and CI suites. Those belong to gate.</p>
+<p><b>Still wrong, worst first:</b></p>
+<ol>
+<li>The fresh default policy input (v6) cannot play the TLA pool corpus. A recipe built on <code>population("train")</code> with default observation config fails after a few updates. This is documented but not prevented: no admission check catches it before games start.</li>
+<li>Running <code>manabot train --regime</code> prints nothing on success, and an existing <code>--out</code> raises a raw traceback. Both predate this change.</li>
+<li>A negative count shows a serde-level message.</li>
+</ol>
+</body></html>

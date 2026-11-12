@@ -339,6 +339,17 @@ impl LimitedRules {
     }
 }
 
+#[pymethods]
+impl LimitedChoices {
+    fn __repr__(&self) -> String {
+        format!(
+            "LimitedChoices(cards={:?}, can_stop={})",
+            self.cards,
+            if self.can_stop { "True" } else { "False" }
+        )
+    }
+}
+
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DeckImportError", py.get_type_bound::<DeckImportError>())?;
     m.add(

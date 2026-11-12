@@ -87,3 +87,16 @@ publish, land or choose the next Graph step from here.
   install the wheel with `--torch-backend cpu` at the minimum pins and run a
   copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
   "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
+- Training recipes: write a regime JSON from Python
+  (`TrainingRegime(...).model_dump_json()`) and run
+  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
+  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
+  (`status`, `stages[].artifacts`, `selected_models`). Keep it small (4 streams,
+  64 transitions, 2 updates; a few seconds on CPU). Corpus or TLA decks need
+  `ObservationConfig(policy_input_version=8)`. Artifact fetches need
+  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
+  an empty directory to act like a new machine.
+- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
+  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
+  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
+  ignores SIGINT, so `pkill -INT` appears to hang.

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>MTG-282 · Deck-building concepts</title>
+<style>
+  :root { color-scheme: light dark; --bg:#faf8f2; --fg:#282c29; --muted:#575e57; --line:#bfc4b9; --accent:#285b45; --panel:#eef1e9; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#1b201d; --fg:#e9eee6; --muted:#b8c4b8; --line:#586359; --accent:#a1d7b6; --panel:#27332b; } }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 system-ui,sans-serif; }
+  main { max-width:890px; margin:auto; padding:28px 24px 48px; }
+  header { font-size:13px; color:var(--muted); }
+  h1 { font-size:30px; line-height:1.15; margin:18px 0 12px; }
+  h2 { font-size:19px; margin:24px 0 8px; }
+  p { margin:10px 0; }
+  code { font:0.88em/1.5 ui-monospace,monospace; overflow-wrap:anywhere; }
+  pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:14px; background:var(--panel); border-left:3px solid var(--accent); }
+  table { border-collapse:collapse; width:100%; font-size:14px; }
+  th,td { text-align:left; vertical-align:top; padding:10px 8px; border-bottom:1px solid var(--line); }
+  th { color:var(--muted); }
+  .callout { border-left:3px solid var(--accent); padding:3px 16px; margin:18px 0; }
+  .source { font-size:12px; }
+  details { margin:16px 0; border-top:1px solid var(--line); padding-top:10px; }
+  summary { cursor:pointer; color:var(--accent); font-weight:600; }
+  summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+  li { margin:8px 0; }
+  @media(max-width:600px) {
+    main { padding:20px 16px 36px; }
+    h1 { font-size:26px; }
+    table,thead,tbody,tr,th,td { display:block; }
+    thead { display:none; }
+    tr { padding:10px 0; border-bottom:1px solid var(--line); }
+    td { padding:4px 0; border:0; }
+    td::before { content:attr(data-label) " · "; font-weight:600; color:var(--muted); }
+  }
+</style>
+<main>
+  <header>
+    MTG-282 · concept-review · 2026-11-11
+    <p class="source">Built from <code>scratch/mtg-282.md</code>, <code>scratch/questions.md</code>,
+      <code>docs/deck-building.md</code>, <code>managym/src/format/limited.rs</code>,
+      <code>manabot/training/{pools,game_results,regime,execution}.py</code>,
+      <code>manabot/training/stages/contract.py</code> and
+      <code>tests/training/test_deck_building_foundations.py</code>.</p>
+  </header>
+  <h1>Advance with the existing design</h1>
+  <p><strong>Routing decision: no design change and no open product choice.</strong>
+    The foundation lets a builder use the same pool, legality and game outcomes as
+    another client. Broad validation remains for gate.</p>
+
+  <div class="callout">
+    <strong>Biggest mismatch to avoid: a completed game is not an optimizer sample.</strong>
+    <p>Before this change, per-game evidence depended on private recovery records.
+      The implemented result row keeps both seats together, survives a later optimizer
+      exception and does not turn failed games into losses. Retaining evidence does
+      not imply exact process resume.</p>
+  </div>
+
+  <table aria-label="Actions, concepts and APIs before and after the branch">
+    <thead><tr><th>Action</th><th>Before the branch</th><th>Implemented concept → API</th></tr></thead>
+    <tbody>
+      <tr><td data-label="Action">Load a pool and its human reference</td>
+        <td data-label="Before">Trophy lists; no saved pool split</td>
+        <td data-label="Implemented">Frozen event population → <code>PoolCorpus.read</code>, <code>population("train")</code><br>827 training / 95 held out; 78 exclusions preserved</td></tr>
+      <tr><td data-label="Action">Pick another card or stop</td>
+        <td data-label="Before">General deck admission only</td>
+        <td data-label="Implemented">Pool + committed prefix → <code>LimitedRules.choices</code><br>40 is the minimum; 60 is the default episode cap</td></tr>
+      <tr><td data-label="Action">Attribute an outcome to builds</td>
+        <td data-label="Before">Recovery attempts or aggregate deck counters</td>
+        <td data-label="Implemented">One completed game, two native seats → <code>read_game_results</code><br>Entry IDs + optional build episodes</td></tr>
+      <tr><td data-label="Action">Run a stage with separate models</td>
+        <td data-label="Before">One regime agent; central stage dispatch</td>
+        <td data-label="Implemented">Named owners + stage roles → <code>ModuleStage</code>, <code>StageDefinition.run</code><br>Typed JSON exchange; detached frozen readers</td></tr>
+    </tbody>
+  </table>
+
+  <h2>One interaction, including failure</h2>
+  <p><strong>Illustration using implemented contracts:</strong> restore the saved corpus,
+    select an entry, then ask for choices. Six Elves and 33 Forests cannot stop;
+    adding a Forest permits stop and still permits another pick.</p>
+  <pre><code>rules = managym.LimitedRules(pool={"Llanowar Elves": 6})
+rules.choices(picks={"Llanowar Elves": 6, "Forest": 33}).can_stop  # False
+rules.choices(picks={"Llanowar Elves": 6, "Forest": 34}).can_stop  # True</code></pre>
+  <p>If B is on the play and A wins, native seat zero is B and seat one is A.
+    The result preserves the entries, not just their possibly identical deck names:</p>
+  <pre><code>{"schema_version": 1, "stream": 0, "game": 1,
+ "seats": [{"entry_id": "event-b", "build_episode": null},
+           {"entry_id": "event-a", "build_episode": "build-a-1"}],
+ "on_play": 0, "winner": 1}</code></pre>
+  <p>The collector journals the completed game before reset. If the optimizer then
+    raises, the executor seals the journal and records its digest artifact. Read it
+    through that failed stage's record. A failed or unfinished game contributes no
+    outcome. Preserve attempt scope when comparing resumed runs; do not concatenate
+    their rows as independent games.</p>
+
+  <details>
+    <summary>What survives, and what must be retried?</summary>
+    <p><strong>Corpus:</strong> immutable bytes, event identities, reference sizes and
+      split membership survive. Restore through the artifact manifest. A world mismatch
+      requires the matching runtime or a new corpus version, never an in-place repair.</p>
+    <p><strong>Picks:</strong> the caller owns the prefix; native choices derive from
+      it. An invalid prefix is an error, not a silently shortened deck or an undo.</p>
+    <p><strong>Module failure:</strong> earlier artifacts remain evidence; a module's
+      result is published only after output validation. A failed module does not promise
+      rollback of live training weights or resumable named-model process state.</p>
+    <p><strong>Abrupt termination:</strong> fsynced partial rows are evidence, but an
+      unhandled process death cannot promise the handled-failure sealing path ran.</p>
+  </details>
+  <details>
+    <summary>Counterexamples that keep the concepts separate</summary>
+    <ul>
+      <li>Identical decks from two events still require two pool comparisons.</li>
+      <li>A 41-card human reference stays 41 cards. A legal 61-card deck can exceed a 60-pick episode.</li>
+      <li>Adding TLE support requires a new corpus version and must move no existing split assignment.</li>
+      <li>Learning from both seats must not double the number of completed games.</li>
+      <li>A module can mutate its detached frozen copy without changing the run-owned model.</li>
+    </ul>
+  </details>
+
+  <p><strong>Proposed changes: none.</strong> An autoregressive builder learner, live
+    game-to-builder training integration and exact builder process resume are not
+    implemented by these foundations. Existing self-play and belief stages keep their
+    entry points. This review did not rerun games or tests; retained receipts and the
+    remaining gate checks are in the working design.</p>
+
+  <h2>Review questions — resolved for this headless step</h2>
+  <ol>
+    <li>Does the design need another identity or lifecycle? <strong>No.</strong>
+      Event, build episode, completed game and model owner answer different questions.</li>
+    <li>Is a product decision missing before implementation can proceed? <strong>No.</strong>
+      The population steer is recorded; no new product choice was found.</li>
+    <li>What should happen next? <strong>Loop-or-next advances.</strong>
+      Show the outstanding gate validation, without starting a training experiment.</li>
+  </ol>
+</main>
+</html>

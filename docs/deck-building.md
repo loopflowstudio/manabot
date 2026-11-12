@@ -49,6 +49,9 @@ assert len(evaluation.decks) == 95
 
 Both populations contain human reference decks with their population entry
 IDs. Loading does not download a fresh 17Lands dump or launch training.
+Playing these decks requires policy input v8 or later
+(`ObservationConfig(policy_input_version=8)`): earlier inputs reject some of
+their layer effects, which fails a self-play stage once such a card is in play.
 
 The TLA pool corpus pairs each trophy event with its human reference build.
 The pool is the selected build's main deck plus sideboard, with basic lands
@@ -140,7 +143,8 @@ Picks commit one copy at a time, in any order. Stop is legal exactly when the
 current list passes the Limited ruleset; reaching 40 does not automatically
 stop. The picking interface has a separate 60-card default size cap, configurable
 with `LimitedRules(pool=..., max_cards=...)` and never below 40. At the cap it
-offers no further card picks; a valid list can still stop. The cap bounds a
+offers no further card picks; a valid list can still stop. Picks beyond the cap
+are an error from `choices`, though `check` may still accept the list. The cap bounds a
 building episode, not the definition of Limited's minimum deck size.
 
 Native world admission still applies when starting the resulting game.
@@ -182,6 +186,8 @@ from `manabot.training.game_results`. Each row has `stream`, `game`, two
 Seats use native ordering, so `on_play` is zero; `winner=None` is a completed
 draw. The stage record scopes the stream/game ordinals. Resume attempts keep
 their own records; do not concatenate attempts as independent games.
+A failed or interrupted stage can retain more rows than its `games` counter,
+which counts games in completed updates.
 
 While a stage runs, it fsyncs each completed result to a `.partial` journal.
 Completion or failure seals the rows under the metric run's

@@ -773,16 +773,20 @@ class TrainingRegime(Strict):
                 raise ValueError("named-model process recovery is not supported")
             for stage in self.stages:
                 if not isinstance(stage, (ModuleStage, TrainSelfPlay)):
-                    raise ValueError("named models support module and self-play stages")
+                    raise ValueError(
+                        f"stage {stage.id}: named models support module and self-play stages"
+                    )
                 if stage.trains is not None and stage.trains not in self.models:
-                    raise ValueError("stage trains an undeclared model")
+                    raise ValueError(f"stage {stage.id} trains an undeclared model")
                 if len(set(stage.frozen)) != len(stage.frozen) or any(
                     name not in self.models for name in stage.frozen
                 ):
-                    raise ValueError("frozen model names must be declared and unique")
+                    raise ValueError(
+                        f"stage {stage.id}: frozen model names must be declared and unique"
+                    )
                 if stage.trains in stage.frozen:
                     raise ValueError(
-                        "a model cannot be trained and frozen in one stage"
+                        f"stage {stage.id}: a model cannot be trained and frozen in one stage"
                     )
                 if isinstance(stage, TrainSelfPlay) and (
                     stage.trains is None
@@ -791,7 +795,7 @@ class TrainingRegime(Strict):
                     or stage.learning_state is not None
                 ):
                     raise ValueError(
-                        "named self-play requires one trained model; producer and learning-state imports remain single-agent operations"
+                        f"stage {stage.id}: named self-play requires one trained model; producer and learning-state imports remain single-agent operations"
                     )
             histories = {model.recent_events for model in self.models.values()}
             if len(histories) != 1:
@@ -905,19 +909,21 @@ class TrainingRegime(Strict):
                 definition = load_stage(stage.module)
                 if set(stage.inputs) != set(definition.inputs):
                     raise ValueError(
-                        "module artifact inputs differ from its declared contract"
+                        f"stage {stage.id}: module artifact inputs differ from its declared contract"
                     )
                 for name, producer_id in stage.inputs.items():
                     producer = previous.get(producer_id)
                     if not isinstance(producer, ModuleStage):
                         raise ValueError(
-                            "module input requires an earlier module artifact"
+                            f"stage {stage.id}: input {name} requires an earlier module artifact"
                         )
                     if (
                         load_stage(producer.module).output
                         is not definition.inputs[name]
                     ):
-                        raise ValueError("incompatible module artifact type")
+                        raise ValueError(
+                            f"stage {stage.id}: input {name} has an incompatible artifact type"
+                        )
             if isinstance(stage, CollectSelection) and stage.source_run is None:
                 policy = previous.get(stage.policy)
                 if not isinstance(policy, TrainSelfPlay):

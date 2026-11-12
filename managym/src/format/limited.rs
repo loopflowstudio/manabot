@@ -89,11 +89,17 @@ impl LimitedRules {
     ) -> Vec<DeckIssue> {
         let mut issues = admitted_counts(picks);
         for (name, count) in picks {
-            if !basics.contains(name) && *count > self.pool.get(name).copied().unwrap_or(0) {
+            let available = self.pool.get(name).copied().unwrap_or(0);
+            if !basics.contains(name) && *count > available {
+                let message = if available == 0 {
+                    format!("{name}: not in the pool")
+                } else {
+                    format!("{name}: picks exceed the pool count of {available}")
+                };
                 issues.push(DeckIssue {
                     card_name: Some(name.clone()),
                     code: "pool_count".into(),
-                    ..DeckIssue::format(format!("{name}: picks exceed the pool count"))
+                    ..DeckIssue::format(message)
                 });
             }
         }
