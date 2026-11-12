@@ -60,7 +60,9 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   beyond w160l8, pooled token stream, v10, categorical value,
   historical_mean, attention off; container: belief binding, `bc`). No reply
   yet. #495 head 0c7cd1419 changes no shared file since 88c97936b (only its
-  scratch), so the copies here are current. #474 still 05c1203e9; #497 open.
+  scratch), so the copies here are current. #474 still 05c1203e9.
+- Rechecked 20:05Z: #495 still 0c7cd1419, #474 still 05c1203e9, no reply on
+  MTG-321 to 8d8dc862. #497 merged to main (439379869), so Remaining 5 is done.
 
 ## Checks
 
@@ -79,8 +81,28 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   input v10), each padded and bucketed (pooled padded only; base refuses
   bucketed pooled), on 24 real Elemental observations; plus every weight
   after `minimal.train(2)` for two configs (covers rl, gradient_step,
-  update_ema, collection). Belief inputs not covered (need belief rows).
-  HEAD vs HEAD rerun also 0 differ. Losses distinct per config; 1,152/1,439
+  update_ema, collection). HEAD vs HEAD rerun also 0 differ.
+- Belief inputs added to the harness: the belief demo match's generated belief
+  and its has/lacks-Bolt conditionings (`encode_belief`), cycled over 24 of
+  that match's own observations, 460-id card vocabulary, 13 count buckets;
+  padded and bucketed (bucketing turns off with belief rows). CPU 05c1203e9
+  vs 4f54559f: 1,846 tensors, 0 differ; again after the main merge (b62cd6c8e):
+  0 differ. Belief embedding gradients non-zero.
+- CUDA L4, Etude run 15d399dab9ae (on-demand `mtg325-l4`, machine
+  mtg325-l4-44bd32217822, terminated after; ~$0.04, Job cap $2.50, cohort
+  `--max-usd 3`), revision 4f54559f, torch 2.15.0+cu132, TF32 matmul and
+  cuDNN on, every forward/backward config on CUDA (bucketed included),
+  `minimal.train` on CPU; one venv/native build, only `manabot/` swapped
+  (`base.patch` reversed gives 05c1203e9's tree). Base vs head: 1,827 of
+  1,846 tensors bitwise identical; all logits, values, losses and trained
+  weights identical; 19 belief-config gradients differ, max abs 3.3e-9
+  (belief owner/zone embeddings, attention in_proj). Head vs head repeat:
+  13 differ, same tensors, max abs 2.8e-9. The differences are CUDA's
+  run-to-run accumulation order in the belief path's backward, not the
+  change; the stated tolerance is that floor (≤ 1e-8 abs on gradients,
+  bitwise elsewhere).
+- After the main merge: live tokens, bucketed execution, boundaries,
+  inference, container load, backend protocol: 45 passed. Losses distinct per config; 1,152/1,439
   gradients non-zero, none non-finite.
 - Second compress (protocol, container, boundary tests: 17 passed): `TorchLearner` value term uses `rl.squared_value_loss`
   (same ops); `gradient_layout = parameter_layout`.
@@ -108,11 +130,11 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    do not yet.
 3. Register `"torch": "torch"` in `backends/parity.py` once #495 is on this
    branch (via #474/main), and run parity on a w160l8 capture.
-4. CUDA L4 check (under USD 3) with `bucketed_shapes` and `precision="tf32"`,
-   using `scratch/equivalence/run.py` on both commits.
-   Re-run the CPU comparison after item 1 changes the forward.
-5. After #497 (MTG-319) merges to main: merge main in, move
-   `manabot/model/live_tokens.py` into `manabot/backends/torch/` with
-   ActorCritic, keep `Execution.live_tokens` where it is (steer cc1dfb64).
+4. Done (Etude 15d399dab9ae, see Checks). Re-run CPU and the L4 launch
+   (`scratch/equivalence/mtg325_cuda_equivalence.py`, regenerate
+   `base.patch`) after item 1 changes the forward.
+5. Done (b62cd6c8e): main merged, `live_tokens.py` in `backends/torch/`
+   (unreleased, no alias), `Execution.live_tokens` unchanged; prepared
+   observations carry `live_token_count` beside admitted buckets.
 6. Rebase/merge onto #474 when it moves (unchanged at 05c1203e9 on
    2026-11-12); delete `scratch/` before landing.

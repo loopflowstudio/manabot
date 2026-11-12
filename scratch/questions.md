@@ -29,3 +29,9 @@
   Docs (`training-loop.md`, `manabot/README.md`, `backends/README.md`) now say
   so. Extensions requested on MTG-321 (steer 8d8dc862, 2026-11-12); assumed
   this Task edits `prepare.py`/`checkpoint.py` in place after #495 lands.
+- Main (#497) is merged into this branch although #474 has not merged it;
+  until #474 does, this branch's diff against #474 includes main's two commits
+  (#497, MTG-318 report). Reversible by rebasing onto #474 once it moves.
+- `live_token_count` stays on `PreparedObservation` (counted in
+  `PolicyInference.prepare`) as #497 wrote it, while buckets moved to
+  admission here; moving the count to admission is a possible follow-up.
