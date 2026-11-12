@@ -94,6 +94,7 @@ from .clock import boot_identity, watchdog_seconds
 
 if TYPE_CHECKING:
     from manabot.training.rollout.collection import RolloutBatch
+    from manabot.training.stages import SelfPlaySession
 
 
 # Longest a run.json export may lag the store while a stage is making progress.
@@ -240,7 +241,8 @@ class Model:
     implicitly. `session` is the live learner state self-play continues when
     the same model trains again; `exports` holds published checkpoints of the
     current weights by kind (a stage that changes the weights replaces it),
-    so an unchanged model is published once.
+    so an unchanged model is published once. `source` is the stage that
+    published them, which a stage reading the model records as its input.
     """
 
     name: str
@@ -248,8 +250,9 @@ class Model:
     observation: ObservationConfig
     network: ActorCritic
     ema: ActorCritic | None = None
-    session: Any = None
+    session: "SelfPlaySession | None" = None
     exports: dict[str, ArtifactReference] = field(default_factory=dict)
+    source: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +290,8 @@ class Run:
         experiment: str | None,
         training_exposure: bool,
         game_ledger: GameErrorLedger | None,
+        recovery_max_microsteps: int | None = None,
+        recovery_every_updates: int = 1,
         smoke_execution: Execution | None = None,
     ) -> None:
         self.record = record
@@ -304,6 +309,10 @@ class Run:
         self.wall_seconds = wall_seconds
         self.recovery = recovery
         self.recoverable = recoverable
+        # A saved regime's legacy process-recovery contract: snapshots replay
+        # at most this many microsteps, taken every this many updates.
+        self.recovery_max_microsteps = recovery_max_microsteps
+        self.recovery_every_updates = recovery_every_updates
         self.checkpoint_seconds = checkpoint_seconds
         self.checkpoint_updates = checkpoint_updates
         self.checkpoint_milestones = checkpoint_milestones
@@ -326,7 +335,7 @@ class Run:
         self.wall_bounded = False
         self.models: dict[str, Model] = {}
         # The self-play session whose collector is open; only it can continue.
-        self.live_session: object = None
+        self.live_session: "SelfPlaySession | None" = None
         self._stage_names: dict[str, int] = {}
         self._last_monitor_seconds = 0.0
         self._last_export = float("-inf")
@@ -382,6 +391,10 @@ class Run:
         """
         if not name or name != name.lower() or not name.replace("-", "").isalnum():
             raise ValueError("model names are lowercase letters, digits and dashes")
+        # The model owns its input contract: recent events read public history.
+        observation = observation.model_copy(
+            update={"policy_history_version": 1 if agent.recent_events else 0}
+        )
         space = ObservationSpace(observation)
         initialization = (
             seed if seed is not None else self.seed + zlib.crc32(name.encode())
@@ -434,6 +447,7 @@ class Run:
         if recorded is not None:
             reference: ArtifactReference = recorded.artifacts[weights]  # type: ignore[assignment]
             model.exports[weights] = reference
+            model.source = name
             return reference
         scope = self.begin_stage(name, Execution(), operation="export")
         assert scope is not None
@@ -465,6 +479,7 @@ class Run:
         scope.record.export_seconds = time.perf_counter() - tick
         self.finish_stage(scope)
         model.exports[weights] = candidate
+        model.source = name
         return candidate
 
     def metrics(self, values: Mapping[str, float], *, update: int) -> None:
@@ -981,6 +996,8 @@ def open_run(
     initial_admission: Path | None = None,
     experiment: str | None = None,
     training_exposure: bool = False,
+    recovery_max_microsteps: int | None = None,
+    recovery_every_updates: int = 1,
     smoke_execution: Execution | None = None,
 ) -> Run:
     """Create and commit the attempt's record; the caller holds the leases."""
@@ -1083,6 +1100,8 @@ def open_run(
         experiment=experiment,
         training_exposure=training_exposure,
         game_ledger=game_ledger,
+        recovery_max_microsteps=recovery_max_microsteps,
+        recovery_every_updates=recovery_every_updates,
         smoke_execution=smoke_execution,
     )
 

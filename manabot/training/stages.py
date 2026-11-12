@@ -5,16 +5,18 @@ artifacts and costs on that scope's `StageRecord` while it runs, and closes it
 with `Run.finish_stage`. There is one implementation of each kind of work:
 
 - `self_play(run, model, ...)` trains a `Model` by self-play, or against
-  another model frozen; `import_policy`, `collect_belief` and `train_belief`
-  admit a published policy, collect hidden-hand labels with a frozen policy
-  and fit a belief sampler. These are what regime functions call.
-- `run_saved_regime(run, regime)` runs a saved `TrainingRegime` by calling the
-  same stage bodies in its stage order; `execute_regime` uses it.
+  another model frozen; `import_policy`, `collect_selection`,
+  `collect_belief` and `train_belief` admit a published policy, play a frozen
+  selection population, collect hidden-hand labels with a frozen policy and
+  fit a belief sampler. These are what regime functions call.
+- `run_saved_regime(run, regime)` is the regime function of a saved
+  `TrainingRegime`: one stage-function call per saved stage, in order;
+  `execute_regime` runs it.
 
-A stage body reads its recipe context as a `TrainingRegime` (`regime`): the
-saved regime itself, or for a regime function a one-stage regime built from
-the call's arguments and the model's configuration, validated by the same
-rules. Its declaration (`TrainSelfPlay`, ...) is the stage's typed settings.
+Each public function admits its own arguments (decks, world, curriculum,
+input digests), builds the stage's typed settings record (`TrainSelfPlay`,
+...) and hands a private body exactly what it reads: the decks, the model
+and observation configuration, the settings and the schedule clock.
 """
 
 from copy import deepcopy
@@ -67,14 +69,20 @@ from manabot.training.regime import (
     FrozenOpponent,
     ImportPolicy,
     Learning,
+    LearningStateImport,
+    PretrainedPolicy,
+    ScheduleClock,
+    SelectionGameSpec,
     Stage,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,
     check_continuation,
+    check_self_play,
 )
 from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.selection_data import (
     SelectionDataset,
     collect_selection_game,
@@ -85,6 +93,7 @@ from manabot.training.state.admission import admit_policy
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
+    GameErrorPolicy,
     GameErrorState,
 )
 from manabot.training.state.learning_state import admit_learning_state, validate_adam
@@ -137,11 +146,97 @@ def _phase_timings(profiler: Profiler, root: str) -> dict[str, PhaseTiming]:
     }
 
 
-def checkpoint_setups(regime: TrainingRegime) -> list[managym.PlayerConfig] | None:
+Decks = MatchConfig | UniformDecks
+
+
+def _root(decks: Decks) -> MatchConfig:
+    """The match a stage's games open: the authored match, or a deck source's
+    representative pair (its sampled roots come from the native draw)."""
+    return decks.match_config() if isinstance(decks, UniformDecks) else decks
+
+
+def checkpoint_setups(decks: Decks) -> list[managym.PlayerConfig] | None:
     """Setups a checkpoint binds; a deck-source run binds the world (`None`)."""
-    if regime.deck_source is not None:
+    if isinstance(decks, UniformDecks):
         return None
-    return Match(regime.root_match).to_rust()
+    return Match(decks).to_rust()
+
+
+def admit_self_play(
+    settings: TrainSelfPlay,
+    *,
+    decks: Decks,
+    agent: ModelConfig,
+    recovery_max_microsteps: int | None,
+    current_world: bool = True,
+) -> None:
+    """Admit a self-play stage's decks, curriculum and sampling in this world.
+
+    `validate_regime` runs this for each saved stage before a run opens;
+    `self_play` runs it for its own settings. `current_world=False` skips
+    admitting a deck source's decks natively (offline authoring).
+    """
+    if settings.matchup_curriculum == "elemental-uniform":
+        elemental_roster(Match(_root(decks)))
+        if agent.world != "elemental-world-v2":
+            raise ValueError(
+                "elemental-uniform requires complete Elemental policy input"
+            )
+    if settings.adaptive is not None:
+        if recovery_max_microsteps is not None:
+            raise ValueError("adaptive sampling requires current-game recovery")
+        if agent.world == "elemental-world-v2":
+            for cell in settings.adaptive.cells:
+                elemental_roster(Match(cell))
+    if isinstance(decks, UniformDecks):
+        if current_world:
+            decks.check()
+        if agent.world != managym.WORLD_SETUP:
+            raise ValueError(
+                "a deck source requires the complete world policy vocabulary"
+            )
+    if agent.belief_count_buckets:
+        raise ValueError("regime stages do not produce belief inputs")
+
+
+def _record_inputs(run: Run, scope: StageScope, producer: str) -> None:
+    """Record every artifact of this run's stage `producer` as an input.
+
+    Each is checked against its digest first, so a stage never reads bytes
+    that changed on disk since they were published.
+    """
+    source = next(item for item in run.record.stages if item.id == producer)
+    for name, item in source.artifacts.items():
+        if file_sha256(item["path"]) != item["sha256"]:
+            raise ValueError(f"input artifact changed: {producer}/{name}")
+        scope.record.inputs[f"{producer}/{name}"] = dict(item)
+
+
+def _open_stage(
+    run: Run,
+    name: str,
+    execution: Execution,
+    *,
+    operation: str,
+    arguments: dict[str, object],
+    producer: str | None = None,
+    self_play: bool = False,
+) -> StageScope:
+    """Open stage `name`, record its producer's artifacts and commit."""
+    scope = run.begin_stage(
+        name,
+        execution,
+        self_play=self_play,
+        keep_restored=True,
+        operation=operation,
+        arguments=arguments,
+    )
+    assert scope is not None
+    if producer is not None:
+        _record_inputs(run, scope, producer)
+    run.persist()
+    scope.check()
+    return scope
 
 
 # ---------------------------------------------------------------------------
@@ -167,20 +262,26 @@ class SelfPlaySession:
 def _train_self_play(
     run: Run,
     scope: StageScope,
-    regime: TrainingRegime,
-    space: ObservationSpace,
     stage: TrainSelfPlay,
-    session: SelfPlaySession | None,
     *,
-    initial: ActorCritic | None = None,
+    decks: Decks,
+    agent_config: ModelConfig,
+    observation: ObservationConfig,
+    schedule_clock: ScheduleClock,
+    session: SelfPlaySession | None,
+    initial: ActorCritic | None,
 ) -> SelfPlaySession:
     """Train one self-play stage; return the live session it ends with.
 
-    `session` is the live state this stage continues (`stage.initial` in a
-    saved regime). `initial` supplies starting weights for a fresh learner, as
-    a regime function's model does. A stage restored only to rebuild live
-    state for its successor returns the session without training.
+    `session` is the live state this stage continues. `initial` supplies the
+    starting weights of a fresh learner (the model's). A stage restored only
+    to rebuild live state for its successor returns the session without
+    training. `schedule_clock` measures schedule progress: the update index
+    over `stage.updates`, or elapsed run time over the run's wall budget.
     """
+    space = ObservationSpace(observation)
+    root = Match(_root(decks))
+    setups = checkpoint_setups(decks)
     record = scope.record
     check = scope.check
     out = run.out
@@ -195,7 +296,14 @@ def _train_self_play(
         )
         run.persist()
         tick = time.perf_counter()
-        imported = admit_learning_state(stage, regime, out)
+        imported = admit_learning_state(
+            stage,
+            out,
+            decks=decks,
+            agent=agent_config,
+            observation=observation,
+            schedule_clock=schedule_clock,
+        )
         if imported.seed != run.seed:
             raise ValueError("learning-state continuation must retain training seed")
         record.artifacts.update(imported.artifacts)
@@ -220,7 +328,12 @@ def _train_self_play(
         run.persist()
         tick = time.perf_counter()
         admitted = admit_policy(
-            stage.pretrained, regime, out, name=f"{stage.id}-pretrained"
+            stage.pretrained,
+            out,
+            decks=decks,
+            agent=agent_config,
+            observation=observation,
+            name=f"{stage.id}-pretrained",
         )
         record.artifacts["pretrained"] = admitted.checkpoint
         record.artifacts["pretrained_run"] = admitted.source_run
@@ -248,7 +361,7 @@ def _train_self_play(
                 str(opponent_path),
                 bucketed_shapes=stage.execution.bucketed_shapes,
             )
-            validate_agent_setup(opponent_agent, Match(regime.root_match).to_rust())
+            validate_agent_setup(opponent_agent, root.to_rust())
             if opponent_space.encoder.config != space.encoder.config:
                 raise ValueError("frozen opponent observation ABI differs")
             if opponent_agent.belief_count_buckets:
@@ -262,7 +375,7 @@ def _train_self_play(
         torch.manual_seed(seeds["initialization"])
         agent = ActorCritic(
             space,
-            regime.agent,
+            agent_config,
             bucketed_shapes=stage.execution.bucketed_shapes,
         ).to(stage.execution.device)
         if initial is not None:
@@ -294,11 +407,11 @@ def _train_self_play(
             with torch.random.fork_rng(devices=[]):
                 initialization, initial_space = load_checkpoint(copied)
             if (
-                initialization.config != regime.agent
+                initialization.config != agent_config
                 or initial_space.encoder.config != space.encoder.config
             ):
                 raise ValueError("initialization model or observation differs")
-            validate_agent_setup(initialization, Match(regime.match).to_rust())
+            validate_agent_setup(initialization, root.to_rust())
             agent.load_state_dict(initialization.state_dict())
             record.inputs["initial_weights"] = dict(reference)
             record.artifacts["initialization_source"] = artifact(copied)
@@ -317,7 +430,7 @@ def _train_self_play(
                 agent,
                 space,
                 temporary,
-                player_configs=checkpoint_setups(regime),
+                player_configs=setups,
                 extra={
                     "run_id": run.id,
                     "stage_id": stage.id,
@@ -369,7 +482,7 @@ def _train_self_play(
 
         collector = SeatRoutedCollector(
             space,
-            Match(regime.root_match),
+            root,
             Reward(RewardConfig()),
             num_envs=stage.streams,
             seed=seeds["collection"],
@@ -382,15 +495,15 @@ def _train_self_play(
             learning_seats=stage.learning_seats,
             batch_closure=stage.batch_closure,
             games_per_stream=stage.games_per_stream,
-            recovery_max_microsteps=regime.recovery_max_microsteps,
+            recovery_max_microsteps=run.recovery_max_microsteps,
             game_errors=stage.game_errors,
             record_attempt=record_game_attempt if stage.game_errors else None,
-            recovery_max_game_microsteps=regime.recovery.max_game_microsteps
-            if regime.recovery
+            recovery_max_game_microsteps=run.recovery.max_game_microsteps
+            if run.recovery
             else None,
             root=stage.root,
             matchup_curriculum=stage.matchup_curriculum,
-            deck_source=regime.deck_source,
+            deck_source=decks if isinstance(decks, UniformDecks) else None,
             device=stage.execution.device,
             workers=stage.execution.workers,
             adaptive=stage.adaptive,
@@ -398,14 +511,19 @@ def _train_self_play(
         )
         run.producers.callback(collector.close)
         resolved: dict[str, object] = {
-            "regime": regime.model_dump(mode="json"),
             "run_id": run.id,
             "identities": run.record.identities,
         }
-        if run.record.regime_function is not None:
+        if run.record.regime is not None:
+            resolved["regime"] = run.record.regime.model_dump(mode="json")
+            regime_name = run.record.regime.id
+        else:
+            assert run.record.regime_function is not None
             resolved["regime_function"] = run.record.regime_function.model_dump(
                 mode="json"
             )
+            resolved["stage"] = stage.model_dump(mode="json")
+            regime_name = run.record.regime_function.function.partition(":")[2]
         experiment = RunContext(
             RuntimeConfig(
                 seed=seeds["initialization"] if imported is not None else run.seed,
@@ -415,7 +533,7 @@ def _train_self_play(
                 log_level="WARNING",
             ),
             experiment=run.experiment or stage.id,
-            regime=regime.id,
+            regime=regime_name,
             run=run.id,
             # A recovery attempt continues its parent's metrics.
             resume=Path(run.record.metrics_run) if run.record.metrics_run else None,
@@ -504,11 +622,11 @@ def _train_self_play(
             raise GameErrorLimit(run.game_ledger.state.stop_reason)
 
     def checkpoint(label: str) -> None:
-        if not regime.recoverable:
+        if not run.recoverable:
             return
         tick = time.perf_counter()
         record.watchdog_seconds = scope.watchdog()
-        suffix = ".pt.gz" if regime.recovery else ".pt"
+        suffix = ".pt.gz" if run.recovery else ".pt"
         target = out / f"{stage.id}-{label}{suffix}"
         save_update(
             target,
@@ -570,13 +688,13 @@ def _train_self_play(
                             batch,
                             stage.learning,
                             update_index / stage.updates
-                            if regime.schedule_clock == "iteration_fraction"
+                            if schedule_clock == "iteration_fraction"
                             else (
                                 time.perf_counter()
                                 - run.start
                                 - run.record.monitoring_export_seconds
                             )
-                            / regime.wall_seconds,
+                            / run.wall_seconds,
                             rng,
                             iteration=iteration + 1,
                             bootstrap_agent=behavior_agent,
@@ -605,7 +723,7 @@ def _train_self_play(
                     diagnostic["behavior"] = stage.behavior
                     diagnostic["behavior_iteration"] = iteration
                     if stage.learning.gradient != "damped_policy":
-                        diagnostic["schedule_clock"] = regime.schedule_clock
+                        diagnostic["schedule_clock"] = schedule_clock
                     iteration += 1
                     scope.iteration = iteration
                     diagnostic["iteration"] = iteration
@@ -656,25 +774,23 @@ def _train_self_play(
                 stage,
                 learner.agent,
                 space,
-                checkpoint_setups(regime),
+                setups,
                 experiment,
             )
         pausing = run.pause_path is not None and run.pause_path.exists()
         cadence = (
-            regime.recovery.checkpoint_updates
-            if regime.recovery
-            else regime.recovery_every_updates
+            run.recovery.checkpoint_updates
+            if run.recovery
+            else run.recovery_every_updates
         )
         checkpoint_due = (
             iteration % cadence == 0
             or pausing
-            or (
-                update_index + 1 == stage.updates if regime.recovery else iteration == 1
-            )
+            or (update_index + 1 == stage.updates if run.recovery else iteration == 1)
         )
         if checkpoint_due:
             checkpoint(f"update-{iteration:08d}")
-        if not regime.recovery or checkpoint_due:
+        if not run.recovery or checkpoint_due:
             run.persist(progress=True)
         if pausing:
             raise TrainingPaused("requested pause committed at an update boundary")
@@ -705,7 +821,7 @@ def _train_self_play(
             model,
             space,
             temporary,
-            player_configs=checkpoint_setups(regime),
+            player_configs=setups,
             extra={
                 "run_id": run.id,
                 "stage_id": stage.id,
@@ -750,7 +866,13 @@ def _train_self_play(
 
 
 def _import_policy(
-    run: Run, scope: StageScope, regime: TrainingRegime, stage: ImportPolicy
+    run: Run,
+    scope: StageScope,
+    stage: ImportPolicy,
+    *,
+    decks: Decks,
+    agent: ModelConfig,
+    observation: ObservationConfig,
 ) -> None:
     record = scope.record
     tick = time.perf_counter()
@@ -759,7 +881,9 @@ def _import_policy(
         "checkpoint": dict(stage.checkpoint),
     }
     run.persist()
-    admitted = admit_policy(stage, regime, run.out)
+    admitted = admit_policy(
+        stage, run.out, decks=decks, agent=agent, observation=observation
+    )
     record.artifacts[stage.weights] = admitted.checkpoint
     record.artifacts["source_run"] = admitted.source_run
     record.producer_cost = admitted.producer_cost
@@ -768,7 +892,13 @@ def _import_policy(
 
 
 def _collect_selection(
-    run: Run, scope: StageScope, regime: TrainingRegime, stage: CollectSelection
+    run: Run,
+    scope: StageScope,
+    stage: CollectSelection,
+    *,
+    match: MatchConfig,
+    agent_config: ModelConfig,
+    observation: ObservationConfig,
 ) -> None:
     record = scope.record
     check = scope.check
@@ -777,11 +907,15 @@ def _collect_selection(
         run.store.training_run(stage.source_run) if stage.source_run else run.record
     )
     source = next(item for item in policy_run.stages if item.id == stage.policy)
-    assert policy_run.regime is not None
-    policy_stage = next(
-        item for item in policy_run.regime.stages if item.id == stage.policy
+    self_play_policy = (
+        isinstance(
+            next(item for item in policy_run.regime.stages if item.id == stage.policy),
+            TrainSelfPlay,
+        )
+        if policy_run.regime is not None
+        else source.operation == "train_self_play"
     )
-    if source.status != "completed" or not isinstance(policy_stage, TrainSelfPlay):
+    if source.status != "completed" or not self_play_policy:
         raise ValueError("selection requires a completed self-play checkpoint stage")
     frozen = source.artifacts[stage.weights]
     record.inputs["policy"] = dict(frozen)
@@ -789,10 +923,7 @@ def _collect_selection(
     if file_sha256(frozen["path"]) != frozen["sha256"]:
         raise ValueError("selection policy artifact changed")
     agent, policy_space = load_checkpoint(frozen["path"])
-    if (
-        agent.config != regime.agent
-        or policy_space.encoder.config != regime.observation
-    ):
+    if agent.config != agent_config or policy_space.encoder.config != observation:
         raise ValueError("selection policy configuration differs from regime")
     if file_sha256(frozen["path"]) != frozen["sha256"]:
         raise ValueError("selection policy artifact changed while loading")
@@ -802,14 +933,14 @@ def _collect_selection(
     record.artifacts["population"] = artifact(population_path)
     run.persist()
     games = []
-    match = Match(regime.root_match)
+    root = Match(match)
     for index, spec in enumerate(stage.population):
         target = out / f"{stage.id}-{index}.receipts.jsonl"
         tick = time.perf_counter()
         game = collect_selection_game(
             agent,
             policy_space,
-            match if spec.assignment == 0 else match.swapped(),
+            root if spec.assignment == 0 else root.swapped(),
             spec,
             target,
             reference=stage.learning.reference,
@@ -932,86 +1063,13 @@ def _train_belief(
     return candidate
 
 
-# ---------------------------------------------------------------------------
-# Saved regimes
-
-
-def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
-    """Run a saved `TrainingRegime`'s stages in order through the stage bodies.
-
-    Stages an earlier attempt completed are skipped; the first open stage
-    continues the recovery snapshot. A smoke run runs the regime's tiny form
-    (`smoke_form`).
-    """
-    if run.smoke_execution is not None:
-        regime = smoke_form(regime, run.smoke_execution)
-    space = ObservationSpace(regime.observation)
-    session: SelfPlaySession | None = None
-    for stage_index, stage in enumerate(regime.stages):
-        if any(item.id == stage.id for item in run.record.stages):
-            continue
-        following = regime.stages[stage_index + 1 : stage_index + 2]
-        scope = run.begin_stage(
-            stage.id,
-            stage.execution,
-            self_play=isinstance(stage, TrainSelfPlay),
-            keep_restored=bool(following)
-            and getattr(following[0], "initial", None) is not None,
-            operation=stage.operation,
-        )
-        if scope is None:
-            continue
-        references = []
-        if isinstance(stage, CollectBelief):
-            references.append(stage.policy)
-        if isinstance(stage, TrainBelief):
-            references.append(stage.dataset)
-        if getattr(stage, "initial", None):
-            references.append(stage.initial)
-        for reference in references:
-            source = next(item for item in run.record.stages if item.id == reference)
-            for name, item in source.artifacts.items():
-                if file_sha256(item["path"]) != item["sha256"]:
-                    raise ValueError(f"input artifact changed: {reference}/{name}")
-                scope.record.inputs[f"{reference}/{name}"] = dict(item)
-        run.persist()
-        scope.check()
-        if isinstance(stage, ImportPolicy):
-            _import_policy(run, scope, regime, stage)
-        elif isinstance(stage, CollectSelection):
-            _collect_selection(run, scope, regime, stage)
-        elif isinstance(stage, CollectBelief):
-            source = next(item for item in run.record.stages if item.id == stage.policy)
-            _collect_belief(
-                run, scope, regime.root_match, stage, source.artifacts[stage.weights]
-            )
-        elif isinstance(stage, TrainBelief):
-            source = next(
-                item for item in run.record.stages if item.id == stage.dataset
-            )
-            _train_belief(
-                run,
-                scope,
-                stage,
-                read_dataset(Path(source.artifacts["dataset"]["path"])),
-            )
-        elif isinstance(stage, TrainSelfPlay):
-            session = _train_self_play(
-                run,
-                scope,
-                regime,
-                space,
-                stage,
-                session if stage.initial else None,
-            )
-
-
 def smoke_stage[S: Stage](stage: S, execution: Execution) -> S:
     """A stage run tiny under `execution`: one update of one transition per stream.
 
     Belief collection plays its minimum three games and belief training takes
-    one step. Stream counts that a curriculum stratifies are kept. Saved and
-    function regimes shrink their stages here, so a smoke run means one thing.
+    one step. Stream counts that a curriculum stratifies are kept. Every stage
+    function shrinks its settings here, so a smoke run means one thing. The
+    result is validated again.
     """
     update: dict[str, object] = {"execution": execution}
     if isinstance(stage, TrainSelfPlay):
@@ -1026,19 +1084,11 @@ def smoke_stage[S: Stage](stage: S, execution: Execution) -> S:
         update["games"] = 3
     elif isinstance(stage, TrainBelief):
         update["steps"] = 1
-    return stage.model_copy(update=update)
-
-
-def smoke_form(regime: TrainingRegime, execution: Execution) -> TrainingRegime:
-    """The saved regime with every stage in its `smoke_stage` form."""
-    stages = [smoke_stage(stage, execution) for stage in regime.stages]
-    return TrainingRegime.model_validate(
-        regime.model_copy(update={"stages": stages}).model_dump()
-    )
+    return type(stage).model_validate({**dict(stage), **update})
 
 
 # ---------------------------------------------------------------------------
-# Stage functions for regime functions
+# Stage functions
 
 
 @dataclass(frozen=True)
@@ -1064,42 +1114,22 @@ class SelfPlayResult:
         )
 
 
-def _stage_regime(
-    run: Run,
-    name: str,
-    decks: MatchConfig | UniformDecks,
-    agent: ModelConfig,
-    observation: ObservationConfig,
-    declaration: TrainSelfPlay | ImportPolicy,
-) -> TrainingRegime:
-    """The one-stage recipe context a stage body reads for a regime function."""
-    regime = TrainingRegime(
-        id=name,
-        world=run.world,
-        match=decks if isinstance(decks, MatchConfig) else None,
-        deck_source=decks if isinstance(decks, UniformDecks) else None,
-        observation=observation,
-        agent=agent,
-        stages=[declaration],
-        wall_seconds=run.wall_seconds,
-        schedule_clock="iteration_fraction",
-        recovery=run.recovery,
-    )
-    # Execution admission (world, deck source, curriculum rosters) is the
-    # saved regimes'; a function's stages pass the same checks.
-    from manabot.training.execution import validate_regime
+@dataclass(frozen=True)
+class BeliefCorpus:
+    """A belief collection stage's published corpus of hidden-hand labels."""
 
-    return validate_regime(regime)
+    stage: str
+    dataset: ArtifactReference
 
 
 def self_play(
     run: Run,
     model: Model,
     *,
-    decks: MatchConfig | UniformDecks,
+    decks: Decks,
     updates: int = 2,
     learning: Learning | DampedPolicyLearning = Learning(),
-    opponent: Model | None = None,
+    opponent: Model | FrozenOpponent | None = None,
     stage: str | None = None,
     streams: int = 4,
     transitions: int = 256,
@@ -1107,18 +1137,29 @@ def self_play(
     learning_seats: Literal["one", "both"] | None = None,
     batch_closure: BatchClosure | None = None,
     behavior: Literal["current-self", "ema-self", "random"] = "current-self",
-    matchup_curriculum: Literal["fixed", "elemental-uniform"] = "fixed",
+    matchup_curriculum: Literal[
+        "fixed", "cross-balanced", "mirrors-balanced", "elemental-uniform"
+    ] = "fixed",
     adaptive: AdaptiveConfig | None = None,
     trainable: Literal["policy_value", "none"] = "policy_value",
+    root: Literal["lethal-target-v1"] | None = None,
+    active_seconds: float | None = None,
+    game_errors: GameErrorPolicy | None = None,
+    initial_weights: ArtifactReference | None = None,
+    pretrained: PretrainedPolicy | None = None,
+    learning_state: LearningStateImport | None = None,
+    schedule_clock: ScheduleClock = "iteration_fraction",
     execution: Execution = Execution(),
 ) -> SelfPlayResult:
     """Train `model` by self-play, or against `opponent` held frozen.
 
-    Settings mean what the same-named `TrainSelfPlay` fields mean. Training
-    the same model again in the next self-play stage continues its live
-    learner, Adam state, EMA and collector, which therefore keep the settings
-    `check_continuation` names. The model's weights become the stage's raw
-    weights (and its EMA, when the learning rule keeps one).
+    Settings mean what the same-named `TrainSelfPlay` fields mean; omitted
+    seats and batch closure take its defaults for the behavior. `opponent`
+    is another model of the run (exported first) or a published checkpoint.
+    Training the same model again in the next self-play stage continues its
+    live learner, Adam state, EMA and collector, which therefore keep the
+    settings `check_continuation` names. The model's weights become the
+    stage's raw weights (and its EMA, when the learning rule keeps one).
     """
     name = run.stage_name(stage or "self-play")
     recorded = run.completed(name)
@@ -1127,11 +1168,15 @@ def self_play(
         return SelfPlayResult.of(recorded)
     if opponent is model:
         raise ValueError("a model cannot be its own frozen opponent")
-    frozen = None
-    if opponent is not None:
+    if opponent is not None and behavior != "current-self":
+        raise ValueError("a frozen opponent sets the behavior")
+    if game_errors is not None and run.game_ledger is None:
+        raise ValueError("game-error tolerance requires the run's game-attempt ledger")
+    frozen = opponent if isinstance(opponent, FrozenOpponent) else None
+    if isinstance(opponent, Model):
         reference = run.export(opponent, decks=decks)
         frozen = FrozenOpponent(path=reference["path"], sha256=reference["sha256"])
-    # Omitted seats and closure take TrainSelfPlay's defaults for the behavior.
+    session = model.session
     implied = {
         key: value
         for key, value in (
@@ -1143,6 +1188,7 @@ def self_play(
     declaration = TrainSelfPlay(
         id=name,
         operation="train_self_play",
+        initial=session.declaration.id if session is not None else None,
         updates=updates,
         learning=learning,
         opponent=frozen,
@@ -1154,14 +1200,16 @@ def self_play(
         matchup_curriculum=matchup_curriculum,
         adaptive=adaptive,
         trainable=trainable,
+        root=root,
+        active_seconds=active_seconds,
+        game_errors=game_errors,
+        initial_weights=initial_weights,
+        pretrained=pretrained,
+        learning_state=learning_state,
         execution=execution,
     )
     if run.smoke_execution is not None:
         declaration = smoke_stage(declaration, run.smoke_execution)
-    regime = _stage_regime(
-        run, name, decks, model.agent, model.observation, declaration
-    )
-    session: SelfPlaySession | None = model.session
     if session is not None:
         if run.live_session is not session:
             raise ValueError(
@@ -1169,28 +1217,43 @@ def self_play(
                 "the run's latest; train it in consecutive self-play stages"
             )
         check_continuation(session.declaration, declaration)
-    space = ObservationSpace(regime.observation)
-    scope = run.begin_stage(
+    check_self_play(
+        declaration,
+        agent=model.agent,
+        deck_source=isinstance(decks, UniformDecks),
+        schedule_clock=schedule_clock,
+        recoverable=run.recoverable,
+    )
+    admit_self_play(
+        declaration,
+        decks=decks,
+        agent=model.agent,
+        recovery_max_microsteps=run.recovery_max_microsteps,
+    )
+    scope = _open_stage(
+        run,
         name,
         declaration.execution,
-        self_play=True,
-        keep_restored=True,
         operation="train_self_play",
         arguments={
             "model": model.name,
-            "opponent": opponent.name if opponent is not None else None,
+            "opponent": opponent.name if isinstance(opponent, Model) else None,
             "decks": decks,
             "settings": declaration,
+            "schedule_clock": schedule_clock,
         },
+        producer=model.source,
+        self_play=True,
     )
-    assert scope is not None
     live = _train_self_play(
         run,
         scope,
-        regime,
-        space,
         declaration,
-        session,
+        decks=decks,
+        agent_config=model.agent,
+        observation=model.observation,
+        schedule_clock=schedule_clock,
+        session=session,
         initial=model.network if session is None else None,
     )
     run.live_session = live
@@ -1208,13 +1271,14 @@ def _published(model: Model, record: StageRecord) -> None:
         for weights in ("raw", "ema")
         if weights in record.artifacts
     }
+    model.source = record.id
 
 
 def _restore_model(model: Model, record: StageRecord) -> None:
     """Load a completed stage's exported weights into `model` on resume.
 
     The live learner is not restored, so the model's next self-play stage
-    starts a fresh learner from these weights.
+    starts a fresh learner from these weights (or its recovery snapshot).
     """
     with torch.random.fork_rng(devices=[]):
         model.network, _ = load_checkpoint(record.artifacts["raw"]["path"])
@@ -1224,6 +1288,18 @@ def _restore_model(model: Model, record: StageRecord) -> None:
     _published(model, record)
 
 
+def _published_model(run: Run, name: str, producer: str) -> Model:
+    """A new model of the run holding the weights stage `producer` published."""
+    record = next(item for item in run.record.stages if item.id == producer)
+    with torch.random.fork_rng(devices=[]):
+        network, space = load_checkpoint(record.artifacts["raw"]["path"])
+        model = run.adopt(name, network, space.encoder.config)
+        if "ema" in record.artifacts:
+            model.ema, _ = load_checkpoint(record.artifacts["ema"]["path"])
+    _published(model, record)
+    return model
+
+
 def import_policy(
     run: Run,
     name: str,
@@ -1231,21 +1307,28 @@ def import_policy(
     source_run: ArtifactReference,
     source_stage: str,
     checkpoint: ArtifactReference,
-    decks: MatchConfig | UniformDecks,
+    decks: Decks,
     weights: Literal["raw", "ema"] = "raw",
+    agent: ModelConfig | None = None,
+    observation: ObservationConfig | None = None,
+    stage: str | None = None,
+    execution: Execution = Execution(),
 ) -> Model:
     """Admit a published policy as a new model of the run, named `name`.
 
-    Admission is the saved `import_policy` stage's: the producer's record must
-    match the checkpoint, its world and setups must admit `decks`, and its
-    cost carries into this run. The model starts from the admitted weights
-    and takes the producer's model and observation configuration.
+    The producer's record must match the checkpoint, its world and setups
+    must admit `decks`, and its cost carries into this run. The producer must
+    use `agent` and `observation` when given, else the checkpoint's own. The
+    model starts from the admitted weights.
     """
-    stage_id = run.stage_name(f"import-{name}")
+    stage_id = run.stage_name(stage or f"import-{name}")
     recorded = run.completed(stage_id)
     if recorded is None:
-        with torch.random.fork_rng(devices=[]):
-            producer, producer_space = load_checkpoint(checkpoint["path"])
+        if agent is None or observation is None:
+            with torch.random.fork_rng(devices=[]):
+                producer, producer_space = load_checkpoint(checkpoint["path"])
+            agent = agent or producer.config
+            observation = observation or producer_space.encoder.config
         declaration = ImportPolicy(
             id=stage_id,
             operation="import_policy",
@@ -1253,27 +1336,88 @@ def import_policy(
             source_stage=source_stage,
             checkpoint=checkpoint,
             weights=weights,
+            execution=execution,
         )
-        regime = _stage_regime(
+        if run.smoke_execution is not None:
+            declaration = smoke_stage(declaration, run.smoke_execution)
+        scope = _open_stage(
             run,
-            stage_id,
-            decks,
-            producer.config,
-            producer_space.encoder.config,
-            declaration,
-        )
-        scope = run.begin_stage(
             stage_id,
             declaration.execution,
             operation="import_policy",
             arguments={"model": name, "decks": decks, "settings": declaration},
         )
-        assert scope is not None
-        _import_policy(run, scope, regime, declaration)
+        _import_policy(
+            run, scope, declaration, decks=decks, agent=agent, observation=observation
+        )
         recorded = scope.record
     with torch.random.fork_rng(devices=[]):
         network, space = load_checkpoint(recorded.artifacts[weights]["path"])
-    return run.adopt(name, network, space.encoder.config)
+    model = run.adopt(name, network, space.encoder.config)
+    model.exports = {weights: recorded.artifacts[weights]}  # type: ignore[dict-item]
+    model.source = recorded.id
+    return model
+
+
+def collect_selection(
+    run: Run,
+    policy: str,
+    *,
+    agent: ModelConfig,
+    observation: ObservationConfig,
+    decks: MatchConfig,
+    population: tuple[SelectionGameSpec, ...],
+    source_run: str | None = None,
+    weights: Literal["raw", "ema"] = "raw",
+    max_steps: int = 2000,
+    learning: Learning | DampedPolicyLearning = Learning(),
+    bootstrap_samples: int = 500,
+    bootstrap_seed: int = 93,
+    stage: str | None = None,
+    execution: Execution = Execution(),
+) -> ArtifactReference:
+    """Play `population` with the self-play stage `policy`'s weights frozen.
+
+    `policy` names a completed self-play stage of this run, or of the stored
+    run `source_run`; its checkpoint must use `agent` and `observation`.
+    Returns the selection dataset; the stage also writes its analysis and
+    report.
+    """
+    name = run.stage_name(stage or "collect-selection")
+    recorded = run.completed(name)
+    if recorded is not None:
+        return recorded.artifacts["dataset"]  # type: ignore[return-value]
+    declaration = CollectSelection(
+        id=name,
+        operation="collect_selection",
+        policy=policy,
+        source_run=source_run,
+        weights=weights,
+        population=population,
+        max_steps=max_steps,
+        learning=learning,
+        bootstrap_samples=bootstrap_samples,
+        bootstrap_seed=bootstrap_seed,
+        execution=execution,
+    )
+    if run.smoke_execution is not None:
+        declaration = smoke_stage(declaration, run.smoke_execution)
+    scope = _open_stage(
+        run,
+        name,
+        declaration.execution,
+        operation="collect_selection",
+        arguments={"decks": decks, "settings": declaration},
+    )
+    _collect_selection(
+        run,
+        scope,
+        declaration,
+        match=decks,
+        agent_config=agent,
+        observation=observation,
+    )
+    return scope.record.artifacts["dataset"]  # type: ignore[return-value]
 
 
 def collect_belief(
@@ -1285,38 +1429,45 @@ def collect_belief(
     weights: Literal["raw", "ema"] = "raw",
     max_steps: int = 2000,
     stage: str | None = None,
-) -> SamplerDataset:
-    """Collect hidden-hand labels with `model` frozen; return the corpus."""
+    execution: Execution = Execution(),
+) -> BeliefCorpus:
+    """Collect hidden-hand labels with `model` frozen; return the corpus.
+
+    The model's published weights are the policy (exported first if it has
+    none); the stage that published them is recorded as this stage's input.
+    """
     name = run.stage_name(stage or "collect-belief")
     recorded = run.completed(name)
     if recorded is not None:
-        return read_dataset(Path(recorded.artifacts["dataset"]["path"]))
+        return BeliefCorpus(name, recorded.artifacts["dataset"])  # type: ignore[arg-type]
+    policy = run.export(model, weights, decks=decks)
+    assert model.source is not None
     declaration = CollectBelief(
         id=name,
         operation="collect_belief",
-        policy="model",
+        policy=model.source,
         weights=weights,
         games=games,
         max_steps=max_steps,
+        execution=execution,
     )
     if run.smoke_execution is not None:
         declaration = smoke_stage(declaration, run.smoke_execution)
-    policy = run.export(model, weights, decks=decks)
-    scope = run.begin_stage(
+    scope = _open_stage(
+        run,
         name,
         declaration.execution,
         operation="collect_belief",
         arguments={"model": model.name, "decks": decks, "settings": declaration},
+        producer=model.source,
     )
-    assert scope is not None
-    scope.record.inputs["policy"] = dict(policy)
-    run.persist()
-    return _collect_belief(run, scope, decks, declaration, policy)
+    _collect_belief(run, scope, decks, declaration, policy)
+    return BeliefCorpus(name, scope.record.artifacts["dataset"])  # type: ignore[arg-type]
 
 
 def train_belief(
     run: Run,
-    corpus: SamplerDataset,
+    corpus: BeliefCorpus,
     *,
     steps: int = 32,
     batch_size: int = 32,
@@ -1325,8 +1476,12 @@ def train_belief(
     history_dropout: float = 0.0,
     evaluation_samples: int = 32,
     stage: str | None = None,
+    execution: Execution = Execution(),
 ) -> ArtifactReference:
-    """Fit a belief sampler to `corpus`; return its admitted checkpoint."""
+    """Fit a belief sampler to `corpus`; return its admitted checkpoint.
+
+    The corpus is read back from its published, digest-checked dataset.
+    """
     name = run.stage_name(stage or "train-belief")
     recorded = run.completed(name)
     if recorded is not None:
@@ -1334,22 +1489,145 @@ def train_belief(
     declaration = TrainBelief(
         id=name,
         operation="train_belief",
-        dataset="corpus",
+        dataset=corpus.stage,
         steps=steps,
         batch_size=batch_size,
         hidden_size=hidden_size,
         learning_rate=learning_rate,
         history_dropout=history_dropout,
         evaluation_samples=evaluation_samples,
+        execution=execution,
     )
     if run.smoke_execution is not None:
         declaration = smoke_stage(declaration, run.smoke_execution)
-    scope = run.begin_stage(
+    scope = _open_stage(
+        run,
         name,
         declaration.execution,
         operation="train_belief",
-        arguments={"corpus": corpus.identity, "settings": declaration},
+        arguments={"settings": declaration},
+        producer=corpus.stage,
     )
-    assert scope is not None
-    scope.record.inputs["dataset"] = {"identity": corpus.identity}
-    return _train_belief(run, scope, declaration, corpus)
+    dataset = read_dataset(Path(corpus.dataset["path"]))
+    return _train_belief(run, scope, declaration, dataset)
+
+
+# ---------------------------------------------------------------------------
+# Saved regimes
+
+
+def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
+    """The regime function of a saved `TrainingRegime`.
+
+    Each saved stage is one stage-function call under its own ID, in order.
+    A fresh self-play stage trains a new model initialized from the run's
+    initialization stream; a stage whose `initial` names an earlier
+    self-play stage trains that stage's model again, continuing its live
+    learner (validation admits only the latest self-play stage there). The
+    run records the saved regime itself, so its digest and meaning are the
+    regime's.
+    """
+    decks = regime.decks
+    models: dict[str, Model] = {}
+    corpora: dict[str, BeliefCorpus] = {}
+    for stage in regime.stages:
+        if isinstance(stage, TrainSelfPlay):
+            model = (
+                models[stage.initial]
+                if stage.initial is not None
+                else run.model(
+                    stage.id,
+                    regime.agent,
+                    regime.observation,
+                    seed=run.seeds["initialization"],
+                )
+            )
+            models[stage.id] = model
+            self_play(
+                run,
+                model,
+                decks=decks,
+                stage=stage.id,
+                updates=stage.updates,
+                learning=stage.learning,
+                opponent=stage.opponent,
+                streams=stage.streams,
+                transitions=stage.transitions,
+                games_per_stream=stage.games_per_stream,
+                learning_seats=stage.learning_seats,
+                batch_closure=stage.batch_closure,
+                behavior="current-self"
+                if stage.behavior == "frozen"
+                else stage.behavior,
+                matchup_curriculum=stage.matchup_curriculum,
+                adaptive=stage.adaptive,
+                trainable=stage.trainable,
+                root=stage.root,
+                active_seconds=stage.active_seconds,
+                game_errors=stage.game_errors,
+                initial_weights=stage.initial_weights,
+                pretrained=stage.pretrained,
+                learning_state=stage.learning_state,
+                schedule_clock=regime.schedule_clock,
+                execution=stage.execution,
+            )
+        elif isinstance(stage, ImportPolicy):
+            models[stage.id] = import_policy(
+                run,
+                stage.id,
+                source_run=stage.source_run,
+                source_stage=stage.source_stage,
+                checkpoint=stage.checkpoint,
+                decks=decks,
+                weights=stage.weights,
+                agent=regime.agent,
+                observation=regime.observation,
+                stage=stage.id,
+                execution=stage.execution,
+            )
+        elif isinstance(stage, CollectSelection):
+            collect_selection(
+                run,
+                stage.policy,
+                agent=regime.agent,
+                observation=regime.observation,
+                decks=regime.root_match,
+                population=stage.population,
+                source_run=stage.source_run,
+                weights=stage.weights,
+                max_steps=stage.max_steps,
+                learning=stage.learning,
+                bootstrap_samples=stage.bootstrap_samples,
+                bootstrap_seed=stage.bootstrap_seed,
+                stage=stage.id,
+                execution=stage.execution,
+            )
+        elif isinstance(stage, CollectBelief):
+            policy = models[stage.policy]
+            if policy.source != stage.policy:
+                # A later stage continued that model; read the policy stage's
+                # own published weights.
+                policy = _published_model(run, f"{stage.id}-policy", stage.policy)
+            corpora[stage.id] = collect_belief(
+                run,
+                policy,
+                decks=regime.root_match,
+                games=stage.games,
+                weights=stage.weights,
+                max_steps=stage.max_steps,
+                stage=stage.id,
+                execution=stage.execution,
+            )
+        else:
+            train_belief(
+                run,
+                corpora[stage.dataset],
+                steps=stage.steps,
+                batch_size=stage.batch_size,
+                hidden_size=stage.hidden_size,
+                learning_rate=stage.learning_rate,
+                history_dropout=stage.history_dropout,
+                evaluation_samples=stage.evaluation_samples,
+                stage=stage.id,
+                execution=stage.execution,
+            )

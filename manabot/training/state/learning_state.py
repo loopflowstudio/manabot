@@ -23,19 +23,21 @@ from typing import Any
 import torch
 
 from manabot.env.match import Match
-from manabot.infra.config import MatchConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
+from manabot.training.decks import UniformDecks
 from manabot.training.records import StageRecord, TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
     LearningStateOrigin,
-    TrainingRegime,
+    ScheduleClock,
     TrainSelfPlay,
 )
-from manabot.training.state.admission import _admit_setups, copy_verified_artifact
+from manabot.training.state.admission import admit_setups, copy_verified_artifact
+import managym
 
 
 @dataclass(frozen=True)
@@ -156,21 +158,34 @@ def validate_adam(optimizer: torch.optim.Adam) -> None:
                 raise ValueError(f"invalid Adam moment: {name}")
 
 
-def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
+def _admit_setup_transfer(
+    source: MatchConfig, decks: MatchConfig | UniformDecks, agent: ModelConfig
+) -> None:
     """A deck switch stays inside the agent's world and changes decks."""
-    world = regime.agent.world
-    if regime.match is None:
+    world = agent.world
+    if not isinstance(decks, MatchConfig):
         raise ValueError("setup transfer requires an authored match, not a deck source")
-    if source == regime.match:
+    if source == decks:
         raise ValueError("setup transfer must change the match")
-    if source.world != world or regime.match.world != world:
+    if source.world != world or decks.world != world:
         raise ValueError("setup transfer must stay inside the agent's world")
 
 
 def admit_learning_state(
-    stage: TrainSelfPlay, regime: TrainingRegime, out: Path
+    stage: TrainSelfPlay,
+    out: Path,
+    *,
+    decks: MatchConfig | UniformDecks,
+    agent: ModelConfig,
+    observation: ObservationConfig,
+    schedule_clock: ScheduleClock,
 ) -> AdmittedLearningState:
-    """Verify relocated copies against an unmodified historical producer export."""
+    """Verify relocated copies against an unmodified historical producer export.
+
+    The producer must have run in this runtime's world with the consumer's
+    `agent`, `observation`, `decks` (or the declared source match) and
+    `schedule_clock`.
+    """
     spec = stage.learning_state
     if spec is None:
         raise ValueError("learning-state input is required")
@@ -204,17 +219,18 @@ def admit_learning_state(
         or source.parent_run_id is not None
     ):
         raise ValueError("learning-state parent must have a completed or paused export")
-    source_match = regime.match
+    deck_source = decks if isinstance(decks, UniformDecks) else None
+    source_match = decks if isinstance(decks, MatchConfig) else None
     if spec.source_match is not None:
-        _admit_setup_transfer(spec.source_match, regime)
+        _admit_setup_transfer(spec.source_match, decks, agent)
         source_match = spec.source_match
     if (
-        source.regime.world != regime.world
-        or source.regime.agent != regime.agent
-        or source.regime.observation != regime.observation
-        or source.regime.deck_source != regime.deck_source
+        source.regime.world != managym.WORLD_VERSION
+        or source.regime.agent != agent
+        or source.regime.observation != observation
+        or source.regime.deck_source != deck_source
         or source.regime.match != source_match
-        or source.regime.schedule_clock != regime.schedule_clock
+        or source.regime.schedule_clock != schedule_clock
     ):
         raise ValueError("learning-state model/world/setup/schedule mismatch")
     for name in (
@@ -251,20 +267,20 @@ def admit_learning_state(
         if role == "optimizer":
             continue
         with torch.random.fork_rng(devices=[]):
-            agent, space = load_checkpoint(copied["path"])
+            policy, space = load_checkpoint(copied["path"])
         # The parent export is bound to what it trained on: a transferred setup's
         # match, else the regime's match or every deck its deck source lists. The
         # segment's own exports are bound to the regime when they are written.
         if spec.source_match is not None:
-            validate_agent_setup(agent, Match(source_match).to_rust())
+            validate_agent_setup(policy, Match(spec.source_match).to_rust())
         else:
-            _admit_setups(agent, regime)
-        if agent.config != regime.agent or space.encoder.config != regime.observation:
+            admit_setups(policy, decks)
+        if policy.config != agent or space.encoder.config != observation:
             raise ValueError("learning-state checkpoint architecture mismatch")
         payload = torch.load(copied["path"], map_location="cpu", weights_only=False)
         # Adam stores positional parameter IDs. The historical checkpoint's
         # ordered state dictionary must agree with today's parameter ordering.
-        parameter_names = list(dict(agent.named_parameters()))
+        parameter_names = list(dict(policy.named_parameters()))
         if [
             name for name in payload["model_state_dict"] if name in parameter_names
         ] != parameter_names:
@@ -289,10 +305,10 @@ def admit_learning_state(
         if role == "raw" and averaging is not None:
             raise ValueError("learning-state raw policy cannot be averaged")
         if any(
-            not torch.isfinite(value).all() for value in agent.state_dict().values()
+            not torch.isfinite(value).all() for value in policy.state_dict().values()
         ):
             raise ValueError("learning-state policy contains nonfinite tensors")
-        policies[role] = agent
+        policies[role] = policy
     if spec.monitoring_update is not None:
         # Declared reset: the EMA restarts as the raw weights at the origin
         # iteration and Adam starts with no moments.

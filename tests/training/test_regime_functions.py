@@ -13,6 +13,7 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
+    Execution,
     Learning,
     RecoveryPolicy,
     TrainingRegime,
@@ -20,7 +21,7 @@ from manabot.training.regime import (
 )
 import manabot.training.run as run_handle
 from manabot.training.run import Run, execute, load_regime, regime_record, smoke
-from manabot.training.stages import run_saved_regime, self_play
+from manabot.training.stages import self_play
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -254,14 +255,19 @@ def test_a_saved_regime_smokes_through_the_same_stages(tmp_path: Path) -> None:
             ),
         ],
     )
-    result = smoke(partial(run_saved_regime, regime=regime), out=tmp_path / "smoke")
-    assert result.status == "completed"
-    record = result.record
-    assert [(s.id, s.operation, s.updates) for s in record.stages] == [
-        ("first", "train_self_play", 1),
-        ("second", "train_self_play", 1),
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        record = execute_regime(
+            regime, 0, tmp_path / "smoke", store, smoke_execution=Execution()
+        )
+    assert record.status == "completed"
+    assert [(s.id, s.updates) for s in record.stages] == [
+        ("first", 1),
+        ("second", 1),
     ]
-    assert record.regime_function is not None
-    assert record.regime_function.function.endswith(":run_saved_regime")
+    # A saved regime's smoke run records the saved regime, unchanged.
+    assert record.regime_function is None
+    assert record.regime == regime
+    assert record.regime_digest == canonical_sha256(regime.model_dump(mode="json"))
+    assert record.stages[1].inputs.keys() >= {"first/raw", "first/optimizer"}
     assert record.selected_artifact == record.stages[-1].artifacts["raw"]
     load_checkpoint(record.stages[-1].artifacts["raw"]["path"])

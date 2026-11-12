@@ -149,9 +149,12 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
     original_fingerprints = execution._runtime_identities
 
     def fixture_identities(
-        seed: int, regime: TrainingRegime, space: ObservationSpace
+        seed: int,
+        regime: TrainingRegime,
+        space: ObservationSpace,
+        devices: set[str] | None = None,
     ) -> dict[str, object]:
-        identities = original_fingerprints(seed, regime, space)
+        identities = original_fingerprints(seed, regime, space, devices)
         return {
             **identities,
             "fixture_source_sha256": canonical_sha256(

@@ -2,8 +2,8 @@
 
 A saved `TrainingRegime` runs as one attempt of `manabot.training.run.Run`
 under `attempt`'s writer lease; `stages.run_saved_regime` executes its stages
-through the same stage bodies regime functions call. VerifyStore owns state;
-manifests are exports.
+through the same stage functions regime functions call. VerifyStore owns
+state; manifests are exports.
 """
 
 from collections.abc import Mapping
@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -22,12 +21,12 @@ from manabot.training.mps import mps_torch_error
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     CheckpointCadence,
+    Execution,
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.run import attempt, host_identities, open_run
-from manabot.training.stages import run_saved_regime
+from manabot.training.stages import admit_self_play, run_saved_regime
 import managym
 
 if TYPE_CHECKING:
@@ -58,29 +57,14 @@ def validate_regime(
         managym.WORLD_VERSION,
     }:
         raise ValueError("unsupported regime world")
-    if any(
-        isinstance(stage, TrainSelfPlay)
-        and stage.matchup_curriculum == "elemental-uniform"
-        for stage in regime.stages
-    ):
-        elemental_roster(Match(regime.root_match))
-        if regime.agent.world != "elemental-world-v2":
-            raise ValueError(
-                "elemental-uniform requires complete Elemental policy input"
-            )
     for stage in regime.stages:
-        if isinstance(stage, TrainSelfPlay) and stage.adaptive is not None:
-            if regime.recovery_max_microsteps is not None:
-                raise ValueError("adaptive sampling requires current-game recovery")
-            if regime.agent.world == "elemental-world-v2":
-                for cell in stage.adaptive.cells:
-                    elemental_roster(Match(cell))
-    if regime.deck_source is not None:
-        if require_current_world:
-            regime.deck_source.check()
-        if regime.agent.world != managym.WORLD_SETUP:
-            raise ValueError(
-                "a deck source requires the complete world policy vocabulary"
+        if isinstance(stage, TrainSelfPlay):
+            admit_self_play(
+                stage,
+                decks=regime.decks,
+                agent=regime.agent,
+                recovery_max_microsteps=regime.recovery_max_microsteps,
+                current_world=require_current_world,
             )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
@@ -88,8 +72,14 @@ def validate_regime(
 
 
 def _runtime_identities(
-    seed: int, regime: TrainingRegime, space: ObservationSpace
+    seed: int,
+    regime: TrainingRegime,
+    space: ObservationSpace,
+    devices: set[str] | None = None,
 ) -> dict[str, object]:
+    """Fingerprints an attempt admits; `devices` defaults to the stages' own."""
+    if devices is None:
+        devices = {stage.execution.device for stage in regime.stages}
     identities = runtime_fingerprints(
         seed, match_config=regime.root_match, observation_space=space
     )
@@ -101,7 +91,7 @@ def _runtime_identities(
     identities.update(
         architecture=architecture_identity(regime.agent, space), **host_identities()
     )
-    if any(stage.execution.device == "cuda" for stage in regime.stages):
+    if "cuda" in devices:
         if not torch.cuda.is_available():
             raise ValueError(
                 "CUDA requested but unavailable; CPU fallback is forbidden"
@@ -113,7 +103,7 @@ def _runtime_identities(
             "capability": list(torch.cuda.get_device_capability(0)),
             "runtime": torch.version.cuda,
         }
-    if any(stage.execution.device == "mps" for stage in regime.stages):
+    if "mps" in devices:
         if not torch.backends.mps.is_available():
             raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
         if (error := mps_torch_error()) is not None:
@@ -137,6 +127,7 @@ def execute_regime(
     stop_reserve_seconds: float | None = None,
     experiment: str | None = None,
     training_exposure: bool = False,
+    smoke_execution: Execution | None = None,
 ) -> TrainingRun:
     """Execute under a local lease, including admission and crash settlement.
 
@@ -148,6 +139,9 @@ def execute_regime(
 
     Each self-play stage's metrics are an Etude run of `experiment`, or of an
     experiment named for the stage when it is None.
+
+    `smoke_execution` runs every stage in its tiny form under that execution
+    (`stages.smoke_stage`); the record still names the saved regime.
     """
     regime = validate_regime(regime)
     game_error_recovery = any(
@@ -207,8 +201,12 @@ def execute_regime(
         )
     digest = canonical_sha256(regime.model_dump(mode="json"))
 
+    devices = {smoke_execution.device} if smoke_execution is not None else None
+
     def identities() -> dict[str, object]:
-        return _runtime_identities(seed, regime, ObservationSpace(regime.observation))
+        return _runtime_identities(
+            seed, regime, ObservationSpace(regime.observation), devices
+        )
 
     with attempt(
         store,
@@ -252,5 +250,8 @@ def execute_regime(
             initial_admission=initial_admission,
             experiment=experiment,
             training_exposure=training_exposure,
+            recovery_max_microsteps=regime.recovery_max_microsteps,
+            recovery_every_updates=regime.recovery_every_updates,
+            smoke_execution=smoke_execution,
         )
         return run.execute(identities, lambda: run_saved_regime(run, regime))

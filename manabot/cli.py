@@ -1,6 +1,5 @@
 """CLI entrypoints for training and simulation."""
 
-from functools import partial
 import importlib
 import inspect
 import json
@@ -211,8 +210,8 @@ def train_command(
     if out is None:
         raise typer.BadParameter("--function and --regime require --out")
     from manabot.training.execution import execute_regime
-    from manabot.training.run import Regime, execute, load_regime, smoke
-    from manabot.training.stages import run_saved_regime
+    from manabot.training.regime import Execution
+    from manabot.training.run import execute, load_regime, smoke
     from manabot.verify.store import VerifyStore
 
     if smoke_run and any(
@@ -253,12 +252,8 @@ def train_command(
     else:
         assert regime is not None
         regime_spec = TrainingRegime.model_validate_json(Path(regime).read_text())
-    if smoke_run:
-        saved: Regime = partial(run_saved_regime, regime=regime_spec)
-        _report_function_run(smoke(saved, out=out, seed=training_seed))
-        return
     with VerifyStore(Path(out).parent / "training.sqlite") as store:
-        execute_regime(
+        record = execute_regime(
             regime_spec,
             training_seed,
             out,
@@ -268,7 +263,14 @@ def train_command(
             checkpoint_seconds=checkpoint_seconds,
             checkpoint_updates=checkpoint_updates,
             initial_admission=Path(initial_admission) if initial_admission else None,
+            smoke_execution=Execution() if smoke_run else None,
         )
+    if smoke_run:
+        typer.echo(f"{record.status}; run: {record.id}")
+        if record.selected_artifact is not None:
+            typer.echo(f"checkpoint: {record.selected_artifact['path']}")
+        if record.status != "completed":
+            raise typer.Exit(1)
 
 
 def _report_function_run(result: "RunResult") -> None:

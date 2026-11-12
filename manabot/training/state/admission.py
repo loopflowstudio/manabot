@@ -15,18 +15,20 @@ import shutil
 import torch
 
 from manabot.env.match import Match
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_decks, validate_agent_setup
+from manabot.training.decks import UniformDecks
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
     ImportPolicy,
     PretrainedPolicy,
     ProducerCost,
-    TrainingRegime,
     TrainSelfPlay,
 )
+import managym
 
 
 @dataclass(frozen=True)
@@ -51,25 +53,27 @@ def copy_verified_artifact(
     return {"path": str(target), "sha256": source["sha256"], "bytes": source["bytes"]}
 
 
-def _admit_setups(agent: object, regime: TrainingRegime) -> None:
-    """Admit a policy for a regime's setups: its match, or its whole deck source.
+def admit_setups(agent: object, decks: MatchConfig | UniformDecks) -> None:
+    """Admit a policy for a stage's setups: its match, or its whole deck source.
 
     A deck run admits a checkpoint only if its world may play every deck the
     source lists, never a representative pair; the shared world rule decides.
     """
-    if regime.deck_source is None:
-        validate_agent_setup(agent, Match(regime.root_match).to_rust())
+    if isinstance(decks, MatchConfig):
+        validate_agent_setup(agent, Match(decks).to_rust())
         return
     if getattr(agent, "world_binding", None) is None:
         raise ValueError("a deck source requires a checkpoint bound to a world")
-    validate_agent_decks(agent, regime.deck_source.players())
+    validate_agent_decks(agent, decks.players())
 
 
 def admit_policy(
     stage: ImportPolicy | PretrainedPolicy,
-    regime: TrainingRegime,
     out: Path,
     *,
+    decks: MatchConfig | UniformDecks,
+    agent: ModelConfig,
+    observation: ObservationConfig,
     name: str | None = None,
 ) -> AdmittedPolicy:
     """Validate a completed producer checkpoint, retaining its unmodified export.
@@ -77,7 +81,9 @@ def admit_policy(
     Publication is a caller-supplied immutable receipt, not a promotion decision.
     Incomplete runs can supply a completed stage; missing source identity or cost
     cannot be replaced by a zero-cost synthetic producer. Legacy checkpoints
-    without TrainingRun provenance are deliberately unsupported.
+    without TrainingRun provenance are deliberately unsupported. The producer
+    must share this runtime's world and the consumer's `agent` and
+    `observation`, and its checkpoint must admit both its own and `decks`.
 
     `name` prefixes the retained copies and is required for a PretrainedPolicy,
     which has no stage ID of its own. Pretrained self-play weights must come from
@@ -129,9 +135,9 @@ def admit_policy(
     ):
         raise ValueError("published checkpoint does not match producer weight artifact")
     if (
-        source.regime.world != regime.world
-        or source.regime.agent != regime.agent
-        or source.regime.observation != regime.observation
+        source.regime.world != managym.WORLD_VERSION
+        or source.regime.agent != agent
+        or source.regime.observation != observation
     ):
         raise ValueError(
             "published producer model/observation/world differs from regime"
@@ -142,11 +148,11 @@ def admit_policy(
     # Ordinary admission owns architecture, state keys and native world meaning.
     # Fork RNG so validation never shifts downstream initialization streams.
     with torch.random.fork_rng(devices=[]):
-        agent, space = load_checkpoint(admitted["path"])
-    if agent.config != regime.agent or space.encoder.config != regime.observation:
+        policy, space = load_checkpoint(admitted["path"])
+    if policy.config != agent or space.encoder.config != observation:
         raise ValueError("published checkpoint model/observation differs from regime")
-    for setups in (source.regime, regime):
-        _admit_setups(agent, setups)
+    for setups in (source.regime.deck_source or source.regime.root_match, decks):
+        admit_setups(policy, setups)
     payload = torch.load(admitted["path"], map_location="cpu", weights_only=False)
     metadata = payload.get("bc", {})
     for key, expected in {

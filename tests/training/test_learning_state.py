@@ -10,10 +10,10 @@ import torch
 from manabot.experiment.checkpoint_evaluation import stage_checkpoint
 from manabot.experiment.evaluation_queue import checkpoints
 from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.infra.files import atomic_json
 from manabot.training import execution
 from manabot.training.decks import UniformDecks
 from manabot.training.records import TrainingRun
@@ -26,11 +26,27 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 import manabot.training.stages as stages
-from manabot.training.state.learning_state import admit_learning_state
+from manabot.training.state.learning_state import (
+    AdmittedLearningState,
+    admit_learning_state,
+)
 from manabot.verify.store import VerifyStore
 import managym
 from managym import Deck
 from tests.training.test_recovery import tracked_updates
+
+
+def _admit(
+    stage: TrainSelfPlay, recipe: TrainingRegime, out: Path
+) -> AdmittedLearningState:
+    return admit_learning_state(
+        stage,
+        out,
+        decks=recipe.decks,
+        agent=recipe.agent,
+        observation=recipe.observation,
+        schedule_clock=recipe.schedule_clock,
+    )
 
 
 def reference(path: Path) -> ArtifactReference:
@@ -108,7 +124,7 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     assert isinstance(stage, TrainSelfPlay)
     admitted_dir = tmp_path / "admission"
     admitted_dir.mkdir()
-    admitted = admit_learning_state(stage, recipe, admitted_dir)
+    admitted = _admit(stage, recipe, admitted_dir)
     for role, agent in (("raw", admitted.raw), ("ema", admitted.ema)):
         payload = torch.load(
             producer.stages[0].artifacts[role]["path"], weights_only=False
@@ -267,9 +283,7 @@ def test_rejects_incomplete_or_mismatched_learning_state(
         torch.save(payload, path)
         setattr(spec, role, reference(path))
         producer.stages[0].artifacts[role] = reference(path)
-        atomic_json(
-            tmp_path / "producer/run.json", producer.model_dump(mode="json")
-        )
+        atomic_json(tmp_path / "producer/run.json", producer.model_dump(mode="json"))
         spec.source_run = reference(tmp_path / "producer/run.json")
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises((ValueError, FileNotFoundError)):
@@ -307,7 +321,7 @@ def test_historical_wire_digest_and_next_iteration(
     assert isinstance(stage, TrainSelfPlay)
     out = tmp_path / "admit"
     out.mkdir()
-    state = admit_learning_state(stage, recipe, out)
+    state = _admit(stage, recipe, out)
     assert state.origin.iteration == 26000
     assert stage.learning.rates(state.origin.iteration + 1) == pytest.approx(
         (6.957944302072213e-6, 0.0023684978179155515)
@@ -427,7 +441,7 @@ def test_raw_only_import_requires_the_declared_monitoring_export(
     out = tmp_path / "admit"
     out.mkdir()
     with pytest.raises(ValueError):
-        admit_learning_state(stage, continued, out)
+        _admit(stage, continued, out)
 
 
 def test_wall_bounded_stage_pauses_with_learner_state_a_successor_continues(

@@ -137,6 +137,32 @@ def test_frozen_belief_stages_run_and_reload(
         assert store.training_run(run.id).stages[-1].artifacts == fit.artifacts
 
 
+def test_a_continued_policy_stage_keeps_its_own_published_weights(
+    tmp_path: Path,
+) -> None:
+    recipe = belief_recipe()
+    policy, collection = recipe.stages[0], recipe.stages[1]
+    assert isinstance(policy, TrainSelfPlay) and isinstance(collection, CollectBelief)
+    recipe.stages = [
+        policy,
+        collection,
+        policy.model_copy(update={"id": "continued", "initial": "policy"}),
+        collection.model_copy(update={"id": "late-histories"}),
+    ]
+    recipe = TrainingRegime.model_validate(recipe.model_dump())
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        run = execute_regime(recipe, 421, tmp_path / "run", store)
+    assert run.status == "completed"
+    trained, _, continued, late = run.stages
+    # The continuation trained the same learner past an intervening stage.
+    assert continued.inputs["policy/raw"] == trained.artifacts["raw"]
+    assert continued.artifacts["raw"] != trained.artifacts["raw"]
+    # A later reader of the first stage reads that stage's weights.
+    assert late.inputs["policy/raw"] == trained.artifacts["raw"]
+    dataset = read_dataset(Path(late.artifacts["dataset"]["path"]))
+    assert dataset.policy_identity == trained.artifacts["raw"]["sha256"]
+
+
 def test_removed_compound_policies_fail_validation_clearly() -> None:
     """Saved compound regimes never load as flat policies or unknown stages."""
     ordinary = belief_recipe().model_dump(mode="json")

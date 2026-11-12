@@ -34,7 +34,6 @@ find them. Etude's launcher does not yet hand the job file's name to its runs.
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from functools import partial
 import json
 import math
 import os
@@ -53,13 +52,12 @@ from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
+    Execution,
     LearningStateImport,
     Strict,
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.run import RunResult, smoke
-from manabot.training.stages import run_saved_regime
 from manabot.verify.store import VerifyStore
 
 # Parent files arrive at ETUDE_INPUTS_DIR/<name>.
@@ -270,16 +268,24 @@ class TrainingJob(Strict):
 
     def smoke(
         self, out: Path, *, device: Literal["cpu", "mps", "cuda"] = "cpu"
-    ) -> RunResult:
+    ) -> TrainingRun:
         """Run this job's regime in its tiny form into `out`, locally.
 
         One update of one transition per stream, exported through ordinary
-        admission, so `out` holds a loadable checkpoint. A continuation or
-        initialization input is not staged here; the regime starts fresh.
+        admission, so `out` holds a loadable checkpoint; the run records this
+        job's saved regime. A continuation or initialization input is not
+        staged here; the regime starts fresh. The run's record goes to
+        `training.sqlite` beside `out`.
         """
-        return smoke(
-            partial(run_saved_regime, regime=self.regime), out=out, device=device
-        )
+        out = Path(out).resolve()
+        with VerifyStore(out.parent / "training.sqlite") as store:
+            return execute_regime(
+                self.regime,
+                0,
+                out,
+                store,
+                smoke_execution=Execution(device=device),
+            )
 
     @property
     def _watchdog_seconds(self) -> float:

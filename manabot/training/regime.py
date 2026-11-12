@@ -23,6 +23,9 @@ from manabot.training.rollout.adaptive import AdaptiveConfig
 from manabot.training.state.game_errors import GameErrorPolicy
 
 BatchClosure = Literal["exact-quota", "complete-games"]
+# How a self-play learning schedule measures progress: the update index over
+# the stage's updates, or elapsed run time over the run's wall budget.
+ScheduleClock = Literal["run_elapsed_budget", "iteration_fraction"]
 
 
 class ArtifactReference(TypedDict):
@@ -585,6 +588,55 @@ def check_continuation(parent: TrainSelfPlay, stage: TrainSelfPlay) -> None:
         )
 
 
+def check_self_play(
+    stage: TrainSelfPlay,
+    *,
+    agent: ModelConfig,
+    deck_source: bool,
+    schedule_clock: ScheduleClock,
+    recoverable: bool,
+) -> None:
+    """Rules a self-play stage obeys given the run around it.
+
+    Saved regimes check each stage when they validate; the `self_play` stage
+    function checks its own settings the same way.
+    """
+    if deck_source and (
+        stage.behavior != "current-self"
+        or stage.root is not None
+        or stage.matchup_curriculum != "fixed"
+    ):
+        raise ValueError(
+            "a deck source requires current-self, ordinary roots and no curriculum"
+        )
+    if (
+        recoverable
+        and schedule_clock != "iteration_fraction"
+        and stage.learning.gradient != "damped_policy"
+    ):
+        raise ValueError(
+            "recovery requires self-play with iteration_fraction or absolute damped policy schedules"
+        )
+    if recoverable and stage.root is not None:
+        raise ValueError("diagnostic roots do not support recovery")
+    if recoverable and stage.active_seconds is not None:
+        raise ValueError("active-time process recovery is unsupported")
+    if stage.execution.device != "cpu":
+        accelerator = "CUDA" if stage.execution.device == "cuda" else "MPS"
+        if recoverable:
+            raise ValueError(f"{accelerator} process recovery is unsupported")
+        if agent.belief_count_buckets or stage.opponent is not None:
+            raise ValueError(
+                f"{accelerator} requires self-contained ordinary self-play"
+            )
+    if agent.token_stream == "pooled" and stage.execution.bucketed_shapes:
+        raise ValueError("token_stream='pooled' does not support bucketed shapes")
+    if agent.value_kind == "categorical_wdl" and not isinstance(
+        stage.learning, DampedPolicyLearning
+    ):
+        raise ValueError("categorical outcome training requires damped_policy")
+
+
 class SelectionGameSpec(Strict):
     """Population and split membership frozen before observing any outcome."""
 
@@ -686,9 +738,7 @@ class TrainingRegime(Strict):
     agent: ModelConfig = ModelConfig()
     stages: list[Operation] = Field(min_length=1)
     wall_seconds: float = Field(default=900, gt=0)
-    schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
-        "run_elapsed_budget"
-    )
+    schedule_clock: ScheduleClock = "run_elapsed_budget"
     recovery_max_microsteps: int | None = Field(default=None, ge=1, le=20_000_000)
     recovery: RecoveryPolicy | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -757,6 +807,11 @@ class TrainingRegime(Strict):
         return self.match
 
     @property
+    def decks(self) -> MatchConfig | UniformDecks:
+        """Where the run's games take their decks: the deck source, else the match."""
+        return self.deck_source if self.deck_source is not None else self.root_match
+
+    @property
     def recoverable(self) -> bool:
         return self.recovery is not None or self.recovery_max_microsteps is not None
 
@@ -769,11 +824,7 @@ class TrainingRegime(Strict):
                 "the deck source owns the run's setups; remove the authored match"
             )
         if self.deck_source is not None and any(
-            not isinstance(stage, TrainSelfPlay)
-            or stage.behavior != "current-self"
-            or stage.root is not None
-            or stage.matchup_curriculum != "fixed"
-            for stage in self.stages
+            not isinstance(stage, TrainSelfPlay) for stage in self.stages
         ):
             raise ValueError(
                 "a deck source requires current-self, ordinary roots and no curriculum"
@@ -810,44 +861,34 @@ class TrainingRegime(Strict):
         )
         if self.recovery is not None and self.recovery_max_microsteps is not None:
             raise ValueError("select one recovery contract")
-        if self.recoverable and (
-            any(not isinstance(stage, TrainSelfPlay) for stage in self.stages)
-            or (
-                self.schedule_clock != "iteration_fraction"
-                and any(
-                    stage.learning.gradient != "damped_policy" for stage in self.stages
-                )
-            )
+        if self.recoverable and any(
+            not isinstance(stage, TrainSelfPlay) for stage in self.stages
         ):
             raise ValueError(
                 "recovery requires self-play with iteration_fraction or absolute damped policy schedules"
             )
-        if self.recoverable and any(stage.root is not None for stage in self.stages):
-            raise ValueError("diagnostic roots do not support recovery")
-        if self.recoverable and any(
-            isinstance(stage, TrainSelfPlay) and stage.active_seconds is not None
-            for stage in self.stages
-        ):
-            raise ValueError("active-time process recovery is unsupported")
-        if any(stage.execution.device != "cpu" for stage in self.stages):
-            accelerator = (
-                "CUDA"
-                if any(stage.execution.device == "cuda" for stage in self.stages)
-                else "MPS"
+        for stage in self.stages:
+            if not isinstance(stage, TrainSelfPlay):
+                if stage.execution.device != "cpu":
+                    accelerator = "CUDA" if stage.execution.device == "cuda" else "MPS"
+                    raise ValueError(
+                        f"{accelerator} requires self-contained ordinary self-play"
+                    )
+                if (
+                    self.agent.token_stream == "pooled"
+                    and stage.execution.bucketed_shapes
+                ):
+                    raise ValueError(
+                        "token_stream='pooled' does not support bucketed shapes"
+                    )
+                continue
+            check_self_play(
+                stage,
+                agent=self.agent,
+                deck_source=self.deck_source is not None,
+                schedule_clock=self.schedule_clock,
+                recoverable=self.recoverable,
             )
-            if self.recoverable:
-                raise ValueError(f"{accelerator} process recovery is unsupported")
-            if self.agent.belief_count_buckets or any(
-                not isinstance(stage, TrainSelfPlay) or stage.opponent is not None
-                for stage in self.stages
-            ):
-                raise ValueError(
-                    f"{accelerator} requires self-contained ordinary self-play"
-                )
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.bucketed_shapes for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support bucketed shapes")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
@@ -896,12 +937,6 @@ class TrainingRegime(Strict):
                         "live self-play continuation cannot branch from an older collector"
                     )
                 check_continuation(parent, stage)
-            if (
-                self.agent.value_kind == "categorical_wdl"
-                and isinstance(stage, TrainSelfPlay)
-                and not isinstance(stage.learning, DampedPolicyLearning)
-            ):
-                raise ValueError("categorical outcome training requires damped_policy")
             previous[stage.id] = stage
             if isinstance(stage, TrainSelfPlay):
                 latest_self_play = stage
