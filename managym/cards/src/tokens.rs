@@ -10,7 +10,7 @@ use managym_state::{
         Keywords, StaticAbility,
     },
     effect::Modification,
-    mana::{Color, Colors, Mana, ManaCost, ManaUse},
+    mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     predicate::CardPredicate,
 };
 
@@ -322,7 +322,7 @@ fn powerstone() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             effects: vec![Effect::add_mana(Mana::restricted_to(
-                ManaUse::except_nonartifact_spells(),
+                ManaRestriction::ExceptNonartifactSpells,
                 [0, 0, 0, 0, 0, 1],
             ))],
             ..Default::default()

@@ -17,7 +17,7 @@ use crate::{
         ability::Effect,
         card::{ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{CardId, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost, ManaUse},
+        mana::{Color, Mana, ManaCost},
     },
 };
 
@@ -602,16 +602,14 @@ impl Game {
         }
     }
 
-    /// The activation's mana cost as paid now: its purpose names the source
-    /// (for restricted mana, CR 106.6) and per-permanent reductions apply to
-    /// its generic part (CR 601.2f, 602.2b).
+    /// The activation's mana cost as paid now: per-permanent reductions apply
+    /// to its generic part (CR 601.2f, 602.2b). Its purpose already names the
+    /// source (CR 106.6).
     pub(crate) fn price_activation(
         &self,
         controller: PlayerId,
-        purpose: ManaUse,
         ability: &mut ActivatedAbilityDefinition,
     ) {
-        ability.mana_cost.purpose = purpose;
         if let Some(predicate) = &ability.cost_reduction_per {
             let count = self.count_battlefield_matching(controller, predicate);
             ability.mana_cost = ability
@@ -1363,11 +1361,11 @@ impl Game {
             .restricted()
             .iter()
             .chain(combat_mana_pool.restricted())
-            .map(|(class, _)| *class)
+            .map(|(class, _)| class.clone())
             .collect::<Vec<_>>();
         classes.sort();
         classes.dedup();
-        for class in classes {
+        for class in &classes {
             let mut regular = mana_pool.restricted_of(class);
             let mut combat = combat_mana_pool.restricted_of(class);
             let left = remaining.restricted_of(class);
@@ -1465,7 +1463,7 @@ fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
     if waterbend > 0 {
         obligations.push(Obligation::Pay {
             cost: ManaCost {
-                purpose: cost.purpose,
+                purpose: cost.purpose.clone(),
                 ..ManaCost::default()
             }
             .with_generic(waterbend),
