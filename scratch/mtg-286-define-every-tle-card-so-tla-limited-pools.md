@@ -85,17 +85,37 @@ Grouping from the allocation ledger; each family lands with its cards.
 | Counter and zone-history triggers | Bloodchief Ascension, Dark Depths, Brought Back |
 | Cast-time costs (alternate exile cost, replicate, unearth, cumulative upkeep) | Force of Negation, Shattering Spree, Cityscape Leveler, Mystic Remora |
 | Scoped costs | Training Grounds (activated-cost reduction, floor one) |
-| Token identity (open, `scratch/questions.md`) | Release to Memory (plain Spirit vs the TLA Spirit name), Lita, Mechanical Engineer (no Zeppelin token printing) |
+| Token identity (decision open, below) | Release to Memory (plain Spirit vs the TLA Spirit name), Lita, Mechanical Engineer (no Zeppelin token printing) |
 | Modal activation, activation prohibition, Coil token | Koma, Cosmos Serpent (uncounterable now exists) |
 | Selection constraints and chooser/owner separation | Three Dreams (distinct names), Bribery (opponent's library, your battlefield) |
 | Split target choosers | Diaochan, Artful Beauty |
 
+Order: rule families that need no new state layout come first: Koma (modal activation,
+activation prohibition, Coil token), Training Grounds, Taunting Challenge,
+Volcanic Torrent, then the cast-time costs. After those: counter and
+zone-history triggers, copy entry, then end-turn and phasing.
+
+Cascade's free cast from exile must respect the hand-only gate (`zone_cast_cost`;
+Drannith Magistrate). The existing `ExileUntilNonlandCastFree` and
+`CastLibraryTopFree` casts skip that gate today, which is a known gap.
 Cascade test cases: continue past expensive nonlands, decline, no qualifying
 card, illegal targets, random bottom order after the cast decision, replay/fork at
 each suspended choice. End-turn and phasing need their state/observation
 contracts written before the writer. Non-bonus families in the ledger (player
 experience counters, the Masters, Toph, Uncle's Musings, Animal Attendant) are
 outside this Task.
+
+## Token identity (decision open)
+
+`managym/src/cards/content_pack.rs` registers every definition under a unique
+name (`cards_by_name`), and `token.spirit` is the TLA Spirit with its blocking
+restriction. Release to Memory needs a plain 1/1 colorless Spirit. Lita's
+Zeppelin has no token printing on Scryfall, so it has no `scryfall_id`. Two
+decisions are open:
+(a) whether tokens resolve by key, so that two tokens can share a printed name,
+or the content pack stays keyed by name;
+(b) which `scryfall_id` a token without a printing carries.
+These block only those two cards.
 
 ## Production boundary (open review)
 

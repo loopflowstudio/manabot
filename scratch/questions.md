@@ -264,7 +264,7 @@ steer; current `check_tle_coverage.py --bonus-sheet` is 21/61 with 40 missing
 only Heartbeat of Spring, The Great Henge and Tarnished Citadel; Toph, Uncle's
 Musings and Animal Attendant are non-bonus. Plan rewritten to the 61-card scope.
 
-## Seventh pass — 13 bonus cards, 2026-11-12 UTC
+## Seventh pass — 14 bonus cards, 2026-11-12 UTC
 
 Defined: Empty City Ruse, Join the Dance, Dockside Extortionist, Blasphemous Act, Agent of
 Treachery, Return of the Wildspeaker, Warstorm Surge, Noxious Gearhulk, Searing
@@ -317,3 +317,10 @@ TriggeringPower/TargetToughness read; `damage_source` keeps only the
 longer splits `select`'s; `by: None` literals became `Effect::deal_damage`.
 Debug: cards 646 passed, `rules_tests` 169 passed, resolution lib 49 passed;
 rebuilt cp313 extension; `--bonus-sheet` still 35 of 61, 26 missing.
+
+Realignment, eighth pass (2026-11-12): the direction's "21 of 61 defined, 40
+missing" was the fifth-pass count. HEAD reports 35 of 61 with 26 missing. Of its
+list, everything is defined except Release to Memory, Lita, Koma, Training
+Grounds, Taunting Challenge, Volcanic Torrent and the four cast-time-cost cards.
+The upstream engine-package split (92560a1e0) moved the Python engine modules
+to `managym/`. No path used by this plan changed.
