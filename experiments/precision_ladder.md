@@ -38,11 +38,11 @@ A run seed fixes the initial weights and every native game seed, so the two
 arms of a seed start from the same weights and meet the same pairings and deals
 until their policies diverge.
 
-Strength: every checkpoint at updates 16, 32, 48 and 64 plays the frozen
-heuristic over the fifty held-out Elemental pairings of 07c490
-(`learning_signal.ELEMENTAL_PAIRS`, four cross legs each, 200 games per
-checkpoint). Each BF16 run's last scored checkpoint also plays each float32
-run's at the same update (four head-to-heads, 800 games). Trajectories are the
+Strength: each run's checkpoints at updates 20 and 40 and at its end (64 on
+schedule) play the frozen heuristic over the fifty held-out Elemental pairings
+of 07c490 (`learning_signal.ELEMENTAL_PAIRS`, four cross legs each, 200 games
+per checkpoint). Each BF16 run also plays each float32 run at the last update
+both checkpointed (four head-to-heads, 800 games). Trajectories are the
 per-update `policy_loss`, `value_loss`, `numerical/clip_fraction` and
 `collection_kl` in each run's metrics, read in the report's ML panels.
 
@@ -51,7 +51,7 @@ Budget: the watchdog allows 64 updates at an assumed 150 s per float32 update
 3 h per run. Etude reserves USD 1.95 per run at the L4's USD 0.60/h ceiling,
 USD 7.80 for four, plus USD 1.50 for one CPU evaluation pass. A float32 run
 slower than assumed stops at its watchdog with its exports; the comparison then
-uses the last scored update every run reached.
+uses the last update every run reached.
 
 ## Status
 

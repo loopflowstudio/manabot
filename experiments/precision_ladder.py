@@ -17,10 +17,10 @@ horizon is `UPDATES` in both arms, so learning rate and τ stand at the same
 point at every matched update. Only `id` and `execution.precision` differ
 (`require_single_axis`).
 
-Evaluation (`eval`): every checkpoint at `SCORED_UPDATES` against the frozen
-heuristic over 07c490's fifty held-out Elemental pairings
-(`learning_signal.ELEMENTAL_PAIRS`, four cross legs each), and each BF16 run's
-final checkpoint against each float32 run's at the same update.
+Evaluation (`eval`): each run's checkpoints at updates 20 and 40 and at its end
+against the frozen heuristic over 07c490's fifty held-out Elemental pairings
+(`learning_signal.ELEMENTAL_PAIRS`, four cross legs each), and each BF16 run
+against each float32 run at the last update both checkpointed.
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
         experiments/precision_ladder.py --rent l4 --parallel 4 \\
@@ -31,12 +31,11 @@ final checkpoint against each float32 run's at the same update.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from itertools import product
 from pathlib import Path
 
-from etude.eval.records import Code, Inference, Matchup
-from etude.experiment import Checkpoint, ExperimentState, TrainingRun
+from etude.eval.records import Inference, Matchup
+from etude.experiment import ExperimentState, TrainingRun
 from etude.launch.records import Job, Run
 from etude.report import Curve, Matches, Ranking, Report, Score
 
@@ -47,8 +46,9 @@ from experiments.learning_signal import (
     SETUP_SECONDS,
     Conditions,
     benchmark_jobs,
+    scheduled_matchups,
+    training_runs,
 )
-from manabot.experiment.job import TrainingJob
 from manabot.infra.runtime import regime_tag
 from manabot.recipes.builders import sampled_self_play
 from manabot.training.panels import ML, PERF
@@ -60,8 +60,9 @@ EXPERIMENT = Path(__file__).stem
 # float32 first: the reference arm and the report's dotted baseline.
 ARMS: tuple[Precision, ...] = ("float32", "bf16")
 SEEDS = (32401, 32402)
+# Checkpoints at learning_signal's scheduled updates below this (20 and 40) and
+# at each run's end are scored.
 UPDATES = 64
-SCORED_UPDATES = (16, 32, 48, 64)
 WIDTH, LAYERS, HEADS = 384, 8, 8
 # Expected float32 seconds per update at w384l8 on an L4: the A40 measured
 # 100.6 s solo at a384l8 (experiments/training-update-time.md) and the L4 is
@@ -72,7 +73,7 @@ FLOAT32_PACE_SECONDS = 150.0
 HOURS = (UPDATES * FLOAT32_PACE_SECONDS + SETUP_SECONDS + FINALIZATION_SECONDS) / 3600
 USD_PER_RUN = 1.95
 EVALUATION = "precision-ladder-v1"
-# 16 heuristic matchups and 4 head-to-heads × 50 pairings × 4 legs: 3,200 games,
+# 12 heuristic matchups and 4 head-to-heads × 50 pairings × 4 legs: 3,200 games,
 # about a third of value_readout_252's pass (9,000 games in 1.25 h on cpu32).
 EVALUATION_HOURS = 0.75
 EVALUATION_USD = 1.5
@@ -82,9 +83,9 @@ def regime_id(precision: Precision) -> str:
     return f"precision-ladder-w{WIDTH}l{LAYERS}-{precision}-v1"
 
 
-def arm(precision: Precision, updates: int = UPDATES) -> TrainingRegime:
+def arm(precision: Precision) -> TrainingRegime:
     """The frontier recipe at w384l8 with bucketed shapes and `precision` written out."""
-    elemental = elemental_recipe(regime_id(precision), updates)
+    elemental = elemental_recipe(regime_id(precision), UPDATES)
     agent = elemental.agent.model_copy(
         update={
             "hidden_dim": WIDTH,
@@ -100,21 +101,18 @@ def arm(precision: Precision, updates: int = UPDATES) -> TrainingRegime:
         observation=elemental.observation,
         match=elemental.match,
         wall_seconds=wall_seconds,
-        # The horizon is `updates` exactly, whatever the arm's real pace.
-        seconds_per_update=wall_seconds / updates,
+        # The horizon is `UPDATES` exactly, whatever the arm's real pace.
+        seconds_per_update=wall_seconds / UPDATES,
         elemental_uniform=True,
     )
-    stage = _stage(regime)
-    stage.updates = updates
-    stage.execution.bucketed_shapes = True
-    stage.execution.precision = precision
-    return TrainingRegime.model_validate(regime.model_dump(mode="json"))
-
-
-def _stage(regime: TrainingRegime) -> TrainSelfPlay:
     stage = regime.stages[0]
     assert isinstance(stage, TrainSelfPlay)
-    return stage
+    stage.updates = UPDATES
+    stage.execution.bucketed_shapes = True
+    stage.execution.precision = precision
+    # The JSON round trip drops the ladder's private mark from the stage, so
+    # the written precision is authored rather than re-resolved.
+    return TrainingRegime.model_validate(regime.model_dump(mode="json"))
 
 
 def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> None:
@@ -128,19 +126,13 @@ def require_single_axis(baseline: TrainingRegime, candidate: TrainingRegime) -> 
         raise ValueError("precision arm changes more than execution.precision")
 
 
-def arms(updates: int = UPDATES) -> dict[Precision, TrainingRegime]:
-    found = {precision: arm(precision, updates) for precision in ARMS}
-    require_single_axis(found[ARMS[0]], found[ARMS[1]])
-    return found
-
-
 def runs(
     revision: str,
     hours: float = HOURS,
     usd_per_run: float = USD_PER_RUN,
     seeds: str = ",".join(str(seed) for seed in SEEDS),
 ) -> list[Run]:
-    """Both arms under the same seeds; a watchdog stop keeps its exports.
+    """Both arms under the same seeds.
 
     The run seed fixes initialization and every native game seed, so the two
     arms of one seed start from the same weights and meet the same deck
@@ -149,27 +141,17 @@ def runs(
     chosen = tuple(int(seed) for seed in seeds.split(","))
     if len(chosen) < 2 or len(set(chosen)) != len(chosen):
         raise ValueError("the comparison needs at least two distinct shared seeds")
-    wall_seconds = hours * 3600 - SETUP_SECONDS - FINALIZATION_SECONDS
-    found: list[Run] = []
-    for regime in arms().values():
-        regime.wall_seconds = wall_seconds
-        _stage(regime).execution.wall_seconds = wall_seconds
-        found += (
-            TrainingJob(
-                regime=TrainingRegime.model_validate(regime.model_dump(mode="json")),
-                experiment=EXPERIMENT,
-                milestones=tuple(u for u in SCORED_UPDATES if u < UPDATES),
-                finalization_seconds=FINALIZATION_SECONDS,
-            )
-            .job(
-                repo=ROOT,
-                revision=revision,
-                max_hours=hours,
-                max_usd=Decimal(str(usd_per_run)),
-            )
-            .runs(*chosen)
-        )
-    return found
+    reference, candidate = (arm(precision) for precision in ARMS)
+    require_single_axis(reference, candidate)
+    return training_runs(
+        (reference, candidate),
+        updates=UPDATES,
+        revision=revision,
+        experiment=EXPERIMENT,
+        seeds=chosen,
+        hours=hours,
+        usd_per_run=usd_per_run,
+    )
 
 
 # --------------------------------------------------------------------------- evaluation
@@ -179,10 +161,6 @@ def arm_runs(state: ExperimentState, precision: Precision) -> list[TrainingRun]:
     """The arm's runs: their checkpoints' regime tag names them."""
     tag = regime_tag(regime_id(precision))
     return [run for run in state.runs if run.checkpoints.tagged(tag)]
-
-
-def _update(checkpoint: Checkpoint) -> int:
-    return int(checkpoint.clocks["updates"])
 
 
 def eval(state: ExperimentState) -> list[Job]:
@@ -196,44 +174,37 @@ def eval(state: ExperimentState) -> list[Job]:
 
 
 def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
-    """Scored checkpoints against the heuristic, then BF16 finals against float32's.
+    """Scheduled checkpoints against the heuristic, then BF16 against float32.
 
     A checkpoint not yet stored is left out, so a later pass plays it. A
-    head-to-head pairs two ended runs at the last scored update both reached,
+    head-to-head pairs two ended runs at the last update both checkpointed,
     float32 first; the four legs give each both decks on the play and the draw.
     """
-    source = [*sorted((ROOT / "manabot").rglob("*.py")), Path(__file__)]
+    found = [
+        matchup
+        for run in state.runs
+        for matchup in scheduled_matchups(run, ELEMENTAL_PAIRS)
+    ]
+    # The same source as `scheduled_matchups`, so a checkpoint is one player in both.
+    source = [
+        *sorted((ROOT / "manabot").rglob("*.py")),
+        ROOT / "experiments/learning_signal.py",
+    ]
     inference = Inference(source=source)
-    heuristic = Code(name="heuristic", source=source)
     conditions = tuple(
         Conditions(design=ELEMENTAL_PAIRS.name, **pairing.model_dump()).model_dump()
         for pairing in ELEMENTAL_PAIRS.pairings
     )
-    legs = ELEMENTAL_PAIRS.legs
-    found: list[Matchup] = []
-    for precision in ARMS:
-        for run in arm_runs(state, precision):
-            found += [
-                Matchup(
-                    name=f"{precision} {run.name} u{_update(checkpoint)} vs heuristic",
-                    players=(checkpoint.model(inference), heuristic),
-                    conditions=conditions,
-                    games=legs,
-                    tags=("heuristic", precision),
-                )
-                for checkpoint in run.checkpoints.at("updates", *SCORED_UPDATES)
-            ]
     reference, candidate = (arm_runs(state, precision) for precision in ARMS)
     for left, right in product(reference, candidate):
         if not (left.ended and right.ended):
             continue
-        reached = {_update(c) for c in left.checkpoints} & {
-            _update(c) for c in right.checkpoints
+        shared = {int(c.clocks["updates"]) for c in left.checkpoints} & {
+            int(c.clocks["updates"]) for c in right.checkpoints
         }
-        matched = [u for u in SCORED_UPDATES if u in reached]
-        if not matched:
+        if not shared:
             continue
-        update = matched[-1]
+        update = max(shared)
         first = left.checkpoints.at("updates", update).last
         second = right.checkpoints.at("updates", update).last
         assert first is not None and second is not None
@@ -242,7 +213,7 @@ def evaluation_matchups(state: ExperimentState) -> tuple[Matchup, ...]:
                 name=f"{ARMS[0]} {left.name} v {ARMS[1]} {right.name} u{update}",
                 players=(first.model(inference), second.model(inference)),
                 conditions=conditions,
-                games=legs,
+                games=ELEMENTAL_PAIRS.legs,
                 tags=("head-to-head",),
             )
         )

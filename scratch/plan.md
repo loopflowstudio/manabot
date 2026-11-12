@@ -27,12 +27,14 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
    `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment.
 2. Learning A/B: written, not launched. `experiments/precision_ladder.py` (arms
    float32/bf16 explicit, w384l8 bucketed, `sampled_self_play` Elemental, seeds 32401/32402,
-   64 updates, horizon 64, eval vs heuristic at 16/32/48/64 + bf16-vs-float32 head-to-heads)
+   64 updates, horizon 64; `runs` and the heuristic matchups reuse `learning_signal`'s
+   `training_runs` / `scheduled_matchups` (scored at 20, 40 and each run's end), plus
+   bf16-vs-float32 head-to-heads at the last shared checkpoint)
    and `experiments/precision_ladder.md` (pre-registered paragraph, USD 10 cap). Launch:
    `etude launch experiments/precision_ladder.py --rent l4 --parallel 4 --max-usd 10
    --revision COMMIT`, then `etude eval ... --rent cpu32`. Check: `read_experiment` loads it,
-   `runs('HEAD')` gives 4 runs at 3.0 h / USD 1.95, `evaluation_matchups` on a fake state
-   gives the expected heuristic and head-to-head matchups; ruff clean.
+   `runs('HEAD')` gives 4 runs at 3.0 h, `evaluation_matchups` on a fake state (one run
+   stopped at 57, one unended) gives 11 heuristic + 2 head-to-heads (u64, u40); ruff clean.
 3. If BF16 is rejected: `ladder_precision` returns float32 everywhere and the docs
    paragraph says what separated. The docs' learning-comparison sentence currently states
    the accepted outcome and is unverified until (2) runs.
@@ -44,4 +46,7 @@ and the branch contains current main, so no upstream change affects the plan.
 ## Compress (2026-11-12)
 Kept `_from_ladder` + `Execution.__eq__` + `authored_dump`: deriving "from ladder" from
 the value would re-resolve explicit/saved float32 on widening, which the tests forbid.
-Only cut: the docs table's `auto` row now points at the ladder paragraph. Docs-only, no rerun.
+Cut: the docs table's `auto` row now points at the ladder paragraph.
+Second pass: `precision_ladder.py` dropped its copies of `training_runs` and the heuristic
+matchup builder (schedule 16/32/48/64 → learning_signal's 20/40 + end; report .md updated,
+prediction unchanged). `pytest test_experiments test_precision` → 35 passed.
