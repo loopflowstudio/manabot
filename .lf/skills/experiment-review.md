@@ -9,7 +9,10 @@ Check that each claim matches its evidence, that exploratory numbers are not
 presented as findings, and that a finding is judged against the prediction
 committed before its runs. A merged PR, a complete schedule or a tiny
 successful update does not by itself show learning. An inconclusive result can
-finish an honest experiment.
+finish an honest experiment. Read the report from the top as its reader would:
+it must answer its questions in plain words before tables, with provenance in
+a closing appendix. A report that opens with counts, ledgers or execution
+status is not done.
 
 Use the bound loop protocol. Advance when the outcome is delivered. Return to
 the run only for a specific missing or correctable portion of the same question
