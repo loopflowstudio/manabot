@@ -193,9 +193,8 @@ pub const DECKLIST_DIM: usize = 5;
 // presence selects it. `player_turn_state` has one row per seat (agent
 // first): life lost this turn / 20, spells cast this turn / 10, then mana
 // that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10.
-// `card_turn_state` aligns with the
-// seats' card rows like `semantic_cards`: 1 for a graveyard card put there
-// from the battlefield this turn.
+// `card_turn_state` aligns with the seats' card rows like `semantic_cards`:
+// 1 for a graveyard card put there from the battlefield this turn.
 pub const TURN_STATE_LIFE_LOST_INDEX: usize = 0;
 pub const TURN_STATE_SPELLS_CAST_INDEX: usize = 1;
 pub const TURN_STATE_NONARTIFACT_MANA_INDEX: usize = 2;
