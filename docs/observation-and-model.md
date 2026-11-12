@@ -38,6 +38,13 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
+Every observation batch is admitted once, on CPU, before any forward:
+`admit_observation(agent, obs)` checks shapes, references, programs and the
+legal-action mask and returns an `AdmittedObservation`. The forward reads only
+admitted input, raises `TypeError` for a plain tensor dictionary and does no
+validation of its own
+([observation admission](../manabot/model/agent.md#observation-admission)).
+
 1. **Embed.** Each visible object gets a typed projection. A card's rules tokens
    pass through a token embedding and a GRU, so the model can read what a card
    does as well as its name. Facts, links and effects add to the object they
@@ -527,6 +534,7 @@ is not evidence for any of them:
 | Part | Code |
 | --- | --- |
 | Network | `ActorCritic` in [`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py) |
+| Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |

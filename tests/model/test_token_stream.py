@@ -6,6 +6,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.token_stream import TOKEN_BUCKET, bucket_length, pack, unpack
 from manabot.verify.action_cases import decision_case, reorder_offers
 
@@ -70,8 +71,8 @@ def test_pooled_outputs_do_not_depend_on_batch_neighbours() -> None:
     first = decision_case("attack").observation
     second = decision_case("learn").observation
     with torch.no_grad():
-        alone_logits, alone_value = agent(first)
-        logits, value = agent(_batch(first, second, second))
+        alone_logits, alone_value = agent(admit_observation(agent, first))
+        logits, value = agent(admit_observation(agent, _batch(first, second, second)))
     legal = first["actions_valid"].bool()
     torch.testing.assert_close(logits[:1][legal], alone_logits[legal])
     torch.testing.assert_close(value[:1], alone_value)
@@ -83,15 +84,15 @@ def test_pooled_logits_follow_their_offers() -> None:
     count = int(obs["actions_valid"][0].sum())
     order = torch.arange(count).flip(0)
     with torch.no_grad():
-        logits, _ = agent(obs)
-        moved, _ = agent(reorder_offers(obs, order))
+        logits, _ = agent(admit_observation(agent, obs))
+        moved, _ = agent(admit_observation(agent, reorder_offers(obs, order)))
     torch.testing.assert_close(moved[0, :count], logits[0, order])
 
 
 def test_pooled_learning_reaches_types_and_attention() -> None:
     agent = _agent(2, "pooled").train()
     obs = _batch(decision_case("target").observation, decision_case("land").observation)
-    logits, value = agent.forward_distribution(obs)
+    logits, value = agent.forward_distribution(admit_observation(agent, obs))
     legal = obs["actions_valid"].bool()
     loss = -torch.log_softmax(logits, -1)[legal].mean() + value.square().mean()
     loss.backward()

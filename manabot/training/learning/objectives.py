@@ -18,7 +18,7 @@ from manabot.model.policy_distribution import (
 )
 from manabot.training.learning.damped_policy import update_damped_iteration
 from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.learner import AdmittedRollout, Learner
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import (
@@ -69,13 +69,14 @@ def update_iteration(
     track = learner.profiler.track
     with track("Batch transfer, targets and behavior checks"):
         batch.action_data.check(batch.actions, batch.logprobs)
+        admitted = AdmittedRollout(learner.agent, batch)
         values = torch.as_tensor(batch.values, device=dev)
         rewards = torch.as_tensor(batch.rewards, device=dev)
         ends = torch.as_tensor(batch.dones, device=dev)
         with torch.no_grad():
             with learner.forward_precision():
                 next_value = (bootstrap_agent or learner.agent).get_value(
-                    observation_tensors(batch.next_obs, dev)
+                    admitted.next_observation(dev)
                 )
             next_value = next_value.float()
             advantages, _ = transition_gae(
@@ -171,14 +172,14 @@ def update_iteration(
         group["lr"] = diagnostics["learning_rate"]
     size = max(1, math.ceil(len(training_rows) / learning.minibatches))
     with track("Minibatches"):
+        admitted.admit_rows(training_rows.cpu().numpy(), size)
         for _ in range(learning.epochs):
             order = training_rows[
                 torch.as_tensor(rng.permutation(len(training_rows)), device=dev)
             ]
             for indices in order.split(size):
                 with track("Forward and loss"):
-                    rows = batch.observations(indices.cpu().numpy())
-                    obs = observation_tensors(rows.observation, dev)
+                    obs, rows = admitted.rows(indices.cpu().numpy(), dev)
                     valid = legal_mask(obs["actions_valid"])
                     behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
                     reference = reference_distribution(obs, learning.reference)

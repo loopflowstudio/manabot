@@ -10,9 +10,10 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.facts import FactEncoder
+from manabot.model.facts import FactEncoder, admit_facts
 from manabot.training.rollout.collection import SeatRoutedCollector
 
 
@@ -49,9 +50,13 @@ def test_capacity_export_and_real_legal_policy(
         batch_closure="exact-quota",
     )
     batch = collector.collect(agent, 2)
-    obs = {
-        k: torch.from_numpy(v[0]) for k, v in batch.observations().observation.items()
-    }
+    obs = admit_observation(
+        agent,
+        {
+            k: torch.from_numpy(v[0])
+            for k, v in batch.observations().observation.items()
+        },
+    )
     policy, value = agent(obs)
     assert policy.shape == obs["actions_valid"].shape
     assert value.shape == (2,)
@@ -205,4 +210,4 @@ def test_fact_capacity_preserves_timestamp_scale_and_gradients(capacity: int) ->
     assert (facts.grad[0, 128:140, 9] != 0).all()
     assert facts.grad[0, 140:].count_nonzero() == 0
     with pytest.raises(ValueError, match="expected"):
-        old(facts, objects)
+        admit_facts(facts, old.max_facts, objects.shape[1], None)

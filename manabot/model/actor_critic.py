@@ -3,6 +3,8 @@ Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
 
 ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
+Both read only observations admitted by `manabot.model.admission`, which owns
+every input check; the forward does no validation host reads.
 
 Object attention runs over the fixed object tables, or, with
 `ModelConfig.token_stream="pooled"`, over one packed token sequence of valid
@@ -31,23 +33,22 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
+from manabot.model.admission import AdmittedObservation, admission_binding
 from manabot.model.buckets import (
     BucketSizes,
     bucket_sizes,
     bucketed_shapes_enabled,
     object_columns,
-    trim_observation,
 )
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
-from manabot.model.inference import PreparedObservation, trim_prepared
+from manabot.model.inference import PreparedObservation, trim_admitted, trim_prepared
 from manabot.model.name_candidates import NameCandidateEncoder
-from manabot.model.policy_distribution import legal_mask
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     SemanticCardEncoder,
-    admit_definition_ids,
+    definition_rows,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.model.token_stream import (
@@ -358,9 +359,7 @@ class ActorCritic(nn.Module):
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
 
-    def forward(
-        self, obs: dict[str, torch.Tensor]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs: AdmittedObservation) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits [B,A] and acting-viewer critic [B].
 
         WDL expectations are signed; scalar units follow value_semantic.
@@ -374,7 +373,7 @@ class ActorCritic(nn.Module):
         return logits, value
 
     def forward_distribution(
-        self, obs: dict[str, torch.Tensor]
+        self, obs: AdmittedObservation
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits and raw critic output from one shared encoding.
 
@@ -389,15 +388,11 @@ class ActorCritic(nn.Module):
         if self.bucketed_shapes:
             obs, buckets = self._bucketed(obs)
         state = self._gather_object_embeddings(obs, buckets)
-        batches, slots = legal_mask(obs["actions_valid"]).nonzero(as_tuple=True)
+        batches, slots = obs["actions_valid"].bool().nonzero(as_tuple=True)
 
         if self.token_types is None:
             encoded = self._attend_objects(
-                state.objects,
-                state.is_agent,
-                state.validity,
-                objects_checked=isinstance(obs, PreparedObservation)
-                and obs.objects_checked,
+                state.objects, state.is_agent, state.validity
             )
             # The optional trailing token is a critic input, never an action focus.
             post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -433,13 +428,14 @@ class ActorCritic(nn.Module):
         )
 
     def _bucketed(
-        self, obs: dict[str, torch.Tensor]
-    ) -> tuple[dict[str, torch.Tensor], BucketSizes | None]:
+        self, obs: AdmittedObservation
+    ) -> tuple[AdmittedObservation, BucketSizes | None]:
         """Trim `obs` to its buckets; prepared inputs were measured on the host.
 
-        Without buckets (a layout the default path must judge), `obs` is
-        returned unchanged and every encoder admits only full capacities.
+        Without buckets (a layout admission did not judge), `obs` is returned
+        unchanged.
         """
+        self._require_admitted(obs)
         if isinstance(obs, PreparedObservation):
             return trim_prepared(obs), obs.buckets
         buckets = bucket_sizes(
@@ -447,23 +443,26 @@ class ActorCritic(nn.Module):
         )
         if buckets is None:
             return obs, None
-        return trim_observation(obs, buckets), buckets
+        return trim_admitted(obs, buckets), buckets
+
+    def _require_admitted(self, obs: Dict[str, torch.Tensor]) -> None:
+        if not isinstance(obs, AdmittedObservation):
+            raise TypeError(
+                "policy forward requires an observation from "
+                "manabot.model.admission.admit_observation"
+            )
+        if obs.binding != admission_binding(self):
+            raise ValueError(
+                "observation was admitted for a different policy configuration"
+            )
 
     def _attend_objects(
         self,
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         validity: torch.Tensor,
-        *,
-        objects_checked: bool = False,
     ) -> torch.Tensor:
         """Encode real objects and, when configured, a trailing neutral value token."""
-        if (
-            not objects_checked
-            and self.config.value_aggregation != "historical_mean"
-            and (validity.sum(1) == 0).any()
-        ):
-            raise ValueError("value aggregation requires a valid object")
         original_slots = objects.shape[1]
         columns = None
         if (
@@ -565,12 +564,11 @@ class ActorCritic(nn.Module):
         )
         tokens = torch.cat((objects, state.relations, action_tokens), dim=1)
         tokens = tokens + self.token_types(self._token_type_ids).to(tokens.dtype)
-        legal = legal_mask(obs["actions_valid"])
         valid = torch.cat(
             (
                 state.validity != 0,
                 obs["relations"][..., RELATION_VALID_INDEX] == 1,
-                legal,
+                obs["actions_valid"].bool(),
             ),
             dim=1,
         )
@@ -617,17 +615,6 @@ class ActorCritic(nn.Module):
         action_rows = obs["actions"][batches, slots]
         actions = self.action_embedding(action_rows[..., :-2])
         indexes = action_rows[..., -2]
-        if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
-            raise ValueError("invalid action continuation reference")
-        rows = obs["relations"]
-        # Select the two join columns before gathering legal action rows;
-        # duplicating complete relation payloads would undo the saving.
-        present = (
-            (indexes[:, None] == rows[..., 1][batches])
-            & (rows[..., RELATION_VALID_INDEX][batches] == 1)
-        ).any(-1)
-        if ((indexes != 0) & ~present).any():
-            raise ValueError("action continuation reference has no frame")
         linked = state.frame_context[batches, (indexes.long() - 1).clamp_min(0)]
         actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
         candidates = obs["name_candidates"][batches, slots]
@@ -647,16 +634,14 @@ class ActorCritic(nn.Module):
     ) -> torch.Tensor:
         """Each selected action's focus objects from `objects` [B,N,D], [K,F*D]."""
         focus = obs["action_focus"][batches, slots]
-        if not (
-            (focus == focus.floor()) & (focus >= -1) & (focus < objects.shape[1])
-        ).all():
-            raise ValueError("invalid action focus reference")
         focused = objects[batches[:, None], focus.clamp_min(0).long()]
         return (focused * (focus != -1).unsqueeze(-1)).flatten(1)
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor], buckets: BucketSizes | None = None
     ) -> EmbeddedObservation:
+        self._require_admitted(obs)
+        assert isinstance(obs, AdmittedObservation)
         if isinstance(obs, PreparedObservation):
             obs.scope.check(self)
             if torch.is_grad_enabled():
@@ -678,7 +663,7 @@ class ActorCritic(nn.Module):
         enc_opp_cards = self.card_embedding(opp_cards)
         definitions = None
         programs = None
-        references = obs.references if isinstance(obs, PreparedObservation) else None
+        references = obs.references
         permanent_ids = torch.stack(
             [
                 obs[key][..., PERMANENT_DEFINITION_INDEX]
@@ -707,20 +692,13 @@ class ActorCritic(nn.Module):
             enc_opp_cards = enc_opp_cards + cards[:, 1]
             enc_agent_player = enc_agent_player + known[:, 0, None]
             enc_opp_player = enc_opp_player + known[:, 1, None]
-            permanent_definitions = (
-                self.semantic_cards.embed_definitions(permanent_ids, definitions)
-                if references is None
-                else definitions[references.permanents]
-            )
+            permanent_definitions = definitions[references.permanents]
         else:
-            cards = self._generic_definitions(
-                obs["semantic_cards"], None if references is None else references.cards
-            )
+            assert self.card_definitions is not None
+            cards = self.card_definitions(references.cards)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
-            permanent_definitions = self._generic_definitions(
-                permanent_ids, None if references is None else references.permanents
-            )
+            permanent_definitions = self.card_definitions(references.permanents)
         permanent_features = [
             obs[key][..., self._numeric_permanent_columns]
             for key in ("agent_permanents", "opponent_permanents")
@@ -770,22 +748,13 @@ class ActorCritic(nn.Module):
         if self.semantic_cards is not None and self.semantic_cards.records:
             assert definitions is not None
             catalog = RecordEmbeddings(self.semantic_cards, definitions)
-        sizes = None if buckets is None else buckets.sizes
-        objects = self.facts(
-            obs["facts"],
-            objects,
-            catalog,
-            count=None if sizes is None else sizes["facts"],
-        )
+        objects = self.facts(obs["facts"], objects, catalog)
         objects = self.shared_effects(
             obs["effects"],
             obs["effect_details"],
             obs["effect_members"],
             objects,
             catalog,
-            counts=None
-            if sizes is None
-            else (sizes["effects"], sizes["details"], sizes["members"]),
         )
         # History and current continuation both inform objects and focus-free actions.
         rows = obs["relations"]
@@ -796,10 +765,7 @@ class ActorCritic(nn.Module):
             else self._generic_definitions(ids)
         )
         encoded_relations = self.continuation.encode_rows(
-            rows,
-            objects,
-            relation_definitions,
-            count=RELATION_ROWS if sizes is None else sizes["relations"],
+            rows, objects, relation_definitions
         )
         shared_context = encoded_relations.sum(1) / rows[..., RELATION_VALID_INDEX].sum(
             1, keepdim=True
@@ -866,10 +832,6 @@ class ActorCritic(nn.Module):
                 ],
                 dim=1,
             )
-            if not (
-                (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
-            ).all():
-                raise ValueError("invalid permanent link object reference")
             permanents = objects[:, start : start + links.shape[1]]
             linked = (links > 0).unsqueeze(-1)
             targets = (
@@ -900,16 +862,8 @@ class ActorCritic(nn.Module):
         ids = [obs["semantic_cards"], permanent_ids, obs["known_hand"][..., 0]]
         if self.semantic_cards.decklist_projection is not None:
             ids.append(obs["decklists"][..., 0])
-        events, valid = obs.get("events"), obs.get("events_valid")
-        if (
-            self.recent_events is not None
-            and events is not None
-            and valid is not None
-            and events.ndim == 3
-            and events.shape[-1] == 12
-            and valid.shape == events.shape[:2]
-        ):
-            # Malformed history is rejected by RecentEventEncoder itself.
+        if self.recent_events is not None:
+            events, valid = obs["events"], obs["events_valid"]
             ids.extend(events[..., column][valid == 1] for column in (2, 7))
         ids.append(obs["relations"][..., [5, 23]])
         if self.semantic_cards.records:
@@ -923,74 +877,28 @@ class ActorCritic(nn.Module):
         ids.append(obs["name_candidates"][..., 1][obs["actions_valid"].bool()])
         return self.semantic_cards.referenced_rows(ids)
 
-    def _generic_definitions(
-        self, ids: torch.Tensor, admitted: torch.Tensor | None = None
-    ) -> torch.Tensor:
-        """Reject unbound/fractional IDs instead of silently aliasing definitions."""
+    def _generic_definitions(self, ids: torch.Tensor) -> torch.Tensor:
+        """Embed admitted card definition IDs of a world without a catalog."""
         assert self.card_definitions is not None
-        rows = (
-            admit_definition_ids(ids, self.card_definitions.num_embeddings)
-            if admitted is None
-            else admitted
-        )
-        return self.card_definitions(rows)
+        return self.card_definitions(definition_rows(ids))
 
     def _belief_rows(
         self, obs: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Build explicit semantic belief rows and one global diagnostic row."""
-
-        required = {
-            "belief_card_def_ids",
-            "belief_owner_role_ids",
-            "belief_hidden_zone_ids",
-            "belief_count_probabilities",
-            "belief_validity",
-            "belief_globals",
-        }
-        missing = sorted(required.difference(obs))
-        if missing:
-            raise ValueError(f"belief-enabled ActorCritic is missing inputs: {missing}")
         card_ids = obs["belief_card_def_ids"].long()
         owner_ids = obs["belief_owner_role_ids"].long()
         zone_ids = obs["belief_hidden_zone_ids"].long()
         probabilities = obs["belief_count_probabilities"].float()
         validity = obs["belief_validity"].float()
         globals_ = obs["belief_globals"].float()
-        if card_ids.ndim != 2:
-            raise ValueError("belief ids must have shape [batch, rows]")
-        expected_ids = card_ids.shape
-        if owner_ids.shape != expected_ids or zone_ids.shape != expected_ids:
-            raise ValueError("belief semantic ids must share shape [batch, rows]")
-        if probabilities.shape != (*expected_ids, self.belief_count_buckets):
-            raise ValueError(
-                "belief count probabilities must have shape [batch, rows, buckets]"
-            )
-        if validity.shape != expected_ids:
-            raise ValueError("belief validity must have shape [batch, rows]")
-        if globals_.shape != (expected_ids[0], 2):
-            raise ValueError("belief globals must have shape [batch, 2]")
-        if not torch.isfinite(probabilities).all() or (probabilities < 0).any():
-            raise ValueError("belief probabilities must be finite and non-negative")
-        if not torch.isfinite(globals_).all():
-            raise ValueError("belief globals must be finite")
-        valid_rows = validity > 0
-        probability_totals = probabilities.sum(dim=-1)
-        if valid_rows.any() and not torch.allclose(
-            probability_totals[valid_rows],
-            torch.ones_like(probability_totals[valid_rows]),
-            atol=1e-5,
-            rtol=0.0,
-        ):
-            raise ValueError("valid belief rows must be normalized")
-        for ids, embedding, label in (
-            (card_ids, self.belief_card_embedding, "card definition"),
-            (owner_ids, self.belief_owner_embedding, "owner role"),
-            (zone_ids, self.belief_zone_embedding, "hidden zone"),
-        ):
-            if (ids < 0).any() or (ids >= embedding.num_embeddings).any():
-                raise ValueError(f"belief {label} id is outside the model vocabulary")
-
+        assert (
+            self.belief_card_embedding is not None
+            and self.belief_owner_embedding is not None
+            and self.belief_zone_embedding is not None
+            and self.belief_count_embedding is not None
+            and self.belief_global_embedding is not None
+        )
         rows = (
             self.belief_card_embedding(card_ids)
             + self.belief_owner_embedding(owner_ids)
@@ -1003,19 +911,19 @@ class ActorCritic(nn.Module):
 
     def get_action_and_value(
         self,
-        obs: Dict[str, torch.Tensor],
+        obs: AdmittedObservation,
         action: Optional[torch.Tensor] = None,
         deterministic: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         logits, value = self.forward(obs)
-        if (obs["actions_valid"].sum(dim=-1) == 0).any():
+        if not obs.legal:
             raise ValueError("No valid actions available")
         dist = torch.distributions.Categorical(logits=logits)
         if action is None:
             action = logits.argmax(dim=-1) if deterministic else dist.sample()
         return action, dist.log_prob(action), dist.entropy(), value
 
-    def get_value(self, obs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def get_value(self, obs: AdmittedObservation) -> torch.Tensor:
         with torch.no_grad():
             _, value = self.forward(obs)
             return value

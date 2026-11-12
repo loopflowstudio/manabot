@@ -1,5 +1,6 @@
 """Device-specific arithmetic boundaries that preserve learning semantics."""
 
+import torch
 from torch import Tensor, nn
 
 
@@ -24,3 +25,19 @@ def float64_operand(tensor: Tensor) -> Tensor:
     are returned, with no transfer or additional tensor operation.
     """
     return tensor.cpu() if tensor.device.type == "mps" else tensor
+
+
+def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
+    """An immutable lookup buffer of `module` on `device`, for admission checks.
+
+    CPU copies are cached per buffer object and version, so admitting CPU
+    observations never reads from an accelerator. The cache is not module state.
+    """
+    buffer = getattr(module, name)
+    if device.type != "cpu" or buffer.device.type == "cpu":
+        return buffer.to(device)
+    cache = module.__dict__.setdefault("_host_buffers", {})
+    key = (id(buffer), buffer._version)
+    if name not in cache or cache[name][0] != key:
+        cache[name] = (key, buffer.detach().cpu())
+    return cache[name][1]
