@@ -171,7 +171,7 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Option<ManaCost> {
-        if cast.free || (cast.kicked && self.state.cards[card].exile_alternative().is_some()) {
+        if cast.free || self.uses_exile_alternative(card, cast) {
             Some(ManaCost::default())
         } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             self.state.cards[card].mana_cost.clone()
@@ -390,8 +390,7 @@ impl Game {
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> bool {
-        if cast.kicked
-            && self.state.cards[card].exile_alternative().is_some()
+        if self.uses_exile_alternative(card, cast)
             && self.exile_alternative_cards(player, card).is_empty()
         {
             return false;
@@ -896,7 +895,7 @@ impl Game {
             targets,
             target_req_indices,
         };
-        if cast.kicked && self.state.cards[card].exile_alternative().is_some() {
+        if self.uses_exile_alternative(card, cast) {
             self.pending_choice = Some(PendingChoice::ExileFromHandPayment {
                 player,
                 payment: Box::new(payment),
@@ -904,6 +903,12 @@ impl Game {
             return Ok(());
         }
         self.begin_payment(player, payment, cost)
+    }
+
+    /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
+    /// card's kicked flag means the alternative, which costs no mana.
+    fn uses_exile_alternative(&self, card: CardId, cast: CastChoices) -> bool {
+        cast.kicked && self.state.cards[card].exile_alternative().is_some()
     }
 
     /// The cards `player` may exile for `card`'s exile-from-hand alternative

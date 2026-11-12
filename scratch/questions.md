@@ -165,3 +165,9 @@ from this pass: three `test_decision_surface.py` precision demos ("content/setup
 identity differs from this runtime", the pinned demo identity moved with the
 added definitions, like the conformance evidence; gate) and
 `test_merchant_payment_recovery` for v5/v6/v8 (main supports only v9).
+
+Ninth-pass compress: `Game::uses_exile_alternative` names the kicked-means-
+alternative rule once (play.rs); distinct-name search finish is one match; the
+stale "distinct land" error reads "distinct-name search candidate". Debug: cards
+663, lib 192, `rules_tests` 169 passed. No behavior change, so the extension was
+not rebuilt.

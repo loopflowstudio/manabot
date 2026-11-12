@@ -2254,7 +2254,7 @@ impl Game {
                     .contains(card)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a distinct land card in library".into()));
+                    return Err(AgentError("not a distinct-name search candidate".into()));
                 }
                 let Decision::SearchDistinctNames {
                     remaining,
@@ -2778,24 +2778,24 @@ impl Game {
             unreachable!()
         };
         let player = *player;
-        let picks = match *end {
-            DistinctSearchEnd::OpponentSplits { picks } if !selected.is_empty() => picks,
-            DistinctSearchEnd::OpponentSplits { .. } | DistinctSearchEnd::Hand => {
+        match *end {
+            DistinctSearchEnd::OpponentSplits { picks } if !selected.is_empty() => {
+                suspended.decision = Decision::OpponentSplitsRevealed {
+                    player: PlayerId(1 - player.0),
+                    owner: player,
+                    revealed: std::mem::take(selected),
+                    remaining: picks,
+                };
+                *self.state.suspended_decision_mut() = Some(suspended);
+            }
+            _ => {
                 for card in std::mem::take(selected) {
                     self.reveal_card_to_hand(card, player);
                 }
                 self.shuffle_library(player);
                 self.run_frame(suspended.frame);
-                return;
             }
-        };
-        suspended.decision = Decision::OpponentSplitsRevealed {
-            player: PlayerId(1 - player.0),
-            owner: player,
-            revealed: std::mem::take(selected),
-            remaining: picks,
-        };
-        *self.state.suspended_decision_mut() = Some(suspended);
+        }
     }
 
     /// Random placement and owner-chosen placement share the same library

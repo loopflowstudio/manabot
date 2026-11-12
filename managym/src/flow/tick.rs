@@ -9,7 +9,10 @@ use crate::{
         game::Game,
         turn::{PhaseKind, StepKind, TurnState, PHASE_STEPS},
     },
-    state::{card::StaticAbility, game_object::PlayerId, permanent::CounterKind},
+    state::{
+        card::StaticAbility, game_object::PlayerId, permanent::CounterKind,
+        stack_object::StackObject, zone::ZoneType,
+    },
 };
 
 impl Game {
@@ -189,9 +192,9 @@ impl Game {
     pub(crate) fn end_the_turn(&mut self) {
         while let Some(object) = self.state.stack_objects.last() {
             match object {
-                crate::state::stack_object::StackObject::Spell(spell) => {
+                StackObject::Spell(spell) => {
                     let card = spell.card;
-                    self.move_card(card, crate::state::zone::ZoneType::Exile);
+                    self.move_card(card, ZoneType::Exile);
                 }
                 _ => {
                     self.state.stack_objects_mut().pop();
@@ -466,13 +469,7 @@ impl Game {
                             .static_abilities
                             .contains(&StaticAbility::NoMaximumHandSize)
                     });
-                if !unlimited
-                    && self
-                        .state
-                        .zones
-                        .size(crate::state::zone::ZoneType::Hand, player)
-                        > 7
-                {
+                if !unlimited && self.state.zones.size(ZoneType::Hand, player) > 7 {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
                         player,
                         remaining: 1,
