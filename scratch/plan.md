@@ -168,3 +168,35 @@ interleaved). Check: test_regime_functions, test_regimes, test_recovery,
 test_active_recovery, test_belief_stages, test_package_boundaries: 61 passed.
 
 Unchanged: the open Etude budget choice and the `run.stage` resume limit.
+
+## Concept review 3 (2026-11-12, against `7fcacc3e5`)
+
+Lineage and one-caller-per-stage hold. Remaining mismatch: a `Model` is
+where a run's weights live, but public `self_play` also takes three
+starting states (`initial_weights`, `pretrained`, `learning_state`) that
+the body loads over `initial=model.network` without looking at the model.
+In a function regime, `m = import_policy(run, "m", ...)` then
+`self_play(run, m, pretrained=...)` trains the pretrained weights while the
+stage records `import-m`'s artifacts as its input (`producer=model.source`),
+and `initial_weights`/`learning_state` behave the same way. Saved regimes
+never hit this: each fresh stage gets a new `run.model`, and
+`TrainingRegime` validation already refuses `initial` with another starting
+state.
+
+Next implement direction (settled by the design: the model owns its
+weights, a record names what was read):
+
+- `self_play` refuses `initial_weights`, `pretrained` or `learning_state`
+  unless the model still holds its own random initialization
+  (`model.source is None and model.trained_by is None`), naming the model,
+  the argument and the stage that gave it weights. Check before
+  `_open_stage`, so a refusal costs nothing and smoke catches it.
+- Docs (`docs/training.md`, regime-function section): a function regime
+  starts from a published policy with `import_policy`; the three
+  arguments are how saved stages start and stay accepted on a fresh model.
+- Test in `test_regime_functions.py`: imported model + `pretrained` is
+  refused by name; a fresh `run.model` + `pretrained` path is unchanged
+  (existing saved-regime tests cover it).
+
+No saved-regime record, digest or stage id changes. Unchanged: the open
+Etude budget choice and the `run.stage` resume limit.

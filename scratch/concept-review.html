@@ -14,33 +14,30 @@ table{border-collapse:collapse;font-size:.9rem}td,th{border-bottom:1px solid var
 h2{font-size:1.15rem;margin-top:2rem}
 </style></head><body><main>
 <header>
-<h1>Regime functions: a model's lineage should survive resume</h1>
-<p>Task MTG-303 · concept-review step (second pass) · 2026-11-12, against d4271e1fc</p>
-<p>Built from manabot/training/run.py, manabot/training/stages.py, tests/training/test_regime_functions.py and scratch/plan.md</p>
+<h1>Regime functions: a model's weights come from the model</h1>
+<p>Task MTG-303 · concept-review step (third pass) · 2026-11-12, against 7fcacc3e5</p>
+<p>Built from manabot/training/stages.py (self_play, _train_self_play, _open_stage, run_saved_regime), manabot/training/run.py (Model), manabot/training/regime.py and scratch/plan.md</p>
 </header>
 
-<p><strong>Decision needed:</strong> none for the next round. The design settles it: a continued stage must record the same arguments whether or not the run was resumed. The Etude budget question below stays open.</p>
+<p><strong>Decision needed:</strong> none for the next round. The design settles it: a stage records what it read, and a model holds the weights a stage trains. The Etude budget question below stays open.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<p>Actions: write a regime function, bind arguments with <code>partial</code>, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code>, stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_selection</code>, <code>collect_belief</code>, <code>train_belief</code>. Since the first pass, <code>run_saved_regime</code> calls these stage functions, so each stage body has one caller. That holds.</p>
+<p>Actions: write a regime function, bind arguments with <code>partial</code>, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code> (weights, <code>trained_by</code>, <code>source</code>), stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_selection</code>, <code>collect_belief</code>, <code>train_belief</code>. One caller per stage body and resume-stable lineage both hold since the second pass.</p>
 
-<h2>Biggest mismatch: lineage is read from live state</h2>
+<h2>Biggest mismatch: two places say where the weights start</h2>
 <p class="tag">existing</p>
-<pre class="old">self_play(run, model, …)
-    initial = model.session.declaration.id if model.session else None
-_restore_model(model, record)          # resume replays a completed stage
-    model.session = None               # → the next continued stage records initial=None</pre>
-<p>Probe: two <code>self_play</code> calls on one model, interrupted after update 1 of the second, then resumed (seed 5):</p>
-<table><tr><th></th><th>stage 2 <code>settings.initial</code></th><th>raw weights</th></tr>
-<tr><td>uninterrupted</td><td><code>"self-play"</code></td><td rowspan="2">bit-equal</td></tr>
-<tr><td>resumed</td><td><code>None</code></td></tr></table>
-<p>Training is right; the record is wrong, so two runs no longer compare by their resolved arguments.</p>
+<pre class="old">m = import_policy(run, "m", source_run=…, checkpoint=A, decks=d)
+self_play(run, m, decks=d, pretrained=PretrainedPolicy(checkpoint=B, …))
+    # body: load m.network (A), then load B over it
+    # record.inputs: "import-m/raw" = A      ← trained B, recorded A</pre>
+<p><code>initial_weights</code> and <code>learning_state</code> overwrite the model the same way. Saved regimes never reach this: each fresh stage gets a new <code>run.model</code>, and <code>TrainingRegime</code> already refuses <code>initial</code> with another starting state.</p>
 <p class="tag">proposed</p>
-<pre class="new">Model.trained_by: str | None   # last self-play stage; set by self_play and _restore_model
-self_play: initial = model.trained_by
-    live session is the run's latest → continue live
-    else a recovery snapshot for this stage → restore it
-    else → refuse by name (never silently start a fresh learner from weights)</pre>
+<pre class="new">self_play(run, m, pretrained=…)       # also initial_weights=, learning_state=
+    if m.source is not None or m.trained_by is not None:
+        ValueError: "model 'm' already holds weights from stage 'import-m';
+                     pretrained= starts a fresh model only"
+    # checked before the stage opens, so smoke rejects it</pre>
+<p>Function regimes start from a published policy with <code>import_policy</code>; the three arguments stay for fresh models, which is how saved stages use them. No saved record, digest or stage id changes.</p>
 
 <h2>Open questions</h2>
 <ol>
