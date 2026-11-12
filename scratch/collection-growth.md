@@ -114,3 +114,11 @@ Earlier blocker history, procedure, concept review and check detail:
 `0287473ec:scratch/collection-growth.md`. Concept review page:
 `scratch/concept-review.html` (no product change; show the actual paired report
 with limitations, inventories and rental accounting once execution is possible).
+
+## Docs
+
+User-facing docs: `experiments/self-play-collection-273.md` (report, reproduction,
+execution record, frozen paired analysis) and `experiments/README.md` (Data
+pointer). Reviewed 2026-11-12 against the execution facts above; they already
+state the inconclusive outcome and need no edit until the open budget decision
+is made.
