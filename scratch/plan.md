@@ -91,7 +91,7 @@ caller per stage body). Outcome 6 waits on the open Etude choice below.
 
 The review found two callers per stage body: `run_saved_regime` dispatched
 to the private bodies while public functions built a one-stage
-`TrainingRegime` (`_stage_regime`). Done in the next implement pass:
+`TrainingRegime` (`_stage_regime`). Done since (`eeca3f374`, `dcd13b7c9`):
 
 1. `run_saved_regime` is an ordinary regime function: one public call per
    saved stage (`stage=<id>`, its settings, the regime's `schedule_clock`).
