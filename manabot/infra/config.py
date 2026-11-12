@@ -247,6 +247,12 @@ COMPOUND_DECISIONS_REMOVED = (
     "compound-decision policies are no longer executable; reproduce them at "
     "commit ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b"
 )
+# The pooled token stream (`token_stream="pooled"`) was removed the same way.
+POOLED_TOKEN_STREAM_REMOVED = (
+    "token_stream='pooled' was removed after its pilot closed negative "
+    "(experiments/token_stream.md); live-token attention replaces it. "
+    "Reproduce it at commit 439379869541cf29e781d7215b088e828041889e"
+)
 
 
 class ModelConfig(BaseConfig):
@@ -290,16 +296,6 @@ class ModelConfig(BaseConfig):
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
-    # What object attention runs over. `tables` attends over the fixed object
-    # tables (players, cards, permanents at their capacities). `pooled` packs
-    # each observation's valid objects, continuation relations and legal
-    # actions into one typed token sequence, padded per batch to a bucket at or
-    # above its longest observation (`manabot.model.token_stream`); logits read
-    # the action tokens. Omitted is `tables`, so existing recipes keep their
-    # identities.
-    token_stream: Literal["tables", "pooled"] = Field(
-        default="tables", exclude_if=lambda value: value == "tables"
-    )
     # Canonical belief rows are an opt-in checkpoint ABI. A positive bucket
     # count requires explicit belief tensors on every forward pass; there is
     # no neutral or positional-condition fallback on this path.
@@ -317,6 +313,18 @@ class ModelConfig(BaseConfig):
         data = dict(data)
         if data.pop("compound_decisions") is not False:
             raise ValueError(COMPOUND_DECISIONS_REMOVED)
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_pooled_token_stream(cls, data: Any) -> Any:
+        """Admit the retired `token_stream` only as `tables`, the one remaining
+        attention layout; a saved `pooled` stream is refused by name."""
+        if not isinstance(data, dict) or "token_stream" not in data:
+            return data
+        data = dict(data)
+        if data.pop("token_stream") != "tables":
+            raise ValueError(POOLED_TOKEN_STREAM_REMOVED)
         return data
 
     @classmethod
@@ -355,15 +363,6 @@ class ModelConfig(BaseConfig):
             or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
-        if self.token_stream == "pooled" and (
-            not self.attention_on
-            or self.value_aggregation == "value_token"
-            or self.belief_count_buckets > 0
-        ):
-            raise ValueError(
-                "a pooled token stream needs attention and supports neither a "
-                "value token nor belief rows"
-            )
         return self
 
 

@@ -44,14 +44,14 @@ def _layout(regime: TrainingRegime, stage: int = 0) -> tuple[Layout, Layout]:
     return execution.bucketed_shapes, execution.live_tokens
 
 
-def _fresh(device: Literal["cpu", "cuda"], **agent: object) -> TrainingRegime:
+def _fresh(device: Literal["cpu", "cuda"]) -> TrainingRegime:
     """A regime authored in code, as recipes build them, so `auto` applies."""
     regime = baseline_test(2).regime
     stage = regime.stages[0]
     return TrainingRegime(
         **{
             **regime.model_dump(exclude={"stages", "agent"}),
-            "agent": regime.agent.model_copy(update=agent),
+            "agent": regime.agent,
             "stages": [
                 stage.model_copy(
                     update={
@@ -83,10 +83,6 @@ def test_auto_resolves_off_on_cpu_and_keeps_regime_bytes() -> None:
     assert canonical_sha256(dumped) == canonical_sha256(written.model_dump(mode="json"))
 
 
-def test_auto_resolves_off_under_the_pooled_stream() -> None:
-    assert _layout(_fresh("cuda", token_stream="pooled")) == (False, False)
-
-
 def test_auto_resolves_off_for_other_operations() -> None:
     stage = Stage(id="plain")
     assert stage.execution.bucketed_shapes == "auto"
@@ -106,14 +102,13 @@ def test_saved_regime_omitting_the_layout_reads_off() -> None:
 
 def test_builders_resolve_auto_again_and_keep_written_values() -> None:
     cuda = _fresh("cuda")
-    pooled = with_agent(
-        cuda,
-        id="pooled",
-        agent=cuda.agent.model_copy(update={"token_stream": "pooled"}),
-    )
-    assert _layout(pooled) == (False, False)
-    assert _layout(with_agent(pooled, id="tables", agent=cuda.agent)) == (True, True)
-    data = _fresh("cuda").model_dump()
+    assert _layout(with_agent(cuda, id="copy", agent=cuda.agent)) == (True, True)
+    authored = cuda.authored_dump()
+    execution = authored["stages"][0]["execution"]
+    assert {name: execution[name] for name in LAYOUT} == dict.fromkeys(LAYOUT, "auto")
+    execution["device"] = "cpu"
+    assert _layout(TrainingRegime.model_validate(authored)) == (False, False)
+    data = cuda.model_dump()
     data["stages"][0]["execution"].update(dict.fromkeys(LAYOUT, False))
     padded = TrainingRegime.model_validate(data)
     assert _layout(with_agent(padded, id="copy", agent=padded.agent)) == (False, False)
@@ -125,19 +120,6 @@ def test_live_tokens_require_cuda() -> None:
     with pytest.raises(ValidationError, match="live tokens require CUDA"):
         Execution(device="mps", live_tokens=True)
     assert Execution(device="cpu", bucketed_shapes=True).bucketed_shapes is True
-
-
-@pytest.mark.parametrize(
-    ("field", "name"),
-    [("bucketed_shapes", "bucketed shapes"), ("live_tokens", "live tokens")],
-)
-def test_pooled_token_stream_rejects_layout(field: str, name: str) -> None:
-    data = _regime(device="cuda", **{field: True})
-    agent = data["agent"]
-    assert isinstance(agent, dict)
-    agent["token_stream"] = "pooled"
-    with pytest.raises(ValidationError, match=f"does not support {name}"):
-        TrainingRegime.model_validate(data)
 
 
 def test_continuation_resolves_auto_to_its_parent_layout() -> None:

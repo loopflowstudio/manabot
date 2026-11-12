@@ -144,9 +144,7 @@ def load_checkpoint(
     Raises `UnsupportedPolicyInput` for a checkpoint of another policy input.
     `bucketed_shapes` and `live_tokens` select the forward's padding and
     attention layout (see `ActorCritic`); they are execution choices, not
-    checkpoint fields. They apply where the model supports them: a
-    `token_stream="pooled"` checkpoint packs its own sequence and always loads
-    padded, so one serving allocation can hold table and pooled policies.
+    checkpoint fields.
     """
 
     if isinstance(path, StoredArtifact):
@@ -160,12 +158,11 @@ def load_checkpoint(
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent_config = ModelConfig.from_checkpoint(config["agent_hypers"])
-    tables = agent_config.token_stream != "pooled"
     agent = ActorCritic(
         obs_space,
         agent_config,
-        bucketed_shapes=bucketed_shapes and tables,
-        live_tokens=live_tokens and tables,
+        bucketed_shapes=bucketed_shapes,
+        live_tokens=live_tokens,
     )
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:

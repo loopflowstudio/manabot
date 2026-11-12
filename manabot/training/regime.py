@@ -823,9 +823,8 @@ class TrainingRegime(Strict):
 
         Bucketed shapes and live tokens pay on CUDA at every measured width
         (experiments/live_token_attention.md), so `auto` is on for a CUDA
-        `train_self_play` stage and off on CPU and MPS, for every other
-        operation and under `token_stream="pooled"`, which packs its own
-        sequence. Stages are copied, never mutated, so a stage instance shared
+        `train_self_play` stage and off on CPU and MPS and for every other
+        operation. Stages are copied, never mutated, so a stage instance shared
         by several regimes resolves separately in each. Runs before
         `references`, which validates the resolved values.
         """
@@ -836,11 +835,7 @@ class TrainingRegime(Strict):
                 name for name in LAYOUT_FIELDS if getattr(execution, name) == "auto"
             )
             if auto:
-                on = (
-                    isinstance(stage, TrainSelfPlay)
-                    and execution.device == "cuda"
-                    and self.agent.token_stream != "pooled"
-                )
+                on = isinstance(stage, TrainSelfPlay) and execution.device == "cuda"
                 execution = execution.model_copy(update=dict.fromkeys(auto, on))
                 execution._from_auto = auto
                 stage = stage.model_copy(update={"execution": execution})
@@ -932,14 +927,6 @@ class TrainingRegime(Strict):
                 raise ValueError(
                     f"{accelerator} requires self-contained ordinary self-play"
                 )
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.bucketed_shapes is True for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support bucketed shapes")
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.live_tokens is True for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support live tokens")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:

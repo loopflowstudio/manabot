@@ -50,11 +50,9 @@ validation of its own
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
-   With `token_stream="pooled"` (an experimental option, off by default), one
-   attention sequence holds each observation's valid objects, continuation
-   relations and legal actions, padded per batch to a 32-token bucket; action
-   tokens carry their focus objects in and their attended output is scored
-   ([comparison](../experiments/token_stream.md)).
+   [Live-token attention](#live-token-attention-profiling) attends over valid
+   objects only; it replaced the pooled token stream
+   ([token-stream report](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -165,8 +163,7 @@ most of all for small decks.
 A training stage's execution settings choose it, with
 [live-token attention](#live-token-attention), from the device. Both default to
 `auto`, which the regime resolves when it is built: on for a CUDA
-`train_self_play` stage, off on CPU and MPS, for every other operation and
-under `token_stream="pooled"`:
+`train_self_play` stage, off on CPU and MPS and for every other operation:
 
 ```python
 from experiments.batched_baseline import batched_baseline
@@ -186,16 +183,12 @@ explicitly is kept as written. To compare the paths on CUDA, write
 `Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
 `--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
 Bucketed shapes may still be written explicitly on CPU or MPS; there they are
-slower to learn, as described above. An explicit `bucketed_shapes=True` with
-`token_stream="pooled"` fails validation.
+slower to learn, as described above.
 
 The stage's collection and learner policies, including a frozen opponent,
 use the resolved layout. Code that builds a policy outside a regime chooses it
 itself: `ActorCritic(..., bucketed_shapes=True)` and
 `load_checkpoint(..., bucketed_shapes=True)` default to off.
-`load_checkpoint` applies either setting only to a table model: a
-`token_stream="pooled"` checkpoint loads padded, so one evaluation allocation
-can serve both kinds.
 [Evaluation and search](evaluation.md#shared-inference) choose it from their
 own device in the same way.
 
@@ -266,8 +259,7 @@ setting changes how a forward is computed, not the model: no `ModelConfig`
 field, checkpoint, world binding or policy input changes, and a checkpoint
 trained with it loads and runs without it. Action probabilities, values,
 losses and gradients agree with the padded path to within 1e-5 on CPU; on CUDA
-they differ only by accumulation order, as bucketed shapes do. It is rejected
-with `token_stream="pooled"`, which already packs its own sequence. On an L4,
+they differ only by accumulation order, as bucketed shapes do. On an L4,
 live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/live_token_attention.md)).

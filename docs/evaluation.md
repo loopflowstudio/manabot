@@ -222,8 +222,7 @@ order of floating-point sums, as batch composition already does, so it is an
 allocation setting: the resolved values are retained in the attempt receipt
 and leave `EvalCompute`, player, benchmark and match identities unchanged.
 Search players that run a policy on CUDA (`"device": "cuda"` in their spec)
-use the same layout; on CPU they keep the padded path. A
-`token_stream="pooled"` checkpoint is always served padded.
+use the same layout; on CPU they keep the padded path.
 
 With an execution, flat stateless checkpoints are served; without one,
 `play_cell`, `evaluate` and the monitor play them scalar in the game child
