@@ -115,7 +115,7 @@ update modules import no framework and no backend at runtime
 are annotations only.
 
 A function has the same name, arguments, shapes and per-row results in every
-backend; the torch backend's signatures are the reference, and
+backend that has it; the torch backend's signatures are the reference, and
 [training loops](../../docs/training-loop.md#standard-methods-kept-local)
 documents them. A backend never carries its own copy of an update's loss:
 `manabot.backends.parity` runs `minibatch_objective` through each backend's
@@ -123,8 +123,11 @@ documents them. A backend never carries its own copy of an update's loss:
 
 - MLX has no float64 on the GPU, so its surrogate ratio and loss sum are
   float32; torch's are float64.
-- MLX has no categorical critic functions; the backend refuses a categorical
-  checkpoint.
+- MLX's `rl` holds what the scalar damped update calls. It has no categorical
+  critic functions (`categorical_lambda_returns`, `categorical_value_loss`,
+  `outcome_probabilities`, `expected_outcome`), and the backend refuses a
+  categorical checkpoint; it also lacks `standardized_advantages` and
+  `selected_rows`, which only PPO calls.
 - `OptimizerHealth` counts steps and rejections on every backend; its sampled
   gradient and parameter detail reads torch modules and is absent on MLX.
 - The PPO update still steps through torch's `gradient_step` and calls tensor
@@ -211,6 +214,13 @@ uv run --extra mlx python -m manabot.backends.parity capture/initial.pt --captur
 ```text
 mlx minibatch   0  B  46  logits 5.8e-09  values 2.4e-07  loss 1.4e-07  min cosine 1.000000 (...)
 ...
+torch  forward logits                           max |Δ| 9.7e-09 (tol 1e-4)  ok
+torch  forward values                           max |Δ| 2.7e-07 (tol 1e-4)  ok
+torch  collection logits                        max |Δ| 0.0e+00 (tol 1e-4)  ok
+torch  collection values                        max |Δ| 0.0e+00 (tol 1e-4)  ok
+torch  learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
+torch  gradient ...                             min cosine 1.000000 over 169 tensors (tol 0.999)  ok
+torch  one step                                 params max |Δ| 7.5e-09, update min cosine 1.000000 (informative)
 mlx    forward logits                           max |Δ| 7.7e-09 (tol 1e-4)  ok
 mlx    forward values                           max |Δ| 3.6e-07 (tol 1e-4)  ok
 mlx    collection logits                        max |Δ| 7.0e-09 (tol 1e-4)  ok
@@ -218,7 +228,7 @@ mlx    collection values                        max |Δ| 3.3e-07 (tol 1e-4)  ok
 mlx    learner loss                             rel Δ 0.0000% (tol 0.1%)  ok
 mlx    gradient ...                             min cosine 0.999940 over 201 tensors (tol 0.999)  ok
 mlx    one step                                 params max |Δ| 9.4e-05, update min cosine 0.944017 (informative)
-parity: pass (mlx)
+parity: pass (torch, mlx)
 ```
 
 The check runs the PyTorch model in float32 on CPU as the reference and every

@@ -52,7 +52,8 @@ update_iteration(backend, learner, batch, Learning(), progress=0.0, rng=np.rando
 
 `move_learning()` (`manabot.recipes.builders`) is the current recipe's
 `DampedPolicyLearning(gradient="damped_policy")`. Each returns the update's
-diagnostics as a dictionary; EMA and checkpoints stay with the caller.
+diagnostics (`UpdateDiagnostics`, a typed dictionary); EMA and checkpoints
+stay with the caller.
 
 Recipes and the executor pass `manabot.backends.torch`. Inside an update,
 array math goes only through `backend.rl`, `backend.learner` and
@@ -129,8 +130,9 @@ the backend's `rl.py` and `learner.py` rather than taken from an RL library.
 The torch versions below read only tensors, an `nn.Module`, an optimizer and
 small typed records, and import nothing else from manabot
 (`tests/test_package_boundaries.py` enforces it), so another role reuses them
-unchanged. Each [backend](../manabot/backends/README.md) has the same
-functions over its own arrays. Each returns one value per row `[B]` where it is a
+unchanged. Another [backend](../manabot/backends/README.md) has the ones
+its updates call, with the same names and arguments over its own arrays.
+Each returns one value per row `[B]` where it is a
 loss, so you choose the reduction, mask and weight.
 
 | Piece | Module | What it is |
@@ -185,7 +187,8 @@ update in `manabot/training/updates/` beside the two above; our recipes then
 run it as they run those. Write that update as they are written: take the
 backend first, do array math only through `backend.rl`, `backend.learner`
 and `backend.arrays`, and hand the minibatch loss to `learner.loss` as a
-closure, so it runs on every backend unchanged.
+closure, so it runs unchanged on every backend whose `rl` has the functions
+it calls.
 
 ### A complete self-play loop
 

@@ -55,7 +55,7 @@ path in MLX names the same component as in the torch state dict:
 Two departures from the PyTorch forward are exact up to float rounding. The
 catalog GRU always encodes every definition, where PyTorch learning encodes
 only the rows a batch references; the others never reach the loss either way.
-And the PPO surrogate's likelihood ratio is float32, where PyTorch uses
+And the clipped surrogate's likelihood ratio is float32, where PyTorch uses
 float64 (the GPU has none); the two differ only for |log ratio| > 88.
 
 ## Layout mapping
@@ -77,7 +77,8 @@ Every canonical parameter maps to MLX arrays, or loading fails naming the key.
 ## Learner
 
 The backend carries no loss of its own. `manabot.backends.mlx.rl` has the
-torch backend's functions over MLX arrays, and
+torch backend's functions that the scalar damped update calls, over MLX
+arrays, and
 `manabot.backends.mlx.learner.Learner` differentiates whatever loss an update
 hands it, clips the global gradient norm and applies Adam (eps 1e-5, bias
 correction). The damped update runs on it unchanged:

@@ -367,3 +367,13 @@ rollout admission and the reference magnet under `training/updates/`;
 "PPO" where the parity loss is the damped update's. They describe the
 branch as it stands (`.pt` save, torch forward not over `Prepared`, PPO on
 torch only); rewrite those sentences when Remaining 1 and 2 land.
+
+Second write-docs pass (2026-11-12, checked every cited name and signature
+against the code): `backends/README.md`, `backends/mlx.md` and
+`docs/training-loop.md` no longer say MLX's `rl` has all of torch's functions
+(it has what the scalar damped update calls; `standardized_advantages` and
+`selected_rows` are PPO-only and absent, as are the categorical ones); the
+parity sample shows the torch lines and `parity: pass (torch, mlx)` (torch
+figures from a laptop run of the MTG-321 capture: forward logits 9.7e-09,
+values 2.7e-07, collection 0, cosine 1.000000 over 169, one step 7.5e-09);
+the updates return `UpdateDiagnostics`, a typed dictionary.
