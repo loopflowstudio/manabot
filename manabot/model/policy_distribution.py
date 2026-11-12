@@ -8,7 +8,6 @@ floor. Collection and learning share this normalization and legal mask.
 import torch
 from torch import Tensor
 
-from manabot.infra.deprecation import moved
 from manabot.rl.numerics import NumericalError as _NumericalError, require as _require
 
 
@@ -148,14 +147,3 @@ def check_behavior(
         "selected_log_mismatch",
         **tensors,
     )
-
-
-__getattr__ = moved(
-    __name__,
-    {
-        "NumericalError": "manabot.rl.numerics",
-        "require": "manabot.rl.numerics",
-        "clipped_surrogate": "manabot.rl.losses",
-        "reverse_kl": "manabot.rl.losses",
-    },
-)

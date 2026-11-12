@@ -273,9 +273,9 @@ def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
     from experiments.tla_frontier import frozen
     import manabot.model.inference as inference_module
     import manabot.training.execution as execution_module
-    from manabot.training.learning.health import OptimizerHealth
     from manabot.training.regime import TrainingRegime
     from manabot.training.rollout.collection import SeatRoutedCollector
+    from manabot.training.updates.health import OptimizerHealth
     from manabot.verify.store import VerifyStore
 
     out.mkdir(parents=True, exist_ok=True)
@@ -532,7 +532,8 @@ def infer_once(
     agent: Any, inference: Any, obs: dict[str, torch.Tensor], generator: torch.Generator
 ) -> dict[str, Any]:
     """Collection's preparation and `Policy inference and action selection` block."""
-    from manabot.model.policy_distribution import legal_mask, policy_logs, require
+    from manabot.model.policy_distribution import legal_mask, policy_logs
+    from manabot.rl.numerics import require
 
     with torch.profiler.record_function("mtg301/prepare"):
         obs_t = inference.prepare(obs)
@@ -563,13 +564,14 @@ def learn_once(
     learner: Any, observer: Any, payload: dict[str, Any], *, step: bool = True
 ) -> dict[str, Any]:
     """`update_damped_iteration`'s minibatch body on one retained minibatch."""
-    from manabot.model.numerics import float64_operand
-    from manabot.model.policy_distribution import legal_mask, policy_logs, reverse_kl
-    from manabot.training.learning.damped_policy import damped_policy_loss
-    from manabot.training.learning.learner import observation_tensors
-    from manabot.training.learning.references import reference_distribution
-    from manabot.training.learning.selection import selected_mean
+    from manabot.model.policy_distribution import legal_mask, policy_logs
+    from manabot.rl.losses import reverse_kl
+    from manabot.rl.numerics import float64_operand
+    from manabot.rl.selection import selected_mean
     from manabot.training.regime import DampedPolicyLearning
+    from manabot.training.updates.damped_policy import damped_policy_loss
+    from manabot.training.updates.learner import observation_tensors
+    from manabot.training.updates.references import reference_distribution
 
     device = learner.device
     learning = DampedPolicyLearning.model_validate(payload["learning"])
@@ -654,8 +656,8 @@ def learn_once(
 
 
 def _learner(agent: Any, device: str) -> tuple[Any, Any]:
-    from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-    from manabot.training.learning.learner import Learner
+    from manabot.training.updates.health import NumericalHealth, OptimizerHealth
+    from manabot.training.updates.learner import Learner
 
     learner = Learner(agent, device, minibatch_rows=256, precision="float32")
     health = NumericalHealth(

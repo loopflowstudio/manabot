@@ -1,6 +1,7 @@
 """Per-row loss terms over one minibatch; the caller reduces, masks and weights.
 
-Every function returns one value per row, `[B]`. Policy terms read padded
+Every loss returns one value per row, `[B]`; `support_logs` builds a frozen
+target for `reverse_kl` and `clip_fraction` is the surrogate's diagnostic. Policy terms read padded
 categorical log-probabilities `[B,A]` that are `-inf` off a `valid` mask
 `[B,A]`, and never read the padding. Targets, behavior likelihoods and
 references are constants: gradients reach only the current policy and value
@@ -28,6 +29,25 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
         ratio * advantages.detach(),
         ratio.clamp(1 - clip, 1 + clip) * advantages.detach(),
     )
+
+
+@torch.no_grad()
+def clip_fraction(log_ratio: Tensor, clip: float) -> float:
+    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
+
+    The ratio is exponentiated in float64 so large log ratios do not overflow.
+    """
+    return float(
+        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
+    )
+
+
+def support_logs(probabilities: Tensor, valid: Tensor) -> Tensor:
+    """Log-probabilities `[B,A]` of a distribution, zero off `valid` (log 1).
+
+    `reverse_kl` never reads the padding; filling it with 1 keeps `log` finite.
+    """
+    return probabilities.masked_fill(~valid, 1).log()
 
 
 def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:

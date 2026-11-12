@@ -22,13 +22,19 @@ from manabot.model.policy_distribution import (
 )
 from manabot.rl.losses import (
     categorical_value_loss,
+    clip_fraction,
     clipped_surrogate,
     entropy,
     reverse_kl,
     squared_value_loss,
+    support_logs,
 )
 from manabot.rl.numerics import float64_operand, require
-from manabot.rl.returns import categorical_lambda_returns, transition_gae
+from manabot.rl.returns import (
+    categorical_lambda_returns,
+    expected_outcome,
+    transition_gae,
+)
 from manabot.rl.selection import selected_mean, selection_mask
 from manabot.rl.step import gradient_step
 from manabot.training.regime import DampedPolicyLearning
@@ -36,7 +42,6 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
-    clip_fraction,
     failure_tensors,
     minibatch_tensors,
 )
@@ -90,7 +95,7 @@ def damped_policy_loss(
     if not valid.gather(-1, actions[:, None]).all():
         raise ValueError("sampled action is not legal")
     logs = policy_logs(logits, valid)
-    reference_logs = reference.detach().masked_fill(~valid, 1).log()
+    reference_logs = support_logs(reference.detach(), valid)
     ratio_logs = (
         (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
     )
@@ -134,9 +139,7 @@ def _targets(
                 "categorical update requires collection outcome probabilities"
             )
         probabilities = torch.as_tensor(batch.outcome_probabilities, device=device)
-        if not torch.allclose(
-            values, probabilities[..., 2] - probabilities[..., 0], atol=1e-5
-        ):
+        if not torch.allclose(values, expected_outcome(probabilities), atol=1e-5):
             raise ValueError(
                 "saved value differs from collection outcome probabilities"
             )
@@ -144,7 +147,7 @@ def _targets(
         value_targets = categorical_lambda_returns(
             probabilities, rewards, ends, bootstrap, learning.value_lambda
         )
-        next_value = bootstrap[:, 2] - bootstrap[:, 0]
+        next_value = expected_outcome(bootstrap)
     else:
         next_value = next_raw.squeeze(-1)
         _, value_targets = transition_gae(
@@ -222,7 +225,7 @@ def update_damped_iteration(
         diagnostics["numerical"] = health
         observer = OptimizerHealth(health, iteration, learner.profiler)
         expected_targets = (
-            targets.values[..., 2] - targets.values[..., 0]
+            expected_outcome(targets.values)
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
@@ -357,7 +360,7 @@ def update_damped_iteration(
                     diagnostics["reference_kl"] = float(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid, 1).log(),
+                            support_logs(reference, valid),
                             valid,
                         ).mean()
                     )

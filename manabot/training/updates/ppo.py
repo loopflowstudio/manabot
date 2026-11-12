@@ -14,10 +14,12 @@ from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.rl.losses import (
+    clip_fraction,
     clipped_surrogate,
     entropy,
     reverse_kl,
     squared_value_loss,
+    support_logs,
 )
 from manabot.rl.numerics import float64_operand, require
 from manabot.rl.returns import standardized_advantages, transition_gae
@@ -28,7 +30,6 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
-    clip_fraction,
     failure_tensors,
     minibatch_tensors,
 )
@@ -181,7 +182,7 @@ def update_iteration(
                     kl_ref = selected_mean(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid, 1).log(),
+                            support_logs(reference, valid),
                             valid,
                         ),
                         actor_mask,
