@@ -47,10 +47,8 @@ The model holds up: cards and tokens are separate authored definitions sharing o
 and the game object, never on `printed`; tokens resolve by key, cards by name. No open product
 choice.
 
-Next implement direction (one comment, no behavior change):
-- `managym/src/flow/zones.rs` `create_token` doc says "Tokens are full cards in
-  `GameState::cards`", which contradicts the split. Say tokens are game objects stored in
-  `GameState::cards` beside cards.
+Review direction done: `create_token`'s doc in `managym/src/flow/zones.rs` now says tokens are
+game objects stored in `GameState::cards` beside cards (comment only).
 
 Considered and left alone:
 - `CardDefId` names rows that include tokens and back faces. Renaming it touches every engine

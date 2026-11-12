@@ -323,7 +323,8 @@ impl Game {
     }
 
     /// Create a token from the token definition keyed `key` (`token.<name>`)
-    /// under `controller`'s control. Tokens are full cards in `GameState::cards`; state-based
+    /// under `controller`'s control. Tokens are game objects stored in `GameState::cards`
+    /// beside cards, not cards themselves (CR 108.2, 111.1); state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
     /// Returns the token's permanent, absent if it did not stay on the battlefield.
     pub fn create_token(
