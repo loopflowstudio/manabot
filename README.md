@@ -369,7 +369,8 @@ inspecting what a bot does, not a way to play Magic.
 For an engine-only project, start with [installing managym](docs/engine-python.md).
 For training, see [installation and dependency choices](docs/development.md#install).
 The release guide also covers supported platforms and CPU/CUDA selection.
-The [0.2.1 release notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
+The [0.2.2 release notes](release/v0.2.2/NOTES.md) cover the separate engine
+package; the [0.2.1 notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
 support and collector API migrations. The historical
 [0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires CPython 3.12.
 

@@ -1,6 +1,6 @@
 [package]
 name = "managym"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 
 # The engine, with the rules types it is written in (`state/`) and the card

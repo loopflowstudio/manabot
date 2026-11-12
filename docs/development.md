@@ -456,8 +456,9 @@ the last command lists CLI commands without starting training. No repository dep
 are installed. For CPython 3.12, create the environment with
 `--python 3.12`; installation selects the matching engine wheel. Pin both
 distributions to the same published version in reproducible projects. See the
-[0.2.1 release notes](../release/v0.2.1/NOTES.md) for that version's API migration
-guidance.
+[0.2.2 release notes](../release/v0.2.2/NOTES.md) for upgrading from the bundled
+0.2.0/0.2.1 wheels, and the [0.2.1 release notes](../release/v0.2.1/NOTES.md)
+for API migration guidance.
 The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
 environment when reproducing that release.
 
