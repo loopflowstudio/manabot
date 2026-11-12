@@ -7,6 +7,8 @@ name = "manabot"
 version = "0.2.2"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "managym==0.2.2",
@@ -47,7 +49,7 @@ evaluation = [
     "matplotlib>=3.9",
 ]
 play = [
-    "maturin>=1.5,<2.0",
+    "maturin>=1.9.3,<2.0",
 ]
 dev = [
     "fastapi>=0.116.0",
@@ -73,7 +75,7 @@ play-runtime = [
     # A trained opponent loads through manabot's model and env packages,
     # which import these at module load.
     "gymnasium>=1.0.0",
-    "maturin>=1.5,<2.0",
+    "maturin>=1.9.3,<2.0",
     "numpy>=1.24.0",
     "psutil>=5.9.0",
     "torch==2.10.0",

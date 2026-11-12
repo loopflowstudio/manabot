@@ -38,6 +38,7 @@ def prepare(destination: Path) -> None:
         } and name not in {
             "pyproject.toml",
             "README.md",
+            "LICENSE",
             "docs/experiment-metrics.md",
             "protocol/experience-v1.schema.json",
         }:
