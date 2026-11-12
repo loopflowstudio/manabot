@@ -1,6 +1,6 @@
 # One pooled typed-token stream against the v9 object tables — MTG-306
 
-Exploratory pilot (USD 25 cap): does a policy that attends over one pooled,
+Exploratory pilot (USD 15 cap; USD 25 until 2026-11-12): does a policy that attends over one pooled,
 typed token sequence per observation learn as well as the current v9 table model
 at matched updates while costing less GPU time per update?
 
@@ -62,6 +62,12 @@ objects, then the same attention blocks, policy head and `masked_mean` critic.
 | Evaluation, up to two passes × $3.00 / $1.50 | $4.50 |
 | Reserve for a failed attempt | $5.95 |
 | **Total** | **$25.00** |
+
+2026-11-12: the cap is now USD 15 in total, including rental idle, evaluation
+and cleanup. Timing keeps its USD .75; learning gets what remains (about
+USD 10–12) and is sized from the timing run's in-situ seconds per update. If
+that cannot cover a meaningful number of updates for both arms at w64, the
+pilot stops after timing and states what learning would cost.
 
 Decision rule (from the Task): open a design Task for an accelerator-first
 token architecture if the pooled arm is within noise of tables at matched
@@ -130,10 +136,64 @@ fewer query–key pairs than the 450 table slots, but only 1.0–1.5× fewer tha
 MTG-302's bucketed objects (194 collection, 130 learner median), while also
 carrying relations and actions.
 
-### L4 timing
+### L4 timing (Etude run `a1bcb3bf17a2`, commit `7ac8c9b6f`, ~$0.16)
 
-Pending.
+One RunPod L4 (Torch 2.15.0+cu132), 2026-11-12. Data:
+`experiments/data/token_stream/timing-a1bcb3bf17a2.json`; the laptop fill above
+is `fill-tla-e1.json` beside it.
+
+End to end, two in-situ Elemental updates per arm from a fresh initialization
+(256 streams, w64l2):
+
+| Arm | Collection s | Learning s | s / update | Games |
+|---|---:|---:|---:|---:|
+| tables | 74.6 | 44.3 | 59.5 | 516 |
+| pooled | 67.6 | 43.2 | 55.4 | 513 |
+
+Pooled is **1.07×** faster per update. Collection, mostly the CPU
+environment, is about 60% of an update in both arms.
+
+Replays of the tables arm's 48 collection batches and 24 learner minibatches,
+both arms interleaved (median CUDA-event wall time per call):
+
+| Size | Call | Tables ms | Pooled ms | Speedup | Peak MB, tables / pooled |
+|---|---|---:|---:|---:|---:|
+| w64l2 | collection forward | 39.8 | 36.2 | 1.10× | 712 / 547 |
+| w64l2 | learner step | 97.7 | 98.4 | 0.99× | 529 / 475 |
+| w160l8 | collection forward | 138.8 | 92.6 | 1.50× | 1,202 / 906 |
+| w160l8 | learner step | 187.9 | 142.7 | 1.32× | 2,632 / 1,900 |
+
+Kernel launches (≈1,030–1,170 per forward, ≈4,130–4,330 per learner step) and
+synchronizing calls (107–109 and 159–160) are nearly equal between arms. At
+w64 both arms are launch- and sync-bound: pooled cuts kernel time by 25% on the
+forward and 6% on the learner step, which barely moves wall time. At w160l8,
+pooled reduces attention work over the 202 Elemental table slots enough to
+cut wall time. Profiled kernel time exceeds wall time at w160l8, so the
+profiler counts overlapping kernels; compare wall times.
+
+Fill on these Elemental captures (8,252 collection and 1,505 learner
+observations) repeats the TLA result: pow2 / pooled 0.58 and 0.61.
 
 ### Learning
 
-Pending.
+Not run. Neither arm of the decision rule can pass: fill already failed, and
+the speed arm needs ≥1.5× per update on the L4, while the w64 recipe measured
+1.07× end to end. Even at w160l8, whose GPU calls are 1.3–1.5× faster, the
+CPU collection share keeps the per-update gain well under 1.5×. A strength
+result therefore cannot change the decision. At the measured ~57 s per
+update, the planned comparison (two seeds × two arms × 400 updates) needs four
+~6.5 h L4 windows, about $15.50, plus about $4.50 of evaluation: roughly
+$20, over the $15 cap. One seed per arm (about $11) would fit but has no
+power to detect "within noise".
+
+## Conclusion
+
+Recommend MTG-302-style per-axis power-of-two bucketing. One pooled budget at
+a common row width pads 1.7× more input than per-axis buckets. The pooled
+attention stream is 1.07× faster per update on the w64 Elemental recipe,
+whose cost is CPU collection plus launch-bound GPU calls. The stream is worth
+revisiting only for wider models (w160l8: 1.3–1.5× on GPU calls, 25–28% less
+peak memory), and with ragged or bucketed rows rather than one common width.
+
+Spend: timing run `a1bcb3bf17a2` ~$0.16 (launcher figure); its machine
+`mtg306-l4-31e6e7676515` ended with the run.
