@@ -121,8 +121,10 @@ docs since; nothing further to reduce, scratch under budget.
 Nothing remains to build. The latest base merge (59cf727bc) only moves
 `managym/perf/baseline.json` to PR #469's Engine Budget run and documents that
 in `docs/development.md`; no trigger code moved. Remaining: parent PR #469
-lands first (open, blocked), then PR #484 CI (only preflight reported, pending,
-at this pass). This branch changes definitions, so its Engine Budget digest
+lands first (open, blocked), then PR #484 CI. Realign at 0fa09f9e4: main has
+not moved past 59cf727bc; #484 passes Python unit, Semantic Kernel, Academy,
+Clean-machine Play and packaging so far, with Rust Tests, Integration, Protocol
+v1 and Engine Budget still pending. This branch changes definitions, so its Engine Budget digest
 likely moves again: adopt #484's own run against the new reference.
 
 QA re-run (head da964c606): catalog trigger text byte-identical to 0c2ce18e1
