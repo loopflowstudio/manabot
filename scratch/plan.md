@@ -25,19 +25,23 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
 Steers (Jack Heart, 2026-11-12): "Run the w256l8 step now"; then "Budget raised: Jack approved
 about USD 30 for the learning A/B ("sure thats fine"). Run the full-length version, about 300
 updates per arm ... Task cap is now USD 35 total."
-Supplies: on-demands `mtg324-l4` (max 4, USD 0.60/h ceiling, the A/B) and `mtg324-l4-step`
-(max 1, USD 0.70/h, the step run only: L4 listed at USD 0.69/h on 2026-11-12 18:52 UTC).
-Driving both: `/tmp/mtg324-etude.sh wait RUN COHORT` (0.2.15 overlay + nested doppler + certifi);
-an unbooted pod needs a live controller loop, or it is lost (first step run d9976d77ffb1 was).
-1. w256l8 step run: `cuda_precision.py --sizes w256l8` at 35764ee13, run 5fcf338bac39.
-   If BF16 learner and large collection calls are both >= 1.1x float32 at w256 (bucketed), set
-   `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment; record the run
-   as a dated line in `experiments/cuda_precision.md`. Then `etude terminate` its machine.
-2. Learning A/B, scored: 300 updates, cohort `mtg324-precision-ab-300` at 3efb3bdf1, runs
-   5713f9936db8 / 51a6ea46563e (float32) and a504bd8e523f / a9a39029b2dd (bf16), USD 7.85 each,
-   `--max-usd 32`; eval pass USD 2 on cpu32 after. The 64-update cohort was cancelled unrented.
-   Float32 pace at w384l8 on the L4 is assumed 150 s; slower runs stop at the watchdog and the
-   comparison uses *M* (pre-registered in `experiments/precision_ladder.md`).
+Supplies: on-demands `mtg324-l4-step` (max 1, USD 0.70/h) and `mtg324-l4-ab` (max 4, USD 0.70/h);
+`mtg324-l4` (0.60/h) is unused: L4s were listed at USD 0.69/h all afternoon of 2026-11-12.
+Driving: `/tmp/mtg324-etude.sh wait RUN|COHORT` (0.2.15 overlay + nested doppler + certifi;
+recreate it from the etude-launch-client memory if /tmp is gone). A queued or unbooted pod
+needs a live controller loop; a booted one is kept to its window by its guardian.
+1. Done: w256l8 step run `f30d26f9bc7a` ($0.29; two pods lost before start, ~$0.04):
+   bucketed BF16 1.66x learner, 1.68x large collection -> `BF16_MIN_HIDDEN_DIM = 256` (10c5c8fe3);
+   dated section in `experiments/cuda_precision.md`, evidence published. Machine terminated.
+   Same host's w160 capture update took 352 s (264 s collection), so the w384 float32 pace is
+   probably above the assumed 150 s, and *M* will likely be below 300.
+2. Learning A/B, scored: cohort `mtg324-precision-ab-300c` at 783ccdba1, 300-update horizon,
+   `--hours 10.9 --usd-per-run 7.85 --max-usd 32`, runs 07f84834e617 / aa9518f6fc4b (float32),
+   2be568a65518 / 27416907ad6c (bf16). `etude launch` was refused (no 4 L4s at once), so it is
+   queued; check `status mtg324-precision-ab-300c` and re-run `wait` if any are still queued.
+   After all end: `etude terminate` each machine, check `runpodctl pod list`, then
+   `etude eval experiments/precision_ladder.py --rent cpu32 --source r2://manabot/jobs` (USD 2),
+   and fill the report's Answer/Cost. Spent so far ~USD 0.35 of the USD 35 Task cap.
 3. Apply the A/B decision. Accepted: keep the docs sentence and fill the report. Rejected or
    unresolved: `ladder_precision` returns float32 everywhere and the docs paragraph says what
    separated. The docs' learning-comparison sentence (`docs/training.md` § Reduced precision)
