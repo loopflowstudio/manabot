@@ -2,7 +2,7 @@
 
 `SemanticCardEncoder` owns the one token vocabulary of card text. With
 `records`, it also owns the exact vocabulary of fact and shared-effect ids
-(`RecordNamespace` keys): every name native `learning_record_names` lists reads
+(`RecordNamespace` keys): every name native `record_vocabulary` lists reads
 the row of the card token for the same concept, or a row appended after the
 card tokens when no card text contains it. Nothing is hashed; an id outside
 the vocabulary fails loudly.
@@ -61,7 +61,7 @@ def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
         size += 1
         return size - 1
 
-    for space, name, value, kind, token in managym.learning_record_names():
+    for space, name, value, kind, token in managym.record_vocabulary():
         key = (int(RecordNamespace[space.upper()]), value)
         if key in names:
             raise ValueError(f"record name {name!r} shares an id with another")
