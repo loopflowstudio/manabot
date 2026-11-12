@@ -52,6 +52,7 @@ def make_teacher(
     *,
     config: LocalSearchConfig | None = None,
     observation: ObservationConfig | None = None,
+    native_encoder: bool = True,
 ) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
@@ -80,6 +81,7 @@ def make_teacher(
         file_sha256(path),
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
+        native_encoder=native_encoder,
     )
     env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
@@ -241,7 +243,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         },
         search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
         search_semantics=SearchSemantics(
-            branch_audit=True,
+            branch_audit=teacher.config.rollout_evidence == "full",
             root_prior="two-kl-local-update/v1",
             leaf_evaluator="frozen-viewer-policy-signed-value/v1",
         ),
@@ -378,23 +380,25 @@ def _searched_roots(env: Env, steps: int) -> list[managym.Env]:
     return roots
 
 
-def test_compact_evidence_and_native_encoding_match_full_defaults(
+def test_compact_native_defaults_match_full_evidence_and_row_encoding(
     tmp_path: Path,
 ) -> None:
-    config = LocalSearchConfig(
+    compact_config = LocalSearchConfig(
         worlds=2, depth=6, decision_seconds=60, sampling="compatible_prior"
     )
-    full, env = make_teacher(tmp_path, config=config)
+    assert compact_config.rollout_evidence == "compact"
+    full_config = compact_config.model_copy(update={"rollout_evidence": "full"})
+    full, env = make_teacher(tmp_path, config=full_config, native_encoder=False)
     checkpoint = full.likelihood.checkpoint
     digest = full.likelihood.checkpoint_sha256
-    compact_config = config.model_copy(update={"rollout_evidence": "compact"})
     arms = {
-        "compact": LocalUpdateTeacher(checkpoint, digest, compact_config),
-        "native": LocalUpdateTeacher(checkpoint, digest, config, native_encoder=True),
-        "both": LocalUpdateTeacher(
-            checkpoint, digest, compact_config, native_encoder=True
+        "compact": LocalUpdateTeacher(
+            checkpoint, digest, compact_config, native_encoder=False
         ),
+        "native": LocalUpdateTeacher(checkpoint, digest, full_config),
+        "defaults": LocalUpdateTeacher(checkpoint, digest, compact_config),
     }
+    assert arms["defaults"].native_encoder
     for root in _searched_roots(env, 4):
         viewer = root.current_agent_index()
         history = ViewerHistory.from_observation(
@@ -403,6 +407,11 @@ def test_compact_evidence_and_native_encoding_match_full_defaults(
         reference = full.search(root, history, seed=11)
         assert reference.schema == "regularized-local-update/v3"
         assert "rollout_evidence" not in reference.config_json
+        # v3 receipts omit the field and still read as full evidence.
+        assert (
+            LocalUpdateReceipt.from_json(reference.to_json()).replay_identity()
+            == reference.replay_identity()
+        )
         for name, teacher in arms.items():
             receipt = teacher.search(root, history, seed=11)
             compact = teacher.config.rollout_evidence == "compact"
@@ -448,7 +457,7 @@ def test_compact_evidence_and_native_encoding_match_full_defaults(
 def test_native_frontier_encoding_writes_the_row_encoder_tensors(
     tmp_path: Path,
 ) -> None:
-    teacher, env = make_teacher(tmp_path)
+    teacher, env = make_teacher(tmp_path, native_encoder=False)
     roots = _searched_roots(env, 6)
     rows, counts = teacher._encode_rows(roots)
     buffers = teacher.space.encoder.allocate(len(roots) + 2)
@@ -480,7 +489,6 @@ def test_native_frontier_encoding_writes_the_row_encoder_tensors(
         teacher.likelihood.checkpoint,
         teacher.likelihood.checkpoint_sha256,
         teacher.config,
-        native_encoder=True,
     )
     for expected, actual in zip(
         teacher.predict_batch(roots), native.predict_batch(roots), strict=True
@@ -525,10 +533,11 @@ def test_compact_registration_declares_no_branch_audit() -> None:
             ),
         )
 
-    historical = LocalSearchConfig().model_dump(exclude={"rollout_evidence"})
+    full = LocalSearchConfig(rollout_evidence="full").model_dump()
+    historical = {k: v for k, v in full.items() if k != "rollout_evidence"}
     register(historical, True)
-    register(LocalSearchConfig().model_dump(), True)
-    compact = LocalSearchConfig(rollout_evidence="compact").model_dump()
+    register(full, True)
+    compact = LocalSearchConfig().model_dump()
     register(compact, False)
     with pytest.raises(ValueError, match="search and seed semantics"):
         register(compact, True)

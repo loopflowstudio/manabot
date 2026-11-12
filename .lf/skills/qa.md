@@ -89,13 +89,14 @@ publish, land or choose the next Graph step from here.
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
-  seconds that default receipts still equal main's, field for field; the
-  `--rollout-evidence`/`--native-encoder` arms check opt-in parity. To play
+  seconds that receipts still equal main's, field for field; the
+  `--rollout-evidence`/`--native-encoder` arms check that full evidence and
+  the Python encoder still match the compact, native defaults. To play
   games, build two players per arm with `make_player` and drive `act`,
   `prepare_step`, `env.step_semantic` and `observe_step` as
   `manabot/sim/native_game.py` does; the default `decision_seconds=1` times
   out full evidence at 16 worlds × depth 20 (about 0.9 s on the
-  initialized fixture), so set the budget explicitly.
+  initialized fixture), so set the budget explicitly for full-evidence arms.
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. Play

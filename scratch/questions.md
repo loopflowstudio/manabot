@@ -1,0 +1,2 @@
+- Bench arms output renamed `speedup` (vs full/off) to `seconds_vs_default` (arm seconds / compact-on seconds), since the baseline is now the default arm. Reversible if a consumer reads `speedup`.
+- Registered local-update players omitting `rollout_evidence` are built with full evidence (normalized in `guidance._build_policy_player`), matching how their registration validates.
