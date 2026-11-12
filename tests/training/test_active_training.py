@@ -67,7 +67,9 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
         clock.charge(execution.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(execution.update_iteration, 10)
+        execution,
+        "update_damped_iteration",
+        clock.charge(execution.update_damped_iteration, 10),
     )
     monkeypatch.setattr(
         execution, "save_checkpoint", clock.charge(execution.save_checkpoint, 100)
@@ -151,7 +153,9 @@ def test_initial_admission_precedes_collection(
         clock.charge(execution.SeatRoutedCollector.collect, 2),
     )
     monkeypatch.setattr(
-        execution, "update_iteration", clock.charge(execution.update_iteration, 10)
+        execution,
+        "update_damped_iteration",
+        clock.charge(execution.update_damped_iteration, 10),
     )
 
     def train() -> TrainingRun:

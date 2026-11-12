@@ -39,12 +39,8 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
-from manabot.model.policy_distribution import (
-    NumericalError,
-    legal_mask,
-    policy_logs,
-    require,
-)
+from manabot.model.policy_distribution import legal_mask, policy_logs
+from manabot.rl.numerics import NumericalError, require
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
