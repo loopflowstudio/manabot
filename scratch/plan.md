@@ -18,16 +18,10 @@ Etude check 31 passed; test_release + test_play_launcher + package boundaries
 passed after the release fixture floor moved to 2.15.0. CUDA under 2.15/cu132
 not re-qualified on rented GPUs (say so in the PR).
 
-## Concept review (2026-11-11): next implement direction
+## Concept review (2026-11-11): done
 
-One fact, one message: `mps_torch_error()` currently says "installed Torch
-{version} computes incorrect MPS gradients (seen on 2.10)", which asserts a
-defect for 2.11–2.14 that no run measured. Reword so the claim matches the
-evidence: Torch {version} is below the MPS minimum {MPS_MINIMUM_TORCH}; Torch
-2.10 computed incorrect MPS gradients on learner minibatches. Keep the remedy
-generic to every caller (upgrade Torch with `uv sync --locked`, or train on
-CPU): the same text is raised by `execute_regime`, where `--recipe local` is
-not the caller's interface. Update the `match=` patterns in
-`tests/training/test_mps_training.py` accordingly. Nothing else changes: the
-concepts (one constant, selection skips, admission rejects, baseline explains)
-already match the Task, and the cu132 move is the Task's stated fallback.
+`mps_torch_error()` claims only what was measured: Torch {version} is below the
+minimum; Torch 2.10 computed incorrect MPS gradients on learner minibatches.
+The remedy is generic (`uv sync --locked`, or train on CPU) because
+`execute_regime` raises the same text. Committed in 6b64a6bb3; test_mps_training
++ test_baseline_recipe: 58 passed.
