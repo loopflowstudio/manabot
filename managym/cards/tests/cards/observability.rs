@@ -1267,6 +1267,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "allies_at_last_affinity_and_two_attackers",
         ),
+        StaticAbility::OpponentsCastOnlyFromHand => witnessed(
+            "StaticAbility::OpponentsCastOnlyFromHand",
+            Seen::Actions("opponents' casts from outside their hands are not offered"),
+            "Drannith Magistrate",
+            "iko",
+            "drannith_magistrate_stops_opponents_casting_from_the_graveyard",
+        ),
         StaticAbility::AdditionalLandPlayEachPlayer => witnessed(
             "StaticAbility::AdditionalLandPlayEachPlayer",
             Seen::Actions("a second land play is offered"),
@@ -1537,6 +1544,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::OpponentsCastOnlyFromHand,
         StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
             condition: None,

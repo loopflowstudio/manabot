@@ -115,6 +115,15 @@ impl Game {
             .any(|(_, view)| view.static_abilities.iter().any(&has))
     }
 
+    /// Whether `player` may cast spells only from their hand: an "until your
+    /// next turn" restriction, or an opponent's permanent that says so.
+    pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
+        self.hand_only_until(player).is_some()
+            || self.active_permanent_has(PlayerId(1 - player.0), |ability| {
+                *ability == StaticAbility::OpponentsCastOnlyFromHand
+            })
+    }
+
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
         self.active_permanent_has(player, |ability| {
@@ -140,7 +149,7 @@ impl Game {
     /// library while a permanent permits it. A hand-only restriction overrides
     /// all three.
     pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
-        if self.hand_only_until(player).is_some() {
+        if self.casts_only_from_hand(player) {
             return None;
         }
         match self.state.zones.zone_of(card)? {

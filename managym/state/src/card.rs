@@ -728,6 +728,9 @@ pub enum StaticAbility {
     Foretell(ManaCost),
     /// "You have no maximum hand size."
     NoMaximumHandSize,
+    /// "Your opponents can't cast spells from anywhere other than their
+    /// hands" while this is on the battlefield (Drannith Magistrate).
+    OpponentsCastOnlyFromHand,
     /// "Each player may play an additional land on each of their turns"
     /// (CR 305.2): one more land play per such permanent, for every player.
     AdditionalLandPlayEachPlayer,

@@ -5493,5 +5493,17 @@
       "R",
       "U"
     ]
+  },
+  "Drannith Magistrate": {
+    "name": "Drannith Magistrate",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Wizard",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Your opponents can't cast spells from anywhere other than their hands.",
+    "colors": [
+      "W"
+    ]
   }
 }
