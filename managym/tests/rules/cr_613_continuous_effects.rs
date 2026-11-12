@@ -932,10 +932,7 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
             }],
         },
         Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: None,
             effects: vec![Effect::sacrifice_this()],
         },

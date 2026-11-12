@@ -35,10 +35,7 @@ fn proft_s_eidetic_memory() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Combat,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
                 intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::Target(TargetSpec::CreatureYouControl),

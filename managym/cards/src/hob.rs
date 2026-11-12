@@ -41,10 +41,7 @@ fn beorn_the_fierce() -> CardDefinition {
             }],
         })],
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::Combat,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
             intervening_if: None,
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),

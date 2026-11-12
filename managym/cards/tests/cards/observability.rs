@@ -402,10 +402,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::AddColors([Color::Blue].into_iter().collect())),
         permanent(Modification::GrantActivated(Box::default())),
         permanent(Modification::GrantTriggered(Box::new(Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::Upkeep,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
             intervening_if: None,
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
@@ -1086,10 +1083,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             who: Actor::AnyPlayer,
             nth: None,
         },
-        TriggerCondition::BeginningOf {
-            step: TurnStep::Upkeep,
-            whose: Actor::You,
-        },
+        TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
         TriggerCondition::Performs {
             who: Actor::Opponent,
             any_of: vec![KeywordAction::Search],
@@ -1154,11 +1148,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             kind: CounterKind::Ice,
         },
         TriggerCondition::WhileSourceAttacking {
-            condition: Box::new(TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate::default(),
-                nth: None,
-            }),
+            condition: Box::new(TriggerCondition::casts(
+                Actor::You,
+                CardPredicate::default(),
+            )),
         },
     ]
 }
@@ -1867,15 +1860,12 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
         TurnStep::Combat,
         TurnStep::End,
     ];
-    let actions = [
+    let mut actions = vec![
         KeywordAction::Search,
         KeywordAction::Scry,
         KeywordAction::Surveil,
-        KeywordAction::Waterbend,
-        KeywordAction::Earthbend,
-        KeywordAction::Firebend,
-        KeywordAction::Airbend,
     ];
+    actions.extend(KeywordAction::BENDING);
     let mut conditions = Vec::new();
     let mut expected = Vec::new();
     for who in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
@@ -1891,7 +1881,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
     }
     conditions.push(TriggerCondition::Performs {
         who: Actor::You,
-        any_of: actions.to_vec(),
+        any_of: actions.clone(),
     });
     expected.extend(
         actions
@@ -1950,10 +1940,7 @@ fn an_intervening_if_reaches_the_learning_tokens() {
     let definition = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::discard()],
         }],

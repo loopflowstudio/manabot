@@ -274,6 +274,22 @@ pub enum Condition {
     TargetControlledByYou,
 }
 
+impl TriggerCondition {
+    /// "Whenever [who] casts a [predicate] spell", any spell of the turn.
+    pub fn casts(who: Actor, predicate: CardPredicate) -> Self {
+        TriggerCondition::Casts {
+            who,
+            predicate,
+            nth: None,
+        }
+    }
+
+    /// "At the beginning of [whose] [step]".
+    pub fn beginning_of(step: TurnStep, whose: Actor) -> Self {
+        TriggerCondition::BeginningOf { step, whose }
+    }
+}
+
 impl Condition {
     /// Whether answering reads the asking ability's source permanent or the
     /// permanent that triggered it, so the condition is meaningful only in

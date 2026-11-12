@@ -43,10 +43,7 @@ fn rites_of_flourishing() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::Draw,
-                whose: Actor::AnyPlayer,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::Draw, Actor::AnyPlayer),
             effects: vec![Effect::ForPlayer {
                 player: PlayerSelector::TriggeringPlayer,
                 effects: vec![Effect::DrawCards {

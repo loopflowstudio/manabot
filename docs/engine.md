@@ -538,19 +538,19 @@ fn lightning_bolt() -> CardDefinition {
   with you as the actor:
 
   ```rust
-  condition: TriggerCondition::Casts {
-      who: Actor::You,
-      predicate: CardPredicate {
+  condition: TriggerCondition::casts(
+      Actor::You,
+      CardPredicate {
           not_card_types: vec![CardType::Creature],
           ..Default::default()
       },
-      nth: None,
-  },
+  ),
   ```
 
-  Changing `who` to `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an
-  opponent casts" or "whenever a player casts"; `nth: Some(2)` gives "your
-  second spell each turn". The same applies to draws (`Draws { who, nth }`),
+  `casts` builds `Casts { who, predicate, nth: None }`. Changing `who` to
+  `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an opponent casts" or
+  "whenever a player casts"; `nth: Some(2)` gives "your second spell each
+  turn". The same applies to draws (`Draws { who, nth }`),
   steps (`BeginningOf { step, whose }`), keyword actions such as searching,
   scrying or bending (`Performs { who, any_of }`) and cards reaching a
   graveyard (`PutIntoGraveyard { whose, predicate }`). Object events name a

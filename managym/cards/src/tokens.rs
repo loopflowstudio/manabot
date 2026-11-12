@@ -255,14 +255,13 @@ fn monk() -> CardDefinition {
     CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::This,
                 Modification::pump(1, 1),

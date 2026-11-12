@@ -19,11 +19,15 @@ combat damage to you". Matching is in `flow/triggers.rs` (`turn_step`,
 `every_trigger_event_parameter_reaches_the_learning_tokens` in
 `cards/tests/cards/observability.rs`. Docs (AGENTS.md, docs/engine.md) match.
 
+Card code uses `TriggerCondition::casts(who, predicate)` and
+`beginning_of(step, whose)` for the ~50 common sites; descriptions share one
+`agree` verb helper.
+
 Tokens and digests move (decision in `scratch/questions.md`).
 
 ## Checks
 
-- `cargo nextest run --workspace --profile ci` (debug): 1162/1163 pass;
+- `cargo nextest run --workspace --profile ci` (debug, after compress): 1162/1163 pass;
   `checked_semantic_conformance_evidence_reproduces` fails identically on the
   base commit d95734088. All 14 regenerated traces equal base's except
   `state_hash`/`content_digest`, so play is unchanged.

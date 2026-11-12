@@ -374,10 +374,7 @@ fn aang_at_the_crossroads() -> CardDefinition {
             })],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Combat,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
                 effects: vec![Effect::Earthbend {
                     count: EffectValue::Fixed(2),
                     what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -594,14 +591,13 @@ fn aang_the_last_airbender() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         subtype: Some("Lesson".into()),
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::This,
                     Modification::AddKeywords(Keywords::of(&[Keyword::Lifelink])),
@@ -801,10 +797,7 @@ fn airbender_ascension() -> CardDefinition {
                 )],
             },
             Ability::Triggered {
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::End,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 intervening_if: Some(Condition::SourceCountersAtLeast {
                     kind: CounterKind::Quest,
                     count: 4,
@@ -1055,11 +1048,10 @@ fn appa_steadfast_guardian() -> CardDefinition {
             Ability::Triggered {
                 condition: TriggerCondition::FromZone {
                     zone: ZoneType::Exile,
-                    condition: Box::new(TriggerCondition::Casts {
-                        who: Actor::You,
-                        predicate: CardPredicate::default(),
-                        nth: None,
-                    }),
+                    condition: Box::new(TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate::default(),
+                    )),
                 },
                 intervening_if: None,
                 effects: vec![Effect::create_tokens("Ally", 1)],
@@ -1129,10 +1121,7 @@ fn avatar_aang() -> CardDefinition {
             ))],
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Upkeep,
-                    whose: Actor::AnyPlayer,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::AnyPlayer),
                 effects: vec![Effect::Modal {
                     modes: vec![
                         vec![
@@ -1759,14 +1748,13 @@ fn boar_q_pine() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::put_counters(
                 ObjectSelector::This,
                 CounterKind::PlusOnePlusOne,
@@ -3414,11 +3402,10 @@ fn fire_lord_azula() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::WhileSourceAttacking {
-                    condition: Box::new(TriggerCondition::Casts {
-                        who: Actor::You,
-                        predicate: CardPredicate::default(),
-                        nth: None,
-                    }),
+                    condition: Box::new(TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate::default(),
+                    )),
                 },
                 effects: vec![Effect::CopyTriggeringObject],
             },
@@ -3466,11 +3453,10 @@ fn fire_lord_zuko() -> CardDefinition {
             Ability::Triggered {
                 condition: TriggerCondition::FromZone {
                     zone: ZoneType::Exile,
-                    condition: Box::new(TriggerCondition::Casts {
-                        who: Actor::You,
-                        predicate: CardPredicate::default(),
-                        nth: None,
-                    }),
+                    condition: Box::new(TriggerCondition::casts(
+                        Actor::You,
+                        CardPredicate::default(),
+                    )),
                 },
                 intervening_if: None,
                 effects: counter_each_creature(),
@@ -3571,10 +3557,7 @@ fn fire_nation_engineer() -> CardDefinition {
         // Attacking this turn cannot be undone, so the intervening-if
         // condition still holds as the ability resolves (CR 603.4).
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
@@ -3852,14 +3835,13 @@ fn firebending_student() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::This,
                     Modification::pump(1, 1),
@@ -4446,11 +4428,7 @@ fn guru_pathik() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: lesson_saga_or_shrine,
-                    nth: None,
-                },
+                condition: TriggerCondition::casts(Actor::You, lesson_saga_or_shrine),
                 intervening_if: None,
                 effects: vec![Effect::TargetClause {
                     requirement: TargetRequirement {
@@ -4735,10 +4713,7 @@ fn hog_monkey() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::Combat,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
@@ -4855,14 +4830,13 @@ fn iguana_parrot() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::Flying, Keyword::Vigilance]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::This,
                 Modification::pump(1, 1),
@@ -5073,10 +5047,7 @@ fn iroh_tea_master() -> CardDefinition {
                 effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Combat,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
                 intervening_if: None,
                 // In a two-player game the target opponent is the opponent.
                 effects: vec![
@@ -5418,10 +5389,7 @@ fn katara_bending_prodigy() -> CardDefinition {
         power: Some(2),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::SourceTapped),
             effects: vec![Effect::put_counters(
                 ObjectSelector::This,
@@ -5952,14 +5920,13 @@ fn mai_jaded_edge() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::This,
                 Modification::pump(1, 1),
@@ -5996,14 +5963,13 @@ fn mai_scornful_striker() -> CardDefinition {
         keywords: Keywords::of(&[Keyword::FirstStrike]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::AnyPlayer,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::AnyPlayer,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::LoseLife {
                 player: PlayerSelector::TriggeringPlayer,
                 amount: EffectValue::Fixed(2),
@@ -6030,14 +5996,13 @@ fn master_pakku() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::This,
                     Modification::pump(1, 1),
@@ -6532,10 +6497,7 @@ fn obsessive_pursuit() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Upkeep,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
                 effects: clue(),
             },
             Ability::Triggered {
@@ -6841,10 +6803,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
         toughness: Some(4),
         keywords: Keywords::of(&[Keyword::Flying]),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
             effects: vec![Effect::CreateTokenCopy {
                 of: ObjectSelector::This,
@@ -7913,11 +7872,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
     };
     let prowess = || Ability::Triggered {
         intervening_if: None,
-        condition: TriggerCondition::Casts {
-            who: Actor::You,
-            predicate: noncreature(),
-            nth: None,
-        },
+        condition: TriggerCondition::casts(Actor::You, noncreature()),
         effects: vec![Effect::until_end_of_turn(
             ObjectSelector::This,
             Modification::pump(1, 1),
@@ -7940,11 +7895,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
             prowess(),
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: noncreature(),
-                    nth: None,
-                },
+                condition: TriggerCondition::casts(Actor::You, noncreature()),
                 effects: vec![Effect::create_tokens("Ally", 1)],
             },
         ],
@@ -8009,9 +7960,9 @@ fn sokka_bold_boomeranger() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         any_of: vec![
                             CardPredicate {
                                 card_type: Some(CardType::Artifact),
@@ -8024,8 +7975,7 @@ fn sokka_bold_boomeranger() -> CardDefinition {
                         ],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::This,
                     CounterKind::PlusOnePlusOne,
@@ -8839,11 +8789,7 @@ fn the_legend_of_kuruk() -> CardDefinition {
             toughness: Some(3),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate::default(),
-                    nth: None,
-                },
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
                 effects: vec![Effect::create_tokens("Spirit", 1)],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
@@ -9124,14 +9070,13 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::You,
-                predicate: CardPredicate {
+            condition: TriggerCondition::casts(
+                Actor::You,
+                CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
-                nth: None,
-            },
+            ),
             effects: vec![Effect::create_tokens("Clue", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -9423,10 +9368,7 @@ fn tiger_seal() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::Upkeep,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
                 effects: vec![Effect::tap(ObjectSelector::This)],
             },
         ],
@@ -9508,11 +9450,7 @@ fn toph_hardheaded_teacher() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate::default(),
-                    nth: None,
-                },
+                condition: TriggerCondition::casts(Actor::You, CardPredicate::default()),
                 intervening_if: None,
                 effects: vec![
                     Effect::Earthbend {
@@ -9584,10 +9522,7 @@ fn toph_the_first_metalbender() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
                 what: ObjectSelector::Target(TargetSpec::LandYouControl),
@@ -9862,14 +9797,13 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::This,
                     Modification::pump(1, 1),
@@ -9914,14 +9848,13 @@ fn ty_lee_chi_blocker() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::You,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::until_end_of_turn(
                     ObjectSelector::This,
                     Modification::pump(1, 1),
@@ -10854,10 +10787,7 @@ fn zuko_conflicted() -> CardDefinition {
         power: Some(2),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::FirstMain,
-                whose: Actor::You,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::FirstMain, Actor::You),
             intervening_if: None,
             effects: vec![Effect::TriggerModes {
                 up_to: None,

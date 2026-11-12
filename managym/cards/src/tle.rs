@@ -67,14 +67,13 @@ fn the_cabbage_merchant() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Casts {
-                    who: Actor::Opponent,
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::Opponent,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                    nth: None,
-                },
+                ),
                 effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {

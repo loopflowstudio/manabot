@@ -73,10 +73,7 @@ fn fevered_visions() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::End,
-                whose: Actor::AnyPlayer,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
             effects: vec![
                 that_player(vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),

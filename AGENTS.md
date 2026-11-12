@@ -469,7 +469,8 @@ step, the active player; for a graveyard, its owner) is "that player",
 `InGraveyard`, `WasCast` and `WhileSourceAttacking` wrap any event. Ability
 descriptions and learning tokens come from one template per event that fills
 in the actor and parameters, so a new actor or count needs no new variant,
-text or token.
+text or token. Card code writes the common forms with
+`TriggerCondition::casts(who, predicate)` and `beginning_of(step, whose)`.
 
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as

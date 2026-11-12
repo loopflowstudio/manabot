@@ -66,10 +66,7 @@ fn agent_of_treachery() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: Some(Condition::ControlsUnownedAtLeast { count: 3 }),
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::End,
-                    whose: Actor::You,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(3),
                 }],

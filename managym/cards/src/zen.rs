@@ -108,10 +108,7 @@ fn bloodchief_ascension() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 }),
-                condition: TriggerCondition::BeginningOf {
-                    step: TurnStep::End,
-                    whose: Actor::AnyPlayer,
-                },
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
                 effects: vec![may(vec![Effect::put_counters(
                     ObjectSelector::This,
                     CounterKind::Quest,

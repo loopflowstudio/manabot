@@ -43,10 +43,7 @@ fn koma_cosmos_serpent() -> CardDefinition {
         statics: vec![StaticAbility::CantBeCountered],
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOf {
-                step: TurnStep::Upkeep,
-                whose: Actor::AnyPlayer,
-            },
+            condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::AnyPlayer),
             effects: vec![Effect::create_tokens("Koma's Coil", 1)],
         }],
         activated_abilities: vec![

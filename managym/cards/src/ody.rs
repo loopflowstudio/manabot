@@ -45,11 +45,7 @@ fn standstill() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Casts {
-                who: Actor::AnyPlayer,
-                predicate: CardPredicate::default(),
-                nth: None,
-            },
+            condition: TriggerCondition::casts(Actor::AnyPlayer, CardPredicate::default()),
             effects: vec![
                 Effect::sacrifice_this(),
                 Effect::if_you_do(vec![Effect::ForPlayer {

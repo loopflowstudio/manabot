@@ -197,11 +197,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             }
         ),
         TriggerCondition::DealsCombatDamage { subject, to, per } => {
-            let to = match to {
-                Actor::You => "you",
-                Actor::Opponent => "an opponent",
-                Actor::AnyPlayer => "a player",
-            };
+            let to = actor_noun(*to);
             match per {
                 Per::Object => format!(
                     "Whenever {} deals combat damage to {to}",
@@ -276,14 +272,18 @@ fn actor_possessive(who: Actor) -> &'static str {
     }
 }
 
-/// "you cast", "an opponent casts".
-fn actor_does(who: Actor, plain: &str, third_person: &str) -> String {
-    let verb = if who == Actor::You {
+/// The verb form agreeing with its actor: "cast" for you, "casts" otherwise.
+fn agree<'a>(who: Actor, plain: &'a str, third_person: &'a str) -> &'a str {
+    if who == Actor::You {
         plain
     } else {
         third_person
-    };
-    format!("{} {verb}", actor_noun(who))
+    }
+}
+
+/// "you cast", "an opponent casts".
+fn actor_does(who: Actor, plain: &str, third_person: &str) -> String {
+    format!("{} {}", actor_noun(who), agree(who, plain, third_person))
 }
 
 /// A keyword action's verb phrase agreeing with its actor.
@@ -292,11 +292,7 @@ fn keyword_action_text(who: Actor, action: KeywordAction) -> String {
         KeywordAction::Search => {
             return format!(
                 "{} {} library",
-                if who == Actor::You {
-                    "search"
-                } else {
-                    "searches"
-                },
+                agree(who, "search", "searches"),
                 actor_possessive(who)
             );
         }
@@ -307,12 +303,7 @@ fn keyword_action_text(who: Actor, action: KeywordAction) -> String {
         KeywordAction::Firebend => ("firebend", "firebends"),
         KeywordAction::Airbend => ("airbend", "airbends"),
     };
-    if who == Actor::You {
-        plain
-    } else {
-        third_person
-    }
-    .into()
+    agree(who, plain, third_person).into()
 }
 
 /// "a or b"; "a, b, or c".
@@ -1258,11 +1249,7 @@ mod tests {
                 "Whenever an opponent casts their second creature spell each turn",
             ),
             (
-                TriggerCondition::Casts {
-                    who: Actor::You,
-                    predicate: CardPredicate::default(),
-                    nth: None,
-                },
+                TriggerCondition::casts(Actor::You, CardPredicate::default()),
                 "Whenever you cast a spell",
             ),
             (
@@ -1273,10 +1260,7 @@ mod tests {
                 "Whenever you draw your second card each turn",
             ),
             (
-                TriggerCondition::BeginningOf {
-                    step: TurnStep::Draw,
-                    whose: Actor::AnyPlayer,
-                },
+                TriggerCondition::beginning_of(TurnStep::Draw, Actor::AnyPlayer),
                 "At the beginning of each player's draw step",
             ),
             (
