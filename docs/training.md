@@ -34,13 +34,16 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
 with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats` and `--device cpu|mps|cuda` apply only to these recipes.
+`--learning-seats`, `--device cpu|mps|cuda` and `--bucketed-shapes` apply only
+to these recipes; a regime sets the same choices in its stages' `Execution`.
 Without `--device`, both select CUDA when available; Apple MPS is used only
 when requested with `--device mps`. Baseline requires an accelerator and
 rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
 CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
-retired and fail.
+retired and fail. `--bucketed-shapes` trains with
+[bucketed padding](observation-and-model.md#bucketed-padding-profiling), an
+opt-in way to compare accelerator cost; it is off by default.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
@@ -123,6 +126,9 @@ damping horizon fitted to the run's expected updates and `recover_capacity`.
 The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
+`execution.bucketed_shapes` (default `False`, serialized only when `True`)
+selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
+for the stage's collection and learner policies.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
@@ -342,21 +348,37 @@ phase seconds under `time/` (`time/collection`,
 `time/learning/minibatches/forward_and_loss`), CUDA high-water marks
 (`memory/peak_allocated_cuda_bytes`, `memory/peak_reserved_cuda_bytes`),
 `selection_groups/<action type>/<terminal distance>/rows`. Completed self-play
-outcomes are rows with `deck`, `opponent_deck`, `position` (`play` or `draw`),
-`wins`, `losses` and `draws` in an immutable JSON table under the metric run's
-`artifacts/self-play-outcomes/`. The update's `self_play_outcomes/table` metric
-names its SHA-256 digest. Etude carries these files alongside metrics, including
-for launched jobs; keep the artifacts when copying a run for offline analysis.
-Deck pairs no longer create metric columns, which made background index refreshes
-repeatedly load large matchup histories.
+outcomes are a row table, logged once per update with Etude's
+`run.log_table("self_play_outcomes", rows, updates=...)`. Each row has `deck`
+and `opponent_deck` (deck identities), `position` (`play` or `draw`), `wins`,
+`losses` and `draws`, so deck pairs add rows rather than metric columns. Etude
+stores the table as an immutable JSON file under the metric run's `artifacts/` and carries it with the
+metrics, including for launched jobs; keep `artifacts/` when copying a run for
+offline analysis. Read the rows directly through Etude:
 
-`manabot.training.update_metrics.read_updates` verifies the selected tables and
+```python
+from etude.train.read import read
+
+# The runs directory holding the metric run, its experiment (the stage id
+# unless the experiment names one) and TrainingRun.id.
+history = read(runs_dir, experiment, run_id)
+for table in history.read_table("self_play_outcomes", "updates"):
+    print(table.x, table.rows)
+```
+
+```text
+1.0 ({'deck': '7d663f0e…', 'opponent_deck': 'fc948195…', 'position': 'draw', 'wins': 1, 'losses': 1, 'draws': 0}, ...)
+```
+
+`manabot.training.update_metrics.read_updates` reads the same tables and
 projects their counts as `self_play_outcomes/<deck>/<opponent>/<play|draw>/wins`
-(and `losses`/`draws`) for existing reports. It selects resumed and duplicate
-updates before reading their tables; unreferenced tables supply no results.
-Missing or corrupt referenced tables raise an error. Historical scalar outcome
-metrics remain readable unchanged. Selection and belief
-summaries stay in their stage's `diagnostics`.
+(and `losses`/`draws`) for existing reports. Etude selects resumed and duplicate
+updates before fetching tables; unreferenced tables supply no results, and a
+missing or damaged selected table raises, naming the file to restore. Historical
+scalar outcome metrics remain readable unchanged. Runs that recorded
+`self_play_outcomes/table` references (written from `1659b0e29`) are refused;
+read them from a revision that still reads that format, such as `bf4e280f7`.
+Selection and belief summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:
 `environment_step_and_encoding`, which compares a run to retained ones, divides by

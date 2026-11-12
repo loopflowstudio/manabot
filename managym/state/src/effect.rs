@@ -90,15 +90,45 @@ pub enum Modification<N = i32> {
     /// Rules effect: doesn't untap during its controller's untap step
     /// (CR 502.3).
     DoesntUntap,
+    /// Rules effect: its activated abilities, mana abilities included, can't
+    /// be activated (CR 602.5).
+    CantActivateAbilities,
+    /// Rules effect: every creature able to block it does so (CR 509.1c).
+    MustBeBlockedByAllAble,
     /// Layer 6: loses these keywords, whatever grants them.
     LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
+    /// Replacement: if it would leave the battlefield, exile it instead of
+    /// putting it anywhere else (unearth, CR 702.84a).
+    ExileIfWouldLeave,
     /// Rules effect on a player: unspent mana of this color stays as steps
     /// and phases end (CR 106.4).
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// Rules effect on a player: the next creature card they cast may be
+    /// cast as though it had flash (Scout's Warning). Casting any creature
+    /// card ends every such record, whether or not it needed the timing.
+    NextCreatureCastFlash,
+    /// Rules effect on a player: they skip every combat phase of their next
+    /// turn, additional ones included (CR 500.11). It ends in the cleanup step
+    /// of a turn that player takes.
+    SkipsCombatPhasesNextTurn,
+    /// Rules effect on a player: their life total can't change (CR 119.7):
+    /// life gain, life loss and damage leave it alone, and they can pay no
+    /// life other than 0 (CR 119.8).
+    LifeTotalCantChange,
+    /// Rules effect on a player: protection from everything (CR 702.16j).
+    /// Nothing can target them, and all damage to them is prevented.
+    ProtectionFromEverything,
+    /// Rules effect: the permanent is phased out (CR 702.26). It stays on
+    /// the battlefield with its counters and attachments, but the game
+    /// treats it as though it doesn't exist; `Game::is_phased_out` is the
+    /// one reader. It phases in, ending the record, during its controller's
+    /// untap step before they untap (CR 702.26a); a permanent phased out
+    /// indirectly with the one it is attached to phases in with it.
+    PhasedOut,
     /// Layer 2 (CR 613.1b): the record's controller controls the object;
     /// when the record ends with the object still theirs, control returns
     /// to `previous`. Only resolutions create it (`Effect::GainControl`).
@@ -153,10 +183,18 @@ impl<N> Modification<N> {
             Self::CantBeBlocked => Modification::CantBeBlocked,
             Self::CantBlock => Modification::CantBlock,
             Self::DoesntUntap => Modification::DoesntUntap,
+            Self::CantActivateAbilities => Modification::CantActivateAbilities,
+            Self::MustBeBlockedByAllAble => Modification::MustBeBlockedByAllAble,
             Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
+            Self::ExileIfWouldLeave => Modification::ExileIfWouldLeave,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
+            Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
+            Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
+            Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
+            Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
+            Self::PhasedOut => Modification::PhasedOut,
             Self::ControlChanged { previous } => Modification::ControlChanged {
                 previous: *previous,
             },
@@ -181,7 +219,6 @@ impl Modification {
             | Self::AddColors(_)
             | Self::GrantActivated(_)
             | Self::GrantTriggered(_)
-            | Self::GrantStatic(_)
             | Self::SwitchPt => return false,
             Self::AddSubtypes(subtypes) => {
                 for subtype in subtypes {
@@ -193,6 +230,8 @@ impl Modification {
             Self::BecomeCreature => {
                 definition.types.types.insert(CardType::Creature);
             }
+            // "Except it has [this card's] other abilities" (CR 707.9b).
+            Self::GrantStatic(ability) => definition.statics.push((**ability).clone()),
             Self::Nonlegendary => definition
                 .supertypes
                 .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary")),
@@ -209,10 +248,18 @@ impl Modification {
             | Self::CantBeBlocked
             | Self::CantBlock
             | Self::DoesntUntap
+            | Self::CantActivateAbilities
+            | Self::MustBeBlockedByAllAble
             | Self::LoseKeywords(_)
             | Self::ExileIfWouldDie
+            | Self::ExileIfWouldLeave
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
+            | Self::NextCreatureCastFlash
+            | Self::SkipsCombatPhasesNextTurn
+            | Self::LifeTotalCantChange
+            | Self::ProtectionFromEverything
+            | Self::PhasedOut
             | Self::ControlChanged { .. }
             | Self::ModeChosen { .. }
             | Self::HasAbilitiesOfSource => return false,
@@ -244,6 +291,9 @@ pub enum EffectDuration {
     /// "For as long as you control [this]": ends once the effect's
     /// controller no longer controls its exact source object (CR 611.2b).
     WhileYouControlSource,
+    /// "Until your next turn": ends as the record controller's next turn
+    /// begins, before that turn's untap step phases anything in (CR 502.1).
+    UntilYourNextTurn,
 }
 
 /// Whom a continuous effect record affects.
@@ -295,6 +345,9 @@ pub struct EffectRecords {
     by_object: BTreeMap<ObjectRef, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
+    /// How many records are `PhasedOut`, so battlefield readers skip the
+    /// per-object lookup while nothing is phased out.
+    phased_out: usize,
 }
 
 impl EffectRecords {
@@ -304,6 +357,7 @@ impl EffectRecords {
             Affected::Object(object) => self.by_object.entry(object).or_default().push(index),
             Affected::Player(player) => self.by_player[player.0].push(index),
         }
+        self.phased_out += usize::from(record.modification == Modification::PhasedOut);
         self.records.push(record);
     }
 
@@ -342,11 +396,18 @@ impl EffectRecords {
         self.records.is_empty()
     }
 
+    /// Whether any record phases a permanent out.
+    #[inline]
+    pub fn any_phased_out(&self) -> bool {
+        self.phased_out > 0
+    }
+
     /// Keep the records `keep` accepts, in order, and rebuild the index.
     pub fn retain(&mut self, mut keep: impl FnMut(&ContinuousEffect) -> bool) {
         let records = std::mem::take(&mut self.records);
         self.by_object.clear();
         self.by_player = Default::default();
+        self.phased_out = 0;
         self.extend(records.into_iter().filter(|record| keep(record)));
     }
 }

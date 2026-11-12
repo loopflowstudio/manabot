@@ -38,11 +38,23 @@ frozen input version never silently falls behind the rules.
 
 ## What the network does
 
+Every observation batch is admitted once, on CPU, before any forward:
+`admit_observation(agent, obs)` checks shapes, references, programs and the
+legal-action mask and returns an `AdmittedObservation`. The forward reads only
+admitted input, raises `TypeError` for a plain tensor dictionary and does no
+validation of its own
+([observation admission](../manabot/model/agent.md#observation-admission)).
+
 1. **Embed.** Each visible object gets a typed projection. A card's rules tokens
    pass through a token embedding and a GRU, so the model can read what a card
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
+   With `token_stream="pooled"` (an experimental option, off by default), one
+   attention sequence holds each observation's valid objects, continuation
+   relations and legal actions, padded per batch to a 32-token bucket; action
+   tokens carry their focus objects in and their attended output is scored
+   ([comparison](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -117,12 +129,77 @@ facts remain a separate sum. Neither path adds attention tokens.
 Complete shared records retain duration, timestamp, controller and exact source
 bindings that can change future behavior.
 
+### Bucketed padding (profiling)
+
+Each buffer arrives padded to its declared capacity, but a real batch uses
+little of it. Across 300 captured collection batches the median batch needed 59
+of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. By default
+the network still processes every slot, and skips lookups for an axis that is
+empty in the batch, so tensor shapes change from batch to batch.
+
+Bucketed padding is an opt-in alternative meant for comparing accelerator
+cost. After an observation is admitted, the network trims each variable axis
+(facts, effect headers, details and members, relations, actions, events, cards,
+permanents, known hands and decklists) to a bucket: the next power of two at or
+above what the batch uses, at least 8 and at most the declared capacity. What a
+batch uses includes every row a reference can name, so trimming removes only
+empty rows nothing refers to. Trimming cards and permanents renumbers object
+references; it is skipped under `historical_mean` value aggregation, whose
+average includes padding, and with belief rows. Logits keep their full action
+capacity. Inference measures the buckets on the host while preparing a batch,
+so the device forward reads nothing back to find them; learning measures them
+with one read per forward.
+
+Inside the network, fact ids are looked up at the fact axis's shape instead of
+for selected rows, and learning encodes the complete card catalog instead of
+the definitions a batch references. Shared-effect routing, fact programs and
+legal-action selection keep their packed, data-dependent layouts. A forward
+therefore takes one of a few shapes per input axis instead of a new shape for
+nearly every batch, and does much less work than padding everything to
+capacity. The complete catalog is more work than the default path's
+referenced definitions: captured Elemental learner batches referenced 65 to
+154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
+tokens. On CPU, where the recurrent catalog encoder dominates learning, a
+learner forward and backward is therefore slower than on the default path,
+most of all for small decks.
+
+A training stage turns it on in its execution settings, next to the device:
+
+```python
+from manabot.training.regime import Execution
+
+execution = Execution(device="cuda", bucketed_shapes=True)
+```
+
+The stage's collection and learner policies, including a frozen opponent
+(`load_checkpoint(..., bucketed_shapes=True)`), then use bucketed shapes; its
+evaluation and search do not. `uv run manabot train --recipe baseline
+--bucketed-shapes` sets it on the CLI recipes ([run training](training.md#run-training)),
+and code that builds a policy directly passes
+`ActorCritic(..., bucketed_shapes=True)`. An unset field is omitted from the
+serialized regime, so existing regime hashes are unchanged; a stage that sets
+it records `"bucketed_shapes": true` in the regime in `run.json`. To compare
+the two paths, run the same regime once with each setting.
+`token_stream="pooled"` does not support bucketed shapes, and a regime
+combining them fails validation.
+
+The setting changes how a forward is computed, not the model. It changes no
+`ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
+trained with either setting loads and runs with the other. On CPU,
+action probabilities, values, losses and gradients agree with the default path
+up to the order of floating-point sums. A batch that references no card
+definition is the one difference in gradient support: the catalog encoder then
+receives exactly zero gradients instead of none. Capacity overflow and
+malformed inputs are rejected with the same error and message as on the
+default path.
+
 ## Policy inputs
 
-Main carries one policy input, v9. `ObservationConfig.policy_input_version` is
-always serialized. A checkpoint, replay or saved configuration bound to any
-other version, or omitting it, raises `UnsupportedPolicyInput`, which names the
-revision to run it from
+Main carries policy input v9, the fresh default, and explicit input v10
+([below](#input-v10-turn-history-and-powerstone-mana)).
+`ObservationConfig.policy_input_version` is always serialized. A checkpoint,
+replay or saved configuration bound to any other version, or omitting it,
+raises `UnsupportedPolicyInput`, which names the revision to run it from
 ([`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is the
 last revision supporting v1–v8). Load saved configurations through
 `ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
@@ -134,6 +211,58 @@ shape. A checkpoint from an earlier layout is refused with the buffers that
 differ and the revision to run it from. Loading an architecture does not
 admit a checkpoint to the current world; see
 [world identity](../manabot/README.md#world-identity).
+
+### Input v10: turn history and Powerstone mana
+
+Three TLE bonus-sheet cards read state v9 has no place for:
+
+| Card | State v10 adds |
+| --- | --- |
+| Bloodchief Ascension | Life each player has lost this turn |
+| Brought Back | Which graveyard cards were put there from the battlefield this turn |
+| Cityscape Leveler | Mana that can't be spent to cast nonartifact spells (its Powerstone tokens) |
+
+Select v10 explicitly before constructing the collector and model:
+
+```python
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.recipes.local import local_smoke
+
+regime = local_smoke(steps=1).model_copy(
+    update={"observation": ObservationConfig(policy_input_version=10)}
+)
+space = ObservationSpace(regime.observation)
+```
+
+Use that `space` for `SeatRoutedCollector` and `ActorCritic(space, regime.agent)`;
+the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
+in the same native scalar, vector and Python encoders, the LLM text observation
+and the learning tokens.
+
+V10 adds two buffers to the v9 layout; their presence is what selects v10 in
+the native encoders:
+
+| Key | Shape | Holds |
+| --- | --- | --- |
+| `player_turn_state` | 2 × 8 | Per seat, agent first: life lost this turn / 20, spells cast this turn / 10, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
+| `card_turn_state` | 2 × 60 | Per seat card row (aligned with `semantic_cards`): 1 for a graveyard card put there from the battlefield this turn |
+
+The model appends each seat's row to its player row and each card value to its
+card row before embedding them.
+
+V9 and its checkpoints are unchanged: w17 checkpoints keep loading, and fresh
+configurations stay v9. A v9 encoder refuses a position that needs v10 state:
+a card visible to the viewer reads life lost this turn or graveyard cards put
+there from the battlefield and that state is present, or a pool holds mana
+that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
+names the needed state. The Python encoder raises `UnsupportedPolicyInput`
+naming v10 and the state, and the native encoders raise `ValueError` with the
+same reason, before writing any buffer. A v9 run over decks with these cards
+stops at the first such position, so train on them with v10.
+A game, replay or Academy session needs no policy input and plays these cards
+under any configuration. A v9 checkpoint cannot be widened to v10; train a new
+one.
 
 ### Layout
 
@@ -382,8 +511,10 @@ is not evidence for any of them:
 - No paired observation test shows a lost activated ability removing an action,
   or a source that leaves and re-enters as the same physical card. Those cases
   rest on rules anchors and reasoning.
-- Fixed padded capacity against packed variable length is open. Natural
-  length distributions have not been gathered.
+- Fixed padded capacity against packed variable length is open. Collection
+  batches use a small fraction of each capacity
+  ([bucketed padding](#bucketed-padding-profiling)); how that affects
+  accelerator cost has not been measured.
 - Learned sums preserve multiplicity but are not injective; whether that loses
   decision-relevant distinctions in practice is unmeasured.
 - Sequence training changes collection, sampling and recovery, and that cost has
@@ -409,6 +540,7 @@ is not evidence for any of them:
 | Part | Code |
 | --- | --- |
 | Network | `ActorCritic` in [`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py) |
+| Observation admission | [`manabot/model/admission.py`](../manabot/model/admission.py) |
 | Observation space and reference encoder | [`manabot/env/observation.py`](../manabot/env/observation.py) |
 | Native encoder and continuation | [`managym/src/agent/observation_encoder.rs`](../managym/src/agent/observation_encoder.rs), [`continuation.rs`](../managym/src/agent/continuation.rs) |
 | Shared effects | [`manabot/env/shared_effects.py`](../manabot/env/shared_effects.py), [`managym/src/agent/shared_effects.rs`](../managym/src/agent/shared_effects.rs) |

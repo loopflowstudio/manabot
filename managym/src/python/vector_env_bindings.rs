@@ -49,6 +49,8 @@ struct ObservationBuffers {
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
     decklists: Option<Py<PyAny>>,
+    player_turn_state: Option<Py<PyAny>>,
+    card_turn_state: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -526,6 +528,33 @@ pub(super) fn input_buffer_config(
         ));
     }
     config.max_facts = shape("facts")?[0];
+    // Input v10 is v9 plus both turn-state buffers.
+    config.turn_state = match (
+        buffers.contains("player_turn_state")?,
+        buffers.contains("card_turn_state")?,
+    ) {
+        (false, false) => false,
+        (true, true) => {
+            let player = shape("player_turn_state")?;
+            let card = shape("card_turn_state")?;
+            if player != [2, crate::agent::observation_encoder::TURN_STATE_DIM]
+                || card != [2, config.max_cards_per_player]
+            {
+                return Err(PyValueError::new_err(format!(
+                    "policy input v10 requires player_turn_state of shape [2, {}] and \
+                     card_turn_state of shape [2, {}]",
+                    crate::agent::observation_encoder::TURN_STATE_DIM,
+                    config.max_cards_per_player
+                )));
+            }
+            true
+        }
+        _ => {
+            return Err(PyValueError::new_err(
+                "policy input v10 requires both player_turn_state and card_turn_state",
+            ))
+        }
+    };
     Ok(config)
 }
 
@@ -592,6 +621,19 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
+        player_turn_state: if c.turn_state {
+            required(
+                "player_turn_state",
+                &[n, 2, crate::agent::observation_encoder::TURN_STATE_DIM],
+            )?
+        } else {
+            None
+        },
+        card_turn_state: if c.turn_state {
+            required("card_turn_state", &[n, 2, c.max_cards_per_player])?
+        } else {
+            None
+        },
         decklists: required(
             "decklists",
             &[
@@ -1035,6 +1077,8 @@ struct SendObservationFieldSlices {
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
     decklists: Option<SendSlice<f32>>,
+    player_turn_state: Option<SendSlice<f32>>,
+    card_turn_state: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -1177,6 +1221,28 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.decklists_len())?,
                         config.decklists_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            player_turn_state: if let Some(buffer) = self.player_turn_state {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.player_turn_state_len())?,
+                        config.player_turn_state_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            card_turn_state: if let Some(buffer) = self.card_turn_state {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.card_turn_state_len())?,
+                        config.card_turn_state_len(),
                     )
                 }
             } else {
@@ -1359,6 +1425,16 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "decklists"))
         .transpose()?;
+    let player_turn_state_buffer = buffers
+        .player_turn_state
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "player_turn_state"))
+        .transpose()?;
+    let card_turn_state_buffer = buffers
+        .card_turn_state
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "card_turn_state"))
+        .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -1426,6 +1502,14 @@ fn with_send_write_buffers<R>(
         decklists: decklists_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))
+            .transpose()?,
+        player_turn_state: player_turn_state_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "player_turn_state"))
+            .transpose()?,
+        card_turn_state: card_turn_state_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "card_turn_state"))
             .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,

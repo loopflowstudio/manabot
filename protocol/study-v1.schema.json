@@ -1772,6 +1772,12 @@
             "minimum": 0
           }
         },
+        "spells_cast": {
+          "description": "Spells this player cast this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "stack": {
           "type": "array",
           "items": {
@@ -2008,6 +2014,12 @@
         "land_entered": {
           "description": "A land entered the battlefield under this player's control.",
           "type": "boolean"
+        },
+        "life_lost": {
+          "description": "Life this player lost (CR 119.3; damage, payment or a set life total\nlower than before), summed over every loss this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
         },
         "permanents_sacrificed": {
           "description": "Permanents this player sacrificed (CR 701.21).",

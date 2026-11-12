@@ -26,6 +26,7 @@ import torch
 from manabot.env.env import Env
 from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import (
     SELECTED_BRANCH_DRIVER_ID,
@@ -227,7 +228,7 @@ class AgentLeafEvaluator:
         ):
             raise ValueError("PUCT policy cannot represent the complete legal offers")
         with torch.inference_mode():
-            logits, value = self.agent(tensor_obs)
+            logits, value = self.agent(admit_observation(self.agent, tensor_obs))
             legal_logits = logits[0, :action_count].double()
             if not torch.isfinite(legal_logits).all():
                 raise ValueError("PUCT policy returned nonfinite legal logits")

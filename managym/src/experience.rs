@@ -536,6 +536,9 @@ pub struct LegacyPlayerView {
     /// What this player has done this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Spells this player cast this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,

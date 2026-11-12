@@ -5,14 +5,18 @@ use managym_state::{
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
-        SacrificeCost,
+        SacrificeCost, StaticAbility,
     },
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![bastion_of_remembrance(), weaponize_the_monsters()]
+    vec![
+        bastion_of_remembrance(),
+        drannith_magistrate(),
+        weaponize_the_monsters(),
+    ]
 }
 
 fn bastion_of_remembrance() -> CardDefinition {
@@ -36,7 +40,7 @@ fn bastion_of_remembrance() -> CardDefinition {
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::Dies {
-                        subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        subject: TriggerSubject::you_control(CardPredicate {
                             card_type: Some(CardType::Creature),
                             ..Default::default()
                         }),
@@ -79,6 +83,26 @@ fn weaponize_the_monsters() -> CardDefinition {
                 )],
                 ..Default::default()
             }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn drannith_magistrate() -> CardDefinition {
+    let text_box = "Your opponents can't cast spells from anywhere other than their hands.";
+    CardDefinition {
+        key: "iko.drannith_magistrate",
+        scryfall_id: "98b0a4a8-9319-451b-9b79-b0bca7a41e91",
+        printed: PrintedCharacteristics {
+            name: "Drannith Magistrate".into(),
+            mana_cost: Some(ManaCost::parse("{1}{W}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Human".into(), "Wizard".into()],
+            power: Some(1),
+            toughness: Some(3),
+            statics: vec![StaticAbility::OpponentsCastOnlyFromHand],
             text_box: text_box.into(),
             ..Default::default()
         },

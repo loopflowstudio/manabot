@@ -319,6 +319,8 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::ExileFromHandPayment { .. }) =>
+                ("additional_cost", "Choose a card in hand to exile instead of paying the spell's mana cost."),
             Some(PendingChoice::DiscardPayment { .. }) =>
                 ("additional_cost", "Choose a card to discard as an activation cost."),
             Some(PendingChoice::TapPayment { .. }) =>
@@ -331,7 +333,9 @@ impl Game {
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
+            Some(PendingChoice::KickerChoice { card, .. }) if self.state.cards[*card].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::AnnounceX { card, .. }) if self.state.cards[*card].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -343,6 +347,8 @@ impl Game {
         view.instruction = instruction.into();
         if let Some(suspended) = &self.state.suspended_decision {
             let (stage, instruction) = match &suspended.decision {
+                Decision::EnterAsCopy { .. } => ("resolution_choice", "Choose a creature for the entering permanent to enter as a copy of, or decline so it enters as itself."),
+                Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => ("tap_payment", "Choose an untapped permanent to pay the ability's tap cost. Each selection commits a tap; the continuation records the unpaid count."),
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::ChooseObject { .. } => ("resolution_choice", "Choose a permanent you control for the resolving instruction (sacrifice, tap, ...), not as an announcement cost."),
@@ -363,7 +369,7 @@ impl Game {
                 Decision::SelectCards { origin: crate::flow::decision::SelectionOrigin::Library, .. } => ("private_search", "Inspect the permitted library candidates. Choose a card, then finish searching when offered."),
                 Decision::SelectCards { .. } => ("select_cards", "Choose from the eligible cards, then finish selection when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
-                Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
+                Decision::SearchDistinctNames { .. } => ("private_search", "Inspect the permitted library candidates. Choose a permitted card with a new name, or stop searching; chosen cards are revealed."),
                 Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
                 Decision::CastDuringResolution { paid: false, .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
                 Decision::CastDuringResolution { paid: true, .. } => ("resolution_cast", "Choose a spell to cast now, paying its costs, or decline."),

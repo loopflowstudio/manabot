@@ -8,6 +8,14 @@ same version and keeps `manabot.managym` as a compatibility alias. Rust sources
 stay in this directory. Start with the
 [Python installation example](../docs/engine-python.md).
 
+For building a deck before play, see [Limited deck building](../docs/deck-building.md):
+`CardPool` holds the cards available, `format.Limited` holds the rules, and a
+build started from both reports the copies still available and when stopping
+is legal. The same rules read and write NumPy arrays over the card axis for
+batched builders.
+Format rules live in `src/format/` (`format::limited`); they build on the
+definitions, decklists and world admission in `src/cards/`.
+
 [Engine development principles](PRINCIPLES.md) records the lessons from
 Allies–Lessons, Elemental and TLA: shared rule ownership, preserved choices and
 timing, trustworthy learning evidence, and measured runtime/search performance.
@@ -27,8 +35,10 @@ are in the [README](../README.md#contracts-the-code-enforces).
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
    and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
-5. **`src/infra/`**: Logging and profiler infrastructure
-6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+5. **`src/format/`**: Format construction rules and card selection;
+   `limited.rs` adds Limited pool counts and deck size rules to world admission
+6. **`src/infra/`**: Logging and profiler infrastructure
+7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
 `cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
@@ -259,14 +269,18 @@ commit and its output become a visible color decision. Mana abilities do not
 create stack objects. Fixed production keeps source order; a nested automatic
 prefix considers concrete pool remainders and the parent's completion.
 
-Every registered chosen-output mana mode consumes a tap (sometimes also a
-sacrifice), so each source has one use during a payment. The registry contract
-requires a model extension before introducing separate tap/sacrifice mana uses,
-repeatable free sources, or additional mana-ability cost methods.
-Search retains identities rather than grouping equal outputs. Its total and
-spend-purpose bounds only reject impossible branches; every accepted payment
-still requires a complete witness. This is finite search, without a general
-large-board performance guarantee.
+Payment search tracks an object's untapped resource, presence and limited
+ability uses separately. Counted tap costs select distinct untapped matching
+permanents through ordinary SelectCard decisions; The Cabbage Merchant can
+activate twice by tapping four distinct Foods without tapping itself. Each
+selected tap commits before the next selection and is unavailable to nested
+costs or waterbending. Pending tap
+counts use the continuation mode field; source and ability retain their usual
+joins. Single-object costs keep their serialized definition shape.
+Every registered mana ability must consume a finite resource. The total and
+spend-purpose bounds count repeatable outputs optimistically; every accepted
+payment still requires an identity-preserving witness with explicit tap choices.
+This is finite search, without a general large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card

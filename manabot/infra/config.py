@@ -17,10 +17,13 @@ from pydantic import (
 
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
-# The one policy input this revision encodes, admits and models. Earlier
-# inputs run from the revision that recorded them; a future input widens the
-# field's literal and this constant together.
-POLICY_INPUT_VERSION: Literal[9] = 9
+# The policy input a fresh configuration selects. Input v10 is v9 plus turn
+# state (life lost, graveyard cards from the battlefield, Powerstone mana) and
+# is selected explicitly; earlier inputs run from the revision that recorded
+# them.
+PolicyInputVersion = Literal[9, 10]
+POLICY_INPUT_VERSION: PolicyInputVersion = 9
+SUPPORTED_POLICY_INPUTS: tuple[PolicyInputVersion, ...] = (9, 10)
 # The last revision whose encoders, bindings and model accept inputs v1-v8.
 LAST_MULTI_INPUT_REVISION = "ac601834d"
 # How the critic summarizes the final object board; see ActorCritic._value_from_objects.
@@ -50,25 +53,35 @@ class BaseConfig(BaseModel):
 
 
 class UnsupportedPolicyInput(ValueError):
-    """A checkpoint, replay or saved configuration bound to another policy input.
+    """A checkpoint, replay or saved configuration bound to another policy
+    input, or an observation the configured input cannot hold.
 
-    `version` is the saved version; a saved configuration that omits it was
-    written for policy input v1.
+    `version` is the saved or required version; a saved configuration that
+    omits it was written for policy input v1. `state` names what a v9
+    observation needed when v10 is required.
     """
 
-    def __init__(self, version: object) -> None:
+    def __init__(self, version: object, state: str | None = None) -> None:
         self.version = version
-        super().__init__(
-            f"the checkpoint was written for policy input v{version} and must be "
-            "run from the revision that recorded it; this revision supports only "
-            f"policy input v{POLICY_INPUT_VERSION}, and {LAST_MULTI_INPUT_REVISION} "
-            "is the last revision supporting v1-v8"
-        )
+        self.state = state
+        if state is not None:
+            message = (
+                f"policy input v{version} required: this observation needs "
+                f"{state}, which v9 cannot hold"
+            )
+        else:
+            message = (
+                f"the checkpoint was written for policy input v{version} and must "
+                "be run from the revision that recorded it; this revision supports "
+                f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
+                f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
+            )
+        super().__init__(message)
 
 
 class ObservationConfig(BaseConfig):
     # Always serialized, so a saved configuration names its input.
-    policy_input_version: Literal[9] = POLICY_INPUT_VERSION
+    policy_input_version: PolicyInputVersion = POLICY_INPUT_VERSION
     # Local fact rows; shared effects have their own fixed buffers.
     max_facts: int = Field(default=512, gt=0)
 
@@ -91,7 +104,7 @@ class ObservationConfig(BaseConfig):
     @classmethod
     def reject_other_inputs(cls, value: object) -> object:
         """Name the recording revision instead of a bare literal mismatch."""
-        if value != POLICY_INPUT_VERSION:
+        if value not in SUPPORTED_POLICY_INPUTS:
             raise UnsupportedPolicyInput(value)
         return value
 
@@ -103,7 +116,7 @@ class ObservationConfig(BaseConfig):
         Raises `UnsupportedPolicyInput` before any other field is validated.
         """
         version = payload.get("policy_input_version", 1)
-        if version != POLICY_INPUT_VERSION:
+        if version not in SUPPORTED_POLICY_INPUTS:
             raise UnsupportedPolicyInput(version)
         return cls(**payload)
 
@@ -277,6 +290,16 @@ class ModelConfig(BaseConfig):
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
+    # What object attention runs over. `tables` attends over the fixed object
+    # tables (players, cards, permanents at their capacities). `pooled` packs
+    # each observation's valid objects, continuation relations and legal
+    # actions into one typed token sequence, padded per batch to a bucket at or
+    # above its longest observation (`manabot.model.token_stream`); logits read
+    # the action tokens. Omitted is `tables`, so existing recipes keep their
+    # identities.
+    token_stream: Literal["tables", "pooled"] = Field(
+        default="tables", exclude_if=lambda value: value == "tables"
+    )
     # Canonical belief rows are an opt-in checkpoint ABI. A positive bucket
     # count requires explicit belief tensors on every forward pass; there is
     # no neutral or positional-condition fallback on this path.
@@ -332,6 +355,15 @@ class ModelConfig(BaseConfig):
             or self.attention_feedforward_dim is not None
         ):
             raise ValueError("value token and stacked layers require attention")
+        if self.token_stream == "pooled" and (
+            not self.attention_on
+            or self.value_aggregation == "value_token"
+            or self.belief_count_buckets > 0
+        ):
+            raise ValueError(
+                "a pooled token stream needs attention and supports neither a "
+                "value token nor belief rows"
+            )
         return self
 
 

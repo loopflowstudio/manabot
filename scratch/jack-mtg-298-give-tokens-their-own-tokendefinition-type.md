@@ -62,10 +62,14 @@ Reverses the concept review's pack-row call. Built in `managym/state/src/card.rs
 - Set files: every set file under `managym/cards/src/` changed mechanically (literal nests
   `printed: PrintedCharacteristics { .. }`, outer `..Default::default()` for no back face);
   `tokens.rs` builds `PrintedCharacteristics`. Test/bench literals moved likewise.
-- Frontier frozen-protocol CI failure: `tests/eval/conftest.py` adds `frontier_world`
-  (compatible identity for scheduling/analysis, applied by `pytestmark` in the three frontier
-  modules) and `frontier_runtime` (real identity, protocol copy bound to the current world) for
-  the three tests that play or train. New `test_frozen_rejects_another_runtime_world`.
+- Frontier frozen-protocol CI failure: gone after syncing main, which reported the frontier
+  result (48cb12b54) and deleted its protocol and tests; the world fixtures written for it went
+  with them.
+- Sync with main (2026-11-12): main's new set files nested mechanically; their tests created
+  tokens by printed name (`Powerstone`, `Food`, `Spirit`, `Clue`, `Koma's Coil`), now by key.
+  Re-recorded for merged digest c23a2513…: semantic-kernel-w17-v2 (only digests/state hashes
+  differ from main), authored-match receipt + AUTHORITY_SHA256/TERMINAL_STATE pins, both parity
+  corpora, Academy w17 fixtures, belief v3 receipts.
 
 Checks (one line each):
 - Release snapshot at HEAD vs this change: content digest aa606cea, catalog_tokens arrays,
@@ -74,4 +78,6 @@ Checks (one line each):
 - pytest: frontier modules 96 passed; world-change list 65 passed; belief/academy parity/
   semantic/env 385 passed.
 
-Remaining: push, ci-fix until every required check is green (no auto-merge), stop at review.
+- After sync: debug nextest 1170 passed; belief/academy/semantic/env pytest 402 passed.
+
+Remaining: CI green on the pushed merge (no auto-merge), then stop at review.

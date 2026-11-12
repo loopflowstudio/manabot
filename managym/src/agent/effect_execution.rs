@@ -46,6 +46,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "bind result",
     "caller frame",
     "captured activation",
+    "cascade exiled",
     "cast choices",
     "cast from exile",
     "cast from hand",
@@ -73,6 +74,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "damaged player",
     "discard from hand",
     "discards remaining",
+    "distinct name search",
     "effect execution",
     "end batch",
     "entering definition",
@@ -103,7 +105,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
-    "land choices remaining",
     "last known characteristics",
     "last known definition",
     "legend group",
@@ -148,8 +149,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "sacrificing player",
     "saved decision",
     "selected",
+    "selected distinct names",
     "selected for graveyard",
-    "selected lands",
     "selected so far",
     "selection",
     "selection domain",
@@ -511,9 +512,10 @@ impl<'a> Projection<'a> {
         let (game, viewer) = (self.game, self.viewer);
         self.summary(|| {
             format!(
-                "Last known {}: power {}; counters {:?}.",
+                "Last known {}: power {}, toughness {}; counters {:?}.",
                 Self::label(game.visible_reference(lki.object_ref, viewer)),
                 lki.power,
+                lki.toughness,
                 lki.counters
             )
         });
@@ -528,6 +530,7 @@ impl<'a> Projection<'a> {
             abilities_lost,
             dealt_damage_this_turn,
             power,
+            toughness,
             counters,
             object_ref: _,
             card: _,
@@ -554,6 +557,7 @@ impl<'a> Projection<'a> {
                     abilities_lost,
                     dealt_damage_this_turn,
                     power,
+                    toughness,
                     counter_values,
                     from_zone,
                     owner,
@@ -961,14 +965,15 @@ pub(crate) fn project_decision(
             remaining,
             ..
         } => out.field("named search", &(owner, name, remaining)),
-        Decision::SearchDistinctLands {
+        Decision::SearchDistinctNames {
+            predicate,
             remaining,
             selected,
-            opponent_picks,
+            end,
             ..
         } => {
-            out.cards("selected lands", selected);
-            out.field("land choices remaining", &(remaining, opponent_picks));
+            out.cards("selected distinct names", selected);
+            out.field("distinct name search", &(predicate, remaining, end));
         }
         Decision::OpponentSplitsRevealed {
             owner,
@@ -1016,6 +1021,14 @@ pub(crate) fn project_decision(
             }
             out.cards("legends kept", keep);
         }
+        Decision::EnterAsCopy {
+            card, candidates, ..
+        } => {
+            out.card("entering card", *card);
+            for id in candidates {
+                out.target("may copy", Target::Permanent(*id));
+            }
+        }
         Decision::Retarget {
             object,
             slot,
@@ -1054,6 +1067,12 @@ pub(crate) fn project_decision(
             match offer {
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
                 ResolutionCastOffer::Exiled { card } => out.card("cast from exile", *card),
+                ResolutionCastOffer::Cascade { card, exiled } => {
+                    out.card("cast from exile", *card);
+                    for exiled in exiled {
+                        out.card("cascade exiled", *exiled);
+                    }
+                }
                 ResolutionCastOffer::LibraryTop { card } => out.card("cast from library", *card),
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
                     out.object("exiled with", *source);

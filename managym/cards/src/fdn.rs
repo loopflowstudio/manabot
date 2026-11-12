@@ -1,7 +1,8 @@
 //! Foundations cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, ObjectSelector, PlayWindow, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, ObjectSelector, Per, PlayWindow, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -46,10 +47,11 @@ fn kellan_planar_trailblazer() -> CardDefinition {
                             Effect::indefinitely(
                                 ObjectSelector::This,
                                 Modification::GrantTriggered(Box::new(Ability::Triggered {
-                                    condition:
-                                        TriggerCondition::CreatureDealsCombatDamageToPlayer {
-                                            subject: TriggerSubject::This,
-                                        },
+                                    condition: TriggerCondition::DealsCombatDamage {
+                                        subject: TriggerSubject::This,
+                                        to: Actor::AnyPlayer,
+                                        per: Per::Object,
+                                    },
                                     intervening_if: None,
                                     effects: vec![Effect::ExileTopCardsToPlay {
                                         count: 1,

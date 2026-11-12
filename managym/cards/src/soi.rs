@@ -1,6 +1,9 @@
 //! Shadows over Innistrad.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TriggerCondition, TriggerSubject, TurnStep,
+    },
     card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     permanent::CounterKind,
@@ -8,7 +11,7 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![tireless_tracker()]
+    vec![fevered_visions(), tireless_tracker()]
 }
 
 fn tireless_tracker() -> CardDefinition {
@@ -28,7 +31,7 @@ fn tireless_tracker() -> CardDefinition {
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::EntersTheBattlefield {
-                        subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        subject: TriggerSubject::you_control(CardPredicate {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         }),
@@ -38,12 +41,10 @@ fn tireless_tracker() -> CardDefinition {
                 Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::Sacrificed {
-                        predicate: CardPredicate {
+                        subject: TriggerSubject::you_control(CardPredicate {
                             subtype: Some("Clue".into()),
                             ..Default::default()
-                        },
-                        controller_only: true,
-                        another: false,
+                        }),
                     },
                     effects: vec![Effect::put_counters(
                         ObjectSelector::This,
@@ -52,6 +53,48 @@ fn tireless_tracker() -> CardDefinition {
                     )],
                 },
             ],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+fn fevered_visions() -> CardDefinition {
+    let text_box = "At the beginning of each player's end step, that player draws a card. If the player is your opponent and has four or more cards in hand, this enchantment deals 2 damage to that player.";
+    let that_player = |effects| Effect::ForPlayer {
+        player: PlayerSelector::TriggeringPlayer,
+        effects,
+    };
+    CardDefinition {
+        key: "soi.fevered_visions",
+        scryfall_id: "3ee3fc2b-c2e4-421d-ac1d-6a111bb44f44",
+        printed: PrintedCharacteristics {
+            name: "Fevered Visions".into(),
+            mana_cost: Some(ManaCost::parse("{1}{U}{R}")),
+            types: CardTypes::new([CardType::Enchantment]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
+                effects: vec![
+                    that_player(vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }]),
+                    // It is the step's active player, so an opponent only off your turn.
+                    Effect::If {
+                        condition: Condition::YourTurn,
+                        then: vec![],
+                        otherwise: vec![that_player(vec![Effect::If {
+                            condition: Condition::CardsInHandAtLeast { count: 4 },
+                            then: vec![Effect::DealDamageToPlayer {
+                                player: PlayerSelector::You,
+                                amount: EffectValue::Fixed(2),
+                            }],
+                            otherwise: vec![],
+                        }])],
+                    },
+                ],
+            }],
             text_box: text_box.into(),
             ..Default::default()
         },

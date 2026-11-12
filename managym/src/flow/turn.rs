@@ -105,6 +105,10 @@ pub struct PlayerTurnHistory {
     /// ("if you've done all four this turn").
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub bent: u8,
+    /// Life this player lost (CR 119.3; damage, payment or a set life total
+    /// lower than before), summed over every loss this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub life_lost: u32,
 }
 
 /// A kind of bending (CR 701.65–701.67 and firebending, CR 702.189); its
@@ -132,6 +136,11 @@ pub struct TurnState {
     pub spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     /// Each player's history this turn, by player index. Resets every turn.
     pub history: [PlayerTurnHistory; 2],
+    /// Graveyard objects that were put there from the battlefield this turn
+    /// (Brought Back), as the exact graveyard incarnation: a card that leaves
+    /// its graveyard is a new object and no longer qualifies (CR 400.7).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub graveyard_from_battlefield: Vec<ObjectRef>,
     /// Once-each-turn uses by exact source object and ability index: a
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
@@ -173,6 +182,7 @@ impl TurnState {
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
             history: Default::default(),
+            graveyard_from_battlefield: Vec::new(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
             extra_turns: Vec::new(),
@@ -299,6 +309,7 @@ impl TurnState {
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
         self.history = Default::default();
+        self.graveyard_from_battlefield.clear();
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();

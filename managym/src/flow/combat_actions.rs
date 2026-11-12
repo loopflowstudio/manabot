@@ -115,9 +115,16 @@ impl Game {
         self.run_frame(frame);
     }
 
+    /// Whether a creature recorded in combat still takes part: one that
+    /// left the battlefield or phased out is removed from combat, and an
+    /// attacker it blocked stays blocked (CR 506.4).
+    fn still_in_combat(&self, permanent_id: PermanentId) -> bool {
+        self.state.permanents[permanent_id].is_some() && !self.is_phased_out(permanent_id)
+    }
+
     fn combat_has_first_or_double_strike(&self, combat: &CombatState) -> bool {
         for attacker_id in &combat.attackers {
-            if self.state.permanents[*attacker_id].is_none() {
+            if !self.still_in_combat(*attacker_id) {
                 continue;
             }
             let keywords = self.characteristics(*attacker_id).keywords;
@@ -127,7 +134,7 @@ impl Game {
         }
         for blockers in combat.attacker_to_blockers.values() {
             for blocker_id in blockers {
-                if self.state.permanents[*blocker_id].is_none() {
+                if !self.still_in_combat(*blocker_id) {
                     continue;
                 }
                 let keywords = self.characteristics(*blocker_id).keywords;
@@ -148,7 +155,7 @@ impl Game {
         let mut events = Vec::new();
 
         for attacker_id in combat.attackers.iter().copied() {
-            if self.state.permanents[attacker_id].is_none() {
+            if !self.still_in_combat(attacker_id) {
                 continue;
             }
             let attacker_ref = self.permanent_object_ref(attacker_id);
@@ -170,7 +177,7 @@ impl Game {
             let blockers: Vec<PermanentId> = declared_blockers
                 .iter()
                 .copied()
-                .filter(|blocker_id| self.state.permanents[*blocker_id].is_some())
+                .filter(|blocker_id| self.still_in_combat(*blocker_id))
                 .collect();
 
             if !was_blocked {
@@ -184,7 +191,7 @@ impl Game {
             }
 
             for blocker_id in &blockers {
-                if self.state.permanents[*blocker_id].is_none() {
+                if !self.still_in_combat(*blocker_id) {
                     continue;
                 }
                 let blocker_ref = self.permanent_object_ref(*blocker_id);
