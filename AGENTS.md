@@ -439,7 +439,9 @@ max_mana_value }`), never a `<Verb><Object>` or `<Verb>All` variant:
 the instruction on `Decision::ChooseObject` for any verb ("tap a creature you
 control"); a verb that depends on which object it hit is an `If` composition,
 and "if you do" is `Condition::Moved` over the frame's latest `Move` or
-`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Amounts are
+`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. A `Move` to the
+library a card is already in, with a stated `library_end`, reorders it without a
+zone change ("then shuffle and put that card on top"). Amounts are
 `EffectValue` (`Fixed(n)` or read at resolution); a verb never has a
 `<Verb>Value` twin. Use the constructors (`Effect::exile`, `return_to_hand`,
 `put_counters`, `destroy`, `deal_damage`, `gain_life`, `discard`,
