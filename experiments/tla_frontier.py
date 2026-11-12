@@ -2,8 +2,9 @@
 
 One seed per size trains under the same damped self-play rule, population,
 input v9, four producers and wall budget; the large size is the frozen w64
-regime with only its width, depth, heads and damping horizon replaced (see the
-protocol `experiments/protocols/tla-frontier-c5fba4-v1.md`). Primary progress is
+regime with only its width, depth, heads and damping horizon replaced. The
+design and results are `experiments/tla-frontier-c5fba4-results.md`; the
+executed source is revision ab2b757d9. Primary progress is
 each learner against its latest trained checkpoint at or before half its elapsed
 training hours, on the frozen random 17Lands deck pairs. `eval` also plays, at
 every shared update milestone, each size against the matched first-64 heuristic and
@@ -28,7 +29,7 @@ A pass's launcher id is a digest of its pending matches, and the launcher refuse
 a known id, so `pass_name` gives a relaunched pass a new tournament name. Match
 keys exclude that name, so a relaunch plays only what no pass attempted.
 
-The MTG-213 v10 pilot's runner, which this protocol's evaluation callback
+The MTG-213 v10 pilot's runner, which this experiment's evaluation callback
 mirrors, exists at revisions up to ac601834d.
 """
 
@@ -68,7 +69,6 @@ from pydantic import Field
 import torch
 
 from experiments import tla_frontier
-from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
@@ -91,7 +91,6 @@ import managym
 ROOT = Path(__file__).resolve().parents[1]
 # `etude eval` and `etude launch` both name the experiment for this file.
 EXPERIMENT = Path(__file__).stem
-PROTOCOL = ROOT / "experiments/protocols/tla-frontier-c5fba4-v1.json"
 REGIME = ROOT / "experiments/regimes/tla-frontier-c5fba4-w64.json"
 GAMES_PER_PAIR = 4
 # One single-threaded game per worker on a 32-vCPU rental, leaving room for its
@@ -138,11 +137,6 @@ class Pair(StrictModel):
     deal: int = Field(ge=0)
 
 
-class RuntimeWorld(StrictModel):
-    world_version: str
-    card_digest: str
-
-
 class LargeSize(StrictModel):
     """The large arm's compute network and damping horizon; all else is w64's."""
 
@@ -154,10 +148,7 @@ class LargeSize(StrictModel):
 
 
 class Protocol(StrictModel):
-    runtime_world: RuntimeWorld
     corpus_sha256: str
-    observation_shapes: dict[str, tuple[int, ...]]
-    regime_sha256: str
     large: LargeSize
     training_seed: int
     deck_seed: int
@@ -177,25 +168,76 @@ class Protocol(StrictModel):
     evaluation_usd: Decimal
 
 
+PROTOCOL = Protocol(
+    corpus_sha256="2173600970d0ab9efb44c620b082e8b15a2615d4e4d801ec0c015710dc333951",
+    large=LargeSize(
+        hidden_dim=160,
+        attention_layers=8,
+        num_attention_heads=8,
+        expected_updates=999,
+    ),
+    training_seed=21501,
+    deck_seed=21590001,
+    # Random 17Lands deck pairs, each with the deal its four legs share.
+    pairs=(
+        Pair(first=107, second=89, deal=21591000),
+        Pair(first=5, second=90, deal=21591001),
+        Pair(first=133, second=122, deal=21591002),
+        Pair(first=2, second=112, deal=21591003),
+        Pair(first=33, second=41, deal=21591004),
+        Pair(first=76, second=108, deal=21591005),
+        Pair(first=18, second=10, deal=21591006),
+        Pair(first=112, second=20, deal=21591007),
+        Pair(first=95, second=68, deal=21591008),
+        Pair(first=97, second=40, deal=21591009),
+        Pair(first=74, second=57, deal=21591010),
+        Pair(first=123, second=21, deal=21591011),
+        Pair(first=28, second=28, deal=21591012),
+        Pair(first=17, second=2, deal=21591013),
+        Pair(first=127, second=10, deal=21591014),
+        Pair(first=132, second=53, deal=21591015),
+    ),
+    milestones=(
+        25,
+        50,
+        75,
+        100,
+        150,
+        200,
+        300,
+        400,
+        600,
+        800,
+        1200,
+        1600,
+        2400,
+        3200,
+        4800,
+        6400,
+    ),
+    export_every=25,
+    game_seconds=600.0,
+    max_commands=10000,
+    bootstrap_seed=21592001,
+    max_paid_usd=Decimal("110"),
+    training_usd=Decimal("38"),
+    training_hours=56.0,
+    evaluation_usd=Decimal("14"),
+)
+
+
 def _regime_id(label: SizeLabel) -> str:
     return f"tla-frontier-c5fba4-{label}"
 
 
 def frozen() -> tuple[dict[SizeLabel, TrainingRegime], Protocol]:
-    """Both regimes and the protocol, rejecting drift from the frozen bytes.
+    """Both regimes and the protocol.
 
-    The hash fixes the regime's contents; `tests/eval/test_tla_frontier.py`
-    checks what those bytes must declare. Only the world and the tensor shapes
-    the encoder derives can still move underneath them.
+    The large regime is the shared w64 regime with `PROTOCOL.large`'s network
+    and damping horizon. The executed values are fixed by revision ab2b757d9.
     """
-    protocol = Protocol.model_validate_json(PROTOCOL.read_bytes())
-    if protocol.runtime_world.model_dump() != managym.world_identity():
-        raise ValueError("frontier runtime world differs from the frozen protocol")
-    if file_sha256(REGIME) != protocol.regime_sha256:
-        raise ValueError("frontier regime differs from frozen protocol")
+    protocol = PROTOCOL
     small = TrainingRegime.model_validate_json(REGIME.read_bytes())
-    if ObservationSpace(small.observation).shapes != protocol.observation_shapes:
-        raise ValueError("frontier tensor capacities differ from frozen protocol")
     stage = _stage(small)
     size = protocol.large.model_dump(exclude={"expected_updates"})
     schedule = _schedule(small).model_copy(
@@ -327,7 +369,6 @@ def _source() -> list[Path]:
         *sorted((ROOT / "manabot").rglob("*.py")),
         Path(__file__),
         REGIME,
-        PROTOCOL,
     ]
 
 
