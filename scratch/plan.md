@@ -53,3 +53,14 @@ Cut: the docs table's `auto` row now points at the ladder paragraph.
 Second pass: `precision_ladder.py` dropped its copies of `training_runs` and the heuristic
 matchup builder (schedule 16/32/48/64 → learning_signal's 20/40 + end; report .md updated,
 prediction unchanged). `pytest test_experiments test_precision` → 35 passed.
+
+## Concept review (2026-11-12)
+Concepts hold: one authoring value (`auto`) that the regime resolves at build time, so
+every record names a real precision and resume never meets a moved threshold. Storing
+`auto` and resolving at run time was the alternative; it would let a later threshold
+change silently retrain saved regimes, so it stays rejected.
+Direction for remaining step 2 (no code now): the 64-update length rests on an assumed
+~150 s/update. The w256 step run measures float32 update time on the L4; before launching
+the A/B, set its length to the most updates (up to 300) that keep both arms × both seeds
+plus eval under the USD 10 cap, and edit the pre-registered paragraph in
+`experiments/precision_ladder.md` to match before any scored run.
