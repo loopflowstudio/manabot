@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import IntEnum
 import os
 from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
@@ -959,6 +960,18 @@ def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...
+def encode_observations_into(
+    envs: Sequence[Env], buffers: Dict[str, np.ndarray], capacity: int
+) -> list[int]:
+    """Write each env's acting-player view into rows 0..len(envs) of buffers.
+
+    Buffers come from `ObservationEncoder.allocate(capacity)`; later rows are
+    untouched. Returns each row's legal-action count. Shape, dtype and
+    writability failures raise before any write; an observation exceeding a
+    capacity (every legal action must fit) raises, leaving earlier rows written.
+    """
+    ...
+
 def input_v10_state(obs: Observation) -> str | None:
     """The state only policy input v10 holds that `obs` needs, if any."""
     ...
