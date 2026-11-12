@@ -219,3 +219,44 @@ Tenth-pass compress (no behavior change): one `EnterAsCopy` action arm, one
 action space reuses `activation_clause_chosen`. `cargo nextest run --workspace`
 (debug): 1145 passed, 2 skipped, 1 failed — only
 `checked_semantic_conformance_evidence_reproduces` (all 14 traces drifted; gate).
+
+## Eleventh pass — Teferi's Protection, 2026-11-12 UTC
+
+Defined Teferi's Protection (new `c17.rs`, first printing
+77f130c7-0138-4a1a-9f67-62d2c302dc48, fetched from Scryfall 2026-11-12 UTC).
+The tenth-pass contract is built; its text is in git at b06486ac1.
+
+Assumptions taken (reversible):
+- The phase-out record is `Indefinite`, ended by phasing in (the general
+  rule), not by the card's duration. "Until your next turn" records end at the
+  start of their controller's untap step (the turn's first step), immediately
+  before phasing in.
+- Phase-in covers permanents the active player controls that are not attached
+  to a phased-out permanent, plus everything phased out attached to them.
+- Phased-out creatures stay in the combat lists. Like departed ones, they deal
+  and receive no combat damage, and an attacker they blocked stays blocked.
+- Layers skip a phased-out source's statics and granted statics. Effects from
+  other sources still reach its displayed view (observation only).
+- Under the life lock, damage is still dealt (DamageDealt, no LifeChanged).
+  Protection prevents damage before that. Protection covers targeting and
+  damage only; players have no blocking or enchanting rules to cover.
+- The directed test uses Pyroclasm, not Volcanic Torrent, as the sweeper: the
+  opponent's cascade over its own library would be nondeterministic.
+
+Diaochan self-target: the fix (`another`-only exclusion in
+`activated_ability_targets`, with `another: true` on Deserter's Disciple, Earth
+Kingdom Protectors and North Pole Patrol) passed the debug card tests. It
+failed `test_shared_effect_transport[*-270]` (action index out of bounds) and
+`test_native_and_python_encoders_agree_on_t3_games` (no longer reaches 'spell
+grant'). Without that hunk, those 13 tests pass. Reverted and filed as MTG-296.
+
+Results (debug): `cargo nextest run --workspace` 1148 passed, 2 skipped,
+1 failed: only `checked_semantic_conformance_evidence_reproduces` (digest;
+gate). After the revert, cards 672 passed; lib + rules + conformance 363
+passed, 2 skipped. Clippy: no warnings in changed files. Rebuilt cp313
+extension (atomic replace); `--bonus-sheet` 8 missing, all blocked. Pytest
+parity, shared-effect transport, text observation, TLE allocation, policy
+catalog, record vocabulary, shared effects, Academy alternative-cost and
+Merchant recovery: 132 passed, 1 skipped. Not run here: Academy vitest
+(`permanent-notes.test.ts` gained two cases; no `node_modules`), browser
+checks and Academy reconnect/fork for phased-out rows (gate).

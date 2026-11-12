@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 52 of 61 defined,
-9 missing, no other issues (rebuilt extension, tenth pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 53 of 61 defined,
+8 missing (all blocked), no other issues (rebuilt extension, eleventh pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -89,10 +89,16 @@ Rules added on this branch, each with directed tests and observation parity
   target clauses, `TargetRequirement::opponent_chooses`,
   `before_attackers` (Diaochan). Detail in `scratch/questions.md`.
 
+- Eleventh pass (Teferi's Protection, new `c17.rs`): `EffectDuration::
+  UntilYourNextTurn` (shared-effect duration code 4); player records
+  `LifeTotalCantChange` (`Game::payable_life` refuses life payments) and
+  `ProtectionFromEverything`; `Modification::PhasedOut` with
+  `Game::is_phased_out` as the one reader. Detail in `scratch/questions.md`.
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 9 bonus-sheet names by rule family
+## Remaining: 8 bonus-sheet names by rule family, all blocked
 
 | Family | Cards |
 |---|---|
@@ -100,45 +106,12 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 | Token identity (blocked, decision) | Release to Memory; Lita, Mechanical Engineer |
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
 | Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
-| Phasing and life lock (contract written) | Teferi's Protection |
 
-Eight are blocked. Teferi's Protection is unblocked: implement the contract
-below.
-
-Known deviation in a defined card (tenth pass): activated abilities never offer
-their own source as a target, so neither player can choose Diaochan herself,
-although the card allows it (the opponent's clause makes this strategic). It
-predates this branch; per the playable-not-bug-free rule it does not block the
-card. It needs a fix here or a bug Task before gate.
-
-## Teferi's Protection contract (proposed, tenth pass)
-
-Every new state is an `Effect::ApplyContinuous` record, per the duration rule,
-so v9's shared-effect rows (header, details, one-based members) carry it with
-no new column or fact kind:
-
-- `EffectDuration::UntilYourNextTurn`: ends as the record controller's next
-  turn begins (before the untap step's phasing, CR 502.1).
-- Player records on the caster: `Modification::LifeTotalCantChange` (life
-  gain, loss, damage-as-loss and setting are no-ops; life costs other than 0
-  cannot be paid, CR 119.8) and `Modification::ProtectionFromEverything`
-  (CR 702.16j: cannot be targeted, all damage to them prevented).
-- Phasing (CR 702.26): `Modification::PhasedOut` on each permanent the caster
-  controls, plus anything attached to them (phased out indirectly, 702.26g),
-  ending when its controller's untap step phases it in (702.26a). No zone
-  change, no triggers, counters and attachments kept (702.26d-e).
-- One authority: `Game::is_phased_out(id)` reads the effect index by object;
-  the battlefield iterators (`iter_battlefield_permanents`,
-  `battlefield_permanents`, `layer_views` scans, trigger index, SBAs, combat,
-  target legality, mana sources, counts) skip phased-out permanents. Permanent
-  rows stay in the observation (public), marked by the effect membership; the
-  LLM text names the record; Academy notes it.
-- Card: instant {2}{W}, `c17.rs`, effects = the two player records, the
-  phase-out record over `each_you_control`, then `Move This` to exile.
-- Directed tests: the caster's life stays put against Lightning Bolt and a
-  life payment is refused; their creatures are not attackable/targetable/
-  counted (Volcanic Torrent misses them), and phase in, before untapping, on
-  the caster's next untap step with counters kept; no ETB triggers fire.
+Known deviation in a defined card: activated abilities never offer their own
+source as a target, so neither player can choose Diaochan herself. Filed as
+bug Task MTG-296: the fix (exclude only `TargetRequirement.another`) moves
+retained replays (`drill-270` shared-effect transport, T3 observation parity),
+so it is not local to this branch.
 
 ## Token identity (decision open)
 
