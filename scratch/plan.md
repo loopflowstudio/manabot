@@ -4,10 +4,10 @@
 
 - `manabot/rl/` — the generic package. It imports only torch and itself (`tests/test_package_boundaries.py`: a static AST check plus a fresh interpreter that refuses every other manabot module, managym, academy and etude).
   - `numerics.py`: `NumericalError`, `require`, `float64_operand`.
-  - `returns.py`: `terminal_distances`, `reverse_waves`, `transition_gae`, `categorical_lambda_returns`.
+  - `returns.py`: `terminal_distances`, `reverse_waves`, `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`.
   - `losses.py`: `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`.
   - `selection.py`: `selected_rows`, `magnitude_quantile` (was `_magnitude_quantile`), `selected_moves`, `selection_mask`, `selected_mean`.
-  - `step.py`: `StepRecorder` Protocol (`track`, `rejecting`, `sampling`, `before_clip`, `record_gradients(model, norm_before)`, `record_step`), `check_objective`, `gradient_step(..., recorder=None)`, `update_ema`.
+  - `step.py`: `StepRecorder` Protocol (`track`, `rejecting`, `sampling`, `before_clip`, `record_gradients(model, norm_before)`, `record_step`), `check_objective`, `gradient_step(..., recorder=None)` (a `None` recorder becomes the no-op `_Unrecorded`), `update_ema`.
 - `manabot/training/learning/` — the player package: `learner`, `references`, `health` (`OptimizerHealth` implements `StepRecorder`; `before_clip` stores `critic_gradient_norms`), `selection` (`selection_diagnostics`, `value_scale`, `UpdateDiagnostics`).
 - `manabot/training/loops/` — `damped_policy.py` (`damped_policy_loss`, `DampedTargets`, `_targets`, `update_damped_iteration`), `ppo.py` (`update_iteration`), `minimal.py` (example).
 - Deprecated aliases, via `manabot/infra/deprecation.py::moved` (lazy module `__getattr__`, warns with the new path and removal in 0.3.0): `learning.objectives` (`update_iteration`, `update_ema`), `learning.damped_policy` (rule, loss, `DampedTargets`, `categorical_lambda_returns`), `learning.returns`, `learning.selection` (the four selection functions), `model.policy_distribution` (`NumericalError`, `require`, `clipped_surrogate`, `reverse_kl`), `model.numerics` (`float64_operand`). `test_learning_pieces.py::test_moved_names_resolve_through_deprecated_aliases` covers each. Unreleased names (`step.py`, `losses.py`, `check_objective`, `critic_gradient_norms`) moved without aliases.
@@ -25,15 +25,7 @@ Full text: `.lf/prompts/20261112-024634-ZEiaX4-steer.md` (maintained loops under
 
 ## Proof
 
-Parity script (outside the repo, `/tmp/mtg304parity/parity.py`): on one collected batch (2 streams, 6 decisions, hidden 16), run `update_iteration` with PPO at retained 0.5 and KLs on, then damped scalar and damped categorical at quantile 0.5 and iteration 1, and dump every diagnostic and the per-parameter sums. Before the split and after it (run with `-W error::DeprecationWarning`), the JSON is byte-identical.
-
-Checks this pass: test_learning_pieces + test_minimal_loop + test_numerical_health + test_package_boundaries: 66 passed.
-
-## Checks (after merge)
-
-- Parity JSON (`/tmp/mtg304parity/parity.py`, now calling the rule the record selects, `-W error::DeprecationWarning`): byte-identical to the pre-split dump.
-- Stage-selects-rule pass: focused + mps/recovery/active_training/credit_assignment: 147 passed; precision, two_seat_learning, phase_timing, regimes, adaptive_two_seat, rl_objectives, game_errors, naming_transitions: 101 passed, 3 failed (the known `binding_mismatch` below); `scripts/inspect_batch.py --updates 1` runs.
-- Every test file changed since aeb9b8cf0 except `tests/eval/test_tla_frontier.py` (needs duckdb, not installed): 412 passed, 3 failed — the known `test_game_errors.py::test_resource_limit_receipt_replays_its_retained_encoding_boundary[*]` `binding_mismatch`, present at d2cde1117 and outside this change. Gate decides between a bug Task and a fix on main.
+Parity script (outside the repo, `/tmp/mtg304parity/parity.py`): on one collected batch (2 streams, 6 decisions, hidden 16), run PPO at retained 0.5 with KLs on, then damped scalar and damped categorical at quantile 0.5 and iteration 1, each through the rule its learning record selects, and dump every diagnostic and the per-parameter sums. Pre-rebuild check history (412 passed across changed files) is in git before 9ae190e51; the current results are under "Per-file check pass" below.
 
 ## Compress (2026-11-12)
 
@@ -43,8 +35,10 @@ Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` re
 
 ## Remaining
 
-- PR #474 against `main` with this diff alone; force-push this branch; retitle and rewrite the body for this Task only.
-- Collection stays as-is (`SeatRoutedCollector`); no new collection API.
+- Done: PR #474 targets `main` at 9ae190e51 (main 13e5642ad merged), titled and described for this Task alone. CI was pending at the last check.
+- Collection is the existing `SeatRoutedCollector` → `RolloutBatch`, documented as a piece in `docs/training-loop.md`; no new collection API.
+- Outcome 4 (smaller executor) belongs to MTG-303: `execution.py` is 1,794 lines here against 1,784 on main (new import paths plus the rule choice).
+- Open outside this Task: the `binding_mismatch` and packed-seed digest failures already on main (see the per-file check pass) need their own bug Tasks or fixes on main.
 
 ## Decisions kept
 
@@ -58,6 +52,8 @@ Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` re
 ## Concept review, second pass (2026-11-12)
 
 Nothing to change. Checked against the old tree (on the rebuilt branch the choice is in `execution.py`): `stages.py:564` chose `update_damped_iteration` for `DampedPolicyLearning`, else `loops.ppo.update_iteration` (typed `Learning` only); the deprecated dispatcher in `learning/objectives.py` warns and keeps the 0.2 behaviour. Considered and kept: renaming `loops.ppo.update_iteration` so it matches `update_damped_iteration`. The module path already names the rule, and the guide and tests use that name.
+
+Third pass (rebuilt branch, after the no-op recorder): nothing to change. `minimal.py` still composes only `rl` pieces, the player's legality and `AdmittedRollout`, `SeatRoutedCollector`; the rule choice stays one branch in `execution.py`; no open product choice.
 
 ## Rebuilt on main without MTG-303 (2026-11-12)
 

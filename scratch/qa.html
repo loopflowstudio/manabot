@@ -1,0 +1,23 @@
+<!doctype html><meta charset="utf-8"><title>MTG-304 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:52em;margin:2em auto}pre{background:#f4f1ea;padding:.6em;overflow:auto}</style>
+<h1>MTG-304 QA: the training library as a library user</h1>
+<p>Persona: someone who reads <code>docs/training-loop.md</code> and writes a learner from the pieces. Branch at 9ae190e51 plus this pass.</p>
+<h2>Scenarios</h2>
+<ol>
+<li><b>Documented command.</b> <code>uv run python -c "from manabot.training.loops.minimal import train; train(3)"</code> returned an <code>ActorCritic</code> (1.85M params) in 5.2 s wall. The guide said "about 20 seconds"; changed to "a few seconds". The guide's example is byte-identical to <code>minimal.py</code>.</li>
+<li><b>Call the rules directly</b>, as the guide's snippet does: <code>update_damped_iteration(learner, batch, move_learning(), iteration=1)</code> → 24 diagnostics; <code>update_iteration(..., Learning(), ...)</code> → 30 diagnostics. Ran with <code>DeprecationWarning</code> as error: no deprecated path is used.</li>
+<li><b>Checkpoint round trip</b> via <code>save_checkpoint</code>/<code>load_checkpoint</code> as documented: works. <code>load_checkpoint</code> returns <code>(policy, observation_space)</code>; the guide said it "reads it back", so it now says what it returns.</li>
+<li><b>Own learner</b> (categorical WDL critic, <code>categorical_lambda_returns</code>, <code>transition_gae</code>, quantile <code>selection_mask</code>, <code>damped_policy_loss</code> with a uniform reference, <code>categorical_value_loss</code>, <code>gradient_step</code>), written from the guide alone. Two snags, both fixed:
+ <ul><li>Passing zeros as the bootstrap raised <code>ValueError: outcome probabilities must normalize</code>, which named the wrong argument. It now raises <code>outcome bootstrap must be distributions over 3 outcomes</code> (or <code>probabilities</code>), and the guide documents <code>bootstrap</code> <code>[E,3]</code>.</li>
+ <li>The guide said <code>AdmittedRollout.rows</code> returns "behavior distributions"; passing that object to <code>damped_policy_loss</code> raised <code>AttributeError: 'ActionRows' object has no attribute 'shape'</code>. The guide now names <code>ActionRows.log_probabilities</code> <code>[B,A]</code>.</li></ul>
+ After the fixes: two iterations trained (loss 2.17, 2.19; norms 0.13, 0.14).</li>
+<li><b>Error path.</b> <code>gradient_step(torch.tensor(1.0), ...)</code> raises <code>NumericalError</code> with <code>invariant == "detached_objective"</code>, as documented.</li>
+<li><b>Returning user, old imports.</b> <code>learning.objectives</code>, <code>learning.damped_policy</code>, <code>learning.returns</code>, <code>model.policy_distribution.clipped_surrogate</code> and <code>model.numerics.float64_operand</code> resolve with a warning naming the new path and removal in 0.3.0. <code>objectives.update_iteration</code> warns when it is called. An unknown name raises the usual <code>ImportError</code>.</li>
+<li><b>Isolation.</b> Importing all five <code>manabot.rl</code> modules in an <code>-I</code> interpreter loads only <code>manabot</code> and <code>manabot.rl.*</code>: no managym, academy or etude.</li>
+<li><b>Ordinary training.</b> <code>uv run manabot train --out .runs/qa304-local</code> completed and wrote <code>self-play-raw.pt</code> in 6.3 s. <code>scripts/inspect_batch.py</code> printed its credit table.</li>
+</ol>
+<h2>Checks</h2>
+<pre>uv run --extra dev pytest tests/training/test_returns.py tests/training/test_learning_pieces.py tests/training/test_ataraxos_gradients.py tests/training/test_minimal_loop.py tests/test_package_boundaries.py -q
+90 passed in 4.75s</pre>
+<h2>Status</h2>
+<p>Works: every documented entry point above. Not reached: CUDA/bf16 precision paths (no GPU here); launches through Etude (out of scope, no runs). Still wrong: nothing found in this Task's scope. Failures that are already on main are in <code>scratch/plan.md</code>.</p>
