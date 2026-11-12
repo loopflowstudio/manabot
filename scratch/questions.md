@@ -1,8 +1,7 @@
 # MTG-327 questions
 
-- PR #495 (MLX backend) is still open; implemented on main as is. When it
-  lands, drop "pooled" from `manabot/policy/checkpoint.py`'s refused list.
-- The removal message names commit 439379869 (last main revision with pooled)
-  as the reproduction point; the report also pins its own revision.
+- Two reproduction revisions are named: the config error says 439379869 (last
+  main revision with pooled); the report says 7ac8c9b6f (its pilot revision).
+  Both load a pooled configuration; left as is.
 - `_embed_actions`/`_focused` (split out for pooled) are folded back into
   `_gather_informed_actions`; `EmbeddedObservation.relations` removed.
