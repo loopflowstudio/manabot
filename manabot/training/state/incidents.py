@@ -20,7 +20,7 @@ from manabot.training.learning.learner import Learner
 
 if TYPE_CHECKING:
     from manabot.training.records import TrainingRun
-    from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+    from manabot.training.rollout.collection import Collector, RolloutBatch
 
 EVIDENCE_BYTES = 32 * 1024**2
 STATE_BYTES = 512 * 1024**2
@@ -41,7 +41,7 @@ def save_incident(
     directory: Path,
     error: NumericalError,
     learner: "Learner",
-    collector: "SeatRoutedCollector",
+    collector: "Collector",
     batch: "RolloutBatch | None",
     run: "TrainingRun",
     iteration: int,

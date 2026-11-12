@@ -7,7 +7,7 @@ import pytest
 import torch
 
 from manabot.training.learning import learner as learner_module
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import Learner, new_learner
 from manabot.training.learning.objectives import (
     reference_distribution,
     update_ema,
@@ -79,7 +79,7 @@ def fixture() -> tuple[Learner, RolloutBatch]:
             obs, probabilities, logits.log_softmax(-1).numpy()
         ),
     )
-    trainer = Learner(agent, "cpu", minibatch_rows=1)
+    trainer = new_learner(agent, "cpu", minibatch_rows=1)
 
     return trainer, batch
 

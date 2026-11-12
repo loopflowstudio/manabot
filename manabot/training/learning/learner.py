@@ -1,15 +1,15 @@
 """Trainable policy and Adam state shared by every RL objective.
 
-A Learner bundles the trainable actor/critic and its optimizer, enabling train
-mode on admission. AdmittedRollout admits a collected batch's observations once
-before its minibatches. Learning-rule functions update this state; execute_regime
-owns collection, clocks, tracking, exports and recovery. Native stream count
-sets the damped rule's minibatch width. There is no independent training loop.
-The learner's profiler times learning phases between existing device waits;
-it adds no synchronization and draws no training randomness.
+`Learner` is data: the trainable actor/critic, its optimizer, device,
+precision and profiler; `new_learner` builds one in train mode.
+`AdmittedRollout` admits a collected batch's observations once before its
+minibatches. Learning-rule functions update the learner in place; a loop
+(`manabot.training.loops`) owns collection and saving. The profiler adds no
+synchronization and draws no training randomness.
 """
 
 from contextlib import AbstractContextManager
+from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
@@ -29,31 +29,46 @@ from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
 
 
+@dataclass(frozen=True)
 class Learner:
-    def __init__(
-        self,
-        agent: ActorCritic,
-        device: torch.device | str,
-        *,
-        minibatch_rows: int,
-        precision: Precision = "float32",
-    ) -> None:
-        if minibatch_rows < 1:
-            raise ValueError("minibatch_rows must be positive")
-        self.device = torch.device(device)
-        # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
-        # a training-mode forward before backward, including on warm starts.
-        self.agent = agent.to(self.device).train()
-        self.minibatch_rows = minibatch_rows
-        self.precision: Precision = precision
-        # The learning rule sets the rate before stepping; retain the initial
-        # Adam configuration in snapshots even when selection skips all rows.
-        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
-        self.profiler = Profiler()
+    """The trainable policy, its Adam optimizer and where and how they run.
 
-    def forward_precision(self) -> AbstractContextManager[object]:
-        """Wrap each policy forward; callers cast its outputs to float32."""
-        return forward_precision(self.precision, self.device)
+    Learning-rule functions update `agent` and `optimizer` in place.
+    `minibatch_rows` is the damped rule's minibatch width (the native stream
+    count). `profiler` times learning phases between existing device waits.
+    """
+
+    agent: ActorCritic
+    optimizer: torch.optim.Adam
+    device: torch.device
+    minibatch_rows: int
+    precision: Precision
+    profiler: Profiler
+
+
+def new_learner(
+    agent: ActorCritic,
+    device: torch.device | str,
+    *,
+    minibatch_rows: int,
+    precision: Precision = "float32",
+) -> Learner:
+    """Move `agent` to `device` in train mode and give it a fresh Adam."""
+    if minibatch_rows < 1:
+        raise ValueError("minibatch_rows must be positive")
+    device = torch.device(device)
+    # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
+    # a training-mode forward before backward, including on warm starts.
+    agent = agent.to(device).train()
+    # The learning rule sets the rate before stepping; retain the initial
+    # Adam configuration in snapshots even when selection skips all rows.
+    optimizer = torch.optim.Adam(agent.parameters(), lr=2.5e-4, eps=1e-5)
+    return Learner(agent, optimizer, device, minibatch_rows, precision, Profiler())
+
+
+def learner_precision(learner: Learner) -> AbstractContextManager[object]:
+    """Wrap each policy forward; callers cast its outputs to float32."""
+    return forward_precision(learner.precision, learner.device)
 
 
 def observation_tensors(obs: dict[str, NDArray[np.generic]]) -> dict[str, torch.Tensor]:

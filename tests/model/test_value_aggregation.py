@@ -11,7 +11,7 @@ from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 
 Aggregation = Literal[
     "historical_mean", "masked_mean", "value_token", "attention_readout"
@@ -122,10 +122,10 @@ def test_token_preserves_action_focus_indexes(depth: Literal[1, 2]) -> None:
         ObservationSpace(),
         ModelConfig(value_aggregation="value_token", attention_layers=depth),
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     obs = {
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()
@@ -190,10 +190,10 @@ def test_missing_fields_preserve_historical_initialization() -> None:
 def test_real_forward_padding_and_historical_equation(aggregation: Aggregation) -> None:
     torch.manual_seed(106)
     agent = ActorCritic(ObservationSpace(), ModelConfig(value_aggregation=aggregation))
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     obs = {
         key: torch.from_numpy(value[0])
         for key, value in batch.observations().observation.items()
@@ -385,10 +385,10 @@ def test_attention_readout_shares_initialization_and_actor_path() -> None:
     for key, value in masked_state.items():
         torch.testing.assert_close(readout_state[key], value, rtol=0, atol=0)
 
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         masked.observation_space, Match(), Reward(RewardConfig()), num_envs=1, seed=29
     )
-    batch = collector.collect(masked, 1)
+    batch = collect(collector, masked, 1)
     obs = {
         key: torch.from_numpy(value)
         for key, value in batch.observations(np.array([0])).observation.items()

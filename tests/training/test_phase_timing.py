@@ -17,7 +17,7 @@ import torch
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import Learner, new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.panels import PERF
 from manabot.training.records import TrainingRun
@@ -28,6 +28,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
+from manabot.training.rollout.collection import collect
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates
@@ -79,9 +80,9 @@ def _update(
 def test_learning_timers_leave_state_and_diagnostics_identical(rule: int) -> None:
     learning, phases = _rules()[rule]
     agent = _agent()
-    batch = _collector(agent).collect(agent, 1)
-    timed = Learner(deepcopy(agent), "cpu", minibatch_rows=2)
-    untimed = Learner(deepcopy(agent), "cpu", minibatch_rows=2)
+    batch = collect(_collector(agent), agent, 1)
+    timed = new_learner(deepcopy(agent), "cpu", minibatch_rows=2)
+    untimed = new_learner(deepcopy(agent), "cpu", minibatch_rows=2)
     untimed.profiler = Profiler(enabled=False)
 
     assert _update(timed, learning, batch) == _update(untimed, learning, batch)
@@ -102,8 +103,8 @@ def test_learning_timers_leave_state_and_diagnostics_identical(rule: int) -> Non
 def test_nested_phases_never_exceed_their_parent() -> None:
     learning, _ = _rules()[0]
     agent = _agent()
-    batch = _collector(agent).collect(agent, 1)
-    learner = Learner(agent, "cpu", minibatch_rows=2)
+    batch = collect(_collector(agent), agent, 1)
+    learner = new_learner(agent, "cpu", minibatch_rows=2)
     _update(learner, learning, batch)
     stats = learner.profiler.get_stats()
     total = stats["Learning"]["total_time"]
@@ -120,7 +121,7 @@ def test_collection_timers_leave_the_batch_identical() -> None:
     agent = _agent()
     timed, untimed = _collector(agent), _collector(agent)
     timed.profiler, untimed.profiler = Profiler(), Profiler(enabled=False)
-    a, b = timed.collect(agent, 1), untimed.collect(agent, 1)
+    a, b = collect(timed, agent, 1), collect(untimed, agent, 1)
     for field in ("actions", "logprobs", "rewards", "dones", "values"):
         np.testing.assert_array_equal(getattr(a, field), getattr(b, field))
     assert any(path.startswith("Collection/") for path in timed.profiler.get_stats())

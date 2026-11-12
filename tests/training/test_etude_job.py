@@ -37,7 +37,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import Collector, RolloutBatch
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -243,7 +243,7 @@ def test_nonrecoverable_collection_cancellation_retains_receipt(
     stop = tmp_path / "stop"
 
     def collecting(
-        self: SeatRoutedCollector,
+        collector: Collector,
         agent: ActorCritic,
         num_steps: int,
         *,
@@ -259,7 +259,7 @@ def test_nonrecoverable_collection_cancellation_retains_receipt(
                 check()
         raise AssertionError("collection continued after cancellation")
 
-    monkeypatch.setattr(SeatRoutedCollector, "collect", collecting)
+    monkeypatch.setattr(execution, "collect", collecting)
     regime = specification().regime
     assert not regime.recoverable
     with VerifyStore(tmp_path / "store.sqlite") as store:

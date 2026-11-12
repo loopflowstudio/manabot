@@ -449,6 +449,7 @@ def _loss(learner: Any, batch: Minibatch) -> _Loss:
     from manabot.model.numerics import float64_operand
     from manabot.model.policy_distribution import legal_mask
     from manabot.training.learning.damped_policy import damped_policy_loss
+    from manabot.training.learning.learner import learner_precision
     from manabot.training.learning.references import reference_distribution
     from manabot.training.learning.selection import selected_mean
 
@@ -460,7 +461,7 @@ def _loss(learner: Any, batch: Minibatch) -> _Loss:
     advantages = batch.advantages.to(device)
     value_targets = batch.value_targets.to(device)
     actor_mask = batch.actor_mask.to(device)
-    with learner.forward_precision():
+    with learner_precision(learner):
         logits, value_logits = learner.agent.forward_distribution(obs)
     logits, value_logits = logits.float(), value_logits.float()
     reference = reference_distribution(obs, batch.learning.reference)
@@ -624,7 +625,7 @@ def run_arm(
     from manabot.model.inference import PolicyInference
     from manabot.model.policy_distribution import NumericalError, policy_logs
     from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-    from manabot.training.learning.learner import Learner
+    from manabot.training.learning.learner import new_learner
     from manabot.training.precision import apply_matmul_precision
 
     device = torch.device(probe.device)
@@ -672,7 +673,7 @@ def run_arm(
             ]
         receipt["collection_peak_bytes"] = _peak(device)
         # Fixed weights: loss parts, logits and gradient without a step.
-        learner = Learner(agent, device, minibatch_rows=256, precision=precision)
+        learner = new_learner(agent, device, minibatch_rows=256, precision=precision)
         for batch in minibatches[: probe.numeric_minibatches]:
             learner.optimizer.zero_grad(set_to_none=True)
             parts = _loss(learner, batch)

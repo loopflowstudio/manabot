@@ -190,8 +190,8 @@ def test_decklist_world_checkpoint_simulates_imported_files(tmp_path: Path) -> N
     config = SimulationConfig(
         hero=str(world), num_games=1, num_threads=1, max_steps=40, match=match
     )
-    stats = simulate_models(model, load_player("random"), config)
-    assert len(stats.games) == 1
+    games = simulate_models(model, load_player("random"), config)
+    assert len(games) == 1
     assert model.actions > 0 and not model.errors
 
 

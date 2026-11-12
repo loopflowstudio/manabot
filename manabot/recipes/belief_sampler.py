@@ -10,13 +10,13 @@ from manabot.belief.collect import collect_belief
 from manabot.belief.train import SamplerConfig, train_belief
 from manabot.recipes.builders import gray_ogre_self_play
 from manabot.recipes.proposed_etude import Step, track
-from manabot.training.loops.self_play import SelfPlay, self_play
+from manabot.training.loops.self_play import SelfPlay, root_match, self_play
 
 
 class BeliefConfig(BaseModel):
     seed: int = 197
     updates: int = Field(default=1, ge=1)
-    policy: SelfPlay = Field(default_factory=gray_ogre_self_play)
+    self_play: SelfPlay = Field(default_factory=gray_ogre_self_play)
     games: int = Field(default=3, ge=3)
     max_steps: int = Field(default=1000, ge=1)
     sampler: SamplerConfig = SamplerConfig(
@@ -25,14 +25,13 @@ class BeliefConfig(BaseModel):
 
 
 def belief(config: BeliefConfig) -> None:
-    run = track(
+    with track(
         clocks=[Step("updates", "optimizer updates")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
-    )
-    try:
+    ) as run:
         policy = self_play(
-            config.policy,
+            config.self_play,
             run.out / "policy",
             seed=config.seed,
             updates=config.updates,
@@ -41,7 +40,7 @@ def belief(config: BeliefConfig) -> None:
         histories = collect_belief(
             policy,
             run.out / "histories.json",
-            match=config.policy.root_match,
+            match=root_match(config.self_play),
             games=config.games,
             seed=config.seed,
             max_steps=config.max_steps,
@@ -50,7 +49,3 @@ def belief(config: BeliefConfig) -> None:
             histories, run.out / "belief.pt", config.sampler, seed=config.seed
         )
         run.checkpoint(sampler, tags=("belief",), updates=config.updates)
-    except BaseException:
-        run.finish("failed")
-        raise
-    run.finish()

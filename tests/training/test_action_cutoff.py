@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-from managym.decision import Command, DecisionFrame
 import numpy as np
 import pytest
 import torch
@@ -21,7 +20,8 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.heuristic import HeuristicPlayer
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import close_collector, collect, open_collector
+from managym.decision import Command, DecisionFrame
 
 
 def test_heuristic_scores_only_retained_legal_offers(tmp_path: Path) -> None:
@@ -99,7 +99,7 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
         MatchConfig(hero_deck={"Mountain": 30}, villain_deck={"Mountain": 30})
     )
     with capture_scope(CaptureScope(tmp_path)):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             space,
             match,
             Reward(RewardConfig()),
@@ -110,9 +110,9 @@ def test_collector_uses_configured_prefix_and_one_masked_distribution(
             learning_seats="both",
         )
         try:
-            batch = collector.collect(agent, 2)
+            batch = collect(collector, agent, 2)
         finally:
-            collector.close()
+            close_collector(collector)
     rows = batch.observations()
     valid = rows.observation["actions_valid"].astype(bool)
     assert rows.probabilities.shape == valid.shape

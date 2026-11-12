@@ -27,12 +27,13 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import Collector, open_collector
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorPolicy,
     GameErrorState,
+    append_attempt,
     replay_attempt,
 )
 from manabot.verify.store import VerifyStore
@@ -48,7 +49,7 @@ from tests.training.test_recovery import tracked_updates
 
 
 class PaymentMismatchVector:
-    def __init__(self, collector: SeatRoutedCollector) -> None:
+    def __init__(self, collector: Collector) -> None:
         self.native = collector._env
         self.configs = [match.to_rust() for match in collector.stream_matches]
         self.shadows = [self._new_shadow(row) for row in range(len(self.configs))]
@@ -113,10 +114,10 @@ class PaymentMismatchVector:
                 self.shadows[row] = self._new_shadow(row)
 
 
-class PaymentMismatchCollector(SeatRoutedCollector):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._env = PaymentMismatchVector(self)
+def payment_mismatch_collector(*args: Any, **kwargs: Any) -> Collector:
+    collector = open_collector(*args, **kwargs)
+    collector._env = PaymentMismatchVector(collector)
+    return collector
 
 
 def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
@@ -170,15 +171,18 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
         }
 
     monkeypatch.setattr(execution, "_runtime_identities", fixture_identities)
-    record = GameErrorLedger.record
 
     def interrupt_after_second_crash(
-        self: GameErrorLedger, row: GameAttempt, context: Mapping[str, object]
+        ledger: GameErrorLedger,
+        state: GameErrorState,
+        row: GameAttempt,
+        context: Mapping[str, object],
     ) -> GameErrorState:
-        record(self, row, context)
-        if self.state.crashed == 2:
+        # The run record already counts the second crash; the next settled game
+        # is the interruption point.
+        if state.crashed == 2:
             raise KeyboardInterrupt("after durable failure, before next update")
-        return self.state
+        return append_attempt(ledger, state, row, context)
 
     with VerifyStore(tmp_path / "training.sqlite") as store:
 
@@ -199,8 +203,8 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             )
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
-            patch.setattr(GameErrorLedger, "record", interrupt_after_second_crash)
+            patch.setattr(execution, "open_collector", payment_mismatch_collector)
+            patch.setattr(execution, "append_attempt", interrupt_after_second_crash)
             with pytest.raises(KeyboardInterrupt):
                 run("first")
         parent_id = store.con.execute(
@@ -317,11 +321,11 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
                     source_repair_reason="A source repair cannot admit another world",
                 )
 
-        def unavailable(*args: object, **kwargs: object) -> SeatRoutedCollector:
+        def unavailable(*args: object, **kwargs: object) -> Collector:
             raise RuntimeError("repair attempt failed during collector setup")
 
         with monkeypatch.context() as patch:
-            patch.setattr(execution, "SeatRoutedCollector", unavailable)
+            patch.setattr(execution, "open_collector", unavailable)
             with pytest.raises(RuntimeError, match="collector setup"):
                 run(
                     "setup-failed",
@@ -334,7 +338,7 @@ def test_repaired_restart_preserves_post_snapshot_failures_and_costs(
             ).fetchone()[0]
         )
         assert failed.recovery_artifact == parent.recovery_artifact
-        monkeypatch.setattr(execution, "SeatRoutedCollector", PaymentMismatchCollector)
+        monkeypatch.setattr(execution, "open_collector", payment_mismatch_collector)
         child = run("second", resume_from=failed.id)
         assert child.status == "completed"
         assert child.game_errors is not None and child.game_errors.crashed == 2

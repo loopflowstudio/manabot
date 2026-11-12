@@ -1,17 +1,18 @@
 """The self-play loop every current recipe uses, written to be read and copied.
 
 `self_play(settings, out, seed=, updates=, run=)` plays games with the current
-learner, learns from each batch with the update its learning record selects,
-and saves its learner to `out / "state.pt"` atomically. Running it again with
-the same arguments resumes from that file; a finished loop returns its final
-policy at once. Nothing else drives it: there is no executor, attempt record or
-lease here. A tracker (`Tracker`, which Etude's run satisfies) receives rows,
-checkpoints and the stop signal.
+learner, learns from each batch and saves the learner to `out / "state.pt"`
+atomically. Running it again with the same arguments resumes from that file; a
+finished loop returns its final policy at once. Nothing else drives it: there
+is no executor, attempt record or lease here. A tracker (`Tracker`, which
+Etude's run satisfies) receives rows, checkpoints and the stop signal.
 
-Principal types: `SelfPlay` (settings, a Pydantic model so a recipe config that
-holds one serializes), `LoopState` (the learner a loop carries), `Tracker`,
-`Stopped` and `Every`. The pieces `new_state`, `load_state`, `save_state`,
-`save_checkpoint` and `save_final` are what the loop body calls.
+The module is data and functions. `SelfPlay` is the settings (a Pydantic model
+so a recipe config that holds one serializes); `LoopState` is the learner a
+loop carries. `step` makes one update and returns the next state; the loop
+body is `state = step(...)` plus saving, logging and checkpoints, each one
+call. `new_state`, `load_state`, `save_state`, `save_checkpoint` and
+`save_final` are the state file and the published policies.
 
 Seeds. With run seed `s` and starting update `u` (0 for a fresh loop): model
 initialization uses `s`; native streams `s + 10000 + u`; Torch, NumPy and
@@ -21,10 +22,10 @@ regime, so the same seed produces the same updates and checkpoints. A resumed
 loop starts fresh, reproducible streams at the update it resumes from.
 """
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from contextlib import contextmanager
 from copy import deepcopy
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, replace
 import os
 from pathlib import Path
 import time
@@ -50,7 +51,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint as save_policy
 from manabot.model.world import validate_agent_setup
 from manabot.training.decks import UniformDecks
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import Learner, new_learner
 from manabot.training.learning.objectives import update_ema, update_iteration
 from manabot.training.learning.selection import UpdateDiagnostics
 from manabot.training.precision import Precision, apply_matmul_precision
@@ -62,13 +63,23 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    Collector,
+    CollectorStats,
+    RolloutBatch,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
     GameErrorLimit,
     GameErrorPolicy,
     GameErrorState,
+    RecordAttempt,
+    append_attempt,
+    open_ledger,
 )
 from manabot.training.update_metrics import OUTCOME_TABLE, metric_row
 import managym
@@ -82,22 +93,6 @@ _MACHINE_FIELDS = frozenset({"device", "workers", "threads"})
 
 # ---------------------------------------------------------------------------
 # Settings
-
-
-class Every(BaseModel):
-    """Every `every`-th absolute update, including update 0 (the initialization)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    every: int = Field(ge=1)
-
-    def __contains__(self, update: object) -> bool:
-        return isinstance(update, int) and update % self.every == 0
-
-
-def every(n: int) -> Every:
-    """Milestones at absolute updates 0, n, 2n, …; a continued run keeps the grid."""
-    return Every(every=n)
 
 
 class SelfPlay(BaseModel):
@@ -135,126 +130,112 @@ class SelfPlay(BaseModel):
     # A published policy to start from; only its weights are inherited.
     pretrained: Path | None = None
     save_every: int = Field(default=1, ge=1)
-    milestones: tuple[int, ...] | Every = ()
+    # Checkpoint at absolute updates 0, n, 2n, …; a continued run keeps the grid.
+    checkpoint_every: int | None = Field(default=None, ge=1)
 
     @model_validator(mode="after")
     def _runs_here(self) -> "SelfPlay":
         from manabot.training.execution import validate_regime
 
-        validate_regime(self.regime(id="self-play", updates=1))
+        validate_regime(to_regime(self, id="self-play", updates=1))
         return self
 
-    def regime(self, *, id: str, updates: int) -> TrainingRegime:
-        """The one-stage saved-regime form of these settings.
 
-        Validation reuses the regime's checks, and the parity test runs the
-        retired executor on it. Wall and memory limits are left to the tracker.
-        """
-        stage = TrainSelfPlay(
-            id="self-play",
-            operation="train_self_play",
-            behavior=self.behavior,
-            updates=updates,
-            streams=self.streams,
-            transitions=self.transitions,
-            games_per_stream=self.games_per_stream,
-            learning_seats=self.learning_seats,
-            batch_closure=self.batch_closure,
-            matchup_curriculum=self.matchup_curriculum,
-            learning=self.learning.model_copy(deep=True),
-            game_errors=self.game_errors,
-            execution=Execution(
-                device=self.device,
-                precision=self.precision,
-                workers=self.workers,
-                threads=self.threads,
-                wall_seconds=1e9,
-                bucketed_shapes=self.bucketed_shapes,
-                live_tokens=self.live_tokens,
-            ),
-        )
-        return TrainingRegime(
-            id=id,
-            world=self.world,
-            match=self.match,
-            deck_source=self.deck_source,
-            observation=self.observation,
-            agent=self.model,
-            stages=[stage],
+def to_regime(settings: SelfPlay, *, id: str, updates: int) -> TrainingRegime:
+    """The one-stage saved-regime form of `settings`.
+
+    Validation reuses the regime's checks, and the parity test runs the
+    retired executor on it. Wall and memory limits are left to the tracker.
+    """
+    stage = TrainSelfPlay(
+        id="self-play",
+        operation="train_self_play",
+        behavior=settings.behavior,
+        updates=updates,
+        streams=settings.streams,
+        transitions=settings.transitions,
+        games_per_stream=settings.games_per_stream,
+        learning_seats=settings.learning_seats,
+        batch_closure=settings.batch_closure,
+        matchup_curriculum=settings.matchup_curriculum,
+        learning=settings.learning.model_copy(deep=True),
+        game_errors=settings.game_errors,
+        execution=Execution(
+            device=settings.device,
+            precision=settings.precision,
+            workers=settings.workers,
+            threads=settings.threads,
             wall_seconds=1e9,
-            schedule_clock="iteration_fraction",
-        )
+            bucketed_shapes=settings.bucketed_shapes,
+            live_tokens=settings.live_tokens,
+        ),
+    )
+    return TrainingRegime(
+        id=id,
+        world=settings.world,
+        match=settings.match,
+        deck_source=settings.deck_source,
+        observation=settings.observation,
+        agent=settings.model,
+        stages=[stage],
+        wall_seconds=1e9,
+        schedule_clock="iteration_fraction",
+    )
 
-    @property
-    def root_match(self) -> MatchConfig:
-        """The authored match, or a deck source's representative opening pair."""
-        if self.deck_source is not None:
-            return self.deck_source.match_config()
-        if self.match is None:
-            raise ValueError("self-play needs a match or a deck source")
-        return self.match
 
-    def learner_digest(self) -> str:
-        """Identity of the learner these settings train; machine fields excluded."""
-        return canonical_sha256(
-            self.model_dump(mode="json", exclude=set(_MACHINE_FIELDS))
-        )
+def root_match(settings: SelfPlay) -> MatchConfig:
+    """The authored match, or a deck source's representative opening pair."""
+    if settings.deck_source is not None:
+        return settings.deck_source.match_config()
+    if settings.match is None:
+        raise ValueError("self-play needs a match or a deck source")
+    return settings.match
 
-    def collector(
-        self,
-        *,
-        seed: int,
-        start: int,
-        record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
-    ) -> SeatRoutedCollector:
-        """Native streams seeded from the run seed and the update they start at.
 
-        The caller closes it. `record_attempt` receives each settled game when
-        `game_errors` is set.
-        """
-        return SeatRoutedCollector(
-            ObservationSpace(self.observation),
-            Match(self.root_match),
-            Reward(RewardConfig()),
-            num_envs=self.streams,
-            seed=seed + COLLECTION_SEED + start,
-            opponent_mode="random" if self.behavior == "random" else "self",
-            learning_seats=self.learning_seats,
-            batch_closure=self.batch_closure,
-            games_per_stream=self.games_per_stream,
-            game_errors=self.game_errors,
-            record_attempt=record_attempt,
-            matchup_curriculum=self.matchup_curriculum,
-            deck_source=self.deck_source,
-            device=self.device,
-            workers=self.workers,
-            precision=self.precision,
-        )
+def learner_digest(settings: SelfPlay) -> str:
+    """Identity of the learner `settings` train; machine fields excluded."""
+    return canonical_sha256(
+        settings.model_dump(mode="json", exclude=set(_MACHINE_FIELDS))
+    )
 
-    def update(
-        self,
-        learner: Learner,
-        batch: RolloutBatch,
-        *,
-        rng: np.random.Generator,
-        iteration: int,
-        updates: int,
-        bootstrap: ActorCritic,
-    ) -> UpdateDiagnostics:
-        """Learn from one batch; `iteration` is the absolute update being made.
 
-        Damped-policy schedules read `iteration`; PPO schedules read the
-        fraction `(iteration - 1) / updates`, so for PPO the target matters.
-        """
-        return update_iteration(
-            learner,
-            batch,
-            self.learning,
-            (iteration - 1) / updates,
-            rng,
-            iteration=iteration,
-            bootstrap_agent=bootstrap,
-        )
+def is_checkpoint(settings: SelfPlay, update: int) -> bool:
+    return (
+        settings.checkpoint_every is not None
+        and update % settings.checkpoint_every == 0
+    )
+
+
+def self_play_collector(
+    settings: SelfPlay,
+    *,
+    seed: int,
+    start: int,
+    record_attempt: RecordAttempt | None = None,
+) -> Collector:
+    """Native streams seeded from the run seed and the update they start at.
+
+    The caller closes it with `close_collector`. `record_attempt` persists
+    each settled game when `game_errors` is set.
+    """
+    return open_collector(
+        ObservationSpace(settings.observation),
+        Match(root_match(settings)),
+        Reward(RewardConfig()),
+        num_envs=settings.streams,
+        seed=seed + COLLECTION_SEED + start,
+        opponent_mode="random" if settings.behavior == "random" else "self",
+        learning_seats=settings.learning_seats,
+        batch_closure=settings.batch_closure,
+        games_per_stream=settings.games_per_stream,
+        game_errors=settings.game_errors,
+        record_attempt=record_attempt,
+        matchup_curriculum=settings.matchup_curriculum,
+        deck_source=settings.deck_source,
+        device=settings.device,
+        workers=settings.workers,
+        precision=settings.precision,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -287,7 +268,7 @@ class Stopped(Exception):
 # The learner a loop carries
 
 
-@dataclass
+@dataclass(frozen=True)
 class Counts:
     """Cumulative work across every attempt of the loop."""
 
@@ -299,9 +280,14 @@ class Counts:
     optimizer_exposures: int = 0
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoopState:
-    """Raw learner and Adam, EMA, the absolute update count and cumulative counts."""
+    """Raw learner and Adam, EMA, the absolute update count and cumulative counts.
+
+    The learner, its optimizer and the EMA are Torch objects that `step`
+    updates in place; the update count and counts are replaced, so each
+    `step` returns the next state.
+    """
 
     settings: SelfPlay
     seed: int
@@ -309,33 +295,15 @@ class LoopState:
     learner: Learner
     ema: ActorCritic | None
     update: int = 0
-    counts: Counts = field(default_factory=Counts)
+    counts: Counts = Counts()
 
-    @property
-    def behavior(self) -> ActorCritic:
-        if self.settings.behavior == "ema-self":
-            assert self.ema is not None
-            return self.ema
-        return self.learner.agent
 
-    def advance(
-        self, collector: SeatRoutedCollector, metrics: UpdateDiagnostics, base: Counts
-    ) -> None:
-        """Count one completed update; `collector` stats are this attempt's totals."""
-        self.update += 1
-        self.counts.optimizer_updates += metrics.get("numerical", {}).get(
-            "optimizer_steps", 0
-        )
-        self.counts.optimizer_exposures += metrics.get("optimizer_exposures", 0)
-        stats = collector.stats
-        self.counts.games = base.games + stats.games
-        self.counts.environment_decisions = (
-            base.environment_decisions + stats.micro_steps
-        )
-        self.counts.learner_transitions = (
-            base.learner_transitions + stats.learner_transitions
-        )
-        self.counts.idle_stream_steps = base.idle_stream_steps + stats.idle_stream_steps
+def behavior(state: LoopState) -> ActorCritic:
+    """The policy that plays the games: the EMA for ema-self, else the raw learner."""
+    if state.settings.behavior == "ema-self":
+        assert state.ema is not None
+        return state.ema
+    return state.learner.agent
 
 
 def _model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
@@ -348,12 +316,29 @@ def _model(settings: SelfPlay, space: ObservationSpace) -> ActorCritic:
 
 
 def _learner(settings: SelfPlay, agent: ActorCritic) -> Learner:
-    return Learner(
+    return new_learner(
         agent,
         settings.device,
         minibatch_rows=settings.streams,
         precision=settings.precision,
     )
+
+
+def _pretrained(settings: SelfPlay, space: ObservationSpace) -> dict[str, torch.Tensor]:
+    """The published weights to start from, admitted against these settings."""
+    assert settings.pretrained is not None
+    with torch.random.fork_rng(devices=[]):
+        published, published_space = load_checkpoint(str(settings.pretrained))
+    if (
+        published.config != settings.model
+        or published_space.encoder.config != space.encoder.config
+    ):
+        raise ValueError("pretrained policy has other model or observation configs")
+    validate_agent_setup(published, Match(root_match(settings)).to_rust())
+    weights = published.state_dict()
+    if any(not torch.isfinite(v).all() for v in weights.values()):
+        raise ValueError("pretrained policy contains nonfinite tensors")
+    return weights
 
 
 def new_state(settings: SelfPlay, seed: int) -> LoopState:
@@ -362,17 +347,7 @@ def new_state(settings: SelfPlay, seed: int) -> LoopState:
     torch.manual_seed(seed)
     agent = _model(settings, space)
     if settings.pretrained is not None:
-        with torch.random.fork_rng(devices=[]):
-            published, published_space = load_checkpoint(str(settings.pretrained))
-        if (
-            published.config != settings.model
-            or published_space.encoder.config != space.encoder.config
-        ):
-            raise ValueError("pretrained policy has other model or observation configs")
-        validate_agent_setup(published, Match(settings.root_match).to_rust())
-        if any(not torch.isfinite(v).all() for v in published.state_dict().values()):
-            raise ValueError("pretrained policy contains nonfinite tensors")
-        agent.load_state_dict(published.state_dict())
+        agent.load_state_dict(_pretrained(settings, space))
     learner = _learner(settings, agent)
     ema = deepcopy(agent) if settings.learning.ema is not None else None
     return LoopState(settings, seed, space, learner, ema)
@@ -390,7 +365,7 @@ def load_state(path: Path, settings: SelfPlay, seed: int) -> LoopState | None:
     for name, expected in (
         ("world", settings.world),
         ("seed", seed),
-        ("settings", settings.learner_digest()),
+        ("settings", learner_digest(settings)),
     ):
         if saved[name] != expected:
             raise ValueError(
@@ -425,10 +400,10 @@ def save_state(path: Path, state: LoopState) -> None:
             "format": "manabot.self-play-state/v1",
             "world": state.settings.world,
             "seed": state.seed,
-            "settings": state.settings.learner_digest(),
+            "settings": learner_digest(state.settings),
             "source_commit": source_commit(),
             "update": state.update,
-            "counts": vars(state.counts),
+            "counts": asdict(state.counts),
             "raw": state.learner.agent.state_dict(),
             "ema": None if state.ema is None else state.ema.state_dict(),
             "optimizer": state.learner.optimizer.state_dict(),
@@ -438,19 +413,21 @@ def save_state(path: Path, state: LoopState) -> None:
     os.replace(temporary, path)
 
 
-def _player_configs(settings: SelfPlay) -> list[managym.PlayerConfig] | None:
-    """A deck-source run binds the world (`None`); a fixed match binds its setups."""
-    return (
-        None
-        if settings.deck_source is not None
-        else Match(settings.root_match).to_rust()
-    )
-
-
 def _save_policy(
     model: ActorCritic, state: LoopState, path: Path, weights: Literal["raw", "ema"]
 ) -> Path:
     temporary = path.with_name(f".{path.name}.tmp")
+    # A deck-source run binds the world (`None`); a fixed match binds its setups.
+    players = (
+        None
+        if state.settings.deck_source is not None
+        else Match(root_match(state.settings)).to_rust()
+    )
+    averaging = {
+        "clock": "collect-update-iteration",
+        "iteration": state.update,
+        "rate": state.settings.learning.ema,
+    }
     # A fresh model constructed for admission must not draw from the loop's RNG.
     device = next(model.parameters()).device.type
     with torch.random.fork_rng(
@@ -461,19 +438,13 @@ def _save_policy(
             model,
             state.space,
             temporary,
-            player_configs=_player_configs(state.settings),
+            player_configs=players,
             extra={
                 "weights": weights,
                 "update": state.update,
                 "seed": state.seed,
                 "value_semantic": "signed_outcome",
-                "averaging": {
-                    "clock": "collect-update-iteration",
-                    "iteration": state.update,
-                    "rate": state.settings.learning.ema,
-                }
-                if weights == "ema"
-                else None,
+                "averaging": averaging if weights == "ema" else None,
             },
         )
         load_checkpoint(str(temporary))
@@ -484,11 +455,10 @@ def _save_policy(
 def save_checkpoint(directory: Path, state: LoopState) -> Path:
     """World-bound raw (returned) and EMA policies at this update, named by update."""
     directory.mkdir(parents=True, exist_ok=True)
-    raw = _save_policy(
-        state.learner.agent, state, directory / f"{state.update:08d}-raw.pt", "raw"
-    )
+    name = f"{state.update:08d}"
+    raw = _save_policy(state.learner.agent, state, directory / f"{name}-raw.pt", "raw")
     if state.ema is not None:
-        _save_policy(state.ema, state, directory / f"{state.update:08d}-ema.pt", "ema")
+        _save_policy(state.ema, state, directory / f"{name}-ema.pt", "ema")
     return raw
 
 
@@ -497,6 +467,94 @@ def save_final(path: Path, state: LoopState) -> Path:
     if state.ema is not None:
         return _save_policy(state.ema, state, path, "ema")
     return _save_policy(state.learner.agent, state, path, "raw")
+
+
+# ---------------------------------------------------------------------------
+# One update
+
+
+def learn(
+    state: LoopState, batch: RolloutBatch, rng: np.random.Generator, *, updates: int
+) -> UpdateDiagnostics:
+    """Learn from one batch in place: the update its learning record selects, then EMA.
+
+    The update made is `state.update + 1`. Damped-policy schedules read that
+    absolute iteration; PPO schedules read the fraction `state.update /
+    updates`, so for PPO the target matters.
+    """
+    settings = state.settings
+    metrics = update_iteration(
+        state.learner,
+        batch,
+        settings.learning,
+        state.update / updates,
+        rng,
+        iteration=state.update + 1,
+        bootstrap_agent=behavior(state),
+    )
+    if state.ema is not None:
+        assert settings.learning.ema is not None
+        update_ema(state.ema, state.learner.agent, settings.learning.ema)
+    return metrics
+
+
+def counted(
+    counts: Counts, base: Counts, stats: CollectorStats, metrics: UpdateDiagnostics
+) -> Counts:
+    """Counts after one more update.
+
+    `stats` are this attempt's collector totals, added to `base`, the counts
+    saved by earlier attempts; optimizer counts accumulate per update.
+    """
+    return Counts(
+        games=base.games + stats.games,
+        environment_decisions=base.environment_decisions + stats.micro_steps,
+        learner_transitions=base.learner_transitions + stats.learner_transitions,
+        idle_stream_steps=base.idle_stream_steps + stats.idle_stream_steps,
+        optimizer_updates=counts.optimizer_updates
+        + metrics.get("numerical", {}).get("optimizer_steps", 0),
+        optimizer_exposures=counts.optimizer_exposures
+        + metrics.get("optimizer_exposures", 0),
+    )
+
+
+def step(
+    state: LoopState,
+    collector: Collector,
+    rng: np.random.Generator,
+    *,
+    updates: int,
+    base: Counts,
+) -> tuple[LoopState, dict[str, object]]:
+    """Collect one batch, learn from it, and return the next state and its metric row."""
+    device = state.settings.device
+    started = time.perf_counter()
+    batch = collect(collector, behavior(state), state.settings.transitions)
+    _synchronize(device)
+    collected = time.perf_counter()
+    metrics = learn(state, batch, rng, updates=updates)
+    _synchronize(device)
+    state = replace(
+        state,
+        update=state.update + 1,
+        counts=counted(state.counts, base, collector.stats, metrics),
+    )
+    row = (
+        metric_row(metrics)
+        | {f"coordinates/{k}": v for k, v in asdict(state.counts).items()}
+        | {
+            "time/collection": collected - started,
+            "time/learning": time.perf_counter() - collected,
+        }
+    )
+    return state, row
+
+
+def _synchronize(device: str) -> None:
+    if device == "cuda":
+        torch.cuda.synchronize()
+    elif device == "mps":
+        torch.mps.synchronize()
 
 
 # ---------------------------------------------------------------------------
@@ -520,23 +578,24 @@ def _device(settings: SelfPlay) -> Iterator[None]:
         torch.set_num_threads(threads)
 
 
-def _ledger(out: Path, policy: GameErrorPolicy) -> GameErrorLedger:
-    """This attempt's append-only ledger, counting every earlier attempt's games."""
+def _ledger(
+    out: Path, policy: GameErrorPolicy
+) -> tuple[GameErrorLedger, GameErrorState]:
+    """This attempt's append-only ledger and the state earlier attempts settled.
+
+    Raises `GameErrorLimit` when an earlier attempt already crossed the limit.
+    """
     directory = out / "game-attempts"
     directory.mkdir(parents=True, exist_ok=True)
     earlier = sorted(directory.glob("*.jsonl"))
-    return GameErrorLedger(
+    ledger, errors = open_ledger(
         directory / f"{len(earlier):04d}.jsonl",
         policy,
         parents=[str(path) for path in earlier],
     )
-
-
-def _synchronize(device: str) -> None:
-    if device == "cuda":
-        torch.cuda.synchronize()
-    elif device == "mps":
-        torch.mps.synchronize()
+    if errors.stop_reason:
+        raise GameErrorLimit(errors.stop_reason)
+    return ledger, errors
 
 
 # ---------------------------------------------------------------------------
@@ -557,11 +616,11 @@ def self_play(
     stops; raises `Stopped` when `run.stopping()` ends it early. Run it again
     to carry on.
     """
-    out = Path(out)
-    final = out / "final.pt"
     if updates < 1:
         raise ValueError("updates must be positive")
+    out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
+    final = out / "final.pt"
     with _device(settings):
         state = load_state(out / "state.pt", settings, seed)
         if state is None:
@@ -572,83 +631,56 @@ def self_play(
             return final if final.exists() else save_final(final, state)
         # A later target invalidates the earlier endpoint, including during a stop.
         final.unlink(missing_ok=True)
-        # Only the learner is durable. Each invocation starts fresh random streams
-        # and adds this collector's totals to the counts saved by its predecessor.
-        base = replace(state.counts)
+
+        # Only the learner is durable. Each attempt starts fresh random streams
+        # and adds its collector's totals to the counts saved before it.
+        base = state.counts
         rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
-        ledger = _ledger(out, settings.game_errors) if settings.game_errors else None
+        # Reads `state` when a failure is captured, so it names the current update.
         failures = CaptureScope(
             out / "failures",
             lambda: {"seed": seed, "update": state.update, "out": str(out)},
         )
-        collector = settings.collector(
-            seed=seed,
-            start=state.update,
-            record_attempt=None
-            if ledger is None
-            else lambda attempt: ledger.record(attempt, failures.context()),
+        record_attempt: RecordAttempt | None = None
+        errors = GameErrorState()
+        if settings.game_errors is not None:
+            ledger, errors = _ledger(out, settings.game_errors)
+
+            def record_attempt(
+                errors: GameErrorState, attempt: GameAttempt
+            ) -> GameErrorState:
+                return append_attempt(ledger, errors, attempt, failures.context())
+
+        collector = self_play_collector(
+            settings, seed=seed, start=state.update, record_attempt=record_attempt
         )
+        collector.game_error_state = errors
+        # After the collector, which may draw from these streams while it starts.
+        seed_random(seed + state.update)
         try:
-            if ledger is not None:
-                collector.game_error_state = ledger.state
-                if ledger.state.stop_reason:
-                    raise GameErrorLimit(ledger.state.stop_reason)
-            seed_random(seed + state.update)
             with capture_scope(failures):
-                if state.update == 0 and 0 in settings.milestones:
-                    _milestone(out, state, run)
+                if state.update == 0 and is_checkpoint(settings, 0):
+                    _checkpoint(out, state, run)
                 while state.update < updates and not (run and run.stopping()):
-                    started = time.perf_counter()
-                    batch = collector.collect(state.behavior, settings.transitions)
-                    _synchronize(settings.device)
-                    collected = time.perf_counter()
-                    metrics = settings.update(
-                        state.learner,
-                        batch,
-                        rng=rng,
-                        iteration=state.update + 1,
-                        updates=updates,
-                        bootstrap=state.behavior,
-                    )
-                    if state.ema is not None:
-                        assert settings.learning.ema is not None
-                        update_ema(
-                            state.ema, state.learner.agent, settings.learning.ema
-                        )
-                    _synchronize(settings.device)
-                    state.advance(collector, metrics, base)
+                    state, row = step(state, collector, rng, updates=updates, base=base)
                     if run:
-                        run.log(
-                            metric_row(metrics)
-                            | {
-                                f"coordinates/{k}": v
-                                for k, v in vars(state.counts).items()
-                            }
-                            | {
-                                "time/collection": collected - started,
-                                "time/learning": time.perf_counter() - collected,
-                            },
-                            updates=state.update,
-                        )
+                        run.log(row, updates=state.update)
                         if settings.behavior != "random":
-                            run.log_table(
-                                OUTCOME_TABLE,
-                                collector.stats.self_play.drain(),
-                                updates=state.update,
-                            )
+                            outcomes = collector.stats.self_play.drain()
+                            run.log_table(OUTCOME_TABLE, outcomes, updates=state.update)
                     if state.update % settings.save_every == 0:
                         save_state(out / "state.pt", state)
-                    if state.update in settings.milestones:
-                        _milestone(out, state, run)
+                    if is_checkpoint(settings, state.update):
+                        _checkpoint(out, state, run)
         finally:
-            collector.close()
+            close_collector(collector)
         save_state(out / "state.pt", state)
         if state.update < updates:
             raise Stopped(state.update)
         return save_final(final, state)
 
 
-def _milestone(out: Path, state: LoopState, run: Tracker | None) -> None:
-    checkpoint = save_checkpoint(out / "checkpoints", state)
+def _checkpoint(out: Path, state: LoopState, run: Tracker | None) -> None:
+    path = save_checkpoint(out / "checkpoints", state)
     if run:
-        run.checkpoint(checkpoint, updates=state.update)
+        run.checkpoint(path, updates=state.update)

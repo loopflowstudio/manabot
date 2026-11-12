@@ -143,8 +143,8 @@ identical tensors. It also checks that v3 receipts and registrations omitting
 `managym.encode_observations_into` also runs `tests/env/test_observation.py`
 and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
-`SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
-`collect(model, 1)` can play a complete game.
+`open_collector` defaults to `batch_closure="complete-games"`, so even
+`collect(collector, model, 1)` can play a complete game.
 
 **Tracking and offline reports.** Checkpoint imports or managed evaluation
 adapters:

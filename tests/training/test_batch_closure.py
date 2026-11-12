@@ -24,7 +24,7 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import Collector, collect, open_collector
 from manabot.training.state.game_errors import GameErrorPolicy
 import managym
 from tests.training.test_two_seat_learning import ScriptedGames, _agent
@@ -166,7 +166,7 @@ def test_a_game_error_policy_does_not_choose_the_closure() -> None:
         {
             "learning_seats": "one",
             "game_errors": GameErrorPolicy(),
-            "record_attempt": lambda _: None,
+            "record_attempt": lambda state, _: state,
         },
     ],
 )
@@ -174,7 +174,7 @@ def test_collector_rejects_exact_quota_with_whole_game_settings(
     fields: dict[str, Any],
 ) -> None:
     with pytest.raises(ValueError, match="exact quota"):
-        SeatRoutedCollector(
+        open_collector(
             _agent().observation_space,
             Match(),
             Reward(RewardConfig()),
@@ -197,9 +197,9 @@ def test_continuation_preserves_closure() -> None:
         )
 
 
-def _one_seat(closure: BatchClosure) -> SeatRoutedCollector:
+def _one_seat(closure: BatchClosure) -> Collector:
     agent = _agent()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -214,7 +214,7 @@ def _one_seat(closure: BatchClosure) -> SeatRoutedCollector:
 
 def test_exact_quota_pauses_mid_game_at_the_quota() -> None:
     agent = _agent()
-    batch = _one_seat("exact-quota").collect(agent, 2)
+    batch = collect(_one_seat("exact-quota"), agent, 2)
     assert batch.dones.shape == (2, 2)
     assert not batch.next_done.all()
 
@@ -222,7 +222,7 @@ def test_exact_quota_pauses_mid_game_at_the_quota() -> None:
 def test_one_seat_complete_games_end_every_trajectory_at_a_result() -> None:
     agent = _agent()
     collector = _one_seat("complete-games")
-    batch = collector.collect(agent, 2)
+    batch = collect(collector, agent, 2)
     assert batch.ordered_obs()["agent_player"].shape[1] == 1
     assert bool(batch.next_done.all())
     # Every packed trajectory closes on a terminal row, so nothing bootstraps.

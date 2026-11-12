@@ -63,11 +63,7 @@ def test_endpoint_excludes_exports_and_rejects_early_ceiling(
 ) -> None:
     clock = Clock()
     monkeypatch.setattr(execution, "time", clock)
-    monkeypatch.setattr(
-        execution.SeatRoutedCollector,
-        "collect",
-        clock.charge(execution.SeatRoutedCollector.collect, 2),
-    )
+    monkeypatch.setattr(execution, "collect", clock.charge(execution.collect, 2))
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
@@ -139,11 +135,7 @@ def test_initial_admission_precedes_collection(
 
     monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
-    monkeypatch.setattr(
-        execution.SeatRoutedCollector,
-        "collect",
-        clock.charge(execution.SeatRoutedCollector.collect, 2),
-    )
+    monkeypatch.setattr(execution, "collect", clock.charge(execution.collect, 2))
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )

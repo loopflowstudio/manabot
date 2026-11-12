@@ -128,6 +128,64 @@ checkpoints or experiment evidence.
   evaluation children with `manabot.sim.child.ChildProcess`, not
   `multiprocessing` spawn, which re-imports the parent's `__main__`.
 
+### Functions and objects (Python)
+
+Use a class where it offers something genuinely valuable, and avoid one where
+it does not. An object is a thing; a function is what happens. A class earns
+its place as a value, a resource or an interchangeable part, where the type
+guarantees something every user relies on. Functions do the work: anything
+with steps, a loop or an order of operations. A class whose methods sequence the
+work (an executor, trainer, manager, runner or collector) is the shape to
+avoid; write the loop as a function whose body shows each step
+(`manabot/training/loops/self_play.py`: `state, row = step(state, ...)`).
+
+Where classes are valuable here, with the examples to copy:
+
+- **Configurations and records** (`ObservationConfig`, `ModelConfig`,
+  `MatchConfig`, `Learning`, `GameErrorPolicy`, the `llm/schema.py`
+  records). A config is the model object: it refuses a bad value when it is
+  built, compares and hashes by content, serializes with stable keys into
+  checkpoints and frozen evidence, and is copied rather than edited
+  (`model_copy(update=...)`, `dataclasses.replace`). It may own validators
+  and pure derivations of its own fields (a digest, a derived size). It does
+  not open files, build runtime objects or run anything; a function that
+  takes the config does.
+- **`torch.nn.Module` subclasses** (`ActorCritic` and its parts). Keep
+  construction and `forward` there; training logic is functions over the
+  module.
+- **A resource with a lifetime** (`VerifyStore`, `VLLMServer`,
+  `PolicyInference`, `ChildProcess`, native `managym` environments, Etude's
+  `Run`): something opened, used and closed. Make it a context manager, or a
+  `@contextmanager` function when there is no state to hold. Do not wrap
+  another library's handle in our own class to add methods.
+- **A guarded invariant** (`BudgetLedger`: spend never exceeds the cap across
+  restarts; `AdmittedRollout`: rows admitted once; `Profiler`: nested
+  timers). The methods exist so no caller can break the invariant; name it
+  in the docstring and keep orchestration out.
+- **Interchangeable parts behind one small interface** (the LLM runtimes,
+  the scenario trackers in `verify/scenarios.py`, the loop's `Tracker`
+  protocol). Declare the interface as a `Protocol`; pick an implementation
+  with a table or an argument, not an `isinstance` chain.
+- **Exceptions** callers catch by type or that carry a typed payload.
+
+These are examples, not a closed list. For a class of another kind, ask what
+it gives a caller that a dataclass and a few functions would not; if the
+answer is real, write the class.
+
+Everything else is functions:
+
+- Pass what a function needs and return what it produces: the next state,
+  not a mutated argument. A function that must change its argument in place
+  says so in its docstring; Torch modules and optimizers are the usual case.
+- No hidden state: no module globals that change, no environment reads below
+  the entry point, no callbacks that reach back into a caller's object.
+- No operator overloading to make data act like something else, and no
+  `try/except/finish` repeated in callers where a `with` would scope it.
+
+Apply this to new and changed code. Convert an existing class when the
+change already touches it; do not rewrite a module only for style. Rust in
+`managym/` follows its own README.
+
 ### Python typing
 
 - Write fully typed Python: annotate parameters and return values on all

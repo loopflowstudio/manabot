@@ -18,7 +18,7 @@ from manabot.infra.config import (
     ValueAggregation,
 )
 from manabot.training.decks import UniformDecks
-from manabot.training.loops.self_play import SelfPlay, every
+from manabot.training.loops.self_play import SelfPlay
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -394,7 +394,7 @@ def elemental_self_play() -> SelfPlay:
         game_errors=GameErrorPolicy(
             threshold=0.1, window=100, warmup=100, max_game_actions=40000
         ),
-        milestones=every(50),
+        checkpoint_every=50,
     )
 
 

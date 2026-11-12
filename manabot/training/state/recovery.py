@@ -2,8 +2,11 @@
 
 These trusted local artifacts contain hidden collector state and Python RNG
 objects; never accept downloaded pickle files or expose them as play checkpoints.
-The ordinary model export remains the only serving artifact. Replay restores
-native auto-reset state from the original seed, then checks every output buffer.
+The ordinary model export remains the only serving artifact. A snapshot holds
+the learner, optimizer, sampling RNGs and cumulative collector counts, not the
+games in progress: a resumed attempt opens fresh streams at its update, so it
+does not reproduce the uninterrupted run. Snapshots from revisions that saved
+collector state (through 439379869) are refused.
 """
 
 from collections.abc import Iterator, Mapping
@@ -14,6 +17,7 @@ import fcntl
 import gzip
 import os
 from pathlib import Path
+import pickle
 import random
 import socket
 import time
@@ -27,10 +31,11 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.training.clock import boot_identity
 from manabot.training.learning.learner import Learner
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.rollout.collection import (
-    CollectorSnapshot,
-    CollectorStats,
-    SeatRoutedCollector,
+from manabot.training.rollout.collection import Collector, CollectorStats
+
+_EARLIER_SNAPSHOT = (
+    "recovery snapshot was written by a revision that saved collector state; "
+    "resume it from 439379869"
 )
 
 
@@ -40,8 +45,8 @@ class TrainingPaused(KeyboardInterrupt):
 
 @dataclass
 class UpdateSnapshot:
-    # Version 4 holds complete stage records; self-play rows live in Etude.
-    format_version: Literal[4]
+    # Version 5 holds cumulative collector counts in place of collector state.
+    format_version: Literal[5]
     iteration: int
     completed_stages: list[StageRecord]
     collector_before: CollectorStats
@@ -54,7 +59,7 @@ class UpdateSnapshot:
     python_rng: tuple[Any, ...]
     numpy_rng: tuple[Any, ...]
     torch_rng: torch.Tensor
-    collector: CollectorSnapshot
+    collector_stats: CollectorStats
     regime_digest: str
     seed: int
     identities: dict[str, Any]
@@ -63,7 +68,7 @@ class UpdateSnapshot:
 def save_update(
     path: Path,
     learner: Learner,
-    collector: SeatRoutedCollector,
+    collector: Collector,
     ema: ActorCritic | None,
     rng: np.random.Generator,
     iteration: int,
@@ -75,7 +80,7 @@ def save_update(
     # Stage records at the exact snapshot boundary, including immutable
     # exports and cumulative counters.
     state = UpdateSnapshot(
-        format_version=4,
+        format_version=5,
         iteration=iteration,
         completed_stages=deepcopy(run.stages[:-1]),
         collector_before=deepcopy(collector_before),
@@ -87,7 +92,7 @@ def save_update(
         python_rng=random.getstate(),
         numpy_rng=np.random.get_state(),
         torch_rng=torch.get_rng_state(),
-        collector=collector.snapshot(),
+        collector_stats=deepcopy(collector.stats),
         regime_digest=run.regime_digest,
         seed=run.seed,
         identities=deepcopy(run.identities),
@@ -137,12 +142,14 @@ def load_update(parent: TrainingRun) -> UpdateSnapshot:
     if file_sha256(path) != artifact["sha256"]:
         raise ValueError("recovery artifact digest mismatch")
     with gzip.open(path, "rb") if path.suffix == ".gz" else path.open("rb") as stream:
-        state = torch.load(stream, map_location="cpu", weights_only=False)
-    if (
-        not isinstance(state, UpdateSnapshot)
-        or getattr(state, "format_version", None) != 4
-    ):
+        try:
+            state = torch.load(stream, map_location="cpu", weights_only=False)
+        except (AttributeError, pickle.UnpicklingError) as error:
+            raise ValueError(_EARLIER_SNAPSHOT) from error
+    if not isinstance(state, UpdateSnapshot):
         raise ValueError("invalid recovery snapshot type")
+    if getattr(state, "format_version", None) != 5:
+        raise ValueError(_EARLIER_SNAPSHOT)
     if state.regime_digest != parent.regime_digest or state.seed != parent.seed:
         raise ValueError("recovery snapshot identity mismatch")
     admit_recovery_identities(

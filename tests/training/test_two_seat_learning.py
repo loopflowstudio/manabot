@@ -18,7 +18,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
-from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.learner import new_learner, observation_tensors
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import (
@@ -27,7 +27,14 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    Collector,
+    RolloutBatch,
+    close_collector,
+    collect,
+    collect_pair,
+    open_collector,
+)
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates
@@ -87,8 +94,8 @@ def _collector(
     seats: Literal["one", "both"] = "both",
     games: int | None = None,
     scripted: bool = True,
-) -> SeatRoutedCollector:
-    collector = SeatRoutedCollector(
+) -> Collector:
+    collector = open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
@@ -97,11 +104,16 @@ def _collector(
         opponent_agent=second,
         learning_seats=seats,
         games_per_stream=games,
-        recovery_max_microsteps=10_000 if second is None else None,
     )
     if scripted:
         collector._env = ScriptedGames(collector._buffers)
     return collector
+
+
+def _at_update_boundary(collector: Collector) -> None:
+    """No pending decision or banked row survives a complete-games batch."""
+    assert not any(collector._streams)
+    assert all(pending is None for pending in collector._pending)
 
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
@@ -133,7 +145,7 @@ def test_both_seats_keep_their_own_trajectory_and_terminal_credit(
 ) -> None:
     agent = _agent(kind)
     collector = _collector(agent)
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     assert batch.actions.shape == (8, 1)
     np.testing.assert_array_equal(
         batch.ordered_obs()["agent_player"][:, 0, 0, 0],
@@ -162,22 +174,22 @@ def test_both_seats_keep_their_own_trajectory_and_terminal_credit(
     assert collector.stats.opponent_decisions == 0
     assert collector.stats.games == 2
     assert collector._env.steps == [5, 3]
-    collector.snapshot()  # no pending or banked rows at the update boundary
+    _at_update_boundary(collector)
     with torch.no_grad():
         agent.value_head[-1].bias.add_(4)
-    second = collector.collect(agent, 7)
+    second = collect(collector, agent, 7)
     _behavior_matches(second, agent)
     assert (
         second.actions.size == 19
     )  # 2 x five-decision games, 3 x three-decision games
-    collector.snapshot()
+    _at_update_boundary(collector)
 
 
 def test_matched_games_control_keeps_only_designated_seats() -> None:
     agent = _agent()
     one = _collector(agent, seats="one", games=2)
     both = _collector(agent, games=2)
-    a, b = one.collect(agent, 999), both.collect(agent, 999)
+    a, b = collect(one, agent, 999), collect(both, agent, 999)
     assert one.stats.games == both.stats.games == 4
     assert one.stats.micro_steps == both.stats.micro_steps == 16
     assert a.actions.size == 10 and b.actions.size == 16
@@ -191,7 +203,7 @@ def test_pair_routes_own_behavior() -> None:
         first.value_head[-1].bias.fill_(0.3)
         second.value_head[-1].bias.fill_(-0.7)
     collector = _collector(first, second=second, games=1)
-    a, b = collector.collect_pair(first, 1)
+    a, b = collect_pair(collector, first, 1)
     _behavior_matches(a, first)
     _behavior_matches(b, second)
     np.testing.assert_array_equal(
@@ -202,39 +214,23 @@ def test_pair_routes_own_behavior() -> None:
     )
 
 
-def test_two_seat_real_native_games_and_recovery() -> None:
+def test_two_seat_real_native_games() -> None:
     agent = _agent()
     collector = _collector(agent, games=1, scripted=False)
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     assert batch.actions.size == collector.stats.micro_steps
     assert collector.stats.games == 2
     assert int(batch.dones.sum()) == 4
     assert float(batch.rewards.sum()) == 0
-    boundary = collector.snapshot()
-    restored = _collector(agent, games=1, scripted=False)
-    restored.restore(boundary, lambda: None)
-    expected = collector.collect(agent, 1)
-    actual = restored.collect(agent, 1)
-    np.testing.assert_array_equal(actual.actions, expected.actions)
-    np.testing.assert_array_equal(actual.rewards, expected.rewards)
-    actual_rows, expected_rows = actual.observations(), expected.observations()
-    for key in actual_rows.observation:
-        np.testing.assert_array_equal(
-            actual_rows.observation[key], expected_rows.observation[key]
-        )
-    np.testing.assert_array_equal(
-        actual_rows.probabilities, expected_rows.probabilities
-    )
-    np.testing.assert_array_equal(
-        actual_rows.log_probabilities, expected_rows.log_probabilities
-    )
+    _at_update_boundary(collector)
+    close_collector(collector)
 
 
 @pytest.mark.parametrize("mode", ["random", "frozen"])
 def test_off_policy_opponents_cannot_train_both_seats(mode: str) -> None:
     agent = _agent()
     with pytest.raises(ValueError, match="both learning seats"):
-        SeatRoutedCollector(
+        open_collector(
             agent.observation_space,
             Match(),
             Reward(RewardConfig()),
@@ -325,8 +321,8 @@ def test_move_learning_consumes_complete_seat_trajectories(
 ) -> None:
     agent = _agent(kind)
     collector = _collector(agent)
-    batch = collector.collect(agent, 1)
-    trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
+    batch = collect(collector, agent, 1)
+    trainer = new_learner(agent, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
         trainer,
         batch,
@@ -354,7 +350,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
         ("random", "one"),
         ("frozen", "one"),
     ):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             agent.observation_space,
             Match(),
             Reward(RewardConfig()),
@@ -363,7 +359,7 @@ def test_collector_defaults_follow_policy_ownership() -> None:
             opponent_agent=_agent(),
         )
         assert collector.learning_seats == seats
-        collector.close()
+        close_collector(collector)
 
 
 def test_named_ladder_recipes_preserve_the_control_and_select_both_seats() -> None:

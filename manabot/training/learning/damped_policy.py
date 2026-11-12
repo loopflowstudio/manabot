@@ -27,7 +27,11 @@ from manabot.model.policy_distribution import (
     reverse_kl,
 )
 from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import AdmittedRollout, Learner
+from manabot.training.learning.learner import (
+    AdmittedRollout,
+    Learner,
+    learner_precision,
+)
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.returns import reverse_waves, transition_gae
 from manabot.training.learning.selection import (
@@ -178,7 +182,7 @@ def _targets(
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
     next_obs = admitted.next_observation(device)
-    with learner.forward_precision():
+    with learner_precision(learner):
         _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
     next_raw = next_raw.float()
     require(torch.isfinite(next_raw), "nonfinite_bootstrap", values=next_raw)
@@ -350,7 +354,7 @@ def update_damped_iteration(
                 obs, rows = admitted.rows(indexes.cpu().numpy(), device)
                 valid = legal_mask(obs["actions_valid"])
                 behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
-                with learner.forward_precision():
+                with learner_precision(learner):
                     logits, value_logits = learner.agent.forward_distribution(obs)
                 logits, value_logits = logits.float(), value_logits.float()
                 reference = reference_distribution(obs, learning.reference)

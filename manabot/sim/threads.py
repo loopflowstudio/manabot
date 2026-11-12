@@ -4,10 +4,10 @@ Containers often report the host's CPU count (`os.cpu_count()` returned 384 on
 a 32-vCPU RunPod pod), so native and numeric libraries size their pools for the
 host. Every evaluation child therefore starts from `child_environment()`, which
 pins the known pool variables before its interpreter loads any library, and
-counts its own OS threads against a declared `ThreadBudget` before reporting.
-A count above budget is an infrastructure failure, never a player forfeit.
-The same `ProcessCensus` records resident memory and whether Torch was loaded,
-so receipts show which children stayed light.
+counts its own OS threads against a declared `ThreadBudget` before reporting
+(`account_threads`). A count above budget is an infrastructure failure, never a
+player forfeit. The same `ProcessCensus` (`take_census`) records resident memory
+and whether Torch was loaded, so receipts show which children stayed light.
 
 `effective_cpus()` is the CPU capacity a process may actually use: the minimum
 of the logical count, its affinity mask and its cgroup CPU quota.
@@ -48,12 +48,6 @@ class ThreadBudgetExceeded(RuntimeError):
 class ThreadBudget:
     role: str
     threads: int
-
-    def account(self, counters: dict[str, int]) -> None:
-        """Record this process's census under `role`, then enforce the bound."""
-        census = ProcessCensus.take()
-        census.record(counters, self)
-        census.enforce(self)
 
 
 # Single-threaded pools leave the interpreter's main thread plus a small
@@ -130,42 +124,54 @@ class ProcessCensus:
     rss_bytes: int
     torch_loaded: bool
 
-    @classmethod
-    def take(cls) -> ProcessCensus:
-        names: dict[str, int] = {}
-        if sys.platform == "linux":
-            for task in Path("/proc/self/task").iterdir():
-                try:
-                    name = (task / "comm").read_text().strip()
-                except OSError:
-                    continue
-                names[name] = names.get(name, 0) + 1
-        process = psutil.Process()
-        return cls(
-            process.num_threads(),
-            names,
-            process.memory_info().rss,
-            "torch" in sys.modules,
+
+def take_census() -> ProcessCensus:
+    """Count this process's threads and read its memory and Torch use now."""
+    names: dict[str, int] = {}
+    if sys.platform == "linux":
+        for task in Path("/proc/self/task").iterdir():
+            try:
+                name = (task / "comm").read_text().strip()
+            except OSError:
+                continue
+            names[name] = names.get(name, 0) + 1
+    process = psutil.Process()
+    return ProcessCensus(
+        process.num_threads(),
+        names,
+        process.memory_info().rss,
+        "torch" in sys.modules,
+    )
+
+
+def record_census(
+    counters: dict[str, int], census: ProcessCensus, budget: ThreadBudget
+) -> None:
+    """Keep maxima by role beside the declared thread budget, in `counters`."""
+    observed = {
+        f"threads/{budget.role}": census.threads,
+        f"rss_bytes/{budget.role}": census.rss_bytes,
+        f"torch_loaded/{budget.role}": int(census.torch_loaded),
+        **{
+            f"thread_names/{budget.role}/{name}": count
+            for name, count in census.names.items()
+        },
+    }
+    for key, value in observed.items():
+        counters[key] = max(counters.get(key, 0), value)
+    counters[f"threads_budget/{budget.role}"] = budget.threads
+
+
+def enforce_budget(census: ProcessCensus, budget: ThreadBudget) -> None:
+    if census.threads > budget.threads:
+        raise ThreadBudgetExceeded(
+            f"{budget.role} process ran {census.threads} threads, budget "
+            f"{budget.threads}: {dict(census.names) or 'names unavailable'}"
         )
 
-    def record(self, counters: dict[str, int], budget: ThreadBudget) -> None:
-        """Keep maxima by role beside the declared thread budget."""
-        observed = {
-            f"threads/{budget.role}": self.threads,
-            f"rss_bytes/{budget.role}": self.rss_bytes,
-            f"torch_loaded/{budget.role}": int(self.torch_loaded),
-            **{
-                f"thread_names/{budget.role}/{name}": count
-                for name, count in self.names.items()
-            },
-        }
-        for key, value in observed.items():
-            counters[key] = max(counters.get(key, 0), value)
-        counters[f"threads_budget/{budget.role}"] = budget.threads
 
-    def enforce(self, budget: ThreadBudget) -> None:
-        if self.threads > budget.threads:
-            raise ThreadBudgetExceeded(
-                f"{budget.role} process ran {self.threads} threads, budget "
-                f"{budget.threads}: {dict(self.names) or 'names unavailable'}"
-            )
+def account_threads(budget: ThreadBudget, counters: dict[str, int]) -> None:
+    """Record this process's census under the budget's role, then enforce it."""
+    census = take_census()
+    record_census(counters, census, budget)
+    enforce_budget(census, budget)

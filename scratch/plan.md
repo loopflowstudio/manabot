@@ -94,3 +94,16 @@ Land diff (step 3), **Delete — do not maintain**:
   checkpoints, seeds.
 - Move `local`/`baseline`/`batched_baseline` recipes and experiment files'
   `runs()` to `training(recipe, config=...)`; add `manabot train --list`.
+
+- functional pass (2026-11-12, in the Task conversation). Jack Heart: "the
+  style in self_play.py still seems very Object ORiented and Frameworky. can
+  we make it more functional?" `SelfPlay` is data only; its methods became
+  functions (`to_regime`, `root_match`, `learner_digest`, `open_collector`,
+  `is_checkpoint`); `Every`/`every()` became `checkpoint_every: int | None`;
+  `LoopState`/`Counts` are frozen; `LoopState.advance`/`.behavior` became
+  `counted`/`behavior`; one update is `step(state, ...) -> (state, row)`
+  using `learn`. Check: `uv run --extra dev pytest
+  tests/training/test_self_play_loop.py -q` → 5 passed (153 s), parity
+  bitwise for PPO and damped. Docs updated (`docs/training.md`,
+  `manabot/README.md`). Recipes' `try/except: run.finish("failed")` is still
+  frameworky; not changed.

@@ -23,7 +23,7 @@ from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
@@ -47,10 +47,10 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
 
 
 def _collected(agent: ActorCritic) -> dict[str, torch.Tensor]:
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space, _match(), Reward(RewardConfig()), num_envs=1, seed=111
     )
-    batch = collector.collect(agent, 16)
+    batch = collect(collector, agent, 16)
     nonempty = np.flatnonzero(
         batch.ordered_obs()["events_valid"].sum(axis=(-1, -2)) >= 2
     )

@@ -28,7 +28,7 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.builders import with_agent
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 
 
 def test_arms_change_only_the_value_readout() -> None:
@@ -215,7 +215,7 @@ def test_pairings_depend_on_the_run_seed_not_the_arm() -> None:
                 value_aggregation=aggregation,
             ),
         )
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             space,
             Match(
                 MatchConfig.authored(
@@ -234,7 +234,7 @@ def test_pairings_depend_on_the_run_seed_not_the_arm() -> None:
             for stream, pair in enumerate(collector._env.current_matchup_indices()):
                 key = (stream, games.get(stream, 0))
                 assert seen.setdefault(key, pair) == pair
-            collector.collect(agent, 64)
+            collect(collector, agent, 64)
         decisions.append(collector.stats.micro_steps)
     # The policies played different games over the same pairings.
     assert decisions[0] != decisions[1]

@@ -1,50 +1,55 @@
 """A local stand-in for the Etude run API the recipes are written against.
 
-Recipes call `track(...)` and use the run it returns: `run.out` (the run's
+A recipe writes `with track(...) as run:` and uses `run.out` (the run's
 directory, kept whole across attempts), `run.log`, `run.log_table`,
-`run.checkpoint`, `run.stopping()` and `run.finish()`. Etude's own `Run`
-(`etude.train.run`) offers everything here except `out` and `stopping`; this
-module adds those two over it so the recipes run today, and it is deleted when
-Etude ships them (then recipes import `track` from `etude.train.run`).
+`run.checkpoint` and `run.stopping()`. Leaving the block finishes the run, as
+failed when it raised. Etude's own `Run` (`etude.train.run`) offers all of
+this except `out` and `stopping`; `TrackedRun` adds those two over it so the
+recipes run today, and this module is deleted when Etude ships them (then
+recipes import `track` from `etude.train.run`).
 
 What each addition stands in for:
 
-- `out` is `ETUDE_OUT` when the launcher (or `manabot train --out`) sets it,
-  otherwise `.runs/<experiment>`. A recipe names no experiment: the launch
-  does (`ETUDE_EXPERIMENT`), and `manabot train` sets it to the recipe's name. The Etude metric run lives in `out/etude/`
-  under the out directory's name, so running again resumes the same run.
+- `out` is `ETUDE_OUT`, otherwise `.runs/<experiment>`. A recipe names no
+  experiment: the launch does (`ETUDE_EXPERIMENT`). The Etude metric run lives
+  in `out/etude/` under the out directory's name, so running again resumes the
+  same run.
 - `stopping()` is true once `ETUDE_STOP_FILE` exists, or once `ETUDE_DEADLINE`
-  (ISO time) less the slowest interval between logged steps has passed.
+  (ISO time) is nearer than the longest interval between two `stopping()`
+  calls so far, which for a loop that asks once per update is its slowest
+  update.
+- `local_launch(out=, experiment=)` sets what a launch would for the block, so
+  a command line can call a recipe as Etude does.
 """
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime
 import os
 from pathlib import Path
 import re
 import time
-from typing import Literal
+from types import TracebackType
+from typing import Self
 
 from etude.train.records import Step
 from etude.train.run import Run, track as etude_track
 
-__all__ = ["Step", "TrackedRun", "track"]
+__all__ = ["Step", "TrackedRun", "local_launch", "track"]
 
 
+@dataclass
 class TrackedRun:
     """Etude's `Run` plus the run directory and the stop signal."""
 
-    def __init__(self, run: Run, out: Path) -> None:
-        self.etude = run
-        self.out = out
-        self._last_step: float | None = None
-        self._slowest = 0.0
+    etude: Run
+    out: Path
+    # Monotonic time of the last `stopping()` call and the longest gap between two.
+    asked: float | None = None
+    slowest: float = 0.0
 
     def log(self, values: Mapping[str, object], /, **clocks: float) -> None:
-        now = time.monotonic()
-        if self._last_step is not None:
-            self._slowest = max(self._slowest, now - self._last_step)
-        self._last_step = now
         self.etude.log(dict(values), **clocks)
 
     def log_table(
@@ -58,17 +63,34 @@ class TrackedRun:
         return self.etude.checkpoint(path, tags=tags, **clocks)
 
     def stopping(self) -> bool:
-        stop = os.environ.get("ETUDE_STOP_FILE")
-        if stop and Path(stop).exists():
-            return True
-        deadline = os.environ.get("ETUDE_DEADLINE")
-        if not deadline:
-            return False
-        left = datetime.fromisoformat(deadline).timestamp() - time.time()
-        return left < self._slowest
+        now = time.monotonic()
+        if self.asked is not None:
+            self.slowest = max(self.slowest, now - self.asked)
+        self.asked = now
+        return _stop_requested() or _seconds_left() < self.slowest
 
-    def finish(self, state: Literal["finished", "failed"] = "finished") -> None:
-        self.etude.finish(state)
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(
+        self,
+        kind: type[BaseException] | None,
+        error: BaseException | None,
+        trace: TracebackType | None,
+    ) -> None:
+        self.etude.finish("failed" if error is not None else "finished")
+
+
+def _stop_requested() -> bool:
+    stop = os.environ.get("ETUDE_STOP_FILE")
+    return bool(stop) and Path(stop).exists()
+
+
+def _seconds_left() -> float:
+    deadline = os.environ.get("ETUDE_DEADLINE")
+    if not deadline:
+        return float("inf")
+    return datetime.fromisoformat(deadline).timestamp() - time.time()
 
 
 def track(
@@ -96,3 +118,19 @@ def track(
         strict=True,
     )
     return TrackedRun(run, out)
+
+
+@contextmanager
+def local_launch(*, out: Path | str, experiment: str) -> Iterator[None]:
+    """Name the run directory and experiment for recipes called in the block."""
+    launch = {"ETUDE_OUT": str(out), "ETUDE_EXPERIMENT": experiment}
+    previous = {key: os.environ.get(key) for key in launch}
+    os.environ.update(launch)
+    try:
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value

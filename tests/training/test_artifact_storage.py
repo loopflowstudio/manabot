@@ -10,18 +10,18 @@ import boto3
 from botocore.exceptions import ClientError
 import pytest
 
-from manabot.infra.artifacts import ArtifactStore, StoredArtifact
+from manabot.infra.artifacts import StoredArtifact, fetch_artifact, publish_artifact
 from manabot.model.checkpoint import load_checkpoint
 
 
 @pytest.fixture
-def storage(monkeypatch: pytest.MonkeyPatch) -> tuple[ArtifactStore, MagicMock]:
+def storage(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     client = MagicMock()
     session = MagicMock()
     session.client.return_value = client
     monkeypatch.setattr(boto3, "Session", MagicMock(return_value=session))
     client.put_object.return_value = {"VersionId": "version-1"}
-    return ArtifactStore(), client
+    return client
 
 
 def _reference(data: bytes) -> StoredArtifact:
@@ -40,15 +40,15 @@ def _respond(client: MagicMock, data: bytes) -> None:
 
 
 def test_publish_and_fetch_verify_bytes_and_preserve_version(
-    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
+    tmp_path: Path, storage: MagicMock
 ) -> None:
-    store, client = storage
+    client = storage
     data = b"retained checkpoint bytes"
     path = tmp_path / "model.pt"
     path.write_bytes(data)
     expected = _reference(data)
     _respond(client, data)
-    reference = store.publish(
+    reference = publish_artifact(
         path, "s3://bucket/manabot/", sha256=expected.sha256, size=len(data)
     )
     assert reference.uri == expected.uri
@@ -59,32 +59,28 @@ def test_publish_and_fetch_verify_bytes_and_preserve_version(
         request["ChecksumSHA256"]
         == base64.b64encode(bytes.fromhex(reference.sha256)).decode()
     )
-    cached = store.fetch(reference, tmp_path / "cache")
+    cached = fetch_artifact(reference, tmp_path / "cache")
     assert cached.read_bytes() == data
     assert client.get_object.call_args.kwargs["VersionId"] == "version-1"
     count = client.get_object.call_count
-    assert store.fetch(reference, tmp_path / "cache") == cached
+    assert fetch_artifact(reference, tmp_path / "cache") == cached
     assert client.get_object.call_count == count
 
 
-def test_changed_source_never_uploads(
-    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
-) -> None:
-    store, client = storage
+def test_changed_source_never_uploads(tmp_path: Path, storage: MagicMock) -> None:
+    client = storage
     reference = _reference(b"original")
     source = tmp_path / "changed"
     source.write_bytes(b"modified")
     with pytest.raises(ValueError, match="differ"):
-        store.publish(
+        publish_artifact(
             source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
         )
     client.put_object.assert_not_called()
 
 
-def test_existing_remote_object_must_match(
-    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
-) -> None:
-    store, client = storage
+def test_existing_remote_object_must_match(tmp_path: Path, storage: MagicMock) -> None:
+    client = storage
     data = b"original"
     reference = _reference(data)
     source = tmp_path / "source"
@@ -102,7 +98,7 @@ def test_existing_remote_object_must_match(
         "ChecksumSHA256": checksum,
         "VersionId": "version-1",
     }
-    retried = store.publish(
+    retried = publish_artifact(
         source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
     )
     assert retried.sha256 == reference.sha256
@@ -112,20 +108,18 @@ def test_existing_remote_object_must_match(
         "ChecksumSHA256": base64.b64encode(hashlib.sha256(b"other").digest()).decode(),
     }
     with pytest.raises(ValueError, match="differs"):
-        store.publish(
+        publish_artifact(
             source, "s3://bucket/prefix", sha256=reference.sha256, size=reference.bytes
         )
     client.get_object.assert_not_called()
 
 
-def test_bad_download_never_installs_cache(
-    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
-) -> None:
-    store, client = storage
+def test_bad_download_never_installs_cache(tmp_path: Path, storage: MagicMock) -> None:
+    client = storage
     reference = _reference(b"original")
     _respond(client, b"tampered")
     with pytest.raises(ValueError, match="differ"):
-        store.fetch(reference, tmp_path)
+        fetch_artifact(reference, tmp_path)
     assert not (tmp_path / reference.sha256).exists()
     assert not list(tmp_path.glob("download-*"))
 
@@ -167,12 +161,12 @@ def test_r2_locations_round_trip_through_their_own_client(
     source = tmp_path / "weights.pt"
     source.write_bytes(b"weights")
     digest = hashlib.sha256(b"weights").hexdigest()
-    reference = ArtifactStore().publish(
+    reference = publish_artifact(
         source, "r2://manabot/", sha256=digest, size=len(b"weights")
     )
     assert reference.uri == f"r2://manabot/sha256/{digest}"
     assert reference.version_id is None
-    fetched = ArtifactStore().fetch(reference, tmp_path / "cache")
+    fetched = fetch_artifact(reference, tmp_path / "cache")
     assert fetched.read_bytes() == b"weights"
 
 
@@ -184,4 +178,4 @@ def test_r2_without_credentials_names_the_missing_variable(
         update={"uri": f"r2://manabot/sha256/{_reference(b'x').sha256}"}
     )
     with pytest.raises(RuntimeError, match="R2_ACCOUNT_ID"):
-        ArtifactStore().fetch(reference, tmp_path / "cache")
+        fetch_artifact(reference, tmp_path / "cache")

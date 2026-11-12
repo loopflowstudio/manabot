@@ -1,11 +1,11 @@
 """CLI entrypoints for training and simulation."""
 
+from collections.abc import Callable, Mapping
 import importlib
 import inspect
-import os
 from pathlib import Path
 import pkgutil
-from typing import Literal, Optional, Sequence
+from typing import Any, Literal, Optional, Protocol, Self, Sequence
 
 import torch
 import typer
@@ -17,8 +17,9 @@ from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.belief_sampler import BeliefConfig, belief
 from manabot.recipes.elemental import ElementalConfig, elemental
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
+from manabot.recipes.proposed_etude import local_launch
 from manabot.sim.sim import run_simulation
-from manabot.training.loops.self_play import Stopped
+from manabot.training.loops.self_play import SelfPlay, Stopped
 from manabot.training.regime import TrainingRegime
 import managym
 
@@ -69,8 +70,40 @@ def named_regime(name: str) -> TrainingRegime:
     return regime
 
 
-# Recipes written as functions over a self-play loop (`manabot.recipes`).
-LOOP_RECIPES = ("elemental", "belief")
+class LoopConfig(Protocol):
+    """What every loop recipe's config has; the command line overrides these."""
+
+    seed: int
+    updates: int
+    self_play: SelfPlay
+
+    def model_copy(self, *, update: Mapping[str, object]) -> Self: ...
+
+
+# Recipes written as functions over a self-play loop (`manabot.recipes`):
+# each name's recipe function and its default config.
+LOOP_RECIPES: dict[str, tuple[Callable[[Any], None], Callable[[], LoopConfig]]] = {
+    "elemental": (elemental, ElementalConfig),
+    "belief": (belief, BeliefConfig),
+}
+
+
+def loop_config(
+    default: LoopConfig,
+    *,
+    seed: int | None,
+    steps: int | None,
+    device: Literal["cpu", "mps", "cuda"] | None,
+) -> LoopConfig:
+    """`default` with the seed, update target and device the command line names."""
+    chosen = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    return default.model_copy(
+        update={
+            "seed": default.seed if seed is None else seed,
+            "updates": default.updates if steps is None else steps,
+            "self_play": default.self_play.model_copy(update={"device": chosen}),
+        }
+    )
 
 
 def _run_loop_recipe(
@@ -81,36 +114,16 @@ def _run_loop_recipe(
     device: Literal["cpu", "mps", "cuda"] | None,
     out: str | None,
 ) -> None:
-    """Call a loop recipe with its default config; rerunning resumes `--out`."""
-    chosen = device or ("cuda" if torch.cuda.is_available() else "cpu")
-    config = ElementalConfig() if name == "elemental" else BeliefConfig()
-    if seed is not None:
-        config.seed = seed
-    if steps is not None:
-        config.updates = steps
-    settings = (
-        config.self_play if isinstance(config, ElementalConfig) else config.policy
-    )
-    settings.device = chosen
+    """Call a loop recipe as a launch would; rerunning resumes `--out`."""
+    recipe, default = LOOP_RECIPES[name]
+    config = loop_config(default(), seed=seed, steps=steps, device=device)
     directory = out or f".runs/{name}-{config.seed}"
-    # The launch names the run's directory and experiment; here the CLI is the launch.
-    launch = {"ETUDE_OUT": directory, "ETUDE_EXPERIMENT": name}
-    previous = {key: os.environ.get(key) for key in launch}
-    os.environ.update(launch)
     try:
-        if isinstance(config, ElementalConfig):
-            elemental(config)
-        else:
-            belief(config)
+        with local_launch(out=directory, experiment=name):
+            recipe(config)
     except Stopped as stopped:
         typer.echo(f"{name}: {stopped}", err=True)
         raise typer.Exit(1) from stopped
-    finally:
-        for key, value in previous.items():
-            if value is None:
-                os.environ.pop(key, None)
-            else:
-                os.environ[key] = value
     typer.echo(f"{name}: completed in {directory}")
 
 

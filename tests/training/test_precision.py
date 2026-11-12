@@ -15,10 +15,10 @@ from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.training import precision
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Execution, Precision
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import close_collector, collect, open_collector
 
 
 def test_float32_regimes_keep_their_bytes() -> None:
@@ -106,19 +106,18 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         "manabot.training.learning.learner",
     ):
         monkeypatch.setattr(f"{module}.forward_precision", recorded)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(),
         Reward(RewardConfig()),
         num_envs=2,
         opponent_mode="self",
         learning_seats="both",
-        recovery_max_microsteps=10_000,
         precision="bf16",
     )
 
-    batch = collector.collect(agent, 1)
-    learner = Learner(agent, "cpu", minibatch_rows=2, precision="bf16")
+    batch = collect(collector, agent, 1)
+    learner = new_learner(agent, "cpu", minibatch_rows=2, precision="bf16")
     result = update_iteration(
         learner,
         batch,
@@ -129,7 +128,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
         np.random.default_rng(1),
         iteration=1,
     )
-    collector.close()
+    close_collector(collector)
 
     assert forwards and all(forwards)
     assert entries and all(entries)

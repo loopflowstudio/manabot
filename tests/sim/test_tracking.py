@@ -65,9 +65,8 @@ def test_simulation_admits_exact_etude_checkpoint(
 def test_simulation_records_game_results_in_etude(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    stats = sim.GameStats()
-    stats.record_game(sim.GameOutcome.HERO_WIN, steps=3, duration=0.25)
-    monkeypatch.setattr(sim, "simulate_models", lambda *args: stats)
+    games = [sim.GameRecord(sim.GameOutcome.HERO_WIN, steps=3, duration=0.25)]
+    monkeypatch.setattr(sim, "simulate_models", lambda *args: games)
     monkeypatch.setenv("ETUDE_TRACK_DIR", str(tmp_path / "launched"))
     monkeypatch.setenv("ETUDE_RUN", "launched-evaluation")
     sim.run_simulation(

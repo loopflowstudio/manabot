@@ -46,7 +46,7 @@ from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
 from manabot.training import execution
 from manabot.training.learning import damped_policy
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import Learner, new_learner
 from manabot.training.learning.selection import UpdateDiagnostics
 from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
@@ -57,7 +57,12 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -419,7 +424,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
     assert isinstance(stage, TrainSelfPlay)
     assert isinstance(stage.learning, DampedPolicyLearning)
     agent = ActorCritic(ObservationSpace(plan.observation), plan.agent).to("mps")
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(plan.root_match),
         Reward(RewardConfig()),
@@ -433,9 +438,11 @@ def test_mps_w64_single_selected_row_without_program_facts(
         deck_source=plan.deck_source,
     )
     try:
-        batch = collector.collect(agent, 1, deadline_monotonic=time.perf_counter() + 40)
+        batch = collect(
+            collector, agent, 1, deadline_monotonic=time.perf_counter() + 40
+        )
     finally:
-        collector.close()
+        close_collector(collector)
     assert batch.actions.shape == (1, 2)
     original = damped_policy._targets
 
@@ -459,7 +466,7 @@ def test_mps_w64_single_selected_row_without_program_facts(
 
     monkeypatch.setattr(damped_policy, "_targets", singleton)
     monkeypatch.setattr(semantic_cards, "embedding_rows", checked)
-    learner = Learner(agent, "mps", minibatch_rows=256)
+    learner = new_learner(agent, "mps", minibatch_rows=256)
     result = execution.update_iteration(
         learner, batch, stage.learning, 0, np.random.default_rng(197), iteration=1
     )

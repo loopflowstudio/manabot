@@ -60,3 +60,23 @@
     runner survive the deletion, or is a comparison several `training(...)`
     jobs in an experiment file and nothing else? The section is not rewritten
     until that is decided.
+
+1a. (2026-11-12) Question 1 is partly settled by direction. Jack Heart, on the
+    list that included deleting the collector's snapshot/restore: "do em all in
+    this diff". The collector (`manabot/training/rollout/collection.py`) can no
+    longer be saved or restored: `snapshot`, `restore`, `CollectorSnapshot`,
+    `AdaptiveSnapshot`, `CurrentGames`, the step journal and the
+    `recovery_max_microsteps` / `recovery_max_game_microsteps` constructor
+    arguments are gone. The regime executor still exists and still accepts
+    `resume_from`, but a resumed attempt now opens fresh native streams seeded
+    `collection seed + snapshot iteration` and carries over only the learner,
+    optimizer, sampling RNGs and cumulative collector counts
+    (`UpdateSnapshot` format 5). It does not reproduce the uninterrupted run:
+    games in progress at the snapshot are abandoned. A snapshot written at or
+    before 439379869 (format 4, pickled collector state) is refused with that
+    revision named; an adaptive stage refuses to resume because its sampler
+    state is no longer saved. `TrainingRegime.recovery` and
+    `recovery_max_microsteps` still validate and serialize (saved regimes stay
+    readable) and still select snapshot cadence, but no longer bound a journal.
+    Still open for review: whether the five frozen regimes listed above need
+    anything beyond "run from 439379869".

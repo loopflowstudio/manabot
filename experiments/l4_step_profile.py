@@ -577,7 +577,10 @@ def learn_once(
     from manabot.model.numerics import float64_operand
     from manabot.model.policy_distribution import legal_mask, policy_logs, reverse_kl
     from manabot.training.learning.damped_policy import damped_policy_loss
-    from manabot.training.learning.learner import observation_tensors
+    from manabot.training.learning.learner import (
+        learner_precision,
+        observation_tensors,
+    )
     from manabot.training.learning.references import reference_distribution
     from manabot.training.learning.selection import selected_mean
     from manabot.training.regime import DampedPolicyLearning
@@ -609,7 +612,7 @@ def learn_once(
         actions = payload["actions"].to(device)[local]
         advantages = payload["advantages"].to(device)[local]
         value_targets = payload["value_targets"].to(device)[local]
-        with learner.forward_precision():
+        with learner_precision(learner):
             logits, value_logits = learner.agent.forward_distribution(obs)
         logits, value_logits = logits.float(), value_logits.float()
         reference = reference_distribution(obs, learning.reference)
@@ -671,9 +674,9 @@ def learn_once(
 
 def _learner(agent: Any, device: str) -> tuple[Any, Any]:
     from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-    from manabot.training.learning.learner import Learner
+    from manabot.training.learning.learner import new_learner
 
-    learner = Learner(agent, device, minibatch_rows=256, precision="float32")
+    learner = new_learner(agent, device, minibatch_rows=256, precision="float32")
     health = NumericalHealth(
         optimizer_steps=0, skipped_steps=0, rejected_steps=0, sampled_steps=1
     )

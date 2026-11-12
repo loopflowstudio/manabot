@@ -37,7 +37,7 @@ from manabot.sim.serving_protocol import (
     PolicyAdmission,
 )
 from manabot.sim.supervision import replay_retained
-from manabot.sim.threads import ProcessCensus, group_worker_budget
+from manabot.sim.threads import group_worker_budget, record_census, take_census
 from manabot.verify.games import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
@@ -483,8 +483,9 @@ def play_cell(
         atomic_json(out_dir / "unattempted.json", unattempted)
         # Every receipt carries this worker's own census, while the runtime's
         # game threads are still alive, so calibration can attribute them.
-        ProcessCensus.take().record(
+        record_census(
             perf.counters,
+            take_census(),
             group_worker_budget(
                 runtime.execution.max_active_games if runtime is not None else None
             ),

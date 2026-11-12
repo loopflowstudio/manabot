@@ -8,7 +8,6 @@ from pathlib import Path
 import secrets
 import tempfile
 import threading
-from types import TracebackType
 from typing import Any
 from uuid import uuid4
 
@@ -60,13 +59,22 @@ class _CallbackSupervisor:
             return play_cell(**kwargs, inference=self.runtime)
 
 
-class CallbackEndpoint:
-    """Own the local RPC listener for a single Etude hold operation."""
+def _serve(server: Any) -> None:
+    try:
+        server.serve_forever()
+    except SystemExit:
+        # BaseManager's process-oriented server exits even when hosted in a thread.
+        pass
 
-    def __init__(self, runtime: InferenceRuntime) -> None:
 
-        self._temporary = tempfile.TemporaryDirectory(prefix="eval-")
-        address = str(Path(self._temporary.name) / "supervisor.sock")
+@contextmanager
+def serve_callbacks(runtime: InferenceRuntime) -> Iterator[InferenceEndpoint]:
+    """Serve one Etude hold operation's callbacks on a private socket.
+
+    The listener and its socket directory last until the block exits.
+    """
+    with tempfile.TemporaryDirectory(prefix="eval-") as directory:
+        address = str(Path(directory) / "supervisor.sock")
         authkey = secrets.token_bytes(32)
         supervisor = _CallbackSupervisor(runtime)
 
@@ -76,32 +84,16 @@ class CallbackEndpoint:
         ServerManager.register(
             "supervisor", callable=lambda: supervisor, exposed=("play_cell",)
         )
-        manager = ServerManager(address=address, authkey=authkey)
-        self._server = manager.get_server()
-        self._thread = threading.Thread(target=self._serve, daemon=True)
-        self._thread.start()
-        self.endpoint = InferenceEndpoint(address, authkey, runtime.execution)
-
-    def _serve(self) -> None:
+        # BaseManager's server is untyped.
+        server: Any = ServerManager(address=address, authkey=authkey).get_server()
+        thread = threading.Thread(target=_serve, args=(server,), daemon=True)
+        thread.start()
         try:
-            self._server.serve_forever()
-        except SystemExit:
-            # BaseManager's process-oriented server exits even when hosted in a thread.
-            pass
-
-    def __enter__(self) -> InferenceEndpoint:
-        return self.endpoint
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self._server.stop_event.set()
-        self._server.listener.close()
-        self._thread.join(timeout=1)
-        self._temporary.cleanup()
+            yield InferenceEndpoint(address, authkey, runtime.execution)
+        finally:
+            server.stop_event.set()
+            server.listener.close()
+            thread.join(timeout=1)
 
 
 @contextmanager
@@ -113,5 +105,5 @@ def callback_allocation(
         yield None
     else:
         with InferenceRuntime(execution, directory / uuid4().hex) as runtime:
-            with CallbackEndpoint(runtime) as endpoint:
+            with serve_callbacks(runtime) as endpoint:
                 yield endpoint

@@ -77,8 +77,8 @@ players cannot play closed matches. `Match.swapped()` moves both lists together;
 
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
-Self-play writes checkpoints at exact absolute updates (`SelfPlay.milestones`,
-usually `every(1000)`); freeze targets and shared intervals before launch.
+Self-play writes checkpoints at exact absolute updates (`SelfPlay.checkpoint_every`,
+usually 1000); freeze targets and shared intervals before launch.
 Lease and spending limits remain in hours and dollars. See
 [checkpoint cadence](../docs/training.md#checkpoint-cadence) and
 [continuation](../docs/training.md#portable-learner-continuation).

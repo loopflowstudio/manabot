@@ -18,7 +18,11 @@ from manabot.model.policy_distribution import (
 )
 from manabot.training.learning.damped_policy import update_damped_iteration
 from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import AdmittedRollout, Learner
+from manabot.training.learning.learner import (
+    AdmittedRollout,
+    Learner,
+    learner_precision,
+)
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.returns import transition_gae
 from manabot.training.learning.selection import (
@@ -74,7 +78,7 @@ def update_iteration(
         rewards = torch.as_tensor(batch.rewards, device=dev)
         ends = torch.as_tensor(batch.dones, device=dev)
         with torch.no_grad():
-            with learner.forward_precision():
+            with learner_precision(learner):
                 next_value = (bootstrap_agent or learner.agent).get_value(
                     admitted.next_observation(dev)
                 )
@@ -183,7 +187,7 @@ def update_iteration(
                     valid = legal_mask(obs["actions_valid"])
                     behavior_logs = torch.as_tensor(rows.log_probabilities, device=dev)
                     reference = reference_distribution(obs, learning.reference)
-                    with learner.forward_precision():
+                    with learner_precision(learner):
                         logits, value = learner.agent(obs)
                     logits, value = logits.float(), value.float()
                     logs = policy_logs(logits, valid)

@@ -41,12 +41,11 @@ def _gate(directory: Path) -> None:
 
 
 def elemental(config: ElementalConfig) -> None:
-    run = track(
+    with track(
         clocks=[Step("updates", "optimizer updates")],
         seed=config.seed,
         config=config.model_dump(mode="json"),
-    )
-    try:
+    ) as run:
         if config.validate_numerics:
             _gate(run.out / "numerics")
         self_play(
@@ -56,7 +55,3 @@ def elemental(config: ElementalConfig) -> None:
             updates=config.updates,
             run=run,
         )
-    except BaseException:
-        run.finish("failed")
-        raise
-    run.finish()

@@ -18,7 +18,7 @@ from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.training.execution import execute_regime, validate_regime
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.selection import selected_rows
@@ -155,7 +155,7 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
         ),
     )
 
-    trainer = Learner(agent, "cpu", minibatch_rows=1)
+    trainer = new_learner(agent, "cpu", minibatch_rows=1)
 
     for name in regime_names():
         stage = named_regime(name).stages[0]

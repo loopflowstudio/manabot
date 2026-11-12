@@ -20,13 +20,11 @@ from manabot.training.state.recovery import TrainingPaused, load_update
 from manabot.verify.store import VerifyStore
 from tests.training import test_recovery as proof
 from tests.training.test_recovery import (
-    assert_learning_metrics_equal,
-    assert_state_equal,
     recipe,
 )
 
 
-def test_safe_pause_restores_current_games_and_exact_learning(
+def test_safe_pause_stops_at_an_update_boundary_and_resumes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -38,7 +36,6 @@ def test_safe_pause_restores_current_games_and_exact_learning(
     stage.updates = 12
     pause = tmp_path / "pause.request"
     with VerifyStore(tmp_path / "training.sqlite") as store:
-        whole = execution.execute_regime(value, 197, tmp_path / "whole", store)
         export = execution.export_training_run
 
         def request_pause(
@@ -72,35 +69,16 @@ def test_safe_pause_restores_current_games_and_exact_learning(
         assert child.status == "completed" and child.updates_through() == 12
         assert child.prior_seconds == stopped.seconds
         assert child.prior_watchdog_seconds == stopped.watchdog_seconds
-        a, b = load_update(whole), load_update(child)
-        for name in (
-            "learner",
-            "optimizer",
-            "ema",
-            "minibatch_rng",
-            "python_rng",
-            "numpy_rng",
-            "torch_rng",
-        ):
-            assert_state_equal(getattr(a, name), getattr(b, name))
-        assert a.collector.current_games == b.collector.current_games
-        assert a.collector.current_games is not None
-        assert a.collector.stats.games > 0
+        saved = load_update(child)
+        assert saved.iteration == 12 and saved.collector_stats.games > 0
         assert (
-            sum(map(len, a.collector.current_games.actions))
-            < a.collector.stats.micro_steps
+            child.stages[0].learner_transitions
+            == saved.collector_stats.learner_transitions
         )
-        assert a.collector.journal == b.collector.journal == []
-        assert_state_equal(a.collector.buffers, b.collector.buffers)
-        assert_learning_metrics_equal(whole, child, tmp_path)
-        assert (
-            child.stages[0].learner_transitions == whole.stages[0].learner_transitions
-        )
-        assert child.stages[0].games == whole.stages[0].games
         assert child.recovery_artifact is not None
         with gzip.open(child.recovery_artifact["path"], "rb") as stream:
             compact = torch.load(stream, weights_only=False)
-        assert compact.format_version == 4
+        assert compact.format_version == 5
         # Snapshots hold counters, not update rows: those are Etude metrics.
         assert compact.record.updates == 12 and compact.record.diagnostics == []
 

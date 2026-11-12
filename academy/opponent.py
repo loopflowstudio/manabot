@@ -60,18 +60,6 @@ class Opponent:
             "deterministic": self.deterministic,
         }
 
-    def verify(self) -> None:
-        try:
-            actual = hashlib.sha256(self.checkpoint.read_bytes()).hexdigest()
-        except OSError as exc:
-            raise ValueError(
-                "The selected opponent checkpoint is unavailable."
-            ) from exc
-        if actual != self.sha256:
-            raise ValueError(
-                "The selected opponent checkpoint changed; restore the pinned artifact."
-            )
-
 
 # ---------------------------------------------------------------------------
 # Checkpoint catalog
@@ -194,5 +182,17 @@ def catalog_opponent(sha256: str) -> Opponent | None:
         step=summary.step,
         setups=[_setup_record(deck) for deck in summary.setups],
     )
-    opponent.verify()
+    _verify_checkpoint(opponent)
     return opponent
+
+
+def _verify_checkpoint(opponent: Opponent) -> None:
+    """Refuse an opponent whose checkpoint bytes are missing or no longer pinned."""
+    try:
+        actual = hashlib.sha256(opponent.checkpoint.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise ValueError("The selected opponent checkpoint is unavailable.") from exc
+    if actual != opponent.sha256:
+        raise ValueError(
+            "The selected opponent checkpoint changed; restore the pinned artifact."
+        )

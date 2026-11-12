@@ -35,11 +35,11 @@ from manabot.training.learning.damped_policy import (
     update_damped_iteration,
 )
 from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import collect, open_collector
 from manabot.verify.store import VerifyStore
 import managym
 
@@ -287,7 +287,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
     agent = ActorCritic(
         ObservationSpace(), ModelConfig(value_aggregation=aggregation)
     ).to(DEVICE)
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         agent.observation_space,
         Match(MatchConfig()),
         Reward(RewardConfig()),
@@ -295,7 +295,7 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         seed=29,
         device=DEVICE,
     )
-    batch = collector.collect(agent, 1)
+    batch = collect(collector, agent, 1)
     obs = admit_on_device(
         agent,
         {
@@ -346,7 +346,7 @@ def test_extreme_real_collector_to_learner() -> None:
     agent = ExtremeAgent(space, ModelConfig(hidden_dim=8, num_attention_heads=2)).to(
         DEVICE
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(MatchConfig()),
         Reward(RewardConfig()),
@@ -358,9 +358,9 @@ def test_extreme_real_collector_to_learner() -> None:
         batch_closure="exact-quota",
         device=DEVICE,
     )
-    batch = collector.collect(agent, 4)
+    batch = collect(collector, agent, 4)
     assert np.isfinite(batch.action_data.log_probabilities).all()
-    trainer = Learner(agent, DEVICE, minibatch_rows=collector.num_envs)
+    trainer = new_learner(agent, DEVICE, minibatch_rows=collector.num_envs)
 
     learning = DampedPolicyLearning(
         gradient="damped_policy", advantage_quantile=0, min_advantage=0

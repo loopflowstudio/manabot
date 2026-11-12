@@ -26,9 +26,6 @@ import traceback
 from typing import Any
 from uuid import uuid4
 
-from managym.decision import Command, DecisionFrame
-from managym.experience import UNVERSIONED_CONTENT_HASH
-
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
@@ -51,7 +48,9 @@ from manabot.sim.serving_protocol import (
     PolicyKey,
 )
 from manabot.sim.supervision import _failure, _infrastructure_failure
-from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
+from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded, account_threads
+from managym.decision import Command, DecisionFrame
+from managym.experience import UNVERSIONED_CONTENT_HASH
 
 
 class _InChildPlayers:
@@ -109,7 +108,7 @@ class _InChildPlayers:
 def _census(game: dict[str, Any]) -> None:
     """Count this child's threads into its result; over budget fails the game."""
     try:
-        GAME_BUDGET.account(game["worker_performance"]["counters"])
+        account_threads(GAME_BUDGET, game["worker_performance"]["counters"])
     except ThreadBudgetExceeded as exc:
         _infrastructure_failure(game, str(exc))
 

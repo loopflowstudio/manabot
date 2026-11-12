@@ -15,6 +15,7 @@ from manabot.model.buckets import (
     bucket_sizes,
 )
 from manabot.model.inference import PolicyInference
+from manabot.training.rollout.collection import collect
 import managym
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -38,7 +39,7 @@ def _bucketed(case: PolicyFixture) -> ActorCritic:
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
     """Decisions from played turns: permanents, facts and public history."""
-    batch = case.collector.collect(case.agent, 24)
+    batch = collect(case.collector, case.agent, 24)
     return {
         key: torch.from_numpy(value[-8:, 0]).float()
         for key, value in batch.observations().observation.items()

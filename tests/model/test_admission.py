@@ -15,10 +15,10 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.training.learning import learner as learner_module
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Learning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import RolloutBatch, collect, open_collector
 from tests.training.test_recovery import recipe
 
 
@@ -32,16 +32,15 @@ def _policy(*, history: bool = True) -> tuple[ActorCritic, RolloutBatch]:
         config.agent.recent_events = True
     space = ObservationSpace(config.observation)
     agent = ActorCritic(space, config.agent).eval()
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(config.match),
         Reward(RewardConfig()),
         num_envs=2,
         seed=91,
         opponent_mode="self",
-        recovery_max_microsteps=10000,
     )
-    return agent, collector.collect(agent, 8)
+    return agent, collect(collector, agent, 8)
 
 
 def _observation(batch: RolloutBatch) -> dict[str, torch.Tensor]:
@@ -141,7 +140,7 @@ def test_learning_admits_each_trained_row_once(
             else DampedPolicyLearning(gradient="damped_policy")
         )
         update_iteration(
-            Learner(agent, "cpu", minibatch_rows=2),
+            new_learner(agent, "cpu", minibatch_rows=2),
             batch,
             learning,
             0.5,

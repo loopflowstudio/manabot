@@ -137,8 +137,8 @@ names a different experiment from its launch.
 
 `self_play` (`manabot.training.loops.self_play`) is the loop every current
 recipe uses. Read it as the template for your own; its body is the loop you
-would write (shown without its game-error ledger, failure capture, timings,
-outcome table and the counts carried across attempts):
+would write (shown without its game-error ledger, failure capture and outcome
+table):
 
 ```python
 def self_play(
@@ -149,28 +149,23 @@ def self_play(
     if state.update >= updates:
         return final if final.exists() else save_final(final, state)
     final.unlink(missing_ok=True)  # a later target replaces the earlier endpoint
+    base = state.counts  # earlier attempts' work; this collector's totals add to it
     rng = np.random.default_rng(seed + MINIBATCH_SEED + state.update)
-    collector = settings.collector(seed=seed, start=state.update)
+    collector = self_play_collector(settings, seed=seed, start=state.update)
+    seed_random(seed + state.update)
     try:
-        seed_random(seed + state.update)
         while state.update < updates and not (run and run.stopping()):
-            batch = collector.collect(state.behavior, settings.transitions)
-            metrics = settings.update(state.learner, batch, rng=rng,
-                                      iteration=state.update + 1, updates=updates,
-                                      bootstrap=state.behavior)
-            if state.ema is not None:
-                update_ema(state.ema, state.learner.agent, settings.learning.ema)
-            state.advance(collector, metrics)
+            state, row = step(state, collector, rng, updates=updates, base=base)
             if run:
-                run.log(metric_row(metrics), updates=state.update)
+                run.log(row, updates=state.update)
             if state.update % settings.save_every == 0:
                 save_state(out / "state.pt", state)
-            if state.update in settings.milestones:
+            if is_checkpoint(settings, state.update):
                 checkpoint = save_checkpoint(out / "checkpoints", state)
                 if run:
                     run.checkpoint(checkpoint, updates=state.update)
     finally:
-        collector.close()
+        close_collector(collector)
     save_state(out / "state.pt", state)
     if state.update < updates:
         raise Stopped(state.update)
@@ -181,14 +176,15 @@ The pieces it uses:
 
 | Piece | What it does |
 | --- | --- |
-| `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision, `save_every` and `milestones`. A Pydantic model, so a config that holds one serializes and validates. |
+| `SelfPlay` | The loop's settings: match and decks, model and observation configs, the update and its learning record, streams, transitions, learning seats, batch closure, game-error policy, workers, device, precision, `save_every` and `checkpoint_every`. A Pydantic model holding data only, so a config that holds one serializes and validates; everything the loop does with it is a function. |
 | `new_state(settings, seed)` | Fresh weights from `seed`, EMA as a copy, a fresh Adam, update 0. |
 | `load_state(path, settings, seed)` | The saved learner, or `None` when `path` does not exist. Refuses a state written for other settings, another seed or another world, naming what differs. `device`, `workers` and `threads` may change between attempts; `updates` is not part of the state, so a later target carries on. |
 | `save_state(path, state)` | Writes raw weights, EMA, Adam, the update count and the source revision to a temporary file, then renames it over `path`. A crash leaves the previous state whole. |
 | `save_checkpoint(directory, state)` | World-bound raw and EMA policies at this update (`NNNNNNNN-raw.pt`, `-ema.pt`), each carrying `checkpoint_source`; returns the raw path. |
 | `save_final(path, state)` | The world-bound policy the loop returns: EMA when the learning record keeps one, raw otherwise. |
-| `settings.collector(seed=, start=)` | A `SeatRoutedCollector` whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these are the executor's streams, so a fresh loop's updates and checkpoints match a saved regime's with the same seed. |
-| `settings.update` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)). Damped-policy schedules read the absolute `iteration`; PPO schedules read `(iteration - 1) / updates`. |
+| `self_play_collector(settings, seed=, start=)` | A `Collector` (`open_collector` in `manabot.training.rollout.collection`) whose streams are seeded from the run seed and the update it starts at, so a resumed loop plays fresh, reproducible games. Sampling (`seed_random`) and minibatch order are reseeded the same way. With `start=0` these are the executor's streams, so a fresh loop's updates and checkpoints match a saved regime's with the same seed. |
+| `step(state, collector, rng, updates=, base=)` | One update: collect a batch with the behavior policy, `learn` from it, and return the next `LoopState` (update and counts replaced; the learner, Adam and EMA are updated in place) with its metric row. |
+| `learn(state, batch, rng, updates=)` | The update the learning record selects: `update_damped_iteration` for `DampedPolicyLearning`, `update_iteration` for `Learning` ([training loops](training-loop.md#the-updates-we-maintain)), then the EMA. Damped-policy schedules read the absolute iteration; PPO schedules read `state.update / updates`. |
 | `Tracker` | What a loop asks of a tracker: `log(values, **clocks)`, `log_table(name, rows, **clocks)`, `checkpoint(path, **clocks)` and `stopping()`. Etude's `Run` is one; pass `None` to train with no tracking. |
 
 `stopping()` is true once the run has been asked to stop or its deadline, less
@@ -222,7 +218,7 @@ def belief(config: BeliefConfig) -> None:
     policy = self_play(config.policy, run.out / "policy", seed=config.seed,
                        updates=config.updates, run=run)
     histories = collect_belief(policy, run.out / "histories.json",
-                               match=config.policy.root_match, games=config.games,
+                               match=root_match(config.policy), games=config.games,
                                seed=config.seed)
     sampler = train_belief(histories, run.out / "belief.pt", config.sampler, seed=config.seed)
     run.checkpoint(sampler, updates=config.updates, tags=("belief",))
@@ -255,7 +251,7 @@ Torch threads independently. `sampled_self_play()` defaults to four producers,
 a damping horizon fitted to the expected updates and `recover_capacity`. The
 matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
-Direct `SeatRoutedCollector` users must call `close()`. `bucketed_shapes`
+A collector opened directly with `open_collector` must be closed with `close_collector`. `bucketed_shapes`
 selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
 and `live_tokens` selects
 [live-token attention](observation-and-model.md#live-token-attention-profiling)
@@ -294,9 +290,9 @@ seat trajectories are packed into `[rows, 1]` with terminal separators and no
 padding. `games_per_stream` overrides the floor with complete games per stream
 per update ([batch boundaries](learning.md#can-a-batch-contain-unfinished-games)); set it on both arms for an equal-game comparison and report
 learner transitions, environment decisions, games, exposures and cost
-separately. For two live models, use one `SeatRoutedCollector` with
+separately. For two live models, open one collector with
 `opponent_mode="learning"`, `learning_seats="both"` and `opponent_agent`;
-`collect_pair` returns each model's rows.
+`collect_pair(collector, agent, n)` returns each model's rows.
 
 ### Batch closure
 
@@ -506,12 +502,11 @@ learning quality. Throughput is cumulative work over observed elapsed cost.
 
 ### Checkpoint cadence
 
-`SelfPlay.milestones` lists the absolute updates at which the loop writes a
-world-bound checkpoint and records it with `run.checkpoint`; the final policy
-owns the endpoint. `every(1000)` (`manabot.training.loops.self_play`) is the
-usual grid, an authoring default rather than an hourly estimate. Milestones are
-absolute, so a run continued from 26,000 with `every(1000)` first writes at
-27,000. A milestone checkpoint carries raw and EMA weights only; `state.pt`
+`SelfPlay.checkpoint_every` (`n`) makes the loop write a world-bound
+checkpoint at absolute updates 0, n, 2n, … and record it with
+`run.checkpoint`; the final policy owns the endpoint. 1000 is the usual grid,
+an authoring default rather than an hourly estimate. The grid is absolute, so a
+run continued from 26,000 with `checkpoint_every=1000` first writes at 27,000. A milestone checkpoint carries raw and EMA weights only; `state.pt`
 carries what resuming needs. A failed write fails the update rather than
 leaving a silent gap.
 

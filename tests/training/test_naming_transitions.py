@@ -17,10 +17,10 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import Learning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import RolloutBatch, collect, open_collector
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}
 
@@ -40,7 +40,7 @@ def _naming_rows(batch: RolloutBatch) -> tuple[np.ndarray, np.ndarray]:
 def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     torch.manual_seed(243)
     space = ObservationSpace(ObservationConfig(policy_input_version=9))
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(
             MatchConfig(
@@ -56,7 +56,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     agent = ActorCritic(space, ModelConfig(hidden_dim=16, attention_on=False))
     batch = None
     for _ in range(20):
-        batch = collector.collect(agent, num_steps=64)
+        batch = collect(collector, agent, num_steps=64)
         groups, names = _naming_rows(batch)
         if len(groups) and len(names):
             break
@@ -70,7 +70,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     # Every naming transition retains complete behavior evidence.
     batch.action_data.check(batch.actions, batch.logprobs)
 
-    learner = Learner(agent, "cpu", minibatch_rows=batch.actions.size)
+    learner = new_learner(agent, "cpu", minibatch_rows=batch.actions.size)
     assert agent.name_candidates is not None
     before = agent.name_candidates.embedding.weight.detach().clone()
     update_iteration(

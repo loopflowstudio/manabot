@@ -11,9 +11,9 @@ from manabot.training.execution import execute_regime
 from manabot.training.loops.self_play import (
     SelfPlay,
     Stopped,
-    every,
     load_state,
     self_play,
+    to_regime,
 )
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.verify.store import VerifyStore
@@ -57,7 +57,10 @@ def test_loop_matches_the_executor_with_the_same_seed(
     settings = _settings(learning)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         record = execute_regime(
-            settings.regime(id="parity", updates=2), SEED, tmp_path / "executor", store
+            to_regime(settings, id="parity", updates=2),
+            SEED,
+            tmp_path / "executor",
+            store,
         )
     assert record.status == "completed", record.error
 
@@ -70,7 +73,7 @@ def test_loop_matches_the_executor_with_the_same_seed(
 
 def test_a_rerun_resumes_and_a_finished_loop_returns_at_once(tmp_path: Path) -> None:
     settings = _settings(Learning(epochs=1, minibatches=1, ema=0.9)).model_copy(
-        update={"milestones": every(1)}
+        update={"checkpoint_every": 1}
     )
     out = tmp_path / "run"
     self_play(settings, out, seed=SEED, updates=1)

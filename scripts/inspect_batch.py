@@ -22,10 +22,15 @@ from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
 from manabot.training.learning.damped_policy import _targets
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import Learner, new_learner
 from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning
-from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    RolloutBatch,
+    close_collector,
+    collect,
+    open_collector,
+)
 
 STREAMS = 2
 
@@ -92,7 +97,7 @@ def main() -> None:
         policy_lambda=args.policy_lambda,
         value_lambda=args.value_lambda,
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         space,
         Match(regime.match),
         Reward(RewardConfig()),
@@ -100,15 +105,15 @@ def main() -> None:
         seed=args.seed,
         opponent_mode="self",
     )
-    learner = Learner(agent, "cpu", minibatch_rows=STREAMS)
+    learner = new_learner(agent, "cpu", minibatch_rows=STREAMS)
     rng = np.random.default_rng(args.seed)
     try:
         for iteration in range(1, args.updates + 1):
-            batch = collector.collect(agent, 64)
+            batch = collect(collector, agent, 64)
             update_iteration(learner, batch, learning, 0.0, rng, iteration=iteration)
-        _report(collector.collect(agent, 64), learner, learning, args.rows)
+        _report(collect(collector, agent, 64), learner, learning, args.rows)
     finally:
-        collector.close()
+        close_collector(collector)
 
 
 if __name__ == "__main__":

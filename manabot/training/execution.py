@@ -42,7 +42,7 @@ from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import new_learner
 from manabot.training.learning.objectives import update_ema, update_iteration
 from manabot.training.mps import mps_torch_error
 from manabot.training.precision import apply_matmul_precision
@@ -63,7 +63,12 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout.collection import (
+    close_collector,
+    collect,
+    commit_adaptive,
+    open_collector,
+)
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.rollout.selection_data import (
     SelectionDataset,
@@ -76,6 +81,8 @@ from manabot.training.state.game_errors import (
     GameErrorLedger,
     GameErrorLimit,
     GameErrorState,
+    append_attempt,
+    open_ledger,
 )
 from manabot.training.state.incidents import save_incident
 from manabot.training.state.learning_state import admit_learning_state, validate_adam
@@ -536,13 +543,12 @@ def _execute_regime(
             isinstance(error_stage, TrainSelfPlay)
             and error_stage.game_errors is not None
         ):
-            game_ledger = GameErrorLedger(
+            game_ledger, run.game_errors = open_ledger(
                 out / "game-attempts.jsonl",
                 error_stage.game_errors,
                 parents=run.game_error_ledgers,
             )
             run.game_error_ledgers.append(str(game_ledger.path))
-            run.game_errors = game_ledger.state
     if parent is None:
         store.save_training_run(run)
     else:
@@ -1253,16 +1259,28 @@ def _execute_regime(
                                 raise ValueError("initial evaluation admission differs")
                     producers.close()
 
-                    def record_game_attempt(attempt: GameAttempt) -> GameErrorState:
+                    def record_game_attempt(
+                        state: GameErrorState, attempt: GameAttempt
+                    ) -> GameErrorState:
                         assert game_ledger is not None
-                        return game_ledger.record(attempt, failures.context())
+                        run.game_errors = append_attempt(
+                            game_ledger, state, attempt, failures.context()
+                        )
+                        return run.game_errors
 
-                    collector = SeatRoutedCollector(
+                    if snapshot is not None and stage.adaptive is not None:
+                        raise ValueError(
+                            "adaptive collection cannot resume: its sampler state is "
+                            "no longer saved; run this attempt from 439379869"
+                        )
+                    collector = open_collector(
                         space,
                         Match(regime.root_match),
                         Reward(RewardConfig()),
                         num_envs=stage.streams,
-                        seed=seeds["collection"],
+                        # A resumed attempt opens fresh streams at its update.
+                        seed=seeds["collection"]
+                        + (snapshot.iteration if snapshot is not None else 0),
                         opponent_mode="frozen"
                         if stage.opponent is not None
                         else "random"
@@ -1272,13 +1290,9 @@ def _execute_regime(
                         learning_seats=stage.learning_seats,
                         batch_closure=stage.batch_closure,
                         games_per_stream=stage.games_per_stream,
-                        recovery_max_microsteps=regime.recovery_max_microsteps,
                         game_errors=stage.game_errors,
                         record_attempt=record_game_attempt
                         if stage.game_errors
-                        else None,
-                        recovery_max_game_microsteps=regime.recovery.max_game_microsteps
-                        if regime.recovery
                         else None,
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
@@ -1288,7 +1302,7 @@ def _execute_regime(
                         adaptive=stage.adaptive,
                         precision=stage.execution.precision,
                     )
-                    producers.callback(collector.close)
+                    producers.callback(close_collector, collector)
                     experiment = RunContext(
                         RuntimeConfig(
                             seed=seeds["initialization"]
@@ -1339,7 +1353,7 @@ def _execute_regime(
                             transitions=int(point["learner_transitions"]),
                         )
                         record.export_seconds += time.perf_counter() - tick
-                    learner = Learner(
+                    learner = new_learner(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
@@ -1369,7 +1383,10 @@ def _execute_regime(
                 if snapshot is not None:
                     tick = time.perf_counter()
                     try:
-                        collector.restore(snapshot.collector, check)
+                        # Cumulative counts carry over; the games in progress
+                        # at the snapshot do not.
+                        collector.stats = deepcopy(snapshot.collector_stats)
+                        collector.stats.learned_game_rows = {}
                         restore_learning(snapshot, learner, ema, rng)
                     finally:
                         run.recovery_seconds += time.perf_counter() - tick
@@ -1386,9 +1403,10 @@ def _execute_regime(
                 if game_ledger is not None:
                     # The ledger includes attempts after the last committed
                     # optimizer snapshot. Restoring learning cannot erase them.
-                    collector.game_error_state = game_ledger.state
-                    if game_ledger.state.stop_reason:
-                        raise GameErrorLimit(game_ledger.state.stop_reason)
+                    assert run.game_errors is not None
+                    collector.game_error_state = run.game_errors
+                    if run.game_errors.stop_reason:
+                        raise GameErrorLimit(run.game_errors.stop_reason)
 
                 def checkpoint(label: str) -> None:
                     nonlocal phase
@@ -1436,7 +1454,8 @@ def _execute_regime(
                     assert behavior_agent is not None
                     batch = None
                     try:
-                        batch = collector.collect(
+                        batch = collect(
+                            collector,
                             behavior_agent,
                             stage.transitions,
                             deadline_monotonic=deadline,
@@ -1482,7 +1501,7 @@ def _execute_regime(
                                         "numerical": {"optimizer_steps": 0},
                                     }
                                 )
-                                adaptive_diagnostics = collector.commit_adaptive(batch)
+                                adaptive_diagnostics = commit_adaptive(collector, batch)
                                 if adaptive_diagnostics is not None:
                                     diagnostic["adaptive"] = adaptive_diagnostics
                                 if stage.matchup_curriculum != "fixed":

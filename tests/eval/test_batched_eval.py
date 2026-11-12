@@ -734,12 +734,12 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
     from concurrent.futures import ProcessPoolExecutor
     import multiprocessing as mp
 
-    from manabot.eval.endpoint import CallbackEndpoint
+    from manabot.eval.endpoint import serve_callbacks
 
     contract = arena_fixture()
     execution = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
-        with CallbackEndpoint(runtime) as endpoint:
+        with serve_callbacks(runtime) as endpoint:
             with ProcessPoolExecutor(1, mp_context=mp.get_context("spawn")) as pool:
                 rows, _, replay = pool.submit(
                     endpoint.play_cell,

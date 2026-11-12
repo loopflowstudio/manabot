@@ -29,7 +29,7 @@ from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
 from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
-from manabot.sim.threads import REPLAY_BUDGET
+from manabot.sim.threads import REPLAY_BUDGET, account_threads
 
 
 def _failure(
@@ -228,7 +228,7 @@ def replay_worker(
                 references.append(retain_evidence(card_evidence_dir, evidence))
                 receipts.append(dict(evidence.replay))
             outcome = ReplayOutcome(receipts, tuple(references))
-        REPLAY_BUDGET.account(outcome.process)
+        account_threads(REPLAY_BUDGET, outcome.process)
         connection.send(outcome)
     except BaseException as exc:
         connection.send(ReplayOutcome(error=f"{type(exc).__name__}: {exc}"))

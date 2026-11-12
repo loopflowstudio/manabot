@@ -6,7 +6,6 @@ import subprocess
 import sys
 from typing import Any
 
-from managym.decision import Command
 import numpy as np
 import pytest
 import torch
@@ -32,10 +31,15 @@ from manabot.training.regime import (
     TrainingRegime,
     TrainSelfPlay,
 )
-from manabot.training.rollout import selection_data
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout import collection, selection_data
+from manabot.training.rollout.collection import (
+    Collector,
+    close_collector,
+    open_collector,
+)
 from manabot.verify.store import VerifyStore
 import managym
+from managym.decision import Command
 
 
 def _model() -> ActorCritic:
@@ -230,7 +234,7 @@ def test_strict_collector_preserves_masked_prefixes(
 ) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             Match(),
             Reward(RewardConfig()),
@@ -243,7 +247,7 @@ def test_strict_collector_preserves_masked_prefixes(
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([-1, -999], [True, False])
         finally:
-            collector.close()
+            close_collector(collector)
     evidence = read_failure(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].actions == [0, -1]
@@ -278,23 +282,23 @@ def test_strict_regime_captures_before_original_error_without_recipe_changes(
         ],
     )
     frozen = recipe.model_dump_json()
-    original = SeatRoutedCollector._sample_learning_rows
+    original = collection._sample_learning_rows
     creations = 0
-    original_init = SeatRoutedCollector.__init__
+    original_open = execution.open_collector
 
-    def initialize(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> None:
+    def opening(*args: Any, **kwargs: Any) -> Collector:
         nonlocal creations
         creations += 1
-        original_init(self, *args, **kwargs)
+        return original_open(*args, **kwargs)
 
-    def actions(self: SeatRoutedCollector, *args: Any, **kwargs: Any) -> np.ndarray:
-        result = original(self, *args, **kwargs)
+    def actions(collector: Collector, *args: Any, **kwargs: Any) -> np.ndarray:
+        result = original(collector, *args, **kwargs)
         if creations == stages:
             result[:] = -1
         return result
 
-    monkeypatch.setattr(SeatRoutedCollector, "__init__", initialize)
-    monkeypatch.setattr(SeatRoutedCollector, "_sample_learning_rows", actions)
+    monkeypatch.setattr(execution, "open_collector", opening)
+    monkeypatch.setattr(collection, "_sample_learning_rows", actions)
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         with pytest.raises(managym.AgentError) as failed:
             execution.execute_regime(recipe, 197, tmp_path / "run", store)
@@ -472,7 +476,7 @@ def test_rollout_evaluation_propagates_without_completed_denominator(
 def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
     scope = CaptureScope(tmp_path)
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             Match(),
             Reward(RewardConfig()),
@@ -484,7 +488,7 @@ def test_sharded_failure_names_global_stream(tmp_path: Path) -> None:
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([0, -1], [False, True])
         finally:
-            collector.close()
+            close_collector(collector)
     evidence = read_failure(scope.paths[0])
     assert evidence.games[0].stream == 1
     assert evidence.games[0].seed == 1
@@ -527,7 +531,7 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
         MatchConfig.authored("elemental-world-v2", "elemental_ug", "elemental_bg")
     )
     with capture_scope(scope):
-        collector = SeatRoutedCollector(
+        collector = open_collector(
             ObservationSpace(),
             match,
             Reward(RewardConfig()),
@@ -545,7 +549,7 @@ def test_strict_uniform_capture_replays_actual_sampled_root(tmp_path: Path) -> N
             with pytest.raises(managym.AgentError):
                 collector._env.step_into_buffers([-1, 0], [True, False])
         finally:
-            collector.close()
+            close_collector(collector)
     evidence = read_failure(scope.paths[0])
     assert len(evidence.games) == 1
     assert evidence.games[0].seed == 17502

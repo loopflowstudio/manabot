@@ -43,7 +43,7 @@ for running training, see [training.md](training.md).
 
 ## 1. Play
 
-`SeatRoutedCollector` steps every stream in lockstep, so one forward pass
+`collect` steps every stream of a `Collector` in lockstep, so one forward pass
 chooses actions for all of them. The network sees only the acting seat's
 [viewer-safe observation](observation-and-model.md). Hidden cards and game
 outcomes never enter it.
@@ -64,16 +64,16 @@ opponent decisions came between them.
 
 ![An interleaved game of decisions by seats A and B, with one forced decision, splits into one row sequence per seat. Seat A's last row has reward +1 and seat B's has -1; all other rows have reward 0.](images/game-to-trajectories.svg)
 
-From `SeatRoutedCollector` in
+From `collect` in
 [`manabot/training/rollout/collection.py`](../manabot/training/rollout/collection.py):
 
 ```python
 slot = (
     2 * int(row) + int(acting[row])
-    if self.learning_seats == "both"
+    if collector.learning_seats == "both"
     else int(row)
 )
-self._pending[slot] = _Pending(...)
+collector._pending[slot] = _Pending(...)
 ```
 
 Each stream and seat has its own slot, and a row stays pending in it until that
@@ -525,7 +525,7 @@ ablations are in [ataraxos-mtg-ablations](../experiments/ataraxos-mtg-ablations.
 | Step | Code |
 | --- | --- |
 | Iteration loop, EMA, checkpoints | `self_play` in [`training/loops/self_play.py`](../manabot/training/loops/self_play.py) |
-| Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
+| Play and batch boundaries | `open_collector` and `collect` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages | `transition_gae` in [`training/learning/returns.py`](../manabot/training/learning/returns.py) |
 | Value targets, loss, update | `_targets`, `damped_policy_loss`, `update_damped_iteration` in [`training/learning/damped_policy.py`](../manabot/training/learning/damped_policy.py) |
 | Filter | [`training/learning/selection.py`](../manabot/training/learning/selection.py) |

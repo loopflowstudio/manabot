@@ -20,6 +20,8 @@ from manabot.sim.threads import (
     ThreadBudgetExceeded,
     child_environment,
     effective_cpus,
+    enforce_budget,
+    record_census,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -197,8 +199,8 @@ def test_census_records_maxima_and_rejects_excess() -> None:
     counters: dict[str, int] = {}
     census = ProcessCensus(3, {"python": 1, "worker": 2}, 10, False)
     budget = ThreadBudget("probe", 2)
-    census.record(counters, budget)
-    ProcessCensus(1, {}, 20, True).record(counters, budget)
+    record_census(counters, census, budget)
+    record_census(counters, ProcessCensus(1, {}, 20, True), budget)
     assert counters == {
         "threads/probe": 3,
         "threads_budget/probe": 2,
@@ -208,4 +210,4 @@ def test_census_records_maxima_and_rejects_excess() -> None:
         "thread_names/probe/worker": 2,
     }
     with pytest.raises(ThreadBudgetExceeded, match="3 threads, budget 2"):
-        census.enforce(budget)
+        enforce_budget(census, budget)

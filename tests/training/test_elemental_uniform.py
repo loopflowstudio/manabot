@@ -1,4 +1,4 @@
-"""Native game-root uniform sampling, exact recovery and real CPU learning."""
+"""Native game-root uniform sampling and real CPU learning."""
 
 from copy import deepcopy
 import json
@@ -19,12 +19,19 @@ from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
-from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.rollout import collection
+from manabot.training.rollout.collection import (
+    Collector,
+    close_collector,
+    collect,
+    open_collector,
+)
 from manabot.training.rollout.matchups import elemental_roster
 from manabot.training.state.game_errors import (
     GameAttempt,
-    GameErrorLedger,
     GameErrorPolicy,
+    append_attempt,
+    open_ledger,
     replay_attempt,
 )
 from manabot.verify.store import VerifyStore
@@ -39,11 +46,10 @@ def _match() -> Match:
 
 
 def _collector(
-    recovery: str,
     streams: int = 4,
     learning_seats: Literal["one", "both"] = "one",
-) -> SeatRoutedCollector:
-    return SeatRoutedCollector(
+) -> Collector:
+    return open_collector(
         ObservationSpace(),
         _match(),
         Reward(RewardConfig()),
@@ -53,24 +59,21 @@ def _collector(
         learning_seats=learning_seats,
         batch_closure="exact-quota" if learning_seats == "one" else "complete-games",
         matchup_curriculum="elemental-uniform",
-        recovery_max_microsteps=200000 if recovery == "exact" else None,
-        recovery_max_game_microsteps=200000 if recovery == "current" else None,
     )
 
 
-@pytest.mark.parametrize("recovery", ["exact", "current"])
 @pytest.mark.parametrize("learning_seats", ["one", "both"])
-def test_uniform_collector_recovers_changed_terminal_roots(
-    recovery: str, learning_seats: Literal["one", "both"]
+def test_uniform_collector_changes_terminal_roots(
+    learning_seats: Literal["one", "both"],
 ) -> None:
     torch.set_num_threads(1)
     agent = ActorCritic(
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
-    first = _collector(recovery, learning_seats=learning_seats)
+    first = _collector(learning_seats=learning_seats)
     initial_pairs = first._env.current_matchup_indices()
-    batch = first.collect(agent, 128)
+    batch = collect(first, agent, 128)
     assert first.stats.games > 0
     assert first._env.current_matchup_indices() != initial_pairs
     for match, players in zip(
@@ -99,62 +102,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         sum(c.wins + c.losses + c.draws for c in first.stats.self_play.counts.values())
         == first.stats.games * 2
     )
-    if recovery == "exact":
-        # Independent action-journal audit: count decisions against the actual
-        # native pair BEFORE auto-reset, not the pair in the returned observation.
-        replay = _collector(recovery, learning_seats=learning_seats)
-        expected: dict[str, dict[str, int]] = {}
-        identities = [p.deck.identity for p in elemental_roster(_match())]
-
-        def key(row: int, pair: tuple[int, int]) -> str:
-            seat = "both" if learning_seats == "both" else str(row % 2)
-            return f"{identities[pair[0]]}/{identities[pair[1]]}/learner-{seat}"
-
-        def count(identity: str, kind: str) -> None:
-            counts = expected.setdefault(
-                identity,
-                dict(
-                    game_roots=0,
-                    environment_decisions=0,
-                    learner_transitions=0,
-                    terminal_games=0,
-                    truncated_games=0,
-                ),
-            )
-            counts[kind] += 1
-
-        for row, pair in enumerate(replay._env.current_matchup_indices()):
-            count(key(row, pair), "game_roots")
-        for actions, active in first.snapshot().journal:
-            pairs = replay._env.current_matchup_indices()
-            acting = replay._env.current_agent_indices()
-            replay._env.step_into_buffers(actions, active)
-            for row, enabled in enumerate(active):
-                if not enabled:
-                    continue
-                identity = key(row, pairs[row])
-                count(identity, "environment_decisions")
-                if learning_seats == "both" or acting[row] == row % 2:
-                    count(identity, "learner_transitions")
-                if replay._buffers["terminated"][row]:
-                    count(identity, "terminal_games")
-                    count(
-                        key(row, replay._env.current_matchup_indices()[row]),
-                        "game_roots",
-                    )
-        assert expected == first.stats.exposure
-    restored = _collector(recovery, learning_seats=learning_seats)
-    restored.restore(first.snapshot(), lambda: None)
-    assert first._self_play_decks == restored._self_play_decks
-    left, right = first.collect(agent, 64), restored.collect(agent, 64)
-    expected, actual = left.ordered_obs(), right.ordered_obs()
-    for key in expected:
-        np.testing.assert_array_equal(expected[key], actual[key])
-    np.testing.assert_array_equal(left.actions, right.actions)
-    np.testing.assert_array_equal(left.rewards, right.rewards)
-    assert first.stats.exposure == restored.stats.exposure
-    assert first.stats.self_play == restored.stats.self_play
-    assert first._env.current_game_seeds() == restored._env.current_game_seeds()
+    close_collector(first)
 
 
 @pytest.mark.parametrize("workers", [2, 4])
@@ -165,7 +113,7 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
     collectors = [
-        SeatRoutedCollector(
+        open_collector(
             ObservationSpace(),
             _match(),
             Reward(RewardConfig()),
@@ -181,7 +129,7 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
     one, many = collectors
     try:
         for _ in range(2):
-            left, right = one.collect(agent, 64), many.collect(agent, 64)
+            left, right = collect(one, agent, 64), collect(many, agent, 64)
             expected, actual = left.ordered_obs(), right.ordered_obs()
             for key in expected:
                 np.testing.assert_array_equal(expected[key], actual[key])
@@ -193,12 +141,12 @@ def test_uniform_draws_agree_across_producer_counts(workers: int) -> None:
             assert one.stats.exposure == many.stats.exposure
         assert one.stats.games > 0
     finally:
-        one.close()
-        many.close()
+        close_collector(one)
+        close_collector(many)
 
 
 def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
-    collector = _collector("current", 256)
+    collector = _collector(256)
     np.testing.assert_array_equal(collector.learner_seat, np.arange(256) % 2)
     assert sum(c["game_roots"] for c in collector.stats.exposure.values()) == 256
     agent = ActorCritic(
@@ -219,7 +167,7 @@ def test_uniform_256_stream_roots_and_full_roster_admission() -> None:
         elemental_roster(Match(bad))
     for mode, root in [("random", None), ("self", "lethal-target-v1")]:
         with pytest.raises(ValueError, match="current-self and ordinary roots"):
-            SeatRoutedCollector(
+            open_collector(
                 ObservationSpace(),
                 _match(),
                 Reward(RewardConfig()),
@@ -307,12 +255,12 @@ def test_uniform_crash_refill_retains_sampled_setups(
 ) -> None:
     torch.set_num_threads(1)
     policy = GameErrorPolicy()
-    ledger = GameErrorLedger(tmp_path / "attempts.jsonl", policy)
+    ledger, _ = open_ledger(tmp_path / "attempts.jsonl", policy)
     agent = ActorCritic(
         ObservationSpace(),
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
-    collector = SeatRoutedCollector(
+    collector = open_collector(
         ObservationSpace(),
         _match(),
         Reward(RewardConfig()),
@@ -322,32 +270,34 @@ def test_uniform_crash_refill_retains_sampled_setups(
         games_per_stream=1,
         matchup_curriculum="elemental-uniform",
         game_errors=policy,
-        record_attempt=lambda row: ledger.record(row, {}),
+        record_attempt=lambda state, row: append_attempt(ledger, state, row, {}),
     )
-    original = collector._sample_learning_rows
+    original = collection._sample_learning_rows
     calls = 0
 
     def sample(
+        collector: Collector,
         agent: ActorCritic,
         rows: np.ndarray,
         acting: np.ndarray,
         inference: PolicyInference,
     ) -> np.ndarray:
         nonlocal calls
-        actions = original(agent, rows, acting, inference)
+        actions = original(collector, agent, rows, acting, inference)
         calls += 1
         if calls == 4:
             actions[0] = -1
         return actions
 
-    monkeypatch.setattr(collector, "_sample_learning_rows", sample)
+    monkeypatch.setattr(collection, "_sample_learning_rows", sample)
     try:
-        batch = collector.collect(agent, 1)
+        batch = collect(collector, agent, 1)
         attempts = [
             GameAttempt.model_validate(json.loads(line)["attempt"])
             for line in ledger.path.read_text().splitlines()
         ]
-        assert ledger.state.crashed == 1 and ledger.state.completed == 2
+        errors = collector.game_error_state
+        assert errors.crashed == 1 and errors.completed == 2
         failed = next(row for row in attempts if row.outcome == "engine_error")
         assert len(failed.actions) == 4
         replay = replay_attempt(failed)
@@ -375,6 +325,6 @@ def test_uniform_crash_refill_retains_sampled_setups(
             == batch.actions.size
         )
         assert sum(c["terminal_games"] for c in collector.stats.exposure.values()) == 2
-        assert ledger.state.discarded_samples == 4
+        assert collector.game_error_state.discarded_samples == 4
     finally:
-        collector.close()
+        close_collector(collector)
