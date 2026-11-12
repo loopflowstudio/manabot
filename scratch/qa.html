@@ -37,6 +37,17 @@ ACADEMY_PLAY_READY … "python": "3.13.15", "native": {"abi": "cp313", …}  (10
 <h2>4. Linux / CUDA install: lock only</h2>
 <p>The lock has <code>torch-2.15.0+cu132</code> wheels for cp312 and cp313, on manylinux_2_28 x86_64 and aarch64. It also has <code>+cpu</code> wheels for the play runtime on Linux. I didn't install it on a GPU. CUDA 13.2 needs NVIDIA driver 580 or newer, and it was not re-qualified on rented GPUs.</p>
 
+<h2>5. Recheck after merging main at dac7f9005 (2026-11-12)</h2>
+<p>Host load was about 10 on 16 CPUs. <code>uv lock --check</code> passes, and the venv still has torch 2.15.0 with MPS available. The CI and release workflows pin <code>torch==2.15.0</code>, and the release validator requires <code>torch&gt;=2.15.0</code> on both platform branches.</p>
+<pre>$ uv run manabot train --out .runs/qa2/auto
+local: completed; run: a2e2f6c8…   (22 s)   run.json: "device": "mps", "torch": "2.15.0"
+
+/tmp/qa-oldtorch (torch 2.10.0), merged code:
+train --recipe baseline              → ValueError: MPS training requires Torch 2.15 or newer; installed Torch 2.10.0 …
+train --device mps                   → same message
+train                                → local: completed; run.json "device": "cpu"
+train --recipe baseline --device mps → same message; no run directory created</pre>
+<p>Tests: test_mps_training.py, test_baseline_recipe.py and test_release.py, 91 passed. Behaviour matches the pre-merge pass, and the merge changed nothing here.</p>
 <h2>Not reached</h2>
 <ul>
 <li>An actual Apple M2 under 2.15. This host is an M4 Max, which never reproduced the bug. The M2 evidence is in the Task brief.</li>
