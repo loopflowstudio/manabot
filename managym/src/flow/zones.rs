@@ -873,17 +873,9 @@ impl Game {
     pub(crate) fn assert_stack_consistent(&self) {
         #[cfg(debug_assertions)]
         {
-            use std::collections::{BTreeMap, HashSet};
+            use std::collections::HashSet;
 
-            fn card_counts(objects: &[ObjectId]) -> BTreeMap<ObjectId, usize> {
-                let mut counts = BTreeMap::new();
-                for object in objects {
-                    *counts.entry(*object).or_insert(0_usize) += 1;
-                }
-                counts
-            }
-
-            let zone_spell_objects: Vec<ObjectId> = [PlayerId(0), PlayerId(1)]
+            let mut zone_spell_objects: Vec<ObjectId> = [PlayerId(0), PlayerId(1)]
                 .into_iter()
                 .flat_map(|player| {
                     self.state
@@ -894,7 +886,7 @@ impl Game {
                 })
                 .collect();
 
-            let stack_spell_objects: Vec<ObjectId> = self
+            let mut stack_spell_objects: Vec<ObjectId> = self
                 .state
                 .stack_objects
                 .iter()
@@ -912,9 +904,12 @@ impl Game {
                 );
             }
 
+            // Same objects in the stack zone and on the stack, as multisets.
+            zone_spell_objects.sort_unstable();
+            stack_spell_objects.sort_unstable();
             assert_eq!(
-                card_counts(&zone_spell_objects),
-                card_counts(&stack_spell_objects),
+                zone_spell_objects,
+                stack_spell_objects,
                 "stack/zone spell mismatch: zone={zone_spell_objects:?}, stack={stack_spell_objects:?}"
             );
         }

@@ -41,6 +41,8 @@ dbf13009 said "Card-only zones (library, hand, decklists) hold card ids", and th
 the difference: CR 111.7-111.8, 704.5d, byte identity).
 Check: fmt, `cargo build --tests --workspace`, clippy `-D warnings` clean; debug nextest
 cr_400/405/601/603/704 + scenario 30 passed, cards token/azula 41 passed.
+Compress: `assert_stack_consistent` compares sorted object lists instead of a count map; clippy
+clean, debug nextest stack/copy/counter/cr_6 160 passed.
 
 For the later split Task, not here: whether library and hand become card-id lists or stay object
 lists as now.
@@ -48,7 +50,7 @@ lists as now.
 ## Remaining
 - CI run 43325427802 on 2a3eae3b0: all jobs passed (Rust Tests debug, Engine Budget, both
   conformance jobs, Python unit, Academy, Integration long/evaluation) except Integration core,
-  still in progress when read. The helper-rename commit needs its own run.
+  still in progress when read again at the compress step. Commits after 2a3eae3b0 need their own run.
 - PR #491's published body is stale; replace it with `scratch/pr-491-body.md` at publish, updating
   its CI line.
 - Stack parent PR #476 (MTG-298) is open; it lands first.
