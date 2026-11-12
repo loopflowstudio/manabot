@@ -10,10 +10,7 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   selection), `learner.py` (`rl/step.py` + `training/precision.py` + `Learner`
   from `training/updates/learner.py`; the policy and `Precision` are
   TYPE_CHECKING-only imports so the step/EMA stay generic), `arrays.py`.
-  Aliases (0.3.0): `model.actor_critic.*`, `model.checkpoint.*`,
-  `training.learning.learner.Learner`; unreleased names (`manabot.rl`,
-  `training.precision`, `updates.learner.Learner`, `model.buckets`) moved
-  without aliases. Every call site in manabot/academy/scripts/tests/paper uses
+  No aliases remain (cut under steer 8332334d; #474 deleted its own). Every call site in manabot/academy/scripts/tests/paper uses
   the new paths; experiments keep theirs except `cuda_precision.py`
   (`training.precision` had no alias). `manabot/policy/{__init__,prepare,
   checkpoint,protocol}.py`, `tests/model/test_policy_container.py`,
@@ -54,19 +51,23 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   module). Registration in `backends/parity.py` waits for #495 on this
   branch (parity.py/convert.py are not here).
 
-## Coordination (rechecked 20:53Z 2026-11-12)
+## Coordination (rechecked at realign, 2026-11-12)
 
-- #495 (MTG-321) merged to main 20:33Z and is merged here (9a728aca2).
-  #474 moved to 9b2aeae33 (deletes every deprecated alias; contains main up
-  to #497, not #495) and is merged here (e56150ece). This branch's diff
-  against #474 therefore includes #495 until #474 merges main again.
-- MTG-321 never answered the 19:41Z extension request (steer 8d8dc862);
-  its PR is merged, so the extensions to `policy/prepare.py` and
-  `policy/checkpoint.py` fall to this Task (the questions.md assumption).
+- #495 (MTG-321) is on main and merged here; the `policy/prepare.py` and
+  `policy/checkpoint.py` extensions fall to this Task or its follow-up.
+- #474 is still open at e0e99309a, merged here (acf319cca). Merge again if
+  it moves; rebase onto main once it lands.
+- Main has one commit past this branch, e38518093 (engine-only: typed mana
+  spending restrictions, Rust plus two Python tests); `git merge-tree` shows
+  it merges cleanly. Taking it needs the extension rebuilt; leave it to gate
+  or the post-#474 rebase.
+- The scope decision is posted on the Task (steer aeac5366, 21:39Z): ship
+  this PR as it stands and stack Remaining 1 and 2, or build them here.
+  Unanswered at realign.
 
 ## Checks
 
-- Boundaries, learning pieces (incl. new alias rows), minimal loop, learner,
+- Boundaries, learning pieces, minimal loop, learner,
   precision, numerical health, returns, objectives, policy container, agent,
   admission, credit assignment, puct/local-update digests, artifact storage,
   experiments, two-seat, bucketed shapes/execution, inference, mps, collection:
@@ -356,7 +357,7 @@ Checks:
   torch backend and the updates written once, and its docs state the
   interim (`.pt` save, torch does its own lookups).
 
-Remaining for this PR: gate; delete `scratch/` before landing. Items 1 and
+Remaining for this PR (if steer aeac5366 is answered "ship"): gate; delete `scratch/` before landing. Items 1 and
 2 and the item 4 rerun belong to the stacked follow-up.
 
 ## Pass of 21:45Z 2026-11-12: main and #474 merged again
