@@ -93,6 +93,7 @@ def test_cli_smoke_and_named_recipe(
             seconds=LOCAL_SECONDS,
             learning_seats="both",
             device=None,
+            bucketed_shapes=False,
         )
     ]
     result = runner.invoke(
@@ -107,6 +108,7 @@ def test_cli_smoke_and_named_recipe(
         seconds=None,
         learning_seats="both",
         device=None,
+        bucketed_shapes=False,
     )
     result = runner.invoke(
         cli.app, ["train", "--steps", "1", "--learning-seats", "one"]
@@ -165,7 +167,7 @@ def test_cpu_baseline_differs_only_in_device(
 
 @pytest.mark.parametrize(
     "cuda,mps,expected",
-    [(True, True, "cuda"), (False, True, "mps"), (False, False, None)],
+    [(True, True, "cuda"), (False, True, None), (False, False, None)],
 )
 @pytest.mark.parametrize("override", [None, "cpu", "cuda", "mps"])
 @pytest.mark.parametrize("recipe", ["baseline", "local"])
@@ -183,7 +185,9 @@ def test_recipe_and_cli_device_selection(
     assert accelerator() == expected
     selected = override if override is not None else expected
     rejected = recipe == "baseline" and selected in {None, "cpu"}
-    message = "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+    message = (
+        "baseline requires CUDA or an explicit --device mps; use --recipe local for CPU"
+    )
     if rejected:
         with pytest.raises(ValueError, match=message):
             baseline(device=override)
@@ -228,3 +232,49 @@ def test_recipe_and_cli_device_selection(
 def test_test_baseline_is_not_a_cli_recipe() -> None:
     result = CliRunner().invoke(cli.app, ["train", "--recipe", "baseline_test"])
     assert result.exit_code != 0
+
+
+@pytest.mark.parametrize("recipe", ["baseline", "local"])
+def test_cli_bucketed_shapes_reaches_the_recipe_stage(
+    recipe: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    observed: list[bool] = []
+    result = SimpleNamespace(
+        status="completed",
+        id="fixture",
+        notebook="baseline.ipynb",
+        stages=[SimpleNamespace(artifacts={"raw": {"path": "policy.pt"}})],
+    )
+
+    def run_plan(self: TrainingRecipe, **kwargs: object) -> SimpleNamespace:
+        observed.append(self.regime.stages[0].execution.bucketed_shapes)
+        return result
+
+    def execute(plan: TrainingRegime, *args: object) -> SimpleNamespace:
+        observed.append(plan.stages[0].execution.bucketed_shapes)
+        return result
+
+    monkeypatch.setattr(TrainingRecipe, "run", run_plan)
+    monkeypatch.setattr(local, "execute_regime", execute)
+    args = ["train", "--recipe", recipe, "--out", str(tmp_path / "run")]
+    for extra in ([], ["--bucketed-shapes"]):
+        invoked = CliRunner().invoke(cli.app, args + extra)
+        assert invoked.exit_code == 0, invoked.output
+    assert observed == [False, True]
+
+
+def test_cli_bucketed_shapes_requires_a_recipe(tmp_path: Path) -> None:
+    invoked = CliRunner().invoke(
+        cli.app,
+        [
+            "train",
+            "--regime",
+            str(tmp_path / "regime.json"),
+            "--out",
+            str(tmp_path / "run"),
+            "--bucketed-shapes",
+        ],
+    )
+    assert invoked.exit_code != 0
+    assert "execution.bucketed_shapes" in invoked.output

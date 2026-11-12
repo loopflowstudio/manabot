@@ -13,6 +13,7 @@ from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from tests.belief.support import (
     fixture_decision,
     fixture_history,
@@ -47,7 +48,7 @@ def test_belief_enabled_agent_has_no_silent_fallback() -> None:
     )
 
     with pytest.raises(ValueError, match="missing inputs"):
-        agent(dict(decision.observation))
+        admit_observation(agent, dict(decision.observation))
 
 
 def test_world_space_mismatch_fails_before_inference() -> None:

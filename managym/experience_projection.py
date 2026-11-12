@@ -191,6 +191,7 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "land_entered": history.land_entered,
         "cards_drawn": history.cards_drawn,
         "bent": history.bent,
+        "life_lost": history.life_lost,
     }
     return {key: value for key, value in values.items() if value}
 
@@ -306,6 +307,7 @@ def _serialize_player(
             if (counts := getattr(player, name)) is not None
         },
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **({"spells_cast": player.spells_cast} if player.spells_cast else {}),
         **({"extra_turns": player.extra_turns} if player.extra_turns else {}),
         **(
             {"additional_combats": player.additional_combats}

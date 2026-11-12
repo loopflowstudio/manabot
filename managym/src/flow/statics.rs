@@ -345,9 +345,11 @@ impl Game {
             return view;
         };
         let purpose = ManaUse::ability(view.subtypes.iter().map(String::as_str));
+        let reduction = self.activated_cost_reduction(id, permanent.controller, &view);
         // Most fixed activations already have an ordinary payment purpose.
         // Preserve the shared allocation when finalization would write nothing.
-        if !view.has_dynamic_activations()
+        if reduction == 0
+            && !view.has_dynamic_activations()
             && view
                 .activated_abilities
                 .iter()
@@ -363,8 +365,31 @@ impl Game {
                 }
             }
             self.price_activation(permanent.controller, purpose, ability);
+            let floor = ability.mana_cost.mana_value.saturating_sub(1);
+            ability.mana_cost = ability.mana_cost.reduced_generic(reduction.min(floor));
         }
         view
+    }
+
+    /// Generic mana the controller's "activated abilities of [predicate] you
+    /// control cost less" statics take off each activation of `id`.
+    fn activated_cost_reduction(
+        &self,
+        id: PermanentId,
+        controller: PlayerId,
+        view: &Characteristics,
+    ) -> u8 {
+        let mut total = 0u8;
+        for (_, source) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+            for ability in &source.static_abilities {
+                if let StaticAbility::ActivatedAbilitiesCostLess { predicate, generic } = ability {
+                    if matches_view(self, id, predicate, view, None) {
+                        total = total.saturating_add(*generic);
+                    }
+                }
+            }
+        }
+        total
     }
     pub(crate) fn effective_pt(&self, id: PermanentId) -> (i32, i32) {
         self.layer_view(id).pt()
@@ -405,6 +430,20 @@ impl Game {
     /// Contextual predicates must read CDA power rather than a printed star's
     /// placeholder. Layer computation itself uses its explicit board context.
     pub(crate) fn card_matches_predicate(&self, card: CardId, predicate: &CardPredicate) -> bool {
+        if predicate.from_battlefield_this_turn {
+            let Some(object) = self.current_object_ref(card) else {
+                return false;
+            };
+            return self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                && self.state.turn.graveyard_from_battlefield.contains(&object)
+                && self.card_matches_predicate(
+                    card,
+                    &CardPredicate {
+                        from_battlefield_this_turn: false,
+                        ..predicate.clone()
+                    },
+                );
+        }
         if let Some(permanent) = self.state.card_to_permanent[card] {
             return self.permanent_matches_predicate(permanent, predicate);
         }
@@ -554,6 +593,7 @@ impl Game {
         let card = &self.state.cards[card];
         granted_flash
             || card.is_instant_speed()
+            || (card.types.is_creature() && self.has_next_creature_cast_flash(player))
             || card
                 .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
@@ -634,6 +674,9 @@ impl Game {
             Condition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
+            Condition::AnyGraveyardAtLeast { count } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .any(|player| self.state.zones.size(ZoneType::Graveyard, player) >= *count),
             Condition::ControlsAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 self.iter_battlefield_permanents(controller)
@@ -641,6 +684,20 @@ impl Game {
                     .take(*count)
                     .count()
                     == *count
+            }
+            Condition::ControlsUnownedAtLeast { count } => {
+                self.iter_battlefield_permanents(controller)
+                    .filter(|&id| {
+                        self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                            self.state.cards[permanent.card].owner != controller
+                        })
+                    })
+                    .take(*count)
+                    .count()
+                    == *count
+            }
+            Condition::CardsInHandAtLeast { count } => {
+                self.state.zones.size(ZoneType::Hand, controller) >= *count
             }
             Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
@@ -650,6 +707,10 @@ impl Game {
             Condition::BentAllFourThisTurn => self.state.turn.history[controller.0].bent == 0b1111,
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
+            }
+            // Two players: the one opponent, as `PlayerSelector::EachOpponent`.
+            Condition::OpponentLostLifeThisTurnAtLeast { amount } => {
+                self.state.turn.history[1 - controller.0].life_lost >= *amount
             }
             Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
                 self.condition_holds(condition, controller, frame, source, triggering)

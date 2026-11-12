@@ -16,6 +16,7 @@ from manabot.cli import named_regime, regime_names
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
@@ -132,7 +133,9 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
     obs["actions"][:, 0, 0] = 1
     obs["actions"][:, 1, 1] = 1
     with torch.no_grad():
-        logits, values = agent({k: torch.as_tensor(v) for k, v in obs.items()})
+        logits, values = agent(
+            admit_observation(agent, {k: torch.as_tensor(v) for k, v in obs.items()})
+        )
         probs = logits.softmax(-1).numpy()
     batch = RolloutBatch(
         recorded=RecordedObservations(

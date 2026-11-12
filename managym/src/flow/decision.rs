@@ -22,7 +22,7 @@ use crate::{
         turn::OnceEachTurnKey,
     },
     state::{
-        ability::{Effect, LibraryEnd, LinkedGrant, PaymentCost},
+        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         mana::ManaCost,
         permanent::CounterKind,
@@ -376,6 +376,9 @@ pub enum ResolutionCastOffer {
         source: ObjectRef,
         predicate: CardPredicate,
     },
+    /// Cascade's hit `card`, among every card the cascade `exiled`; those not
+    /// cast go on the bottom of the library in a random order.
+    Cascade { card: CardId, exiled: Vec<CardId> },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -396,6 +399,15 @@ pub enum Decision {
     OrderReplacement {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
+    },
+    /// "You may have this creature enter as a copy of [a creature]" (CR
+    /// 707.5): the entering card's controller chooses one of `candidates`
+    /// or declines before its move commits; the copy's own entry
+    /// replacements then apply (CR 614.12).
+    EnterAsCopy {
+        player: PlayerId,
+        card: CardId,
+        candidates: Vec<PermanentId>,
     },
     /// Choose a name from the immutable installed vocabulary, one ordinary
     /// decision per level: a scope larger than `NAME_BRANCHING` offers its
@@ -428,6 +440,8 @@ pub enum Decision {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        tap_remaining: usize,
         resume: Option<Box<Decision>>,
     },
     ManaChoice {
@@ -514,14 +528,16 @@ pub enum Decision {
         next: usize,
         end: LibraryEnd,
     },
-    /// Search for up to `remaining` more land cards with different names,
-    /// revealing each (Elemental Teachings). The revealed cards stay in the
-    /// library until an opponent splits them (`OpponentSplitsRevealed`).
-    SearchDistinctLands {
+    /// Search for up to `remaining` more [predicate] cards with names
+    /// different from every one already `selected`, revealing each. The
+    /// revealed cards stay in the library until `end` places them; an
+    /// opponent's split is `OpponentSplitsRevealed`.
+    SearchDistinctNames {
         player: PlayerId,
+        predicate: CardPredicate,
         remaining: usize,
         selected: Vec<CardId>,
-        opponent_picks: usize,
+        end: DistinctSearchEnd,
     },
     /// `player` chooses a card matching `predicate` from `owner`'s revealed
     /// hand; `owner` discards it. Candidates are read from the current hand,
@@ -622,6 +638,7 @@ impl Decision {
         match self {
             Decision::Payment(payment) => payment.player,
             Decision::OrderReplacement { player, .. }
+            | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
             | Decision::SearchNamed { player, .. }
@@ -633,7 +650,7 @@ impl Decision {
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectCards { player, .. }
-            | Decision::SearchDistinctLands { player, .. }
+            | Decision::SearchDistinctNames { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
@@ -696,13 +713,14 @@ impl Decision {
                 LibraryEnd::Bottom => &cards[*next..],
             },
             Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
-            Decision::SearchDistinctLands { selected, .. } => selected,
+            Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
                 offer: ResolutionCastOffer::LibraryTop { card },
                 ..
             } => std::slice::from_ref(card),
             Decision::OrderReplacement { .. }
+            | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
             | Decision::CastDuringResolution { .. }
@@ -992,6 +1010,27 @@ impl Game {
             })
     }
 
+    /// Whether `viewer` (or a player sharing information with them) is
+    /// inspecting `owner`'s library: a named search, or a pending selection
+    /// from that library ("search target opponent's library"). The library
+    /// selection grants no hand access, but its exact library cards fix the
+    /// hidden partition, so sampled worlds keep `owner`'s zones as they are.
+    pub(crate) fn inspects_library(&self, viewer: PlayerId, owner: PlayerId) -> bool {
+        self.searches_private_zones(viewer, owner)
+            || self
+                .state
+                .suspended_decision
+                .as_ref()
+                .is_some_and(|suspended| {
+                    suspended.decisions().any(|decision| {
+                        matches!(decision, Decision::SelectCards { player, from: Some(source), .. }
+                        if self.shares_information(viewer, *player)
+                            && source.owner == owner
+                            && source.zone == ZoneType::Library)
+                    })
+                })
+    }
+
     /// Search permission reveals all cards in the searched zones only to
     /// the chooser; eligibility by name restricts actions, not information.
     pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {
@@ -1060,6 +1099,22 @@ impl Game {
                         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
                             frame,
                             decision: Decision::OrderReplacement { player, candidates },
+                        });
+                        return;
+                    }
+                    BatchProgress::EntryCopy {
+                        player,
+                        card,
+                        candidates,
+                    } => {
+                        frame.batch = Some(batch);
+                        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                            frame,
+                            decision: Decision::EnterAsCopy {
+                                player,
+                                card,
+                                candidates,
+                            },
                         });
                         return;
                     }
@@ -1327,6 +1382,23 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
+            Decision::EnterAsCopy {
+                player,
+                card,
+                candidates,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: candidates
+                    .iter()
+                    .map(|id| Action::ChooseTarget {
+                        player: *player,
+                        target: Target::Permanent(*id),
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect(),
+                focus: vec![self.state.cards[*card].id],
+            },
             Decision::ChoosePaymentX { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Modal,
@@ -1358,12 +1430,29 @@ impl Game {
                 ),
                 focus: source_focus,
             },
-            Decision::ManaUpfront { player, .. } => ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::PayOrNot,
-                actions: self.mana_ability_actions(*player, None),
-                focus: source_focus,
-            },
+            Decision::ManaUpfront {
+                player,
+                tap_remaining,
+                ..
+            } => {
+                let (kind, actions) = if *tap_remaining > 0 {
+                    (
+                        ActionSpaceKind::LookAndSelect,
+                        self.mana_tap_cost_actions(*player),
+                    )
+                } else {
+                    (
+                        ActionSpaceKind::PayOrNot,
+                        self.mana_ability_actions(*player, None),
+                    )
+                };
+                ActionSpace {
+                    player: Some(*player),
+                    kind,
+                    actions,
+                    focus: source_focus,
+                }
+            }
             Decision::Payment(payment) => {
                 let player = payment.player;
                 let mut actions = self.mana_ability_actions(player, None);
@@ -1485,12 +1574,12 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
-            Decision::SearchDistinctLands { player, .. } => ActionSpace {
+            Decision::SearchDistinctNames { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.distinct_land_search_candidates(&suspended.decision),
+                    self.distinct_name_search_candidates(&suspended.decision),
                     true,
                 ),
                 focus: source_focus,
@@ -1728,8 +1817,33 @@ impl Game {
                 return Err(AgentError("mana color cannot complete the payment".into()));
             }
         }
+        if let (Decision::ManaUpfront { tap_remaining, .. }, Action::SelectCard { player, card }) =
+            (&suspended.decision, action)
+        {
+            if *tap_remaining > 0 {
+                return self.pay_mana_tap_cost(*player, *card);
+            }
+        }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::EnterAsCopy { candidates, .. }, choice) => {
+                let of = match choice {
+                    Action::ChooseTarget {
+                        target: Target::Permanent(id),
+                        ..
+                    } if candidates.contains(id) => Some(*id),
+                    Action::Decline { .. } => None,
+                    _ => {
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Err(AgentError("illegal creature to copy".into()));
+                    }
+                };
+                let mut batch = suspended.frame.batch.take().expect("retained event batch");
+                self.choose_entry_copy(&mut batch, of);
+                suspended.frame.batch = Some(batch);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
                 let Some(candidate) = candidates.get(*mode) else {
                     *self.state.suspended_decision_mut() = Some(suspended);
@@ -1848,7 +1962,7 @@ impl Game {
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
                 match payment.counters_on_decline {
                     Some(Target::StackSpell(card)) => {
-                        self.counter_spell(card, suspended.frame.source)
+                        self.counter_spell(card, suspended.frame.source, ZoneType::Graveyard)
                     }
                     Some(Target::StackAbility(id)) => {
                         self.counter_ability(id, suspended.frame.source)
@@ -2217,15 +2331,15 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::SearchDistinctLands { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::SearchDistinctNames { .. }, Action::SelectCard { card, .. }) => {
                 if !self
-                    .distinct_land_search_candidates(&suspended.decision)
+                    .distinct_name_search_candidates(&suspended.decision)
                     .contains(card)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
-                    return Err(AgentError("not a distinct land card in library".into()));
+                    return Err(AgentError("not a distinct-name search candidate".into()));
                 }
-                let Decision::SearchDistinctLands {
+                let Decision::SearchDistinctNames {
                     remaining,
                     selected,
                     ..
@@ -2238,7 +2352,7 @@ impl Game {
                 if *remaining > 0 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 } else {
-                    self.finish_distinct_land_search(suspended);
+                    self.finish_distinct_name_search(suspended);
                 }
                 Ok(())
             }
@@ -2281,6 +2395,14 @@ impl Game {
                     suspended.decision,
                     Decision::CastDuringResolution { paid: true, .. }
                 );
+                if let Decision::CastDuringResolution {
+                    offer: ResolutionCastOffer::Cascade { exiled, .. },
+                    ..
+                } = &suspended.decision
+                {
+                    let rest = exiled.iter().copied().filter(|other| other != &card);
+                    self.put_exiled_on_bottom_in_random_order(rest.collect());
+                }
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
@@ -2314,14 +2436,20 @@ impl Game {
                 Ok(())
             }
             (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
-                if let ResolutionCastOffer::Exiled { card } = offer {
-                    self.reveal_card_to_hand(*card, *player);
+                match offer {
+                    ResolutionCastOffer::Exiled { card } => {
+                        self.reveal_card_to_hand(*card, *player);
+                    }
+                    ResolutionCastOffer::Cascade { exiled, .. } => {
+                        self.put_exiled_on_bottom_in_random_order(exiled.clone());
+                    }
+                    _ => {}
                 }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
-                self.finish_distinct_land_search(suspended);
+            (Decision::SearchDistinctNames { .. }, Action::Decline { .. }) => {
+                self.finish_distinct_name_search(suspended);
                 Ok(())
             }
             (
@@ -2625,13 +2753,14 @@ impl Game {
                         && self.card_matches_predicate(*card, predicate)
                 })
                 .collect(),
-            ResolutionCastOffer::Exiled { card } => self
-                .state
-                .zones
-                .contains(*card, ZoneType::Exile, *player)
-                .then_some(*card)
-                .into_iter()
-                .collect(),
+            ResolutionCastOffer::Exiled { card } | ResolutionCastOffer::Cascade { card, .. } => {
+                self.state
+                    .zones
+                    .contains(*card, ZoneType::Exile, *player)
+                    .then_some(*card)
+                    .into_iter()
+                    .collect()
+            }
             ResolutionCastOffer::ExiledWith { source, predicate } => self
                 .state
                 .exile_links
@@ -2656,6 +2785,12 @@ impl Game {
             .into_iter()
             .collect(),
         };
+        // Casting from exile or a library is casting from outside the hand
+        // (Drannith Magistrate).
+        if !matches!(offer, ResolutionCastOffer::Hand { .. }) && self.casts_only_from_hand(*player)
+        {
+            candidates.clear();
+        }
         candidates.retain(|card| self.can_cast_with(*player, *card, free));
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
@@ -2683,11 +2818,14 @@ impl Game {
         candidates
     }
 
-    /// Library land cards whose names differ from every card already
-    /// selected by a `SearchDistinctLands` decision.
-    pub(crate) fn distinct_land_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::SearchDistinctLands {
-            player, selected, ..
+    /// Library cards matching a `SearchDistinctNames` predicate whose names
+    /// differ from every card it already selected.
+    pub(crate) fn distinct_name_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::SearchDistinctNames {
+            player,
+            predicate,
+            selected,
+            ..
         } = decision
         else {
             return Vec::new();
@@ -2700,7 +2838,7 @@ impl Game {
             .copied()
             .filter(|card| {
                 let card_ref = &self.state.cards[*card];
-                card_ref.types.is_land()
+                self.card_matches_predicate(*card, predicate)
                     && !selected
                         .iter()
                         .any(|chosen| self.state.cards[*chosen].name == card_ref.name)
@@ -2710,31 +2848,37 @@ impl Game {
         candidates
     }
 
-    /// The revealed lands pass to an opponent's split, or, when there are
-    /// none, the library is shuffled.
-    fn finish_distinct_land_search(&mut self, mut suspended: SuspendedResolution) {
-        let Decision::SearchDistinctLands {
+    /// The revealed cards go to `end`: into hand, or to an opponent's split.
+    /// With none revealed, or once in hand, the library is shuffled.
+    fn finish_distinct_name_search(&mut self, mut suspended: SuspendedResolution) {
+        let Decision::SearchDistinctNames {
             player,
             selected,
-            opponent_picks,
+            end,
             ..
         } = &mut suspended.decision
         else {
             unreachable!()
         };
         let player = *player;
-        if selected.is_empty() {
-            self.shuffle_library(player);
-            self.run_frame(suspended.frame);
-            return;
+        match *end {
+            DistinctSearchEnd::OpponentSplits { picks } if !selected.is_empty() => {
+                suspended.decision = Decision::OpponentSplitsRevealed {
+                    player: PlayerId(1 - player.0),
+                    owner: player,
+                    revealed: std::mem::take(selected),
+                    remaining: picks,
+                };
+                *self.state.suspended_decision_mut() = Some(suspended);
+            }
+            _ => {
+                for card in std::mem::take(selected) {
+                    self.reveal_card_to_hand(card, player);
+                }
+                self.shuffle_library(player);
+                self.run_frame(suspended.frame);
+            }
         }
-        suspended.decision = Decision::OpponentSplitsRevealed {
-            player: PlayerId(1 - player.0),
-            owner: player,
-            revealed: std::mem::take(selected),
-            remaining: *opponent_picks,
-        };
-        *self.state.suspended_decision_mut() = Some(suspended);
     }
 
     /// Random placement and owner-chosen placement share the same library
@@ -2820,15 +2964,35 @@ impl Game {
         library.extend(cards.iter().rev());
     }
 
+    /// Put each of `cards` still in exile on the bottom of its owner's
+    /// library, in a random order (cascade, CR 702.85a).
+    pub(crate) fn put_exiled_on_bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
+        cards.retain(|card| self.state.zones.zone_of(*card) == Some(ZoneType::Exile));
+        cards.shuffle(self.state.rng_mut());
+        for card in cards {
+            self.move_card(card, ZoneType::Library);
+            self.put_on_bottom_of_library(card);
+        }
+    }
+
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
+        self.reorder_in_library(card, LibraryEnd::Bottom);
+    }
+
+    /// Put a card already in its owner's library at one end: a reorder
+    /// within one zone, so no zone change (CR 400.7) and no zone-move
+    /// inverse applies. Index 0 is the bottom; the last card is the top.
+    pub(crate) fn reorder_in_library(&mut self, card: CardId, end: LibraryEnd) {
         let owner = self.state.cards[card].owner;
-        // A reorder within one zone, so the zone-move inverse does not apply.
         let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
-            library.insert(0, card);
+            match end {
+                LibraryEnd::Bottom => library.insert(0, card),
+                LibraryEnd::Top => library.push(card),
+            }
         }
     }
 }

@@ -84,6 +84,11 @@ def train_command(
         None,
         help="Training device (default: CUDA, then MPS; local alone falls back to CPU)",
     ),
+    bucketed_shapes: bool = typer.Option(
+        False,
+        "--bucketed-shapes",
+        help="Train local/baseline recipes with bucketed policy tensor shapes",
+    ),
     steps: int | None = typer.Option(
         None, min=1, help="Recipe horizon in collection/update iterations"
     ),
@@ -167,6 +172,7 @@ def train_command(
                 seconds=LOCAL_SECONDS if seconds is None else seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                bucketed_shapes=bucketed_shapes,
             )
             status = result.status
             typer.echo(f"local: {status}; run: {result.id}")
@@ -182,6 +188,7 @@ def train_command(
                 seconds=seconds,
                 learning_seats=learning_seats or "both",
                 device=device,
+                bucketed_shapes=bucketed_shapes,
             )
             status = baseline_result.status
             typer.echo(
@@ -190,9 +197,12 @@ def train_command(
         if status != "completed":
             raise typer.Exit(1)
         return
-    if any(value is not None for value in (steps, seconds, learning_seats, device)):
+    if bucketed_shapes or any(
+        value is not None for value in (steps, seconds, learning_seats, device)
+    ):
         raise typer.BadParameter(
-            "--steps, --seconds, --learning-seats and --device require a recipe"
+            "--steps, --seconds, --learning-seats, --device and --bucketed-shapes "
+            "require a recipe; a regime sets execution.bucketed_shapes"
         )
     if sum(value is not None for value in (function, regime, regime_name)) != 1:
         raise typer.BadParameter("select one of --function, --regime or --regime-name")

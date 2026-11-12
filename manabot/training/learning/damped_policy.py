@@ -27,7 +27,7 @@ from manabot.model.policy_distribution import (
     reverse_kl,
 )
 from manabot.training.learning.health import OptimizerHealth, batch_health
-from manabot.training.learning.learner import Learner, observation_tensors
+from manabot.training.learning.learner import AdmittedRollout, Learner
 from manabot.training.learning.references import reference_distribution
 from manabot.training.learning.returns import reverse_waves, transition_gae
 from manabot.training.learning.selection import (
@@ -166,17 +166,18 @@ class DampedTargets:
 @torch.no_grad()
 def _targets(
     learner: Learner,
-    batch: RolloutBatch,
+    admitted: AdmittedRollout,
     learning: DampedPolicyLearning,
     bootstrap_agent: ActorCritic | None = None,
 ) -> DampedTargets:
     device = learner.device
+    batch = admitted.batch
     rewards = torch.as_tensor(batch.rewards, device=device)
     ends = torch.as_tensor(batch.dones, device=device)
     values = torch.as_tensor(batch.values, device=device)
     require(torch.isfinite(values), "nonfinite_collection_values", values=values)
     require(torch.isfinite(rewards), "nonfinite_rewards", rewards=rewards)
-    next_obs = observation_tensors(batch.next_obs, device)
+    next_obs = admitted.next_observation(device)
     with learner.forward_precision():
         _, next_raw = (bootstrap_agent or learner.agent).forward_distribution(next_obs)
     next_raw = next_raw.float()
@@ -241,9 +242,10 @@ def update_damped_iteration(
     track = learner.profiler.track
     with track("Batch transfer and behavior checks"):
         batch.action_data.check(batch.actions, batch.logprobs)
+        admitted = AdmittedRollout(learner.agent, batch)
         actions = torch.as_tensor(batch.actions, device=device)
     with track("Targets"):
-        targets = _targets(learner, batch, learning, bootstrap_agent)
+        targets = _targets(learner, admitted, learning, bootstrap_agent)
         advantage_abs_mean = float(targets.advantages.abs().mean())
     rate, tau = learning.rates(iteration)
     diagnostics: UpdateDiagnostics = {
@@ -325,6 +327,12 @@ def update_damped_iteration(
         health["skipped_steps"] = (actions.numel() + width - 1) // width
         return diagnostics
     with track("Minibatches"):
+        trained = (
+            targets.selected
+            if learning.filter_scope == "actor_critic"
+            else torch.ones_like(targets.selected)
+        )
+        admitted.admit_rows(trained.nonzero().flatten().cpu().numpy(), width)
         for start in range(0, actions.numel(), width):
             actor_selected = targets.selected[start : start + width]
             selected = (
@@ -339,8 +347,7 @@ def update_damped_iteration(
                 indexes = torch.arange(start, start + len(selected), device=device)[
                     selected
                 ]
-                rows = batch.observations(indexes.cpu().numpy())
-                obs = observation_tensors(rows.observation, device)
+                obs, rows = admitted.rows(indexes.cpu().numpy(), device)
                 valid = legal_mask(obs["actions_valid"])
                 behavior_logs = torch.as_tensor(rows.log_probabilities, device=device)
                 with learner.forward_precision():

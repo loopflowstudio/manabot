@@ -18,6 +18,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.builders import with_recent_events
@@ -80,9 +81,9 @@ def test_real_history_reaches_both_heads_and_reloads(
     assert (obs["events"][..., [2, 7]][valid] > 0).any(), (
         "public definition identity is required"
     )
-    policy, value = agent(obs)
+    policy, value = agent(admit_observation(agent, obs))
     without = {**obs, "events_valid": torch.zeros_like(obs["events_valid"])}
-    no_policy, no_value = agent(without)
+    no_policy, no_value = agent(admit_observation(agent, without))
     legal = obs["actions_valid"].bool()
     assert not torch.equal(policy[legal], no_policy[legal])
     assert not torch.equal(value, no_value)
@@ -106,7 +107,9 @@ def test_real_history_reaches_both_heads_and_reloads(
     assert space.encoder.config.policy_history_version == 1
     assert architecture_receipt(loaded) == architecture_receipt(agent)
     assert architecture_receipt(agent).components["recent_events"].total > 0
-    for expected, actual in zip((policy, value), loaded(obs), strict=True):
+    for expected, actual in zip(
+        (policy, value), loaded(admit_observation(loaded, obs)), strict=True
+    ):
         torch.testing.assert_close(expected, actual, rtol=0, atol=0)
     checkpoint = torch.load(path, weights_only=False)
     del checkpoint["hypers"]["agent_hypers"]["recent_events"]
@@ -120,12 +123,14 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
     obs = _collected(agent)
     # Distinct native public rows, including semantic card references.
     count = int(obs["events_valid"].sum())
-    expected = agent(obs)
+    expected = agent(admit_observation(agent, obs))
     reversed_obs = {**obs, "events": obs["events"].clone()}
     reversed_obs["events"][:, :count] = obs["events"][:, :count].flip(1)
     assert any(
         not torch.equal(a, b)
-        for a, b in zip(expected, agent(reversed_obs), strict=True)
+        for a, b in zip(
+            expected, agent(admit_observation(agent, reversed_obs)), strict=True
+        )
     )
     changed = {**obs, "events": obs["events"].clone()}
     # Reassign only a public definition to another admitted visible definition.
@@ -134,7 +139,8 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
     replacement = ids[ids != obs["events"][0, index, 2]][0]
     changed["events"][0, index, 2] = replacement
     assert any(
-        not torch.equal(a, b) for a, b in zip(expected, agent(changed), strict=True)
+        not torch.equal(a, b)
+        for a, b in zip(expected, agent(admit_observation(agent, changed)), strict=True)
     )
     padded = torch.full((1, count * 2 + 3, 12), float("nan"))
     validity = torch.zeros(1, count * 2 + 3)
@@ -142,7 +148,11 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
     validity[:, 1 : 2 * count : 2] = 1
     for left, right in zip(
         expected,
-        agent({**obs, "events": padded, "events_valid": validity}),
+        agent(
+            admit_observation(
+                agent, {**obs, "events": padded, "events_valid": validity}
+            )
+        ),
         strict=True,
     ):
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
@@ -156,14 +166,26 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
             if not key.startswith("recent_events.")
         }
     )
-    for left, right in zip(baseline(empty), agent(empty), strict=True):
+    for left, right in zip(
+        baseline(admit_observation(baseline, empty)),
+        agent(admit_observation(agent, empty)),
+        strict=True,
+    ):
         torch.testing.assert_close(left, right, atol=0, rtol=0)
-    for left, right in zip(agent(empty), agent(zero), strict=True):
+    for left, right in zip(
+        agent(admit_observation(agent, empty)),
+        agent(admit_observation(agent, zero)),
+        strict=True,
+    ):
         torch.testing.assert_close(left, right, atol=0, rtol=0)
-    for left, right in zip(expected, agent(obs), strict=True):
+    for left, right in zip(expected, agent(admit_observation(agent, obs)), strict=True):
         torch.testing.assert_close(left, right, atol=0, rtol=0)
     with pytest.raises(ValueError, match="requires events"):
-        agent({key: value for key, value in obs.items() if key != "events"})
+        agent(
+            admit_observation(
+                agent, {key: value for key, value in obs.items() if key != "events"}
+            )
+        )
 
 
 def test_checkpoint_player_fixed_view_history_hidden_worlds_and_reset(
@@ -237,10 +259,12 @@ def test_history_off_and_declarative_identity() -> None:
     env = Env(_match(), ObservationSpace(), Reward(RewardConfig()), seed=111)
     raw, _ = env.reset()
     tensors = {key: torch.from_numpy(value).unsqueeze(0) for key, value in raw.items()}
-    expected = baseline(tensors)
+    expected = baseline(admit_observation(baseline, tensors))
     tensors.pop("events")
     tensors.pop("events_valid")
-    for left, right in zip(expected, explicit(tensors), strict=True):
+    for left, right in zip(
+        expected, explicit(admit_observation(explicit, tensors)), strict=True
+    ):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
     base = wdl_baseline()
     comparison = Experiment(

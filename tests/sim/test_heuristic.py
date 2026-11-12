@@ -292,6 +292,21 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Foggy Swamp Visions": None,
         # Player control uses the heuristic's fallback for unrated effects.
         "Secret of Bloodbending": None,
+        # TLE: damage, counters and destruction rate as harmful, pumps as
+        # beneficial; control, theft, recursion and forced combat are unrated.
+        "Explosive Shot": "harmful",
+        "Force of Negation": "harmful",
+        "Rending Volley": "harmful",
+        "Searing Blood": "harmful",
+        "Shattering Spree": "harmful",
+        "Zuko's Offense": "harmful",
+        "Run Amok": "beneficial",
+        "Sokka's Sword Training": "beneficial",
+        "Bribery": None,
+        "Brought Back": None,
+        "Empty City Ruse": None,
+        "Imprisoned in the Moon": None,
+        "Taunting Challenge": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)

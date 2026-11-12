@@ -129,7 +129,7 @@ def _artifacts(directory: Path) -> None:
                 "Requires-Dist: managym==0.2.0\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
-                "Requires-Dist: etude-sdk>=0.2.15\n"
+                "Requires-Dist: etude-sdk>=0.2.16\n"
             )
             tags = ["py3-none-any"]
         for tag in tags:
@@ -184,7 +184,7 @@ def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
         (b"Name: manabot", b"Name: managym"),
         (b"Version: 0.2.0", b"Version: 9.9.9"),
         (b">=3.12, <3.14", b">=3.12, <3.13"),
-        (b"etude-sdk>=0.2.15", b"etude-sdk==0.2.15"),
+        (b"etude-sdk>=0.2.16", b"etude-sdk==0.2.16"),
     ],
 )
 def test_source_metadata_must_match_wheels(
@@ -401,3 +401,51 @@ def test_completed_engine_can_resume_absent_training(
     monkeypatch.setattr("sys.argv", ["complete.py", str(tmp_path), "--tag", "v0.2.0"])
     module.main()
     assert output.read_text() == "managym=false\nmanabot=true\n"
+
+
+def test_post_upload_checks_wait_for_pypi_to_list_the_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _artifacts(tmp_path)
+    module = _load("complete")
+    engine = {
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in tmp_path.glob("managym-*")
+    }
+    calls: list[str] = []
+
+    def registry(project: str, version: str) -> dict[str, str]:
+        calls.append(project)
+        # PyPI's JSON reports the just-uploaded engine as absent once.
+        return engine if len(calls) > 1 else {}
+
+    monkeypatch.setattr(module, "published_files", registry)
+    monkeypatch.setattr(module.time, "sleep", lambda seconds: None)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "complete.py",
+            str(tmp_path),
+            "--tag",
+            "v0.2.0",
+            "--require-engine",
+            "--wait",
+            "60",
+        ],
+    )
+    module.main()
+    assert calls == ["managym", "managym"]
+
+
+def test_post_upload_checks_fail_once_the_wait_expires(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _artifacts(tmp_path)
+    module = _load("complete")
+    monkeypatch.setattr(module, "published_files", lambda project, version: {})
+    monkeypatch.setattr(
+        "sys.argv",
+        ["complete.py", str(tmp_path), "--tag", "v0.2.0", "--require-engine"],
+    )
+    with pytest.raises(ValueError, match="engine publication is missing"):
+        module.main()

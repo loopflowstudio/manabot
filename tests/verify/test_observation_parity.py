@@ -34,6 +34,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import UnsupportedPolicyInput
 from manabot.managym.enums import ActionEnum
+from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.text_observation import priority_root
 import managym
 
@@ -350,7 +351,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
 
 def _token_low(name: str) -> int:
     """The low 16 bits of a learning-token value, as fact rows store it."""
-    return managym.learning_token_value(name) & 0xFFFF
+    return managym.catalog_token_value(name) & 0xFFFF
 
 
 # The policy input encodes every Observation fact. These states reach its
@@ -707,3 +708,121 @@ def test_vector_buffers_derive_fact_capacity(capacity: int) -> None:
     obs, *_ = scalar.step(0)
     env.step_into_buffers([0])
     assert_buffer_observation_equal(buffers, 0, encoder.encode(obs))
+
+
+def test_merchant_tap_count_native_reference_and_text_parity() -> None:
+    env = priority_root(
+        ("Unlucky Cabbage Merchant", "Unlucky Cabbage Merchant"),
+        ("The Cabbage Merchant", "Forest", "Forest", "Forest", "Forest"),
+    )
+    owner = env.current_agent_index()
+    assert owner is not None
+    for food_count in (1, 2):
+        obs = env.observation_for_player(owner)
+        cast_index = next(
+            index
+            for index, action in enumerate(obs.action_space.actions)
+            if int(action.action_type) == ActionEnum.PRIORITY_CAST_SPELL
+        )
+        env.step(cast_index)
+        for _ in range(16):
+            obs = env.observation_for_player(owner)
+            if (
+                sum(card.name == "Food" for card in obs.agent_cards) == food_count
+                and not obs.stack_objects
+            ):
+                break
+            actor = env.current_agent_index()
+            assert actor is not None
+            pending = env.observation_for_player(actor)
+            index = next(
+                index
+                for index, action in enumerate(pending.action_space.actions)
+                if int(action.action_type)
+                in (ActionEnum.PAY_COST, ActionEnum.PRIORITY_PASS_PRIORITY)
+            )
+            env.step(index)
+        else:
+            raise AssertionError("Food creation did not resolve")
+    decision = capture_text_decision(env)
+    activation = next(
+        action
+        for action in decision.actions
+        if "Activate" in action.description
+        and "The Cabbage Merchant" in action.description
+    )
+    submit_response(env, decision, activation.reference)
+    encoder = ObservationEncoder(ObservationConfig())
+    for remaining in (2, 1):
+        actor = env.current_agent_index()
+        assert actor is not None
+        obs = env.observation_for_player(actor)
+        assert obs.continuation[-1].mode == remaining
+        reference = encoder.encode(obs)
+        native = env.encode_observation(obs, encoder.config.max_facts)
+        buffers = encoder.allocate()
+        env.encode_observation_into(obs, buffers)
+        for key, value in reference.items():
+            np.testing.assert_array_equal(native[key], value, err_msg=key)
+            np.testing.assert_array_equal(buffers[key], value, err_msg=key)
+        decision = capture_text_decision(env)
+        assert f"{remaining} tap selections still required" in decision.text
+        assert all(
+            "Tap Food to pay" in action.description for action in decision.actions
+        )
+        submit_response(env, decision, decision.actions[0].reference)
+    assert len(capture_text_decision(env).actions) == 5
+
+
+def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_parity() -> (
+    None
+):
+    env = priority_root(("Scout's Warning", "Gray Ogre"), ("Plains", "Gray Ogre"))
+    owner = env.current_agent_index()
+    assert owner is not None
+    decision = capture_text_decision(env)
+    cast = next(
+        action
+        for action in decision.actions
+        if "Cast" in action.description and "Scout's Warning" in action.description
+    )
+    submit_response(env, decision, cast.reference)
+    for _ in range(16):
+        obs = env.observation_for_player(owner)
+        if not obs.stack_objects and env.current_agent_index() == owner:
+            break
+        actor = env.current_agent_index()
+        assert actor is not None
+        pending = env.observation_for_player(actor)
+        index = next(
+            index
+            for index, action in enumerate(pending.action_space.actions)
+            if int(action.action_type)
+            in (ActionEnum.PAY_COST, ActionEnum.PRIORITY_PASS_PRIORITY)
+        )
+        env.step(index)
+    else:
+        raise AssertionError("Scout's Warning did not resolve")
+    obs = env.observation_for_player(owner)
+    assert [effect.modification for effect in obs.agent.effects] == [
+        "NextCreatureCastFlash"
+    ]
+    decision = capture_text_decision(env)
+    assert (
+        "the next creature card cast can be cast as though it had flash"
+        in decision.text
+    )
+    encoder = ObservationEncoder(ObservationConfig())
+    unchanged = encoder.encode(obs)["facts"]
+    permanents = obs.agent_permanents
+    ogre = next(p for p in permanents if p.power is not None)
+    ogre.counters = {"minus_one_minus_one": 1}
+    obs.agent_permanents = [ogre if p.id == ogre.id else p for p in permanents]
+    reference = encoder.encode(obs)
+    assert not np.array_equal(reference["facts"], unchanged), "counter fact row"
+    native = env.encode_observation(obs, encoder.config.max_facts)
+    buffers = encoder.allocate()
+    env.encode_observation_into(obs, buffers)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
+        np.testing.assert_array_equal(buffers[key], value, err_msg=key)

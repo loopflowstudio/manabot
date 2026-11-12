@@ -130,16 +130,17 @@ def test_mps_torch_minimum_gates_selection(
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
     assert (mps_torch_error() is None) == admitted
-    assert accelerator() == ("mps" if admitted else None)
-    assert local_smoke().stages[0].execution.device == ("mps" if admitted else "cpu")
+    # MPS is never selected automatically, whatever the Torch version.
+    assert accelerator() is None
+    assert local_smoke().stages[0].execution.device == "cpu"
     if admitted:
-        assert baseline().regime.stages[0].execution.device == "mps"
+        assert baseline(device="mps").regime.stages[0].execution.device == "mps"
+        assert local_smoke(device="mps").stages[0].execution.device == "mps"
     else:
-        for device in (None, "mps"):
-            with pytest.raises(
-                ValueError, match=f"installed Torch {version} is below that minimum"
-            ):
-                baseline(device=device)
+        with pytest.raises(
+            ValueError, match=f"installed Torch {version} is below that minimum"
+        ):
+            baseline(device="mps")
 
 
 def test_old_torch_mps_stage_fails_before_training(
@@ -320,7 +321,7 @@ def test_empty_record_embedding_cpu_loss_gradients_and_adam_equivalent(
         ):
             if column == FACT_DETAIL_INDEX and family != "detail":
                 continue
-            word = managym.learning_token_value(name) & 0xFFFFFFFF
+            word = managym.catalog_token_value(name) & 0xFFFFFFFF
             row[column : column + 2] = torch.tensor([word >> 16, word & 0xFFFF])
     encoder = FactEncoder(4, 4, vocabulary="catalog")
     with torch.no_grad():

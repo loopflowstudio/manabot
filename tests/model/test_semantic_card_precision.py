@@ -20,6 +20,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.training.precision import forward_precision
@@ -124,7 +125,7 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
                 torch.testing.assert_close(a, b, atol=0, rtol=0)
         optimizer = torch.optim.Adam(agent.parameters())
         with forward_precision(declared, torch.device("cuda")):
-            logits, values = agent.forward_distribution(obs)
+            logits, values = agent.forward_distribution(admit_observation(agent, obs))
         loss = (
             logits[obs["actions_valid"].bool()].float().square().mean()
             + values.float().square().mean()
@@ -144,8 +145,8 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
         restored.load_state_dict(torch.load(checkpoint, weights_only=True))
         with torch.no_grad(), forward_precision(declared, torch.device("cuda")):
             for a, b in zip(
-                agent.forward_distribution(obs),
-                restored.forward_distribution(obs),
+                agent.forward_distribution(admit_observation(agent, obs)),
+                restored.forward_distribution(admit_observation(restored, obs)),
                 strict=True,
             ):
                 torch.testing.assert_close(a, b, atol=0, rtol=0)

@@ -21,6 +21,7 @@ from manabot.belief.state import ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.model.admission import admit_observation
 from manabot.sim.search.branch import BranchSession
 from manabot.sim.search.local_update import (
     FloatArray,
@@ -517,7 +518,7 @@ def test_batch_inputs_match_python_at_selected_capacities(
     finally:
         handle.remove()
     with torch.inference_mode():
-        logits, values = teacher.agent(tensors)
+        logits, values = teacher.agent(admit_observation(teacher.agent, tensors))
     for i, (probabilities, value) in enumerate(predictions):
         count = int(expected[i]["actions_valid"].sum())
         np.testing.assert_array_equal(

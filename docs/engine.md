@@ -16,8 +16,10 @@ cross-package contract is in the
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
 - [Hand snapshots](#hand-snapshots)
+- [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
+- [Decks](#decks)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -123,6 +125,9 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 - The same observation feeds the policy tensor, the LLM text and Academy. A
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
+
+Consumers read the encoded arrays by name; see
+[encoded observations](#encoded-observations).
 
 ### Executing an action
 
@@ -390,6 +395,111 @@ captures and viewer trace exports. Public `known_hand` counts describe only
 revealed knowledge. Reading snapshots does not change deck disclosure or what a
 player may observe, and requires no policy-input version or checkpoint migration.
 
+## Encoded observations
+
+The native encoder turns an observation into NumPy arrays, one layout per
+engine release. manabot reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
+[observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Reading arrays by name
+
+To read a permanent's card definition without hard-coding column 24, ask the
+native API for the layout:
+
+```python
+import managym
+
+layout = managym.observation_layout()
+definition = layout["agent_permanents"]["columns"]["definition"]
+print(definition["index"], definition["kind"])
+# 24 id
+print(definition["encoding"])
+# CardDefId + 1; 0 means absent
+```
+
+The scalar encoder writes the arrays the layout describes. This example starts
+a game with fixed decks and reads only valid permanent rows (the first
+decision can have none):
+
+```python
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+arrays = game.encode_observation(observation)
+valid = arrays["agent_permanents_valid"].astype(bool)
+references = arrays["agent_permanents"][valid, definition["index"]]
+definition_ids = [int(reference) - 1 for reference in references if reference != 0]
+```
+
+These are definition IDs for catalog joins, not object identities or numeric
+features. Do not log-scale them or infer similarity from their magnitude.
+Retain the installed world's content identity with saved arrays and catalog
+references.
+
+`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
+encoder's array names. Each array describes its `axes`, `shape` and stored
+`dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
+default. The seat axis is viewer-relative (agent first, opponent second).
+Feature arrays have a `columns` mapping keyed by column name. Each column gives
+its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
+identities and references, categorical codes, flags, counts, numeric values and
+ranks. The encoding explains scaling, join targets, index bases and absence
+sentinels; the range describes stored values, including when no fixed bound
+exists. A `tagged` kind needs its row-kind description before preprocessing.
+Tagged fact, relation and effect rows describe meanings conditional on their
+row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+scalar-valued arrays have empty `columns` and describe their `element` meaning
+without inventing a feature axis. Shared headers own the detail/member slices;
+unused rows are zero. `policy_history=True` describes the 12-column public
+history rows of `events` instead of the 7-column raw events; public history is
+bounded to 32 rows, even though its allocated event capacity is selected
+separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
+`life_lost`, `spells_cast`, then `nonartifact_mana_white` through
+`nonartifact_mana_colorless`) and `card_turn_state`.
+
+Read the stored encoding before adding preprocessing: permanent damage, power
+and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
+Fact timestamp ranks are stored as ranks; the built-in model divides them by
+128, independently of fact capacity. The layout describes the array values,
+not a blanket normalization to apply to every column.
+
+The layout comes from the column table the native encoder writes through, so
+it cannot drift from the arrays. Reading it starts no game and imports no
+Torch. Row capacities are a separate allocation choice: use
+`ObservationSpace.shapes` when allocating caller-owned buffers, and retain all
+its keys. Capacity errors need larger buffers and a compatible model; state is
+never truncated.
+
+A later engine release can change the layout. Save the package version and
+world identity with collected arrays, and look columns up by name rather than
+by position.
+
+### Card definition IDs
+
+A `CardDefId` is the definition's position in the installed catalog, sorted by
+definition key. Adding a card renumbers every definition after it, so IDs are
+stable only within one installed build. Do not key a saved embedding table or
+dataset by raw IDs. Join each ID to a stable identity for the installed build:
+`managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
+`registry_name`, definition `key` and `scryfall_id` (back faces have a name but
+no key). For card features rather than identities, `managym.catalog_tokens()`
+gives each definition's tokenized rules text, rows by `CardDefId`, so the
+tokens describe cards a model has not seen.
+
+### Deprecated names
+
+Engine names describe what managym produces. These earlier spellings, named for
+manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
+
+| Deprecated | Use |
+|---|---|
+| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
+| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
+| `managym.learning_record_names()` | `managym.record_vocabulary()` |
+
 ## Cards as programs
 
 A card is one Rust function returning the engine's own `CardDefinition`, written
@@ -422,6 +532,38 @@ fn lightning_bolt() -> CardDefinition {
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- A trigger is "whenever X does Y": an event over its actor, with the event's
+  own parameters as fields. Monastery Swiftspear's prowess
+  ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
+  with you as the actor:
+
+  ```rust
+  condition: TriggerCondition::casts(
+      Actor::You,
+      CardPredicate {
+          not_card_types: vec![CardType::Creature],
+          ..Default::default()
+      },
+  ),
+  ```
+
+  `casts` builds `Casts { who, predicate, nth: None }`. Changing `who` to
+  `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an opponent casts" or
+  "whenever a player casts"; `nth: Some(2)` gives "your second spell each
+  turn". The same applies to draws (`Draws { who, nth }`), steps
+  (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
+  or bending (`Performs { who, any_of }`), cards reaching a graveyard
+  (`PutIntoGraveyard { whose, predicate }`) and putting counters
+  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
+  instead, whose controller is the same kind of `Actor` ("a creature an
+  opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
+  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  more" creatures trigger once per batch or once each, and `attackers` says
+  whether the attack is alone or with at least one other creature. The ability
+  description ("Whenever an opponent draws their second card each turn, ...")
+  and the learning tokens come from one template per event, so a card that
+  needs a new actor or count needs no new variant.
 - Learning tokens derive from the same definition
   ([`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs)), so the
   policy can read what a card does and a new variant reaches the model without
@@ -522,6 +664,58 @@ to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and
 `--villain-deck-file` ([Academy](academy.md)).
+
+### TLA decks with TLE bonus-sheet cards
+
+TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
+Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
+importer, with no extra pack or flag. The engine defines 58 of the 61:
+
+```python
+import managym
+
+decklist = managym.Decklist(
+    "1 Avatar Enthusiasts\n1 Scout's Warning\n17 Plains\n",
+    filename="tla-with-bonus-sheet.txt",
+)
+admitted, = managym.admit_decklists([("hero", decklist)])
+print(managym.check_decks([admitted.deck]))
+# [[]] — no admission issues
+```
+
+Every defined non-token card belongs to the world pool. This small example
+checks `development-v1` admission, not Limited construction or booster
+contents; use a complete deck for play.
+
+Three bonus-sheet cards are not yet defined, so a deck listing one of them
+raises `managym.DeckImportError` naming it as unknown:
+
+| Card | Waits for |
+| --- | --- |
+| Release to Memory | Tokens with their own definition type, resolved by key |
+| Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
+| Heartbeat of Spring | A redesign of how mana production triggers see what a land produced |
+
+Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 995
+admit; the five that fail list Heartbeat of Spring (three) or Lita (two). Do
+not drop or substitute the card to admit such a deck; it admits once its
+definition exists.
+
+Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
+policy input v9 cannot hold: life lost this turn, cards put into a graveyard
+from the battlefield this turn, and Powerstone mana that can't be spent on
+nonartifact spells. Their decks admit and play under any input, but a v9 policy
+refuses an observation that needs that state; train on them with input v10
+([policy inputs](observation-and-model.md#input-v10-turn-history-and-powerstone-mana)).
+
+`managym.set_cards(["tla"])` selects definitions by their first-printing set.
+Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
+actual counted decklist against the world to include its bonus-sheet cards.
+
+For unknown names in `DeckImportError`, check spelling and the installed
+engine's definitions. Engine and checkpoint worlds must remain compatible;
+keep frozen runs on their recorded world. New card support does not expand
+saved training corpora or change their split assignments.
 
 ## What we know
 

@@ -21,6 +21,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import admit_on_device
 from manabot.model.policy_distribution import (
     NumericalError,
     check_behavior,
@@ -297,10 +298,13 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
         device=DEVICE,
     )
     batch = collector.collect(agent, 1)
-    obs = {
-        key: torch.from_numpy(value).to(DEVICE)
-        for key, value in batch.observations(np.array([0])).observation.items()
-    }
+    obs = admit_on_device(
+        agent,
+        {
+            key: torch.from_numpy(value)
+            for key, value in batch.observations(np.array([0])).observation.items()
+        },
+    )
     optimizer = torch.optim.Adam(agent.parameters())
 
     def measure(loss: Literal["policy", "value"]) -> NumericalHealth:

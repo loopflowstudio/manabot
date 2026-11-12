@@ -31,8 +31,17 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
-            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
-            {
+            let views: Vec<_> = self
+                .layer_views(self.iter_battlefield_permanents(player))
+                .collect();
+            if views.iter().any(|(_, characteristics)| {
+                characteristics
+                    .static_abilities
+                    .contains(&crate::state::card::StaticAbility::LegendRuleDoesntApply)
+            }) {
+                continue;
+            }
+            for (id, characteristics) in views {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                 if characteristics.is_legendary {
                     names
@@ -109,6 +118,11 @@ impl Game {
                 SbaProgress::Stable
             };
         }
+
+        // CR 704.5q — +1/+1 and -1/-1 counters on one permanent annihilate
+        // in pairs. Power and toughness are unchanged, so the simultaneous
+        // checks below read the same characteristics either way.
+        performed |= self.annihilate_opposing_counters();
 
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
@@ -191,6 +205,28 @@ impl Game {
         } else {
             SbaProgress::Stable
         }
+    }
+
+    fn annihilate_opposing_counters(&mut self) -> bool {
+        let pairs: Vec<(PermanentId, i32)> = self
+            .state
+            .permanents
+            .iter()
+            .enumerate()
+            .filter_map(|(index, permanent)| {
+                let permanent = permanent.as_ref()?;
+                let pairs = permanent
+                    .counter_count(CounterKind::PlusOnePlusOne)
+                    .min(permanent.counter_count(CounterKind::MinusOneMinusOne));
+                (pairs > 0).then_some((PermanentId(index), pairs))
+            })
+            .collect();
+        for &(id, pairs) in &pairs {
+            let permanent = self.state.permanents[id].as_mut().expect("present");
+            permanent.change_counters(CounterKind::PlusOnePlusOne, -pairs);
+            permanent.change_counters(CounterKind::MinusOneMinusOne, -pairs);
+        }
+        !pairs.is_empty()
     }
 
     pub(crate) fn finish_state_based_batch(&mut self) -> bool {
