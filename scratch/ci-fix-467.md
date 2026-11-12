@@ -44,3 +44,25 @@ scope. Do not rerun this deterministic compiler failure as a flake.
 The verified evaluation repair is checkpointed locally, not published or armed.
 The existing published head still has auto-merge enabled. This attempt is blocked,
 not a completed CI repair.
+
+## Second attempt, 2026-11-12 UTC
+
+`lf sync` checkpointed these notes as `865c9f65724deaea2a654929d1ce8fb243ba972b`
+and completed without a main merge. GitHub now reports that exact published head,
+with `autoMergeRequest: null`; the import repair is therefore published, but the
+PR is not armed. New CI runs are pending. No manual rerun or arm was requested.
+
+Re-read the failed logs and comparison contract in `docs/development.md`:
+the historical engine must receive identical candidate definitions, with only
+counters/fixture access added. CI reports 91 compilation errors, including
+removed `AttachSourceTo` fields and missing search, shuffle and discard/draw
+APIs. The card-file changes since the pinned control include #433's resolution
+repair, beyond the original Honest Work ordering adjustment. Copying only that
+ordering adjustment would no longer satisfy identical candidate content; moving
+the control or backporting new rules needs a separately validated comparison.
+Main has no Layer Risk Measurements runs, so this is not an observed base-branch
+flake. No harness changes or repeated deterministic compile attempt were made.
+
+Still blocked on a compatible historical control or revised measurement scope.
+Earlier local verification remains applicable to the unchanged import repair:
+Ruff and 92 focused tests passed in attempt 1. No local processes were started.
