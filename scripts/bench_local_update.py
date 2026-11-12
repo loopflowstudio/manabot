@@ -20,10 +20,14 @@ and SHA-256 from composite construction/serialization skipped by direct hashes.
 view and attributes allocation, Python validation/conversion and native encoding.
 Its Python timing includes cProfile overhead; probe times are not speedup claims.
 
---rollout-evidence and --native-encoder instead compare opt-in arms against the
-defaults (full evidence, row encoding) under the current code, with no git
-reference. Every arm searches the same openings and seeds; an unprofiled parity
-pass checks Commands, native frontier tensors and values before any timing.
+A reference whose config predates the evidence mode is compared with full
+evidence; any other reference uses the defaults.
+
+--rollout-evidence and --native-encoder instead compare arms against the
+defaults (compact evidence, native frontier encoding) under the current code,
+with no git reference; an omitted flag holds that setting at its default. Every
+arm searches the same openings and seeds; an unprofiled parity pass checks
+Commands, native frontier tensors and values before any timing.
 --inference-threads sets Torch's intra-op count once, before any model loads.
 """
 
@@ -68,6 +72,9 @@ import managym
 
 
 RolloutEvidence = Literal["full", "compact"]
+# Search defaults: compact evidence with native frontier encoding.
+_DEFAULT_ARM: tuple[RolloutEvidence, str] = ("compact", "on")
+_DEFAULT_NAME = "/".join(_DEFAULT_ARM)
 
 
 def reference_module(revision: str, relative_path: str) -> types.ModuleType:
@@ -378,17 +385,17 @@ def _initialized_checkpoint(path: Path, match: Match) -> Path:
 def compare_arm(baseline: LocalUpdateReceipt, arm: LocalUpdateReceipt) -> Parity:
     """Same Commands and support as the default arm; predictions within tolerance.
 
-    Compact receipts omit per-Command witnesses and hashes, so they are compared
-    on Command counts, seeds, terminal flags and values; full arms must match
-    every retained rollout field except the rounded value.
+    Compact receipts omit per-Command witnesses and hashes, so a pair with a
+    compact side is compared on Command counts, seeds, terminal flags and
+    values; two full receipts must match every retained rollout field except
+    the rounded value.
     """
-    compact = arm.schema == "regularized-local-update/v4"
+    compact = "regularized-local-update/v4" in (baseline.schema, arm.schema)
     for left, right in zip(baseline.rollouts, arm.rollouts, strict=True):
         if compact:
-            left = replace(
-                left,
-                actor_observation_hashes=right.actor_observation_hashes,
-                branch_audit_json=right.branch_audit_json,
+            left, right = (
+                replace(row, actor_observation_hashes=(), branch_audit_json="")
+                for row in (left, right)
             )
         assert replace(left, signed_value=right.signed_value) == right
     assert baseline.allocation_counts == arm.allocation_counts
@@ -442,7 +449,7 @@ def compare_arms(
     encoders: Sequence[str],
     threads: dict[str, int],
 ) -> None:
-    """Time opt-in arms against the default arm on identical searches."""
+    """Time arms against the default arm on identical searches."""
     match = _bench_match()
     initialized = checkpoint is None
     with TemporaryDirectory(prefix="local-update-arms-") as temporary:
@@ -451,11 +458,11 @@ def compare_arms(
                 Path(temporary) / "initialized.pt", match
             )
         digest = file_sha256(checkpoint)
-        arms = [("full", "off")] + [
+        arms = [_DEFAULT_ARM] + [
             (mode, encoder)
             for mode in evidence
             for encoder in encoders
-            if (mode, encoder) != ("full", "off")
+            if (mode, encoder) != _DEFAULT_ARM
         ]
         teachers = {
             f"{mode}/{encoder}": LocalUpdateTeacher(
@@ -490,7 +497,7 @@ def compare_arms(
                     with _checked_native_frontiers(teacher) as checked:
                         receipts[name] = teacher.search(engine, history, seed=17)
                     frontiers[name] = len(checked)
-                baseline = receipts["full/off"]
+                baseline = receipts[_DEFAULT_NAME]
                 parity = {
                     name: compare_arm(baseline, receipt)
                     for name, receipt in receipts.items()
@@ -512,7 +519,8 @@ def compare_arms(
                         "arms": {
                             name: {
                                 "seconds": seconds[name],
-                                "speedup": seconds["full/off"] / seconds[name],
+                                "seconds_vs_default": seconds[name]
+                                / seconds[_DEFAULT_NAME],
                                 "schema": receipts[name].schema,
                                 "native_frontiers_checked": frontiers[name],
                                 "parity": asdict(parity[name]),
@@ -594,8 +602,8 @@ def main() -> None:
             args.checkpoint,
             args.worlds,
             args.position_seeds,
-            evidence=args.rollout_evidence or ["full"],
-            encoders=args.native_encoder or ["off"],
+            evidence=args.rollout_evidence or [_DEFAULT_ARM[0]],
+            encoders=args.native_encoder or [_DEFAULT_ARM[1]],
             threads=threads,
         )
         return
@@ -626,7 +634,15 @@ def main() -> None:
                 Path(temporary) / "initialized.pt", match
             )
         digest = file_sha256(checkpoint)
-        config = LocalSearchConfig(depth=20, decision_seconds=120)
+        # References predating the evidence mode only know full evidence.
+        evidence: RolloutEvidence = (
+            "compact"
+            if "rollout_evidence" in reference_search.LocalSearchConfig.model_fields
+            else "full"
+        )
+        config = LocalSearchConfig(
+            depth=20, decision_seconds=120, rollout_evidence=evidence
+        )
         with patch("manabot.model.checkpoint.ActorCritic", reference_model.ActorCritic):
             before = reference(checkpoint, digest, _reference_config(config))
         teachers = {

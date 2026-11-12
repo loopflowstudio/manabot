@@ -244,6 +244,10 @@ class Execution(Strict):
     # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
     # hashes are unchanged; never part of the model or its checkpoints.
     bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
+    # The same forwards attend over valid objects only, packed into one
+    # sequence (`manabot.model.live_tokens`). Omitted when unset, like
+    # bucketed shapes, and likewise never model state.
+    live_tokens: bool = Field(default=False, exclude_if=lambda value: not value)
 
     # Whether `precision` came from the ladder rather than being written. Not
     # serialized: a saved regime keeps the precision it names. Builders that
@@ -283,6 +287,8 @@ class Stage(Strict):
             raise ValueError("collection profiling requires train_self_play")
         if self.execution.bucketed_shapes:
             raise ValueError("bucketed shapes require train_self_play")
+        if self.execution.live_tokens:
+            raise ValueError("live tokens require train_self_play")
         if self.execution.workers != 1:
             raise ValueError(
                 "multiple producers are supported only for train_self_play"
@@ -911,6 +917,10 @@ class TrainingRegime(Strict):
             stage.execution.bucketed_shapes for stage in self.stages
         ):
             raise ValueError("token_stream='pooled' does not support bucketed shapes")
+        if self.agent.token_stream == "pooled" and any(
+            stage.execution.live_tokens for stage in self.stages
+        ):
+            raise ValueError("token_stream='pooled' does not support live tokens")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
@@ -963,6 +973,7 @@ class TrainingRegime(Strict):
                     or parent.execution.workers != stage.execution.workers
                     or parent.execution.bucketed_shapes
                     != stage.execution.bucketed_shapes
+                    or parent.execution.live_tokens != stage.execution.live_tokens
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.learning_seats != stage.learning_seats
@@ -976,7 +987,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes and opponent"
+                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes, live tokens and opponent"
                     )
             if (
                 self.agent.value_kind == "categorical_wdl"

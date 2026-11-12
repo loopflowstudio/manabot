@@ -22,7 +22,7 @@ import hashlib
 import json
 from pathlib import Path
 import time
-from typing import Callable, Literal, Sequence
+from typing import Callable, Literal, Mapping, Sequence
 
 import managym._managym as native
 from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
@@ -76,9 +76,18 @@ class LocalSearchConfig(BaseModel):
     decision_seconds: float = Field(default=1, gt=0)
     max_support: int = Field(default=20000, ge=1)
     sampling: Literal["belief", "compatible_prior", "learned"] = "compatible_prior"
-    # Full keeps per-Command native witnesses and actor viewer hashes (v3
-    # receipts); compact keeps only reconciled Command counts (v4 receipts).
-    rollout_evidence: Literal["full", "compact"] = "full"
+    # Compact keeps only reconciled Command counts (v4 receipts); full keeps
+    # per-Command native witnesses and actor viewer hashes (v3 receipts).
+    rollout_evidence: Literal["full", "compact"] = "compact"
+
+    @classmethod
+    def from_recorded(cls, config: Mapping[str, object]) -> LocalSearchConfig:
+        """Read a receipt or registration config; one omitting the field is full.
+
+        Receipts and registrations written before compact evidence existed, and
+        full-evidence receipts since, omit `rollout_evidence`.
+        """
+        return cls.model_validate({"rollout_evidence": "full", **config})
 
     def receipt_config_json(self) -> str:
         """Full-evidence receipts keep the config bytes written before the field."""
@@ -215,7 +224,7 @@ class LocalUpdateReceipt:
             "regularized-local-update/v4",
         ):
             raise ValueError("unsupported local update receipt")
-        config = LocalSearchConfig.model_validate_json(receipt.config_json)
+        config = LocalSearchConfig.from_recorded(json.loads(receipt.config_json))
         compact = config.rollout_evidence == "compact"
         if compact != (receipt.schema == "regularized-local-update/v4"):
             raise ValueError("compact rollout evidence requires the v4 receipt schema")
@@ -491,7 +500,7 @@ class LocalUpdateTeacher:
         *,
         sampler: SamplerArtifact | None = None,
         hand_sampler: SearchHandSampler | None = None,
-        native_encoder: bool = False,
+        native_encoder: bool = True,
     ) -> None:
         self.likelihood = FrozenPolicyLikelihood(checkpoint, expected_sha256=sha256)
         self.agent = self.likelihood.agent

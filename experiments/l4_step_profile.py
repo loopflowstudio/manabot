@@ -12,7 +12,8 @@ Exploratory. One rented L4 runs, in order:
    before any export.
 2. `replay`: those inputs through the inference and learner-step code in one
    subprocess per arm (`baseline` at the job revision, `option3` with
-   `l4_step_profile_option3.patch` applied to a copy of `manabot/`) and size
+   `l4_step_profile_option3.patch` applied to a copy of `manabot/`, or a
+   layout switch of `ActorCritic`: `bucketed`, `live`, `bucketed-live`) and size
    (w160l8 with the in-situ initial weights; a larger random initialization). The
    learner step reproduces `update_damped_iteration`'s minibatch body, including
    its index round trip, `OptimizerHealth` check/step and diagnostic reads.
@@ -64,6 +65,12 @@ SIZES: dict[str, dict[str, int]] = {
     "w160l8": {},
     "w384l8": {"hidden_dim": 384, "attention_layers": 8, "num_attention_heads": 8},
     "w256l8": {"hidden_dim": 256, "attention_layers": 8, "num_attention_heads": 8},
+}
+# `ActorCritic` layout switches per arm; other arms run the default layout.
+LAYOUTS: dict[str, dict[str, bool]] = {
+    "bucketed": {"bucketed_shapes": True},
+    "live": {"live_tokens": True},
+    "bucketed-live": {"bucketed_shapes": True, "live_tokens": True},
 }
 
 
@@ -319,8 +326,8 @@ def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
     original_step = OptimizerHealth.step
     original_update = execution_module.update_iteration
 
-    def make_actor(space: Any, config: Any) -> Any:
-        agent = original_actor(space, config)
+    def make_actor(space: Any, config: Any, **layout: bool) -> Any:
+        agent = original_actor(space, config, **layout)
         if (captures / "initial.pt").exists():
             raise RuntimeError("the update constructed a second policy")
         torch.save(
@@ -504,7 +511,7 @@ def _inputs(captures: Path) -> Inputs:
     }
 
 
-def _agent(captures: Path, size: str, device: str) -> Any:
+def _agent(captures: Path, size: str, device: str, arm: str = "baseline") -> Any:
     from manabot.env.observation import ObservationSpace
     from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
@@ -512,7 +519,9 @@ def _agent(captures: Path, size: str, device: str) -> Any:
     regime = TrainingRegime.model_validate_json((captures / "regime.json").read_text())
     config = regime.agent.model_copy(update=SIZES[size])
     torch.manual_seed(SEED)
-    agent = ActorCritic(ObservationSpace(regime.observation), config)
+    agent = ActorCritic(
+        ObservationSpace(regime.observation), config, **LAYOUTS.get(arm, {})
+    )
     if not SIZES[size]:
         agent.load_state_dict(torch.load(captures / "initial.pt"))
     return agent.to(device)
@@ -563,6 +572,8 @@ def learn_once(
     learner: Any, observer: Any, payload: dict[str, Any], *, step: bool = True
 ) -> dict[str, Any]:
     """`update_damped_iteration`'s minibatch body on one retained minibatch."""
+    from manabot.model.admission import admit_observation
+    from manabot.model.inference import transfer_admitted
     from manabot.model.numerics import float64_operand
     from manabot.model.policy_distribution import legal_mask, policy_logs, reverse_kl
     from manabot.training.learning.damped_policy import damped_policy_loss
@@ -585,9 +596,14 @@ def learn_once(
         indexes = torch.arange(len(selected), device=device)[selected]
         indexes.cpu().numpy()
         local = torch.arange(rows, device=device)
-        obs = observation_tensors(
-            {k: v.numpy() for k, v in payload["obs"].items()}, device
-        )
+        # The learner admits CPU rows once, then moves them (`AdmittedRollout`).
+        obs = transfer_admitted(
+            admit_observation(
+                learner.agent,
+                observation_tensors({k: v.numpy() for k, v in payload["obs"].items()}),
+            ),
+            torch.device(device),
+        )[0]
         valid = legal_mask(obs["actions_valid"])
         behavior_logs = payload["behavior_logs"].to(device)
         actions = payload["actions"].to(device)[local]
@@ -683,13 +699,15 @@ def _peaks(device: str) -> dict[str, int]:
     }
 
 
-def numerics(captures: Path, out: Path, size: str, device: str) -> None:
+def numerics(
+    captures: Path, out: Path, size: str, device: str, arm: str = "baseline"
+) -> None:
     """Fixed-weight inference outputs, losses and gradients for cross-arm checks."""
     import manabot
 
     torch.set_num_threads(min(8, os.cpu_count() or 1))
     inputs = _inputs(captures)
-    agent = _agent(captures, size, device).eval()
+    agent = _agent(captures, size, device, arm).eval()
     from manabot.model.inference import PolicyInference
 
     result: dict[str, Any] = {
@@ -800,8 +818,9 @@ def replay(
         "host": _host(),
     }
     inputs = _inputs(captures)
-    agent = _agent(captures, size, device)
+    agent = _agent(captures, size, device, arm)
     receipt["bucketed_shapes"] = getattr(agent, "bucketed_shapes", None)
+    receipt["live_tokens"] = getattr(agent, "live_tokens", None)
     receipt["parameters"] = sum(p.numel() for p in agent.parameters())
     receipt["weights"] = _state_digest(agent)
     receipt["inference_rows"] = [len(o["actions_valid"]) for o in inputs["inference"]]
@@ -1093,6 +1112,7 @@ def analyze(out: Path) -> dict[str, Any]:
             for k in (
                 "status",
                 "bucketed_shapes",
+                "live_tokens",
                 "parameters",
                 "weights",
                 "inference_peaks",
@@ -1123,7 +1143,8 @@ def analyze(out: Path) -> dict[str, Any]:
     for path in sorted((out / "numerics").glob("*-*.pt")):
         if path.name.startswith("baseline-"):
             continue
-        base = path.with_name("baseline-" + path.name.split("-", 1)[1])
+        # Arm names may contain hyphens; the size is the last segment.
+        base = path.with_name("baseline-" + path.name.rsplit("-", 1)[1])
         if base.exists():
             comparisons[path.stem] = compare(base, path)
     summary["numerics"] = comparisons
@@ -1151,51 +1172,38 @@ def _option3_tree(target: Path) -> Path:
     return target
 
 
-@dataclass(frozen=True)
-class Arm:
-    """Source tree (None: the job revision) and switches for one arm's processes."""
+def _arms(candidate: str, work: Path) -> dict[str, Path]:
+    """Each arm's source tree: the job revision, or option 3's patched copy.
 
-    tree: Path | None = None
-    environment: tuple[tuple[str, str], ...] = ()
-
-
-def _arms(candidate: str, work: Path) -> dict[str, Arm]:
-    """Baseline plus one candidate: the option-3 patch, or MTG-302's switch."""
+    Layout arms (MTG-302's bucketed shapes, MTG-319's live tokens alone and
+    over buckets) share the job revision; their switches come from the arm's
+    name (`LAYOUTS`)."""
     if candidate == "option3":
-        return {"baseline": Arm(), "option3": Arm(_option3_tree(work / "option3"))}
+        return {"baseline": ROOT, "option3": _option3_tree(work / "option3")}
     if candidate == "bucketed":
-        if not (ROOT / "manabot" / "model" / "buckets.py").exists():
-            raise RuntimeError("this revision has no bucketed-shapes switch")
-        return {
-            "baseline": Arm(),
-            "bucketed": Arm(environment=(("MANABOT_BUCKETED_SHAPES", "1"),)),
-        }
+        return {"baseline": ROOT, "bucketed": ROOT}
+    if candidate == "live":
+        return dict.fromkeys(("baseline", "bucketed", "live", "bucketed-live"), ROOT)
     raise ValueError(f"unknown candidate {candidate!r}")
 
 
-def _clean_env(arm: Arm) -> dict[str, str]:
-    # Stage processes track locally, never as the launcher's run; only the
-    # arm's own switches reach them.
-    env = {
-        k: v
-        for k, v in os.environ.items()
-        if not k.startswith("ETUDE_") and k != "MANABOT_BUCKETED_SHAPES"
-    }
+def _clean_env(tree: Path) -> dict[str, str]:
+    # Stage processes track locally, never as the launcher's run.
+    env = {k: v for k, v in os.environ.items() if not k.startswith("ETUDE_")}
     # A patched tree shadows the editable install's `manabot`.
-    env["PYTHONPATH"] = str(arm.tree or ROOT)
-    env.update(arm.environment)
+    env["PYTHONPATH"] = str(tree)
     return env
 
 
-def _stage(args: list[str], log: Path, arm: Arm, timeout: float) -> dict[str, Any]:
+def _stage(args: list[str], log: Path, tree: Path, timeout: float) -> dict[str, Any]:
     tick = time.perf_counter()
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as handle:
         try:
             code = subprocess.run(
                 [sys.executable, str(Path(__file__).resolve()), *args],
-                cwd=arm.tree or ROOT,
-                env=_clean_env(arm),
+                cwd=tree,
+                env=_clean_env(tree),
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 timeout=timeout,
@@ -1224,7 +1232,7 @@ def job(smoke: bool = False) -> None:
     started = time.perf_counter()
 
     candidate = os.environ.get("MTG301_CANDIDATE", "option3")
-    arms: dict[str, Arm] = {"baseline": Arm()}
+    arms: dict[str, Path] = {"baseline": ROOT}
 
     def replay_stage(arm: str, size: str, name: str) -> bool:
         log.append(
@@ -1267,6 +1275,8 @@ def job(smoke: bool = False) -> None:
                         str(out / "numerics" / f"{arm}-w160l8.pt"),
                         "w160l8",
                         device,
+                        "--arm",
+                        arm,
                     ],
                     out / "logs" / f"numerics-{arm}.log",
                     arms[arm],
@@ -1278,9 +1288,12 @@ def job(smoke: bool = False) -> None:
             (s for s in larger if replay_stage("baseline", s, f"baseline-{s}")), None
         )
         replay_stage("baseline", "w160l8", "baseline-w160l8")
-        replay_stage(candidate, "w160l8", f"{candidate}-w160l8")
-        if large:
-            replay_stage(candidate, large, f"{candidate}-{large}")
+        for arm in arms:
+            if arm == "baseline":
+                continue
+            replay_stage(arm, "w160l8", f"{arm}-w160l8")
+            if large:
+                replay_stage(arm, large, f"{arm}-{large}")
         replay_stage("baseline", "w160l8", "baseline-w160l8-repeat")
     finally:
         _write(
@@ -1316,14 +1329,20 @@ def _finish(out: Path, captures: Path) -> None:
     shutil.move(packed, out / "results.tar.gz")
 
 
-def runs(revision: str, candidate: str = "option3", hours: str = "1.25") -> Any:
-    """`candidate`: option3, or bucketed at a revision carrying MTG-302's switch."""
+def runs(
+    revision: str,
+    candidate: str = "option3",
+    hours: str = "1.25",
+    usd: str = "1.50",
+    name: str = "mtg301-l4-step-profile",
+) -> Any:
+    """`candidate`: option3, bucketed or live (see `_arms`)."""
     from etude.launch.records import Job, Variable
 
     from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 
     return Job(
-        name=f"mtg301-l4-step-profile-{candidate}",
+        name=f"{name}-{candidate}",
         environment=(
             Variable(name="MTG301_CANDIDATE", value=candidate),
             Variable(name="MTG301_REVISION", value=revision),
@@ -1341,7 +1360,7 @@ def runs(revision: str, candidate: str = "option3", hours: str = "1.25") -> Any:
         repo=str(ROOT),
         revision=revision,
         max_hours=float(hours),
-        max_usd=Decimal("1.50"),
+        max_usd=Decimal(usd),
         max_attempts=1,
     )
 
@@ -1366,6 +1385,7 @@ def main() -> None:
     p.add_argument("out", type=Path)
     p.add_argument("size", choices=sorted(SIZES))
     p.add_argument("device")
+    p.add_argument("--arm", default="baseline")
     p = sub.add_parser("compare")
     p.add_argument("first", type=Path)
     p.add_argument("second", type=Path)
@@ -1379,7 +1399,7 @@ def main() -> None:
     elif args.command == "replay":
         replay(args.captures, args.out, args.arm, args.size, args.device)
     elif args.command == "numerics":
-        numerics(args.captures, args.out, args.size, args.device)
+        numerics(args.captures, args.out, args.size, args.device, args.arm)
     elif args.command == "compare":
         print(json.dumps(compare(args.first, args.second), indent=1))
     else:
