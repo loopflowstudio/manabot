@@ -48,6 +48,9 @@ The same retained minibatches and collection observations were run through each
 layout, two passes each. A baseline repeat at w160l8 lands within 0.5% of the
 first baseline run, so differences of a few percent are noise.
 
+![Median learner step per layout at w160l8 and w384l8, with the bucketed ÷ 1.5
+bar](data/live_token_attention/learner_step.svg)
+
 | Layout, w384l8 (31.5M parameters) | Learner step (median) | Learner pass | Collection pass | Learner peak memory |
 |---|---:|---:|---:|---:|
 | Padded (default) | 882 ms | 18.0 s | 20.4 s | 12.8 GB |
@@ -80,6 +83,9 @@ covers. This pilot did not separate that cost.
 At fixed weights (w160l8 in-situ initialization, CUDA, four learner minibatches
 and eight collection observations), each layout was compared with the padded
 path:
+
+![Largest absolute deviation from the padded path per metric and layout, log
+scale](data/live_token_attention/equivalence.svg)
 
 | Layout | Collection logits | Values | Losses | Gradients (max abs) | Gradient cosine |
 |---|---:|---:|---:|---:|---:|
@@ -157,6 +163,9 @@ supersedes.
   each arm's `receipt.json`. Passes are `summary.json`'s
   `learner_total_s_per_pass` / `inference_total_s_per_pass`, averaged over two
   passes.
+- Figures: `uv run --extra reports python -m experiments.live_token_attention
+  experiments/data/live_token_attention` writes `learner_step.svg` and
+  `equivalence.svg` from the receipts and `summary.json`.
 - Evidence is under `experiments/data/live_token_attention/` (manifest entries
   in `experiments/data.manifest.json`): `summary.json`, `job.json`,
   `gpu-samples.csv`, `insitu/`, `replay/<arm>-<size>/`, `numerics/`, `logs/`,

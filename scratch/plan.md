@@ -31,6 +31,10 @@
   tolerance. Report `experiments/live_token_attention.md` has Results, Decision
   ("Build out live tokens") and appendix; README index line; data published (75
   manifest entries, untracked in git).
+- Figures: `uv run --extra reports python -m experiments.live_token_attention
+  experiments/data/live_token_attention` writes `learner_step.svg` (Results) and
+  `equivalence.svg` (Numerics) from the receipts; both rendered and checked against
+  the tables, published (77 manifest entries).
 
 ## Checks
 
