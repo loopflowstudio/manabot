@@ -39,7 +39,7 @@ jobs:
           uv venv --python 3.13
           uv export --frozen --extra dev --extra play --no-emit-project --prune torch --output-file /tmp/layer-requirements.txt
           uv pip install --requirements /tmp/layer-requirements.txt
-          uv pip install --index-url https://download.pytorch.org/whl/cpu torch==2.10.0
+          uv pip install --index-url https://download.pytorch.org/whl/cpu torch==2.15.0
       - name: Prepare historical sources and record provenance
         run: |
           uv run --no-sync python scripts/measure_layer_risk.py prepare --out .cache/layer-risk

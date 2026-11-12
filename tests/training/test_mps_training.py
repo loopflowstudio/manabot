@@ -43,11 +43,13 @@ from manabot.model.semantic_cards import (
 )
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.baseline import baseline
+from manabot.recipes.device import accelerator
 from manabot.recipes.local import local_smoke
 from manabot.training import execution
 from manabot.training.learning import damped_policy
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.selection import UpdateDiagnostics
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -115,6 +117,45 @@ def test_unavailable_mps_fails_without_fallback(
                 tmp_path / "unavailable",
                 store,
             )
+
+
+@pytest.mark.parametrize(
+    "version,admitted",
+    [("2.10.0", False), ("2.14.1", False), ("2.15.0", True), ("3.0.0+cpu", True)],
+)
+def test_mps_torch_minimum_gates_selection(
+    version: str, admitted: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(torch, "__version__", version)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    assert (mps_torch_error() is None) == admitted
+    assert accelerator() == ("mps" if admitted else None)
+    assert local_smoke().stages[0].execution.device == ("mps" if admitted else "cpu")
+    if admitted:
+        assert baseline().regime.stages[0].execution.device == "mps"
+    else:
+        with pytest.raises(ValueError, match=f"installed Torch {version} computes"):
+            baseline()
+
+
+def test_old_torch_mps_stage_fails_before_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(torch, "__version__", "2.10.0")
+    monkeypatch.setattr(torch.backends.mps, "is_available", lambda: True)
+    with VerifyStore(tmp_path / "runs.sqlite") as store:
+        with pytest.raises(
+            ValueError,
+            match="MPS training requires Torch 2.15 or newer; installed Torch 2.10.0",
+        ):
+            execution.execute_regime(
+                local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
+                197,
+                tmp_path / "old-torch",
+                store,
+            )
+    assert not (tmp_path / "old-torch" / "checkpoints").exists()
 
 
 def test_float64_operand_keeps_cpu_tensor_ops_and_gradients_identical() -> None:

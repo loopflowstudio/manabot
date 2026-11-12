@@ -56,8 +56,8 @@ def validate(directory: Path, complete: bool) -> None:
         for requirement in expected.requirements
     }
     if not {
-        "torch>=2.10.0;sys_platform=='linux'",
-        "torch>=2.10.0;sys_platform!='linux'",
+        "torch>=2.15.0;sys_platform=='linux'",
+        "torch>=2.15.0;sys_platform!='linux'",
         "etude-sdk>=0.2.15",
     }.issubset(requirements) or any(
         requirement.startswith("managym") for requirement in requirements

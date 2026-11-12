@@ -43,9 +43,15 @@ CPU override.
 retired and fail.
 
 Apple Silicon MPS is admitted for float32 ordinary self-play through
-`execute_regime` and both CLI recipes.
-An unavailable device fails explicitly. Float64 loss and diagnostic arithmetic
-runs on the host with gradients preserved; no automatic operator fallback is
+`execute_regime` and both CLI recipes, and requires Torch 2.15 or newer: Torch
+2.10 computed wrong or nonfinite MPS gradients on some learner minibatches
+whose losses matched CPU, and finite wrong gradients were clipped and applied
+rather than rejected. The repository lock
+installs 2.15. With an older Torch, automatic selection skips MPS, so local
+trains on CPU. Baseline, an explicit `--device mps` and any MPS stage stop
+before training with a message naming the installed and minimum Torch versions;
+upgrade Torch (`uv sync --locked`) or train on CPU with `--recipe local`. An unavailable device fails explicitly. Float64 loss and
+diagnostic arithmetic runs on the host with gradients preserved; no automatic operator fallback is
 enabled. Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
 for this workflow. The baseline coordinator reserves a CPU evaluator thread

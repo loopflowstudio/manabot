@@ -255,7 +255,7 @@ jobs:
           uv pip install --python .venv/bin/python \
             --requirements /tmp/visual-requirements.txt maturin==1.11.5
           uv pip install --python .venv/bin/python \
-            --default-index https://download.pytorch.org/whl/cpu torch==2.10.0
+            --default-index https://download.pytorch.org/whl/cpu torch==2.15.0
 
       - name: Build Python extension
         run: uv run --no-sync maturin develop --release --manifest-path managym/Cargo.toml --features python

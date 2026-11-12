@@ -99,8 +99,8 @@ def _artifacts(directory: Path) -> None:
     """Small archives exercise the same inventory/metadata checks as real wheels."""
     metadata = (
         "Name: manabot\nVersion: 0.2.0\nRequires-Python: >=3.12, <3.14\n"
-        "Requires-Dist: torch>=2.10.0 ; sys_platform == 'linux'\n"
-        "Requires-Dist: torch>=2.10.0 ; sys_platform != 'linux'\n"
+        "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
+        "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
         "Requires-Dist: etude-sdk>=0.2.15\n"
     )
     for python in ("312", "313"):
