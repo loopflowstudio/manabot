@@ -248,3 +248,13 @@ uncommitted outcomes, changed hashes, traces outside the attempt's time window
 and unused recovery entries. This uses the authorized missing-key continuation;
 it does not synthesize a footer/score or replay a scored game. Make the runner's
 stop handler idempotent to prevent the reproduced cleanup defect from recurring.
+
+## Retained-snapshot analysis — 2026-11-12
+
+Use MTG-269's existing mirror report and the November 11 sealed snapshots;
+the MTG-245-specific reader instruction does not select a different experiment.
+No new collection, execution or replay is needed for this report clarification.
+The previously named search environment no longer contains its dependencies;
+use an ephemeral uv overlay with retained numpy 2.4.2, pydantic 2.12.5,
+torch 2.10.0 and etude-sdk 0.2.6 for offline analysis. Do not sync or rebuild
+the frozen checkout or change the remote execution environment.

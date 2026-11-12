@@ -3546,6 +3546,10 @@
    "sha256": "85e48af70f5aa031fe339932d65c644a5fa1617c8ce6365357d041efd436b9eb",
    "bytes": 807
   },
+  "experiments/data/search-mirror-v1/reconciliation/analysis-20261112.json": {
+   "sha256": "4745178abd7d187b966872cfddca455406b61c32ec4bc2fe4a5bc01c68517a1b",
+   "bytes": 748
+  },
   "experiments/data/search-mirror-v1/reconciliation/audit.py": {
    "sha256": "b584c98ad0d3dc6881aa180b221284fadf31dc119b74fcce0fb27e5e2129a754",
    "bytes": 11809
@@ -3561,6 +3565,10 @@
   "experiments/data/search-mirror-v1/reconciliation/pre-analysis-summary-20261111.json": {
    "sha256": "d06b80b7a2d5ffb16c2d36f117361554f53fe92d56a81762955b700e9e37ccdc",
    "bytes": 2172579
+  },
+  "experiments/data/search-mirror-v1/reconciliation/pre-analysis-summary-20261112.json": {
+   "sha256": "44f8355f090500fc1036972faf034c5a7369385decd59237c196d3536014bcaf",
+   "bytes": 2178783
   },
   "experiments/data/search-mirror-v1/reconciliation/pre-transition-summary-20261111.json": {
    "sha256": "f5f67c23dd5e15eb4861156b5897ce0363038c178258dba79245280aa863f1a4",
@@ -3590,16 +3598,20 @@
    "sha256": "1ebd3ae5ad6803c6f255f31f5e23f816e35501337a7034e626221488c90aa5f6",
    "bytes": 5124
   },
+  "experiments/data/search-mirror-v1/reconciliation/verify-analysis-20261112.py": {
+   "sha256": "f82751e55c56ab6fca6ab950bb37c666b5f099b5ebdff53e70b5a51aeebccbc5",
+   "bytes": 3010
+  },
   "experiments/data/search-mirror-v1/reconciliation/verify-transition-report.py": {
    "sha256": "d9c39a9ad72b40ba286fb65a427d996b22a77fab6d7c129453eab48bbb76e21b",
    "bytes": 3738
   },
   "experiments/data/search-mirror-v1/report.html": {
-   "sha256": "ab4a89bddb05fa627f6c72daf941a5379cd6068a4fd99bc4786c3df2a13dadc8",
-   "bytes": 99884
+   "sha256": "f3cef32efab34624420167e18fd4c53767aa10434e2a8760454991db100f1308",
+   "bytes": 101474
   },
   "experiments/data/search-mirror-v1/summary.json": {
-   "sha256": "44f8355f090500fc1036972faf034c5a7369385decd59237c196d3536014bcaf",
+   "sha256": "4cb169d18d2f3f45e046d1e09e6cc6c8392e40cba529df5b5506dad2a1d457ca",
    "bytes": 2178783
   },
   "experiments/data/search-mirror-v2/batching/admission-1/0-oracle-16-batched.json.gz": {

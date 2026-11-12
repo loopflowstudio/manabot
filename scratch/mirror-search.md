@@ -1,5 +1,16 @@
 # Mirror search continuation
 
+## Report clarification — 2026-11-12
+
+The owning report now separates execution, health, learning, training exposure,
+generalization, native support and replay identity. A full owner rebuild
+preserves every scientific result and input from the dated November 11 snapshot;
+no new collection or execution occurred. Reconciliation evidence is in v1
+`reconciliation/{analysis-20261112.json,verify-analysis-20261112.py}`. The seed
+check reuses the exact-bound November 11 receipt; it is not an expanded audit.
+Nine focused report/data checks and Ruff pass. Light/dark and 390-pixel browser
+checks pass. Scientific acceptance remains unresolved for evidence review.
+
 ## Analysis handoff — 2026-11-11
 
 Analysis uses the unchanged 13:09–13:10 original and 13:51 native snapshots,

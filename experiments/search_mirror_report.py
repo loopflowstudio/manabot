@@ -70,6 +70,11 @@ EXTRA_CSS = """
 td.best { font-weight: 600; }
 .row.single { grid-template-columns: minmax(0, 560px); }
 details, .table-scroll { overflow-x: auto; }
+.evidence-assessments { table-layout: fixed; }
+.evidence-assessments th:first-child { width: 8rem; }
+.evidence-assessments th, .evidence-assessments td {
+  text-align: left; vertical-align: top; overflow-wrap: anywhere;
+}
 """
 NOISE_BETAS = (0.01, 0.03, 0.1)
 
@@ -552,9 +557,30 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'does not. Game length and concurrent load confound these timings; this is not an equal-compute '
         'strength comparison or inclusive worker-hour accounting.</p></details>'
         + segment_html + accounting_html +
-        f'<p class="note">Health: {escape(extension["health"])}. '
-        f'Native support: {escape(extension["native_support"])}. '
-        f'Replay identity: {escape(extension["replay_identity"])}. '
+        '<h3>Separate evidence assessments</h3>'
+        '<table class="evidence-assessments"><tr><th scope="col">Question</th>'
+        '<th scope="col">Retained evidence and limit</th></tr>'
+        f'<tr><th scope="row">Execution completeness</th><td>{extension["valid_games"]:,} valid, '
+        f'{extension["invalid_games"]:,} invalid, {extension["missing_games"]:,} missing of '
+        f'{extension["planned_games"]:,} scheduled outcomes. Completed contrasts do not fill '
+        'missing study slots.</td></tr>'
+        f'<tr><th scope="row">Health</th><td>{escape(extension["health"])}</td></tr>'
+        f'<tr><th scope="row">Learning</th><td>{escape(extension["learning"])}. '
+        'Deck lists, rules and checkpoint are fixed across paired arms; gains measure the '
+        'search intervention, not deck improvements, rules changes or newly learned skill.</td></tr>'
+        '<tr><th scope="row">Training exposure</th><td>Absent, unresolved. Evaluation draws, '
+        'actions, deck membership and schedule completeness cannot supply the missing '
+        'training card-exposure measure.</td></tr>'
+        f'<tr><th scope="row">Generalization</th><td>{escape(extension["generalization"])}. '
+        'Held-out cards, held-out deck combinations and unseen mechanics remain distinct '
+        'untested claims.</td></tr>'
+        f'<tr><th scope="row">Native support</th><td>{escape(extension["native_support"])}</td></tr>'
+        f'<tr><th scope="row">Replay identity</th><td>{escape(extension["replay_identity"])}</td></tr>'
+        '</table>'
+        '<p class="note">The schedule uses one trained lineage (seed 18301). '
+        'Per-game hero seed is the declared deal; opponent seed is deal + 1. '
+        'Those paired evaluation seeds do not measure robustness across training seeds.</p>'
+        '<p class="note">'
         'Smoke outcomes are separate from the 3,000 planned games and establish no strength result. '
         'Policy-only timing stays in its separate historical table. No new rental spend is recorded. '
         f'{escape(extension["timing_note"])} '
