@@ -8,6 +8,14 @@ same version and keeps `manabot.managym` as a compatibility alias. Rust sources
 stay in this directory. Start with the
 [Python installation example](../docs/engine-python.md).
 
+For building a deck before play, see [Limited deck building](../docs/deck-building.md):
+`CardPool` holds the cards available, `format.Limited` holds the rules, and a
+build started from both reports the copies still available and when stopping
+is legal. The same rules read and write NumPy arrays over the card axis for
+batched builders.
+Format rules live in `src/format/` (`format::limited`); they build on the
+definitions, decklists and world admission in `src/cards/`.
+
 [Engine development principles](PRINCIPLES.md) records the lessons from
 Allies–Lessons, Elemental and TLA: shared rule ownership, preserved choices and
 timing, trustworthy learning evidence, and measured runtime/search performance.
@@ -27,8 +35,10 @@ are in the [README](../README.md#contracts-the-code-enforces).
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
    and their tests, reached by the engine only through `managym_cards::catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
-5. **`src/infra/`**: Logging and profiler infrastructure
-6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+5. **`src/format/`**: Format construction rules and card selection;
+   `limited.rs` adds Limited pool counts and deck size rules to world admission
+6. **`src/infra/`**: Logging and profiler infrastructure
+7. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
 `cards/src/`, returning the engine's own `CardDefinition` in its rules types
