@@ -34,7 +34,11 @@ from managym.enums import (  # noqa: F401
 import numpy as np
 
 # Local imports
-from manabot.env.shared_effects import SHARED_EFFECT_SHAPES, encode_shared_effects
+from manabot.env.shared_effects import (
+    DURATION_CODES,
+    SHARED_EFFECT_SHAPES,
+    encode_shared_effects,
+)
 from manabot.infra.config import ObservationConfig
 from manabot.infra.log import getLogger
 import managym
@@ -576,15 +580,7 @@ class ObservationEncoder:
                     else []
                 ),
             ] or [0]
-            match effect.duration:
-                case "EndOfTurn":
-                    duration = 1.0
-                case "WhileYouControlSource":
-                    duration = 3.0
-                case "UntilYourNextTurn":
-                    duration = 4.0
-                case _:
-                    duration = 2.0
+            duration = float(DURATION_CODES.get(effect.duration, 2))
             provenance = (duration, effect.timestamp, effect.source_registry_key)
             for ordinal, (token_kind, token_value) in enumerate(effect.program):
                 push(

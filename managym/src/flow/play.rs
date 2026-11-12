@@ -1199,7 +1199,7 @@ impl Game {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
-        if ability.life_cost > 0 && self.payable_life(player) < ability.life_cost as i32 {
+        if self.payable_life(player) < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {

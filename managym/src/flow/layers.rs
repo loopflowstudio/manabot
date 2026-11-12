@@ -369,14 +369,15 @@ impl<'a> Context<'a> {
             }
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
+            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
             // A phased-out permanent's static abilities apply to nothing
             // (CR 702.26b); its own view still takes the records on it.
-            let sources = !game.is_phased_out(id);
-            known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
-            for node in seed.nodes.iter().filter(|_| sources) {
-                context.reads_mana |= node.reads.mana;
-                context.reads_tapped |= node.reads.tapped;
-                nodes.push(node.clone());
+            if !game.is_phased_out(id) {
+                for node in &seed.nodes {
+                    context.reads_mana |= node.reads.mana;
+                    context.reads_tapped |= node.reads.tapped;
+                    nodes.push(node.clone());
+                }
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {

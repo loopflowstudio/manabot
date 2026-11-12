@@ -20,8 +20,9 @@ SHARED_EFFECT_SHAPES: dict[str, tuple[int, int]] = {
     "effect_details": (DETAIL_ROWS, DETAIL_DIM),
     "effect_members": (MEMBER_ROWS, MEMBER_DIM),
 }
-# Header column 8: the record's `EffectDuration`, as the native encoder writes it.
-_DURATION_CODES: dict[str, int] = {
+# Header column 8 and the copy-exception fact's duration: the record's
+# `EffectDuration`, as the native encoder writes it.
+DURATION_CODES: dict[str, int] = {
     "EndOfTurn": 1,
     "Indefinite": 2,
     "WhileYouControlSource": 3,
@@ -76,11 +77,11 @@ def encode_shared_effects(
         for i, value in enumerate((effect.power, effect.toughness, effect.amount)):
             row[2 + i] = (value or 0) / 10
             row[5 + i] = value is not None
-        if effect.duration not in _DURATION_CODES or (
+        if effect.duration not in DURATION_CODES or (
             effect.duration == "WhileYouControlSource" and record.source is None
         ):
             raise ValueError("invalid shared effect duration/source")
-        row[8] = _DURATION_CODES[effect.duration]
+        row[8] = DURATION_CODES[effect.duration]
         row[9] = ranks[effect.timestamp]
         row[10] = join(record.controller_id)
         row[11] = (

@@ -1272,12 +1272,7 @@ fn facts(obs: &Observation) -> Vec<Fact> {
 fn copy_exception_facts(object: i32, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
     let kind = FactKind::CopyException;
     let id = name_value(&format!("Modification::{}", effect.modification));
-    let duration = match effect.duration.as_str() {
-        "EndOfTurn" => 1.0,
-        "WhileYouControlSource" => 3.0,
-        "UntilYourNextTurn" => 4.0,
-        _ => 2.0,
-    };
+    let duration = super::shared_effects::duration_code(&effect.duration).unwrap_or(2.0);
     let values = [
         effect.power.or(effect.amount).unwrap_or(0) as f32 / 10.0,
         effect.toughness.unwrap_or(0) as f32 / 10.0,

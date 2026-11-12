@@ -260,3 +260,11 @@ catalog, record vocabulary, shared effects, Academy alternative-cost and
 Merchant recovery: 132 passed, 1 skipped. Not run here: Academy vitest
 (`permanent-notes.test.ts` gained two cases; no `node_modules`), browser
 checks and Academy reconnect/fork for phased-out rows (gate).
+
+Eleventh-pass compress: one duration-code table per language
+(`agent/shared_effects.rs::duration_code`, `manabot/env/shared_effects.py::
+DURATION_CODES`) now serves both the shared-effect header and the
+copy-exception fact; layer phased-out skip is a plain `if`; the redundant
+`life_cost > 0` guard is gone. Debug: cards 672 passed; lib + rules +
+conformance 363 passed, 2 skipped. Rebuilt cp313; parity, observation and
+shared-effect pytest 75 passed; `--bonus-sheet` 8 missing, all blocked.
