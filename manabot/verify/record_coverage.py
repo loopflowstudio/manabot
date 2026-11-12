@@ -25,6 +25,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 import managym
 
 _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -168,7 +169,7 @@ def _embed(
     batch = {key: torch.from_numpy(np.stack([r[key] for r in rows])) for key in rows[0]}
     try:
         with torch.no_grad():
-            model(batch)
+            model(admit_observation(model, batch))
     except ValueError as error:
         raise ValueError(
             f"game {game} (decks {first} / {second}) emitted an id outside the "

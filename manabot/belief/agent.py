@@ -21,6 +21,7 @@ from manabot.belief.state import (
     ViewerHistory,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.inference import admit_on_device
 
 
 def _output_bytes(policy: NDArray[np.float32], value: np.float32) -> bytes:
@@ -164,11 +165,11 @@ class Manabot:
         view = encode_belief(belief, self.belief_schema)
         encoding_seconds = time.perf_counter() - encoded_started
 
-        device = next(self.policy_value.parameters()).device
-        observation = {
-            key: value.to(device) for key, value in decision.observation.items()
-        }
-        observation.update(view.to_torch_observation(batch_size=1, device=device))
+        observation = {key: value.cpu() for key, value in decision.observation.items()}
+        observation.update(
+            view.to_torch_observation(batch_size=1, device=torch.device("cpu"))
+        )
+        observation = admit_on_device(self.policy_value, observation)
         was_training = self.policy_value.training
         self.policy_value.eval()
         inference_started = time.perf_counter()

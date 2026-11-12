@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.training.learning import learner as learner_module
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import (
     reference_distribution,
@@ -34,6 +35,16 @@ class TinyPolicy(torch.nn.Module):
 
     def get_value(self, obs):
         return self(obs)[1]
+
+
+@pytest.fixture(autouse=True)
+def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TinyPolicy tests the learning rule; it reads no policy input to admit."""
+    monkeypatch.setattr(learner_module, "admit_observation", lambda agent, obs: obs)
+    monkeypatch.setattr(learner_module, "bind_admitted", lambda agent, obs: obs)
+    monkeypatch.setattr(
+        learner_module, "transfer_admitted", lambda admitted, device: (admitted, 0)
+    )
 
 
 def fixture() -> tuple[Learner, RolloutBatch]:
@@ -274,6 +285,7 @@ def test_learning_materializes_only_selected_minibatches(
 
     monkeypatch.setattr(RolloutBatch, "observations", selected_rows_only)
     run(trainer, batch, control(minibatches=2))
-    assert seen == [2, 2]
+    # Admission reads each minibatch-sized chunk once, then minibatches re-read.
+    assert seen == [2, 2, 2, 2]
     assert "actions" not in batch.recorded.rows
     assert "actions_valid" not in batch.recorded.rows

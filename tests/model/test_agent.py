@@ -24,6 +24,7 @@ import torch.nn as nn
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -60,13 +61,13 @@ def agent(
 
 @pytest.fixture
 def real_observation(
-    observation_space: ObservationSpace,
+    observation_space: ObservationSpace, agent: ActorCritic
 ) -> Generator[Dict[str, torch.Tensor], None, None]:
     """
     Create a real observation using a vector env and the real observation encoder.
 
-    Returns a dictionary of torch.Tensors with a batch dimension (here, batch_size=2)
-    as produced by the real environment.
+    Returns the batch (batch_size=2) as produced by the real environment,
+    admitted for `agent`.
     """
     # Local imports
     from manabot.env.match import Match, Reward
@@ -85,7 +86,7 @@ def real_observation(
         opponent_policy="random",
     )
     obs, _ = vec_env.reset()
-    yield obs
+    yield admit_observation(agent, obs)
     vec_env.close()
 
 

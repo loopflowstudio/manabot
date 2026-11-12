@@ -148,20 +148,67 @@ This updated design document reflects both the current implementation and our st
 
 
 
+## Observation admission
+
+A policy forward reads only admitted observations. Admission
+([`admission.py`](admission.py)) validates a batch once, on CPU, where it
+enters a model; `forward`, `forward_distribution`, `get_action_and_value` and
+`get_value` then do no validation of their own:
+
+```python
+from manabot.model.admission import admit_observation
+
+admitted = admit_observation(agent, obs)  # CPU tensors, one batch
+logits, value = agent(admitted)           # logits [B,A], value [B]
+```
+
+`admit_observation` returns an `AdmittedObservation`, which keeps the tensor
+dictionary interface. It checks the observation, not the weights: shapes,
+binary validity, definition and vocabulary references, action focus and
+continuation references, permanent links, fact and record programs,
+shared-effect partitions, naming spans, recent events, belief rows, the
+legal-action mask and, when the value aggregation needs one, a valid object in
+every row. Malformed input raises `ValueError` naming the check (a malformed
+action mask is `NumericalError` `invalid_action_mask`); nothing is truncated or
+repaired. Admission records whether every row has a legal action, so
+`get_action_and_value` rejects an empty row with `No valid actions available`
+without reading the batch again.
+
+A plain tensor dictionary passed to a forward raises `TypeError`. An admitted
+observation belongs to the `ModelConfig` and observation configuration that
+admitted it, not to one instance: a restored, target or bootstrap copy reads
+it, and a model with another configuration raises `ValueError`. Admitted
+tensors are read-only; assembling an `AdmittedObservation` by hand is outside
+the contract.
+
+The forward still compacts data-dependent structure per batch: legal action
+rows, the object and fact columns in use, packed card programs and
+shared-effect CSR routes. Those reads choose the CPU work; they are not
+validation.
+
+Each observation path admits once per batch:
+
+- Collection and search serving admit inside `PolicyInference.prepare` (below).
+- Learning wraps each rollout batch in `AdmittedRollout`
+  ([`learner.py`](../training/learning/learner.py)): it admits the bootstrap
+  rows and then the rows an update trains, in minibatch-sized chunks; rows the
+  advantage filter drops are never admitted, and epochs re-read admitted rows
+  without checks.
+- Other callers admit CPU tensors with `admit_observation`, or use
+  `admit_on_device` from [`inference.py`](inference.py) to admit and move a
+  batch to the model's device.
+
 ## Inference preparation
 
 Ordinary seat-routed collection uses `PolicyInference` from
-[`inference.py`](inference.py) for one unchanged behavior-policy interval. It
-admits definition IDs on CPU before transfer and lazily reuses semantic catalog
-embeddings. Prepared observations retain the tensor dictionary interface; they
-are owned by that scope and must not be mutated or used after it closes. Normal
-parameter updates, tensor replacement, model-mode/configuration changes and
-gradient-enabled use are rejected. Unsafe mutation through `.data` aliases is
-outside this contract. A fresh scope follows every collection/update boundary.
-
-Learning with ordinary tensor dictionaries continues to validate inputs and
-encode the catalog with gradients. Inference scopes add no checkpoint state and
-do not change sampling, request shapes, optimizer state or recovery serialization.
+[`inference.py`](inference.py) for one unchanged behavior-policy interval.
+`prepare` admits a CPU batch, transfers it to the model's device and lazily
+reuses semantic catalog embeddings. Its `PreparedObservation` is an
+`AdmittedObservation` owned by that scope; it must not be mutated or used after
+the scope closes. Normal parameter updates, tensor replacement,
+model-mode/configuration changes and gradient-enabled use are rejected. Unsafe
+mutation through `.data` aliases is outside this contract. A fresh scope follows
+every collection/update boundary.
 
 ## Capacity identity and accounting
 

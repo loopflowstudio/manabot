@@ -19,15 +19,16 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_identity, architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.facts import FactEncoder
+from manabot.model.facts import FactEncoder, admit_facts
 from manabot.model.semantic_cards import (
     RecordEmbeddings,
     RecordNamespace,
     SemanticCardEncoder,
 )
-from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
 from manabot.verify.representation import kellan_upgrade_root
 import managym
 
@@ -166,23 +167,24 @@ def test_catalog_fact_inference_preserves_sparse_rows(
         assert not torch.allclose(actual[:, 0], objects[:, 0])
 
 
-def test_unknown_ids_fail_instead_of_hashing(cards: SemanticCardEncoder) -> None:
-    encoder = _fact_encoder()
-    objects = torch.zeros(1, 2, WIDTH)
-    records = RecordEmbeddings(cards, cards.definitions())
+def test_unknown_ids_fail_admission_instead_of_hashing(
+    cards: SemanticCardEncoder,
+) -> None:
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        encoder(_granted_keyword("not a keyword"), objects, records)
+        admit_facts(_granted_keyword("not a keyword"), 4, 2, cards)
     facts = _granted_keyword("flying")
     facts[0, 0, FACT_ID_INDEX : FACT_ID_INDEX + 2] = torch.tensor(
         _halves(_value("Modification::NoSuchModification"))
     )
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        encoder(facts, objects, records)
+        admit_facts(facts, 4, 2, cards)
     facts = _granted_keyword("flying", source=len(cards.definition_rows))
     with pytest.raises(ValueError, match="unadmitted"):
-        encoder(facts, objects, records)
+        admit_facts(facts, 4, 2, cards)
     with pytest.raises(ValueError, match="outside the vocabulary"):
-        cards.record_tokens(torch.tensor([3]), torch.tensor([_value("Effect::None")]))
+        cards.require_record_tokens(
+            torch.tensor([3]), torch.tensor([_value("Effect::None")])
+        )
 
 
 def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
@@ -242,13 +244,7 @@ def test_catalog_effect_batch_preserves_independent_outputs_and_gradients(
         _halves(_value("Modification::NoSuchModification"))
     )
     with pytest.raises(ValueError, match="outside the record vocabulary"):
-        effects(
-            headers,
-            details,
-            members,
-            objects,
-            RecordEmbeddings(cards, cards.definitions()),
-        )
+        admit_shared_effects(headers, details, members, objects.shape[1], cards)
 
 
 def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
@@ -266,7 +262,7 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
         config = fresh.model_copy(update={"record_vocabulary": vocabulary})
         model = ActorCritic(space, config)
         assert hasattr(model.shared_effects, "modification") == (vocabulary == "hashed")
-        logits, _ = model(values)
+        logits, _ = model(admit_observation(model, values))
         assert torch.isfinite(logits).all()
         path = tmp_path / f"{vocabulary}.pt"
         save_checkpoint(model, space, path, player_configs=None)
@@ -278,7 +274,10 @@ def test_real_program_ids_map_and_checkpoints_keep_their_vocabulary(
         restored, _ = load_checkpoint(str(path))
         assert restored.config.record_vocabulary == vocabulary
         assert architecture_receipt(restored) == architecture_receipt(model)
-        torch.testing.assert_close(model(values)[0], restored(values)[0])
+        torch.testing.assert_close(
+            model(admit_observation(model, values))[0],
+            restored(admit_observation(restored, values))[0],
+        )
 
 
 def test_architecture_identity_names_catalog_only_where_it_applies() -> None:
