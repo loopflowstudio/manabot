@@ -262,11 +262,10 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-**No pytest run lasts five minutes.** `tests/conftest.py` ends a local run at
-300 seconds, and in CI any single test at 300 seconds, with every thread's
-stack and exit status 1. Run the tests for the files you changed, not whole
-directories; CI runs the suite. When a selection hits the limit, find the slow
-test with `--durations=20` and fix or split it; never raise the limit.
+**No test runs for five minutes.** `tests/conftest.py` ends the run when a
+single test reaches 300 seconds, with every thread's stack and exit status 1.
+Fix or split a test that hits the limit; never raise it. Run the tests for the
+files you changed, not whole directories; CI runs the suite.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.

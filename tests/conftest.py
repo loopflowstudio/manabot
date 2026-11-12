@@ -8,10 +8,8 @@ Bytes that fail verification fail the test.
 Every test gets its own ``ETUDE_HOME``, so Etude's kept statistics databases
 and launcher state never reach the developer's home directory.
 
-Nothing here runs for five minutes. A local run that reaches the limit, and in
-CI a single test that does, prints every thread's stack and exits with status
-1. CI limits the test instead of the run because its groups are sized for
-several minutes on a runner each.
+No test runs for five minutes. When one reaches the limit, the run prints
+every thread's stack and exits with status 1. Collection has the same limit.
 """
 
 import faulthandler
@@ -60,8 +58,7 @@ def pytest_unconfigure(config: pytest.Config) -> None:
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
-    if os.environ.get("CI"):
-        _start_limit(item.config)
+    _start_limit(item.config)
     paths = tuple(
         path for marker in item.iter_markers("experiment_data") for path in marker.args
     )
