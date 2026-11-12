@@ -1,6 +1,28 @@
 <!doctype html><meta charset="utf-8"><title>MTG-319 QA: live-token attention</title>
 <style>body{font:15px/1.5 system-ui;max-width:52em;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto}td,th{padding:.2em .7em;text-align:right}td:first-child,th:first-child{text-align:left}</style>
 <h1>MTG-319 QA: live-token attention</h1>
+<h2>Second pass: figures and the profile refactor</h2>
+<p>Since the first pass, the branch added the report figures (<code>python -m experiments.live_token_attention &lt;folder&gt;</code>) and turned <code>l4_step_profile</code>'s arms into source-tree paths. Who this is for: someone reading the report on a new machine who wants to redraw or check its charts, and whoever launches the profile next.</p>
+<h3>A. Fetch the evidence like a new machine</h3>
+<p>I moved the local folder aside, set <code>MANABOT_DATA_CACHE</code> to an empty directory and ran <code>doppler run … manabot.data fetch experiments/data/live_token_attention</code>. It fetched 77 files (1.17 GB) in 4 min 41 s, byte-identical to the local copy (<code>diff -r</code>).</p>
+<h3>B. Redraw the figures</h3>
+<p>The charts read only <code>summary.json</code> and the eight <code>replay/&lt;arm&gt;-&lt;size&gt;/receipt.json</code>. Fetching just those nine paths took 5 s and 2.4 MB, and the figure command drew both SVGs from them. They matched the published ones except for an embedded date and random clip and marker IDs. Every redraw therefore changed the bytes, and with them the manifest digests, although nothing in the chart had changed.</p>
+<p><b>Fixed:</b> <code>svg.hashsalt</code> plus <code>metadata={"Date": None}</code>. Two redraws are now byte-identical. I republished the two SVGs, which changed 2 manifest entries. Deleting them and fetching them back from the store with an empty cache gives the same SHA-1 as a fresh redraw.</p>
+<p><b>Fixed:</b> run against a folder without the evidence, the command ended in a <code>FileNotFoundError</code> traceback. It now exits 2 with <code>…/summary.json is missing; fetch summary.json and replay/&lt;arm&gt;-&lt;size&gt;/receipt.json with `uv run --extra artifacts python -m manabot.data fetch`</code>. The report's appendix now names those paths and their size, so a reader doesn't download 1.2 GB for two charts.</p>
+<h3>C. Look at the charts</h3>
+<p>Rendered with <code>rsvg-convert</code>. The learner-step panels show 387/165/143/114 ms (w160l8) and 882/386/254/202 ms (w384l8), with the bucketed ÷ 1.5 line. The equivalence dots fall between 7e-9 and 2.5e-5. Both match the report's tables and <code>summary.json</code>. The labels are legible, and nothing overlaps.</p>
+<p><b>Fixed in the report:</b> the Answer said "logits within 4e-8". That number is learner logits, while the table shows collection logits (7e-9), and the Answer left values (6e-7) out. It now says "learner logits within 4e-8, values within 6e-7".</p>
+<h3>D. The refactored profile, end to end</h3>
+<p><code>_arms</code> gives every arm the job's revision for <code>bucketed</code> and <code>live</code>, and refuses an unknown candidate. Both experiments' <code>runs()</code> build a <code>Job</code> offline, and <code>tests/eval/test_experiment_files.py</code> passes (4). To send the new <code>Path</code> arms through real child processes, I ran the profile's own CPU smoke job:</p>
+<pre>ETUDE_OUTPUT_DIR=.runs/qa319b/smoke/out MTG301_WORK=… MTG301_CANDIDATE=live \
+  uv run python experiments/l4_step_profile.py job --smoke
+== insitu: exit 0;  numerics baseline/bucketed/live/bucketed-live: exit 0
+== replay {baseline,bucketed,live,bucketed-live} × {w160l8,w256l8} + repeat: exit 0
+358.8 s wall, 2.2 GB max RSS, exit 0
+numerics (CPU): live ok, weights_equal, loss 0.0, grad 8.4e-8
+                bucketed-live ok, loss 2.5e-8, grad 3.0e-7</pre>
+<p>Tests: <code>test_live_tokens.py</code> and <code>test_bucketed_execution.py</code> gave 13 passed, and <code>test_experiment_data_untracked.py</code> passed. ruff is clean. The report's links and the docs anchor resolve.</p>
+<h2>First pass</h2>
 <p>Who this is for: someone setting <code>Execution.live_tokens</code> in a training regime, then playing the checkpoint it writes. Everything below ran through the real <code>manabot train</code> and <code>manabot sim</code> CLIs on the laptop CPU, with outputs under the ignored <code>.runs/qa319/</code>. Nothing needed fixing.</p>
 
 <h2>1. Train with the switch</h2>
@@ -40,5 +62,5 @@ Hero wins: 8 (80.00%)  Villain wins: 2  Timeouts: 0  Average steps per game: 208
 <ol>
 <li><code>manabot train</code> has <code>--bucketed-shapes</code> but no <code>--live-tokens</code>. Recipe users must write a regime JSON to try the layout. This is a product choice for after the pilot; I added no flag.</li>
 <li>On CPU, bucketed shapes, with or without live tokens, make learning about 7× slower than padded. This was not introduced here. Anyone trying this on a laptop will see it.</li>
-<li>The report gives its results as tables rather than one chart per question.</li>
+<li>(Resolved since the first pass: the report now has one chart per question.)</li>
 </ol>

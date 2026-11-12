@@ -5079,8 +5079,8 @@
    "bytes": 45369
   },
   "experiments/data/live_token_attention/equivalence.svg": {
-   "sha256": "ec24d0cc544ae349a905501ed54d33e8320055a81d540019fbcfc42fb1fe8cba",
-   "bytes": 31826
+   "sha256": "e09068c8fb8d24de86df66350b0dbffbb8cb9fdd18e99c4938f7a541d0b02202",
+   "bytes": 31776
   },
   "experiments/data/live_token_attention/gpu-samples.csv": {
    "sha256": "3d76875e5305871b5f47c44cc770bc4042866f28aef09c7bf75cc0e7732e3b46",
@@ -5163,8 +5163,8 @@
    "bytes": 3944
   },
   "experiments/data/live_token_attention/learner_step.svg": {
-   "sha256": "3d29052a74a742439bbb31a0e2d65484c27be326f2dbec5ac46e70b0bfffb994",
-   "bytes": 19960
+   "sha256": "2c7ee69984cdfc0053bc5583235ed891b682fe8f8efb9fc711cbd0b4beca8635",
+   "bytes": 19910
   },
   "experiments/data/live_token_attention/logs/insitu.log": {
    "sha256": "55975fda7da48d463075627b27eb0bc2da9afd8e6fa8467dd689d7ad71af7118",

@@ -38,8 +38,8 @@ measures it on the host while preparing the batch and reads nothing.
 **Answer.** Yes. At w384l8 on an L4, live tokens over bucketed shapes take the
 median learner step from 386 ms to 202 ms, 1.91× faster, which clears the 1.5×
 bar. The prediction (about 1.3×) is refuted. Outputs match the padded path as
-closely as bucketed shapes already do: losses within 9e-8, logits within 4e-8
-and gradients within 2.5e-5 (cosine ≥ 0.999999999). Live tokens should be built
+closely as bucketed shapes already do: losses within 9e-8, learner logits
+within 4e-8, values within 6e-7 and gradients within 2.5e-5 (cosine ≥ 0.999999999). Live tokens should be built
 out as the layout for larger models.
 
 ### Learner step and collection forward
@@ -165,7 +165,10 @@ supersedes.
   passes.
 - Figures: `uv run --extra reports python -m experiments.live_token_attention
   experiments/data/live_token_attention` writes `learner_step.svg` and
-  `equivalence.svg` from the receipts and `summary.json`.
+  `equivalence.svg` from `summary.json` and `replay/<arm>-<size>/receipt.json`
+  (2.4 MB of the folder's 1.2 GB; fetch those paths with
+  `uv run --extra artifacts python -m manabot.data fetch`). The SVGs are
+  byte-stable, so redrawing them leaves the manifest unchanged.
 - Evidence is under `experiments/data/live_token_attention/` (manifest entries
   in `experiments/data.manifest.json`): `summary.json`, `job.json`,
   `gpu-samples.csv`, `insitu/`, `replay/<arm>-<size>/`, `numerics/`, `logs/`,

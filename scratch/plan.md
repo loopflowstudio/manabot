@@ -71,6 +71,14 @@ Task the report recommends, not here:
   in-process APIs would keep "execution choice, never checkpoint state" in one
   place; serialized `Execution` keys keep their spelling.
 
+## Second QA pass
+
+Fresh-cache fetch is byte-identical (77 files, 1.17 GB). The figures need only 2.4 MB
+(summary.json and the replay receipts), and the appendix now says so. SVGs are byte-stable
+(hashsalt, no date) and were republished (2 manifest entries). The figure command refuses a
+folder without the evidence and names the fetch. CPU `job --smoke` for candidate
+`live` exits 0 across all 14 stages. See scratch/qa.html.
+
 ## Remaining
 
 - Publishing and CI belong to the caller.

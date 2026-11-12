@@ -93,6 +93,8 @@ def charts(folder: Path) -> None:
             "xtick.color": _MUTED,
             "ytick.color": _INK,
             "svg.fonttype": "none",
+            # Fixed ids and no date: redrawn figures keep their manifest digests.
+            "svg.hashsalt": "live_token_attention",
         }
     )
 
@@ -132,7 +134,7 @@ def charts(folder: Path) -> None:
     axes[0].set_yticks(rows, [label for _, label in _LAYOUTS])
     axes[0].set_ylim(len(_LAYOUTS) - 0.5, -1.1)
     figure.tight_layout()
-    figure.savefig(folder / "learner_step.svg")
+    figure.savefig(folder / "learner_step.svg", metadata={"Date": None})
     plt.close(figure)
 
     # Equivalence: largest absolute deviation from the padded path per metric,
@@ -169,14 +171,21 @@ def charts(folder: Path) -> None:
     axis.set_xlabel("largest absolute deviation from the padded path (w160l8, CUDA)")
     axis.legend(frameon=False, loc="upper right", fontsize=8)
     figure.tight_layout()
-    figure.savefig(folder / "equivalence.svg")
+    figure.savefig(folder / "equivalence.svg", metadata={"Date": None})
     plt.close(figure)
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Write the report's figures.")
     parser.add_argument("folder", type=Path, help="the run's evidence folder")
-    charts(parser.parse_args(argv).folder)
+    folder = parser.parse_args(argv).folder
+    if not (folder / "summary.json").is_file():
+        parser.error(
+            f"{folder}/summary.json is missing; fetch summary.json and "
+            "replay/<arm>-<size>/receipt.json with "
+            "`uv run --extra artifacts python -m manabot.data fetch`"
+        )
+    charts(folder)
 
 
 if __name__ == "__main__":
