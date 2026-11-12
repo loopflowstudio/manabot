@@ -535,6 +535,20 @@ mod tests {
         assert_eq!(lines(&rejected), [(Some(2), "unsupported")]);
     }
 
+    #[test]
+    fn a_card_is_admitted_when_a_token_shares_its_printed_name() {
+        let mut pool = world_pool().clone();
+        let token = pool
+            .definitions
+            .iter_mut()
+            .find(|row| row.key.as_deref() == Some("token.ally"))
+            .unwrap();
+        token.registry_name = "Forest".into();
+        let imported = admit_with_world(&parse_decklist("10 Forest", "x"), &pool).unwrap();
+        assert_eq!(imported.deck.main, BTreeMap::from([("Forest".into(), 10)]));
+        assert!(admit_in_world(&pool, &imported.deck).is_empty());
+    }
+
     /// The pool with Forest renamed to a two-face registry name.
     fn double_faced_pool() -> ContentPool {
         let mut pool = world_pool().clone();

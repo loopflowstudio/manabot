@@ -143,10 +143,18 @@ pub(crate) fn admit_in_world(pool: &ContentPool, deck: &Deck) -> Vec<DeckIssue> 
     issues
 }
 
-/// The definition a deck entry names among the rows sharing its name: the only
-/// row, or the first of several that are all unsupported for one reason, as
-/// when tokens share a printed name. `None` when the name is ambiguous.
+/// The definition a deck entry names among the rows sharing its name: the one
+/// eligible row, since a deck entry names a card whatever tokens print the
+/// same name; else the only row, or the first of several that are all
+/// unsupported for one reason, as when tokens share a printed name. `None`
+/// when the name is ambiguous.
 pub(crate) fn named_definition<'a>(rows: &[&'a PoolDefinition]) -> Option<&'a PoolDefinition> {
+    let mut eligible = rows
+        .iter()
+        .filter(|row| row.eligibility == Eligibility::Eligible);
+    if let (Some(&card), None) = (eligible.next(), eligible.next()) {
+        return Some(card);
+    }
     let (&first, rest) = rows.split_first()?;
     let same_rejection = |row: &&PoolDefinition| {
         row.eligibility == Eligibility::Unsupported
