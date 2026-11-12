@@ -1,71 +1,52 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><title>MTG-281 QA — collection-growth tools</title>
+<meta charset="utf-8">
+<title>MTG-281 QA — closed-inconclusive delivery</title>
 <style>
 body{font:15px/1.5 system-ui,sans-serif;max-width:920px;margin:2rem auto;padding:0 1rem;color:#222}
 h1{font-size:1.5rem}h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #ddd}
 pre{background:#f5f3ee;padding:.6rem .8rem;overflow-x:auto;font-size:13px}
-.ok{color:#176b89;font-weight:600}.fix{color:#ad4b25;font-weight:600}
 table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}
 img{max-width:100%;border:1px solid #ddd}
-</style></head><body>
-<h1>MTG-281 QA: retained-growth report, capture, paired analysis and provider read</h1>
-<p>2026-11-12 UTC. Performed as a first-time reader following
-<code>experiments/self-play-collection-273.md</code>: a <code>git ls-files -co --exclude-standard</code>
-copy in <code>/tmp/qa281-fresh</code>, an empty data cache, then the guide's commands verbatim.
-Nothing was rented and no game or training ran.</p>
-
-<h2>Headline</h2>
-<p class="fix">The execution “blocker” was local. Every recorded <code>GET catalog/gpus: no reply</code>
-was macOS python.org CPython failing TLS certificate verification. RunPod answered all along.</p>
-<pre>$ curl ... https://api.runpod.io/v2/catalog/gpus?include=AVAILABILITY&amp;product=POD&amp;cloud=SECURE
-http=200 t=0.82
-$ .venv/bin/python -I -c "urllib.request.urlopen(same request)"
-OSError URLError(SSLCertVerificationError(1, '[SSL: CERTIFICATE_VERIFY_FAILED] ... unable to get local issuer certificate'))
-$ SSL_CERT_FILE=$(certifi bundle) doppler run ... etude availability mtg281-l4 --timeout 30
-mtg281-l4  NVIDIA L4 with at least 6 vCPUs, 48 GB at $0.59/hour (ceiling $0.60)  available  0 of 1 in use  rentable now  asked 2026-11-12 00:19:23 UTC</pre>
-<p>The paired measurement can now be launched within the prepared bounds. Execution is not part of this step. The report and scratch plan now record the cause, and the qa skill records the working command.</p>
+</style>
+<h1>MTG-281 QA: the closed-inconclusive report as a reader meets it</h1>
+<p>2026-11-12 UTC. The earlier pre-execution QA pass (commit <code>44bf3640e</code>) covered CLI mistake handling,
+live blockwise capture and the TLS cause of provider read failures. Since then the baseline ran, stalled at 251/500,
+the comparison reader's receipt bindings were corrected and the Task closed inconclusive. This pass followed
+<code>experiments/self-play-collection-273.md</code> as a first-time reader: a <code>git ls-files -co --exclude-standard</code>
+copy in <code>/tmp/qa281b</code> without <code>experiments/data/</code>, an empty <code>MANABOT_DATA_CACHE</code>, and the guide's
+commands verbatim. Nothing was rented; no game or training ran.</p>
 
 <h2>Scenarios</h2>
 <table>
 <tr><th>Scenario</th><th>What I did</th><th>What I saw</th></tr>
-<tr><td>Fresh checkout, no credentials</td><td><code>manabot.data fetch experiments/data/collection-growth-281</code> with R2 variables unset</td><td>Traceback ending <code>R2 access needs R2_ACCOUNT_ID in the environment</code>. Clear cause, noisy form (pre-existing <code>manabot.data</code> behavior, not changed).</td></tr>
-<tr><td>Fetch with Doppler, empty cache</td><td>same, under <code>doppler run --project manabot --config prd</code></td><td class="ok">19 files, 32 MB, 7.8 s; digests verified.</td></tr>
-<tr><td>Reproduce historical figures</td><td><code>report_collection_growth.py --data … --out .runs/collection-growth/report</code></td><td class="ok">4.5 s; <code>summary.json</code>, <code>phases.png</code>, <code>growth.png</code> byte-identical to published.</td></tr>
-<tr><td>Wrong <code>--data</code>, then corrected retry</td><td><code>--data experiments/data --out .runs/x1</code>, then correct <code>--data</code> with the same <code>--out</code></td><td><span class="fix">Bug, fixed:</span> the failed run left an empty <code>.runs/x1</code>, so the corrected retry failed with <code>FileExistsError</code>. Now: <code>error: experiments/data lacks w64.json, w160.json</code>, no directory left, and the retry reproduces identical bytes.</td></tr>
-<tr><td>Repeat to existing output</td><td>both report CLIs</td><td><span class="fix">Was a traceback, fixed:</span> <code>error: output already exists: …</code> (exit 2), matching capture's existing behavior.</td></tr>
-<tr><td>Paired analysis before arms exist</td><td>empty / partial <code>paired-captures/</code></td><td><span class="fix">Was a raw FileNotFoundError, fixed:</span> <code>error: … lacks before-training.json, after-training.json</code>; no output written.</td></tr>
-<tr><td>Substitute historical captures as arms</td><td>w64/w160 as before/after with empty receipts</td><td class="ok">Rejected (receipt validation); no report written.</td></tr>
-<tr><td>Live blockwise capture of w160</td><td><code>measure_collection_growth.py --source r2://manabot/jobs --run 5b7d8fa7b38c</code>, new cache</td><td class="ok">91 blocks, 77 s cold / 6 s warm, ~120 MB peak RSS. Identical to the published snapshot except <code>observed_at</code>.</td></tr>
-<tr><td>Capture summary line</td><td>read the success message</td><td><span class="fix">Confusing, fixed:</span> said “Captured 933 updates” while the report says updates 1–932. Row 0 carries no metrics. Now prints <code>Captured updates 1–932 (932 with metrics)</code>.</td></tr>
-<tr><td>Capture to existing snapshot</td><td>repeat with same <code>--out</code></td><td class="ok"><code>error: snapshot already exists</code>, evidence untouched.</td></tr>
-<tr><td>Provider availability</td><td>documented <code>etude availability mtg281-l4</code></td><td>Failed in 1 s (“no reply”). Root-caused to TLS as above; succeeds with <code>SSL_CERT_FILE</code>.</td></tr>
+<tr><td>Fresh environment</td><td><code>uv sync --locked --no-install-project --extra artifacts --extra reports --extra dev</code></td><td>45 s, clean.</td></tr>
+<tr><td>Fetch all evidence, cold cache</td><td><code>manabot.data fetch experiments/data/collection-growth-281</code> under <code>doppler run --project manabot --config prd</code></td><td>46 files, 72.8 MB, 15 s, digests verified. Includes all of <code>execution-20261112/</code> and <code>prepared/</code>.</td></tr>
+<tr><td>Reproduce historical figures</td><td><code>report_collection_growth.py --data … --out .runs/collection-growth/report</code></td><td>Exit 0; <code>summary.json</code>, <code>phases.png</code>, <code>growth.png</code> byte-identical to the published copies.</td></tr>
+<tr><td>Try the paired reader on the real baseline alone</td><td>copied <code>before.json</code> + <code>before-training.json</code> into a new data dir; ran the documented paired command</td><td><code>error: .runs/pc lacks after.json, after-training.json</code>, exit 2, nothing written. Matches the report's statement that the frozen command cannot run without genuine after inputs.</td></tr>
+<tr><td>Check the report's identity-validation claim</td><td>called the maintained reader's <code>_validate_arm</code> on the published baseline capture/receipt and the prepared before job</td><td><code>['before: incomplete scientific target or metric capture']</code>, last update 251 — identical to <code>execution.json</code>'s <code>baseline_identity_validation</code>. No identity mismatch.</td></tr>
+<tr><td>Reader erratum binding</td><td>sha256 of the maintained reader, the published execution copy and the frozen prepared copy</td><td>Maintained = execution copy = <code>e9adf766…</code> (erratum's corrected digest); prepared copy = <code>db645bfc…</code> (erratum's original). Frozen bytes untouched.</td></tr>
+<tr><td>Look at the partial figure</td><td>opened <code>before-partial.png</code> (embedded in the report)</td><td>Legible: collection spikes and RSS rise to ~17.6 GB through 251, missing 252–500 shaded and labelled. Peak agrees with the report's 17.62 GB.</td></tr>
+<tr><td>Follow the report's links</td><td>every relative link and in-page anchor in the report; README's <code>#data</code> and guide anchors</td><td>All resolve.</td></tr>
+<tr><td>Find the follow-up</td><td>read the closing paragraph, then <code>lf task status MTG-305</code></td><td><b>Gap, fixed:</b> the report said "a follow-up Task" without naming it; a reader had to search. Now names MTG-305 (exists, unstarted, experiments Wave).</td></tr>
+<tr><td>Focused tests</td><td>comparison report, growth capture, preparation, experiment-data-untracked</td><td>26 passed.</td></tr>
 </table>
 
-<h2>Figures (regenerated, identical to published)</h2>
-<img src="../experiments/data/collection-growth-281/phases.png" alt="Historical collection phases for w64 and w160">
-<img src="../experiments/data/collection-growth-281/growth.png" alt="Historical RSS, index and game-length growth">
-<p>Both read well. Medians and spikes are legible, and the titles carry the lower-bound and fold-time qualifications. The straight
-“index lower bound” panel mainly shows that header bytes grow linearly in both runs; it is still correct.</p>
+<h2>Figure as published</h2>
+<img src="qa-before-partial.png" alt="Partial baseline collection time and RSS through update 251, with 252–500 shaded">
 
 <h2>Changes</h2>
-<ul>
-<li><code>scripts/report_collection_growth.py</code>: parse inputs before creating <code>--out</code>; the CLI refuses existing output and missing inputs with usage errors.</li>
-<li><code>scripts/report_collection_comparison.py</code>: same CLI checks for the four paired inputs.</li>
-<li><code>scripts/measure_collection_growth.py</code>: success line reports the measured update span.</li>
-<li><code>tests/infra/test_collection_growth_capture.py</code>: a failed report leaves the output path free for retry.</li>
-<li><code>experiments/self-play-collection-273.md</code>: provider-failure paragraph now states the local TLS cause and the 00:19 quote.</li>
-<li>Frozen <code>prepared/</code> copies and published bytes are unchanged. Analysis semantics are unchanged.</li>
-</ul>
-<pre>pytest test_collection_comparison_report / _growth_capture / _preparation / experiment_data_untracked: 22 passed (before the new test); growth_capture: 7 passed after it. Ruff and git diff --check pass.</pre>
+<ul><li><code>experiments/self-play-collection-273.md</code>: the closing paragraph names follow-up Task MTG-305.</li></ul>
+<p>No script, published byte or frozen preparation changed.</p>
 
 <h2>Status</h2>
-<p><b>Works now:</b> fetch → historical report reproduction, blockwise capture, mistake handling for all three CLIs, and the provider quote (with <code>SSL_CERT_FILE</code>).</p>
-<p><b>Not reached:</b> the paired rented arms, their real receipts and the comparison verdict. These are the Task's paid execution, and this step does not launch them. The paired report has only been exercised on rejection paths and in the existing synthetic tests.</p>
+<p><b>Works now:</b> cold fetch of all 46 published files, byte-identical historical report reproduction, the documented
+paired command's refusal without after inputs, and the report's baseline identity-validation and erratum claims, which re-derive exactly.</p>
+<p><b>Not reached:</b> a real paired verdict. The Task closed inconclusive with no repaired arm, so the paired
+reader's verdict path is exercised only by its synthetic tests. That is MTG-305's work.</p>
 <p><b>Still wrong, worst first:</b></p>
 <ol>
-<li>Etude reports a local certificate failure as provider “no reply”. This cost four misattributed blocker records. It is an Etude-side wording/diagnostic fix (possible follow-up in <code>loopflowstudio/etude</code>).</li>
-<li>Launches from this machine need the <code>SSL_CERT_FILE</code> prefix until the interpreter's CA bundle is installed. Without it, a launch would fail at its first provider call.</li>
-<li>Wave memory still says the provider reads failed; a correction is proposed in <code>scratch/collection-growth.md</code> (memory is read-only from this step).</li>
-<li><code>manabot.data fetch</code> without credentials prints a traceback rather than a one-line error.</li>
+<li>The baseline stall at update 251 is unexplained. MTG-305 carries this.</li>
+<li>Etude reports local TLS certificate failures as provider "no reply" (from the earlier pass; Etude-side).</li>
+<li>Re-checking the baseline's identity validation needs a private function (<code>_validate_arm</code>); the CLI has no single-arm mode. That is acceptable for a closed Task. A single-arm mode would be a design change, so I did not add one.</li>
+<li><code>manabot.data fetch</code> without credentials prints a traceback rather than a one-line error (pre-existing).</li>
 </ol>
-</body></html>

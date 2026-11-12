@@ -374,7 +374,7 @@ flattening score is supplied. These data cannot rank residual causes after the f
 frozen two-arm envelope ($7.80 per arm with ancillary reserve) and the expected
 $11.86 pair. Running the after arm alone would leave no baseline 451–500
 endpoint, and comparing updates 51–251 would be a post-hoc endpoint, so no
-further rental was made. A follow-up Task carries the controlled comparison:
+further rental was made. Follow-up Task MTG-305 carries the controlled comparison:
 explain or rule out the baseline stall at update 251, then run both jobs in
 `prepared/` unchanged under a budget that covers the full envelope.
 
