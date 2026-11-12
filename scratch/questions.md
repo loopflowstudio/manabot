@@ -58,10 +58,7 @@
   on MLX.
 - Steer 793944f0 is satisfied: main's #499 is merged (71ab00215) and
   `require_supported` no longer reads `token_stream`.
-- Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint` writing
-  the container) are assumed to be a stacked follow-up Task, not this PR
-  (sized in plan.md "Pass of 21:30Z"). The Task outcome names them, so this
-  needs a person's yes, asked on the Task as steer aeac5366 (21:39Z) and
-  unanswered at realign; no Task was created from here. The docs state the
-  interim (`.pt` save, torch does its own lookups), so they are true for
-  this PR.
+- Steer aeac5366 answered (bc2e6bd3, Jack Heart 2026-11-12: "thats fine"):
+  ship this PR as it stands; Remaining 1 and 2 go to a separate Task stacked
+  on MTG-325, filed as 1fd444 (not started; Linear sync pending). The $10
+  speed check still runs here before gate.

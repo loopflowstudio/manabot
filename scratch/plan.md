@@ -481,3 +481,8 @@ leaves it open. Items 1 and 2 above are needed on either answer.
   arms collect the same 1,711 rows and 159 damped steps; damped 5.84 vs 5.80
   steps/s, PPO 1.41 vs 1.40, load 0.050 vs 0.049 s (base vs head; single
   samples, no spread).
+- Speed check queued: Etude run 47636a275a9e (cohort `mtg325-speed`,
+  `--max-usd 10`, revision d035ae750) waiting for `mtg325-l4` stock; the
+  first launch was refused (no machines, no cost).
+- Scope settled (steer bc2e6bd3): ship as is; Remaining 1 and 2 are Task
+  1fd444. Remaining for this PR: the speed result, then gate.
