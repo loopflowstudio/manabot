@@ -515,39 +515,58 @@ NVIDIA L4 on 2026-10-08; neither is full training throughput.
 
 ### Reduced precision
 
-A CUDA stage can trade exact float32 arithmetic for tensor-core speed in its
-execution settings:
+A stage's `Execution.precision` defaults to `auto`, a ladder by model width:
+on CUDA, a model whose `ModelConfig.hidden_dim` is at least
+`BF16_MIN_HIDDEN_DIM` (384, in `manabot.training.regime`) trains in `bf16`;
+narrower models, and every stage off CUDA, train in `float32`. The regime
+resolves `auto` when it is built and stores the result, so the regime, its
+`run.json` and its stage records name the precision a run actually used:
 
 ```python
-from manabot.training.regime import Execution
+from experiments.batched_baseline import batched_baseline
+from manabot.recipes.builders import with_capacity
 
-execution = Execution(device="cuda", precision="tf32", bucketed_shapes=True)
+regime = batched_baseline()  # a CUDA stage at hidden_dim 64
+wide = with_capacity(regime, id="batched-w384l8", width=384, depth=8, heads=8)
+
+[stage.execution.precision for stage in regime.stages]  # ['float32']
+[stage.execution.precision for stage in wide.stages]    # ['bf16']
 ```
+
+Builders that change the model (`with_capacity`, `with_agent`) resolve the
+ladder again for the new width; a precision written explicitly
+(`Execution(device="cuda", precision="float32")`) is kept as written.
 
 | `precision` | What changes |
 | --- | --- |
-| `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
+| `auto` (default) | Resolved when the regime is built: `bf16` on CUDA at `hidden_dim >= BF16_MIN_HIDDEN_DIM`, otherwise `float32`. Never serialized; the regime stores the resolved value. |
+| `float32` | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | `torch.autocast(cuda, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
 
-Checkpoint evaluation and search run on CPU in float32. A reduced precision off CUDA fails
-validation (`precision tf32 requires CUDA`). The field is serialized in every
-stage, so a run's `run.json` regime names the precision it trained under, and
-a reduced-precision run is a declared regime variant, never an edit of a
-float32 regime. Precision changes no `ModelConfig` field, checkpoint or world
-binding: a checkpoint trained in any precision loads and runs in any other.
+The ladder reads width alone: depth (`attention_layers`), bucketed shapes and
+the GPU model do not move it. Saved regimes and `run.json` files already name a precision in
+every stage, so they load, continue and [resume](#recovery) with the precision
+they were trained under; only a regime built fresh in code meets the ladder. A
+reduced precision off CUDA fails validation (`precision tf32 requires CUDA`);
+`auto` off CUDA resolves to `float32` and never fails. Checkpoint evaluation
+and search run on CPU in float32. Precision changes no `ModelConfig` field,
+checkpoint or world binding: a checkpoint trained in any precision loads and
+runs in any other.
 
-Reduced precision changes learning numerics, not just speed, and finite
-metrics do not show that it learns the same. CUDA training stays float32: the
-L4 measurement for w160l8 and w384l8
-([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)) left TF32
-unresolved and BF16 rejected under its pre-registered rule, though both stayed
-within 0.6% of float32's loss at fixed weights and its 200-step replay could
-not resolve learning differences that small. TF32 is 1.1× faster at w160l8 and
-1.3–1.5× at w384l8; BF16 is slower at w160l8 and 2–2.7× faster at w384l8. A
-reduced precision becomes a recommendation only after a real learning
-comparison: same seeds, bucketed shapes, strength at matched updates. Before
-training in one on another GPU or model size, run the
+The threshold is the narrowest width at which BF16 was measured faster than
+float32 and learned the same. On an L4 with bucketed shapes, BF16 is slower than
+float32 at w160l8 (autocast's casts cost more than the small matmuls save) and
+2–2.7× faster at w384l8
+([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)). In a
+learning comparison at w384l8, BF16 and float32 from the same seeds reached
+the same strength against the frozen anchor at matched updates, with policy
+and value loss, clip fraction and approximate KL inside float32's seed band
+([`experiments/precision_ladder.md`](../experiments/precision_ladder.md)). TF32
+is 1.1× faster at w160l8 and 1.3–1.5× at w384l8 but has had no learning
+comparison, so the ladder never selects it.
+
+Before training a reduced precision on another GPU, run the
 [CUDA numerics validation](#validation), which checks float32, and the bf16
 dtype-join admission on that host:
 
