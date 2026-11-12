@@ -60,7 +60,9 @@ class EvalAllocation(EvalCompute):
     def live_tokens_on_cuda(self) -> "EvalAllocation":
         # Off CUDA, jagged attention falls back to one call per observation.
         if self.live_tokens and self.device != "cuda":
-            raise ValueError("live tokens require CUDA")
+            raise ValueError(
+                f"live tokens require CUDA; leave live_tokens off for device {self.device}"
+            )
         return self
 
     @property

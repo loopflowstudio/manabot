@@ -249,7 +249,10 @@ class Execution(Strict):
             raise ValueError(f"precision {self.precision} requires CUDA")
         # Off CUDA, jagged attention falls back to one call per observation.
         if self.live_tokens is True and self.device != "cuda":
-            raise ValueError("live tokens require CUDA")
+            raise ValueError(
+                'live tokens require CUDA; set live_tokens to false or "auto" '
+                f"for device {self.device}"
+            )
         return self
 
     @property

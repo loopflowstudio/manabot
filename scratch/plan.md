@@ -79,3 +79,17 @@ Compress pass (2026-11-12): no cuts left. `experiment/config.py` `Baseline.captu
 keeps `model_dump` on purpose (a snapshot freezes resolved values). Shortened the
 observation-and-model "resolved value" paragraph to point at training.md's stage
 operations. Check: `pytest tests/training/test_bucketed_execution.py -q` — 15 passed.
+
+Concept review (2026-11-12, against HEAD 794376739; origin/main unchanged since
+the 5ff530928 merge): no design change. The two switches stay two fields; they
+are not one `layout` enum, because live tokens over full tables is a measured
+third layout and saved regimes keep their key spelling. `auto` exists only while
+a regime is authored (resolved in `resolve_forward_layout`, restored only by
+`authored_dump`), so a saved record only ever holds booleans. Evaluation
+accepts the switches as allocation settings, which outcome 3 asks for; padded is
+the default by measurement (questions.md 8). Search stays padded for the same
+small-batch reason. That is a reversible default, not an open product
+choice. The hidden `--bucketed-shapes` alias no longer turns bucketing on off
+CUDA (questions.md 1); this is accepted as light pre-1.0 compatibility.
+Still waiting on MTG-324 (precision `auto`, no PR) and MTG-325 (draft #501),
+per the plan's Remaining list.

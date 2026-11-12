@@ -1,0 +1,36 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MTG-328 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:860px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.3em .6em;text-align:left;vertical-align:top}table{border-collapse:collapse}</style></head><body>
+<h1>MTG-328 QA: forward-layout defaults</h1>
+<p>Run on a CPU laptop at HEAD 794376739 plus this pass's edits. I used the installed CLI (<code>uv run manabot train</code>), regime JSON files written the way an author writes them, and served evaluation through <code>evaluate(...)</code>. No CUDA host was used. Outputs are in <code>.runs/qa/</code>, which git ignores.</p>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>Scenario</th><th>What I did</th><th>What I saw</th></tr>
+<tr><td>Fresh local run</td><td><code>manabot train --recipe local --device cpu --out .runs/qa/fresh</code></td><td>Completed in about 7 s. The saved <code>run.json</code> execution block leaves out both switches (they resolve off on CPU), so it reads like main's.</td></tr>
+<tr><td>New flag</td><td><code>--padded-shapes</code> on the local recipe; <code>--help</code></td><td>Completed. The help shows <code>--padded-shapes</code> and hides the deprecated flag.</td></tr>
+<tr><td>Deprecated flag</td><td><code>--bucketed-shapes</code></td><td>Warns on stderr: <code>--bucketed-shapes is deprecated and removed in 0.3.0; CUDA recipes use bucketed shapes by default (--padded-shapes turns them off)</code>. The run completes. On CPU the flag now does nothing, as accepted in questions.md 1.</td></tr>
+<tr><td>Recipe flag with a regime</td><td><code>--regime … --padded-shapes</code></td><td>A clear <code>BadParameter</code> error that points to the stage's execution block.</td></tr>
+<tr><td>live_tokens=true on CPU</td><td>Regime with <code>"live_tokens": true</code>, device cpu</td><td>Refused at validation. <b>Fixed:</b> the message only said <code>live tokens require CUDA</code>. It now names the fix: <code>live tokens require CUDA; set live_tokens to false or "auto" for device cpu</code>.</td></tr>
+<tr><td>bucketed_shapes=true on CPU</td><td>Regime with an explicit true</td><td>Completed, and <code>run.json</code> records <code>bucketed_shapes: true</code>.</td></tr>
+<tr><td>auto on CPU</td><td>Regime with both set to <code>"auto"</code></td><td>Completed. Both resolved off and were left out of the saved record, so its digest is the same as the default regime's (a5dc8d7a…).</td></tr>
+<tr><td>Authoring for CUDA (validation only)</td><td>Changed <code>authored_dump()</code> to device cuda, then validated</td><td>Both resolve <code>true</code>. The saved record round-trips to an equal model. An explicit <code>live_tokens: false</code> is kept, and bucketing still resolves on. Rebuilding that CUDA regime for CPU through <code>authored_dump()</code> resolves the switches off again.</td></tr>
+<tr><td>Older saved CUDA record</td><td>Took a CUDA record and removed both keys, as in regimes saved before this change</td><td>Both read <code>False</code>. That is what those runs trained with.</td></tr>
+<tr><td>Returning user: frozen regimes keep their identity</td><td>Computed <code>canonical_sha256(model_dump)</code> for every <code>experiments/regimes/*.json</code> and two QA regimes, on this branch and in a detached merge-base worktree (main's code confirmed imported)</td><td>All digests are identical. <code>elemental-uniform-174-v1.json</code> fails validation on both main and this branch, so the failure predates this change.</td></tr>
+<tr><td>Interrupt and resume</td><td>Sent SIGINT to an <code>auto</code> regime with <code>recovery</code> after 25 s, then <code>--resume-from &lt;id&gt;</code> with the same file and seed</td><td>The resume passed the digest and seed check and carried on training. It then stopped as <code>interrupted</code> at the 300 s <code>wall_seconds</code> limit, which counts the parent run's time. That is expected for the smoke budget. Without <code>recovery</code>, the resume fails with "no committed recovery boundary", which also predates this change.</td></tr>
+<tr><td>Served evaluation of the trained checkpoint</td><td><code>evaluate()</code> with a CPU <code>EvalExecution</code>, 2 deals (8 games), once padded and once with <code>bucketed_shapes=True</code></td><td>Both completed in 13.2 s and 12.6 s. Per-game decisions were identical (<code>[329, 535, 300, 505, 283, 292, 72, 96]</code>) and both scored 0.5. <code>evaluation.json</code> and <code>allocation/execution.json</code> record the layout. <code>EvalExecution(device="cpu", live_tokens=True)</code> is refused, now with the same fix-naming message.</td></tr>
+</table>
+
+<h2>Fixed</h2>
+<ul><li>The live-token refusal messages in <code>manabot/training/regime.py</code> and <code>manabot/sim/execution.py</code> now name the remedy. The old prefix is kept, so the docs and test matches still hold. <code>tests/training/test_bucketed_execution.py</code> and <code>tests/eval/test_batched_eval.py</code>: 37 passed, 1 skipped.</li></ul>
+
+<h2>Could not reach</h2>
+<ul><li>Any CUDA run. The on-by-default path was checked only by validation and serialization; no CUDA training or served CUDA evaluation was run in this pass. The L4 numbers in <code>experiments/eval_forward_layout.md</code> come from an earlier run.</li></ul>
+
+<h2>Still wrong or worth noting (worst first)</h2>
+<ol>
+<li>If you copy a CUDA run's saved <code>regime</code> (from <code>model_dump</code>, holding <code>true</code>) and change the device to CPU, it is refused. The new message says what to change. Rebuilding from <code>authored_dump()</code> avoids this, but a saved <code>run.json</code> no longer carries <code>auto</code>.</li>
+<li>Pydantic's lax bool accepts strings: <code>"bucketed_shapes": "yes"</code> is read as <code>true</code>. Main behaves the same, so this is not a regression.</li>
+<li>MTG-324 (precision <code>auto</code>) and MTG-325 (forward relocation) still have to be merged in, as listed in the plan.</li>
+</ol>
+</body></html>

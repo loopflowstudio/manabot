@@ -148,7 +148,13 @@ publish, land or choose the next Graph step from here.
   the same `--seed`. Equal layouts then give `run.json` files that differ only in
   `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
   `bucketed_shapes` makes learning about 7× slower than padded, so time
-  bucketed arms against a bucketed control.
+  bucketed arms against a bucketed control. Rebuild a regime for another
+  device from `authored_dump()`, not `model_dump()`, so `auto` fields resolve
+  again. To resume, the regime needs `recovery` (e.g.
+  `{"checkpoint_updates": 2}`); without it `--resume-from` passes the digest
+  check, then fails with "no committed recovery boundary". Resume with the same
+  regime file, `--seed` and a new `--out`. `wall_seconds` counts the parent's
+  time. macOS has no `timeout`; use the tool's own timeout.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
