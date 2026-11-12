@@ -19,6 +19,12 @@ and SHA-256 from composite construction/serialization skipped by direct hashes.
 --compare-encoders separately checks exact tensors for every reference-profile
 view and attributes allocation, Python validation/conversion and native encoding.
 Its Python timing includes cProfile overhead; probe times are not speedup claims.
+
+--rollout-evidence and --native-encoder instead compare opt-in arms against the
+defaults (full evidence, row encoding) under the current code, with no git
+reference. Every arm searches the same openings and seeds; an unprofiled parity
+pass checks Commands, native frontier tensors and values before any timing.
+--inference-threads sets Torch's intra-op count once, before any model loads.
 """
 
 from __future__ import annotations
@@ -36,7 +42,7 @@ import sys
 from tempfile import TemporaryDirectory
 import time
 import types
-from typing import ParamSpec, Sequence, TypedDict, TypeVar, cast
+from typing import Literal, ParamSpec, Sequence, TypedDict, TypeVar, cast
 from unittest.mock import patch
 
 from managym.decision import Observation
@@ -59,6 +65,9 @@ from manabot.sim.search.local_update import (
     LocalUpdateTeacher,
 )
 import managym
+
+
+RolloutEvidence = Literal["full", "compact"]
 
 
 def reference_module(revision: str, relative_path: str) -> types.ModuleType:
@@ -340,6 +349,195 @@ def profile_costs(profile: cProfile.Profile) -> dict[str, Cost]:
     return groups
 
 
+def _bench_match() -> Match:
+    return Match(
+        MatchConfig(
+            hero_deck={"Mountain": 8, "Gray Ogre": 8},
+            villain_deck={"Forest": 8, "Llanowar Elves": 8},
+        )
+    )
+
+
+def _initialized_checkpoint(path: Path, match: Match) -> Path:
+    """An untrained 64 x 2 policy; it measures cost, never playing strength."""
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space,
+        ModelConfig(hidden_dim=64, num_attention_heads=4, attention_layers=2),
+    )
+    save_checkpoint(
+        agent,
+        space,
+        path,
+        player_configs=match.to_rust(),
+        extra={"value_semantic": "signed_outcome"},
+    )
+    return path
+
+
+def compare_arm(baseline: LocalUpdateReceipt, arm: LocalUpdateReceipt) -> Parity:
+    """Same Commands and support as the default arm; predictions within tolerance.
+
+    Compact receipts omit per-Command witnesses and hashes, so they are compared
+    on Command counts, seeds, terminal flags and values; full arms must match
+    every retained rollout field except the rounded value.
+    """
+    compact = arm.schema == "regularized-local-update/v4"
+    for left, right in zip(baseline.rollouts, arm.rollouts, strict=True):
+        if compact:
+            left = replace(
+                left,
+                actor_observation_hashes=right.actor_observation_hashes,
+                branch_audit_json=right.branch_audit_json,
+            )
+        assert replace(left, signed_value=right.signed_value) == right
+    assert baseline.allocation_counts == arm.allocation_counts
+    assert baseline.offer_ids == arm.offer_ids
+    return Parity(
+        max_base_error=_prediction_error(baseline.base, arm.base),
+        max_value_error=max(
+            _prediction_error(baseline.values, arm.values),
+            _prediction_error(
+                [row.signed_value for row in baseline.rollouts],
+                [row.signed_value for row in arm.rollouts],
+            ),
+        ),
+        max_target_error=_prediction_error(baseline.target, arm.target),
+    )
+
+
+@contextmanager
+def _checked_native_frontiers(teacher: LocalUpdateTeacher) -> Iterator[list[int]]:
+    """Compare every native frontier with the row encoder during a parity pass.
+
+    Yields the sizes of the frontiers checked; a row-encoding teacher has none.
+    """
+    checked: list[int] = []
+    if not teacher.native_encoder:
+        yield checked
+        return
+    native = teacher._encode_native
+
+    def encode(
+        engines: Sequence[managym.Env],
+    ) -> tuple[dict[str, NDArray[np.generic]], list[int]]:
+        actual, counts = native(engines)
+        expected, expected_counts = teacher._encode_rows(engines)
+        assert counts == expected_counts
+        for key, value in expected.items():
+            np.testing.assert_array_equal(actual[key], value, err_msg=key)
+        checked.append(len(engines))
+        return actual, counts
+
+    with patch.object(teacher, "_encode_native", encode):
+        yield checked
+
+
+def compare_arms(
+    checkpoint: Path | None,
+    worlds: Sequence[int],
+    position_seeds: Sequence[int],
+    *,
+    evidence: Sequence[RolloutEvidence],
+    encoders: Sequence[str],
+    threads: dict[str, int],
+) -> None:
+    """Time opt-in arms against the default arm on identical searches."""
+    match = _bench_match()
+    initialized = checkpoint is None
+    with TemporaryDirectory(prefix="local-update-arms-") as temporary:
+        if checkpoint is None:
+            checkpoint = _initialized_checkpoint(
+                Path(temporary) / "initialized.pt", match
+            )
+        digest = file_sha256(checkpoint)
+        arms = [("full", "off")] + [
+            (mode, encoder)
+            for mode in evidence
+            for encoder in encoders
+            if (mode, encoder) != ("full", "off")
+        ]
+        teachers = {
+            f"{mode}/{encoder}": LocalUpdateTeacher(
+                checkpoint,
+                digest,
+                LocalSearchConfig(
+                    depth=20, decision_seconds=120, rollout_evidence=mode
+                ),
+                native_encoder=encoder == "on",
+            )
+            for mode, encoder in arms
+        }
+        for teacher in teachers.values():
+            validate_agent_setup(teacher.agent, match.to_rust())
+        rows: list[dict[str, object]] = []
+        for position_seed in position_seeds:
+            engine = managym.Env(seed=position_seed, skip_trivial=True)
+            engine.reset(match.to_rust())
+            viewer = engine.current_agent_index()
+            history = ViewerHistory.from_observation(
+                Observation.from_json(engine.semantic_observation_json(viewer))
+            )
+            for teacher in teachers.values():
+                teacher.predict(engine)  # Warm the policy, without advancing a game.
+            for world_count in worlds:
+                receipts: dict[str, LocalUpdateReceipt] = {}
+                frontiers: dict[str, int] = {}
+                for name, teacher in teachers.items():
+                    teacher.config = teacher.config.model_copy(
+                        update={"worlds": world_count}
+                    )
+                    with _checked_native_frontiers(teacher) as checked:
+                        receipts[name] = teacher.search(engine, history, seed=17)
+                    frontiers[name] = len(checked)
+                baseline = receipts["full/off"]
+                parity = {
+                    name: compare_arm(baseline, receipt)
+                    for name, receipt in receipts.items()
+                }
+                seconds: dict[str, float] = {}
+                for name, teacher in teachers.items():
+                    started = time.perf_counter()
+                    timed = teacher.search(engine, history, seed=17)
+                    seconds[name] = time.perf_counter() - started
+                    compare_arm(receipts[name], timed)
+                rows.append(
+                    {
+                        "position_seed": position_seed,
+                        "worlds": world_count,
+                        "rollouts": len(baseline.rollouts),
+                        "commands": sum(
+                            r.canonical_commands for r in baseline.rollouts
+                        ),
+                        "arms": {
+                            name: {
+                                "seconds": seconds[name],
+                                "speedup": seconds["full/off"] / seconds[name],
+                                "schema": receipts[name].schema,
+                                "native_frontiers_checked": frontiers[name],
+                                "parity": asdict(parity[name]),
+                            }
+                            for name in teachers
+                        },
+                    }
+                )
+        print(
+            json.dumps(
+                {
+                    "platform": platform.platform(),
+                    "torch": torch.__version__,
+                    "checkpoint_sha256": digest,
+                    "initialized_policy": initialized,
+                    "depth": 20,
+                    "threads": threads,
+                    "runtime_sha256": baseline.runtime_sha256,
+                    "timings": rows,
+                },
+                indent=2,
+            )
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", default="841b1c50c")
@@ -362,10 +560,45 @@ def main() -> None:
         type=Path,
         help="Compare against previously retained original-runtime receipts",
     )
+    parser.add_argument(
+        "--rollout-evidence",
+        nargs="+",
+        choices=("full", "compact"),
+        help="Compare these evidence arms against the defaults instead of --reference",
+    )
+    parser.add_argument(
+        "--native-encoder",
+        nargs="+",
+        choices=("off", "on"),
+        help="Compare these frontier encoders against the defaults",
+    )
+    parser.add_argument(
+        "--inference-threads",
+        type=int,
+        default=1,
+        help="Torch intra-op threads, fixed for the whole process",
+    )
     args = parser.parse_args()
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
+    if args.inference_threads < 1:
+        parser.error("--inference-threads must be positive")
+    # Fixed before any model loads; search never changes thread settings.
+    torch.set_num_threads(args.inference_threads)
+    threads = {
+        "requested_intra_op": args.inference_threads,
+        "intra_op": torch.get_num_threads(),
+        "inter_op": torch.get_num_interop_threads(),
+    }
     torch.manual_seed(15)
+    if args.rollout_evidence or args.native_encoder:
+        compare_arms(
+            args.checkpoint,
+            args.worlds,
+            args.position_seeds,
+            evidence=args.rollout_evidence or ["full"],
+            encoders=args.native_encoder or ["off"],
+            threads=threads,
+        )
+        return
     # Retain the changed execution owners. Current imported encoders would
     # otherwise silently give the baseline today's optimizations.
     reference = cast(
@@ -377,27 +610,12 @@ def main() -> None:
     reference_model = reference_module(args.reference, "manabot/model/actor_critic.py")
     reference_facts = reference_module(args.reference, "manabot/model/facts.py")
     reference_model.FactEncoder = reference_facts.FactEncoder
-    match = Match(
-        MatchConfig(
-            hero_deck={"Mountain": 8, "Gray Ogre": 8},
-            villain_deck={"Forest": 8, "Llanowar Elves": 8},
-        )
-    )
+    match = _bench_match()
     with TemporaryDirectory(prefix="local-update-bench-") as temporary:
         checkpoint = args.checkpoint
         if checkpoint is None:
-            checkpoint = Path(temporary) / "initialized.pt"
-            space = ObservationSpace()
-            agent = ActorCritic(
-                space,
-                ModelConfig(hidden_dim=64, num_attention_heads=4, attention_layers=2),
-            )
-            save_checkpoint(
-                agent,
-                space,
-                checkpoint,
-                player_configs=match.to_rust(),
-                extra={"value_semantic": "signed_outcome"},
+            checkpoint = _initialized_checkpoint(
+                Path(temporary) / "initialized.pt", match
             )
         digest = file_sha256(checkpoint)
         config = LocalSearchConfig(depth=20, decision_seconds=120)
@@ -513,7 +731,7 @@ def main() -> None:
                     "initialized_policy": args.checkpoint is None,
                     "model": teachers["after"].agent.config.model_dump(mode="json"),
                     "depth": 20,
-                    "threads": 1,
+                    "threads": threads,
                     "runtime_sha256": receipts["after"].runtime_sha256,
                     "native_instrumented_build": bool(native_profiles),
                     "reference_native": "shared with current teacher",
