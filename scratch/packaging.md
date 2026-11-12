@@ -151,3 +151,30 @@ Torch 2.15.0, all extras) only after these fixes:
   `manabot/__init__.py` now raises an ImportError naming the repair; release
   notes and the engine guide say to uninstall 0.2.0 first. uv's one-step
   upgrade is unaffected. Repairs verified with pip and uv.
+
+## PR publication validation — 2026-11-11
+
+`lf sync` completed cleanly against `origin/main` at
+`4c041d6cefe829c5b1b52273ba19991d663ee26b`. The whole branch diff was reviewed
+against the packaging-only outcome. Reused the QA installed-wheel proofs above.
+
+- Focused packaging, CI selection, package boundaries, source binding and recipe
+  tests: 117 passed with dev/artifacts/reports extras. The initial invocation
+  omitted reports and failed on missing matplotlib; the corrected run passed.
+- Isolated artifact/Etude dependency suite: 31 passed.
+- All three integration invocations collected successfully: 1376 core, 560
+  evaluation and 134 long tests. Collection is not execution. Evaluation needs
+  its evaluation extra (DuckDB); collection without that extra failed.
+- Rust formatting and all-target/all-feature Clippy passed. PyO3 required an
+  absolute interpreter path because its build subprocess did not resolve the
+  guide's relative path from the workspace root.
+- Loopflow graph/skill validation passed.
+
+Linux wheel builds and the full seven-artifact inventory remain PR CI checks.
+This step authorizes only a ready PR, not a package release or merge.
+- Full debug Rust suite with CI timeouts and two test workers: 1057 passed.
+  Log: `/tmp/mtg287-publish-rust.log`.
+- Retained QA inventory (two macOS engine wheels, training wheel and both
+  sdists) and strict Twine checks passed again; metadata/version check passed.
+- CI selector enables all nine validation groups for this branch. Their
+  broader runtime/browser coverage remains CI work; no all-CI pass is claimed.
