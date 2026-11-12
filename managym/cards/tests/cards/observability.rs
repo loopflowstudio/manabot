@@ -694,6 +694,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
+        Effect::CopyTriggeringSpellForEach { .. } => "Effect::CopyTriggeringSpellForEach",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
         Effect::CounterAbility { .. } => "Effect::CounterAbility",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
@@ -704,7 +705,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 81;
+const EFFECT_VARIANTS: usize = 82;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -955,6 +956,9 @@ fn effect_witnesses() -> Vec<Effect> {
             duration: EffectDuration::EndOfTurn,
         },
         Effect::CopyTriggeringObject,
+        Effect::CopyTriggeringSpellForEach {
+            each: ObjectSelector::each_other_you_control(CardPredicate::creature()),
+        },
         Effect::CastExiledWithSource {
             predicate: CardPredicate::subtype("Ally"),
         },
@@ -984,6 +988,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::CreatureDealsCombatDamageToYou"
         }
         TriggerCondition::OpponentCastsSpell { .. } => "TriggerCondition::OpponentCastsSpell",
+        TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
         TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
@@ -1087,6 +1092,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::creature(),
         },
         TriggerCondition::OpponentCastsSpell {
+            predicate: CardPredicate::creature(),
+        },
+        TriggerCondition::SpellTargetsOnlyThis {
             predicate: CardPredicate::creature(),
         },
         TriggerCondition::CreatureDealsCombatDamageToYou,

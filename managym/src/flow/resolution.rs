@@ -1005,6 +1005,33 @@ impl Game {
                 self.state.turn.extra_turns.push(frame.controller);
                 None
             }
+            Effect::CopyTriggeringSpellForEach { each } => {
+                let spell = frame.context_target?;
+                let index = self.stack_index_of(spell)?;
+                let slots = self.state.stack_objects[index].targets().len();
+                let legal = self.retarget_candidates(&Decision::Retarget {
+                    player: frame.controller,
+                    object: spell,
+                    slot: 0,
+                    may_keep: false,
+                });
+                let onto: Vec<Target> = self
+                    .select(each, frame)
+                    .into_iter()
+                    .filter_map(|object| self.lookup_current_permanent(object).ok())
+                    .map(Target::Permanent)
+                    .filter(|target| legal.contains(target))
+                    .collect();
+                for target in onto {
+                    let Some(copy) = self.copy_stack_object(spell, frame.controller) else {
+                        break;
+                    };
+                    for slot in 0..slots {
+                        self.change_stack_target(copy, slot, target);
+                    }
+                }
+                None
+            }
             Effect::EndTheTurn => {
                 self.end_the_turn();
                 None

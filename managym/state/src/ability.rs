@@ -87,6 +87,12 @@ pub enum TriggerCondition {
     OpponentCastsSpell {
         predicate: CardPredicate,
     },
+    /// "Whenever a player casts a [predicate] spell that targets only this
+    /// [permanent]": every target of the spell is this permanent. The spell
+    /// is the context and its caster "that player".
+    SpellTargetsOnlyThis {
+        predicate: CardPredicate,
+    },
     /// Each creature dealing combat damage to this ability's controller.
     CreatureDealsCombatDamageToYou,
     /// "When [subject] enters the battlefield."
@@ -1089,6 +1095,12 @@ pub enum Effect {
     /// Copy the spell or ability the trigger names (its context): "copy it",
     /// "copy that ability" (CR 707.10). The copy may get new targets.
     CopyTriggeringObject,
+    /// "Copy that spell for each [each] the spell could target. Each copy
+    /// targets a different one of those" (Mirrorwing Dragon): the triggering
+    /// spell is copied under the resolving player once per selected
+    /// permanent that is a legal new target for it, and each copy's targets
+    /// become that permanent; nobody chooses.
+    CopyTriggeringSpellForEach { each: ObjectSelector },
     /// "Change the target of target spell or ability with a single target"
     /// (CR 115.7): to another legal target, if there is one.
     ChangeTarget { target: TargetSpec },
@@ -1457,7 +1469,8 @@ impl Effect {
                 effects.iter().any(Effect::asks_triggering_spell)
             }
             // "Copy that spell": the cast spell is the context.
-            Effect::CopyTriggeringObject => true,
+            Effect::CopyTriggeringObject | Effect::CopyTriggeringSpellForEach { .. } => true,
+            Effect::ForPlayer { effects, .. } => effects.iter().any(Effect::asks_triggering_spell),
             _ => false,
         }
     }
@@ -1587,6 +1600,7 @@ impl Effect {
             | Effect::OptionalManaPaymentX { .. }
             | Effect::CreateDelayedTrigger { .. }
             | Effect::CopyTriggeringObject
+            | Effect::CopyTriggeringSpellForEach { .. }
             | Effect::CastExiledWithSource { .. }
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

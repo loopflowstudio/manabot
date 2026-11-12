@@ -87,6 +87,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "Whenever an opponent casts a {}",
             predicate_description(predicate, "spell")
         ),
+        TriggerCondition::SpellTargetsOnlyThis { predicate } => format!(
+            "Whenever a player casts a {} that targets only this",
+            predicate_description(predicate, "spell")
+        ),
         TriggerCondition::PlayerCastsSpell { predicate } => format!(
             "When a player casts a {}",
             predicate_description(predicate, "spell")
@@ -820,6 +824,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ),
         GainControl { player, what, duration } => format!("{} gains control of {}{}", player_description(player), selector_description(what), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
+        CopyTriggeringSpellForEach { each } => format!("Copy that spell for {} it could target. Each copy targets a different one of them", selector_description(each)),
         CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),

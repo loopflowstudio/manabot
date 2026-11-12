@@ -97,6 +97,7 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::YouCastThis
         | TriggerCondition::YouCastNthSpellThisTurn { .. }
         | TriggerCondition::OpponentCastsSpell { .. }
+        | TriggerCondition::SpellTargetsOnlyThis { .. }
         | TriggerCondition::PlayerCastsSpell { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
         | TriggerCondition::Dies { .. }
@@ -1646,6 +1647,18 @@ impl Game {
                 TriggerCondition::PlayerCastsSpell { predicate },
                 GameEvent::SpellCast { card, .. },
             ) => self.card_matches_predicate(*card, predicate),
+            (
+                TriggerCondition::SpellTargetsOnlyThis { predicate },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                let this = self.state.card_to_permanent[source_card].map(Target::Permanent);
+                self.card_matches_predicate(*card, predicate)
+                    && this.is_some()
+                    && self.find_spell_on_stack_index(*card).is_some_and(|index| {
+                        let targets = self.state.stack_objects[index].targets();
+                        !targets.is_empty() && targets.iter().all(|target| Some(*target) == this)
+                    })
+            }
             (
                 TriggerCondition::AttacksWithAnother,
                 GameEvent::AttackersDeclared { attackers, .. },

@@ -1,9 +1,12 @@
 //! Eldritch Moon.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{
+        Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
+        TriggerCondition,
+    },
     card::{
-        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, StaticAbility,
-        StaticContinuous, StaticScope,
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
+        StaticAbility, StaticContinuous, StaticScope,
     },
     effect::Modification,
     mana::{Colors, Mana, ManaCost},
@@ -11,7 +14,39 @@ use managym_state::{
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![imprisoned_in_the_moon()]
+    vec![imprisoned_in_the_moon(), mirrorwing_dragon()]
+}
+
+fn mirrorwing_dragon() -> CardDefinition {
+    let text_box = "Flying\nWhenever a player casts an instant or sorcery spell that targets only Mirrorwing Dragon, that player copies that spell for each other creature they control that the spell could target. Each copy targets a different one of those creatures.";
+    CardDefinition {
+        key: "emn.mirrorwing_dragon",
+        scryfall_id: "4b7e33a8-765b-4909-a5c6-5fe8f8774a51",
+        name: "Mirrorwing Dragon".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Dragon".into()],
+        power: Some(4),
+        toughness: Some(5),
+        keywords: Keywords::of(&[Keyword::Flying]),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::SpellTargetsOnlyThis {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Instant, CardType::Sorcery],
+                    ..Default::default()
+                },
+            },
+            intervening_if: None,
+            effects: vec![Effect::ForPlayer {
+                player: PlayerSelector::TriggeringPlayer,
+                effects: vec![Effect::CopyTriggeringSpellForEach {
+                    each: ObjectSelector::each_other_you_control(CardPredicate::creature()),
+                }],
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn imprisoned_in_the_moon() -> CardDefinition {
