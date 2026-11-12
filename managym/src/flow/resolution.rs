@@ -36,30 +36,29 @@ use crate::{
 };
 
 impl Game {
+    /// A permanent's power and toughness as it is, or from its last known
+    /// information once it has left; zero for anything else.
+    fn power_toughness_or_lki(&self, target: Option<Target>) -> (i32, i32) {
+        match target {
+            Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
+                let view = self.characteristics(id);
+                (view.power, view.toughness)
+            }
+            Some(Target::Permanent(id)) => self
+                .departed_permanent_lki(id)
+                .map_or((0, 0), |lki| (lki.power, lki.toughness)),
+            _ => (0, 0),
+        }
+    }
+
     /// A quantity read by a resolving instruction: it sees the frame's
     /// announced X and recorded excess damage.
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
             EffectValue::Objects(of) => self.select(of, frame).len() as i32,
             EffectValue::X => i32::from(frame.x),
-            EffectValue::TriggeringPower => match frame.context_target {
-                Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
-                    self.characteristics(id).power
-                }
-                Some(Target::Permanent(id)) => {
-                    self.departed_permanent_lki(id).map_or(0, |lki| lki.power)
-                }
-                _ => 0,
-            },
-            EffectValue::TargetToughness => match frame.primary_target() {
-                Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
-                    self.characteristics(id).toughness
-                }
-                Some(Target::Permanent(id)) => self
-                    .departed_permanent_lki(id)
-                    .map_or(0, |lki| lki.toughness),
-                _ => 0,
-            },
+            EffectValue::TriggeringPower => self.power_toughness_or_lki(frame.context_target).0,
+            EffectValue::TargetToughness => self.power_toughness_or_lki(frame.primary_target()).1,
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::SourcePower => self
                 .source_permanent_id(frame)
@@ -1895,28 +1894,24 @@ impl Game {
     // -----------------------------------------------------------------------
     // Object selection.
 
-    /// The objects a selector names as the instruction resolves. A `Chosen`
-    /// selector names the object the resolving player chose for this
-    /// instruction (`execute_frame_effect` suspended on the choice first).
     /// The object a `DealDamage { by }` names as the damage's source: the
-    /// exact current object, else the departed one through its last known
-    /// information (CR 608.2h).
+    /// exact current object, else a departed triggering permanent through its
+    /// last known information (CR 608.2h).
     fn damage_source(&self, by: &ObjectSelector, frame: &EffectFrame) -> Option<ObjectRef> {
         self.select(by, frame)
             .into_iter()
             .next()
-            .or_else(|| match by {
-                ObjectSelector::Triggering => match frame.context_target {
-                    Some(Target::Permanent(id)) => {
-                        self.departed_permanent_lki(id).map(|lki| lki.object_ref)
-                    }
-                    _ => None,
-                },
-                ObjectSelector::This => frame.source_ref,
+            .or_else(|| match (by, frame.context_target) {
+                (ObjectSelector::Triggering, Some(Target::Permanent(id))) => {
+                    self.departed_permanent_lki(id).map(|lki| lki.object_ref)
+                }
                 _ => None,
             })
     }
 
+    /// The objects a selector names as the instruction resolves. A `Chosen`
+    /// selector names the object the resolving player chose for this
+    /// instruction (`execute_frame_effect` suspended on the choice first).
     pub(crate) fn select(&self, what: &ObjectSelector, frame: &EffectFrame) -> Vec<ObjectRef> {
         let permanent = |id: Option<PermanentId>| {
             id.and_then(|id| self.permanent_object_ref(id))

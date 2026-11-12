@@ -310,3 +310,10 @@ passed (2 ignored); `conformance_tests` 2 passed; lib 192 passed; fmt applied.
 Rebuilt cp313 extension (atomic replace); `check_tle_coverage.py --bonus-sheet`
 35 of 61, 26 missing, no other issues; pytest text observation, observation
 parity, TLE allocation and policy catalog 101 passed.
+
+Compress pass (2026-11-12): `power_toughness_or_lki` shares the
+TriggeringPower/TargetToughness read; `damage_source` keeps only the
+`Triggering` LKI fallback (its one consumer, Warstorm Surge) and its doc no
+longer splits `select`'s; `by: None` literals became `Effect::deal_damage`.
+Debug: cards 646 passed, `rules_tests` 169 passed, resolution lib 49 passed;
+rebuilt cp313 extension; `--bonus-sheet` still 35 of 61, 26 missing.

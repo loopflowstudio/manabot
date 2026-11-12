@@ -4,10 +4,7 @@ use managym::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::turn::StepKind,
     state::{
-        ability::{
-            Ability, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
-            TriggerSubject,
-        },
+        ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
         card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
         zone::ZoneType,
@@ -712,11 +709,10 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DealDamage {
-                by: None,
-                amount: EffectValue::Fixed(2),
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+            effects: vec![Effect::deal_damage(
+                2,
+                ObjectSelector::Target(TargetSpec::Creature),
+            )],
         },
     );
     s.game_mut().move_card(ogre, ZoneType::Battlefield);

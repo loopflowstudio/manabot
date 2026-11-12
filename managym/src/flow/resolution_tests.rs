@@ -147,11 +147,7 @@ fn clause(spec: TargetSpec, effects: Vec<Effect>) -> Effect {
 }
 
 fn damage() -> Effect {
-    Effect::DealDamage {
-        by: None,
-        amount: EffectValue::Fixed(1),
-        what: ObjectSelector::Target(TargetSpec::Creature),
-    }
+    Effect::deal_damage(1, ObjectSelector::Target(TargetSpec::Creature))
 }
 
 fn hexproof_keywords() -> Keywords {

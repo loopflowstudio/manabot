@@ -1882,16 +1882,15 @@ fn bumi_bash() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![Effect::Modal {
             modes: vec![
-                vec![Effect::DealDamage {
-                    by: None,
-                    amount: EffectValue::BattlefieldMatching {
+                vec![Effect::deal_damage(
+                    EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Land),
                             ..Default::default()
                         },
                     },
-                    what: ObjectSelector::Target(TargetSpec::Creature),
-                }],
+                    ObjectSelector::Target(TargetSpec::Creature),
+                )],
                 vec![Effect::destroy(ObjectSelector::Target(
                     TargetSpec::Permanent {
                         predicate: CardPredicate {
@@ -2154,16 +2153,15 @@ fn cat_gator() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DealDamage {
-                by: None,
-                amount: EffectValue::BattlefieldMatching {
+            effects: vec![Effect::deal_damage(
+                EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         subtype: Some("Swamp".into()),
                         ..Default::default()
                     },
                 },
-                what: ObjectSelector::Target(TargetSpec::AnyTarget),
-            }],
+                ObjectSelector::Target(TargetSpec::AnyTarget),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2254,17 +2252,16 @@ fn combustion_technique() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::DealDamage {
-                by: None,
-                amount: EffectValue::GraveyardMatching {
+            Effect::deal_damage(
+                EffectValue::GraveyardMatching {
                     base: 2,
                     predicate: CardPredicate {
                         subtype: Some("Lesson".into()),
                         ..Default::default()
                     },
                 },
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            },
+                ObjectSelector::Target(TargetSpec::Creature),
+            ),
             Effect::until_end_of_turn(
                 ObjectSelector::Target(TargetSpec::Creature),
                 Modification::ExileIfWouldDie,
@@ -5211,16 +5208,15 @@ fn jet_freedom_fighter() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DealDamage {
-                    by: None,
-                    amount: EffectValue::BattlefieldMatching {
+                effects: vec![Effect::deal_damage(
+                    EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             card_type: Some(CardType::Creature),
                             ..Default::default()
                         },
                     },
-                    what: ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
-                }],
+                    ObjectSelector::Target(TargetSpec::CreatureOpponentControls),
+                )],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -8444,16 +8440,15 @@ fn team_avatar() -> CardDefinition {
             zone: ActivationZone::Hand,
             discard_source: true,
             mana_cost: ManaCost::parse("{2}{W}"),
-            effects: vec![Effect::DealDamage {
-                by: None,
-                amount: EffectValue::BattlefieldMatching {
+            effects: vec![Effect::deal_damage(
+                EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
                 },
-                what: ObjectSelector::Target(TargetSpec::Creature),
-            }],
+                ObjectSelector::Target(TargetSpec::Creature),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
