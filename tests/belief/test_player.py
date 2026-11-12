@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.likelihood import (
     FrozenPolicyLikelihood,
     LikelihoodResult,
@@ -16,8 +16,8 @@ from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.sim.search.flat_mc import play_games
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
 from tests.belief.fresh_env import fresh_env
 
 

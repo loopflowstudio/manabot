@@ -7,6 +7,10 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import transition_gae
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -14,10 +18,7 @@ from manabot.infra.config import (
     ModelConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
-from manabot.rl.returns import transition_gae
 from manabot.training.execution import execute_regime
 from manabot.training.regime import (
     DampedPolicyLearning,
@@ -27,7 +28,7 @@ from manabot.training.regime import (
 )
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner, observation_tensors
+from manabot.training.updates.learner import observation_tensors
 from manabot.verify.store import VerifyStore
 import managym
 from tests.training.test_recovery import tracked_updates

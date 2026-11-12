@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from manabot.rl.returns import (
+from manabot.backends.torch.rl import (
     categorical_lambda_returns,
     reverse_waves,
     terminal_distances,

@@ -11,8 +11,7 @@ from collections.abc import Iterator
 import pytest
 import torch
 
-from manabot.rl.returns import categorical_lambda_returns
-from manabot.rl.selection import selected_moves
+from manabot.backends.torch.rl import categorical_lambda_returns, selected_moves
 from manabot.training.updates.damped_policy import damped_policy_loss
 
 

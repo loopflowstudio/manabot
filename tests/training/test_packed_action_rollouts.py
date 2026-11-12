@@ -4,9 +4,8 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.rl import NumericalError, clipped_surrogate, reverse_kl
 from manabot.model.policy_distribution import policy_logs
-from manabot.rl.losses import clipped_surrogate, reverse_kl
-from manabot.rl.numerics import NumericalError
 from manabot.training.rollout.actions import PackedActions
 from manabot.training.updates.damped_policy import damped_policy_loss
 

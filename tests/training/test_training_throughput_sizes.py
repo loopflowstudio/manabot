@@ -8,10 +8,10 @@ from torch import nn
 
 from experiments import training_throughput_sizes as sizes
 from experiments.elemental_variants import elemental_recipe
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.records import TrainingRun
 from manabot.training.regime import TrainingRegime
 from tests.training.test_training_throughput import _worker

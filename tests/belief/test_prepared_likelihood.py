@@ -4,8 +4,6 @@ import gc
 import json
 import weakref
 
-from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
-from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 import numpy as np
 import pytest
 import torch
@@ -15,6 +13,8 @@ from manabot.belief.likelihood import FrozenPolicyLikelihood, _matching_offer_in
 from manabot.belief.range import BeliefState
 from manabot.model.admission import admit_observation
 import managym
+from managym.decision import SEMANTIC_DECISION_VERSION, DecisionFrame
+from managym.possible_worlds import PossibleWorld, PossibleWorldSpace
 from tests.belief.fresh_env import fresh_env
 
 
@@ -287,9 +287,9 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
-    from manabot.model.actor_critic import ActorCritic
 
     root = managym.Env(seed=157)
     deck = {"Mountain": 4, "Raging Goblin": 4}

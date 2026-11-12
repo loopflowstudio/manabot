@@ -8,17 +8,17 @@ import pytest
 import torch
 
 from experiments import training_throughput_packing as packing
+from manabot.backends.torch import learner as torch_learner
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.training import precision
 from manabot.training.regime import DampedPolicyLearning, Execution, Precision
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 
 
 def test_float32_regimes_keep_their_bytes() -> None:
@@ -41,16 +41,16 @@ def test_reduced_precision_requires_cuda(declared: Precision) -> None:
 def test_tf32_sets_both_switches_and_float32_restores_the_process_defaults() -> None:
     before = (torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32)
     try:
-        precision.apply_matmul_precision("tf32")
+        torch_learner.apply_matmul_precision("tf32")
         assert torch.backends.cuda.matmul.allow_tf32
         assert torch.backends.cudnn.allow_tf32
-        precision.apply_matmul_precision("bf16")
+        torch_learner.apply_matmul_precision("bf16")
         assert (
             torch.backends.cuda.matmul.allow_tf32,
             torch.backends.cudnn.allow_tf32,
         ) == before
     finally:
-        precision.apply_matmul_precision("float32")
+        torch_learner.apply_matmul_precision("float32")
     assert (
         torch.backends.cuda.matmul.allow_tf32,
         torch.backends.cudnn.allow_tf32,
@@ -59,13 +59,13 @@ def test_tf32_sets_both_switches_and_float32_restores_the_process_defaults() -> 
 
 @pytest.mark.parametrize("declared", ["float32", "tf32"])
 def test_only_bf16_autocasts(declared: Precision) -> None:
-    with precision.forward_precision(declared, torch.device("cuda")):
+    with torch_learner.forward_precision(declared, torch.device("cuda")):
         assert not torch.is_autocast_enabled("cuda")
 
 
 @pytest.mark.filterwarnings("ignore:CUDA is not available")
 def test_bf16_autocasts_cuda_forwards() -> None:
-    context = precision.forward_precision("bf16", torch.device("cuda"))
+    context = torch_learner.forward_precision("bf16", torch.device("cuda"))
     assert isinstance(context, torch.autocast)
     assert (context.device, context.fast_dtype) == ("cuda", torch.bfloat16)
 
@@ -95,7 +95,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
             return _method(*args)  # type: ignore[operator]
 
         monkeypatch.setattr(agent, name, tracked)
-    real = precision.forward_precision
+    real = torch_learner.forward_precision
 
     def recorded(declared: Precision, device: torch.device) -> object:
         entries.append(declared == "bf16")
@@ -103,7 +103,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
 
     for module in (
         "manabot.training.rollout.collection",
-        "manabot.training.updates.learner",
+        "manabot.backends.torch.learner",
     ):
         monkeypatch.setattr(f"{module}.forward_precision", recorded)
     collector = SeatRoutedCollector(

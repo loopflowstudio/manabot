@@ -18,6 +18,10 @@ import numpy as np
 import psutil
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
     collect_frozen_policy,
@@ -36,15 +40,10 @@ from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
 from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.rl.numerics import NumericalError
-from manabot.rl.step import update_ema
 from manabot.training.mps import mps_torch_error
-from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
     NumericalFailure,
@@ -96,7 +95,6 @@ from manabot.training.update_metrics import (
     time_since,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 import managym
 

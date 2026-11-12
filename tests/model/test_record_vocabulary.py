@@ -6,6 +6,8 @@ from typing import Literal
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import (
     FACT_DETAIL_INDEX,
     FACT_DIM,
@@ -18,10 +20,8 @@ from manabot.env.observation import (
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.architecture import architecture_identity, architecture_receipt
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.facts import FactEncoder, admit_facts
 from manabot.model.semantic_cards import (
     RecordEmbeddings,

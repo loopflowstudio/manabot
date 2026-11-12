@@ -2,19 +2,19 @@
 
 from copy import deepcopy
 
-from managym.decision import Command, DecisionFrame, SemanticTransition
-from managym.experience_projection import describe_actions
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
+from managym.decision import Command, DecisionFrame, SemanticTransition
+from managym.experience_projection import describe_actions
 
 PACK = "elemental-combat-v1"
 

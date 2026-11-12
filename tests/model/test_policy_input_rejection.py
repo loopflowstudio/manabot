@@ -13,6 +13,8 @@ import pytest
 import torch
 
 from academy.villain import CheckpointVillain
+from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -23,9 +25,7 @@ from manabot.infra.config import (
     ObservationConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.sim.replay import replay_environment
 
 SETUP = "ur-lessons-vs-gw-allies"

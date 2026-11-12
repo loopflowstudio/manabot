@@ -5,8 +5,8 @@ from collections.abc import Callable
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import FACT_OBJECT_INDEX
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.buckets import (
     ONE_BASED_REFERENCES,

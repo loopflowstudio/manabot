@@ -11,6 +11,9 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import transition_gae
 from manabot.env.failures import read_failure
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -21,8 +24,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.rl.returns import transition_gae
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
@@ -36,7 +37,6 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     replay_attempt,
 )
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 import managym
 from tests.eval.arena_fixture import arena_fixture

@@ -12,25 +12,28 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor
 
+from manabot.backends.torch.learner import Learner, gradient_step
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import (
+    categorical_lambda_returns,
+    categorical_value_loss,
+    clipped_surrogate,
+    entropy,
+    float64_operand,
+    require,
+    reverse_kl,
+    selected_mean,
+    selection_mask,
+    squared_value_loss,
+    transition_gae,
+)
 from manabot.env.observation import ACTION_TYPE_DIM
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (
     check_logs,
     check_probabilities,
     legal_mask,
     policy_logs,
 )
-from manabot.rl.losses import (
-    categorical_value_loss,
-    clipped_surrogate,
-    entropy,
-    reverse_kl,
-    squared_value_loss,
-)
-from manabot.rl.numerics import float64_operand, require
-from manabot.rl.returns import categorical_lambda_returns, transition_gae
-from manabot.rl.selection import selected_mean, selection_mask
-from manabot.rl.step import gradient_step
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
@@ -40,7 +43,7 @@ from manabot.training.updates.health import (
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.updates.learner import AdmittedRollout, Learner
+from manabot.training.updates.learner import AdmittedRollout
 from manabot.training.updates.references import reference_distribution
 from manabot.training.updates.selection import (
     UpdateDiagnostics,

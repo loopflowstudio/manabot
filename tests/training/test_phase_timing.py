@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.learner import Learner
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
@@ -27,7 +28,6 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 from manabot.verify.store import VerifyStore
 import managym

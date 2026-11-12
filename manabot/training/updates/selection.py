@@ -1,6 +1,6 @@
 """Censored rollout diagnostics of the player's advantage selection.
 
-The selection itself is generic (`manabot.rl.selection`); these group it by the
+The selection itself is generic (`manabot.backends.torch.rl`); these group it by the
 player's action types and terminal distances.
 
 Distances count same-viewer transitions to a terminal observed in this batch.
@@ -13,9 +13,11 @@ from typing import Literal, TypedDict
 import torch
 from torch import Tensor
 
-from manabot.rl.numerics import float64_operand
-from manabot.rl.returns import terminal_distances
-from manabot.rl.selection import magnitude_quantile
+from manabot.backends.torch.rl import (
+    float64_operand,
+    magnitude_quantile,
+    terminal_distances,
+)
 from manabot.training.rollout.adaptive import AdaptiveDiagnostics
 from manabot.training.updates.health import NumericalHealth
 

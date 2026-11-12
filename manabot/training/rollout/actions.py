@@ -13,8 +13,8 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 
+from manabot.backends.torch.rl import NumericalError, require
 from manabot.model.policy_distribution import check_behavior, legal_mask
-from manabot.rl.numerics import NumericalError, require
 
 ACTION_FIELDS = frozenset(
     {"actions", "actions_valid", "action_focus", "name_candidates"}

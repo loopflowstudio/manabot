@@ -7,6 +7,8 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -15,7 +17,6 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.regime import DampedPolicyLearning, Learning, TrainSelfPlay
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -25,7 +26,6 @@ from manabot.training.rollout.adaptive import (
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 import managym
 
@@ -173,7 +173,7 @@ def test_current_elemental_training_exports_scored_admitted_checkpoint(
     tmp_path: Path,
 ) -> None:
     from experiments.elemental_long import recipe
-    from manabot.model.checkpoint import load_checkpoint
+    from manabot.backends.torch.checkpoint import load_checkpoint
     from manabot.model.world import validate_agent_setup
     from manabot.training.execution import execute_regime
     from manabot.verify.store import VerifyStore

@@ -22,12 +22,11 @@ from collections.abc import Sequence
 import random
 from typing import TYPE_CHECKING, Callable
 
-from managym.enums import ActionEnum
-
 from manabot.sim.search.flat import DEFAULT_SEARCH_SIMS, FlatSearchPolicy
 
 # Local imports
 import managym
+from managym.enums import ActionEnum
 
 from .bot_decision import BotDecision
 
@@ -82,7 +81,7 @@ class CheckpointVillain:
         deterministic: bool = False,
         player_configs: Sequence[managym.PlayerConfig] | None = None,
     ) -> None:
-        from manabot.model.checkpoint import load_checkpoint
+        from manabot.backends.torch.checkpoint import load_checkpoint
         from manabot.model.world import validate_agent_setup
 
         self.agent, self.obs_space = load_checkpoint(path)

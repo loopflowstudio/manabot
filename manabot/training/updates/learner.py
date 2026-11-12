@@ -1,59 +1,24 @@
-"""Trainable policy and Adam state shared by every RL objective.
+"""Rollout admission for the updates.
 
-A Learner bundles the trainable actor/critic and its optimizer, enabling train
-mode on admission. AdmittedRollout admits a collected batch's observations once
-before its minibatches. Learning-rule functions update this state; execute_regime
-owns collection, clocks, tracking, exports and recovery. Native stream count
-sets the damped rule's minibatch width. There is no independent training loop.
-The learner's profiler times learning phases between existing device waits;
-it adds no synchronization and draws no training randomness.
+AdmittedRollout admits a collected batch's observations once before its
+minibatches. The updates step a `Learner` (`manabot.backends.torch.learner`);
+execute_regime owns collection, clocks, tracking, exports and recovery. Native
+stream count sets the damped rule's minibatch width.
 """
-
-from contextlib import AbstractContextManager
 
 import numpy as np
 from numpy.typing import NDArray
 import torch
 
-from manabot.infra.profiler import Profiler
-from manabot.model.actor_critic import ActorCritic
+from manabot.backends.torch.policy import ActorCritic
 from manabot.model.admission import (
     AdmittedObservation,
     admit_observation,
     bind_admitted,
 )
 from manabot.model.inference import transfer_admitted
-from manabot.training.precision import forward_precision
-from manabot.training.regime import Precision
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch
-
-
-class Learner:
-    def __init__(
-        self,
-        agent: ActorCritic,
-        device: torch.device | str,
-        *,
-        minibatch_rows: int,
-        precision: Precision = "float32",
-    ) -> None:
-        if minibatch_rows < 1:
-            raise ValueError("minibatch_rows must be positive")
-        self.device = torch.device(device)
-        # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
-        # a training-mode forward before backward, including on warm starts.
-        self.agent = agent.to(self.device).train()
-        self.minibatch_rows = minibatch_rows
-        self.precision: Precision = precision
-        # The learning rule sets the rate before stepping; retain the initial
-        # Adam configuration in snapshots even when selection skips all rows.
-        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
-        self.profiler = Profiler()
-
-    def forward_precision(self) -> AbstractContextManager[object]:
-        """Wrap each policy forward; callers cast its outputs to float32."""
-        return forward_precision(self.precision, self.device)
 
 
 def observation_tensors(obs: dict[str, NDArray[np.generic]]) -> dict[str, torch.Tensor]:

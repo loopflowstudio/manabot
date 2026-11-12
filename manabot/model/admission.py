@@ -46,7 +46,7 @@ from manabot.model.semantic_cards import (
 from manabot.model.shared_effects import admit_shared_effects
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
 
 # Object sequence order of ActorCritic: validity key per object block.

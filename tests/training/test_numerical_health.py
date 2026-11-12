@@ -17,10 +17,12 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.backends.torch.learner import Learner, gradient_step
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError, selected_moves
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import admit_on_device
 from manabot.model.policy_distribution import (
     check_behavior,
@@ -28,9 +30,6 @@ from manabot.model.policy_distribution import (
     legal_mask,
     policy_logs,
 )
-from manabot.rl.numerics import NumericalError
-from manabot.rl.selection import selected_moves
-from manabot.rl.step import gradient_step
 from manabot.training import execution
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
@@ -40,7 +39,6 @@ from manabot.training.updates.damped_policy import (
     update_damped_iteration,
 )
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.selection import value_scale
 from manabot.verify.store import VerifyStore
 import managym

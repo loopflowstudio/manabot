@@ -10,16 +10,24 @@ import pytest
 import torch
 from torch import Tensor
 
+from manabot.backends.torch.learner import (
+    Learner,
+    StepRecorder,
+    gradient_step,
+    update_ema,
+)
+from manabot.backends.torch.rl import (
+    NumericalError,
+    categorical_value_loss,
+    entropy,
+    squared_value_loss,
+    standardized_advantages,
+)
 from manabot.model.policy_distribution import policy_logs
-from manabot.rl.losses import categorical_value_loss, entropy, squared_value_loss
-from manabot.rl.numerics import NumericalError
-from manabot.rl.returns import standardized_advantages
-from manabot.rl.step import StepRecorder, gradient_step, update_ema
 from manabot.training.learning import objectives
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
-from manabot.training.updates.learner import Learner
 
 
 def test_squared_value_loss_accepts_column_predictions() -> None:
@@ -168,7 +176,11 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
 
 # Names published in 0.2, and where they live now.
 _MOVED = [
-    ("manabot.training.learning.objectives", "update_ema", "manabot.rl.step"),
+    (
+        "manabot.training.learning.objectives",
+        "update_ema",
+        "manabot.backends.torch.learner",
+    ),
     (
         "manabot.training.learning.damped_policy",
         "update_damped_iteration",
@@ -182,11 +194,23 @@ _MOVED = [
     (
         "manabot.training.learning.damped_policy",
         "categorical_lambda_returns",
-        "manabot.rl.returns",
+        "manabot.backends.torch.rl",
     ),
-    ("manabot.training.learning.returns", "transition_gae", "manabot.rl.returns"),
-    ("manabot.training.learning.selection", "selection_mask", "manabot.rl.selection"),
-    ("manabot.training.learning.selection", "selected_mean", "manabot.rl.selection"),
+    (
+        "manabot.training.learning.returns",
+        "transition_gae",
+        "manabot.backends.torch.rl",
+    ),
+    (
+        "manabot.training.learning.selection",
+        "selection_mask",
+        "manabot.backends.torch.rl",
+    ),
+    (
+        "manabot.training.learning.selection",
+        "selected_mean",
+        "manabot.backends.torch.rl",
+    ),
     (
         "manabot.training.learning.selection",
         "selection_diagnostics",
@@ -195,7 +219,7 @@ _MOVED = [
     (
         "manabot.training.learning.learner",
         "Learner",
-        "manabot.training.updates.learner",
+        "manabot.backends.torch.learner",
     ),
     (
         "manabot.training.learning.learner",
@@ -212,11 +236,35 @@ _MOVED = [
         "reference_distribution",
         "manabot.training.updates.references",
     ),
-    ("manabot.model.policy_distribution", "NumericalError", "manabot.rl.numerics"),
-    ("manabot.model.policy_distribution", "require", "manabot.rl.numerics"),
-    ("manabot.model.policy_distribution", "clipped_surrogate", "manabot.rl.losses"),
-    ("manabot.model.policy_distribution", "reverse_kl", "manabot.rl.losses"),
-    ("manabot.model.numerics", "float64_operand", "manabot.rl.numerics"),
+    (
+        "manabot.model.policy_distribution",
+        "NumericalError",
+        "manabot.backends.torch.rl",
+    ),
+    ("manabot.model.policy_distribution", "require", "manabot.backends.torch.rl"),
+    (
+        "manabot.model.policy_distribution",
+        "clipped_surrogate",
+        "manabot.backends.torch.rl",
+    ),
+    ("manabot.model.policy_distribution", "reverse_kl", "manabot.backends.torch.rl"),
+    ("manabot.model.numerics", "float64_operand", "manabot.backends.torch.rl"),
+    ("manabot.model.actor_critic", "ActorCritic", "manabot.backends.torch.policy"),
+    (
+        "manabot.model.actor_critic",
+        "EmbeddedObservation",
+        "manabot.backends.torch.policy",
+    ),
+    *(
+        ("manabot.model.checkpoint", name, "manabot.backends.torch.checkpoint")
+        for name in (
+            "load_checkpoint",
+            "save_checkpoint",
+            "load_etude_checkpoint",
+            "local_checkpoint_file",
+            "fetch_etude_checkpoint",
+        )
+    ),
 ]
 
 

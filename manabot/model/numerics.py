@@ -34,4 +34,4 @@ def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
     return cache[name][1]
 
 
-__getattr__ = moved(__name__, {"float64_operand": "manabot.rl.numerics"})
+__getattr__ = moved(__name__, {"float64_operand": "manabot.backends.torch.rl"})

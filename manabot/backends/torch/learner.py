@@ -1,21 +1,40 @@
-"""The update step: one guarded gradient step, and the parameter average.
+"""The torch learner: optimizer state, precision and the guarded update step.
 
-`gradient_step` runs backward, global-norm clipping and the optimizer for any
-`nn.Module`. It refuses to step on a loss or gradients it cannot trust and
-raises `NumericalError` (`manabot.rl.numerics`) instead. An optional
-`StepRecorder` observes what it did: timing, rejections and sampled gradient
-detail; the player's `OptimizerHealth`
-(`manabot.training.updates.health`) is one. `update_ema` keeps the averaged
-model that evaluation and exports read.
+`Learner` bundles a trainable `ActorCritic` with its Adam optimizer, its
+forward precision and a profiler; the updates in `manabot.training.updates`
+step it. `gradient_step` runs backward, global-norm clipping and the
+optimizer for any `nn.Module`, refusing to step on a loss or gradients it
+cannot trust (`NumericalError`, `manabot.backends.torch.rl`); an optional
+`StepRecorder` observes what it did. `update_ema` keeps the averaged model
+that evaluation and exports read. `forward_precision` and
+`apply_matmul_precision` apply a stage's declared numeric precision.
 """
 
 from contextlib import AbstractContextManager, nullcontext
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import torch
 from torch import Tensor, nn
 
-from manabot.rl.numerics import NumericalError, require
+from manabot.backends.torch.rl import NumericalError, require
+from manabot.infra.profiler import Profiler
+
+if TYPE_CHECKING:
+    # Annotations only: the update step and EMA serve any model, so importing
+    # them loads neither the player's network nor the training configuration.
+    from manabot.backends.torch.policy import ActorCritic
+    from manabot.training.regime import Precision
+
+# -- Update step ---------------------------------------------------------------
+# The update step: one guarded gradient step, and the parameter average.
+#
+# `gradient_step` runs backward, global-norm clipping and the optimizer for any
+# `nn.Module`. It refuses to step on a loss or gradients it cannot trust and
+# raises `NumericalError` (`manabot.backends.torch.rl`) instead. An optional
+# `StepRecorder` observes what it did: timing, rejections and sampled gradient
+# detail; the player's `OptimizerHealth`
+# (`manabot.training.updates.health`) is one. `update_ema` keeps the averaged
+# model that evaluation and exports read.
 
 
 class StepRecorder(Protocol):
@@ -147,3 +166,77 @@ def update_ema(averaged: nn.Module, model: nn.Module, rate: float) -> None:
         dest.lerp_(model.get_parameter(name), 1 - rate)
     for name, dest in averaged.named_buffers():
         dest.copy_(model.get_buffer(name))
+
+
+# -- Precision -----------------------------------------------------------------
+# Numeric precision a training stage declares in `Execution.precision`.
+#
+# - `float32`: nothing changes; every helper here is a no-op.
+# - `tf32`: for the stage, CUDA matmul and cuDNN may use TF32 tensor cores
+#   (`allow_tf32`). Weights, activations and losses stay float32 tensors.
+# - `bf16`: `torch.autocast(cuda, bfloat16)` around the policy forwards only, in
+#   collection (behavior sampling and stored values) and in the learner (bootstrap
+#   targets and the loss forward). Callers cast forward outputs back to float32,
+#   so behavior log-probabilities, targets, losses and their reductions are float32;
+#   weights and Adam state stay float32 and no gradient scaler is used, since bf16
+#   keeps float32's exponent range.
+#
+# Both reduced precisions change numerics, so they are declared regime variants,
+# never edits of a float32 regime; `Execution` rejects them off CUDA.
+
+
+# The process's switches before any stage set them. float32 keeps them, so float32
+# runs train exactly as before these options existed (cuDNN's default allows TF32).
+_PROCESS_TF32 = (torch.backends.cuda.matmul.allow_tf32, torch.backends.cudnn.allow_tf32)
+
+
+def apply_matmul_precision(precision: "Precision") -> None:
+    """Set the TF32 switches a stage runs under: on for tf32, else the process's own."""
+    matmul, cudnn = (True, True) if precision == "tf32" else _PROCESS_TF32
+    torch.backends.cuda.matmul.allow_tf32 = matmul
+    torch.backends.cudnn.allow_tf32 = cudnn
+
+
+def forward_precision(
+    precision: "Precision", device: torch.device
+) -> AbstractContextManager[object]:
+    """The context one policy forward runs in: bf16 autocast, else nothing."""
+    if precision != "bf16":
+        return nullcontext()
+    return torch.autocast(device.type, dtype=torch.bfloat16)
+
+
+# -- Learner -------------------------------------------------------------------
+# Trainable policy and Adam state shared by every update.
+#
+# The learning rule sets the rate before stepping. Recurrent CUDA kernels need
+# a training-mode forward before backward, so construction enables train mode.
+# The profiler times learning phases between existing device waits; it adds no
+# synchronization and draws no training randomness.
+
+
+class Learner:
+    def __init__(
+        self,
+        agent: "ActorCritic",
+        device: torch.device | str,
+        *,
+        minibatch_rows: int,
+        precision: "Precision" = "float32",
+    ) -> None:
+        if minibatch_rows < 1:
+            raise ValueError("minibatch_rows must be positive")
+        self.device = torch.device(device)
+        # Checkpoint admission returns eval mode. Recurrent CUDA kernels need
+        # a training-mode forward before backward, including on warm starts.
+        self.agent = agent.to(self.device).train()
+        self.minibatch_rows = minibatch_rows
+        self.precision: Precision = precision
+        # The learning rule sets the rate before stepping; retain the initial
+        # Adam configuration in snapshots even when selection skips all rows.
+        self.optimizer = torch.optim.Adam(self.agent.parameters(), lr=2.5e-4, eps=1e-5)
+        self.profiler = Profiler()
+
+    def forward_precision(self) -> AbstractContextManager[object]:
+        """Wrap each policy forward; callers cast its outputs to float32."""
+        return forward_precision(self.precision, self.device)

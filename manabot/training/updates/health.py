@@ -1,7 +1,7 @@
 """Local numerical health, independent of tracker availability and RNG.
 
 Batch measurements cover every collected row (`batch_health`). An
-`OptimizerHealth` is the player's `StepRecorder` (`manabot.rl.step`): passed
+`OptimizerHealth` is the player's `StepRecorder` (`manabot.backends.torch.learner`): passed
 to `gradient_step`, it counts steps and samples gradient and parameter detail,
 including the critic readout's share, at iteration 1 and every 25th iteration.
 Safety checks run on every step, observed or not; absent samples remain absent.
@@ -15,9 +15,9 @@ import numpy as np
 import torch
 from torch import Tensor, nn
 
+from manabot.backends.torch.learner import check_objective
+from manabot.backends.torch.rl import NumericalError, float64_operand
 from manabot.infra.profiler import Profiler
-from manabot.rl.numerics import NumericalError, float64_operand
-from manabot.rl.step import check_objective
 from manabot.training.rollout.actions import PackedActions
 
 HEALTH_INTERVAL = 25

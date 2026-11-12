@@ -8,5 +8,5 @@ __getattr__ = moved(
         ("update_damped_iteration", "damped_policy_loss", "DampedTargets"),
         "manabot.training.updates.damped_policy",
     )
-    | {"categorical_lambda_returns": "manabot.rl.returns"},
+    | {"categorical_lambda_returns": "manabot.backends.torch.rl"},
 )

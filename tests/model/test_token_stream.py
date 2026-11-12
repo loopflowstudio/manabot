@@ -3,9 +3,9 @@
 import pytest
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.token_stream import TOKEN_BUCKET, bucket_length, pack, unpack
 from manabot.verify.action_cases import decision_case, reorder_offers

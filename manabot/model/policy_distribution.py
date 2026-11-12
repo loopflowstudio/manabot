@@ -8,8 +8,11 @@ floor. Collection and learning share this normalization and legal mask.
 import torch
 from torch import Tensor
 
+from manabot.backends.torch.rl import (
+    NumericalError as _NumericalError,
+    require as _require,
+)
 from manabot.infra.deprecation import moved
-from manabot.rl.numerics import NumericalError as _NumericalError, require as _require
 
 
 def legal_mask(mask: Tensor) -> Tensor:
@@ -153,9 +156,9 @@ def check_behavior(
 __getattr__ = moved(
     __name__,
     {
-        "NumericalError": "manabot.rl.numerics",
-        "require": "manabot.rl.numerics",
-        "clipped_surrogate": "manabot.rl.losses",
-        "reverse_kl": "manabot.rl.losses",
+        "NumericalError": "manabot.backends.torch.rl",
+        "require": "manabot.backends.torch.rl",
+        "clipped_surrogate": "manabot.backends.torch.rl",
+        "reverse_kl": "manabot.backends.torch.rl",
     },
 )

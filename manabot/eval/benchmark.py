@@ -28,6 +28,7 @@ from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import BaseModel
 
+from manabot.backends.torch.checkpoint import local_checkpoint_file
 from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
 from manabot.eval.evaluation import (
     EvaluationRequest,
@@ -41,7 +42,6 @@ from manabot.eval.results import EvaluationRow
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.registration import PlayerRegistration

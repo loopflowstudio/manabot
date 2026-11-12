@@ -1,11 +1,12 @@
-"""Deprecated: moved to `manabot.training.updates.learner`."""
+"""Deprecated: moved to `manabot.backends.torch.learner` and `manabot.training.updates.learner`."""
 
 from manabot.infra.deprecation import moved
 
 __getattr__ = moved(
     __name__,
-    dict.fromkeys(
-        ("Learner", "AdmittedRollout", "observation_tensors"),
+    {"Learner": "manabot.backends.torch.learner"}
+    | dict.fromkeys(
+        ("AdmittedRollout", "observation_tensors"),
         "manabot.training.updates.learner",
     ),
 )

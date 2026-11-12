@@ -402,8 +402,8 @@ def _infer(
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Collection's preparation, forward and action selection
     (`SeatRoutedCollector._sample_learning_rows` up to rollout recording)."""
+    from manabot.backends.torch.learner import forward_precision
     from manabot.model.policy_distribution import legal_mask, policy_logs, require
-    from manabot.training.precision import forward_precision
 
     prepared = scope.prepare(obs)
     with torch.no_grad():
@@ -621,11 +621,11 @@ def run_arm(
     reference: Outputs | None,
 ) -> tuple[dict[str, Any], Outputs]:
     """One arm of one group; returns its receipt and fixed-weight outputs."""
+    from manabot.backends.torch.learner import apply_matmul_precision
     from manabot.model.inference import PolicyInference
     from manabot.model.policy_distribution import NumericalError, policy_logs
     from manabot.training.learning.health import NumericalHealth, OptimizerHealth
     from manabot.training.learning.learner import Learner
-    from manabot.training.precision import apply_matmul_precision
 
     device = torch.device(probe.device)
     precision: Precision = "float32" if arm.startswith("float32") else arm  # type: ignore[assignment]

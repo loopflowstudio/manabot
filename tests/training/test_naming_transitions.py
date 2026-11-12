@@ -8,6 +8,8 @@ This is a bounded wiring check on real games, not a learning-quality claim.
 import numpy as np
 import torch
 
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import (
@@ -16,10 +18,8 @@ from manabot.infra.config import (
     ObservationConfig,
     RewardConfig,
 )
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.ppo import update_iteration
 
 SOZIN = {"Swamp": 17, "The Rise of Sozin": 23}

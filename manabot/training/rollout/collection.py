@@ -32,22 +32,22 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
+from manabot.backends.torch.learner import forward_precision
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import NumericalError, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
 from manabot.model.policy_distribution import legal_mask, policy_logs
-from manabot.rl.numerics import NumericalError, require
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,
     _allocate_buffers,
 )
 from manabot.training.decks import UniformDecks, pair_match
-from manabot.training.precision import forward_precision
 from manabot.training.regime import BatchClosure, Precision
 from manabot.training.rollout.actions import ACTION_FIELDS, ActionRows, PackedActions
 from manabot.training.rollout.adaptive import (

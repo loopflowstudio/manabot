@@ -10,19 +10,22 @@ import math
 import numpy as np
 import torch
 
-from manabot.env.observation import ACTION_TYPE_DIM
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.policy_distribution import legal_mask, policy_logs
-from manabot.rl.losses import (
+from manabot.backends.torch.learner import Learner, gradient_step
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import (
     clipped_surrogate,
     entropy,
+    float64_operand,
+    require,
     reverse_kl,
+    selected_mean,
+    selected_rows,
     squared_value_loss,
+    standardized_advantages,
+    transition_gae,
 )
-from manabot.rl.numerics import float64_operand, require
-from manabot.rl.returns import standardized_advantages, transition_gae
-from manabot.rl.selection import selected_mean, selected_rows
-from manabot.rl.step import gradient_step
+from manabot.env.observation import ACTION_TYPE_DIM
+from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
@@ -32,7 +35,7 @@ from manabot.training.updates.health import (
     failure_tensors,
     minibatch_tensors,
 )
-from manabot.training.updates.learner import AdmittedRollout, Learner
+from manabot.training.updates.learner import AdmittedRollout
 from manabot.training.updates.references import reference_distribution
 from manabot.training.updates.selection import UpdateDiagnostics, selection_diagnostics
 

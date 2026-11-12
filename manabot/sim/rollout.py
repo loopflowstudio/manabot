@@ -25,12 +25,12 @@ from typing import Any
 import numpy as np
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import admit_on_device
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.flat_mc import (

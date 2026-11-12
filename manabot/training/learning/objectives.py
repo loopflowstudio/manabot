@@ -9,13 +9,13 @@ import warnings
 
 import numpy as np
 
+from manabot.backends.torch.learner import Learner
+from manabot.backends.torch.policy import ActorCritic
 from manabot.infra.deprecation import moved
-from manabot.model.actor_critic import ActorCritic
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates import ppo
 from manabot.training.updates.damped_policy import update_damped_iteration
-from manabot.training.updates.learner import Learner
 from manabot.training.updates.selection import UpdateDiagnostics
 
 
@@ -53,4 +53,4 @@ def update_iteration(
     )
 
 
-__getattr__ = moved(__name__, {"update_ema": "manabot.rl.step"})
+__getattr__ = moved(__name__, {"update_ema": "manabot.backends.torch.learner"})

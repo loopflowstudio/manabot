@@ -4,12 +4,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from managym._managym import AgentError
-from managym.decision import Observation
-from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 import numpy as np
 import pytest
 import torch
 
+from manabot.backends.torch.checkpoint import save_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
@@ -24,8 +24,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
@@ -38,6 +36,8 @@ from manabot.sim.search.local_update import (
     regularized_update,
 )
 import managym
+from managym.decision import Observation
+from managym.possible_worlds import PossibleWorldSpace, WorldQuery
 
 
 def small_match() -> MatchConfig:

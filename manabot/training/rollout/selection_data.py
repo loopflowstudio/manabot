@@ -15,12 +15,12 @@ from typing import Literal
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.failures import ScalarCapture
 from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.training.regime import SelectionGameSpec, Strict

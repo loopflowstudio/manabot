@@ -25,8 +25,6 @@ import time
 from typing import Callable, Literal, Mapping, Sequence
 
 import managym._managym as native
-from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
-from managym.possible_worlds import WorldQuery
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
@@ -61,6 +59,8 @@ from manabot.sim.search.sampling import (
     validate_hand,
 )
 import managym
+from managym.decision import Command, DecisionFrame, Observation, SemanticTransition
+from managym.possible_worlds import WorldQuery
 
 FloatArray = NDArray[np.float64]
 
@@ -480,7 +480,7 @@ def local_search_source_sha256() -> str:
         "manabot/sim/search/rollout.py",
         "manabot/sim/search/rollout_receipt.py",
         "manabot/sim/search/sampling.py",
-        "manabot/model/actor_critic.py",
+        "manabot/backends/torch/policy.py",
         "manabot/model/facts.py",
         "manabot/belief/sampling.py",
         "manabot/belief/sampling_data.py",

@@ -28,7 +28,7 @@ from manabot.model.buckets import BucketSizes, bucket_sizes, trim_observation
 from manabot.model.semantic_cards import CardReferences
 
 if TYPE_CHECKING:
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
 
 
 def transfer(
