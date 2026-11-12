@@ -35,7 +35,7 @@ type Updates = dict[int, MetricRow]
 # The Etude row table holding each self-play update's SelfPlayOutcome rows.
 OUTCOME_TABLE = "self_play_outcomes"
 # Runs written from 1659b0e29 referenced manabot-written tables by this metric;
-# bf4e280f7 is the last revision that reads them.
+# earlier revisions such as bf4e280f7 read them.
 _RETIRED_OUTCOME_REFERENCE = "self_play_outcomes/table"
 
 # Lists whose entries are named by fields, not by position. Self-play lists

@@ -371,7 +371,7 @@ updates before fetching tables; unreferenced tables supply no results, and a
 missing or damaged selected table raises, naming the file to restore. Historical
 scalar outcome metrics remain readable unchanged. Runs that recorded
 `self_play_outcomes/table` references (written from `1659b0e29`) are refused;
-read them from `bf4e280f7`, the last revision that does. Selection and belief
+read them from a revision before this change, such as `bf4e280f7`. Selection and belief
 summaries stay in their stage's `diagnostics`.
 
 The Perf panel's "Update time" series shows where an update goes:
