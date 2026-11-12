@@ -2,8 +2,8 @@
 
 Jack Heart: "license should be MIT" (Task directive snapshot).
 
-Reversible assumption: `Copyright (c) 2026 Manabot contributors`; no specific
-copyright holder was supplied. No open product question.
+Jack Heart, 2026-11-11: "Make it (c) Loopflow Studio". LICENSE reads
+`Copyright (c) 2026 Loopflow Studio`. No open product question.
 
 The Task brief calls `tests/fixtures/seventeenlands/LICENSE` CC BY 4.0, but it
 begins "GNU GENERAL PUBLIC LICENSE", "Version 3, 29 June 2007". README links
