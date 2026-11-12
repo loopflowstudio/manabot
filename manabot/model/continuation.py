@@ -27,9 +27,15 @@ class ContinuationEncoder(nn.Module):
         rows: torch.Tensor,
         objects: torch.Tensor,
         definitions: torch.Tensor,
+        *,
+        count: int = RELATION_ROWS,
     ) -> torch.Tensor:
-        """Return [B,R,D], zero for padding; shared by pooling and frame joins."""
-        if rows.shape[1:] != (RELATION_ROWS, self.relation_dim):
+        """Return [B,R,D], zero for padding; shared by pooling and frame joins.
+
+        `count` is the admitted row count: the capacity, or a bucket the
+        caller trimmed the rows to.
+        """
+        if rows.shape[1:] != (count, self.relation_dim):
             raise ValueError(f"expected [batch, 64, {self.relation_dim}] relations")
         valid = rows[..., RELATION_VALID_INDEX]
         if not ((valid == 0) | (valid == 1)).all():

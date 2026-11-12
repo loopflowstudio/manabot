@@ -35,18 +35,27 @@ smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
 with initial and endpoint evaluation. `--steps`, `--seconds` and
 `--learning-seats` and `--device cpu|mps|cuda` apply only to these recipes.
-Without `--device`, both select CUDA first, then Apple MPS. Baseline requires
-an accelerator and rejects CPU; use `--recipe local` on CPU-only machines.
-Local defaults to CPU when no accelerator is available and accepts an explicit
-CPU override.
+Without `--device`, both select CUDA when available; Apple MPS is used only
+when requested with `--device mps`. Baseline requires an accelerator and
+rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
+CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
 retired and fail.
 
-Apple Silicon MPS is admitted for float32 ordinary self-play through
-`execute_regime` and both CLI recipes.
-An unavailable device fails explicitly. Float64 loss and diagnostic arithmetic
-runs on the host with gradients preserved; no automatic operator fallback is
-enabled. Reduced precision remains CUDA-only. MPS process recovery, belief
+CPU is the default and recommended device on Apple Silicon. On a quiet Apple
+M2, MPS was slower than CPU for collection at every measured batch size, only
+tied 8-thread CPU for learning, and its driver memory grew past 20 GB within a
+few learner steps; `torch.compile` and fixed minibatch sizes did not change
+that. Apple Silicon MPS remains admitted, on explicit request, for float32
+ordinary self-play through `execute_regime` and both CLI recipes, and requires
+Torch 2.15 or newer: on an
+Apple M2, Torch 2.10–2.13 compute wrong MPS linear-layer weight gradients,
+which gradient clipping then applies (see `manabot/training/mps.py`). The
+repository lock installs 2.15. With an older Torch, an explicit `--device mps`
+and any MPS stage stop before training with a message naming both versions. An unavailable
+device fails explicitly. Float64 loss and diagnostic arithmetic runs on the
+host with gradients preserved; no automatic operator fallback is enabled.
+Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
 for this workflow. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process

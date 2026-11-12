@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn runtime_only_programs_have_catalog_tokens() {
         use crate::{
-            cards::tokens::{learning_catalog, rules_tokens},
+            cards::tokens::{catalog_tokens, rules_tokens},
             flow::{
                 event::GameEvent,
                 game::CastChoices,
@@ -281,7 +281,7 @@ mod tests {
             },
         };
         let pack = default_content_pack();
-        let catalog = learning_catalog(pack).unwrap();
+        let catalog = catalog_tokens(pack).unwrap();
         let known: std::collections::HashSet<_> = catalog
             .token_kind
             .into_iter()
