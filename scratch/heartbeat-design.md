@@ -68,7 +68,7 @@ the PR description.
 
 The user's request: "you may also want to coordinate with mtg-242 which is also touching mana payment".
 MTG-242 (`jack/mtg-242-generalize-mana-spending-restrictions-and-payment-resources`,
-worktree `../manabot.mtg-242-generalize-mana-spending`, no PR yet) reworks
+worktree `../manabot.mtg-242-generalize-mana-spending`, PR #496 open on 2026-11-12) reworks
 `state/mana.rs` restricted-pool classes into typed `ManaRestriction` /
 `SpendingContext`, and makes the encoders refuse restricted mana outside the
 representable list (its `scratch/questions.md` proposes a
