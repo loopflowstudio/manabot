@@ -27,9 +27,10 @@ actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
-The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
-`--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
-the local device; baseline rejects CPU. MPS self-play uses float32 and requires
+The local recipe selects CUDA when available and CPU otherwise; Apple MPS is used
+only with an explicit `--device mps`. `--recipe baseline` requires CUDA or an
+explicit `--device mps`. `--device cpu|mps|cuda` overrides the local device;
+baseline rejects CPU. MPS self-play uses float32 and requires
 Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
