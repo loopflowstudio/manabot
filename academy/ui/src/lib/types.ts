@@ -32,8 +32,6 @@ export interface CardState {
   cast_permission?: CastPermission;
   /** The value of X announced for this spell on the stack. */
   x?: number;
-  /** A graveyard card put there from the battlefield this turn. */
-  from_battlefield_this_turn?: boolean;
 }
 
 /** A public permission to play an exiled card; only set terms are present. */

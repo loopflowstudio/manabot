@@ -579,6 +579,8 @@ class ManaCost:
     hybrid: List[tuple[int, int]]
     cost: List[int]
     mana_value: int
+    # Number of {X} symbols; mana_value counts none of them (CR 202.3e).
+    x: int
 
 class CardTypes:
     is_castable: bool
