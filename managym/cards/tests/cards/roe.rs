@@ -96,7 +96,8 @@ fn audit_prism_treasure_empty_pool_activation() {
     s.advance_to_active_step(0, managym::flow::turn::StepKind::Main);
     // Only the activation is under test; do not introduce Prism's ETB draw.
     s.force_permanent_on_battlefield(0, "Prophetic Prism");
-    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
     activate_named(&mut s, "Prophetic Prism", 0);
     // Paying the upfront cost exposes the nested Treasure/color decisions.
@@ -123,7 +124,8 @@ fn audit_prism_treasure_empty_pool_activation() {
 fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
     let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
     enter_and_settle(&mut s, "Prophetic Prism");
-    s.game_mut().create_token("Treasure", PlayerId(0), false);
+    s.game_mut()
+        .create_token("token.treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
     s.game_mut().scenario_refresh_priority().unwrap();
     let prism = permanent_named(&s, "Prophetic Prism");
@@ -340,7 +342,8 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
     for spell in [false, true] {
         let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner", "Raging Goblin"]);
         enter_and_settle(&mut s, "Prophetic Prism");
-        s.game_mut().create_token("Treasure", PlayerId(0), false);
+        s.game_mut()
+            .create_token("token.treasure", PlayerId(0), false);
         let prism = permanent_named(&s, "Prophetic Prism");
         let treasure = permanent_named(&s, "Treasure");
         s.set_player_mana_pool(0, "0");
@@ -384,7 +387,8 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
         enter_and_settle(&mut s, "Prophetic Prism");
         enter_and_settle(&mut s, "Prophetic Prism");
         if seed {
-            s.game_mut().create_token("Treasure", PlayerId(0), false);
+            s.game_mut()
+                .create_token("token.treasure", PlayerId(0), false);
         }
         s.set_player_mana_pool(0, "0");
         s.game_mut().scenario_refresh_priority().unwrap();
@@ -487,7 +491,8 @@ fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
     for life in [1, 3] {
         let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
         enter_and_settle(&mut s, "Prophetic Prism");
-        s.game_mut().create_token("Treasure", PlayerId(0), false);
+        s.game_mut()
+            .create_token("token.treasure", PlayerId(0), false);
         let treasure = permanent_named(&s, "Treasure");
         let source_card = s.game().state.permanents[treasure].as_ref().unwrap().card;
         s.game_mut().state.cards[source_card].activated_abilities[0].life_cost = 2;

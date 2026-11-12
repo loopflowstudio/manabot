@@ -103,9 +103,10 @@ impl Game {
                         [Effect::AddMana { mana, .. }] => {
                             Some(format!("Add {}", mana_description(mana)))
                         }
-                        [Effect::CreateToken { token_name, .. }] => {
-                            Some(format!("Create a {token_name} token"))
-                        }
+                        [Effect::CreateToken { token, .. }] => Some(format!(
+                            "Create a {} token",
+                            default_content_pack().token_name(token)
+                        )),
                         [Effect::PlaceTargetInLibrary { second_from_top }] => {
                             Some(if *second_from_top {
                                 "Second from the top".into()

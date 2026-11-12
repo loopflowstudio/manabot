@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "51fea61f8f3958c56c8b2a9d9ba69636aa6688e831cf472c0b8eccfd1bfe286d",
+    "authority_receipt_sha256": "ff927beb175ccf8ff11d1a105bca4061fa9d667fd898cf53679b0bae7dae7964",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,19 +45,19 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "51fea61f8f3958c56c8b2a9d9ba69636aa6688e831cf472c0b8eccfd1bfe286d"
+          "sha256": "ff927beb175ccf8ff11d1a105bca4061fa9d667fd898cf53679b0bae7dae7964"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "83bd9a1d90d7ecf6d0d9729712ac52870f160d71ec212605449c33ff66876108"
+          "sha256": "028ee7f27ca9444888f981464fa6cf3b31fba187ca46d1ef26d49276ebb96f3b"
         },
         {
           "path": "academy/server.py",
           "sha256": "e16bc94ff65c11ffeb889277e32ce391dbd686a474e60aaa22903c05cea02c44"
         },
         {
-          "path": "manabot/managym/experience_projection.py",
-          "sha256": "01122092855a751a5c82740538d59e3ea10d051faace0024325316c1bf8f10fc"
+          "path": "managym/experience_projection.py",
+          "sha256": "58d3ed63bc9fbd7fe2ffaa75a1136c659fe27896c110d644e5f4795168b074a0"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -72,28 +72,28 @@
           "sha256": "fe7079e161c2f65c715a53552864dbe888a144c4432402f42c033b7d31580c5d"
         },
         {
-          "path": "manabot/managym/__init__.pyi",
-          "sha256": "0a71dcb3e038d7469eb86fa1bd7caee9694c0a20f4f6eea9aef9dbb097e85e4b"
+          "path": "managym/__init__.pyi",
+          "sha256": "e6f81b0ea69225d1388c523da83843f2483af538989e6e51a7bcbb854fcd849d"
         },
         {
-          "path": "manabot/managym/decision.py",
+          "path": "managym/decision.py",
           "sha256": "879a2eb47eaf4011e67743ac429460359ba77d37594b423620293c4fc96cf3a1"
         },
         {
-          "path": "manabot/managym/possible_worlds.py",
-          "sha256": "a4575b3e2afed8cc9dc3913a1d05d551bc787ca18a815132153f47c9570a7543"
+          "path": "managym/possible_worlds.py",
+          "sha256": "b71063885e5260bf5c7999734b54238297072171d5b7a78408e97a42042a252b"
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "8f8eb2043eeeca57e72c77e9e1e6d954b7a883d65c88b58baf3a4ae41d04c097"
+          "sha256": "8b8447c5256af1d14b6a36667c2496a7c64d40f0d7c28bafc0825752039e4a9f"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "d84f49327c5fd7e720537d349c1aa4b34016f309a7ab4a6259189fd7d6e182bc"
+          "sha256": "943acdf1fb7f1c9be2474a2c011f7e0829367c333474a5848607d38bf3bb2cdb"
         },
         {
           "path": "managym/src/decision.rs",
-          "sha256": "6987286229e03b2a32855cc7cbd343e19366c8c7c50551c65b2f60653b7a20ed"
+          "sha256": "7de0c11c7053895ca3da39ead82014b354d7cd2664113cd4a031fa676b1c4b0e"
         },
         {
           "path": "managym/src/possible_worlds.rs",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "c82ca509b1fea2f2762264fcf2cd0097608450beb4772c014284a0a07c2113d7"
+          "sha256": "0ee006842bf2b31a9a88939c1cccd8bb265938f83daf2727a5ee500749fbc6f7"
         },
         {
           "path": "managym/cards/tests/cards/stx.rs",
@@ -109,7 +109,7 @@
         },
         {
           "path": "scripts/verify-public-commitment-parity",
-          "sha256": "35953a4775a4709ec999a4bfcb003bb120581df8e2cf32a5196fba88915420bb"
+          "sha256": "fd3a15066ca3df1a45c7fcb93e8964b8e13de3d7aac8f7cf8620a11d37be8f12"
         },
         {
           "path": "tests/belief/test_player.py",
@@ -121,14 +121,14 @@
         },
         {
           "path": "tests/academy/test_public_commitment_parity.py",
-          "sha256": "b90d610cc120e56d96ea647a8e0a5f94fdafe522819735e8969b930853df013f"
+          "sha256": "9f3e2349db82d8416e05358108d18bd9dd34cbfe6800c6357cbc66dfc5314b30"
         },
         {
           "path": "tests/sim/test_conditional_search.py",
           "sha256": "fe7203833b223d1efa2024782cb8ff2a666e981f12c402b9e54a1acfea49db9a"
         }
       ],
-      "sha256": "60ddf65801e3feadf83ec64de16275114136243d3a49ccad2a90c8ace145b3dc"
+      "sha256": "2813e05442f2c142782e411627fd5047d586b9092cae06f360f9f5769d44e03b"
     },
     "seed": 0,
     "semantic_decision_version": 8

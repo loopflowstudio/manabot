@@ -25,17 +25,20 @@ are in the [README](../README.md#contracts-the-code-enforces).
    types (cards, zones, mana, effects), re-exported here as `managym::state`;
    **`src/state/`** adds players, decks and the canonical match-state hash
 4. **`cards/`**: the `managym-cards` crate — card set modules (one per printed set)
-   and their tests, reached by the engine only through `managym_cards::catalog()`;
+   and their tests, reached by the engine only through `managym_cards::catalog()` and `token_catalog()`;
    **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
 `cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+(`Effect`, `Ability`, `TargetSpec`, …). Tokens are not cards: each is a
+`TokenDefinition` in `cards/src/tokens.rs`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine runs these values
+directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
-support check (defined non-token cards, excluding rules fixtures) and the set
+support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
 decklist data separate from card behavior; see
 [the content contract](../content/semantic/README.md).

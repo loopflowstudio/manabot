@@ -864,7 +864,7 @@ fn cr_613_sun_urborg_magus_and_saga_keep_earlier_layers_and_external_grants() {
             tap_source: true,
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         })),
     );
@@ -1118,7 +1118,7 @@ fn cr_613_moon_after_saga_chapters_preserves_their_resolved_abilities() {
             mana_cost: ManaCost::parse("{2}"),
             // Existing Construct token witnesses the retained creation program;
             // Saga-specific token sizing is independent of this layer interaction.
-            effects: vec![Effect::create_tokens("Ballistic Boulder", 1)],
+            effects: vec![Effect::create_tokens("token.ballistic_boulder", 1)],
             ..Default::default()
         },
     ];

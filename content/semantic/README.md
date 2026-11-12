@@ -7,9 +7,16 @@ printed it, under [`managym/cards/src/`](../../managym/cards/src/)
 (`Ability`, `Effect`, `TargetSpec`, `TriggerCondition`, …). That value is the
 card: the engine runs it, the pool describes it and the policy reads it. There
 is no second card vocabulary, compiler or IR for current content. Each
-definition carries its key (`<set>.<card>`, tokens `token.*`) and the Scryfall
-id of that printing; Oracle text, rulings and images are reachable from the id,
-while the printed `text_box` stays in the definition so play works offline.
+definition carries its key (`<set>.<card>`) and the Scryfall id of that
+printing; Oracle text, rulings and images are reachable from the id, while the
+printed `text_box` stays in the definition so play works offline.
+
+Tokens are not cards. Each is a `TokenDefinition` in
+[`managym/cards/src/tokens.rs`](../../managym/cards/src/tokens.rs), written in
+the same rules types and keyed `token.*`. Effects create a token by key
+(`Effect::create_tokens("token.spirit", 1)`), so two tokens may share a printed
+name. A token's Scryfall id is its first token printing's, and is absent only
+for a token that was never printed.
 
 New behavior is a new rules-type variant (for example an `Effect`) with a
 directed card test in `managym/cards/tests/cards/<set>.rs`, never card-specific logic.
@@ -26,13 +33,15 @@ the open TLA work.
 
 ## The catalog and identity
 
-A world has one card list. The catalog registers every set-file definition plus
-the rules fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny),
-in name order, each double-faced card's back face right after its front; every
+A world has one card list. The catalog registers every set-file definition,
+every token definition and the rules fixtures in `managym/src/cards/fixtures.rs`
+(Crossroads of Destiny), in name order, each double-faced card's back face right after its front; every
 match runs on it. Its identity is its `content_digest`, which is the world
 identity's card digest. Authored setups are decklists over it
 ([`cards/setups.rs`](../../managym/src/cards/setups.rs)), named by preset or
 by the `pack_key` frozen evidence records; they are not packs.
+Token definitions have native IDs and learning rows so created tokens can be
+observed, but are never eligible for deck entry.
 `managym.content_pool("world")` exposes the world pool's native IDs, keys and
 eligibility without starting a game; `managym.set_cards(["tla", "lea"])` narrows
 it to chosen sets.

@@ -9,8 +9,8 @@
 //! Each definition contributes one *characteristics* span and one span per
 //! program (each triggered, mana, triggered-mana and activated ability, plus
 //! the spell). Identity and printed text (`key`, `scryfall_id`, `name`,
-//! `text_box`) are never tokens. A `token_name` becomes a definition
-//! reference to the created token's row, and a double-faced card's
+//! `text_box`) are never tokens. A created token's key (serialized as
+//! `token_name`) becomes a definition reference to that token's row, and a double-faced card's
 //! `back_face` one to its back face's row, so the policy reads that
 //! definition in place.
 //!
@@ -246,7 +246,7 @@ pub(crate) struct TokenWriter<'p> {
     tokens: Vec<(u16, i32)>,
     /// Positions of definition reference tokens and their target rows.
     references: Vec<(usize, i32)>,
-    /// Name of the struct field being written, for `token_name` references.
+    /// Name of the struct field being written, for definition references.
     field: Option<&'static str>,
     /// Depth of nested structs; the top-level `CardDefinition` is depth 1.
     depth: usize,
@@ -405,11 +405,13 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
         unsupported("characters")
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
-        if matches!(self.field, Some("token_name" | "back_face")) {
-            let row = self
-                .pack
-                .definition_id(value)
-                .ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
+        let reference = match self.field {
+            Some("token_name") => Some(self.pack.token_id(value)),
+            Some("back_face") => Some(self.pack.definition_id(value)),
+            _ => None,
+        };
+        if let Some(row) = reference {
+            let row = row.ok_or_else(|| ContentError(format!("{value:?} is not in the pack")))?;
             let CardDefId(row) = row;
             self.references.push((self.tokens.len(), row as i32));
             self.push(TokenKind::DefinitionRef, row as i32);
@@ -707,13 +709,13 @@ mod tests {
     #[test]
     fn retained_rules_tokens_preserve_created_definition_identity() {
         let pack = default_content_pack();
-        let food = rules_tokens(&Effect::create_tokens("Food", 1), pack).unwrap();
-        let ally = rules_tokens(&Effect::create_tokens("Ally", 1), pack).unwrap();
+        let food = rules_tokens(&Effect::create_tokens("token.food", 1), pack).unwrap();
+        let ally = rules_tokens(&Effect::create_tokens("token.ally", 1), pack).unwrap();
         assert_ne!(food, ally);
-        for (name, tokens) in [("Food", food), ("Ally", ally)] {
+        for (key, tokens) in [("token.food", food), ("token.ally", ally)] {
             assert!(tokens.contains(&(
                 TokenKind::DefinitionRef as u16,
-                pack.definition_id(name).unwrap().0 as i32
+                pack.token_id(key).unwrap().0 as i32
             )));
         }
     }

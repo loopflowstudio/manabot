@@ -96,7 +96,8 @@ impl CounterProvenance {
 /// Copiable values are captured before a creation can suspend. No physical
 /// token or identity exists until creation replacements have finished.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub(crate) enum TokenDefinition {
+pub(crate) enum TokenSource {
+    /// The token definition with this `token.*` key.
     Registered(String),
     Copy {
         definition_id: crate::state::card::CardDefId,
@@ -129,7 +130,7 @@ pub(crate) enum ProposedEvent {
         target: ObjectRef,
     },
     CreateTokens {
-        definition: Box<TokenDefinition>,
+        definition: Box<TokenSource>,
         controller: PlayerId,
         count: i32,
         entry: ZoneEntry,
@@ -624,7 +625,7 @@ impl Game {
     /// allocated outside every zone, as entry proposals under its terms.
     fn allocate_tokens(
         &mut self,
-        definition: TokenDefinition,
+        definition: TokenSource,
         controller: PlayerId,
         count: i32,
         entry: ZoneEntry,
@@ -632,8 +633,8 @@ impl Game {
         let mut entries = Vec::new();
         for _ in 0..count {
             let card = match &definition {
-                TokenDefinition::Registered(name) => self.prepare_token(name, controller),
-                TokenDefinition::Copy {
+                TokenSource::Registered(key) => self.prepare_token(key, controller),
+                TokenSource::Copy {
                     definition_id,
                     definition,
                     front,

@@ -824,7 +824,9 @@ pub struct CardDefinition {
     pub keywords: Keywords,
     /// Explicit color identity for cards without a mana cost (tokens).
     pub color_override: Option<Colors>,
-    /// Tokens cease to exist outside the battlefield (CR 111.7, 704.5d).
+    /// Token status (CR 111.1): set on a [`TokenDefinition`]'s catalog row
+    /// and on token copies, never by a card. Tokens cease to exist outside
+    /// the battlefield (CR 111.7, 704.5d).
     pub is_token: bool,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
@@ -852,6 +854,37 @@ fn serialize_back_face<S: serde::Serializer>(
     match face {
         Some(face) => serializer.serialize_some(&face.name),
         None => serializer.serialize_none(),
+    }
+}
+
+/// A token definition (CR 111.1): not a card, so it has its own catalog,
+/// keyed `token.<name>`. Effects create tokens by key, so two tokens may
+/// share a printed name. Its characteristics and abilities are written in the
+/// same rules types as a card's; the engine registers them as an object
+/// definition with token status ([`TokenDefinition::object_definition`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TokenDefinition {
+    /// `token.<name>`, unique in the token catalog.
+    pub key: &'static str,
+    /// Scryfall card-object id of the token's first token printing; `None`
+    /// only for a token with no printing.
+    pub scryfall_id: Option<&'static str>,
+    /// The printed characteristics and abilities every token created from
+    /// this definition starts with. Identity (`key`, `scryfall_id`) and
+    /// token status live on the token definition, not here.
+    pub characteristics: CardDefinition,
+}
+
+impl TokenDefinition {
+    /// The object definition the engine runs: the characteristics with this
+    /// token's key, Scryfall id (empty when unprinted) and token status.
+    pub fn object_definition(&self) -> CardDefinition {
+        CardDefinition {
+            key: self.key,
+            scryfall_id: self.scryfall_id.unwrap_or(""),
+            is_token: true,
+            ..self.characteristics.clone()
+        }
     }
 }
 

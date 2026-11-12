@@ -14,7 +14,7 @@ use managym::state::{
     predicate::CardPredicate,
     subtype::subtype_category,
 };
-use managym_cards::catalog;
+use managym_cards::{catalog, token_catalog};
 use serde_json::Value;
 
 /// Where a condition sits: an `Effect::If` condition may ask anything; an
@@ -94,9 +94,16 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
     }
 }
 
+/// Every card definition and every token's characteristics.
+fn authored_definitions() -> impl Iterator<Item = &'static CardDefinition> {
+    catalog()
+        .iter()
+        .chain(token_catalog().iter().map(|token| &token.characteristics))
+}
+
 #[test]
 fn resolution_only_conditions_appear_only_in_effect_if() {
-    for definition in catalog() {
+    for definition in authored_definitions() {
         let misplaced = misplaced_resolution_conditions(definition);
         assert!(misplaced.is_empty(), "{}: {misplaced:?}", definition.key);
     }
@@ -233,9 +240,11 @@ fn tla_allocation_has_every_face_and_fixed_token_in_the_catalog() {
             }
             "token_template" if row["in_tla_closure"] == true => {
                 tokens += 1;
-                let id = catalog
-                    .definition_id(name)
+                let token = token_catalog()
+                    .iter()
+                    .find(|token| token.characteristics.name == name)
                     .unwrap_or_else(|| panic!("undefined allocated token {name}"));
+                let id = catalog.token_id(token.key).unwrap();
                 assert!(catalog.definition(id).unwrap().is_token, "{name}");
             }
             "copy_marker" => {
@@ -292,7 +301,7 @@ fn named_subtypes(value: &Value, key: Option<&str>, found: &mut Vec<String>) {
 #[test]
 fn every_authored_subtype_has_a_category() {
     let mut found = Vec::new();
-    for definition in catalog() {
+    for definition in authored_definitions() {
         let value = serde_json::to_value(definition).expect("definitions serialize");
         named_subtypes(&value, None, &mut found);
     }

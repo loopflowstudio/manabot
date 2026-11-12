@@ -12,7 +12,7 @@ use crate::{
         event::GameEvent,
         game::Game,
         proposed_event::{
-            EventBinding, ProposedDamageTarget, ProposedEvent, TokenDefinition, ZoneEntry,
+            EventBinding, ProposedDamageTarget, ProposedEvent, TokenSource, ZoneEntry,
         },
         trigger::{DelayedTrigger, DelayedTriggerEvent},
         turn::OnceEachTurnKey,
@@ -1319,7 +1319,7 @@ impl Game {
                     },
                 };
                 let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-                    definition: Box::new(TokenDefinition::Copy {
+                    definition: Box::new(TokenSource::Copy {
                         definition_id: self.state.cards[copied].definition_id,
                         definition: self.state.cards[copied].copiable_definition(),
                         front: self.state.cards[copied].front_face().cloned(),
@@ -1403,13 +1403,13 @@ impl Game {
                 None
             }
             Effect::CreateToken {
-                token_name,
+                token,
                 count,
                 tapped_and_attacking,
             } => {
                 let count = self.effect_value(count, frame).max(0);
                 let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-                    definition: Box::new(TokenDefinition::Registered(token_name.clone())),
+                    definition: Box::new(TokenSource::Registered(token.clone())),
                     controller: frame.controller,
                     count,
                     entry: ZoneEntry {

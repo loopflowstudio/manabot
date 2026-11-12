@@ -27,7 +27,7 @@ fn bastion_of_remembrance() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::create_tokens("Human Soldier", 1)],
+                effects: vec![Effect::create_tokens("token.human_soldier", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,

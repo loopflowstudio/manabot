@@ -31,7 +31,7 @@ fn deadly_dispute() -> CardDefinition {
             Effect::DrawCards {
                 count: EffectValue::Fixed(2),
             },
-            Effect::create_tokens("Treasure", 1),
+            Effect::create_tokens("token.treasure", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()

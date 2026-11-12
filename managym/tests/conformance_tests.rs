@@ -19,8 +19,8 @@
 // Sanctioned shell deviations (documented in
 // experiments/milestone-1-two-deck-slice.md) are allowlisted explicitly below.
 //
-// Cards that are NOT real Magic cards are either registered with
-// `is_token: true` (token definitions) or listed in NOT_REAL_CARDS and
+// Rows that are NOT real Magic cards are either tokens (`TokenDefinition`s,
+// registered with token status) or listed in NOT_REAL_CARDS and
 // marked `// not a real card` at their registration site; everything else
 // without a fixture entry fails this test.
 
@@ -209,7 +209,7 @@ fn every_registered_real_card_matches_scryfall() {
                 "{name}: no Scryfall fixture entry. New card registrations must be \
                  snapshotted: run `uv run scripts/refresh_card_fixture.py`. If the card \
                  is invented, mark it `// not a real card` and add it to NOT_REAL_CARDS \
-                 in conformance_tests.rs; token definitions must set `is_token: true`."
+                 in conformance_tests.rs; tokens are TokenDefinitions in `cards/src/tokens.rs`."
             ));
             continue;
         };

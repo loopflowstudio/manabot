@@ -741,7 +741,7 @@ fn air_nomad_legacy() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::YouControl(CardPredicate {
@@ -1051,7 +1051,7 @@ fn appa_steadfast_guardian() -> CardDefinition {
                     }),
                 },
                 intervening_if: None,
-                effects: vec![Effect::create_tokens("Ally", 1)],
+                effects: vec![Effect::create_tokens("token.ally", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -1429,7 +1429,7 @@ fn azula_on_the_hunt() -> CardDefinition {
                         player: PlayerSelector::You,
                         amount: EffectValue::Fixed(1),
                     },
-                    Effect::create_tokens("Clue", 1),
+                    Effect::create_tokens("token.clue", 1),
                 ],
             },
         ],
@@ -2085,7 +2085,7 @@ fn callous_inspector() -> CardDefinition {
                     player: PlayerSelector::You,
                     amount: EffectValue::Fixed(1),
                 },
-                Effect::create_tokens("Clue", 1),
+                Effect::create_tokens("token.clue", 1),
             ],
         }],
         text_box: text_box.into(),
@@ -2111,7 +2111,7 @@ fn canyon_crawler() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Food", 1)],
+            effects: vec![Effect::create_tokens("token.food", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             zone: ActivationZone::Hand,
@@ -2342,7 +2342,7 @@ fn crescent_island_temple() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::create_tokens(
-                    "Monk",
+                    "token.monk",
                     EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
@@ -2359,7 +2359,7 @@ fn crescent_island_temple() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::create_tokens("Monk", 1)],
+                effects: vec![Effect::create_tokens("token.monk", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -2388,7 +2388,7 @@ fn cruel_administrator() -> CardDefinition {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Soldier", 1)],
+            effects: vec![Effect::create_tokens("token.soldier", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2409,7 +2409,7 @@ fn cunning_maneuver() -> CardDefinition {
                 ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(3, 1),
             ),
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ],
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
         text_box: text_box.into(),
@@ -3468,7 +3468,7 @@ fn fire_nation_attacks() -> CardDefinition {
         name: "Fire Nation Attacks".into(),
         mana_cost: Some(ManaCost::parse("{4}{R}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::create_tokens("Soldier", 2)],
+        spell_effects: vec![Effect::create_tokens("token.soldier", 2)],
         statics: vec![StaticAbility::Flashback(ManaCost::parse("{8}{R}"))],
         text_box: text_box.into(),
         ..Default::default()
@@ -3581,7 +3581,7 @@ fn fire_nation_raider() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             intervening_if: Some(Condition::AttackedThisTurn),
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3638,7 +3638,7 @@ fn fire_nation_warship() -> CardDefinition {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(2),
@@ -3673,7 +3673,7 @@ fn fire_navy_trebuchet() -> CardDefinition {
             intervening_if: None,
             effects: vec![
                 Effect::CreateToken {
-                    token_name: "Ballistic Boulder".into(),
+                    token: "token.ballistic_boulder".into(),
                     count: EffectValue::Fixed(1),
                     tapped_and_attacking: true,
                 },
@@ -3746,7 +3746,7 @@ fn firebender_ascension() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::create_tokens("Soldier", 1)],
+                effects: vec![Effect::create_tokens("token.soldier", 1)],
             },
             Ability::Triggered {
                 condition: TriggerCondition::YourAttackingCreatureTriggers,
@@ -4017,7 +4017,7 @@ fn foggy_swamp_spirit_keeper() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-            effects: vec![Effect::create_tokens("Spirit", 1)],
+            effects: vec![Effect::create_tokens("token.spirit", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4116,7 +4116,7 @@ fn forecasting_fortune_teller() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4134,7 +4134,7 @@ fn gather_the_white_lotus() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
             Effect::create_tokens(
-                "Ally",
+                "token.ally",
                 EffectValue::BattlefieldMatching {
                     predicate: CardPredicate {
                         subtype: Some("Plains".into()),
@@ -4843,7 +4843,7 @@ fn invasion_reinforcements() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5020,7 +5020,7 @@ fn iroh_tea_master() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 intervening_if: None,
-                effects: vec![Effect::create_tokens("Food", 1)],
+                effects: vec![Effect::create_tokens("token.food", 1)],
             },
             Ability::Triggered {
                 condition: TriggerCondition::BeginningOfYourCombat,
@@ -5043,7 +5043,7 @@ fn iroh_tea_master() -> CardDefinition {
                                 },
                                 Effect::WhenYouDo {
                                     effects: vec![
-                                        Effect::create_tokens("Ally", 1),
+                                        Effect::create_tokens("token.ally", 1),
                                         Effect::put_counters(
                                             ObjectSelector::CreatedThisWay,
                                             CounterKind::PlusOnePlusOne,
@@ -5105,7 +5105,7 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
             ActivatedAbilityDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{5}"),
-                effects: vec![Effect::create_tokens("Ally", 1)],
+                effects: vec![Effect::create_tokens("token.ally", 1)],
                 ..Default::default()
             },
         ],
@@ -5271,7 +5271,7 @@ fn jet_s_brainwashing() -> CardDefinition {
                 ],
                 otherwise: vec![],
             },
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ],
         additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{3}"))],
         text_box: text_box.into(),
@@ -5343,7 +5343,7 @@ fn june_bounty_hunter() -> CardDefinition {
             }),
             own_turn_only: true,
             mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5426,7 +5426,7 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             own_turn_only: true,
@@ -5478,7 +5478,7 @@ fn knowledge_seeker() -> CardDefinition {
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::create_tokens("Clue", 1)],
+                effects: vec![Effect::create_tokens("token.clue", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -5557,7 +5557,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![
-                Effect::create_tokens("Ally", 1),
+                Effect::create_tokens("token.ally", 1),
                 Effect::SelectCards {
                     from: ObjectSelector::CreatedThisWay,
                     predicate: CardPredicate::creature(),
@@ -5693,7 +5693,7 @@ fn kyoshi_warriors() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5718,7 +5718,7 @@ fn leaves_from_the_vine() -> CardDefinition {
                         count: EffectValue::Fixed(3),
                         target: None,
                     },
-                    Effect::create_tokens("Food", 1),
+                    Effect::create_tokens("token.food", 1),
                 ],
             ),
             chapter(
@@ -5865,7 +5865,7 @@ fn lost_days() -> CardDefinition {
                     },
                 },
             },
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ],
         targeting: vec![TargetRequirement::one(TargetSpec::Permanent {
             predicate: CardPredicate {
@@ -6108,7 +6108,7 @@ fn messenger_hawk() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
@@ -6264,7 +6264,7 @@ fn momo_playful_pet() -> CardDefinition {
                 up_to: None,
                 unchosen: false,
                 modes: vec![
-                    vec![Effect::create_tokens("Food", 1)],
+                    vec![Effect::create_tokens("token.food", 1)],
                     vec![Effect::put_counters(
                         ObjectSelector::Target(TargetSpec::CreatureYouControl),
                         CounterKind::PlusOnePlusOne,
@@ -6440,7 +6440,7 @@ fn obsessive_pursuit() -> CardDefinition {
                 player: PlayerSelector::You,
                 amount: EffectValue::Fixed(1),
             },
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ]
     };
     let attacking_creature = || TargetSpec::Permanent {
@@ -6738,7 +6738,7 @@ fn path_to_redemption() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![
                 Effect::exile(ObjectSelector::Attached),
-                Effect::create_tokens("Ally", 1),
+                Effect::create_tokens("token.ally", 1),
             ],
             ..Default::default()
         }],
@@ -6941,7 +6941,7 @@ fn pretending_poxbearers() -> CardDefinition {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7187,7 +7187,7 @@ fn raven_eagle() -> CardDefinition {
                 Effect::exile(ObjectSelector::Target(graveyard_card())),
                 Effect::If {
                     condition: Condition::TargetCardExiled(CardPredicate::creature()),
-                    then: vec![Effect::create_tokens("Clue", 1)],
+                    then: vec![Effect::create_tokens("token.clue", 1)],
                     otherwise: vec![],
                 },
             ],
@@ -7282,7 +7282,7 @@ fn realm_of_koh() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{3}{B}"),
-            effects: vec![Effect::create_tokens("Spirit", 1)],
+            effects: vec![Effect::create_tokens("token.spirit", 1)],
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
@@ -7861,7 +7861,7 @@ fn sokka_tenacious_tactician() -> CardDefinition {
                 condition: TriggerCondition::YouCastSpell {
                     predicate: noncreature(),
                 },
-                effects: vec![Effect::create_tokens("Ally", 1)],
+                effects: vec![Effect::create_tokens("token.ally", 1)],
             },
         ],
         statics: vec![
@@ -7893,7 +7893,7 @@ fn sold_out() -> CardDefinition {
             Effect::exile(ObjectSelector::Target(TargetSpec::Creature)),
             Effect::If {
                 condition: Condition::TargetDealtDamageThisTurn,
-                then: vec![Effect::create_tokens("Clue", 1)],
+                then: vec![Effect::create_tokens("token.clue", 1)],
                 otherwise: vec![],
             },
         ],
@@ -8257,7 +8257,7 @@ fn suki_courageous_rescuer() -> CardDefinition {
                 }),
             },
             intervening_if: None,
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -8282,7 +8282,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::CreateToken {
-                token_name: "Ally".into(),
+                token: "token.ally".into(),
                 count: EffectValue::Fixed(1),
                 tapped_and_attacking: true,
             }],
@@ -8352,7 +8352,7 @@ fn sun_warriors() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -8547,7 +8547,7 @@ fn the_cave_of_two_lovers() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         subtypes: vec!["Saga".into()],
         abilities: vec![
-            chapter(1, vec![Effect::create_tokens("Ally", 2)]),
+            chapter(1, vec![Effect::create_tokens("token.ally", 2)]),
             chapter(
                 2,
                 vec![Effect::search_library(
@@ -8591,7 +8591,7 @@ fn the_earth_king() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::create_tokens("Bear", 1)],
+                effects: vec![Effect::create_tokens("token.bear", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -8754,7 +8754,7 @@ fn the_legend_of_kuruk() -> CardDefinition {
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate::default(),
                 },
-                effects: vec![Effect::create_tokens("Spirit", 1)],
+                effects: vec![Effect::create_tokens("token.spirit", 1)],
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 exhaust: true,
@@ -8877,7 +8877,7 @@ fn the_legend_of_roku() -> CardDefinition {
             }],
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{8}"),
-                effects: vec![Effect::create_tokens("Dragon", 1)],
+                effects: vec![Effect::create_tokens("token.dragon", 1)],
                 ..Default::default()
             }],
             text_box: back_text.into(),
@@ -9032,7 +9032,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::create_tokens("Clue", 1)],
+            effects: vec![Effect::create_tokens("token.clue", 1)],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
@@ -9339,7 +9339,7 @@ fn tolls_of_war() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::create_tokens("Clue", 1)],
+                effects: vec![Effect::create_tokens("token.clue", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -9353,7 +9353,7 @@ fn tolls_of_war() -> CardDefinition {
                         }),
                     }),
                 },
-                effects: vec![Effect::create_tokens("Ally", 1)],
+                effects: vec![Effect::create_tokens("token.ally", 1)],
             },
         ],
         text_box: text_box.into(),
@@ -9510,7 +9510,7 @@ fn treetop_freedom_fighters() -> CardDefinition {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::create_tokens("Ally", 1)],
+            effects: vec![Effect::create_tokens("token.ally", 1)],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -9561,7 +9561,7 @@ fn true_ancestry() -> CardDefinition {
                     },
                 ))],
             },
-            Effect::create_tokens("Clue", 1),
+            Effect::create_tokens("token.clue", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -9878,7 +9878,7 @@ fn united_front() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{X}{W}{W}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::create_tokens("Ally", EffectValue::X),
+            Effect::create_tokens("token.ally", EffectValue::X),
             Effect::put_counters(
                 ObjectSelector::each_you_control(CardPredicate {
                     card_type: Some(CardType::Creature),
@@ -9911,7 +9911,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::create_tokens("Food", 1)],
+                effects: vec![Effect::create_tokens("token.food", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
@@ -10863,7 +10863,7 @@ fn zuko_s_exile() -> CardDefinition {
             })),
             Effect::ForPlayer {
                 player: PlayerSelector::TargetController,
-                effects: vec![Effect::create_tokens("Clue", 1)],
+                effects: vec![Effect::create_tokens("token.clue", 1)],
             },
         ],
         text_box: text_box.into(),

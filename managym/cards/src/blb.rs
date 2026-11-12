@@ -24,7 +24,7 @@ fn savor() -> CardDefinition {
                 ObjectSelector::Target(TargetSpec::Creature),
                 Modification::pump(-2, -2),
             ),
-            Effect::create_tokens("Food", 1),
+            Effect::create_tokens("token.food", 1),
         ],
         text_box: text_box.into(),
         ..Default::default()

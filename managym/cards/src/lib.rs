@@ -5,10 +5,11 @@
 //! (written in the `managym-state` rules types), listed in its set module's
 //! `cards()`; [`catalog`] gathers every set and is the only way the engine
 //! reaches them. New behavior is a new `Effect` (or other rules-type) variant,
-//! never card-specific logic. Every token lives in `tokens.rs`. Defined
-//! non-token cards are supported; known rules bugs are tracked as Tasks,
-//! not deck-entry exclusions. Card behavior
-//! tests live in `tests/cards/<set>.rs` beside the sets.
+//! never card-specific logic. Tokens are not cards: each is a
+//! [`TokenDefinition`] in `tokens.rs`, reached through [`token_catalog`] by
+//! its `token.*` key. Defined cards are supported; known rules bugs are
+//! tracked as Tasks, not deck-entry exclusions. Card behavior tests live in
+//! `tests/cards/<set>.rs` beside the sets.
 
 mod afr;
 mod blb;
@@ -47,9 +48,10 @@ mod zen;
 
 use std::sync::OnceLock;
 
-use managym_state::card::CardDefinition;
+use managym_state::card::{CardDefinition, TokenDefinition};
 
-/// Every card and token definition from every set, sorted by key.
+/// Every card definition from every set, sorted by key. Tokens are in
+/// [`token_catalog`].
 pub fn catalog() -> &'static [CardDefinition] {
     static CATALOG: OnceLock<Vec<CardDefinition>> = OnceLock::new();
     CATALOG.get_or_init(|| {
@@ -62,7 +64,17 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 34] = [
+/// Every token definition, sorted by key.
+pub fn token_catalog() -> &'static [TokenDefinition] {
+    static TOKENS: OnceLock<Vec<TokenDefinition>> = OnceLock::new();
+    TOKENS.get_or_init(|| {
+        let mut definitions = tokens::tokens();
+        definitions.sort_by_key(|definition| definition.key);
+        definitions
+    })
+}
+
+const SETS: [fn() -> Vec<CardDefinition>; 33] = [
     afr::cards,
     blb::cards,
     bro::cards,
@@ -93,7 +105,6 @@ const SETS: [fn() -> Vec<CardDefinition>; 34] = [
     stx::cards,
     ths::cards,
     tla::cards,
-    tokens::cards,
     vis::cards,
     war::cards,
     zen::cards,

@@ -309,19 +309,19 @@ impl Game {
         self.state.mana_pool_mut(controller).add(&produced);
     }
 
-    /// Create a token from a registered token definition under `controller`'s
-    /// control. Tokens are full cards in `GameState::cards`; state-based
+    /// Create a token from the token definition keyed `key` (`token.<name>`)
+    /// under `controller`'s control. Tokens are full cards in `GameState::cards`; state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
     /// Returns the token's permanent, absent if it did not stay on the battlefield.
     pub fn create_token(
         &mut self,
-        name: &str,
+        key: &str,
         controller: PlayerId,
         tapped_and_attacking: bool,
     ) -> Option<PermanentId> {
         let batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-            definition: Box::new(crate::flow::proposed_event::TokenDefinition::Registered(
-                name.into(),
+            definition: Box::new(crate::flow::proposed_event::TokenSource::Registered(
+                key.into(),
             )),
             controller,
             count: 1,
@@ -340,13 +340,13 @@ impl Game {
             .find_map(|object| self.lookup_current_permanent(object).ok())
     }
 
-    pub(crate) fn prepare_token(&mut self, name: &str, controller: PlayerId) -> Option<CardId> {
+    pub(crate) fn prepare_token(&mut self, key: &str, controller: PlayerId) -> Option<CardId> {
         let object_id = self.state.id_gen_mut().next_id();
-        let Some(card) = default_content_pack().instantiate(name, controller, object_id) else {
-            debug_assert!(false, "unknown token definition: {name}");
+        let Some(card) = default_content_pack().instantiate_token(key, controller, object_id)
+        else {
+            debug_assert!(false, "{key:?} is not a key in the token catalog");
             return None;
         };
-        debug_assert!(card.is_token, "created token must be a token definition");
 
         let card_id = self.add_card(card);
         Some(card_id)

@@ -431,6 +431,17 @@ fn lightning_bolt() -> CardDefinition {
   bug-free.
 - Each definition lives in the set file of its first printing and carries that
   printing's Scryfall id; `cargo test` in `managym/` covers all three crates.
+- Tokens are not cards. A token is a `TokenDefinition` in
+  [`managym/cards/src/tokens.rs`](../managym/cards/src/tokens.rs), in its own
+  catalog under `token.*` keys, written in the same rules types. Effects name
+  the token by key, so tokens that share a printed name stay distinct:
+
+  ```rust
+  Effect::create_tokens("token.spirit", 1)
+  ```
+
+  A token carries the Scryfall id of its first token printing, or none when it
+  was never printed. Tokens are never deck entries or part of the card pool.
 
 ## Resolution contracts
 

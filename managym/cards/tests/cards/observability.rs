@@ -763,7 +763,7 @@ fn effect_witnesses() -> Vec<Effect> {
             player: PlayerSelector::TriggeringPlayer,
             amount: EffectValue::Fixed(2),
         },
-        Effect::create_tokens("Clue", value()),
+        Effect::create_tokens("token.clue", value()),
         Effect::gain_life(value()),
         Effect::OnNthResolutionThisTurn {
             n: 2,
@@ -1224,7 +1224,7 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
         StaticAbility::BlockRestriction(_) => witnessed(
             "StaticAbility::BlockRestriction",
             Seen::Actions("block offers omit forbidden pairs"),
-            "Spirit",
+            "token.spirit",
             "tla",
             "spirit_tokens_cannot_block_or_be_blocked_by_nonspirits",
         ),
@@ -2111,10 +2111,16 @@ fn learning_tokens_never_carry_names_or_printed_text() {
 // ---------------------------------------------------------------------------
 // Static abilities and additional costs.
 
-/// The definition of `name` in the default pack.
+/// The definition of the card named `name`, or of the token keyed `name`
+/// (`token.*`), in the default pack.
 fn card_definition(name: &str) -> CardDefinition {
     let pack = default_content_pack();
-    let id = pack.definition_id(name).unwrap_or_else(|| panic!("{name}"));
+    let id = if name.starts_with("token.") {
+        pack.token_id(name)
+    } else {
+        pack.definition_id(name)
+    }
+    .unwrap_or_else(|| panic!("{name}"));
     pack.definition(id).unwrap().clone()
 }
 
@@ -2330,14 +2336,13 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
     let pack = default_content_pack();
     let catalog = learning_catalog(pack).unwrap();
-    let tokens = managym_cards::catalog()
-        .iter()
-        .filter(|definition| definition.key.starts_with("token."))
-        .collect::<Vec<_>>();
+    let tokens = managym_cards::token_catalog();
     assert!(!tokens.is_empty());
-    for token in tokens {
+    for definition in tokens {
+        let row = pack.token_id(definition.key).unwrap();
+        let token = pack.definition(row).unwrap();
         assert!(token.is_token, "{}", token.key);
-        let row = pack.definition_id(&token.name).unwrap().0 as i32;
+        let row = row.0 as i32;
         let referencing = catalog
             .definition_ref_source_tokens
             .iter()
@@ -2351,7 +2356,7 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
         );
 
         let (mut game, _) = ogre_game();
-        game.create_token(&token.name, PlayerId(0), false);
+        game.create_token(token.key, PlayerId(0), false);
         let (observation, encoded) = observe(&game, 0);
         let card = observation
             .agent_cards

@@ -31,8 +31,8 @@ fn tireless_provisioner() -> CardDefinition {
             },
             effects: vec![Effect::Modal {
                 modes: vec![
-                    vec![Effect::create_tokens("Food", 1)],
-                    vec![Effect::create_tokens("Treasure", 1)],
+                    vec![Effect::create_tokens("token.food", 1)],
+                    vec![Effect::create_tokens("token.treasure", 1)],
                 ],
             }],
         }],
