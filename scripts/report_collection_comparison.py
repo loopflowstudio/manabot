@@ -179,7 +179,9 @@ def _validate_arm(arm: str, run: Reading, receipt: Receipt, job: Run) -> list[st
         or logged.regime != expected
         or logged.run_id != receipt.id
         or logged.identities != receipt.identities
-        or receipt.metrics_run != run.source.run
+        # TrainingRun retains the worker's local tracking directory; capture
+        # names the same SDK run after delivery to the selected storage root.
+        or Path(receipt.metrics_run or "").name != run.source.run
         or declaration.seed != SEED
         or receipt.seed != SEED
         or receipt.identities.get("source_commit") != SOURCES[arm]
@@ -201,7 +203,7 @@ def _validate_arm(arm: str, run: Reading, receipt: Receipt, job: Run) -> list[st
         or run.update[-1] != UPDATES
     ):
         issues.append(f"{arm}: incomplete scientific target or metric capture")
-    if stage.actual_device != "cuda" or stage.actual_threads != 1:
+    if stage.actual_device not in {"cuda", "cuda:0"} or stage.actual_threads != 1:
         issues.append(f"{arm}: device/thread mismatch")
     if stage.updates == run.update[-1] and (
         stage.games != run.metrics["coordinates/games"][-1]

@@ -460,6 +460,12 @@ choice by paying a real cost and checking the remaining mana.
 
 ### Etude training records
 
+`TrainingRun.metrics_run` is the worker's local tracking path; a delivered metric
+capture uses its final path component as the SDK run ID. Bind that ID together
+with the logged scientific run, source and recipe, preserving the original path.
+Resolved CUDA receipts use `cuda:0` for the requested single-GPU `cuda` device.
+Report fixtures must exercise these actual receipt forms.
+
 Training row tables belong under the metric run's `artifacts/`, named by their
 content digest, with `.partial` staging before atomic rename. Etude's tracker
 and launcher courier carry these immutable author artifacts before metric

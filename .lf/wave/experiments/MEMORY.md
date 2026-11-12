@@ -85,11 +85,15 @@ this Task; a follow-up depends on what the repaired arm actually shows.
 The subsequent hand-snapshot merge (`0b296e617`) changes five protected native
 source files. The ten published preparation-file digests and both arm bindings
 still verify, but regenerating their local admission from current sources must
-reject. Preserve that distinction in tests: frozen declaration/budget fixtures
-and current-runtime rejection have separate purposes. Rebuilding an extension
-does not make changed source compatible; use the retained preparation for launch
-and the matching historical source for reproduction. The Task plan owns the
-post-sync validation gap, not a new scientific freeze.
+reject. The repaired declaration/budget tests inject pinned source/world identity
+only for offline preparation; real archives, recipe, shapes and output hashes
+remain checked. Separate unpatched runtime rejection prevents the fixture from
+serving as admission evidence. Rebuilding the matching extension resolved the
+stale `HandSnapshot` import failure; the retained combined check passed 22 tests.
+This closes the post-sync preparation gap, not remote CUDA admission or scientific
+acceptance. Rebuilding does not make changed source compatible: launch uses the
+retained preparation, and reproduction uses matching historical source. Production
+guards and published evidence remain unchanged.
 
 ## Shared effect inputs (5da5f4, 2026-11-04 UTC)
 

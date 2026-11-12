@@ -6,6 +6,13 @@ of the outcome-table repair. The $15 covers all rental costs, including setup,
 failures and teardown. Frozen frontier runs, the arena disk and EXP-46 are outside
 this change. Scientific acceptance remains open independently of software delivery.
 
+Current outcome (2026-11-12 UTC): **inconclusive**. The baseline stopped at
+251/500 and its provider deletion is confirmed. Both fresh after-arm quote
+attempts refused L4 capacity before submission. No active Task rental remains.
+The execution evidence and qualified report are published; the paired scientific
+acceptance is unmet. No baseline retry, shorter endpoint or changed preparation
+is authorized. See the execution continuation below for retained facts.
+
 ## Evidence and approach
 
 `experiments/self-play-collection-273.md` owns reproduction, thresholds, paired
@@ -54,7 +61,7 @@ separates delivery from scientific completion. The prepared separate serial L4
 allocations remain descriptive: matching `HostFacts` cannot establish identical
 physical hosts or isolate contention. Material host differences withhold the verdict.
 
-## Execution blocker and remaining work
+## Pre-execution blocker history
 
 **Resolved at 2026-11-12 00:19 UTC (QA): the blocker was local TLS, not the
 provider.** At 00:18:56 UTC the plain command above still failed in about 1 s.
@@ -105,6 +112,8 @@ with the frozen pair. The subsequent combined check passed 22 tests, including
 the extracted rental-wrapper checks. The earlier feedback's fixture-repair and
 extension-rebuild work is complete; gate still owns broader validation. No code
 repair is currently needed before obtaining provider visibility and quotes.
+
+The original execution procedure follows; the continuation records its outcome.
 
 1. Obtain fresh capacity and individual whole-rental quotes for both arms.
    Reserve at most $7.20 each plus $0.60 ancillary, cumulatively $15 including
@@ -238,3 +247,55 @@ The review page is `scratch/concept-review.html`. What to show next is the actua
 paired report with its limitations, delivered inventories and rental accounting
 once execution is possible. This review ran no tests, provider reads or rentals
 and changed no implementation or frozen evidence.
+
+## Execution continuation (2026-11-12 UTC)
+
+Both fresh individual quotes were $7.0308333333 at $0.59/hour for 42,900 seconds.
+Reservations were $7.20 per arm plus $0.60 ancillary, $15 total. Initial
+inventory found no Task machine, Run or unsettled session; the two historical
+frontier pods remained untouched. Prepared hashes and registered supply matched.
+
+Baseline `d053e8a1f225` (launch `15e782abd6e2`, attempt `5a910b054eaa`) acquired
+`mtg281-l4-c7be7a664da0` / pod `9gt72h4djozdfz` at 00:30:51 UTC. CUDA numerics
+passed. It stopped progressing at 251 updates around 05:02 UTC. The long polling
+batch did not escalate the unchanged clock until 06:50 UTC; this avoidable idle
+time is included in the cost, not excluded. Direct reads found the main thread
+waiting and one busy thread; they do not isolate a cause. A 32 MB compressed
+backup preserved its outputs before cancellation. No restart is permitted.
+
+Cancellation ended the attempt; deletion at 06:55:24 UTC and a subsequent
+provider-absence read are retained. Whole-lifetime compute is estimated at
+$3.781877823; provider billing remains provisional. The full original ceilings
+are retained, so no savings fund extra attempts. The original worker receipt
+still says running at 251; preserve it alongside the terminal launcher status.
+Eight of fifteen advertised files fetched; thirteen backup files match the
+final inventory, except SQLite shm/wal. Fetch failures remain explicit.
+
+After source-only publication completed for `62f650e82e93`. Its fresh quote
+at about 06:58 UTC refused L4 capacity before submission. The fresh recheck after
+evidence publication also refused capacity: no after Run or rental exists.
+Final reconciliation confirms no active Task rental or unsettled session.
+Do not change hardware,
+source, seed, target or thresholds; a quote is not capacity reservation.
+
+Real receipts exposed a reader boundary bug: metrics_run is a worker-local path,
+and actual_device is cuda:0. The maintained reader now compares the SDK run's
+final path component while retaining scientific/source/recipe checks, and
+accepts only cuda or cuda:0 for the single GPU. Immutable preparation/analysis
+snapshots remain untouched; retain this reader erratum with execution evidence.
+Five focused tests passed; real baseline validation now reports only incomplete
+scientific target. Gate owns the rest of the suite.
+
+Operational receipts and recovery bytes are in
+`.runs/collection-growth/execution-20261112/`. The manifest-published
+`experiments/data/collection-growth-281/execution-20261112/` retains execution
+evidence and final reconciliation; the report records the incomplete outcome.
+The frozen paired reader cannot run without
+an actual after capture/receipt; never fabricate either. The 451–500 endpoint is
+missing, so no flattening score or residual-cause ranking is supported.
+
+Checks: focused receipt-binding/device tests — 5 passed; artifact tracking check
+`uv run --no-sync --extra dev pytest tests/infra/test_experiment_data_untracked.py -q`
+— 1 passed. Changed-file Ruff check/format passed. Gate owns broader validation.
+Remaining scientific work is blocked: after capacity is unavailable and the
+baseline's missing endpoint cannot be repaired under the one-attempt contract.

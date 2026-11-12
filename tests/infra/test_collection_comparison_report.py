@@ -50,7 +50,7 @@ def pair(
         receipt = {
             "id": run_id,
             "seed": SEED,
-            "metrics_run": run_id,
+            "metrics_run": f"/run/etude/track/{run_id}",
             "status": "completed" if end == 500 else "paused",
             "regime": regime,
             "identities": identities,
@@ -65,7 +65,7 @@ def pair(
                 {
                     "updates": end,
                     "status": "completed" if end == 500 else "paused",
-                    "actual_device": "cuda",
+                    "actual_device": "cuda:0",
                     "actual_threads": 1,
                     "games": end * 100,
                     "learner_transitions": end * 1000,
@@ -224,11 +224,28 @@ def test_sparse_metric_withholds_verdict(tmp_path: Path) -> None:
     assert any("missing or nonfinite" in issue for issue in result["limitations"])
 
 
-def test_capture_must_bind_the_delivered_scientific_run(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "metrics_run", ["different-run", "/run/etude/track/different-run", None]
+)
+def test_capture_must_bind_the_delivered_scientific_run(
+    tmp_path: Path, metrics_run: str | None
+) -> None:
     prepared, data = pair(tmp_path)
     path = data / "after-training.json"
     receipt = json.loads(path.read_text())
-    receipt["metrics_run"] = "different-run"
+    receipt["metrics_run"] = metrics_run
     path.write_text(json.dumps(receipt))
     with pytest.raises(ValueError, match="identities disagree"):
         compare(prepared, data, tmp_path / "report")
+
+
+def test_another_cuda_device_withholds_verdict(tmp_path: Path) -> None:
+    prepared, data = pair(tmp_path)
+    path = data / "after-training.json"
+    receipt = json.loads(path.read_text())
+    receipt["stages"][0]["actual_device"] = "cuda:1"
+    path.write_text(json.dumps(receipt))
+    compare(prepared, data, tmp_path / "report")
+    result = json.loads((tmp_path / "report/comparison.json").read_text())
+    assert result["verdict"] == "inconclusive"
+    assert "after: device/thread mismatch" in result["limitations"]

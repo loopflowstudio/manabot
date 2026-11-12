@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>MTG-281 · Collection measurement concept review</title>
+<style>
+  :root { color-scheme: light dark; --paper: #faf8f3; --ink: #292b28; --muted: #5e625a; --line: #c8c8bd; --accent: #365c4c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --paper: #1c211e; --ink: #e6e9df; --muted: #b6bfb3; --line: #4a574e; --accent: #a4d1b7; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 840px; margin: auto; padding: 28px 24px 40px; }
+  header { font-size: .8rem; color: var(--muted); }
+  h1 { font-size: 1.8rem; line-height: 1.15; margin: 20px 0 12px; }
+  h2 { font-size: 1.08rem; margin: 24px 0 8px; }
+  p { margin: 8px 0 12px; }
+  code { font-size: .85em; overflow-wrap: anywhere; }
+  .decision { border-left: 3px solid var(--accent); padding-left: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 10px 9px 0; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td:first-child { width: 24%; }
+  ol { padding-left: 24px; }
+  li { margin: 8px 0; }
+  .scope { color: var(--muted); font-size: .9rem; }
+  @media (max-width: 520px) {
+    main { padding: 20px 16px; }
+    h1 { font-size: 1.5rem; }
+    table { font-size: .8rem; }
+    th, td { padding-right: 7px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    MTG-281 · concept-review · 2026-11-11 America/Los_Angeles<br>
+    Built from <code>scratch/collection-growth.md</code>,
+    <code>scratch/questions.md</code>,
+    <code>experiments/self-play-collection-273.md</code>,
+    <code>scripts/{collection_comparison,prepare_collection_comparison,measure_collection_growth,report_collection_comparison}.py</code>
+    and <code>.lf/skills/experiment-performance-review.md</code>.
+  </header>
+
+  <h1>Keep the measurement contract. Advance the review.</h1>
+  <p class="decision"><strong>No design change; no open product choice.</strong>
+    Preparation is complete. Paid execution and the repaired-arm verdict remain
+    pending provider visibility and fresh affordable quotes.</p>
+  <p>Jack Heart, 2026-11-11: “do 1 and 2. You have $15”.
+    The allowance covers setup, failures and teardown as well as training.</p>
+
+  <h2>Before → after this review</h2>
+  <p><strong>Existing:</strong> frozen preparation → separate bounded executions →
+    bound evidence → descriptive comparison.<br>
+    <strong>Proposed changes: none.</strong> Retain that model and its existing usage guide.</p>
+
+  <table aria-label="Actions, concepts, and state ownership">
+    <thead><tr><th>Action</th><th>Concept</th><th>API and durable result</th></tr></thead>
+    <tbody>
+      <tr><td>Inspect growth</td><td>Retained observation</td><td><code>capture()</code> → new <code>Capture</code>; <code>reading()</code> → offline figures</td></tr>
+      <tr><td>Use the frozen pair</td><td>Immutable preparation</td><td><code>prepared_runs()</code> verifies digests and arm bindings; <code>prepare()</code> is separate reproduction</td></tr>
+      <tr><td>Execute within $15</td><td>Rental and scientific run</td><td>Etude owns allocation; <code>TrainingJob</code> produces each <code>TrainingRun</code> receipt</td></tr>
+      <tr><td>Read the comparison</td><td>Derived conclusion</td><td><code>compare()</code> binds four inputs to preparation → new <code>comparison.json</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>The largest potential mismatch: “finished”</h2>
+  <p>A successful launcher can deliver a trainer paused at 480/500 updates.
+    The comparison must remain <code>inconclusive</code>. A valid preparation
+    cannot stand in for execution; matching host specifications cannot stand in
+    for the same physical machine. These distinctions are already preserved.</p>
+
+  <h2>One interaction, including recovery</h2>
+  <p><strong>Normal:</strong> quote both arms → execute serially within their original
+    bounds → use each receipt’s <code>metrics_run</code> to capture → compare the
+    two captures and unchanged training receipts.</p>
+  <p><strong>Failure:</strong> an availability read fails. Keep preparation and obtain
+    a fresh read; preparation replay cannot recover visibility. If acquisition
+    is uncertain, reconcile it before acquiring again. If delivery is partial,
+    retain it and recapture the same run to a new path when evidence arrives.</p>
+  <p><strong>Counterexamples:</strong> wrong run identity rejects; incomplete work or
+    a flat baseline withholds the conclusion. Changed local native sources reject
+    preparation reproduction. Attempts, costs, deadlines and frozen inputs survive.</p>
+  <p class="scope">Even a complete pair describes one seed through 500 updates on
+    separate allocations. It establishes neither later-regime flatness nor a
+    causal, same-machine speedup. The next useful artifact is measured evidence
+    with limitations, inventories and rental accounting.</p>
+
+  <h2>Review questions — resolved without new product choices</h2>
+  <ol>
+    <li><strong>Merge preparation, rental and scientific success?</strong>
+      No; their separate owners preserve recovery and honest completion.</li>
+    <li><strong>Change the horizon, thresholds or rental arrangement?</strong>
+      No change is implied by this review; preserve the frozen bounded design.</li>
+    <li><strong>What should loop-or-next do?</strong>
+      Advance: nothing to change and no open choice. Scientific execution remains incomplete.</li>
+  </ol>
+</main>
+</body>
+</html>

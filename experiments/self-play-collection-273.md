@@ -141,9 +141,11 @@ frozen frontier runs to turn this software proof into experimental evidence.
 **Both historical runs show growing host memory and collection spikes aligned
 with permanent-block boundaries.** The width-160 run is not a flat-memory
 control. This supports the index-refresh mechanism, but does not establish that
-the outcome-table fix flattens training: the matched before/after runs have not
-launched. The L4 provider availability read failed; new rental spending is $0
-of the authorized $15. MTG-281 remains incomplete.
+the outcome-table fix flattens training. The new baseline stopped at 251/500
+updates and was cancelled; its rental is confirmed deleted. A fresh quote for
+the repaired arm refused L4 capacity before submission. Whole-rental baseline
+compute is estimated at $3.78 within the authorized $15; billing is provisional.
+The paired scientific result remains incomplete (see execution below).
 
 ### Evidence and differences
 
@@ -236,7 +238,7 @@ or tensor memory. No further profiling was performed.
 
 ![Memory, index growth and game lengths](data/collection-growth-281/growth.png)
 
-### Matched comparison: bounded plan, not executed
+### Matched comparison: frozen bounded plan
 
 A prospective **500-update** horizon catches the early memory increase and
 45 permanent blocks: historical w64 RSS is 20.12 GB at update 500. It cannot
@@ -303,11 +305,82 @@ the development environment could not verify RunPod's TLS certificate
 "no reply". The same request answered HTTP 200 through `curl`. With
 `SSL_CERT_FILE` set to certifi's bundle, the read at 2026-11-12 00:19:23 UTC
 returned the `mtg281-l4` L4 (6 vCPUs, 48 GB) available at $0.59/hour, under the
-$0.60 ceiling. That quote reserves no capacity. No run or rental has been
-requested, and there is **no verdict of flat, partly flat or not flat**
+$0.60 ceiling. That quote reserved no capacity and requested no rental. The subsequent
+execution below still supplies **no verdict of flat, partly flat or not flat**
 after the repair. A remaining-cause follow-up depends on that comparison; this
 historical evidence cannot rank `_slice_obs_tensors`, allocator/native memory
 and `game_errors` as residual causes after an unexecuted fix.
+
+### First execution: incomplete baseline, 2026-11-12 UTC
+
+**The comparison is inconclusive.** Baseline Run `d053e8a1f225` passed CUDA
+numerics and completed **251 of 500 updates**, 11,892,727 learner transitions
+and 67,952 games. There were 62 crashed games among 68,014 settled attempts,
+with 13,096 samples discarded under the frozen recovery policy. Its sampled
+peak RSS was 17.62 GB. The last metric is dated 05:02:35 UTC; no later completed
+update was found in the worker record or the final blockwise capture.
+
+The acquired L4 pod `9gt72h4djozdfz` was in EUR-IS-1. Its provider declaration
+reported 16 vCPUs and 62 GB memory. The training receipt names an AMD EPYC 7702,
+128 visible/schedulable logical CPUs, no recorded CPU quota, and a 61,999,996,928
+byte cgroup-v1 memory limit. The visible CPU count is not a dedicated-core claim.
+It ran the pinned before source, seed and recipe, with Torch 2.10.0+cu128 and
+CUDA 12.8. The retained scientific ID is `017f44da68f74211ae93a2a352c81887`.
+
+The monitor continued polling the unchanged clock for approximately 110 minutes
+before escalating it. That delay is included in cost. Direct reads then found
+the main thread waiting on a futex and one busy thread; a provider sample showed
+zero GPU utilization. These observations do not isolate the stall's cause.
+A prior transient R2 delivery error is also retained; it does not explain the
+unchanged local training receipt. No further profiling or source repair was
+performed. After backing up partial outputs, cancellation was requested and
+provider deletion confirmed at **06:55:24 UTC**. No restart was made.
+
+![Partial baseline collection and memory; the missing endpoint is shaded](data/collection-growth-281/execution-20261112/before-partial.png)
+
+The original TrainingRun receipt still says `running` at 251, while the launcher
+is terminal `cancelled`; neither is rewritten to invent a scientific outcome.
+Of fifteen advertised outputs, eight were fetched and verified. Thirteen files
+in the pre-stop backup match the final inventory, including the training receipt,
+checkpoint files and game-attempt ledger. The SQLite shm/wal backup hashes differ
+and are not presented as a final database snapshot. The advertised
+`etude-result.json` returned 404; other failed fetches returned 500 or were
+unavailable. All failures and original inventory hashes remain retained.
+
+Whole-rental compute, from request through confirmed deletion at $0.59/hour,
+is estimated at **$3.781877823**. Hourly provider rows continued changing after
+their stated end times, so the SDK's lower displayed total is not final billing.
+The original $7.20-per-arm ceilings and $0.60 ancillary reserve remain within
+$15; unused time does not authorize retries. Published container-disk pricing
+is $0.10/GB-month with no RunPod transfer fee; R2 Standard storage and request
+charges remain ancillary estimates, not invoices.
+([RunPod pricing](https://docs.runpod.io/pods/pricing),
+[R2 pricing](https://developers.cloudflare.com/r2/pricing/)).
+
+The repaired source was published under intent `62f650e82e93`, but its fresh
+individual quote around 06:58 UTC reported no available L4 machines. It created
+no Run or allocation. A fresh recheck after publishing the baseline evidence
+returned the same capacity refusal. Final reconciliation found no active Task
+rental or unsettled session and independently confirmed the baseline pod absent.
+The fixed 451–500 endpoint is absent from the baseline,
+and the repaired arm has no measurements. The frozen comparison command cannot
+run without genuine after inputs; no replacement receipt or shorter-window
+flattening score is supplied. These data cannot rank residual causes after the fix.
+
+The manifest-published `execution-20261112/` directory retains the baseline
+capture/receipt, pre-stop output archive, launch/provider/teardown/billing records,
+output inventory and verification, monitoring history, figure,
+`execution.json` and `final-reconciliation.json`. The immutable preparation remains
+unchanged.
+
+Real receipts also exposed a comparison-reader boundary error: `metrics_run`
+is a worker-local directory and `actual_device` resolves to `cuda:0`. The
+maintained reader now binds the final path component to the SDK capture ID,
+while retaining scientific-run/source/recipe checks, and admits `cuda:0` as the
+single requested CUDA device. `reader-erratum.json` binds the old and corrected
+reader bytes. No estimator, endpoint, threshold or scientific source changed.
+Five focused tests passed, and the real baseline now passes identity validation
+while correctly reporting its incomplete target. Broader checks remain with gate.
 
 ### Frozen paired analysis
 
@@ -321,8 +394,10 @@ After both bounded arms deliver their evidence, place these four files in
 | `before-training.json` | Unchanged before arm's delivered `training/run.json` |
 | `after-training.json` | Unchanged after arm's delivered `training/run.json` |
 
-Use each training receipt's `metrics_run` as the capture command's `--run`;
-the launcher Run ID and the scientific training ID are different identities.
+Use the final path component of each training receipt's `metrics_run` as the
+capture command's `--run` (for example, `d053e8a1f225` from
+`/run/etude/track/d053e8a1f225`). Preserve the original receipt path. The SDK
+metric/launcher identity and scientific training ID are different identities.
 Then run:
 
 ```sh
@@ -335,8 +410,9 @@ PYTHONPATH=. uv run --no-sync python scripts/report_collection_comparison.py \
 The command prints the verdict and writes `paired-report/comparison.json`,
 including `limitations`, primary `growth_scores` and per-arm statistics and
 receipts. All three options are required; `--out` must be new. Read the
-limitations alongside the verdict. No measured paired inputs are currently
-published; the historical w64/w160 captures cannot substitute for these arms.
+limitations alongside the verdict. Only the incomplete baseline inputs are
+published; there is no measured pair. The historical w64/w160 captures cannot
+substitute for these arms.
 
 The reader checks capture, scientific run, source, seed and prepared-recipe
 bindings. An identity mismatch stops analysis: check that each capture and

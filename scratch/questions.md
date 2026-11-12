@@ -14,7 +14,8 @@ file size or exact fold time. Retain this distinction in plots and conclusions.
 The 500-update horizon tests early growth, not the later 850–1700 regime. A
 600-update pair projects $14.46 before setup/teardown at the historical $0.59/h;
 650 projects $15.76. The bounded plan does not assume a repair speedup to fit.
-No fresh provider quote was available; paid execution remains unlaunched.
+At preparation, no fresh provider quote was available and paid execution was
+unlaunched. The execution continuation in collection-growth.md supersedes that status.
 
 Reversible CLI choice: capture is the script's only operation; drop its redundant
 subcommand. Reproduction requires a new `--out` directory, keeping the published
@@ -48,3 +49,11 @@ never run games or training; temporary outputs are synthetic. Separate
 unpatched runtime rejection prevents this fixture from serving as admission
 evidence for the current checkout. Production guards and published bytes stay
 unchanged.
+
+Execution accounting (2026-11-12): RunPod's hourly amounts are still changing
+within rows whose end times are in the past. At 02:08 UTC its two rows totaled
+about $0.3683, while the baseline rental's elapsed lifetime at $0.59/h implied
+$0.9567. Etude had already advanced its billed-through marker and displayed
+less. Treat these as provisional billing; retain the full $7.20 live reservation
+and reconcile with the larger whole-lifetime estimate, not the falling status
+amount. This is no scientific-runtime change and no billing-finality claim.
