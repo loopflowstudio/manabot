@@ -1,5 +1,40 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Execution complete — final collection 2026-11-12
+
+Etude `mtg269-mirror-v2-uniform-native` / `b9b50aa247df` **succeeded** at
+2026-11-12 02:51:17 UTC (started 2026-11-11 13:45:05 UTC, exit 0) on the owned
+mini; the original `mtg269-mirror-v2` / `3a2b62144b9a` remains cancelled. Both
+report $0 rental spend. No search worker was running at collection.
+
+The existing collector sealed both segments at 10:09–10:12 UTC and published
+them through `manabot.data`. All **3,000** declared outcomes are present:
+
+| Segment | Cells (beta 0.01, depth 20) | Outcomes | Scored | Failed |
+|---|---|---:|---:|---:|
+| Original | oracle 4/8/16 worlds, 500 each | 1,500 | 1,500 | 0 |
+| Uniform native | uniform 4/8/16 worlds, 500 each | 1,500 | 1,499 | 1 |
+
+The one scored failure is `policy/mirror-v2-uniform-d20-b0.01-w16/1819058000`:
+`TimeoutError: local search deadline exceeded; target unavailable` from the
+per-decision search deadline, retained with its full traceback and attempt
+trace. It is a game failure, not an interruption, and belongs in the report's
+missing-evidence sensitivity. The seven original-shell uniform interruptions
+stay uncommitted attempt files under their earlier reconciliation receipt.
+
+Original-segment seals were re-verified byte-for-byte against the prior
+published inventory (1,500 of 1,500); every new uniform trace was parsed from
+start record to outcome. All 3,053 published game/inventory entries match local
+bytes, and the 13 displaced local files remain exact prefixes of their
+replacements. Summed game wall time: original 931,110.94 s, uniform native
+318,836.18 s. These are separate implementation costs; complete CPU and
+inclusive monetary costs remain unmeasured.
+
+Evidence: `search-mirror-v2/reconciliation/{remote-inventory,uniform-native-inventory,collection-final-20261112}.json`
+and `search-mirror-v2/transition/etude-final-20261112.json`. This collection is
+not a replay or an extension of the dated Command/algebra audit. The report
+rebuild over the full grid is the next step.
+
 ## Native uniform continuation running — 2026-11-11
 
 Etude run **`mtg269-mirror-v2-uniform-native`**, attempt **`b9b50aa247df`**,

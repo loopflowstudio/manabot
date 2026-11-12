@@ -1,5 +1,20 @@
 # Mirror search continuation
 
+## Final collection — 2026-11-12
+
+Campaign complete; both segments collected 10:09–10:12 UTC with the existing
+collector and published. 3,000/3,000 outcomes: oracle 1,500 scored; uniform
+native 1,499 scored + 1 TimeoutError (`policy/mirror-v2-uniform-d20-b0.01-w16/1819058000`).
+Etude uniform-native `b9b50aa247df` succeeded 02:51:17 UTC, $0. Receipt:
+v2 `reconciliation/collection-final-20261112.json`; Etude read:
+`transition/etude-final-20261112.json`. Scripts/logs in
+`scratch/mirror-collect-20261112/`. The local collection call hit a 600 s tool
+limit during publish, but the mini process finished: its manifest (written only
+after all uploads) holds both inventory hashes, and all 3,053 entries hydrated
+and verified. Next: rebuild the report over the full grid (analysis step).
+Offline Python needs the overlay `--with numpy==2.4.2 --with pydantic==2.12.5
+--with torch==2.10.0 --with etude-sdk==0.2.6 --with boto3` and `PYTHONPATH=$PWD`.
+
 ## Report clarification — 2026-11-12
 
 The owning report now separates execution, health, learning, training exposure,
