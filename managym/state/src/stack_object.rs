@@ -1,14 +1,15 @@
 use super::ability::Effect;
 use super::card::{AbilityGrant, CardDefId};
-use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
+use super::game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, PublicId, Target};
 use crate::binding::ObjectBinding;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SpellOnStack {
     pub cast_from: super::zone::ZoneType,
     pub flashback: bool,
-    pub id: ObjectId,
-    pub card: CardId,
+    pub id: PublicId,
+    #[serde(rename = "card")]
+    pub object: ObjectId,
     pub controller: PlayerId,
     /// Immutable meaning of the source card. The serialized field name stays
     /// legacy-compatible for benchmark snapshots and observation adapters.
@@ -39,11 +40,12 @@ pub struct ActivatedAbilityOnStack {
     /// The definition lending the activated ability, fixed at activation.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherited_from: Option<CardDefId>,
-    pub id: ObjectId,
+    pub id: PublicId,
     pub controller: PlayerId,
     #[serde(rename = "source_card_registry_key")]
     pub source_definition_id: CardDefId,
-    pub source_card: CardId,
+    #[serde(rename = "source_card")]
+    pub source_object: ObjectId,
     pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
@@ -73,9 +75,10 @@ pub struct TriggeredAbilityOnStack {
     pub remembered: Vec<ObjectBinding>,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub source_transforms: u32,
-    pub id: ObjectId,
+    pub id: PublicId,
     pub controller: PlayerId,
-    pub source_card: CardId,
+    #[serde(rename = "source_card")]
+    pub source_object: ObjectId,
     pub source_ref: Option<ObjectRef>,
     pub source_lki: Option<ObjectLki>,
     #[serde(rename = "source_card_registry_key")]
@@ -93,7 +96,7 @@ pub struct TriggeredAbilityOnStack {
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub x: u8,
     /// Delayed triggers resolve these effects instead of looking up
-    /// `Card::abilities[ability_index]`.
+    /// `Object::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,
 }
 
@@ -105,7 +108,7 @@ pub enum StackObject {
 }
 
 impl StackObject {
-    pub fn id(&self) -> ObjectId {
+    pub fn id(&self) -> PublicId {
         match self {
             StackObject::Spell(spell) => spell.id,
             StackObject::ActivatedAbility(ability) => ability.id,
@@ -124,17 +127,17 @@ impl StackObject {
     /// The object as a target: a spell by its card, an ability by its id.
     pub fn as_target(&self) -> Target {
         match self {
-            StackObject::Spell(spell) => Target::StackSpell(spell.card),
+            StackObject::Spell(spell) => Target::StackSpell(spell.object),
             object => Target::StackAbility(object.id()),
         }
     }
 
     /// The spell's card, or the card whose ability this is.
-    pub fn source_card(&self) -> CardId {
+    pub fn source_object(&self) -> ObjectId {
         match self {
-            StackObject::Spell(spell) => spell.card,
-            StackObject::ActivatedAbility(ability) => ability.source_card,
-            StackObject::TriggeredAbility(triggered) => triggered.source_card,
+            StackObject::Spell(spell) => spell.object,
+            StackObject::ActivatedAbility(ability) => ability.source_object,
+            StackObject::TriggeredAbility(triggered) => triggered.source_object,
         }
     }
 
@@ -158,8 +161,8 @@ impl StackObject {
     /// Legacy numeric observation projection. Internal state uses
     /// [`CardDefId`]; the current Python/observation ABI still exposes an
     /// integer registry key with the same value.
-    pub fn source_card_registry_key(&self) -> ObjectId {
-        ObjectId(self.source_definition_id().0)
+    pub fn source_card_registry_key(&self) -> PublicId {
+        PublicId(self.source_definition_id().0)
     }
 
     pub fn ability_index(&self) -> Option<usize> {

@@ -1,5 +1,20 @@
 # MTG-320: runtime object kinds by zone
 
+## Rename pass (steers d57fc17e, 0779d3e9, e3b2a142, dbf13009; 2026-11-12)
+- Merged current MTG-298 branch (6320ad43c); `PutIntoGraveyard` now reads `moved.is_card()`;
+  `become_copy_of` already leaves kind alone. Four card tests moved off the removed `is_token` field.
+- Design written to docs/engine.md "Objects and zones" (CR term -> type table, "What is built",
+  token moment). Built: record `Object` in `state::game_object`, `ObjectId`/`ObjectVec`,
+  `GameState::objects`, `object_to_permanent`, `PublicId` for the old u32 id, locals/fields renamed
+  with serde wire names kept. Details and exclusions in questions.md.
+- Wire check: `semantic-kernel-w17-v2` conformance reproduces (state hashes byte-identical). A
+  misplaced serde attribute (on `ObjectLki.counters`) was the one drift found, by diffing regenerated
+  traces against a base-revision build.
+- Checks: `cargo nextest run --workspace --profile ci` 1166 passed, 4 timed out at load ~250-380;
+  those 4 pass alone without the limit (conformance 508 s, base revision 345 s at the same load).
+- Left for the PR body as remaining: Card/CardId store split, new object per zone change, CR 400.7
+  carry-over record, bench numbers (Engine Budget in CI).
+
 Docs: `docs/engine.md#objects-and-zones` (rename written 2026-11-12: `GameObject`/`ObjectId`/`GameState::objects`, card-only naming rule, departure "record named Card" dropped), `managym/README.md` (Architecture pointer; policy-input paragraph says `ObjectId`). Build must match these names.
 
 Built:

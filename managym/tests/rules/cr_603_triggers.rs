@@ -2,7 +2,7 @@ use managym::{
     agent::action::ActionSpaceKind,
     flow::{trigger::PendingTrigger, turn::StepKind},
     state::{
-        game_object::{CardId, ObjectLookupError, PermanentId, PlayerId},
+        game_object::{ObjectId, ObjectLookupError, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -11,35 +11,35 @@ use crate::support::game::*;
 use crate::support::inspect::owned_card;
 
 fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) -> PermanentId {
-    let card_id = owned_card(s, player, name);
+    let object_id = owned_card(s, player, name);
     let game = s.game_mut();
-    game.move_card(card_id, ZoneType::Battlefield);
+    game.move_object(object_id, ZoneType::Battlefield);
     // Drain events and triggers so the engine doesn't process ETB triggers from setup
     game.state.pending_events.clear();
     game.state.pending_triggers.clear();
     game.state.observation_events.clear();
-    game.state.card_to_permanent[card_id].expect("permanent should exist after move_card")
+    game.state.object_to_permanent[object_id].expect("permanent should exist after move_card")
 }
 
 fn count_cards_named(s: &Scenario, player: usize, zone: ZoneType, name: &str) -> usize {
     s.game()
         .state
         .zones
-        .zone_cards(zone, PlayerId(player))
+        .zone_objects(zone, PlayerId(player))
         .iter()
-        .filter(|card_id| s.game().state.cards[*card_id].name == name)
+        .filter(|object_id| s.game().state.objects[*object_id].name == name)
         .count()
 }
 
 fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
-    let islands: Vec<CardId> = s
+    let islands: Vec<ObjectId> = s
         .game()
         .state
-        .cards
+        .objects
         .iter()
         .enumerate()
-        .filter(|(_, card)| card.owner == PlayerId(0) && card.name == "Island")
-        .map(|(idx, _)| CardId(idx))
+        .filter(|(_, object)| object.owner == PlayerId(0) && object.name == "Island")
+        .map(|(idx, _)| ObjectId(idx))
         .take(3)
         .collect();
     assert_eq!(islands.len(), 3, "expected at least three Islands in deck");
@@ -47,13 +47,13 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
         s.game_mut()
             .state
             .zones
-            .move_card(island, PlayerId(0), ZoneType::Hand);
+            .move_object(island, PlayerId(0), ZoneType::Hand);
     }
     let manowar = owned_card(s, 0, "Man-o'-War");
     s.game_mut()
         .state
         .zones
-        .move_card(manowar, PlayerId(0), ZoneType::Hand);
+        .move_object(manowar, PlayerId(0), ZoneType::Hand);
 
     for land_drop in 0..3 {
         s.advance_to_active_step(0, StepKind::Main);
@@ -125,7 +125,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_card: p1_source,
+            source_object: p1_source,
             source_ref: None,
             source_lki: None,
             ability_index: 0,
@@ -145,7 +145,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_card: p0_source,
+            source_object: p0_source,
             source_ref: None,
             source_lki: None,
             ability_index: 0,
@@ -216,19 +216,19 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
     s.choose_target_named("Man-o'-War");
 
     let old_permanent = s.battlefield_permanents_named(0, "Man-o'-War")[0];
-    let card = s.game().state.permanents[old_permanent]
+    let object = s.game().state.permanents[old_permanent]
         .as_ref()
         .expect("old permanent")
-        .card;
-    let old_ref = s.game().current_object_ref(card).expect("old object ref");
+        .object;
+    let old_ref = s.game().current_object_ref(object).expect("old object ref");
 
-    s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
     // Ignore the new object's own ETB trigger; this scenario is specifically
     // resolving the already-stacked trigger that targeted the old object.
     s.game_mut().state.pending_triggers.clear();
-    let new_ref = s.game().current_object_ref(card).expect("new object ref");
-    let new_permanent = s.game().state.card_to_permanent[card].expect("new permanent");
+    let new_ref = s.game().current_object_ref(object).expect("new object ref");
+    let new_permanent = s.game().state.object_to_permanent[object].expect("new permanent");
 
     assert_eq!(old_ref.entity, new_ref.entity);
     assert_ne!(old_ref.incarnation, new_ref.incarnation);
@@ -241,12 +241,12 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
     s.pass_priority();
 
     assert_eq!(
-        s.game().state.card_to_permanent[card],
+        s.game().state.object_to_permanent[object],
         Some(new_permanent),
         "the new incarnation must remain on the battlefield"
     );
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
 }
@@ -269,7 +269,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         requirement_index: 0,
-        source_card: source,
+        source_object: source,
         source_ref: None,
         source_lki: None,
         ability_index: 0,

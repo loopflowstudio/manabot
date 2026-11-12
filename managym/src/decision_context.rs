@@ -17,20 +17,20 @@ use crate::{
         decision::Decision,
         game::{Game, PendingChoice},
     },
-    state::game_object::{CardId, PlayerId, Target},
+    state::game_object::{ObjectId, PlayerId, Target},
 };
 
 impl Game {
-    fn decision_card(&self, card: CardId) -> Option<DecisionObjectView> {
-        let reference = self.current_object_ref(card)?;
+    fn decision_card(&self, object: ObjectId) -> Option<DecisionObjectView> {
+        let reference = self.current_object_ref(object)?;
         let display_id = self
             .state
-            .card_to_permanent
-            .get(card.0)
+            .object_to_permanent
+            .get(object.0)
             .and_then(|permanent| *permanent)
             .and_then(|permanent| self.state.permanents[permanent].as_ref())
-            .map_or(self.state.cards[card].id.0, |permanent| permanent.id.0);
-        let card = &self.state.cards[card];
+            .map_or(self.state.objects[object].id.0, |permanent| permanent.id.0);
+        let object = &self.state.objects[object];
         Some(DecisionObjectView {
             entity_id: reference.entity.0 as u32,
             subject: SubjectRef::Object {
@@ -40,7 +40,7 @@ impl Game {
                 },
             },
             display_id,
-            label: card.name.clone(),
+            label: object.name.clone(),
         })
     }
 
@@ -56,17 +56,17 @@ impl Game {
             }),
             Target::Permanent(permanent) => {
                 let permanent = self.state.permanents[*permanent].as_ref()?;
-                let mut view = self.decision_card(permanent.card)?;
+                let mut view = self.decision_card(permanent.object)?;
                 view.display_id = permanent.id.0;
                 if let SubjectRef::Object { ref mut id } = view.subject {
                     id.entity = permanent.id.0;
                 }
                 Some(view)
             }
-            Target::StackSpell(card) => self.decision_card(*card),
+            Target::StackSpell(object) => self.decision_card(*object),
             Target::StackAbility(id) => self.decision_card(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
-                let mut view = self.decision_card(CardId::from(reference.entity))?;
+                let mut view = self.decision_card(ObjectId::from(reference.entity))?;
                 // Keep the announced incarnation even if the card later moved.
                 view.subject = SubjectRef::Object {
                     id: ObjectRenderId {
@@ -124,13 +124,15 @@ impl Game {
                                 .agent_cards
                                 .iter()
                                 .chain(observation.opponent_cards.iter())
-                                .find(|card| card.id == id.0 as i32)
+                                .find(|object_id| object_id.id == id.0 as i32)
                                 .and_then(|_| {
                                     self.state
-                                        .cards
+                                        .objects
                                         .iter()
-                                        .position(|card| card.id == *id)
-                                        .and_then(|card| self.decision_card(CardId(card)))
+                                        .position(|object_id| object_id.id == *id)
+                                        .and_then(|object_id| {
+                                            self.decision_card(ObjectId(object_id))
+                                        })
                                 })
                         }?;
                         let role = match action {
@@ -199,25 +201,33 @@ impl Game {
             .filter_map(|event| {
                 use crate::flow::event::GameEvent;
                 match event {
-                    GameEvent::PermanentSacrificed { card, controller } => Some(format!(
+                    GameEvent::PermanentSacrificed {
+                        object_id: object,
+                        controller,
+                    } => Some(format!(
                         "Seat {} sacrificed {}.",
                         controller.0 + 1,
-                        self.state.cards[*card].name
+                        self.state.objects[*object].name
                     )),
-                    GameEvent::SpellCast { card, .. } => Some(format!(
+                    GameEvent::SpellCast {
+                        object_id: object, ..
+                    } => Some(format!(
                         "{} was cast; its announced costs are committed.",
-                        self.state.cards[*card].name
+                        self.state.objects[*object].name
                     )),
-                    GameEvent::SpellResolved { card } => Some(format!(
+                    GameEvent::SpellResolved { object_id: object } => Some(format!(
                         "{} finished resolving.",
-                        self.state.cards[*card].name
+                        self.state.objects[*object].name
                     )),
-                    GameEvent::SpellCountered { card, .. } => {
-                        Some(format!("{} was countered.", self.state.cards[*card].name))
-                    }
-                    GameEvent::AbilityCountered { source_card, .. } => Some(format!(
+                    GameEvent::SpellCountered {
+                        object_id: object, ..
+                    } => Some(format!(
+                        "{} was countered.",
+                        self.state.objects[*object].name
+                    )),
+                    GameEvent::AbilityCountered { source_object, .. } => Some(format!(
                         "An ability of {} was countered.",
-                        self.state.cards[*source_card].name
+                        self.state.objects[*source_object].name
                     )),
                     _ => None,
                 }
@@ -275,10 +285,14 @@ impl Game {
                     return self.decision_target(&Target::Player(PlayerId(player)));
                 }
                 let display_id = reference.object? as u32;
-                self.state.cards.iter().enumerate().find_map(|(index, _)| {
-                    self.decision_card(CardId(index))
-                        .filter(|view| view.display_id == display_id)
-                })
+                self.state
+                    .objects
+                    .iter()
+                    .enumerate()
+                    .find_map(|(index, _)| {
+                        self.decision_card(ObjectId(index))
+                            .filter(|view| view.display_id == display_id)
+                    })
             };
             view.source = RequiredNullable(object(frame.source));
             view.targets = frame
@@ -333,9 +347,9 @@ impl Game {
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
-            Some(PendingChoice::KickerChoice { card, .. }) if self.state.cards[*card].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
+            Some(PendingChoice::KickerChoice { object: object_id, .. }) if self.state.objects[*object_id].exile_alternative().is_some() => ("additional_cost", "Choose whether to exile a card from hand rather than pay the mana cost: paying the cost uses the alternative."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
-            Some(PendingChoice::AnnounceX { card, .. }) if self.state.cards[*card].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
+            Some(PendingChoice::AnnounceX { object: object_id, .. }) if self.state.objects[*object_id].replicate().is_some() => ("mode", "Announce how many times to pay the replicate cost; each offer's mode index is that count, and the spell is copied once per payment."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -398,7 +412,7 @@ impl Game {
             .into();
             view.instruction = if let Some(trigger) = &placement.placing {
                 let description = crate::agent::ability_description::trigger_description(
-                    &self.state.cards[trigger.source_card],
+                    &self.state.objects[trigger.source_object],
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );

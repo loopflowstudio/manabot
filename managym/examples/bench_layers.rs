@@ -12,10 +12,10 @@ use managym::{
     state::{
         ability::Condition,
         card::{
-            Card, CardType, CardTypes, PrintedCharacteristics, StaticAbility, StaticLandType,
+            CardType, CardTypes, PrintedCharacteristics, StaticAbility, StaticLandType,
             StaticScope, StaticTypeGrant,
         },
-        game_object::PermanentId,
+        game_object::{Object, PermanentId},
         mana::Mana,
         predicate::CardPredicate,
     },
@@ -70,16 +70,16 @@ fn root() -> (Env, PermanentId) {
         ),
     ] {
         let game = env.benchmark_game_mut();
-        let card_id = game.state.permanents[id].as_ref().unwrap().card;
-        let old = &game.state.cards[card_id];
-        let card = Card::from_definition(
+        let object_id = game.state.permanents[id].as_ref().unwrap().object;
+        let old = &game.state.objects[object_id];
+        let object = Object::from_definition(
             old.id,
             old.owner,
             old.definition_id,
             Arc::new(definition),
             old.is_token,
         );
-        game.state.cards[card_id] = card;
+        game.state.objects[object_id] = object;
     }
     env.scenario_refresh().unwrap();
     let view = env.benchmark_game_mut().characteristics(urborg);
@@ -203,7 +203,8 @@ fn payment_root(pool: bool) -> (Env, PermanentId) {
             .enumerate()
             .find_map(|(i, p)| {
                 let p = p.as_ref()?;
-                (game.state.cards[p.card].name == "Fire Nation Cadets").then_some(PermanentId(i))
+                (game.state.objects[p.object].name == "Fire Nation Cadets")
+                    .then_some(PermanentId(i))
             })
             .unwrap()
     };
@@ -222,7 +223,7 @@ fn payment_surface(env: &mut Env) -> serde_json::Value {
             "life":p.life, "mana":p.mana_pool, "combat_mana":p.combat_mana_pool,
         })).collect::<Vec<_>>(),
         "permanents":game.state.permanents.iter().enumerate().filter_map(|(id,p)| {
-            p.as_ref().map(|p| serde_json::json!({"id":id,"card":p.card,"tapped":p.tapped}))
+            p.as_ref().map(|p| serde_json::json!({"id":id,"card":p.object,"tapped":p.tapped}))
         }).collect::<Vec<_>>(),
         "stack":game.state.stack_objects,
     })

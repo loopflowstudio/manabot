@@ -101,7 +101,7 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
 fn authored_definitions() -> impl Iterator<Item = &'static PrintedCharacteristics> {
     catalog()
         .iter()
-        .flat_map(|card| std::iter::once(&card.printed).chain(card.back_face.as_deref()))
+        .flat_map(|object| std::iter::once(&object.printed).chain(object.back_face.as_deref()))
         .chain(token_catalog().iter().map(|token| &token.printed))
 }
 

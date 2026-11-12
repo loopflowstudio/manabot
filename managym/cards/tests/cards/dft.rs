@@ -18,7 +18,7 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
             .game()
             .state
             .zones
-            .zone_cards(ZoneType::Library, PlayerId(0))
+            .zone_objects(ZoneType::Library, PlayerId(0))
             .clone();
         put_onto_battlefield(&mut s, 0, "Caradora, Heart of Alacria");
         pass_until(&mut s, ActionSpaceKind::Modal);
@@ -29,12 +29,12 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
             assert!(!offered.is_empty());
             assert!(offered
                 .iter()
-                .all(|card| s.game().state.cards[*card].name == "Phoenix Fleet Airship"));
+                .all(|object| s.game().state.objects[*object].name == "Phoenix Fleet Airship"));
             let selected = offered[0];
             select_card(&mut s, selected);
             settle(&mut s);
             assert_eq!(s.game().state.zones.zone_of(selected), Some(ZoneType::Hand));
-            let definition = s.game().state.cards[selected].definition_id;
+            let definition = s.game().state.objects[selected].definition_id;
             assert!(s.game().state.events.iter().any(|event| matches!(event,
                 GameEvent::CardRevealed { owner: PlayerId(0), definition: shown } if *shown == definition
             )));
@@ -50,10 +50,10 @@ fn caradora_search_reveals_a_vehicle_and_declining_does_not_shuffle() {
                 .game()
                 .state
                 .zones
-                .zone_cards(ZoneType::Library, PlayerId(0));
+                .zone_objects(ZoneType::Library, PlayerId(0));
             let retained: Vec<_> = before
                 .into_iter()
-                .filter(|card| after.contains(card))
+                .filter(|object| after.contains(object))
                 .collect();
             assert_eq!(&retained, after);
         }

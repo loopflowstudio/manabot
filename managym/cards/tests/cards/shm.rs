@@ -17,9 +17,9 @@ fn rhys_the_redeemed_makes_elf_warriors_and_copies_each_creature_token() {
     settle(&mut s);
     let elves = s.battlefield_permanents_named(0, "Elf Warrior");
     assert_eq!(elves.len(), 1);
-    let elf = s.game().state.permanents[elves[0]].as_ref().unwrap().card;
+    let elf = s.game().state.permanents[elves[0]].as_ref().unwrap().object;
     let colors = s.game().characteristics(elves[0]).colors.len();
-    assert!(!s.game().state.cards[elf].is_card());
+    assert!(!s.game().state.objects[elf].is_card());
     assert_eq!(colors, 2);
 
     s.game_mut().state.permanents[rhys].as_mut().unwrap().tapped = false;

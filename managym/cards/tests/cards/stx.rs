@@ -148,24 +148,24 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
             .actions
             .iter()
             .find_map(|a| {
-                if let Action::SelectCard { card, .. } = a {
-                    Some(*card)
+                if let Action::SelectCard { object, .. } = a {
+                    Some(*object)
                 } else {
                     None
                 }
             })
             .unwrap();
         if forest {
-            assert_eq!(s.game().state.cards[selected].name, "Forest");
+            assert_eq!(s.game().state.objects[selected].name, "Forest");
         }
         let index = s
             .action_space()
             .actions
             .iter()
-            .position(|a| matches!(a,Action::SelectCard {card,..} if *card==selected))
+            .position(|a| matches!(a,Action::SelectCard {object,..} if *object==selected))
             .unwrap();
         s.step_action(index);
-        let id = s.game().state.card_to_permanent[selected].unwrap();
+        let id = s.game().state.object_to_permanent[selected].unwrap();
         assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
         assert_eq!(
             s.action_space().kind,
@@ -224,10 +224,10 @@ fn resampled_private_search_choices_still_name_library_cards() {
             let expected: BTreeSet<_> = branch
                 .state
                 .zones
-                .zone_cards(ZoneType::Library, PlayerId(0))
+                .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .filter(|card| branch.state.cards[**card].name == "Forest")
-                .map(|card| branch.state.cards[*card].id.0 as i32)
+                .filter(|object| branch.state.objects[**object].name == "Forest")
+                .map(|object| branch.state.objects[*object].id.0 as i32)
                 .collect();
             let offered: BTreeSet<_> = branch
                 .action_space()
@@ -235,7 +235,9 @@ fn resampled_private_search_choices_still_name_library_cards() {
                 .actions
                 .iter()
                 .filter_map(|action| match action {
-                    Action::SelectCard { card, .. } => Some(branch.state.cards[*card].id.0 as i32),
+                    Action::SelectCard { object, .. } => {
+                        Some(branch.state.objects[*object].id.0 as i32)
+                    }
                     _ => None,
                 })
                 .collect();
@@ -244,15 +246,15 @@ fn resampled_private_search_choices_still_name_library_cards() {
             let visible = owner
                 .agent_cards
                 .iter()
-                .filter(|card| card.zone == ZoneType::Library)
-                .map(|card| card.id)
+                .filter(|object| object.zone == ZoneType::Library)
+                .map(|object| object.id)
                 .collect::<BTreeSet<_>>();
             let inspected = branch
                 .state
                 .zones
-                .zone_cards(ZoneType::Library, PlayerId(0))
+                .zone_objects(ZoneType::Library, PlayerId(0))
                 .iter()
-                .map(|card| branch.state.cards[*card].id.0 as i32)
+                .map(|object| branch.state.objects[*object].id.0 as i32)
                 .collect::<BTreeSet<_>>();
             assert_eq!(
                 visible, inspected,
@@ -292,7 +294,7 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
     let mut s = five_color_setup(&["Field Trip"]);
     let hand = library_card(&s, 0, "Forest");
-    s.game_mut().move_card(hand, ZoneType::Hand);
+    s.game_mut().move_object(hand, ZoneType::Hand);
     cast(&mut s, "Field Trip");
     pass_until(&mut s, ActionSpaceKind::LookAndSelect);
     let space = PossibleWorldSpace::for_viewer(s.game(), PlayerId(1));
@@ -309,11 +311,11 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
         assert!(observed
             .opponent_cards
             .iter()
-            .all(|card| card.zone != ZoneType::Library && card.zone != ZoneType::Hand));
+            .all(|object| object.zone != ZoneType::Library && object.zone != ZoneType::Hand));
         for action in &branch.action_space().unwrap().actions {
-            if let Action::SelectCard { card, .. } = action {
-                assert_eq!(branch.state.zones.zone_of(*card), Some(ZoneType::Library));
-                assert_eq!(branch.state.cards[*card].name, "Forest");
+            if let Action::SelectCard { object, .. } = action {
+                assert_eq!(branch.state.zones.zone_of(*object), Some(ZoneType::Library));
+                assert_eq!(branch.state.objects[*object].name, "Forest");
             }
         }
     }
@@ -414,13 +416,13 @@ fn discard_then_draw_public_commitment_is_viewer_safe_and_authoritative() {
         .as_array()
         .expect("opponent cards")
         .iter()
-        .all(|card| card["zone"].as_i64() != Some(ZoneType::Hand as i64)));
+        .all(|object| object["zone"].as_i64() != Some(ZoneType::Hand as i64)));
 
     let (discard_id, discarded_card) = frame
         .offers
         .iter()
         .find_map(|offer| match &offer.public_commitment {
-            Some(PublicCommitment::Discard { card }) => Some((offer.id.0, card.clone())),
+            Some(PublicCommitment::Discard { card: object }) => Some((offer.id.0, object.clone())),
             _ => None,
         })
         .expect("one hand card has a discard commitment");
@@ -500,8 +502,8 @@ fn discard_public_commitment_materialization_rebuilds_hypothetical_hand() {
     let frame = branch.semantic_decision_frame().expect("refreshed frame");
     let mut commitments = BTreeMap::new();
     for offer in &frame.offers {
-        if let Some(PublicCommitment::Discard { card }) = &offer.public_commitment {
-            *commitments.entry(card.clone()).or_insert(0_u32) += 1;
+        if let Some(PublicCommitment::Discard { card: object }) = &offer.public_commitment {
+            *commitments.entry(object.clone()).or_insert(0_u32) += 1;
         }
     }
     assert_eq!(commitments, world.hand);
@@ -558,12 +560,12 @@ fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
         s.advance_to_active_step(0, StepKind::Main);
         cast_and_resolve(&mut s);
         assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
-        let card = s.game().state.players[0].sideboard[0];
+        let object = s.game().state.players[0].sideboard[0];
         let library_before = library(&s, 0);
         let hand_before = hand(&s, 0).len();
         s.drain_events();
         assert!(s.take_action_by_type(ActionType::LearnTakeLesson));
-        assert!(hand(&s, 0).contains(&card));
+        assert!(hand(&s, 0).contains(&object));
         assert_eq!(hand(&s, 0).len(), hand_before + 1);
         assert_eq!(library(&s, 0), library_before);
         assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);

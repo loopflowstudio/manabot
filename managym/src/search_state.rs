@@ -181,7 +181,7 @@ mod tests {
     use crate::{
         flow::event::GameEvent,
         state::{
-            game_object::{CardId, PermanentId},
+            game_object::{ObjectId, PermanentId},
             zone::ZoneType,
         },
     };
@@ -205,8 +205,8 @@ mod tests {
         let baseline = witness(&game);
 
         let mut incarnation = game.clone();
-        incarnation.state.object_incarnations[CardId(0)] = incarnation.state.object_incarnations
-            [CardId(0)]
+        incarnation.state.object_incarnations[ObjectId(0)] = incarnation.state.object_incarnations
+            [ObjectId(0)]
         .checked_next()
         .expect("next incarnation");
         assert_authority_change(&baseline, &incarnation, "incarnation");
@@ -218,12 +218,12 @@ mod tests {
                 .position(Option::is_some)
                 .expect("fixture has a live permanent"),
         );
-        let card = game.state.permanents[permanent]
+        let object = game.state.permanents[permanent]
             .as_ref()
             .expect("live permanent")
-            .card;
+            .object;
         let lki = game
-            .snapshot_current_permanent(card)
+            .snapshot_current_permanent(object)
             .expect("live permanent has snapshot facts");
         let mut object_lki = game.clone();
         object_lki.state.object_lki.insert(lki);
@@ -249,7 +249,7 @@ mod tests {
         let library = zone_order
             .state
             .zones
-            .zone_cards_mut(ZoneType::Library, PlayerId(0));
+            .zone_objects_mut(ZoneType::Library, PlayerId(0));
         let last = library.len() - 1;
         library.swap(0, last);
         assert_authority_change(&baseline, &zone_order, "zone order");

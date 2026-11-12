@@ -23,22 +23,22 @@ fn three_dreams_finds_up_to_three_differently_named_auras() {
     let mut chosen = Vec::new();
     for name in auras {
         let offered = offered_cards(&s);
-        assert!(offered.iter().all(|card| {
-            let card = &s.game().state.cards[*card];
-            card.has_subtype("Aura") && !chosen.iter().any(|(_, n)| *n == card.name)
+        assert!(offered.iter().all(|object| {
+            let object = &s.game().state.objects[*object];
+            object.has_subtype("Aura") && !chosen.iter().any(|(_, n)| *n == object.name)
         }));
-        let card = *offered
+        let object = *offered
             .iter()
-            .find(|card| s.game().state.cards[**card].name == name)
+            .find(|object| s.game().state.objects[**object].name == name)
             .unwrap();
         choose(
             &mut s,
-            |action| matches!(action, Action::SelectCard { card: c, .. } if *c == card),
+            |action| matches!(action, Action::SelectCard { object: c, .. } if *c == object),
         );
-        chosen.push((card, name.to_string()));
+        chosen.push((object, name.to_string()));
     }
     settle(&mut s);
-    for (card, _) in &chosen {
-        assert_eq!(zone_of(&s, *card), Some(ZoneType::Hand));
+    for (object, _) in &chosen {
+        assert_eq!(zone_of(&s, *object), Some(ZoneType::Hand));
     }
 }

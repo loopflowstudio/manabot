@@ -25,7 +25,7 @@ use crate::{
     state::{
         card::ActivatedAbilityDefinition,
         game_object::{
-            CardId, CardVec, IdGenerator, Incarnation, ObjectLkiLog, ObjectRef, PermanentId,
+            IdGenerator, Incarnation, ObjectId, ObjectLkiLog, ObjectRef, ObjectVec, PermanentId,
             PermanentVec, PlayerId, Target,
         },
         mana::Mana,
@@ -38,12 +38,12 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct GameState {
     /// Every object a game has made: its cards, tokens and copies of spells,
-    /// told apart by `Card::kind` (CR 109.1).
-    pub cards: CardVec<crate::state::card::Card>,
+    /// told apart by `Object::kind` (CR 109.1).
+    pub objects: ObjectVec<crate::state::game_object::Object>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
-    pub card_to_permanent: CardVec<Option<PermanentId>>,
+    pub object_to_permanent: ObjectVec<Option<PermanentId>>,
     /// Current CR 400.7 generation for each stable physical card entity.
-    pub object_incarnations: CardVec<Incarnation>,
+    pub object_incarnations: ObjectVec<Incarnation>,
     /// Last-known battlefield facts keyed by the departed exact object.
     pub object_lki: ObjectLkiLog,
     pub players: [crate::state::player::Player; 2],
@@ -82,7 +82,7 @@ pub struct GameState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum ActivationSource {
     Permanent(PermanentId),
-    Card(CardId),
+    Card(ObjectId),
 }
 
 /// What a caster announces while casting a spell (CR 601.2b) that changes
@@ -110,7 +110,8 @@ pub struct CastChoices {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Payment {
     Spell {
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
         mode: Option<usize>,
@@ -182,14 +183,16 @@ pub enum PendingChoice {
     /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
     AnnounceX {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
@@ -202,7 +205,8 @@ pub enum PendingChoice {
     },
     SpellMode {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
     },
@@ -210,7 +214,8 @@ pub enum PendingChoice {
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
         player: PlayerId,
-        card: CardId,
+        #[serde(rename = "card")]
+        object: ObjectId,
         #[serde(flatten)]
         cast: CastChoices,
         mode: Option<usize>,
@@ -485,8 +490,8 @@ impl TrackedState {
 
     /// Move `card` to `to_zone` under `holder`. Characteristics read the
     /// battlefield and graveyards; the trigger index reads the battlefield.
-    pub(crate) fn move_card(&mut self, card: CardId, holder: PlayerId, to_zone: ZoneType) {
-        let from_zone = self.state.zones.zone_of(card);
+    pub(crate) fn move_object(&mut self, object: ObjectId, holder: PlayerId, to_zone: ZoneType) {
+        let from_zone = self.state.zones.zone_of(object);
         let touches = |zone: ZoneType| matches!(zone, ZoneType::Battlefield | ZoneType::Graveyard);
         if touches(to_zone) || from_zone.is_some_and(touches) {
             self.revisions.characteristics += 1;
@@ -494,13 +499,13 @@ impl TrackedState {
         if to_zone == ZoneType::Battlefield || from_zone == Some(ZoneType::Battlefield) {
             self.revisions.triggers += 1;
         }
-        self.state.zones.move_card(card, holder, to_zone);
+        self.state.zones.move_object(object, holder, to_zone);
     }
 
     /// Advance the card's CR 400.7 incarnation as it leaves `from_zone`.
     /// Only a battlefield object's exact identity reaches a cached derivation
     /// (through its effect records and static attachments).
-    pub(crate) fn advance_incarnation(&mut self, card: CardId, from_zone: ZoneType) {
+    pub(crate) fn advance_incarnation(&mut self, object: ObjectId, from_zone: ZoneType) {
         if from_zone == ZoneType::Battlefield {
             self.revisions.characteristics += 1;
             self.revisions.triggers += 1;
@@ -508,7 +513,7 @@ impl TrackedState {
         let incarnation = self
             .state
             .object_incarnations
-            .get_mut(card.0)
+            .get_mut(object.0)
             .expect("card entity must have an incarnation");
         *incarnation = incarnation
             .checked_next()

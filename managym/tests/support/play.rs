@@ -12,7 +12,7 @@ use managym::{
     agent::action::{Action, ActionSpaceKind, ActionType},
     flow::turn::{PhaseKind, StepKind},
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         target::Target,
         zone::ZoneType,
     },
@@ -151,8 +151,8 @@ impl Scenario {
                 let Some(permanent) = self.game.state.permanents[*permanent_id].as_ref() else {
                     return false;
                 };
-                let card = &self.game.state.cards[permanent.card];
-                card.name == card_name
+                let object = &self.game.state.objects[permanent.object];
+                object.name == card_name
             })
             .expect("target choice for named permanent should exist");
         self.step_action(choose_index);
@@ -298,10 +298,10 @@ pub fn choose_mode(s: &mut Scenario, wanted: usize) {
     s.step_action(index);
 }
 
-pub fn select_card(s: &mut Scenario, card: CardId) {
+pub fn select_card(s: &mut Scenario, object: ObjectId) {
     choose(
         s,
-        |a| matches!(a,Action::SelectCard {card: selected,..} if *selected==card),
+        |a| matches!(a,Action::SelectCard {object: selected,..} if *selected==object),
     );
 }
 
@@ -323,23 +323,23 @@ pub fn target_opponent(s: &mut Scenario) {
 
 /// Move player 0's library copy into the hand through the zone-change
 /// authority and cast that copy.
-pub fn cast(s: &mut Scenario, name: &str) -> CardId {
+pub fn cast(s: &mut Scenario, name: &str) -> ObjectId {
     let id = move_to_hand(s, name);
     cast_card(s, id);
     id
 }
 
 /// Cast `id` from whichever zone currently permits it, refreshing priority.
-pub fn cast_card(s: &mut Scenario, id: CardId) {
+pub fn cast_card(s: &mut Scenario, id: ObjectId) {
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         s,
-        |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
+        |a| matches!(a, Action::CastSpell { object, .. } if *object == id),
     );
 }
 
 /// Refresh priority, then whether `id` may be cast.
-pub fn castable(s: &mut Scenario, id: CardId) -> bool {
+pub fn castable(s: &mut Scenario, id: ObjectId) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
     can_cast(s, id)
 }
@@ -349,17 +349,17 @@ pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
     let id = move_to_hand(s, name);
     choose(
         s,
-        |a| matches!(a, Action::PlayLand { card, .. } if *card == id),
+        |a| matches!(a, Action::PlayLand { object, .. } if *object == id),
     );
-    s.game().state.card_to_permanent[id].expect("land entered")
+    s.game().state.object_to_permanent[id].expect("land entered")
 }
 
 /// Like `cast`, but the copy may already be in player 0's hand.
-pub fn cast_owned(s: &mut Scenario, name: &str) -> CardId {
-    let card = find_owned_card(s, 0, name);
-    s.game_mut().move_card(card, ZoneType::Hand);
-    cast_card(s, card);
-    card
+pub fn cast_owned(s: &mut Scenario, name: &str) -> ObjectId {
+    let object = find_owned_card(s, 0, name);
+    s.game_mut().move_object(object, ZoneType::Hand);
+    cast_card(s, object);
+    object
 }
 
 /// Take the first offered cast action.
@@ -399,11 +399,11 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
 
 /// Activate ability `index` of a card in its hand or graveyard, refreshing
 /// priority first.
-pub fn activate_card(s: &mut Scenario, source: CardId, index: usize) {
+pub fn activate_card(s: &mut Scenario, source: ObjectId, index: usize) {
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(s, |a| {
-        matches!(a, Action::ActivateCardAbility { card, ability_index, .. }
-        if *card == source && *ability_index == index)
+        matches!(a, Action::ActivateCardAbility { object, ability_index, .. }
+        if *object == source && *ability_index == index)
     });
 }
 
@@ -434,10 +434,10 @@ pub fn activate_named(s: &mut Scenario, name: &str, index: usize) {
 
 /// Put player 0's library copy into play and `settle`: a land moves straight
 /// onto the battlefield, anything else is cast.
-pub fn play_and_settle(s: &mut Scenario, name: &str) -> CardId {
+pub fn play_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    if s.game().state.cards[id].types.is_land() {
-        s.game_mut().move_card(id, ZoneType::Battlefield);
+    if s.game().state.objects[id].types.is_land() {
+        s.game_mut().move_object(id, ZoneType::Battlefield);
         s.game_mut().scenario_refresh_priority().unwrap();
     } else {
         cast(s, name);
@@ -448,9 +448,9 @@ pub fn play_and_settle(s: &mut Scenario, name: &str) -> CardId {
 
 /// Move player 0's library copy onto the battlefield through the zone-change
 /// authority, pass once if it triggered, and `settle`.
-pub fn enter_and_settle(s: &mut Scenario, name: &str) -> CardId {
+pub fn enter_and_settle(s: &mut Scenario, name: &str) -> ObjectId {
     let id = library_card(s, 0, name);
-    s.game_mut().move_card(id, ZoneType::Battlefield);
+    s.game_mut().move_object(id, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     if !s.game().state.pending_triggers.is_empty() {
         s.pass_priority();

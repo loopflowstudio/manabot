@@ -14,26 +14,29 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         400_701,
     );
     let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[permanent]
+    let object = s.game().state.permanents[permanent]
         .as_ref()
         .expect("forced permanent")
-        .card;
+        .object;
     let old_presentation = s.game().state.permanents[permanent]
         .as_ref()
         .expect("forced permanent")
         .id;
     let old_ref = s
         .game()
-        .current_object_ref(card)
+        .current_object_ref(object)
         .expect("battlefield object ref");
     assert_eq!(s.game().lookup_current_permanent(old_ref), Ok(permanent));
 
-    s.game_mut().move_card(card, ZoneType::Hand);
+    s.game_mut().move_object(object, ZoneType::Hand);
     assert_eq!(
         s.game().lookup_current_permanent(old_ref),
         Err(ObjectLookupError::StaleIncarnation)
     );
-    let hand_ref = s.game().current_object_ref(card).expect("hand object ref");
+    let hand_ref = s
+        .game()
+        .current_object_ref(object)
+        .expect("hand object ref");
     assert_eq!(
         s.game().lookup_current_permanent(hand_ref),
         Err(ObjectLookupError::WrongZone)
@@ -51,7 +54,7 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         .expect("departing battlefield LKI")
         .clone();
     assert_eq!(lki.object_ref, old_ref);
-    assert_eq!(lki.card, card);
+    assert_eq!(lki.object, object);
     assert_eq!(lki.from_zone, ZoneType::Battlefield);
     assert_eq!(lki.owner, PlayerId(0));
     assert_eq!(lki.controller, PlayerId(0));
@@ -64,12 +67,12 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
         "Gray Ogre"
     );
 
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
     let new_ref = s
         .game()
-        .current_object_ref(card)
+        .current_object_ref(object)
         .expect("re-entered object ref");
-    let new_permanent = s.game().state.card_to_permanent[card].expect("re-entered permanent");
+    let new_permanent = s.game().state.object_to_permanent[object].expect("re-entered permanent");
     let new_presentation = s.game().state.permanents[new_permanent]
         .as_ref()
         .expect("re-entered permanent")
@@ -88,7 +91,7 @@ fn object_ref_leave_and_reenter_preserves_entity_but_invalidates_incarnation() {
     );
 
     let branch = s.game().clone();
-    assert_eq!(branch.current_object_ref(card), Some(new_ref));
+    assert_eq!(branch.current_object_ref(object), Some(new_ref));
     assert_eq!(branch.object_lki(old_ref), Some(&lki));
     assert_eq!(
         branch
@@ -107,17 +110,17 @@ fn object_ref_same_zone_move_is_not_a_new_rules_object() {
         400_702,
     );
     let permanent = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let card = s.game().state.permanents[permanent]
+    let object = s.game().state.permanents[permanent]
         .as_ref()
         .expect("forced permanent")
-        .card;
-    let before = s.game().current_object_ref(card).expect("object ref");
+        .object;
+    let before = s.game().current_object_ref(object).expect("object ref");
     let events_before = s.game().state.events.len();
 
-    s.game_mut().move_card(card, ZoneType::Battlefield);
+    s.game_mut().move_object(object, ZoneType::Battlefield);
 
-    assert_eq!(s.game().current_object_ref(card), Some(before));
-    assert_eq!(s.game().state.card_to_permanent[card], Some(permanent));
+    assert_eq!(s.game().current_object_ref(object), Some(before));
+    assert_eq!(s.game().state.object_to_permanent[object], Some(permanent));
     assert_eq!(s.game().state.events.len(), events_before);
 }
 
@@ -133,12 +136,12 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         400_703,
     );
     let lesson = owned_card(&s, 0, "It'll Quench Ya!");
-    s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    s.game_mut().move_object(lesson, ZoneType::Graveyard);
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
     let swarm_card = s.game().state.permanents[swarm]
         .as_ref()
         .expect("swarm permanent")
-        .card;
+        .object;
     let old_ref = s
         .game()
         .current_object_ref(swarm_card)
@@ -149,7 +152,7 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
         .id;
     let hand_before = s.zone_size(0, ZoneType::Hand);
 
-    s.game_mut().move_card(swarm_card, ZoneType::Graveyard);
+    s.game_mut().move_object(swarm_card, ZoneType::Graveyard);
     let pending = s
         .game()
         .state
@@ -163,10 +166,10 @@ fn cr_400_7_death_trigger_keeps_source_lki_across_reentry() {
     assert_eq!(source_lki.presentation_id, old_presentation);
     assert_eq!(
         source_lki.definition_id,
-        s.game().state.cards[swarm_card].definition_id
+        s.game().state.objects[swarm_card].definition_id
     );
 
-    s.game_mut().move_card(swarm_card, ZoneType::Battlefield);
+    s.game_mut().move_object(swarm_card, ZoneType::Battlefield);
     let new_ref = s
         .game()
         .current_object_ref(swarm_card)

@@ -60,10 +60,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
             assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
-            for &card in roster {
-                assert_eq!(game.state.cards[card].owner, PlayerId(player));
-                assert_eq!(game.state.zones.zone_of(card), None);
-                assert!(!game.state.players[player].deck.contains(&card));
+            for &object in roster {
+                assert_eq!(game.state.objects[object].owner, PlayerId(player));
+                assert_eq!(game.state.zones.zone_of(object), None);
+                assert!(!game.state.players[player].deck.contains(&object));
             }
         }
     }
@@ -80,8 +80,8 @@ fn learn_sideboard_does_not_change_opening_deal_or_library_order() {
     for player in [PlayerId(0), PlayerId(1)] {
         for zone in [ZoneType::Hand, ZoneType::Library] {
             assert_eq!(
-                empty.state.zones.zone_cards(zone, player),
-                sideboard.state.zones.zone_cards(zone, player)
+                empty.state.zones.zone_objects(zone, player),
+                sideboard.state.zones.zone_objects(zone, player)
             );
         }
     }

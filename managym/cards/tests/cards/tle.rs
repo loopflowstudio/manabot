@@ -35,9 +35,9 @@ fn tle_baseline_vanilla_creatures_cast_and_deal_printed_combat_damage() {
         ("Warship Scout", 2, 1),
     ] {
         let mut s = five_color_setup(&[name]);
-        let card = cast_owned(&mut s, name);
+        let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let permanent = s.game().state.object_to_permanent[object].unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(!tapped(&s, permanent), "{name}");
@@ -111,9 +111,9 @@ fn tle_baseline_koala_sheep_gains_three_on_entry() {
 #[test]
 fn tle_baseline_wolf_cove_villager_enters_tapped_and_untaps_normally() {
     let mut s = five_color_setup(&["Wolf Cove Villager"]);
-    let card = cast_owned(&mut s, "Wolf Cove Villager");
+    let object = cast_owned(&mut s, "Wolf Cove Villager");
     settle(&mut s);
-    let permanent = s.game().state.card_to_permanent[card].unwrap();
+    let permanent = s.game().state.object_to_permanent[object].unwrap();
     assert!(tapped(&s, permanent));
     s.advance_to_active_step(1, StepKind::Main);
     assert!(tapped(&s, permanent));
@@ -142,9 +142,9 @@ fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
         ("Sokka, Wolf Cove's Protector", 3, 3, Keyword::Vigilance),
     ] {
         let mut s = five_color_setup(&[name]);
-        let card = cast_owned(&mut s, name);
+        let object = cast_owned(&mut s, name);
         settle(&mut s);
-        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let permanent = s.game().state.object_to_permanent[object].unwrap();
         let view = s.game().characteristics(permanent);
         assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
         assert!(view.keywords.has(keyword), "{name}");
@@ -154,9 +154,9 @@ fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
 #[test]
 fn tle_baseline_dragon_moose_attacks_the_turn_it_enters() {
     let mut s = five_color_setup(&["Dragon Moose"]);
-    let card = cast_owned(&mut s, "Dragon Moose");
+    let object = cast_owned(&mut s, "Dragon Moose");
     settle(&mut s);
-    let moose = s.game().state.card_to_permanent[card].unwrap();
+    let moose = s.game().state.object_to_permanent[object].unwrap();
     pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
     attack_with(&mut s, moose);
     s.advance_to_step(StepKind::EndOfCombat);
@@ -241,9 +241,9 @@ fn tle_baseline_katara_heroic_healer_counters_each_other_creature_you_control() 
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.game_mut().scenario_refresh_priority().unwrap();
-    let card = cast_owned(&mut s, "Katara, Heroic Healer");
+    let object = cast_owned(&mut s, "Katara, Heroic Healer");
     settle(&mut s);
-    let katara = s.game().state.card_to_permanent[card].unwrap();
+    let katara = s.game().state.object_to_permanent[object].unwrap();
     assert_eq!(counters(&s, ogre), 1);
     assert_eq!(counters(&s, katara), 0);
     assert_eq!(counters(&s, foe), 0);
@@ -367,11 +367,11 @@ fn merchant_repeats_with_four_foods_and_preserves_exact_tap_commands() {
         assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
         for food in pair {
             assert_choice_contract(&s);
-            let card = card_of(&s, *food);
-            assert!(offered_cards(&s).contains(&card));
-            select_card(&mut s, card);
+            let object = card_of(&s, *food);
+            assert!(offered_cards(&s).contains(&object));
+            select_card(&mut s, object);
             assert!(tapped(&s, *food));
-            assert!(!offered_cards(&s).contains(&card));
+            assert!(!offered_cards(&s).contains(&object));
         }
         assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
         assert_choice_contract(&s);
@@ -392,8 +392,8 @@ fn merchant_three_foods_fund_only_one_activation() {
     assert!(!can_cast(&s, prism));
     activate(&mut s, source, 0);
     for food in &foods[..2] {
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     choose_mode(&mut s, 4);
     assert!(!can_activate(&s, source));
@@ -419,8 +419,8 @@ fn merchant_cannot_reuse_the_food_reserved_for_its_own_activation() {
         for food in pair {
             assert!(!offered_cards(&s).contains(&payer_card));
             assert_choice_contract(&s);
-            let card = card_of(&s, *food);
-            select_card(&mut s, card);
+            let object = card_of(&s, *food);
+            select_card(&mut s, object);
         }
         choose_mode(&mut s, 4);
     }
@@ -448,8 +448,8 @@ fn merchant_tap_count_reaches_the_acting_viewer_and_policy() {
             }
             encode(&observation, &Default::default()).unwrap();
         }
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
 }
@@ -489,8 +489,8 @@ fn merchant_sacrifices_a_food_for_each_creature_dealing_combat_damage_to_you() {
     for food in foods {
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
         assert_choice_contract(&s);
-        let card = card_of(&s, food);
-        select_card(&mut s, card);
+        let object = card_of(&s, food);
+        select_card(&mut s, object);
     }
     settle(&mut s);
     assert!(s.battlefield_permanents_named(0, "Food").is_empty());
@@ -509,8 +509,8 @@ fn merchant_paid_foods_are_not_offered_again_for_waterbending() {
     pass_until(&mut s, ActionSpaceKind::Waterbend);
     activate(&mut s, source, 0);
     for food in &foods[..2] {
-        let card = card_of(&s, *food);
-        select_card(&mut s, card);
+        let object = card_of(&s, *food);
+        select_card(&mut s, object);
     }
     choose_mode(&mut s, 4);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);

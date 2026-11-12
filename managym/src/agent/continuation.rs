@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
-        game_object::{CardId, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, ObjectRef, PlayerId, Target},
         mana::ManaCost,
         stack_object::StackObject,
         zone::ZoneType,
@@ -203,7 +203,7 @@ impl Game {
     /// Execution always consumes the captured effects, regardless of this answer.
     pub(crate) fn activation_catalog_program(
         &self,
-        card: CardId,
+        object: ObjectId,
         face: crate::state::card::CardDefId,
         inherited: Option<crate::state::card::CardDefId>,
         index: usize,
@@ -211,11 +211,11 @@ impl Game {
         effects: &[crate::state::ability::Effect],
     ) -> bool {
         let definition = if let Some(grant) = grant {
-            self.state.cards[CardId::from(grant.grantor.entity)]
+            self.state.objects[ObjectId::from(grant.grantor.entity)]
                 .attached_grants()
                 .nth(grant.index)
         } else {
-            self.source_face(card, face).and_then(|source| {
+            self.source_face(object, face).and_then(|source| {
                 source.activated_abilities.get(index).or_else(|| {
                     crate::cards::content_pack::default_content_pack()
                         .definition(inherited?)?
@@ -231,15 +231,15 @@ impl Game {
         object: ObjectRef,
         viewer: PlayerId,
     ) -> VisibleReference {
-        let card_id = CardId::from(object.entity);
-        if self.current_object_ref(card_id) != Some(object) {
+        let object_id = ObjectId::from(object.entity);
+        if self.current_object_ref(object_id) != Some(object) {
             return VisibleReference {
                 definition: self.object_lki(object).map(|lki| lki.definition_id.0),
                 ..VisibleReference::default()
             };
         }
-        let card = &self.state.cards[card_id];
-        let zone = self.state.zones.zone_of(card_id);
+        let record = &self.state.objects[object_id];
+        let zone = self.state.zones.zone_of(object_id);
         // Ordinary visibility needs no walk of retained event batches. Only
         // otherwise hidden objects need the prospective-entry permission.
         let visible = matches!(
@@ -252,12 +252,14 @@ impl Game {
                     | ZoneType::Command
             )
         ) || (zone == Some(ZoneType::Hand)
-            && self.shares_information(viewer, card.owner))
+            && self.shares_information(viewer, record.owner))
             || (matches!(zone, Some(ZoneType::Hand | ZoneType::Library))
-                && (self.searches_private_zones(viewer, card.owner)
-                    || self.decision_reveals(card_id, viewer)))
+                && (self.searches_private_zones(viewer, record.owner)
+                    || self.decision_reveals(object_id, viewer)))
             || self.pending_public_entries().contains(&object);
-        if !visible || (self.is_foretold(card_id) && !self.shares_information(viewer, card.owner)) {
+        if !visible
+            || (self.is_foretold(object_id) && !self.shares_information(viewer, record.owner))
+        {
             return VisibleReference::default();
         }
         VisibleReference {
@@ -265,9 +267,9 @@ impl Game {
                 self.lookup_current_permanent(object)
                     .ok()
                     .and_then(|id| self.state.permanents[id].as_ref())
-                    .map_or(card.id.0, |p| p.id.0) as i32,
+                    .map_or(record.id.0, |p| p.id.0) as i32,
             ),
-            definition: Some(card.definition_id.0),
+            definition: Some(record.definition_id.0),
             player: None,
         }
     }
@@ -276,21 +278,24 @@ impl Game {
     /// cards it looks at, orders or has revealed, or the whole zone a card
     /// selection reads. The observation lists these same cards for that viewer,
     /// so their reference slots join its rows instead of reading as unrevealed.
-    fn decision_reveals(&self, card: CardId, viewer: PlayerId) -> bool {
+    fn decision_reveals(&self, object: ObjectId, viewer: PlayerId) -> bool {
         let Some(suspended) = &self.state.suspended_decision else {
             return false;
         };
-        let (owner, zone) = (self.state.cards[card].owner, self.state.zones.zone_of(card));
+        let (owner, zone) = (
+            self.state.objects[object].owner,
+            self.state.zones.zone_of(object),
+        );
         suspended.decisions().any(|decision| {
             self.shares_information(viewer, decision.player())
-                && (decision.revealed_cards().contains(&card)
+                && (decision.revealed_cards().contains(&object)
                     || matches!(decision, Decision::SelectCards { from: Some(source), .. }
                         if source.owner == owner && Some(source.zone) == zone))
         })
     }
 
-    pub(crate) fn card_reference(&self, card: CardId, viewer: PlayerId) -> VisibleReference {
-        self.current_object_ref(card)
+    pub(crate) fn card_reference(&self, object_id: ObjectId, viewer: PlayerId) -> VisibleReference {
+        self.current_object_ref(object_id)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
     }
@@ -300,7 +305,7 @@ impl Game {
             ActivationSource::Permanent(permanent) => {
                 self.target_reference(Target::Permanent(permanent), viewer)
             }
-            ActivationSource::Card(card) => self.card_reference(card, viewer),
+            ActivationSource::Card(object) => self.card_reference(object, viewer),
         }
     }
 
@@ -314,16 +319,16 @@ impl Game {
                 .permanent_object_ref(id)
                 .map(|object| self.visible_reference(object, viewer))
                 .unwrap_or_default(),
-            Target::StackSpell(card) => {
-                if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
-                    self.card_reference(card, viewer)
+            Target::StackSpell(object_id) => {
+                if self.state.zones.zone_of(object_id) == Some(ZoneType::Stack) {
+                    self.card_reference(object_id, viewer)
                 } else {
                     VisibleReference::default()
                 }
             }
             Target::StackAbility(id) => self
                 .stack_ability_source(id)
-                .map(|card| self.card_reference(card, viewer))
+                .map(|object_id| self.card_reference(object_id, viewer))
                 .unwrap_or_default(),
             Target::GraveyardCard(object) => self.visible_reference(object, viewer),
         }
@@ -454,7 +459,7 @@ impl Game {
             .source_ref
             .map(|r| self.visible_reference(r, viewer))
             .unwrap_or_default();
-        source.definition = Some(self.state.cards[trigger.source_card].definition_id.0);
+        source.definition = Some(self.state.objects[trigger.source_object].definition_id.0);
         let context = match &trigger.event {
             DelayedTriggerEvent::Leaves { watched, .. } => {
                 Some(self.visible_reference(*watched, viewer))
@@ -518,7 +523,7 @@ impl Game {
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
                 source.definition = Some(trigger.source_lki.as_ref().map_or(
-                    self.state.cards[trigger.source_card].definition_id.0,
+                    self.state.objects[trigger.source_object].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
                 let mut frame = ContinuationFrame {
@@ -590,13 +595,14 @@ impl Game {
         let clauses: &[usize] = match object {
             StackObject::Spell(spell) => {
                 frame.kind = 1;
-                frame.source = self.card_reference(spell.card, viewer);
+                frame.source = self.card_reference(spell.object, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
                 frame.x = spell.x;
-                frame.granted_keywords =
-                    KeywordData::from_keywords(&self.spell_keywords(spell.card, spell.controller))
-                        .flags();
+                frame.granted_keywords = KeywordData::from_keywords(
+                    &self.spell_keywords(spell.object, spell.controller),
+                )
+                .flags();
                 &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
@@ -671,7 +677,7 @@ impl Game {
                 self.payment_frame(payment, viewer, &mut frame)
             }
             PendingChoice::ChooseTargets {
-                card,
+                object,
                 cast,
                 mode,
                 requirement_index,
@@ -679,20 +685,21 @@ impl Game {
                 chosen_req_indices,
                 ..
             } => {
-                frame.source = self.card_reference(*card, viewer);
+                frame.source = self.card_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
-            PendingChoice::SpellMode { card, cast, .. } => {
-                frame.source = self.card_reference(*card, viewer);
+            PendingChoice::SpellMode { object, cast, .. } => {
+                frame.source = self.card_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
             }
-            PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
-                frame.source = self.card_reference(*card, viewer)
+            PendingChoice::KickerChoice { object, .. }
+            | PendingChoice::AnnounceX { object, .. } => {
+                frame.source = self.card_reference(*object, viewer)
             }
             PendingChoice::ActivatedTarget {
                 source,
@@ -798,7 +805,7 @@ impl Game {
                 .unwrap_or_else(|| {
                     effect
                         .source
-                        .map(|card| self.card_reference(card, viewer))
+                        .map(|object| self.card_reference(object, viewer))
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
@@ -944,14 +951,14 @@ impl Game {
     fn payment_frame(&self, payment: &Payment, viewer: PlayerId, frame: &mut ContinuationFrame) {
         match payment {
             Payment::Spell {
-                card,
+                object,
                 cast,
                 mode,
                 targets,
                 target_req_indices,
                 ..
             } => {
-                frame.source = self.card_reference(*card, viewer);
+                frame.source = self.card_reference(*object, viewer);
                 frame.kicked = cast.kicked;
                 frame.x = cast.x;
                 frame.mode = *mode;
@@ -1196,17 +1203,17 @@ mod tests {
             .visible_reference(reference, PlayerId(0))
             .object
             .is_some());
-        let card = CardId::from(reference.entity);
-        game.move_card(card, ZoneType::Hand);
+        let object_id = ObjectId::from(reference.entity);
+        game.move_object(object_id, ZoneType::Hand);
         assert!(game
             .visible_reference(reference, PlayerId(0))
             .object
             .is_none());
         assert!(game
-            .target_reference(Target::StackSpell(card), PlayerId(0))
+            .target_reference(Target::StackSpell(object_id), PlayerId(0))
             .object
             .is_none());
-        assert!(game.card_reference(card, PlayerId(1)).object.is_none());
+        assert!(game.card_reference(object_id, PlayerId(1)).object.is_none());
     }
 
     #[test]
@@ -1329,13 +1336,13 @@ mod tests {
             },
             Decision::OrderLibrary {
                 player,
-                cards: vec![],
+                object_ids: vec![],
                 next: 0,
                 end: LibraryEnd::Bottom,
             },
             Decision::OrderLibrary {
                 player,
-                cards: vec![],
+                object_ids: vec![],
                 next: 0,
                 end: LibraryEnd::Top,
             },
@@ -1419,7 +1426,7 @@ mod tests {
             },
             Decision::EnterAsCopy {
                 player,
-                card: CardId(0),
+                object_id: ObjectId(0),
                 candidates: vec![],
             },
         ];

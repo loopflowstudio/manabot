@@ -23,7 +23,7 @@ use crate::support::{
 use managym::agent::observation_layout::{
     action, card, fact, permanent, player, relation, turn_state,
 };
-use managym::state::card::ObjectKind;
+use managym::state::game_object::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
@@ -49,7 +49,7 @@ use managym::{
     },
     state::{
         effect::{Affected, EffectDuration, Modification},
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{ObjectId, PermanentId, PlayerId, Target},
         mana::Color,
         permanent::CounterKind,
         zone::ZoneType,
@@ -133,7 +133,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
     let Permanent {
         transforms: _,
         id: _,
-        card: _,
+        object: _,
         controller: _,
         tapped: _,
         summoning_sick: _,
@@ -1236,7 +1236,7 @@ fn condition_witnesses() -> Vec<Condition> {
 struct Witnessed {
     token: &'static str,
     seen: Seen,
-    card: &'static str,
+    object: &'static str,
     file: &'static str,
     test: &'static str,
 }
@@ -1244,14 +1244,14 @@ struct Witnessed {
 const fn witnessed(
     token: &'static str,
     seen: Seen,
-    card: &'static str,
+    object: &'static str,
     file: &'static str,
     test: &'static str,
 ) -> Witnessed {
     Witnessed {
         token,
         seen,
-        card,
+        object,
         file,
         test,
     }
@@ -1769,12 +1769,12 @@ fn card_row<'a>(
     encoded: &'a EncodedObservation,
     permanent: PermanentId,
 ) -> &'a [f32] {
-    let card = game.state.permanents[permanent].as_ref().unwrap().card;
-    let id = game.state.cards[card].id.0 as i32;
+    let object = game.state.permanents[permanent].as_ref().unwrap().object;
+    let id = game.state.objects[object].id.0 as i32;
     let row = observation
         .agent_cards
         .iter()
-        .position(|card| card.id == id)
+        .position(|object| object.id == id)
         .unwrap();
     &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
 }
@@ -2169,8 +2169,8 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         );
 
         let mut printed = base_game.clone();
-        let card = printed.state.permanents[ogre].as_ref().unwrap().card;
-        printed.state.cards[card].keywords = keywords;
+        let object = printed.state.permanents[ogre].as_ref().unwrap().object;
+        printed.state.objects[object].keywords = keywords;
         let (obs, after) = observe(&printed, 0);
         assert!(
             changed(
@@ -2349,9 +2349,9 @@ fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
         let mut names = game
             .state
             .zones
-            .zone_cards(ZoneType::Hand, PlayerId(1))
+            .zone_objects(ZoneType::Hand, PlayerId(1))
             .iter()
-            .map(|card| game.state.cards[*card].name.clone())
+            .map(|object| game.state.objects[*object].name.clone())
             .collect::<Vec<_>>();
         names.sort();
         names
@@ -2417,7 +2417,7 @@ fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
 fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     let statics = static_witnesses().into_iter().map(|ability| {
         let row = static_seen(&ability);
-        let printed = card_definition(row.card)
+        let printed = card_definition(row.object)
             .statics
             .iter()
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&ability));
@@ -2425,29 +2425,29 @@ fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
     });
     let costs = cost_witnesses().into_iter().map(|cost| {
         let row = cost_seen(&cost);
-        let printed = card_definition(row.card)
+        let printed = card_definition(row.object)
             .additional_costs
             .iter()
             .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&cost));
         (row, printed)
     });
     for (row, printed) in statics.chain(costs) {
-        assert!(printed, "{} does not print {}", row.card, row.token);
+        assert!(printed, "{} does not print {}", row.object, row.token);
         let path = format!("{}/tests/cards/{}.rs", env!("CARGO_MANIFEST_DIR"), row.file);
         let source = std::fs::read_to_string(&path).unwrap();
         let body = function_body(&source, row.test)
             .unwrap_or_else(|| panic!("{path} has no test {}", row.test));
         // The test names the card itself or through a setup helper it calls.
-        let card = format!("{:?}", row.card);
-        let runs_card = body.contains(&card)
+        let object = format!("{:?}", row.object);
+        let runs_card = body.contains(&object)
             || source
                 .match_indices("\nfn ")
                 .filter_map(|(at, _)| source[at + 4..].split('(').next())
                 .any(|helper| {
                     body.contains(&format!("{helper}("))
-                        && function_body(&source, helper).is_some_and(|it| it.contains(&card))
+                        && function_body(&source, helper).is_some_and(|it| it.contains(&object))
                 });
-        assert!(runs_card, "{} does not run {}", row.test, row.card);
+        assert!(runs_card, "{} does not run {}", row.test, row.object);
         match row.seen {
             Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
             Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
@@ -2468,13 +2468,13 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
     let variant = |name: &str| (TokenKind::Variant, name_value(name));
     for ability in static_witnesses() {
         let row = static_seen(&ability);
-        let card = card_definition(row.card);
+        let object = card_definition(row.object);
         let mut names = vec![row.token];
         if let StaticAbility::BlockRestriction(restriction) = &ability {
             names.push(block_restriction_token(restriction));
         }
-        let tokens = tokens_of(&card);
-        let mut stripped = card.clone();
+        let tokens = tokens_of(&object);
+        let mut stripped = object.clone();
         let printed = Arc::make_mut(&mut stripped.printed);
         printed.statics.retain(|candidate| {
             std::mem::discriminant(candidate) != std::mem::discriminant(&ability)
@@ -2490,9 +2490,13 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
             }
         }
         let without = tokens_of(&stripped);
-        assert_ne!(tokens, without, "{}", row.card);
+        assert_ne!(tokens, without, "{}", row.object);
         for name in names {
-            assert!(tokens.contains(&variant(name)), "{} lacks {name}", row.card);
+            assert!(
+                tokens.contains(&variant(name)),
+                "{} lacks {name}",
+                row.object
+            );
             assert!(!without.contains(&variant(name)), "{name}");
         }
         // The token also appears for a bare definition with only this ability.
@@ -2508,15 +2512,15 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
     }
     for cost in cost_witnesses() {
         let row = cost_seen(&cost);
-        let card = card_definition(row.card);
-        let tokens = tokens_of(&card);
-        let mut stripped = card.clone();
+        let object = card_definition(row.object);
+        let tokens = tokens_of(&object);
+        let mut stripped = object.clone();
         Arc::make_mut(&mut stripped.printed)
             .additional_costs
             .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
         let without = tokens_of(&stripped);
-        assert_ne!(tokens, without, "{}", row.card);
-        assert!(tokens.contains(&variant(row.token)), "{}", row.card);
+        assert_ne!(tokens, without, "{}", row.object);
+        assert!(tokens.contains(&variant(row.token)), "{}", row.object);
         assert!(!without.contains(&variant(row.token)), "{}", row.token);
     }
 }
@@ -2529,7 +2533,7 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let (base_game, ogre) = ogre_game();
     let (base_obs, base) = observe(&base_game, 0);
-    let card = base_game.state.permanents[ogre].as_ref().unwrap().card;
+    let object = base_game.state.permanents[ogre].as_ref().unwrap().object;
     let edits = static_witnesses()
         .into_iter()
         .map(|ability| {
@@ -2547,7 +2551,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
     let mut checked = 0;
     for (row, edit) in edits {
         let mut game = base_game.clone();
-        edit(&mut game.state.cards[card]);
+        edit(&mut game.state.objects[object]);
         let (obs, after) = observe(&game, 0);
         let moved = match row.seen {
             Seen::Card(column) => changed(
@@ -2579,8 +2583,8 @@ fn no_maximum_hand_size_keeps_the_hand_count_column_through_cleanup() {
         s.pass_priority();
         resolve_top(&mut s);
         if !has_static {
-            let card = card_of(&s, proft);
-            s.game_mut().move_card(card, ZoneType::Hand);
+            let object = card_of(&s, proft);
+            s.game_mut().move_object(object, ZoneType::Hand);
         }
         s.game_mut().draw_cards(PlayerId(0), 5);
         s.advance_to_active_step(0, StepKind::End);
@@ -2647,12 +2651,12 @@ fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristic
         let (mut game, _) = ogre_game();
         game.create_token(token.key, PlayerId(0), false);
         let (observation, encoded) = observe(&game, 0);
-        let card = observation
+        let object = observation
             .agent_cards
             .iter()
-            .position(|card| card.name == token.name && card.is_token)
+            .position(|object| object.name == token.name && object.is_token)
             .unwrap_or_else(|| panic!("{} is not observed", token.key));
-        let card_row = &encoded.agent_cards[card * CARD_DIM..(card + 1) * CARD_DIM];
+        let card_row = &encoded.agent_cards[object * CARD_DIM..(object + 1) * CARD_DIM];
         assert_eq!(card_row[29], 1.0, "{} is_token column", token.key);
         assert_eq!(card_row[8], token.power.unwrap_or(0) as f32 / 10.0);
         assert_eq!(card_row[9], token.toughness.unwrap_or(0) as f32 / 10.0);
@@ -3126,8 +3130,8 @@ fn every_observed_field_names_its_encoding_and_every_column_is_claimed() {
         }
     }
     for keyword in Keyword::ALL {
-        let (card, permanent) = keyword_columns(keyword);
-        for (buffer, index) in [(Buffer::Card, card), (Buffer::Permanent, permanent)] {
+        let (object, permanent) = keyword_columns(keyword);
+        for (buffer, index) in [(Buffer::Card, object), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),
                 "{keyword:?}: {buffer:?} {index}"
@@ -3222,14 +3226,14 @@ fn card_sources() -> Vec<(&'static str, CardSource)> {
 
 /// The card row of `permanent` as the viewer's JSON observation states it.
 fn card_json(s: &Scenario, viewer: usize, permanent: PermanentId) -> serde_json::Value {
-    let id = s.game().state.cards[card_of(s, permanent)].id.0 as i64;
+    let id = s.game().state.objects[card_of(s, permanent)].id.0 as i64;
     let observation: serde_json::Value =
         serde_json::from_str(&Observation::for_player(s.game(), PlayerId(viewer)).to_json())
             .unwrap();
     ["agent_cards", "opponent_cards"]
         .into_iter()
         .flat_map(|rows| observation[rows].as_array().unwrap().clone())
-        .find(|card| card["id"].as_i64() == Some(id))
+        .find(|object| object["id"].as_i64() == Some(id))
         .expect("card row")
 }
 
@@ -3245,8 +3249,8 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
     let witnesses = [gran, swarm, drake];
     let before = witnesses.map(|id| card_json(&s, 0, id));
-    let gran_card = s.game().state.permanents[gran].as_ref().unwrap().card;
-    s.game_mut().state.cards[gran_card]
+    let gran_card = s.game().state.permanents[gran].as_ref().unwrap().object;
+    s.game_mut().state.objects[gran_card]
         .statics
         .push(StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
@@ -3317,12 +3321,12 @@ fn layered_card_fields_read_characteristics_on_the_battlefield() {
 fn card_rows_off_the_battlefield_read_the_printed_card() {
     let mut s = five_color_setup(&["Gran-Gran"]);
     let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
-    let card = card_of(&s, gran);
-    assert!(s.game().state.cards[card].is_legendary());
+    let object = card_of(&s, gran);
+    assert!(s.game().state.objects[object].is_legendary());
     until_end_of_turn(&mut s, gran, Modification::Nonlegendary);
     assert_eq!(card_json(&s, 0, gran)["is_legendary"], false);
-    s.game_mut().move_card(card, ZoneType::Graveyard);
-    let id = s.game().state.cards[card].id.0 as i32;
+    s.game_mut().move_object(object, ZoneType::Graveyard);
+    let id = s.game().state.objects[object].id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(0));
     let row = observation
         .agent_cards
@@ -3881,7 +3885,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
         (s, ogre)
     };
     let (mut s, ogre) = setup();
-    let fissure = s.game().state.delayed_triggers[0].source_card;
+    let fissure = s.game().state.delayed_triggers[0].source_object;
     for viewer in [0, 1] {
         let (controller, event, this_turn, watched) = waiting(&s, viewer).expect("visible");
         assert_eq!(
@@ -3902,7 +3906,7 @@ fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
             "capture and event watch are distinct relations"
         );
         assert!(
-            definitions_seen(&s, viewer).contains(&s.game().state.cards[fissure].definition_id.0)
+            definitions_seen(&s, viewer).contains(&s.game().state.objects[fissure].definition_id.0)
         );
     }
     let frame = Observation::for_player(s.game(), PlayerId(1))
@@ -3987,16 +3991,16 @@ fn definitions_seen(s: &Scenario, viewer: usize) -> BTreeSet<u32> {
 fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     let mut s = five_color_setup(&["Sozin's Comet", "United Front"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_card(comet, ZoneType::Hand);
+    s.game_mut().move_object(comet, ZoneType::Hand);
     let front = move_to_hand(&mut s, "United Front");
     s.set_player_mana_pool(0, "3");
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
-        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+        |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
     );
     assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
-    let hidden = [comet, front].map(|card| s.game().state.cards[card].definition_id.0);
+    let hidden = [comet, front].map(|object| s.game().state.objects[object].definition_id.0);
 
     let owner = encoded(&s, 0);
     let face_down = owner
@@ -4165,18 +4169,18 @@ fn encoded_default(observation: &Observation) -> EncodedObservation {
     encode(observation, &ObservationEncoderConfig::default()).expect("v5 encodes")
 }
 
-fn object_id(s: &Scenario, card: CardId) -> i32 {
-    s.game().state.cards[card].id.0 as i32
+fn object_id(s: &Scenario, object: ObjectId) -> i32 {
+    s.game().state.objects[object].id.0 as i32
 }
 
 /// The encoded row of `card` on either side of `observation`, if listed.
-fn listed_card_row(observation: &Observation, card: i32) -> Option<Vec<f32>> {
+fn listed_card_row(observation: &Observation, object: i32) -> Option<Vec<f32>> {
     let encoded = encoded_default(observation);
-    for (cards, rows) in [
+    for (objects, rows) in [
         (&observation.agent_cards, &encoded.agent_cards),
         (&observation.opponent_cards, &encoded.opponent_cards),
     ] {
-        if let Some(slot) = cards.iter().position(|c| c.id == card) {
+        if let Some(slot) = objects.iter().position(|c| c.id == object) {
             return Some(rows[slot * CARD_DIM..(slot + 1) * CARD_DIM].to_vec());
         }
     }
@@ -4290,8 +4294,8 @@ fn announced_x_reaches_the_stack_card_row() {
     choose_mode(&mut s, 3);
     let id = object_id(&s, front);
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    let card = observation.agent_cards.iter().find(|c| c.id == id).unwrap();
-    assert_eq!(card.x, Some(3));
+    let object = observation.agent_cards.iter().find(|c| c.id == id).unwrap();
+    assert_eq!(object.x, Some(3));
     let row = listed_card_row(&observation, id).unwrap();
     assert_eq!(&row[card::HAS_X..card::HAS_X + 2], &[1.0, 0.3]);
 }
@@ -4305,13 +4309,13 @@ fn announced_x_reaches_the_stack_card_row() {
 fn foretold_card_and_permission_reach_only_the_owner() {
     let mut s = five_color_setup(&["Sozin's Comet"]);
     let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_card(comet, ZoneType::Hand);
+    s.game_mut().move_object(comet, ZoneType::Hand);
     s.set_player_mana_pool(0, "2");
     let opponent_before = encoded_default(&Observation::for_player(s.game(), PlayerId(1)));
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
-        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+        |a| matches!(a, Action::Foretell { object, .. } if *object == comet),
     );
     let id = object_id(&s, comet);
 
@@ -4386,16 +4390,16 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
     let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
     for _ in 0..3 {
         let lesson = library_card(&s, 0, "Waterbending Lesson");
-        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+        s.game_mut().move_object(lesson, ZoneType::Graveyard);
     }
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
     let is_tok =
-        |id: PermanentId| s.game().state.cards[card_of(&s, id)].kind() == ObjectKind::Token;
+        |id: PermanentId| s.game().state.objects[card_of(&s, id)].kind() == ObjectKind::Token;
     let token = *dragons.iter().find(|id| is_tok(**id)).unwrap();
     let source = *dragons.iter().find(|id| !is_tok(**id)).unwrap();
-    let key = s.game().state.cards[card_of(&s, source)].registry_key.0 as f32;
+    let key = s.game().state.objects[card_of(&s, source)].registry_key.0 as f32;
     for viewer in [0, 1] {
         let rows = facts_about(&s, viewer, object_index(&s, viewer, token));
         let copy = fact_row(&rows, FactKind::Copy, name_value("CopyEffect"));
@@ -4664,7 +4668,7 @@ fn counter_and_creation_replacements_reach_learning_tokens() {
 fn merchant_counted_tap_cost_reaches_learning_tokens() {
     let definition = managym_cards::catalog()
         .iter()
-        .find(|card| card.name == "The Cabbage Merchant")
+        .find(|object| object.name == "The Cabbage Merchant")
         .unwrap();
     let tokens = tokens_of(&ObjectDefinition::card(definition));
     let cost = tokens
@@ -4736,11 +4740,11 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     let slot = observation
         .agent_cards
         .iter()
-        .position(|card| card.id == s.game().state.cards[ogre_card].id.0 as i32)
+        .position(|object| object.id == s.game().state.objects[ogre_card].id.0 as i32)
         .expect("graveyard row");
-    let cards = encoded(&s).card_turn_state;
-    assert_eq!(cards[slot], 1.0);
-    assert_eq!(cards.iter().sum::<f32>(), 1.0);
+    let objects = encoded(&s).card_turn_state;
+    assert_eq!(objects[slot], 1.0);
+    assert_eq!(objects.iter().sum::<f32>(), 1.0);
 
     // Powerstone mana in a pool (its production is exercised by the
     // castability test in `tests/cards/bro.rs`).

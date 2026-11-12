@@ -13,7 +13,7 @@ use crate::{
         turn::TurnState,
     },
     state::{
-        game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
+        game_object::{IdGenerator, Incarnation, ObjectId, ObjectVec, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},
         zone::{ZoneManager, ZoneType},
     },
@@ -52,9 +52,9 @@ impl Game {
             Player::new(id_gen.next_id(), 1, player_configs[1].name.clone()),
         ];
 
-        let mut cards = CardVec::default();
-        let mut card_to_permanent = CardVec::default();
-        let mut object_incarnations = CardVec::default();
+        let mut cards = ObjectVec::default();
+        let mut object_to_permanent = ObjectVec::default();
+        let mut object_incarnations = ObjectVec::default();
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
@@ -64,9 +64,9 @@ impl Game {
                     let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .unwrap_or_else(|| panic!("unknown card in decklist: {name}"));
-                    let card_id = CardId(cards.len());
+                    let card_id = ObjectId(cards.len());
                     cards.push(card);
-                    card_to_permanent.push(None);
+                    object_to_permanent.push(None);
                     object_incarnations.push(Incarnation::INITIAL);
                     players[player_index].deck.push(card_id);
                 }
@@ -91,9 +91,9 @@ impl Game {
                     let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
                         .expect("validated sideboard definition");
-                    let card_id = CardId(cards.len());
+                    let card_id = ObjectId(cards.len());
                     cards.push(card);
-                    card_to_permanent.push(None);
+                    object_to_permanent.push(None);
                     object_incarnations.push(Incarnation::INITIAL);
                     players[player_index].sideboard.push(card_id);
                 }
@@ -105,14 +105,14 @@ impl Game {
         for player in [PlayerId(0), PlayerId(1)] {
             let deck = players[player.0].deck.clone();
             for card in deck {
-                zones.move_card(card, player, ZoneType::Library);
+                zones.move_object(card, player, ZoneType::Library);
             }
             zones.shuffle(ZoneType::Library, player, &mut rng);
             // CR 103.3, 103.5 — Shuffle, then draw the ordinary seven-card hand.
             // This setup does not offer the mulligan procedure in CR 103.5.
             for _ in 0..7 {
                 if let Some(card) = zones.top(ZoneType::Library, player) {
-                    zones.move_card(card, player, ZoneType::Hand);
+                    zones.move_object(card, player, ZoneType::Hand);
                 }
             }
         }
@@ -120,9 +120,9 @@ impl Game {
         let mut game = Self {
             derived: Default::default(),
             state: TrackedState::new(GameState {
-                cards,
+                objects: cards,
                 permanents: PermanentVec::default(),
-                card_to_permanent,
+                object_to_permanent,
                 object_incarnations,
                 object_lki: Default::default(),
                 players,

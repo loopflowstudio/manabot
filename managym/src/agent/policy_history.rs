@@ -11,7 +11,7 @@ use crate::{
         game::Game,
     },
     state::{
-        game_object::{CardId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -63,14 +63,19 @@ fn public(zone: ZoneType) -> bool {
     )
 }
 
-fn card_reference(game: &Game, card: CardId) -> HistoryReference {
-    let Some(zone) = game.state.zones.zone_of(card).filter(|zone| public(*zone)) else {
+fn card_reference(game: &Game, object: ObjectId) -> HistoryReference {
+    let Some(zone) = game
+        .state
+        .zones
+        .zone_of(object)
+        .filter(|zone| public(*zone))
+    else {
         return HistoryReference::Unavailable;
     };
-    if game.is_foretold(card) {
+    if game.is_foretold(object) {
         return HistoryReference::Unavailable;
     }
-    let data = &game.state.cards[card];
+    let data = &game.state.objects[object];
     HistoryReference::Card {
         definition: data.definition_id.0,
         owner: data.owner,
@@ -83,9 +88,9 @@ fn card_reference(game: &Game, card: CardId) -> HistoryReference {
 // originating incarnation. A delayed effect must not route to a returned object.
 // Retain only a definition currently public at emission; hidden sources and
 // causal source zone/incarnation remain unavailable.
-fn source_reference(game: &Game, source: Option<CardId>) -> HistoryReference {
+fn source_reference(game: &Game, source: Option<ObjectId>) -> HistoryReference {
     let mut reference = source
-        .map(|card| card_reference(game, card))
+        .map(|object| card_reference(game, object))
         .unwrap_or(HistoryReference::Unavailable);
     if let HistoryReference::Card {
         zone, context_id, ..
@@ -100,15 +105,15 @@ fn source_reference(game: &Game, source: Option<CardId>) -> HistoryReference {
 fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
-        Target::StackSpell(card) => card_reference(game, card),
+        Target::StackSpell(object_id) => card_reference(game, object_id),
         Target::StackAbility(id) => game
             .stack_ability_source(id)
-            .map(|card| card_reference(game, card))
+            .map(|object_id| card_reference(game, object_id))
             .unwrap_or(HistoryReference::Unavailable),
-        Target::GraveyardCard(object) => card_reference(game, CardId::from(object.entity)),
+        Target::GraveyardCard(object) => card_reference(game, ObjectId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)
-            .map(|exact| card_reference(game, CardId::from(exact.entity)))
+            .map(|exact| card_reference(game, ObjectId::from(exact.entity)))
             .unwrap_or(HistoryReference::Unavailable),
     }
 }
@@ -119,8 +124,11 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
 /// this copy-on-write projection; it never executes or reconstructs rules.
 pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     use HistoryKind::*;
-    if let GameEvent::CardMoved { card, .. } = event {
-        let id = game.state.cards[*card].id.0 as i32;
+    if let GameEvent::CardMoved {
+        object_id: object, ..
+    } = event
+    {
+        let id = game.state.objects[*object].id.0 as i32;
         // Every real zone move creates a new incarnation. The old reference
         // keeps its public definition/zone but cannot follow the physical card.
         let matches = |reference: &HistoryReference| {
@@ -146,7 +154,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
         GameEvent::CardMoved {
-            card,
+            object_id: object,
             to,
             face_down,
             ..
@@ -155,7 +163,7 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             let source = if *face_down {
                 unknown.clone()
             } else {
-                card_reference(game, *card)
+                card_reference(game, *object)
             };
             (Arrival, 0, source, vec![unknown])
         }
@@ -181,10 +189,13 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             unknown,
             vec![HistoryReference::Player(*player)],
         ),
-        GameEvent::SpellCast { card, targets } => (
+        GameEvent::SpellCast {
+            object_id: object,
+            targets,
+        } => (
             Cast,
             0,
-            card_reference(game, *card),
+            card_reference(game, *object),
             if targets.is_empty() {
                 vec![unknown]
             } else {
@@ -194,23 +205,26 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
                     .collect()
             },
         ),
-        GameEvent::SpellResolved { card } => {
-            (Resolved, 0, card_reference(game, *card), vec![unknown])
+        GameEvent::SpellResolved { object_id: object } => {
+            (Resolved, 0, card_reference(game, *object), vec![unknown])
         }
-        GameEvent::SpellCountered { card, by } => (
-            Countered,
-            0,
-            source_reference(game, *by),
-            vec![card_reference(game, *card)],
-        ),
-        // The countered ability is gone; its source card stands for it.
-        GameEvent::AbilityCountered {
-            source_card, by, ..
+        GameEvent::SpellCountered {
+            object_id: object,
+            by,
         } => (
             Countered,
             0,
             source_reference(game, *by),
-            vec![source_reference(game, Some(*source_card))],
+            vec![card_reference(game, *object)],
+        ),
+        // The countered ability is gone; its source card stands for it.
+        GameEvent::AbilityCountered {
+            source_object, by, ..
+        } => (
+            Countered,
+            0,
+            source_reference(game, *by),
+            vec![source_reference(game, Some(*source_object))],
         ),
         _ => return,
     };
@@ -256,12 +270,12 @@ pub fn encode(
                 let context = context_id.and_then(|id| {
                     obs.agent_cards
                         .iter()
-                        .position(|card| card.id == id)
+                        .position(|object| object.id == id)
                         .map(|slot| 2 + slot)
                         .or_else(|| {
                             obs.opponent_cards
                                 .iter()
-                                .position(|card| card.id == id)
+                                .position(|object| object.id == id)
                                 .map(|slot| 2 + cards_per_player + slot)
                         })
                 });
@@ -294,7 +308,7 @@ pub fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::state::{game_object::ObjectId, player::PlayerConfig};
+    use crate::state::{game_object::PublicId, player::PlayerConfig};
 
     fn game() -> Game {
         Game::new(
@@ -316,13 +330,13 @@ mod tests {
     #[test]
     fn history_survives_drain_departure_reentry_and_hidden_reassignment() {
         let mut game = game();
-        let card = CardId(0);
-        let other = CardId(40);
-        game.move_card(card, ZoneType::Stack);
-        game.move_card(other, ZoneType::Battlefield);
-        let target = game.state.card_to_permanent[other].unwrap();
+        let object = ObjectId(0);
+        let other = ObjectId(40);
+        game.move_object(object, ZoneType::Stack);
+        game.move_object(other, ZoneType::Battlefield);
+        let target = game.state.object_to_permanent[other].unwrap();
         game.emit(GameEvent::SpellCast {
-            card,
+            object_id: object,
             targets: vec![Target::Permanent(target)],
         });
         let initial = Observation::for_player(&game, PlayerId(0));
@@ -348,8 +362,8 @@ mod tests {
             encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
         );
         // Consistent presentation-ID renaming cannot alter learned rows.
-        for card in game.state.cards.iter_mut() {
-            card.id = ObjectId(card.id.0 + 1000);
+        for object in game.state.objects.iter_mut() {
+            object.id = PublicId(object.id.0 + 1000);
         }
         for row in Arc::make_mut(&mut game.policy_history) {
             for reference in [&mut row.source, &mut row.target] {
@@ -366,9 +380,9 @@ mod tests {
             expected,
             encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
         );
-        game.move_card(card, ZoneType::Hand);
-        game.move_card(other, ZoneType::Graveyard);
-        game.move_card(other, ZoneType::Battlefield);
+        game.move_object(object, ZoneType::Hand);
+        game.move_object(other, ZoneType::Graveyard);
+        game.move_object(other, ZoneType::Battlefield);
         let projected = Observation::for_player(&game, PlayerId(0));
         let cast = projected
             .policy_history
@@ -393,7 +407,7 @@ mod tests {
         // Future hidden placement cannot rewrite a previously public identity.
         game.state
             .zones
-            .move_card(card, PlayerId(0), ZoneType::Library);
+            .move_object(object, PlayerId(0), ZoneType::Library);
         assert_eq!(
             before,
             encode(&Observation::for_player(&game, PlayerId(0)), 32, 60)
@@ -411,7 +425,7 @@ mod tests {
                 old: 20,
                 new: 20 - index,
             });
-            game.move_card(CardId(index as usize), ZoneType::Hand);
+            game.move_object(ObjectId(index as usize), ZoneType::Hand);
         }
         let first = Observation::for_player(&game, PlayerId(0));
         let second = Observation::for_player(&game, PlayerId(1));
@@ -434,8 +448,8 @@ mod tests {
     fn observations_share_bounded_suffix_and_forks_isolate_it() {
         let mut game = game();
         game.create_token("token.ally", PlayerId(0), false);
-        let token = CardId(game.state.cards.len() - 1);
-        let permanent = game.state.card_to_permanent[token].unwrap();
+        let token = ObjectId(game.state.objects.len() - 1);
+        let permanent = game.state.object_to_permanent[token].unwrap();
         game.emit(GameEvent::DamageDealt {
             source: Some(token),
             target: DamageTarget::Permanent(permanent),
@@ -474,28 +488,28 @@ mod tests {
         ));
         let mut fork = game.clone();
         assert!(Arc::ptr_eq(&root, &fork.policy_history));
-        fork.move_card(token, ZoneType::Graveyard);
+        fork.move_object(token, ZoneType::Graveyard);
         assert_ne!(fork.policy_history, root);
         assert!(Arc::ptr_eq(&root, &game.policy_history));
     }
     #[test]
     fn physical_card_slots_are_only_routing() {
-        let root = |source: CardId, destination: CardId| {
+        let root = |source: ObjectId, destination: ObjectId| {
             let mut game = game();
             game.scenario_clear_hand(PlayerId(0));
             game.scenario_clear_hand(PlayerId(1));
             game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], Default::default());
-            game.move_card(destination, ZoneType::Battlefield);
-            let target = game.state.card_to_permanent[destination].unwrap();
+            game.move_object(destination, ZoneType::Battlefield);
+            let target = game.state.object_to_permanent[destination].unwrap();
             game.emit(GameEvent::SpellCast {
-                card: source,
+                object_id: source,
                 targets: vec![Target::Permanent(target)],
             });
             Observation::for_player(&game, PlayerId(0))
         };
         // Identical public definitions instantiated in different physical slots.
-        let first = root(CardId(0), CardId(40));
-        let second = root(CardId(1), CardId(41));
+        let first = root(ObjectId(0), ObjectId(40));
+        let second = root(ObjectId(1), ObjectId(41));
         assert_ne!(first.agent_cards[0].id, second.agent_cards[0].id);
         assert_eq!(encode(&first, 32, 60), encode(&second, 32, 60));
     }

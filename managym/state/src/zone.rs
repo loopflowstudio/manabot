@@ -2,7 +2,7 @@ use std::array;
 
 use rand::seq::SliceRandom;
 
-use super::game_object::{CardId, PlayerId};
+use super::game_object::{ObjectId, PlayerId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 #[repr(i32)]
@@ -18,13 +18,13 @@ pub enum ZoneType {
 
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct ZoneManager {
-    library: [Vec<CardId>; 2],
-    hand: [Vec<CardId>; 2],
-    battlefield: [Vec<CardId>; 2],
-    graveyard: [Vec<CardId>; 2],
-    stack: [Vec<CardId>; 2],
-    exile: [Vec<CardId>; 2],
-    command: [Vec<CardId>; 2],
+    library: [Vec<ObjectId>; 2],
+    hand: [Vec<ObjectId>; 2],
+    battlefield: [Vec<ObjectId>; 2],
+    graveyard: [Vec<ObjectId>; 2],
+    stack: [Vec<ObjectId>; 2],
+    exile: [Vec<ObjectId>; 2],
+    command: [Vec<ObjectId>; 2],
     card_zones: Vec<Option<ZoneType>>,
 }
 
@@ -45,62 +45,64 @@ impl Default for ZoneManager {
 
 impl ZoneManager {
     /// The player whose `zone` holds `card`.
-    fn holder_in(&self, card: CardId, zone: ZoneType) -> Option<PlayerId> {
+    fn holder_in(&self, object: ObjectId, zone: ZoneType) -> Option<PlayerId> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
-            .find(|player| self.zone_cards(zone, *player).contains(&card))
+            .find(|player| self.zone_objects(zone, *player).contains(&object))
     }
 
-    fn ensure_slot(&mut self, card: CardId) {
-        if self.card_zones.len() <= card.0 {
-            self.card_zones.resize(card.0 + 1, None);
+    fn ensure_slot(&mut self, object: ObjectId) {
+        if self.card_zones.len() <= object.0 {
+            self.card_zones.resize(object.0 + 1, None);
         }
     }
 
-    pub fn zone_of(&self, card: CardId) -> Option<ZoneType> {
-        self.card_zones.get(card.0).copied().flatten()
+    pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType> {
+        self.card_zones.get(object.0).copied().flatten()
     }
 
-    fn remove_card_in_place(cards: &mut Vec<CardId>, card: CardId) {
-        cards.retain(|c| *c != card);
+    fn remove_object_in_place(objects: &mut Vec<ObjectId>, object: ObjectId) {
+        objects.retain(|c| *c != object);
     }
 
-    fn remove_from_zone(&mut self, card: CardId, zone: ZoneType) {
-        let Some(holder) = self.holder_in(card, zone) else {
+    fn remove_from_zone(&mut self, object: ObjectId, zone: ZoneType) {
+        let Some(holder) = self.holder_in(object, zone) else {
             return;
         };
         let idx = holder.0;
         match zone {
-            ZoneType::Library => Self::remove_card_in_place(&mut self.library[idx], card),
-            ZoneType::Hand => Self::remove_card_in_place(&mut self.hand[idx], card),
-            ZoneType::Battlefield => Self::remove_card_in_place(&mut self.battlefield[idx], card),
-            ZoneType::Graveyard => Self::remove_card_in_place(&mut self.graveyard[idx], card),
-            ZoneType::Stack => Self::remove_card_in_place(&mut self.stack[idx], card),
-            ZoneType::Exile => Self::remove_card_in_place(&mut self.exile[idx], card),
-            ZoneType::Command => Self::remove_card_in_place(&mut self.command[idx], card),
+            ZoneType::Library => Self::remove_object_in_place(&mut self.library[idx], object),
+            ZoneType::Hand => Self::remove_object_in_place(&mut self.hand[idx], object),
+            ZoneType::Battlefield => {
+                Self::remove_object_in_place(&mut self.battlefield[idx], object)
+            }
+            ZoneType::Graveyard => Self::remove_object_in_place(&mut self.graveyard[idx], object),
+            ZoneType::Stack => Self::remove_object_in_place(&mut self.stack[idx], object),
+            ZoneType::Exile => Self::remove_object_in_place(&mut self.exile[idx], object),
+            ZoneType::Command => Self::remove_object_in_place(&mut self.command[idx], object),
         }
     }
 
-    fn insert_to_zone(&mut self, card: CardId, holder: PlayerId, zone: ZoneType) {
+    fn insert_to_zone(&mut self, object: ObjectId, holder: PlayerId, zone: ZoneType) {
         let idx = holder.0;
         match zone {
-            ZoneType::Library => self.library[idx].push(card),
-            ZoneType::Hand => self.hand[idx].push(card),
-            ZoneType::Battlefield => self.battlefield[idx].push(card),
-            ZoneType::Graveyard => self.graveyard[idx].push(card),
-            ZoneType::Stack => self.stack[idx].push(card),
-            ZoneType::Exile => self.exile[idx].push(card),
-            ZoneType::Command => self.command[idx].push(card),
+            ZoneType::Library => self.library[idx].push(object),
+            ZoneType::Hand => self.hand[idx].push(object),
+            ZoneType::Battlefield => self.battlefield[idx].push(object),
+            ZoneType::Graveyard => self.graveyard[idx].push(object),
+            ZoneType::Stack => self.stack[idx].push(object),
+            ZoneType::Exile => self.exile[idx].push(object),
+            ZoneType::Command => self.command[idx].push(object),
         }
     }
 
     /// Remove a card from all zones entirely (CR 704.5d — tokens cease to
-    /// exist). The card object remains in `GameState::cards` but is no
+    /// exist). The card object remains in `GameState::objects` but is no
     /// longer in any zone.
-    pub fn remove_card(&mut self, card: CardId) {
-        if let Some(zone) = self.zone_of(card) {
-            self.remove_from_zone(card, zone);
-            self.card_zones[card.0] = None;
+    pub fn remove_card(&mut self, object: ObjectId) {
+        if let Some(zone) = self.zone_of(object) {
+            self.remove_from_zone(object, zone);
+            self.card_zones[object.0] = None;
         }
     }
 
@@ -108,29 +110,29 @@ impl ZoneManager {
     /// The holder is the card's owner (CR 108.3), except on the
     /// battlefield, where it is the permanent's controller (CR 110.2): each
     /// player's battlefield lists the permanents they control.
-    pub fn move_card(&mut self, card: CardId, holder: PlayerId, to_zone: ZoneType) {
-        self.ensure_slot(card);
-        if let Some(old_zone) = self.zone_of(card) {
-            self.remove_from_zone(card, old_zone);
+    pub fn move_object(&mut self, object: ObjectId, holder: PlayerId, to_zone: ZoneType) {
+        self.ensure_slot(object);
+        if let Some(old_zone) = self.zone_of(object) {
+            self.remove_from_zone(object, old_zone);
         }
-        self.insert_to_zone(card, holder, to_zone);
-        self.card_zones[card.0] = Some(to_zone);
+        self.insert_to_zone(object, holder, to_zone);
+        self.card_zones[object.0] = Some(to_zone);
     }
 
-    pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<CardId> {
-        let cards = self.zone_cards(zone, player);
-        cards.last().copied()
+    pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<ObjectId> {
+        let objects = self.zone_objects(zone, player);
+        objects.last().copied()
     }
 
-    pub fn contains(&self, card: CardId, zone: ZoneType, player: PlayerId) -> bool {
-        self.zone_cards(zone, player).contains(&card)
+    pub fn contains(&self, object: ObjectId, zone: ZoneType, player: PlayerId) -> bool {
+        self.zone_objects(zone, player).contains(&object)
     }
 
     pub fn size(&self, zone: ZoneType, player: PlayerId) -> usize {
-        self.zone_cards(zone, player).len()
+        self.zone_objects(zone, player).len()
     }
 
-    pub fn zone_cards(&self, zone: ZoneType, player: PlayerId) -> &Vec<CardId> {
+    pub fn zone_objects(&self, zone: ZoneType, player: PlayerId) -> &Vec<ObjectId> {
         let idx = player.0;
         match zone {
             ZoneType::Library => &self.library[idx],
@@ -143,7 +145,7 @@ impl ZoneManager {
         }
     }
 
-    pub fn zone_cards_mut(&mut self, zone: ZoneType, player: PlayerId) -> &mut Vec<CardId> {
+    pub fn zone_objects_mut(&mut self, zone: ZoneType, player: PlayerId) -> &mut Vec<ObjectId> {
         let idx = player.0;
         match zone {
             ZoneType::Library => &mut self.library[idx],
@@ -162,7 +164,7 @@ impl ZoneManager {
         player: PlayerId,
         rng: &mut R,
     ) {
-        self.zone_cards_mut(zone, player).shuffle(rng);
+        self.zone_objects_mut(zone, player).shuffle(rng);
     }
 
     /// Shuffle an unordered hidden zone from a canonical starting order.
@@ -175,16 +177,19 @@ impl ZoneManager {
         player: PlayerId,
         rng: &mut R,
     ) {
-        let cards = self.zone_cards_mut(zone, player);
-        cards.sort_unstable_by_key(|card| card.0);
-        cards.shuffle(rng);
+        let objects = self.zone_objects_mut(zone, player);
+        objects.sort_unstable_by_key(|object| object.0);
+        objects.shuffle(rng);
     }
 
     /// Put hidden card `new` where `player`'s face-down exiled card `old`
     /// lies. `old` is left zoneless until the caller reassigns it to the
     /// hand or library with [`ZoneManager::reassign_hidden`].
-    pub fn replace_face_down_exile(&mut self, player: PlayerId, old: CardId, new: CardId) {
-        if let Some(slot) = self.exile[player.0].iter_mut().find(|card| **card == old) {
+    pub fn replace_face_down_exile(&mut self, player: PlayerId, old: ObjectId, new: ObjectId) {
+        if let Some(slot) = self.exile[player.0]
+            .iter_mut()
+            .find(|object| **object == old)
+        {
             *slot = new;
         }
         self.ensure_slot(new);
@@ -201,17 +206,17 @@ impl ZoneManager {
     pub fn reassign_hidden(
         &mut self,
         player: PlayerId,
-        new_hand: Vec<CardId>,
-        new_library: Vec<CardId>,
+        new_hand: Vec<ObjectId>,
+        new_library: Vec<ObjectId>,
     ) {
         let idx = player.0;
-        for &card in &new_hand {
-            self.ensure_slot(card);
-            self.card_zones[card.0] = Some(ZoneType::Hand);
+        for &object in &new_hand {
+            self.ensure_slot(object);
+            self.card_zones[object.0] = Some(ZoneType::Hand);
         }
-        for &card in &new_library {
-            self.ensure_slot(card);
-            self.card_zones[card.0] = Some(ZoneType::Library);
+        for &object in &new_library {
+            self.ensure_slot(object);
+            self.card_zones[object.0] = Some(ZoneType::Library);
         }
         self.hand[idx] = new_hand;
         self.library[idx] = new_library;

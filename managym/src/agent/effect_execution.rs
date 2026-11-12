@@ -27,7 +27,7 @@ use crate::{
     },
     state::{
         ability::Effect,
-        game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+        game_object::{ObjectId, ObjectLki, ObjectRef, PlayerId, Target},
     },
 };
 
@@ -285,7 +285,7 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn card(&mut self, name: &str, card: CardId) {
+    fn card(&mut self, name: &str, card: ObjectId) {
         self.reference(name, self.game.card_reference(card, self.viewer));
     }
 
@@ -314,7 +314,7 @@ impl<'a> Projection<'a> {
         }
     }
 
-    fn cards(&mut self, name: &str, cards: &[CardId]) {
+    fn cards(&mut self, name: &str, cards: &[ObjectId]) {
         if cards.is_empty() {
             return;
         }
@@ -410,7 +410,10 @@ impl<'a> Projection<'a> {
                     _ => unreachable!("only operation completion events are retained"),
                 }
             }
-            FrameCompletion::Spell { card, attach_to } => {
+            FrameCompletion::Spell {
+                object: card,
+                attach_to,
+            } => {
                 self.field("return", &"finish spell");
                 self.card("spell", *card);
                 if let Some(object) = attach_to {
@@ -423,7 +426,7 @@ impl<'a> Projection<'a> {
                 self.field("payer", player);
                 match payment {
                     Payment::Spell {
-                        card,
+                        object: card,
                         cast,
                         mode,
                         targets,
@@ -505,7 +508,7 @@ impl<'a> Projection<'a> {
         // While the exact object still has this view, its ordinary object row
         // and catalog already carry the snapshot. After departure or a changed
         // view, retain the non-identity facts explicitly.
-        if self.game.snapshot_current_permanent(lki.card).as_ref() == Some(lki) {
+        if self.game.snapshot_current_permanent(lki.object).as_ref() == Some(lki) {
             self.field("snapshot", &"current characteristics");
             return;
         }
@@ -533,7 +536,7 @@ impl<'a> Projection<'a> {
             toughness,
             counters,
             object_ref: _,
-            card: _,
+            object: _,
             from_zone,
             owner,
             controller,
@@ -652,7 +655,7 @@ impl<'a> Projection<'a> {
                     });
                 }
                 ProposedEvent::ZoneMove {
-                    card,
+                    object_id: card,
                     object,
                     from,
                     to,
@@ -664,7 +667,7 @@ impl<'a> Projection<'a> {
                         self.reference(
                             "entering definition",
                             VisibleReference {
-                                definition: Some(self.game.state.cards[*card].definition_id.0),
+                                definition: Some(self.game.state.objects[*card].definition_id.0),
                                 ..Default::default()
                             },
                         );
@@ -908,7 +911,10 @@ pub(crate) fn project_decision(
             out.cards("selected for graveyard", graveyard);
         }
         Decision::OrderLibrary {
-            cards, next, end, ..
+            object_ids: cards,
+            next,
+            end,
+            ..
         } => {
             out.cards("library order", cards);
             out.field("ordered prefix", next);
@@ -1022,7 +1028,9 @@ pub(crate) fn project_decision(
             out.cards("legends kept", keep);
         }
         Decision::EnterAsCopy {
-            card, candidates, ..
+            object_id: card,
+            candidates,
+            ..
         } => {
             out.card("entering card", *card);
             for id in candidates {
@@ -1066,14 +1074,19 @@ pub(crate) fn project_decision(
             out.field("pay casting costs", paid);
             match offer {
                 ResolutionCastOffer::Hand { predicate } => out.field("cast from hand", predicate),
-                ResolutionCastOffer::Exiled { card } => out.card("cast from exile", *card),
-                ResolutionCastOffer::Cascade { card, exiled } => {
+                ResolutionCastOffer::Exiled { object: card } => out.card("cast from exile", *card),
+                ResolutionCastOffer::Cascade {
+                    object: card,
+                    exiled,
+                } => {
                     out.card("cast from exile", *card);
                     for exiled in exiled {
                         out.card("cascade exiled", *exiled);
                     }
                 }
-                ResolutionCastOffer::LibraryTop { card } => out.card("cast from library", *card),
+                ResolutionCastOffer::LibraryTop { object: card } => {
+                    out.card("cast from library", *card)
+                }
                 ResolutionCastOffer::ExiledWith { source, predicate } => {
                     out.object("exiled with", *source);
                     out.field("cast predicate", predicate);

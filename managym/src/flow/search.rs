@@ -11,7 +11,7 @@ use crate::{
     agent::action::{ActionSpace, ActionSpaceKind, AgentError},
     flow::{decision::Decision, game::Game, selection_sampling::HiddenCommitments},
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -100,7 +100,7 @@ impl Game {
             } else {
                 let (mut known, mut residual) = self.hidden_hand_partition(opponent, commitments);
                 residual.extend(self.foretold_cards(opponent));
-                residual.sort_unstable_by_key(|card| card.0);
+                residual.sort_unstable_by_key(|object| object.0);
                 residual.shuffle(&mut rng);
                 assert!(
                     self.fill_foretold_slots(opponent, &mut residual),
@@ -171,10 +171,10 @@ impl Game {
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, player, rng);
-        if let Some(card) = known_top {
-            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-            library.retain(|other| *other != card);
-            library.push(card);
+        if let Some(object) = known_top {
+            let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
+            library.retain(|other| *other != object);
+            library.push(object);
         }
     }
 
@@ -204,25 +204,29 @@ impl Game {
         &self,
         player: PlayerId,
         commitments: &HiddenCommitments,
-    ) -> (Vec<CardId>, Vec<CardId>) {
-        let is_fixed = |card: CardId| commitments.pins_card(card);
+    ) -> (Vec<ObjectId>, Vec<ObjectId>) {
+        let is_fixed = |object: ObjectId| commitments.pins_card(object);
         let mut pool: Vec<_> = [ZoneType::Hand, ZoneType::Library]
             .into_iter()
-            .flat_map(|zone| self.state.zones.zone_cards(zone, player).iter().copied())
-            .filter(|card| {
-                !is_fixed(*card) || !self.state.zones.contains(*card, ZoneType::Library, player)
+            .flat_map(|zone| self.state.zones.zone_objects(zone, player).iter().copied())
+            .filter(|object| {
+                !is_fixed(*object)
+                    || !self
+                        .state
+                        .zones
+                        .contains(*object, ZoneType::Library, player)
             })
             .collect();
-        pool.sort_unstable_by_key(|card| card.0);
+        pool.sort_unstable_by_key(|object| object.0);
         let mut counts = self.state.players[player.0].known_hand.clone();
         let mut known = Vec::new();
         let mut residual = Vec::new();
         // Public entrants in a hand pin the physical witness; ordinary reveals
         // still reserve only a definition minimum, as before.
-        pool.retain(|card| {
-            if is_fixed(*card) && self.state.zones.contains(*card, ZoneType::Hand, player) {
-                known.push(*card);
-                if let Some(count) = counts.get_mut(&self.state.cards[*card].definition_id) {
+        pool.retain(|object| {
+            if is_fixed(*object) && self.state.zones.contains(*object, ZoneType::Hand, player) {
+                known.push(*object);
+                if let Some(count) = counts.get_mut(&self.state.objects[*object].definition_id) {
                     *count = count.saturating_sub(1);
                 }
                 false
@@ -230,15 +234,15 @@ impl Game {
                 true
             }
         });
-        for card in pool {
-            if let Some(count) = counts.get_mut(&self.state.cards[card].definition_id) {
+        for object in pool {
+            if let Some(count) = counts.get_mut(&self.state.objects[object].definition_id) {
                 if *count > 0 {
-                    known.push(card);
+                    known.push(object);
                     *count -= 1;
                     continue;
                 }
             }
-            residual.push(card);
+            residual.push(object);
         }
         assert!(
             counts.values().all(|count| *count == 0),
@@ -270,16 +274,18 @@ impl Game {
         let inspections: Vec<_> = suspended
             .decisions()
             .map(|decision| decision.revealed_cards().to_vec())
-            .filter(|cards| !cards.is_empty())
+            .filter(|objects| !objects.is_empty())
             .collect();
         for revealed in inspections {
-            let player = self.state.cards[revealed[0]].owner;
-            for card in &revealed {
-                self.state.zones.move_card(*card, player, ZoneType::Library);
+            let player = self.state.objects[revealed[0]].owner;
+            for object in &revealed {
+                self.state
+                    .zones
+                    .move_object(*object, player, ZoneType::Library);
             }
             let revealed_set = revealed.iter().copied().collect::<BTreeSet<_>>();
-            let library = self.state.zones.zone_cards_mut(ZoneType::Library, player);
-            library.retain(|card| !revealed_set.contains(card));
+            let library = self.state.zones.zone_objects_mut(ZoneType::Library, player);
+            library.retain(|object| !revealed_set.contains(object));
             // revealed[0] is the top of the library = last element.
             library.extend(revealed.iter().rev());
         }

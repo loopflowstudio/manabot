@@ -73,9 +73,9 @@ fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
             .expect("powerstone");
         s.set_player_mana_pool(0, pool);
         s.game_mut().scenario_refresh_priority().unwrap();
-        let card = find_owned_card(&s, 0, name);
+        let object = find_owned_card(&s, 0, name);
         assert_eq!(
-            can_cast(&s, card),
+            can_cast(&s, object),
             castable,
             "{name} with {pool} and a Powerstone"
         );
@@ -85,8 +85,8 @@ fn powerstone_mana_pays_for_artifact_spells_but_not_nonartifact_spells() {
 #[test]
 fn unearthed_cityscape_leveler_has_haste_and_is_exiled_instead_of_destroyed() {
     let mut s = five_color_setup(&["Cityscape Leveler"]);
-    let card = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
-    activate_card(&mut s, card, 0);
+    let object = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
+    activate_card(&mut s, object, 0);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
     let leveler = permanent_named(&s, "Cityscape Leveler");
     assert!(s
@@ -99,21 +99,21 @@ fn unearthed_cityscape_leveler_has_haste_and_is_exiled_instead_of_destroyed() {
     // Its attack trigger destroys the Leveler itself: it is exiled instead,
     // and its controller still creates the Powerstone.
     settle_targeting(&mut s, Target::Permanent(leveler));
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
     assert_eq!(powerstones(&s, 0), vec![true]);
 }
 
 #[test]
 fn unearthed_cityscape_leveler_is_exiled_at_the_next_end_step() {
     let mut s = five_color_setup(&["Cityscape Leveler"]);
-    let card = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
-    activate_card(&mut s, card, 0);
+    let object = plant_in_graveyard(&mut s, 0, "Cityscape Leveler");
+    activate_card(&mut s, object, 0);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
     assert_eq!(
-        s.game().state.zones.zone_of(card),
+        s.game().state.zones.zone_of(object),
         Some(ZoneType::Battlefield)
     );
     s.advance_to_step(StepKind::End);
     settle_targeting(&mut s, Target::Player(PlayerId(1)));
-    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(object), Some(ZoneType::Exile));
 }

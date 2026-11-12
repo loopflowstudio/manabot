@@ -11,8 +11,8 @@ use crate::{
     flow::{decision::Decision, game::Game},
     state::{
         ability::{effect_target_requirements, TargetRequirement},
-        card::ObjectKind,
-        game_object::{CardId, PlayerId, Target},
+        game_object::ObjectKind,
+        game_object::{ObjectId, PlayerId, Target},
         stack_object::StackObject,
     },
 };
@@ -21,7 +21,7 @@ impl Game {
     /// The stack index of a spell or ability target.
     pub(crate) fn stack_index_of(&self, object: Target) -> Option<usize> {
         match object {
-            Target::StackSpell(card) => self.find_spell_on_stack_index(card),
+            Target::StackSpell(object_id) => self.find_spell_on_stack_index(object_id),
             Target::StackAbility(id) => self.find_ability_on_stack_index(id),
             _ => None,
         }
@@ -36,7 +36,7 @@ impl Game {
         match &self.state.stack_objects[index] {
             StackObject::Spell(spell) => {
                 let requirements =
-                    self.state.cards[spell.card].target_requirements_for_mode(spell.mode);
+                    self.state.objects[spell.object].target_requirements_for_mode(spell.mode);
                 requirements
                     .get(*spell.target_req_indices.get(slot)?)
                     .cloned()
@@ -48,11 +48,11 @@ impl Game {
                 let effects = match &triggered.inline_effects {
                     Some(effects) => effects.as_slice(),
                     None => {
-                        let card = triggered
+                        let object = triggered
                             .source_lki
                             .as_ref()
-                            .map_or(triggered.source_card, |lki| lki.card);
-                        self.source_face(card, triggered.source_definition_id)?
+                            .map_or(triggered.source_object, |lki| lki.object);
+                        self.source_face(object, triggered.source_definition_id)?
                             .abilities
                             .get(triggered.ability_index)?
                             .effects()
@@ -96,7 +96,7 @@ impl Game {
         };
         let current = targets.get(*slot).copied();
         let source = stacked.source_ref();
-        let source_card = stacked.source_card();
+        let source_object = stacked.source_object();
         let self_target = stacked.as_target();
         // Both distinctness and the shared mana-value budget apply only to
         // the other targets of this clause, never to the slot being replaced.
@@ -119,7 +119,7 @@ impl Game {
                         if self.permanent_object_ref(*id) == Some(source))
             })
             .filter(|target| {
-                self.within_source_bound(*target, &requirement.spec, source_card, source)
+                self.within_source_bound(*target, &requirement.spec, source_object, source)
             })
             .collect()
     }
@@ -171,21 +171,23 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         let copy = match self.state.stack_objects[index].clone() {
             StackObject::Spell(mut spell) => {
-                let mut card = self.state.cards[spell.card].clone();
-                card.id = id;
-                card.owner = controller;
-                let card = card.with_kind(ObjectKind::SpellCopy);
-                let copied = CardId(self.state.cards.len());
-                self.state.cards.push(card);
-                self.state.card_to_permanent.push(None);
+                let mut object_id = self.state.objects[spell.object].clone();
+                object_id.id = id;
+                object_id.owner = controller;
+                let object_id = object_id.with_kind(ObjectKind::SpellCopy);
+                let copied = ObjectId(self.state.objects.len());
+                self.state.objects.push(object_id);
+                self.state.object_to_permanent.push(None);
                 self.state
                     .object_incarnations
                     .push(crate::state::game_object::Incarnation::INITIAL);
-                self.state
-                    .zones
-                    .move_card(copied, controller, crate::state::zone::ZoneType::Stack);
+                self.state.zones.move_object(
+                    copied,
+                    controller,
+                    crate::state::zone::ZoneType::Stack,
+                );
                 spell.id = id;
-                spell.card = copied;
+                spell.object = copied;
                 spell.controller = controller;
                 StackObject::Spell(spell)
             }

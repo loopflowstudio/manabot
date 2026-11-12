@@ -16,7 +16,7 @@ use crate::{
     state::{
         ability::Effect,
         card::{ActivatedAbilityDefinition, ReplacementEffect},
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{ObjectId, PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaUse},
     },
 };
@@ -43,7 +43,7 @@ enum Obligation {
 #[derive(Clone)]
 struct ManaSource {
     permanent: PermanentId,
-    card: CardId,
+    object: ObjectId,
     untapped: bool,
     fixed: Option<Mana>,
     abilities: Vec<ManaActivation>,
@@ -79,7 +79,7 @@ enum PaymentStep {
     Spend(Mana),
     Output(usize),
     Waterbend(PermanentId),
-    Tap(CardId),
+    Tap(ObjectId),
 }
 
 impl PaymentStep {
@@ -90,9 +90,9 @@ impl PaymentStep {
                 permanent: *permanent,
                 ability_index: *ability_index,
             }),
-            Self::Tap(card) => Some(Action::SelectCard {
+            Self::Tap(object) => Some(Action::SelectCard {
                 player,
-                card: *card,
+                object: *object,
             }),
             Self::Output(mode) => Some(Action::ChooseMode {
                 player,
@@ -302,7 +302,7 @@ impl PaymentModel {
                         remaining: remaining - 1,
                     };
                     if let Some(mut path) = self.witness(next, policy, visited) {
-                        path.insert(0, PaymentStep::Tap(self.sources[index].card));
+                        path.insert(0, PaymentStep::Tap(self.sources[index].object));
                         return Some(path);
                     }
                 }
@@ -721,7 +721,7 @@ impl Game {
                     .collect();
                 ManaSource {
                     permanent,
-                    card: source.card,
+                    object: source.object,
                     untapped: !source.tapped,
                     fixed,
                     abilities,
@@ -1128,7 +1128,7 @@ impl Game {
             {
                 actions.push(Action::SelectCard {
                     player,
-                    card: self.state.permanents[*permanent].as_ref().unwrap().card,
+                    object: self.state.permanents[*permanent].as_ref().unwrap().object,
                 });
             }
         }
@@ -1138,15 +1138,15 @@ impl Game {
     pub(crate) fn pay_mana_tap_cost(
         &mut self,
         player: PlayerId,
-        card: CardId,
+        object: ObjectId,
     ) -> Result<(), AgentError> {
         if !self
             .mana_tap_cost_actions(player)
-            .contains(&Action::SelectCard { player, card })
+            .contains(&Action::SelectCard { player, object })
         {
             return Err(AgentError("illegal mana tap cost selection".into()));
         }
-        let permanent = self.state.card_to_permanent[card].unwrap();
+        let permanent = self.state.object_to_permanent[object].unwrap();
         self.tap_permanent(permanent, false);
         if let Some(SuspendedResolution {
             decision: Decision::ManaUpfront { tap_remaining, .. },
@@ -1236,7 +1236,7 @@ impl Game {
         if !effects.is_empty() {
             let source_ref = self.permanent_object_ref(permanent);
             let mut child = EffectFrame::new(player, effects);
-            child.source = self.state.permanents[permanent].as_ref().map(|p| p.card);
+            child.source = self.state.permanents[permanent].as_ref().map(|p| p.object);
             child.source_ref = source_ref;
             self.run_before_decision(child, caller);
         } else {
@@ -1447,7 +1447,7 @@ impl Game {
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.iter_battlefield_permanents(player).any(|id| {
             self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state.cards[permanent.card]
+                self.state.objects[permanent.object]
                     .replacement_effects
                     .contains(&ReplacementEffect::UnspentManaBecomesRed)
             }) && !self.characteristics(id).abilities_lost

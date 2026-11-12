@@ -19,10 +19,8 @@ use super::names::{NameCandidate, NameVocabulary};
 use crate::agent::observation::KeywordData;
 use crate::state::{
     ability::{Ability, PaymentCost},
-    card::{
-        Card, CardDefId, CardDefinition, ObjectDefinition, PrintedCharacteristics, TokenDefinition,
-    },
-    game_object::{ObjectId, PlayerId},
+    card::{CardDefId, CardDefinition, ObjectDefinition, PrintedCharacteristics, TokenDefinition},
+    game_object::{Object, PlayerId, PublicId},
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
@@ -319,7 +317,7 @@ impl ContentPack {
     /// status and its shown face's back face. Records of a copy (pending
     /// creations, canonical state) serialize this; the token a copy creates
     /// takes only `printed`.
-    pub fn object_row(&self, card: &Card) -> ObjectDefinition {
+    pub fn object_row(&self, card: &Object) -> ObjectDefinition {
         ObjectDefinition {
             key: "",
             scryfall_id: None,
@@ -332,7 +330,7 @@ impl ContentPack {
     }
 
     /// A new card object of the card named `name`.
-    pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: ObjectId) -> Option<Card> {
+    pub fn instantiate(&self, name: &str, owner: PlayerId, object_id: PublicId) -> Option<Object> {
         self.instantiate_row(self.definition_id(name)?, owner, object_id)
     }
 
@@ -341,8 +339,8 @@ impl ContentPack {
         &self,
         key: &str,
         owner: PlayerId,
-        object_id: ObjectId,
-    ) -> Option<Card> {
+        object_id: PublicId,
+    ) -> Option<Object> {
         self.instantiate_row(self.token_id(key)?, owner, object_id)
     }
 
@@ -350,10 +348,10 @@ impl ContentPack {
         &self,
         definition_id: CardDefId,
         owner: PlayerId,
-        object_id: ObjectId,
-    ) -> Option<Card> {
+        object_id: PublicId,
+    ) -> Option<Object> {
         let row = self.definitions.get(definition_id.0 as usize)?;
-        Some(Card::from_definition(
+        Some(Object::from_definition(
             object_id,
             owner,
             definition_id,

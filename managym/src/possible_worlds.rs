@@ -22,7 +22,7 @@ use crate::{
     decision::ObservationIdentity,
     flow::game::Game,
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{ObjectId, PlayerId},
         zone::ZoneType,
     },
 };
@@ -81,7 +81,7 @@ pub(crate) fn binom(n: u32, k: u32) -> u128 {
 }
 
 /// One opponent-hand card-**name** multiset of the public hand size, drawn from
-/// the opponent's unseen pool. The weight is the number of physical `CardId`
+/// the opponent's unseen pool. The weight is the number of physical `ObjectId`
 /// deals that yield this name-multiset with every foretold slot filled by a
 /// foretell-bearing card, not a probability.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -385,11 +385,11 @@ pub struct HiddenHandConstraints {
 }
 
 /// Card-name multiset of `cards`.
-fn name_counts(game: &Game, cards: impl IntoIterator<Item = CardId>) -> BTreeMap<String, u32> {
+fn name_counts(game: &Game, cards: impl IntoIterator<Item = ObjectId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
     for card in cards {
         *counts
-            .entry(game.state.cards[card].name.clone())
+            .entry(game.state.objects[card].name.clone())
             .or_insert(0) += 1;
     }
     counts
@@ -410,8 +410,8 @@ impl HiddenHandConstraints {
         let unseen = commitments.unseen_cards(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|card| game.state.cards[**card].foretell().is_some())
-            .map(|card| game.state.cards[*card].name.clone())
+            .filter(|card| game.state.objects[**card].foretell().is_some())
+            .map(|card| game.state.objects[*card].name.clone())
             .collect();
         let pool = name_counts(game, unseen);
         let foretold = if game.shares_information(viewer, opponent) {
@@ -431,7 +431,7 @@ impl HiddenHandConstraints {
                 game,
                 game.state
                     .zones
-                    .zone_cards(ZoneType::Hand, opponent)
+                    .zone_objects(ZoneType::Hand, opponent)
                     .iter()
                     .copied(),
             )
@@ -539,10 +539,10 @@ impl HiddenHandConstraints {
         {
             // Group the opponent's unseen CardIds by name, sorted ascending so
             // the lowest CardIds of each name go to the hand deterministically.
-            let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
+            let mut by_name: BTreeMap<String, Vec<ObjectId>> = BTreeMap::new();
             for card in commitments.unseen_cards(&branch, opponent) {
                 by_name
-                    .entry(branch.state.cards[card].name.clone())
+                    .entry(branch.state.objects[card].name.clone())
                     .or_default()
                     .push(card);
             }
@@ -550,8 +550,8 @@ impl HiddenHandConstraints {
                 cards.sort_unstable_by_key(|card| (!commitments.pins_card(*card), card.0));
             }
 
-            let mut new_hand: Vec<CardId> = Vec::with_capacity(self.hand_size as usize);
-            let mut new_library: Vec<CardId> = Vec::new();
+            let mut new_hand: Vec<ObjectId> = Vec::with_capacity(self.hand_size as usize);
+            let mut new_library: Vec<ObjectId> = Vec::new();
             for (name, cards) in &by_name {
                 let k = world.hand.get(name).copied().unwrap_or(0) as usize;
                 if k > cards.len() {
@@ -602,7 +602,7 @@ impl HiddenHandConstraints {
         }
 
         // Fail closed: the realized hand name-multiset must equal the world.
-        let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
+        let hand = branch.state.zones.zone_objects(ZoneType::Hand, opponent);
         if name_counts(&branch, hand.iter().copied()) != world.hand {
             return Err(MaterializeError::InconsistentWorld);
         }
@@ -1012,7 +1012,7 @@ impl PossibleWorldSpace {
     /// Materialize `world` into an exact `Game` branch of `source`.
     ///
     /// Clones the source, reassigns only the opponent's hidden split to match
-    /// the world (lowest `CardId`s of each name to hand; seeded library
+    /// the world (lowest `ObjectId`s of each name to hand; seeded library
     /// shuffle; foretold slots refilled from the seeded remainder's
     /// foretell-bearing cards), using ordinary hidden-zone reassignment.
     /// Public zones and any suspended-decision revealed library cards are
@@ -1203,7 +1203,7 @@ mod tests {
     fn weights_match_brute_force_physical_deals() {
         let space =
             PossibleWorldSpace::from_pool(PlayerId(0), 2, pool(&[("A", 2), ("B", 1), ("C", 1)]));
-        // Independent brute force over physical CardId deals: enumerate every
+        // Independent brute force over physical ObjectId deals: enumerate every
         // unordered 2-card deal from [A, A, B, C] and count name-multisets.
         let physical = ["A", "A", "B", "C"];
         let mut brute: BTreeMap<BTreeMap<String, u32>, u128> = BTreeMap::new();

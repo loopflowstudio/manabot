@@ -10,8 +10,9 @@ use crate::state::{
         LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
         TriggerCondition, TriggerSubject, TurnStep,
     },
-    card::{Card, CardType, Keyword, Keywords},
+    card::{CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
+    game_object::Object,
     mana::{Color, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -19,11 +20,15 @@ use crate::state::{
 };
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
-pub(crate) fn trigger_description(card: &Card, index: usize, inline: Option<&[Effect]>) -> String {
+pub(crate) fn trigger_description(
+    object: &Object,
+    index: usize,
+    inline: Option<&[Effect]>,
+) -> String {
     if let Some(effects) = inline {
         return format!(
             "{} — delayed ability: {}",
-            card.name,
+            object.name,
             effects_description(effects)
         );
     }
@@ -31,14 +36,14 @@ pub(crate) fn trigger_description(card: &Card, index: usize, inline: Option<&[Ef
         condition,
         intervening_if,
         effects,
-    } = &card.abilities[index];
+    } = &object.abilities[index];
     let intervening = intervening_if
         .as_ref()
         .map(|condition| format!(", if {}", condition_text(condition)))
         .unwrap_or_default();
     format!(
         "{} — {}{intervening}: {}",
-        card.name,
+        object.name,
         condition_description(condition),
         effects_description(effects)
     )

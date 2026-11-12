@@ -298,11 +298,11 @@ fn admit_with_world(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImpor
             .entry((entry.section, name.clone()))
             .or_default()
             .push(entry.line);
-        let cards = match entry.section {
+        let objects = match entry.section {
             DeckSection::Main => &mut deck.main,
             DeckSection::Sideboard => &mut deck.sideboard,
         };
-        *cards.entry(name.clone()).or_default() += entry.count;
+        *objects.entry(name.clone()).or_default() += entry.count;
         entries.push(DeckEntry {
             name,
             card_def_id: Some(definition.card_def_id.0),

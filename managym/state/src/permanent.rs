@@ -1,8 +1,8 @@
 use smallvec::SmallVec;
 
 use super::{
-    card::{ActivatedAbilityDefinition, Card, Keyword},
-    game_object::{CardId, ObjectId, ObjectRef, PlayerId},
+    card::{ActivatedAbilityDefinition, Keyword},
+    game_object::{Object, ObjectId, ObjectRef, PlayerId, PublicId},
 };
 
 /// Counter kinds the engine knows (CR 122). A new kind is one variant here.
@@ -144,8 +144,9 @@ pub struct Permanent {
     /// Number of transformations of this incarnation (CR 701.27f).
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub transforms: u32,
-    pub id: ObjectId,
-    pub card: CardId,
+    pub id: PublicId,
+    #[serde(rename = "card")]
+    pub object: ObjectId,
     pub controller: PlayerId,
     pub tapped: bool,
     pub summoning_sick: bool,
@@ -162,11 +163,11 @@ pub struct Permanent {
     pub counters: Counters,
     /// Keyword-counter timestamps, renewed on additions (CR 613.7c).
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
-    pub keyword_counter_timestamps: std::collections::BTreeMap<CounterKind, ObjectId>,
+    pub keyword_counter_timestamps: std::collections::BTreeMap<CounterKind, PublicId>,
     /// Its timestamp (CR 613.7d/e): when it entered, renewed when an Aura or
     /// Equipment becomes attached. Static abilities apply in this order among
     /// continuous-effect records.
-    pub timestamp: ObjectId,
+    pub timestamp: PublicId,
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
@@ -206,17 +207,17 @@ impl Permanent {
         }
     }
 
-    pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
+    pub fn new(id: PublicId, object_id: ObjectId, object: &Object) -> Self {
         Self {
             transforms: 0,
             id,
-            card: card_id,
-            controller: card.owner,
+            object: object_id,
+            controller: object.owner,
             tapped: false,
             // CR 302.6 applies to any permanent that is a creature; only
             // creatures and Vehicles can attack or pay {T} as creatures here.
-            summoning_sick: (card.types.is_creature() || card.has_subtype("Vehicle"))
-                && !card.keywords.has(Keyword::Haste),
+            summoning_sick: (object.types.is_creature() || object.has_subtype("Vehicle"))
+                && !object.keywords.has(Keyword::Haste),
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,

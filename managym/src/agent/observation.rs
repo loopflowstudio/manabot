@@ -14,7 +14,7 @@ use crate::{
         ability::PaymentCost,
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
-        game_object::{CardId, ObjectId, PlayerId, Target},
+        game_object::{ObjectId, PlayerId, PublicId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
@@ -1087,12 +1087,12 @@ impl Observation {
     /// Copies of each definition id among `cards`.
     fn definition_counts(
         game: &Game,
-        cards: impl IntoIterator<Item = CardId>,
+        objects: impl IntoIterator<Item = ObjectId>,
     ) -> BTreeMap<u32, u32> {
         let mut counts = BTreeMap::new();
-        for card in cards {
+        for object in objects {
             *counts
-                .entry(game.state.cards[card].definition_id.0)
+                .entry(game.state.objects[object].definition_id.0)
                 .or_default() += 1;
         }
         counts
@@ -1133,7 +1133,7 @@ impl Observation {
                     .sideboard
                     .iter()
                     .copied()
-                    .filter(|card| game.state.zones.zone_of(*card).is_none());
+                    .filter(|object| game.state.zones.zone_of(*object).is_none());
                 (
                     Some(Self::definition_counts(game, p.deck.iter().copied())),
                     Some(Self::unseen_counts(game, player, viewer)),
@@ -1201,7 +1201,7 @@ impl Observation {
     fn populate_cards(&mut self, game: &Game, agent_player: PlayerId) {
         for card in &game.state.players[agent_player.0].sideboard {
             if game.state.zones.zone_of(*card).is_none() {
-                let card = &game.state.cards[*card];
+                let card = &game.state.objects[*card];
                 self.agent_sideboard.push(SideboardCardData {
                     candidate_id: card.id.0 as i32,
                     owner_id: self.agent.id,
@@ -1215,11 +1215,11 @@ impl Observation {
         // Inspection paths can overlap (hand, library top and a pending
         // search). Emit each card once, retaining first-visible order.
         let mut seen = HashSet::new();
-        let mut add_card = |card: CardId, zone: ZoneType| {
+        let mut add_card = |card: ObjectId, zone: ZoneType| {
             if seen.insert(card) {
                 self.push_card(
                     Self::card_data(game, card, zone),
-                    game.state.cards[card].owner,
+                    game.state.objects[card].owner,
                 );
             }
         };
@@ -1227,7 +1227,7 @@ impl Observation {
         // A replacement question identifies prospective battlefield entrants
         // publicly before their retained zone moves commit.
         for object in game.pending_public_entries() {
-            let card = CardId::from(object.entity);
+            let card = ObjectId::from(object.entity);
             if let Some(zone) = game.state.zones.zone_of(card) {
                 add_card(card, zone);
             }
@@ -1237,7 +1237,7 @@ impl Observation {
             if !game.shares_information(agent_player, perspective) {
                 continue;
             }
-            for card in game.state.zones.zone_cards(ZoneType::Hand, perspective) {
+            for card in game.state.zones.zone_objects(ZoneType::Hand, perspective) {
                 add_card(*card, ZoneType::Hand);
             }
 
@@ -1263,7 +1263,7 @@ impl Observation {
                         .filter(|card| {
                             game.state.zones.zone_of(*card) == Some(ZoneType::Library)
                                 || (game.state.zones.zone_of(*card) == Some(ZoneType::Hand)
-                                    && game.state.cards[*card].owner != perspective)
+                                    && game.state.objects[*card].owner != perspective)
                         })
                         .collect(),
                     Decision::SelectCards {
@@ -1287,10 +1287,10 @@ impl Observation {
         }
 
         for player in [agent_player, PlayerId((agent_player.0 + 1) % 2)] {
-            for card in game.state.zones.zone_cards(ZoneType::Graveyard, player) {
+            for card in game.state.zones.zone_objects(ZoneType::Graveyard, player) {
                 add_card(*card, ZoneType::Graveyard);
             }
-            for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
+            for card in game.state.zones.zone_objects(ZoneType::Exile, player) {
                 // A foretold card is face down; inspection follows native control.
                 if game.shares_information(agent_player, player) || !game.is_foretold(*card) {
                     add_card(*card, ZoneType::Exile);
@@ -1300,15 +1300,15 @@ impl Observation {
 
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
-                let mut card = Self::card_data(game, spell.card, ZoneType::Stack);
-                let definition = &game.state.cards[spell.card];
+                let mut card = Self::card_data(game, spell.object, ZoneType::Stack);
+                let definition = &game.state.objects[spell.object];
                 // A replicated spell's announced count is its X.
                 if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
                     || definition.replicate().is_some()
                 {
                     card.x = Some(i32::from(spell.x));
                 }
-                self.push_card(card, game.state.cards[spell.card].owner);
+                self.push_card(card, game.state.objects[spell.object].owner);
             }
         }
     }
@@ -1348,7 +1348,7 @@ impl Observation {
         characteristics: &Characteristics,
     ) {
         let pdat = PermanentData {
-            colors: (characteristics.colors != game.state.cards[permanent.card].colors()).then(
+            colors: (characteristics.colors != game.state.objects[permanent.object].colors()).then(
                 || {
                     characteristics
                         .colors
@@ -1364,7 +1364,7 @@ impl Observation {
                 .collect(),
             transforms: permanent.transforms,
             id: permanent.id.0 as i32,
-            registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
+            registry_key: game.state.objects[permanent.object].registry_key.0 as i32,
             controller_id: game.state.players[permanent.controller.0].id.0 as i32,
             tapped: permanent.tapped,
             damage: permanent.damage,
@@ -1421,7 +1421,7 @@ impl Observation {
                     .collect()
             }),
             is_granted_land: characteristics.is_land()
-                && !game.state.cards[permanent.card].types.is_land(),
+                && !game.state.objects[permanent.object].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
                     .attacker_to_blockers
@@ -1442,7 +1442,7 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
-            copy: game.state.cards[permanent.card]
+            copy: game.state.objects[permanent.object]
                 .copy
                 .as_ref()
                 .map(|copy| CopyData::new(copy, permanent.timestamp.0 as i32)),
@@ -1455,16 +1455,16 @@ impl Observation {
         }
 
         self.push_card(
-            Self::card_data(game, permanent.card, ZoneType::Battlefield),
+            Self::card_data(game, permanent.object, ZoneType::Battlefield),
             permanent.controller,
         );
     }
 
     /// A card's row. On the battlefield every characteristic reads the
     /// layered view (`Game::characteristics`); elsewhere CDAs still set power.
-    fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
-        let printed = Self::printed_card_data(game, card_id, zone);
-        match game.state.card_to_permanent[card_id] {
+    fn card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
+        let printed = Self::printed_card_data(game, object_id, zone);
+        match game.state.object_to_permanent[object_id] {
             Some(permanent) if zone == ZoneType::Battlefield => {
                 let view = game.characteristics(permanent);
                 CardData {
@@ -1481,41 +1481,41 @@ impl Observation {
                 }
             }
             _ => CardData {
-                power: game.card_power(card_id),
+                power: game.card_power(object_id),
                 ..printed
             },
         }
     }
 
-    fn printed_card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
-        let card = &game.state.cards[card_id];
+    fn printed_card_data(game: &Game, object_id: ObjectId, zone: ZoneType) -> CardData {
+        let object = &game.state.objects[object_id];
         CardData {
             zone,
-            owner_id: game.state.players[card.owner.0].id.0 as i32,
-            id: card.id.0 as i32,
-            registry_key: card.registry_key.0 as i32,
-            name: card.name.clone(),
-            text_box: card.text_box.clone(),
-            power: card.power.unwrap_or(0),
-            toughness: card.toughness.unwrap_or(0),
-            is_token: !card.is_card(),
-            is_legendary: card.is_legendary(),
-            is_ally: card.has_subtype("Ally"),
-            is_lesson: card.has_subtype("Lesson"),
-            ward_cost: ward_value(card.ward()),
-            kicker_cost: card
+            owner_id: game.state.players[object.owner.0].id.0 as i32,
+            id: object.id.0 as i32,
+            registry_key: object.registry_key.0 as i32,
+            name: object.name.clone(),
+            text_box: object.text_box.clone(),
+            power: object.power.unwrap_or(0),
+            toughness: object.toughness.unwrap_or(0),
+            is_token: !object.is_card(),
+            is_legendary: object.is_legendary(),
+            is_ally: object.has_subtype("Ally"),
+            is_lesson: object.has_subtype("Lesson"),
+            ward_cost: ward_value(object.ward()),
+            kicker_cost: object
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData::from_types(&card.types),
-            keywords: KeywordData::from_keywords(&card.keywords),
-            mana_cost: card.mana_cost.clone().unwrap_or_default(),
-            face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
+            card_types: CardTypeData::from_types(&object.types),
+            keywords: KeywordData::from_keywords(&object.keywords),
+            mana_cost: object.mana_cost.clone().unwrap_or_default(),
+            face_down: zone == ZoneType::Exile && game.is_foretold(object_id),
             cast_permission: game
-                .exile_grant_on(card_id)
+                .exile_grant_on(object_id)
                 .map(|grant| CastPermissionData {
                     player_id: game.state.players[grant.player.0].id.0 as i32,
-                    cost: game.grant_cast_cost(grant, card_id),
+                    cost: game.grant_cast_cost(grant, object_id),
                     this_turn: grant.this_turn,
                     through_next_turn: grant.through_next_turn.is_some(),
                     own_turn_only: grant.own_turn_only,
@@ -1532,7 +1532,7 @@ impl Observation {
                 }),
             x: None,
             from_battlefield_this_turn: zone == ZoneType::Graveyard
-                && game.current_object_ref(card_id).is_some_and(|object| {
+                && game.current_object_ref(object_id).is_some_and(|object| {
                     game.state.turn.graveyard_from_battlefield.contains(&object)
                 }),
         }
@@ -1546,7 +1546,7 @@ impl Observation {
                 }
                 StackObject::TriggeredAbility(a) => {
                     Some(super::ability_description::trigger_description(
-                        &game.state.cards[a.source_card],
+                        &game.state.objects[a.source_object],
                         a.ability_index,
                         a.inline_effects.as_deref(),
                     ))
@@ -1579,7 +1579,7 @@ impl Observation {
             },
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {
-                    let keywords = game.spell_keywords(spell.card, spell.controller);
+                    let keywords = game.spell_keywords(spell.object, spell.controller);
                     (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
@@ -1617,10 +1617,10 @@ impl Observation {
                 player_id: None,
                 permanent_id: None,
                 stack_object_id: None,
-                card_id: Some(game.state.cards[CardId::from(object.entity)].id.0 as i32),
+                card_id: Some(game.state.objects[ObjectId::from(object.entity)].id.0 as i32),
             }),
-            Target::StackSpell(card_id) => {
-                let stack_object_id = Self::stack_spell_object_id(game, card_id)?.0 as i32;
+            Target::StackSpell(object_id) => {
+                let stack_object_id = Self::stack_spell_object_id(game, object_id)?.0 as i32;
                 Some(StackTargetData {
                     kind: StackTargetKindData::StackObject,
                     player_id: None,
@@ -1642,12 +1642,12 @@ impl Observation {
         }
     }
 
-    fn stack_spell_object_id(game: &Game, card_id: CardId) -> Option<ObjectId> {
+    fn stack_spell_object_id(game: &Game, object_id: ObjectId) -> Option<PublicId> {
         game.state
             .stack_objects
             .iter()
             .find_map(|object| match object {
-                StackObject::Spell(spell) if spell.card == card_id => Some(spell.id),
+                StackObject::Spell(spell) if spell.object == object_id => Some(spell.id),
                 _ => None,
             })
     }
@@ -1677,13 +1677,13 @@ impl Observation {
                 vec![data]
             }
             GameEvent::CardMoved {
-                card,
+                object_id,
                 from,
                 to,
                 controller,
                 face_down,
             } => {
-                let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
+                let mut data = Self::card_event_data(EventType::CardMoved, *object_id, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
                 // Outside cards and face-down arrivals name no public object.
@@ -1718,37 +1718,37 @@ impl Observation {
                 new - old,
                 None,
             )],
-            GameEvent::SpellCast { card, .. } => vec![Self::card_event_data(
+            GameEvent::SpellCast { object_id, .. } => vec![Self::card_event_data(
                 EventType::SpellCast,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
-            GameEvent::SpellResolved { card } => vec![Self::card_event_data(
+            GameEvent::SpellResolved { object_id } => vec![Self::card_event_data(
                 EventType::SpellResolved,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
-            GameEvent::SpellCountered { card, .. } => vec![Self::card_event_data(
+            GameEvent::SpellCountered { object_id, .. } => vec![Self::card_event_data(
                 EventType::SpellCountered,
-                *card,
+                *object_id,
                 PlayerId(0),
             )],
             GameEvent::AbilityCountered {
-                source_card,
+                source_object,
                 controller,
                 ..
             } => vec![Self::card_event_data(
                 EventType::AbilityCountered,
-                *source_card,
+                *source_object,
                 *controller,
             )],
             GameEvent::AbilityTriggered {
-                source_card,
+                source_object,
                 controller,
                 ..
             } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
-                *source_card,
+                *source_object,
                 *controller,
             )],
             GameEvent::CombatAttackersDeclared {
@@ -1869,10 +1869,10 @@ impl Observation {
         data
     }
 
-    fn card_event_data(event_type: EventType, card: CardId, controller: PlayerId) -> EventData {
+    fn card_event_data(event_type: EventType, object: ObjectId, controller: PlayerId) -> EventData {
         Self::build_event_data(
             event_type,
-            Some(EventEntity::Card(card)),
+            Some(EventEntity::Card(object)),
             None,
             0,
             Some(controller),
@@ -1906,7 +1906,7 @@ impl Observation {
 
     fn event_entity(entity: Option<EventEntity>) -> (i32, i32) {
         match entity {
-            Some(EventEntity::Card(card)) => (EventEntityKind::Card as i32, card.0 as i32),
+            Some(EventEntity::Card(object)) => (EventEntityKind::Card as i32, object.0 as i32),
             Some(EventEntity::Permanent(permanent)) => {
                 (EventEntityKind::Permanent as i32, permanent.0 as i32)
             }
@@ -1915,7 +1915,7 @@ impl Observation {
         }
     }
 
-    pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<ObjectId> {
+    pub(crate) fn action_focus(game: &Game, action: &Action) -> Vec<PublicId> {
         match action {
             Action::ChooseTrigger { trigger_id, player } => game
                 .state
@@ -1924,13 +1924,23 @@ impl Observation {
                 .and_then(|p| p.remaining.iter().find(|t| t.id == *trigger_id))
                 .and_then(|t| t.source_ref)
                 .and_then(|r| game.visible_reference(r, *player).object)
-                .map(|id| vec![ObjectId(id as u32)])
+                .map(|id| vec![PublicId(id as u32)])
                 .unwrap_or_default(),
-            Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
-                vec![game.state.cards[card].id]
+            Action::PlayLand {
+                object: object_id, ..
             }
-            Action::ActivateCardAbility { card, .. } | Action::Foretell { card, .. } => {
-                vec![game.state.cards[card].id]
+            | Action::CastSpell {
+                object: object_id, ..
+            } => {
+                vec![game.state.objects[object_id].id]
+            }
+            Action::ActivateCardAbility {
+                object: object_id, ..
+            }
+            | Action::Foretell {
+                object: object_id, ..
+            } => {
+                vec![game.state.objects[object_id].id]
             }
             Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
@@ -1965,18 +1975,26 @@ impl Observation {
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
                 crate::state::target::Target::GraveyardCard(object) => {
-                    vec![game.state.cards[CardId::from(object.entity)].id]
+                    vec![game.state.objects[ObjectId::from(object.entity)].id]
                 }
-                crate::state::target::Target::StackSpell(card_id) => {
-                    vec![game.state.cards[card_id].id]
+                crate::state::target::Target::StackSpell(object_id) => {
+                    vec![game.state.objects[object_id].id]
                 }
                 crate::state::target::Target::StackAbility(id) => vec![*id],
             },
-            Action::ScryCard { card, .. }
-            | Action::SelectCard { card, .. }
-            | Action::LearnDiscard { card, .. }
-            | Action::LearnTakeLesson { card, .. } => {
-                vec![game.state.cards[card].id]
+            Action::ScryCard {
+                object: object_id, ..
+            }
+            | Action::SelectCard {
+                object: object_id, ..
+            }
+            | Action::LearnDiscard {
+                object: object_id, ..
+            }
+            | Action::LearnTakeLesson {
+                object: object_id, ..
+            } => {
+                vec![game.state.objects[object_id].id]
             }
             Action::WaterbendTap { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
@@ -1993,36 +2011,46 @@ impl Observation {
                     return candidates
                         .get(*mode)
                         .map(|candidate| {
-                            game.state.cards[CardId::from(candidate.source().entity)].id
+                            game.state.objects[ObjectId::from(candidate.source().entity)].id
                         })
                         .into_iter()
                         .collect();
                 }
                 // Other decisions focus the resolving or cast object's card.
-                let card = game
+                let object_id = game
                     .state
                     .suspended_decision
                     .as_ref()
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
-                        Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
-                        | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
-                        | Some(crate::flow::game::PendingChoice::AnnounceX { card, .. })
-                        | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
-                            Some(*card)
-                        }
+                        Some(crate::flow::game::PendingChoice::SpellMode {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::KickerChoice {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::AnnounceX {
+                            object: object_id,
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::ChooseTargets {
+                            object: object_id,
+                            ..
+                        }) => Some(*object_id),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            source: crate::flow::game::ActivationSource::Card(card),
+                            source: crate::flow::game::ActivationSource::Card(object_id),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
+                            source: crate::flow::game::ActivationSource::Card(object_id),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::TapPayment {
-                            source: crate::flow::game::ActivationSource::Card(card),
+                            source: crate::flow::game::ActivationSource::Card(object_id),
                             ..
-                        }) => Some(*card),
+                        }) => Some(*object_id),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
@@ -2041,22 +2069,23 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
                             game.state.permanents[*permanent]
                                 .as_ref()
-                                .map(|perm| perm.card)
+                                .map(|perm| perm.object)
                         }
                         Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
-                            game.payment_source_card(payment)
+                            game.payment_source_object(payment)
                         }
                         Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
                             payment,
                             ..
-                        }) => game.payment_source_card(payment),
+                        }) => game.payment_source_object(payment),
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
                             | crate::flow::game::PendingChoice::ManaPayment { .. },
                         ) => None,
                         None => None,
                     });
-                card.map(|card| vec![game.state.cards[card].id])
+                object_id
+                    .map(|object_id| vec![game.state.objects[object_id].id])
                     .unwrap_or_default()
             }
         }
@@ -2069,19 +2098,19 @@ impl Observation {
         if self.agent.is_agent == self.opponent.is_agent {
             return false;
         }
-        for card in &self.agent_sideboard {
-            if card.owner_id != self.agent.id {
+        for object in &self.agent_sideboard {
+            if object.owner_id != self.agent.id {
                 return false;
             }
         }
         // A battlefield card sits with its controller, who may not own it.
-        for (cards, side) in [
+        for (objects, side) in [
             (&self.agent_cards, self.agent.id),
             (&self.opponent_cards, self.opponent.id),
         ] {
-            if cards
+            if objects
                 .iter()
-                .any(|card| card.zone != ZoneType::Battlefield && card.owner_id != side)
+                .any(|object| object.zone != ZoneType::Battlefield && object.owner_id != side)
             {
                 return false;
             }

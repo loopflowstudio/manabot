@@ -90,7 +90,7 @@ fn creature_token_ceases_to_exist_after_dying() {
     s.game_mut().create_token("token.ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
-    let token_card = permanent(&s, token).card;
+    let token_card = permanent(&s, token).object;
 
     s.game_mut().state.permanents[token]
         .as_mut()
@@ -389,7 +389,7 @@ fn bounce_is_not_death() {
         },
     );
 
-    s.game_mut().move_card(ogre_card, ZoneType::Hand);
+    s.game_mut().move_object(ogre_card, ZoneType::Hand);
     s.pass_priority();
     resolve_until_priority(&mut s);
 
@@ -407,7 +407,7 @@ fn block_restriction_respects_effective_power() {
         .unwrap()
         .summoning_sick = false;
     let attacker_card = card_of(&s, attacker);
-    s.game_mut().state.cards[attacker_card]
+    s.game_mut().state.objects[attacker_card]
         .statics
         .push(StaticAbility::BlockRestriction(
             BlockRestriction::CantBeBlockedBy(CardPredicate {
@@ -506,8 +506,8 @@ fn counters_on_lands_are_inert_and_persistent() {
         .game()
         .state
         .zones
-        .zone_cards(ZoneType::Battlefield, PlayerId(0))
-        .contains(&forest_perm.card));
+        .zone_objects(ZoneType::Battlefield, PlayerId(0))
+        .contains(&forest_perm.object));
 }
 
 /// Observation encoding: counter counts, token flag, Ally/Lesson type tags,
@@ -528,10 +528,10 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     // A Lesson in the graveyard (subtype injected — no Lesson spell is
     // registered until Stage 2 machinery lands).
     let bolt = find_owned_card_off_battlefield(&s, 0, "Lightning Bolt");
-    s.game_mut().state.cards[bolt]
+    s.game_mut().state.objects[bolt]
         .subtypes
         .push("Lesson".to_string());
-    s.game_mut().move_card(bolt, ZoneType::Graveyard);
+    s.game_mut().move_object(bolt, ZoneType::Graveyard);
     s.pass_priority();
 
     let events = s.game_mut().take_observation_events();
@@ -547,7 +547,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     let all_cards = obs.agent_cards.iter().chain(obs.opponent_cards.iter());
     let token_card = all_cards
         .clone()
-        .find(|card| card.name == "Ally")
+        .find(|object| object.name == "Ally")
         .expect("token card should be observable");
     assert!(token_card.is_token);
     assert!(token_card.is_ally);
@@ -555,7 +555,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
 
     let lesson_card = all_cards
         .clone()
-        .find(|card| card.name == "Lightning Bolt")
+        .find(|object| object.name == "Lightning Bolt")
         .expect("graveyard lesson should be observable");
     assert!(lesson_card.is_lesson);
     assert!(!lesson_card.is_token);

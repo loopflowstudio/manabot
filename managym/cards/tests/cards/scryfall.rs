@@ -21,7 +21,7 @@ fn well_formed(id: &str) -> bool {
 fn printed_ids() -> impl Iterator<Item = (&'static str, &'static str)> {
     catalog()
         .iter()
-        .map(|card| (card.key, card.scryfall_id))
+        .map(|object| (object.key, object.scryfall_id))
         .chain(
             token_catalog()
                 .iter()
@@ -42,8 +42,8 @@ fn every_printed_definition_has_a_well_formed_unique_scryfall_id() {
 fn every_card_key_names_its_set_and_is_unique() {
     let mut keys = BTreeSet::new();
     for definition in catalog() {
-        let (set, card) = definition.key.split_once('.').expect("<set>.<card> key");
-        assert!(!set.is_empty() && !card.is_empty(), "{}", definition.key);
+        let (set, object) = definition.key.split_once('.').expect("<set>.<card> key");
+        assert!(!set.is_empty() && !object.is_empty(), "{}", definition.key);
         assert_ne!(
             set, "token",
             "{}: tokens are TokenDefinitions",
