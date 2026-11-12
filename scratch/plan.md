@@ -69,7 +69,11 @@
 
 ## Remaining
 
-- Training suite result (running). Then commit; delivery belongs to later steps.
-- Proposed memory note: `etude launch --max-usd` on a single run needs `--cohort`; the
-  Job's own `max_usd` caps it. `etude wait RUN` leaves the rented machine up to its
-  window end after success, so terminate it.
+- Training suite (`--extra dev,artifacts,notebook,reports`, deselect test_etude_evaluation)
+  hit the 1 h limit at ~415/772 (in `test_monitor_evaluation`), with another worktree's
+  pytest loading the CPU. Failures, none in this diff's files: `test_game_errors`
+  resource_limit replay x3 (`binding_mismatch`: native `semantic_decision_frame_json`
+  differs from the retained frame); `test_inspect_batch_script` (`damped_policy._targets`:
+  `RolloutBatch` has no `batch`); `test_head_to_head` x2 (duckdb, needs `--extra
+  evaluation`). `test_active_recovery` and `test_learning_state` failed in the full run
+  but pass alone (17 passed). Leave the rest of the suite to CI.
