@@ -1,74 +1,52 @@
 <!doctype html>
-<meta charset="utf-8">
-<title>MTG-298 QA: TokenDefinition split</title>
-<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}pre{background:#f4f4f4;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:1.6em}</style>
-<h1>MTG-298 QA: tokens as TokenDefinition</h1>
-<p>2026-11-12. The people this change serves: card authors writing tokens in Rust, Python consumers of the
-<code>managym</code> wheel, and Academy players who see tokens on the table.</p>
+<html><head><meta charset="utf-8"><title>MTG-320 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:900px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f1ea}pre{padding:.6em;overflow:auto}</style></head>
+<body>
+<h1>MTG-320 QA: runtime object kinds</h1>
+<p>Build under test: branch head <code>79aa9881e</code>. Release extension rebuilt from it and installed into
+<code>managym/_managym.cpython-313-darwin.so</code> (the previous build predated the last commits).</p>
 
-<h2>1. Gameplay unchanged: fresh wheel installs, base vs branch</h2>
-<p>I built wheels from the base commit <code>d2cde1117</code> and from the branch, then installed each in a fresh
-<code>/tmp</code> venv. In each venv I played 30 random-policy games with 2-colour decks of every eligible single-colour
-token maker (seeds 0–29).</p>
-<pre>games 30 … all terminated (14–45 turns)
-token objects seen: Ally, Clue, Food, Soldier, Monk, Bear, Ballistic Boulder, Human Soldier, Treasure,
-  plus token copies of cards (Phoenix Fleet Airship, Joo Dee, …)
-diff out-base.txt out-new.txt  →  IDENTICAL</pre>
-<p>The public surface compared the same way:</p>
-<ul>
-<li><code>content_pool("world")</code> rows hash the same on both. The 11 token rows carry their
-<code>token.*</code> key and Scryfall id, and are "unsupported: A token, created by its card".</li>
-<li><code>learning_catalog()</code>: every array is identical except <code>content_digest</code>.</li>
-<li><code>world_identity().card_digest</code> moves from <code>0798b2c7…</code> to <code>aa606cea…</code>, as already reported.</li>
-<li><code>card_definitions_json()</code> now shows <code>"CreateToken": {"token_name": "token.clue"}</code> where it
-showed <code>"Clue"</code>. The field name was kept so the learning-token field hash stays the same; see questions.md.</li>
-<li>Deck admission (<code>check_decks</code>, <code>admit_decklists</code>, <code>Env.reset</code>) gives the same answers on
-both. "Spirit" and "Treasure" are rejected as tokens; "token.spirit" is rejected as unknown.</li>
-</ul>
+<h2>1. Random games over every authored pack (Python engine)</h2>
+<p>12 games each of <code>tla-baseline-v1</code>, <code>ur-lessons-vs-gw-allies</code>, <code>elemental-world-v2</code>,
+<code>elemental-temur-v1</code> and <code>elemental-sacrifice-v1</code>, random legal actions, both seats' observations read at every decision.</p>
+<pre>60/60 games finished; 436 distinct tokens seen (Ally, Clue, Human Soldier, Food, Treasure, Ran and Shaw)
+token outside battlefield/stack at a decision: 90 sightings, all Treasure in a graveyard</pre>
+<p>Each Treasure case is a <code>Modal</code> decision (choose the mana color) right after sacrificing it for mana; the next
+decision is a priority decision and the Treasure is gone. Mana abilities don't wait for priority and SBAs only run before
+priority (CR 704.3), so this is correct. The SBA logic is the same as before for tokens (the branch only adds the spell-copy arm).</p>
 
-<h2>2. Author adds a second "Spirit" token with no printing</h2>
-<p>In a throwaway worktree I added <code>token.spirit_flying</code>: a white 1/1 flying "Spirit" with
-<code>scryfall_id: None</code>. I listed it in <code>tokens()</code> and pointed Realm of Koh at it. Foggy Swamp Spirit
-Keeper still makes <code>token.spirit</code>.</p>
-<ul>
-<li>The cards crate in debug (<code>cargo nextest --profile ci</code>): 579/579 pass.</li>
-<li>I played 40 random games with Koh, Foggy Keeper and Ancestral Recall. Both Spirits exist side by side with distinct
-registry rows: <code>token.spirit</code> 1/1 with no keywords and <code>token.spirit_flying</code> 1/1 with flying.</li>
-<li>The online <code>check_scryfall.py</code> checked 351 definitions and skipped the unprinted token. It reported
-8 problems, all double-faced-card names (for example "Avatar Aang // …"). The base revision reports the same 8.</li>
-<li>A typo in the key (<code>"token.spirit_flyng"</code>) fails three debug tests with a clear error:
-<code>ContentError("\"token.spirit_flyng\" is not in the pack")</code>.</li>
-</ul>
-<p><b>Found and fixed:</b> with two tokens sharing a printed name, a deck listing "Spirit" was rejected as
-<code>ambiguous: card name identifies multiple definitions</code> instead of with the token reason. Both resolvers
-(<code>deck_admission::admit_in_world</code> and <code>decklist::admit_with_world</code>) now share
-<code>named_definition</code>. Rows that share a name and are all unsupported for one reason resolve to that reason.
-Names that match more than one eligible definition stay ambiguous. New test:
-<code>tokens_sharing_a_printed_name_are_unsupported_not_ambiguous</code>. After the fix the author build reports
-<code>Spirit: A token, created by its card; not a deck entry</code>.</p>
+<h2>2. Fire Lord Azula copies (new path: spell copies and permanent-spell copies)</h2>
+<p>Constructed decks via <code>PlayerConfig(..., world=WORLD_SETUP)</code>: 4 Fire Lord Azula, Lightning Bolt, Firebending Lesson,
+Combustion Technique, Fists of Flame, Spectral Sailor (flash), UBR lands. Scripted policy attacks, holds Sailors for combat, casts spells.</p>
+<pre>150/150 games finished
+copies seen on the stack: Combustion Technique 8, Firebending Lesson 9, Fists of Flame 13, Lightning Bolt 9
+Spectral Sailor tokens on the battlefield: 47 sightings  (permanent-spell copy became a token, CR 111.12)
+token or copy outside battlefield/stack at a decision: 0
+more non-token copies of a card than the deck holds: 0</pre>
 
 <h2>3. Academy table</h2>
-<p>I ran <code>./scripts/play --demo precision --port 8731 --frontend-port 5931</code> and pressed New Game. The checked
-prefix replays against the re-recorded fixture digests without divergence. Sacrificing Callous Inspector leaves a
-Clue, and a Treasure comes from Deadly Dispute. Both appear under "Artifact tokens · 2". Inspecting the Clue shows
-"{2}, Sacrifice this token: Draw a card." No console errors. I stopped the server with SIGINT.</p>
-<img src="qa-clue.png" width="860" alt="Academy battlefield with Clue and Treasure tokens, Clue inspected">
+<p><code>./scripts/play --port 18731 --frontend-port 18732</code>; <code>ACADEMY_PLAY_READY</code> named the rebuilt cp313 module.
+Headless Chromium: first visit, New Game, then clicked action-panel offers until the game ended (four games).</p>
+<img src="qa/01-first-visit.png" alt="first visit"><img src="qa/02-new-game.png" alt="new game">
+<p>Games ran to the "Game Over" dialog with no page or console errors. The GW opponent's Ally token renders on the battlefield
+(attacking 3/3) and graveyards hold only cards:</p>
+<img src="qa/06-faststall-3.png" alt="game over with Ally token">
+<img src="qa/04-end.png" alt="game over">
 
-<h2>Checks after the fix</h2>
-<ul>
-<li><code>cargo fmt --check</code> and <code>cargo clippy --workspace --all-targets</code>: clean.</li>
-<li><code>cargo nextest run --workspace --profile ci</code> (debug): 1057 passed.</li>
-<li>Rebuilt the extension. Admission-related pytest (training decks, academy decklist setup, player control,
-decklist disclosure, text observation, decklist import): 95 passed.</li>
-</ul>
+<h2>Fixed</h2>
+<p>Nothing in the product needed fixing. Added the engine-scenario route to <code>.lf/skills/qa.md</code>.</p>
 
-<h2>What works, what I couldn't reach, what's still wrong</h2>
+<h2>Result</h2>
 <ul>
-<li>Works: authoring, offline and online Scryfall checks, playing games, the Python wheel surface, deck admission
-and the Academy table.</li>
-<li>Not run: Engine Budget, which needs CI. The random games match base exactly, so no gameplay change is expected.</li>
-<li>Still wrong (known, out of scope): Academy curated-pack token art keys by printed name, so two tokens sharing a name
-would share art identity there. No such pair exists yet.</li>
-<li>Minor: <code>card_definitions_json</code> uses the field name <code>token_name</code> but now holds a key. This is kept on
-purpose to preserve learning tokens.</li>
+<li>Works: token creation, death and removal; Treasure/Clue/Food sacrifice; spell copies on the stack that vanish after
+resolving; permanent-spell copies entering as tokens; Academy play end to end.</li>
+<li>Not reached: a token copy of a permanent spell in Academy (no Academy matchup has Fire Lord Azula); returning a spell copy to
+hand by bounce (no defined card does it); emblems (none defined).</li>
+<li>Seen once, not reproduced: in the first Academy run, after rapid clicks (250 ms apart) the table showed
+"Waiting for the table — your action is being processed" with both choices disabled for about two minutes and no server
+error. Three later games, including two with the same fast clicking, did not repeat it. This change doesn't touch Academy
+code; it may be a frontend race with rapid commands.</li>
+<li>Still open for the gate (from the plan): syncing with main moves two new readers of the row's <code>is_token</code>
+(<code>TriggerCondition::PutIntoGraveyard</code> and <code>Card::become_copy_of</code>) onto the kind.</li>
 </ul>
+</body></html>

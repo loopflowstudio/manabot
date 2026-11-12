@@ -35,3 +35,10 @@ Compress: only import tidying (`ObjectKind` in retarget.rs, predicate.rs). Kept 
 over a `Card::is_token()` method: it would share a name with the deref'd row flag `CardDefinition.is_token`.
 No runtime `Card` reads that flag any more (grep: remaining reads are rows or observation `CardData`).
 `cargo build --tests` ok.
+
+Concept review (2026-11-12): no concept change. The model reads as the rules do: a definition (card or
+token row) says what a thing is, `ObjectKind` says what each game object is, zones say where. One
+authority per fact: `kind` for runtime questions, the row's `is_token` only for catalog rows and the
+frozen wire/hash bytes. Emblem and copy-of-a-card stay "none yet". Keeping the record named `Card` is
+a naming refactor, not a product choice; it stays as recorded in questions.md. The only outstanding
+work is the main sync above (two readers to move to `is_card()`/kind), already written as direction.
