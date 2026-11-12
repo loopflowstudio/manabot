@@ -318,7 +318,7 @@ def test_locked_play_closure_is_cpu_only_and_training_retains_cuda():
     training_export, training_names = _exported_requirements("training-runtime")
     assert any(
         line.startswith("torch==")
-        and "+cu128" in line
+        and "+cu132" in line
         and "sys_platform == 'linux'" in line
         for line in training_export.splitlines()
     )
@@ -596,7 +596,7 @@ def test_wrapper_no_frontend_does_not_require_node_or_npm(tmp_path):
             body = (
                 "#!/bin/sh\n"
                 'if [ "$1" = export ]; then\n'
-                "  echo \"torch==2.10.0+cpu ; sys_platform != 'darwin'\"\n"
+                "  echo \"torch==2.15.0+cpu ; sys_platform != 'darwin'\"\n"
                 "fi\n"
                 "exit 0\n"
             )
