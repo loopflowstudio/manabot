@@ -90,3 +90,6 @@ Layout lookups (done): `buckets.py` names every remapped reference and row join
 equals every layout reference column whose encoding names the object table.
 Extension rebuilt (release wheel, cp313 darwin `.so` replaced by rename).
 `pytest tests/model tests/test_package_boundaries.py` 307 passed, 4 skipped.
+
+Concept review at `e2df215fa`: no change. The hand-listed reference names stay
+(they carry one- vs zero-based meaning); the layout test catches any omission.
