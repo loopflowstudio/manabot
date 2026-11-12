@@ -126,7 +126,12 @@ revision to run it from
 ([`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is the
 last revision supporting v1–v8). Load saved configurations through
 `ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
-reshape its weights to get past the error. Loading an architecture does not
+reshape its weights to get past the error.
+
+A layout change on main does not bump the version. Every checkpoint records the
+revision and Etude run that wrote it, and its world binding holds each buffer's
+shape. A checkpoint from an earlier layout is refused with the buffers that
+differ and the revision to run it from. Loading an architecture does not
 admit a checkpoint to the current world; see
 [world identity](../manabot/README.md#world-identity).
 

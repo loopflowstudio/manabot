@@ -7,6 +7,10 @@ it. A setup binding (`checkpoint_world`) names the exact setups of a match on
 the world's one catalog; a match within the Elemental roster binds the
 complete roster, and a binding of more than two setups admits any pair of
 them. Neither form records how a model trained.
+
+A refused checkpoint is run from the revision that wrote it: the checkpoint
+records that revision (`checkpoint_source`), and a mismatch names it with the
+fields and input buffers that differ.
 """
 
 from __future__ import annotations
@@ -14,11 +18,14 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 import hashlib
 import json
+import os
+import subprocess
 from typing import Any
 
 from managym.decision import SEMANTIC_DECISION_VERSION
 from managym.possible_worlds import POSSIBLE_WORLD_SPACE_VERSION
 
+from manabot.infra.source import source_commit, source_dirty
 from manabot.semantic.learning import DEFAULT_SCHEMA_PATH, BoundSemanticPack
 import managym
 
@@ -241,8 +248,59 @@ def validate_checkpoint_world(
         expected = expected_world(binding, observation_space, player_configs)
     except (KeyError, TypeError, ValueError, managym.AgentError) as error:
         raise ValueError("checkpoint world binding has invalid setup") from error
-    if _digest(current_binding_form(binding)) != _digest(expected):
+    current = current_binding_form(binding)
+    if _digest(current) != _digest(expected):
         raise ValueError(
-            "checkpoint world/setup/input binding differs from this runtime"
+            "checkpoint world/setup/input binding differs from this runtime in "
+            f"{binding_difference(current, expected)}; {written_at(checkpoint)}"
         )
     return binding
+
+
+def checkpoint_source() -> dict[str, str | bool | None]:
+    """The revision and Etude run writing a checkpoint, for a later mismatch to name."""
+    try:
+        commit: str | None = source_commit()
+        dirty: bool | None = source_dirty()
+    except (OSError, subprocess.SubprocessError, ValueError):
+        commit, dirty = None, None
+    return {"commit": commit, "dirty": dirty, "etude_run": os.environ.get("ETUDE_RUN")}
+
+
+def written_at(checkpoint: Mapping[str, Any]) -> str:
+    """Where to run a checkpoint this runtime refuses."""
+    source = checkpoint.get("source")
+    commit = source.get("commit") if isinstance(source, Mapping) else None
+    if not commit:
+        return "it records no source revision"
+    run = f", Etude run {source['etude_run']}" if source.get("etude_run") else ""
+    dirty = " with uncommitted changes" if source.get("dirty") else ""
+    return f"it was written at revision {commit}{dirty}{run}; run it from there"
+
+
+def binding_difference(binding: Mapping[str, Any], expected: Mapping[str, Any]) -> str:
+    """Name the binding fields, and the input buffers, that differ."""
+    names: list[str] = []
+    for key in sorted(set(binding) | set(expected)):
+        if binding.get(key) == expected.get(key):
+            continue
+        saved, now = binding.get(key), expected.get(key)
+        if (
+            key == "input_schema"
+            and isinstance(saved, Mapping)
+            and isinstance(now, Mapping)
+        ):
+            for name in sorted(set(saved) | set(now)):
+                if saved.get(name) != now.get(name):
+                    names.append(
+                        f"{name} {_shape(saved.get(name))} -> {_shape(now.get(name))}"
+                    )
+        else:
+            names.append(key)
+    return ", ".join(names)
+
+
+def _shape(entry: Any) -> str:
+    if not isinstance(entry, Mapping):
+        return "absent"
+    return "x".join(str(size) for size in entry.get("shape", []))

@@ -143,9 +143,10 @@ create that Task, start its campaign or complete it on the card author's behalf.
 
 ## Experiments
 
-`experiment` has four steps: design → run → report → review. Only the review is
-interactive, and it returns to the run for a specific missing portion of the
-same question.
+`experiment` is design → run → report. The design sets the tier. An
+exploratory experiment ends at its report. A finding adds one interactive
+review, which returns to the run for a specific missing portion of the same
+question.
 
 Most runs are **exploratory**: calibration, throughput, capacity, pilots and
 anything run to make later work possible. They need a module and a line saying
@@ -167,8 +168,8 @@ Three rules replace protocol files:
 An experiment whose whole cost is at or under USD25 launches under the
 launcher's own cap (`--max-usd`). Above that, a person approves the amount
 before anything is rented. Software the experiment needs beyond its module is
-delivered as an ordinary PR from the same checkout before the run; the Task
-stays open until the review accepts the report. Existing checkpoints go straight
+delivered as an ordinary PR from the same checkout before the run; a finding's
+Task stays open until the review accepts the report. Existing checkpoints go straight
 to evaluation without placeholder training.
 
 An experiment is its Python module at a commit. It has no protocol document,

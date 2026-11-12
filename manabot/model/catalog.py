@@ -32,7 +32,12 @@ from manabot.infra.config import (
     ObservationConfig,
     UnsupportedPolicyInput,
 )
-from manabot.model.world import WORLD, current_binding_form, expected_world
+from manabot.model.world import (
+    WORLD,
+    current_binding_form,
+    expected_world,
+    written_at,
+)
 import managym
 
 CheckpointSource = Literal["path", "runs", "tournament"]
@@ -174,7 +179,8 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
         return "its deck setup or observation settings no longer build in this engine"
     for key, explanation in _BINDING_FIELDS:
         if binding.get(key) != expected.get(key):
-            return explanation(binding.get(key), expected.get(key))
+            difference = explanation(binding.get(key), expected.get(key))
+            return f"{difference}; {written_at(checkpoint)}"
     return None
 
 

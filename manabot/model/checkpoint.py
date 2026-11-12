@@ -31,6 +31,7 @@ from manabot.model.architecture import (
     validate_architecture_receipt,
 )
 from manabot.model.world import (
+    checkpoint_source,
     checkpoint_world,
     deck_world,
     validate_checkpoint_world,
@@ -188,6 +189,7 @@ def save_checkpoint(
             if player_configs is None
             else checkpoint_world(player_configs, obs_space)
         ),
+        "source": checkpoint_source(),
         "architecture": architecture_receipt(agent).model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,

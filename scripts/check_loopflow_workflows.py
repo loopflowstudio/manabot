@@ -121,17 +121,18 @@ def _coverage(coverage: list[Step]) -> None:
 
 
 def _experiment(experiment: list[Step]) -> None:
-    """Design, run, report, then one interactive review that returns to the run."""
-    steps = _flatten(experiment)
-    assert [step.label for step in steps] == [
-        "experiment-design",
-        "experiment-run",
-        "experiment-report",
-        "experiment-review",
-    ]
-    assert [step.label for step in steps if step.interactive] == ["experiment-review"]
-    review = _one(steps, "experiment-review")
-    assert review.returns_to == _one(steps, "experiment-run").key
+    """Design, then run and report; only a finding ends in a person's review."""
+    assert experiment[0].label == "experiment-design"
+    router = _one(experiment, "experiment-tier")
+    routes = {path.name: [step.label for step in path.steps] for path in router.paths}
+    assert routes == {
+        "exploratory": ["experiment-run", "experiment-report"],
+        "finding": ["experiment-run", "experiment-report", "experiment-review"],
+    }
+    finding = next(path.steps for path in router.paths if path.name == "finding")
+    interactive = [step for step in _flatten(experiment) if step.interactive]
+    assert interactive == [finding[-1]]
+    assert finding[-1].returns_to == finding[0].key
 
 
 def _performance(steps: list[Step], measure: str, review: str) -> None:

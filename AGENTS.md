@@ -76,7 +76,7 @@ checkpoints or experiment evidence.
 
 - Most runs are exploratory: calibration, throughput, capacity, pilots and
   anything run to make later work possible. They need no prediction, protocol
-  or review before launch. A finding, a result that will be cited as a claim
+  or review; the report ends them. A finding, a result that will be cited as a claim
   about a method or about playing strength, opens its report with one
   paragraph committed before any scored run: question, numeric prediction, the
   result that would refute it and a cost cap. When unsure, it is exploratory.
@@ -138,6 +138,11 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- A checkpoint records the revision and Etude run that wrote it
+  (`checkpoint_source`). The world binding compares every input buffer's shape,
+  so a layout change refuses older checkpoints, naming that revision and the
+  buffers that differ. Do not bump the input version for a layout change or add
+  a loading path for an older layout.
 - Main carries one policy input, v9 (`ObservationConfig.policy_input_version`);
   it is always serialized. A checkpoint, replay or saved configuration bound to
   any other version, or omitting it, raises `UnsupportedPolicyInput`, which
