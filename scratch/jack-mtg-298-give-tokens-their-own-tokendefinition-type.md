@@ -37,8 +37,8 @@ two tokens sharing a name would share one identity there. No such pair exists ye
 Checks (latest): debug `cargo nextest run --workspace --profile ci` 1170 passed; clippy clean;
 belief/academy parity/semantic/env pytest 402 passed; world-change list 65 passed.
 
-Remaining: CI on fbfca586b (all checks pass except `preflight` pending at 2026-11-12 realign);
-main has no newer commits. Then review; Engine Budget runs in CI (no gameplay change expected).
+Remaining: CI on 712823d10 (PR head; running at 2026-11-12 realign, no failures yet; main has
+no newer commits). Then review; Engine Budget runs in CI (no gameplay change expected).
 
 ## Concept review (2026-11-12)
 
