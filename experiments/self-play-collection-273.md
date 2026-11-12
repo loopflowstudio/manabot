@@ -85,3 +85,13 @@ Any follow-up should profile an already-running trainer or use separately
 authorized bounded execution, compare equal completed work, and retain host,
 source, game-length and error/recovery differences. Do not restart or mutate the
 frozen frontier runs to turn this software proof into experimental evidence.
+
+2026-11-12: training now logs each update's rows with Etude 0.2.16's
+`Run.log_table("self_play_outcomes", ...)` (stored as `artifacts/<digest>.json`)
+and reads them through `RunData.read_table`; manabot's table writer and reader
+are deleted. Runs carrying `self_play_outcomes/table` references are refused,
+naming `bf4e280f7`. Etude 0.2.16 also replaced `write_manifest` with
+`manifest.Index`, whose recent refresh no longer redescribes permanent blocks:
+the diagnostic's refresh peak is now 35,666 bytes (scalar) and 6,408 bytes
+(table) at 1, 4 and 8 blocks, while the permanent manifest still grows to
+389,180 versus 5,709 bytes at eight blocks.

@@ -631,10 +631,7 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
 /// sources, and nothing else.
 #[test]
 fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
-    let ally = ManaUse {
-        spells: ManaUse::spell(["Ally"]).spells,
-        abilities: ManaUse::ability(["Ally"]).abilities,
-    };
+    let ally = ManaUse::new(["Ally"], ["Ally"]);
     let mut s = five_color_setup(&[
         "Jasmine Dragon Tea Shop",
         "Rebellious Captives",

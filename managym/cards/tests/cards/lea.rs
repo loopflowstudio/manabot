@@ -2,11 +2,14 @@
 
 use crate::support::{
     game::{deck, deck_of, five_color_setup, ready, Scenario},
-    inspect::permanent_named,
-    play::{activate_named, enter_and_settle},
+    inspect::{library_card, permanent_named},
+    play::{activate_named, cast, cast_card, choose, enter_and_settle, resolve_top, settle},
 };
 use managym::{
-    agent::action::{Action, ActionType},
+    agent::{
+        action::{Action, ActionSpaceKind, ActionType},
+        observation::Observation,
+    },
     flow::turn::StepKind,
     state::{
         game_object::{PlayerId, Target},
@@ -172,4 +175,97 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
             );
         }
     }
+}
+
+#[test]
+fn sol_ring_taps_for_two_colorless() {
+    let mut s = crate::support::game::five_color_unfunded_setup(&["Sol Ring", "Prophetic Prism"]);
+    let ring = s.force_permanent_on_battlefield(0, "Sol Ring");
+    let prism = crate::support::game::move_to_hand(&mut s, "Prophetic Prism");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(crate::support::inspect::can_cast(&s, prism));
+    crate::support::play::cast_card(&mut s, prism);
+    crate::support::play::settle(&mut s);
+    assert!(crate::support::inspect::tapped(&s, ring));
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Prophetic Prism").len(),
+        1
+    );
+}
+
+/// Clone offers every creature on the battlefield, enters as the chosen one
+/// (a card, not a token, still its caster's), and is Clone again once it
+/// leaves the battlefield.
+#[test]
+fn clone_enters_as_a_copy_and_leaves_as_clone() {
+    let mut s = five_color_setup(&["Clone", "Gray Ogre", "Wolf Cove Villager"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let villager = s.force_permanent_on_battlefield(0, "Wolf Cove Villager");
+    let clone = cast(&mut s, "Clone");
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let offered: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseTarget {
+                target: Target::Permanent(id),
+                ..
+            } => Some(*id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered.len(), 2);
+    assert!(offered.contains(&ogre) && offered.contains(&villager));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+
+    let copy = s.game().state.card_to_permanent[clone].expect("entered");
+    let card = &s.game().state.cards[clone];
+    assert_eq!(card.name, "Gray Ogre");
+    assert!(card.is_card());
+    assert_eq!(s.game().characteristics(copy).pt(), (2, 2));
+    assert_eq!(
+        s.game().state.permanents[copy].as_ref().unwrap().controller,
+        PlayerId(0)
+    );
+    let observation = Observation::for_player(s.game(), PlayerId(1));
+    let seen = observation
+        .opponent_permanents
+        .iter()
+        .find_map(|permanent| permanent.copy.as_ref())
+        .expect("the copy effect is observed");
+    assert_eq!(seen.name, "Gray Ogre");
+
+    s.game_mut().move_card(clone, ZoneType::Graveyard);
+    assert_eq!(s.game().state.cards[clone].name, "Clone");
+    assert!(s.game().state.cards[clone].copy.is_none());
+}
+
+/// The copied creature's own entry replacement applies (CR 614.12): a copy
+/// of Wolf Cove Villager enters tapped. Declining leaves a 0/0 Clone, which
+/// dies.
+#[test]
+fn clone_takes_the_copied_entry_replacements_or_dies_as_itself() {
+    let mut s = five_color_setup(&["Clone", "Wolf Cove Villager"]);
+    let villager = s.force_permanent_on_battlefield(1, "Wolf Cove Villager");
+    let clone = cast(&mut s, "Clone");
+    resolve_top(&mut s);
+    assert!(s.choose_target(Target::Permanent(villager)));
+    settle(&mut s);
+    let copy = s.game().state.card_to_permanent[clone].expect("entered");
+    assert!(s.game().state.permanents[copy].as_ref().unwrap().tapped);
+
+    let second = library_card(&s, 0, "Clone");
+    s.game_mut().move_card(second, ZoneType::Hand);
+    cast_card(&mut s, second);
+    resolve_top(&mut s);
+    choose(&mut s, |action| matches!(action, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(second),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.cards[second].name, "Clone");
 }

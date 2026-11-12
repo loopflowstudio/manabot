@@ -3,6 +3,7 @@
 // blocking restrictions, and zone counting (no scattered string compares).
 
 use super::card::{Card, CardType, Keyword, ObjectKind};
+use super::mana::Color;
 
 /// A structural predicate over cards. Every populated field must match.
 /// Deserialization reads a definition's serialized predicate back, so
@@ -36,8 +37,17 @@ pub struct CardPredicate {
     /// "tapped": only permanents are tapped.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tapped: bool,
+    /// "card in a graveyard that was put there from the battlefield this
+    /// turn" (Brought Back): game history, so card-only matching refuses it
+    /// and `Game::card_matches_predicate` answers it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub from_battlefield_this_turn: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
+    /// Has at least one of these colors ("white or blue"), as its
+    /// characteristics are now (layer 5).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors_any: Vec<Color>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -124,6 +134,7 @@ impl CardPredicate {
             || self.with_counter
             || self.attacking
             || self.tapped
+            || self.from_battlefield_this_turn
             || (self.flying && !card.keywords.has(Keyword::Flying))
         {
             return false;
@@ -136,6 +147,12 @@ impl CardPredicate {
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
             return false;
+        }
+        if !self.colors_any.is_empty() {
+            let colors = card.colors();
+            if !self.colors_any.iter().any(|color| colors.contains(color)) {
+                return false;
+            }
         }
         if !self.any_of.is_empty()
             && !self

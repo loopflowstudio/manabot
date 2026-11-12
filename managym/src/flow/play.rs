@@ -17,9 +17,10 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
         proposed_event::ProposedEvent,
+        turn::{PhaseKind, StepKind},
     },
     state::{
-        ability::TargetRequirement,
+        ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
@@ -32,6 +33,16 @@ use crate::{
 /// is monotone in X, so the scan stops at the first unpayable value.
 fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
     (least..=u8::MAX).take_while(|&x| can_pay(x)).collect()
+}
+
+/// The fields of `PendingChoice::ActivatedTarget`: `player` activates and
+/// `requirement` is the clause being chosen.
+struct ActivatedTargeting {
+    player: PlayerId,
+    source: ActivationSource,
+    ability_index: usize,
+    chosen: Vec<Target>,
+    requirement: usize,
 }
 
 #[derive(Default)]
@@ -56,8 +67,27 @@ impl Game {
     }
 
     pub fn can_play_land(&self, player: PlayerId) -> bool {
-        // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to one per turn.
-        self.can_cast_sorceries(player) && self.state.turn.lands_played < 1
+        // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to
+        // one per turn, plus each additional land play granted.
+        self.can_cast_sorceries(player)
+            && self.state.turn.lands_played < 1 + self.additional_land_plays()
+    }
+
+    /// Additional land plays every player has on their turns (CR 305.2).
+    fn additional_land_plays(&self) -> u32 {
+        let permanents = [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.iter_battlefield_permanents(player));
+        self.layer_views(permanents)
+            .map(|(_, view)| {
+                view.static_abilities
+                    .iter()
+                    .filter(|ability| {
+                        matches!(ability, StaticAbility::AdditionalLandPlayEachPlayer)
+                    })
+                    .count() as u32
+            })
+            .sum()
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {
@@ -95,6 +125,15 @@ impl Game {
             .any(|(_, view)| view.static_abilities.iter().any(&has))
     }
 
+    /// Whether `player` may cast spells only from their hand: an "until your
+    /// next turn" restriction, or an opponent's permanent that says so.
+    pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
+        self.hand_only_until(player).is_some()
+            || self.active_permanent_has(PlayerId(1 - player.0), |ability| {
+                *ability == StaticAbility::OpponentsCastOnlyFromHand
+            })
+    }
+
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
         self.active_permanent_has(player, |ability| {
@@ -120,7 +159,7 @@ impl Game {
     /// library while a permanent permits it. A hand-only restriction overrides
     /// all three.
     pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
-        if self.hand_only_until(player).is_some() {
+        if self.casts_only_from_hand(player) {
             return None;
         }
         match self.state.zones.zone_of(card)? {
@@ -142,7 +181,7 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Option<ManaCost> {
-        if cast.free {
+        if cast.free || self.uses_exile_alternative(card, cast) {
             Some(ManaCost::default())
         } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             self.state.cards[card].mana_cost.clone()
@@ -165,9 +204,17 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
         let mut cost = self.casting_mana_cost(player, card, cast)?.with_x(cast.x);
-        cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
+        cost.purpose = ManaUse::cast(
+            card_ref.subtypes.iter().map(String::as_str),
+            card_ref.types.is_artifact(),
+        );
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
+        }
+        if let Some(replicate) = card_ref.replicate() {
+            for _ in 0..cast.x {
+                cost = cost.plus(replicate);
+            }
         }
         if cast.kicked {
             if let Some(kicker) = card_ref.optional_cost() {
@@ -179,8 +226,23 @@ impl Game {
                 StaticAbility::CostsLessPerPermanent(predicate) => {
                     self.count_battlefield_matching(player, predicate)
                 }
+                StaticAbility::CostsLessPerPermanentOnBattlefield(predicate) => {
+                    [PlayerId(0), PlayerId(1)]
+                        .into_iter()
+                        .map(|controller| self.count_battlefield_matching(controller, predicate))
+                        .sum()
+                }
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
+                }
+                StaticAbility::CostsLessByGreatestPower(predicate) => {
+                    self.controller_value(
+                        &EffectValue::GreatestPowerYouControl {
+                            predicate: predicate.clone(),
+                        },
+                        player,
+                    )
+                    .max(0) as usize
                 }
                 _ => continue,
             };
@@ -317,7 +379,7 @@ impl Game {
         self.begin_cast(player, card, cast)
     }
 
-    /// CR 601.2b — announce X, then any optional additional cost, before
+    /// CR 601.2b — announce X (or a replicate count), then any optional additional cost, before
     /// modes and targets. Replacing a printed X cost with a free cast or a
     /// fixed alternative fixes X to zero (CR 107.3b).
     fn begin_cast(
@@ -334,7 +396,9 @@ impl Game {
         // CR 107.3a/b: additional X costs still apply to free casts when the
         // printed mana cost has no X. A replaced printed X, however, is zero.
         let additional_x = card_ref.required_waterbend().is_some_and(|cost| cost.x > 0);
-        if selected_x || (!printed_x && additional_x) {
+        // CR 702.56a: the replicate count is announced with the other costs.
+        let replicate = card_ref.replicate().is_some();
+        if selected_x || (!printed_x && additional_x) || replicate {
             self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
             return Ok(());
         }
@@ -355,13 +419,18 @@ impl Game {
         cast: CastChoices,
         targets: Option<&[Target]>,
     ) -> bool {
+        if self.uses_exile_alternative(card, cast)
+            && self.exile_alternative_cards(player, card).is_empty()
+        {
+            return false;
+        }
         let Some(cost) = self.effective_spell_cost(player, card, cast, targets) else {
             return false;
         };
         if !cast.kicked
             && self.state.cards[card]
                 .life_alternative()
-                .is_some_and(|life| self.state.players[player.0].life < life as i32)
+                .is_some_and(|life| self.payable_life(player) < life as i32)
         {
             return false;
         }
@@ -431,6 +500,20 @@ impl Game {
             kicked: true,
             ..cast
         };
+        // A spell cast without paying its mana cost can't also take an
+        // alternative cost (CR 118.9a).
+        if !cast.free
+            && self.state.cards[card].exile_alternative().is_some()
+            && self.can_pay_cast(player, card, kicked)
+        {
+            // The mana cost or the alternative: asked only when both are
+            // payable.
+            if !self.can_pay_cast(player, card, cast) {
+                return self.begin_mode_selection(player, card, kicked);
+            }
+            self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
+            return Ok(());
+        }
         if self.state.cards[card].optional_cost().is_some()
             && self.can_pay_cast(player, card, kicked)
         {
@@ -834,17 +917,79 @@ impl Game {
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
         let cost = self.state.cards[card].sacrifice_cost().cloned();
-        self.begin_payment(
-            player,
-            Payment::Spell {
-                card,
-                cast,
-                mode,
-                targets,
-                target_req_indices,
-            },
-            cost,
-        )
+        let payment = Payment::Spell {
+            card,
+            cast,
+            mode,
+            targets,
+            target_req_indices,
+        };
+        if self.uses_exile_alternative(card, cast) {
+            self.pending_choice = Some(PendingChoice::ExileFromHandPayment {
+                player,
+                payment: Box::new(payment),
+            });
+            return Ok(());
+        }
+        self.begin_payment(player, payment, cost)
+    }
+
+    /// Whether `cast` takes `card`'s exile-from-hand alternative cost: such a
+    /// card's kicked flag means the alternative, which costs no mana.
+    fn uses_exile_alternative(&self, card: CardId, cast: CastChoices) -> bool {
+        cast.kicked && self.state.cards[card].exile_alternative().is_some()
+    }
+
+    /// The cards `player` may exile for `card`'s exile-from-hand alternative
+    /// cost: other matching cards in hand while `card` is cast from hand,
+    /// paying its costs, and, if the cost says so, outside `player`'s turn.
+    pub(crate) fn exile_alternative_cards(&self, player: PlayerId, card: CardId) -> Vec<CardId> {
+        let Some((predicate, not_your_turn)) = self.state.cards[card].exile_alternative() else {
+            return Vec::new();
+        };
+        if (not_your_turn && self.active_player() == player)
+            || !self.state.zones.contains(card, ZoneType::Hand, player)
+        {
+            return Vec::new();
+        }
+        self.state
+            .zones
+            .zone_cards(ZoneType::Hand, player)
+            .iter()
+            .copied()
+            .filter(|other| *other != card && self.card_matches_predicate(*other, predicate))
+            .collect()
+    }
+
+    /// Exile `exiled` for the pending alternative cost, then pay the rest of
+    /// the spell's cost.
+    pub(crate) fn exile_payment_action(
+        &mut self,
+        player: PlayerId,
+        exiled: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::ExileFromHandPayment {
+            player: payer,
+            payment,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no exile payment pending".into()));
+        };
+        let Payment::Spell { card, .. } = payment.as_ref() else {
+            unreachable!("an exile alternative pays for a spell");
+        };
+        if payer != player
+            || !self
+                .exile_alternative_cards(player, *card)
+                .contains(&exiled)
+        {
+            return Err(AgentError(
+                "not a card this alternative cost can exile".into(),
+            ));
+        }
+        self.move_card(exiled, ZoneType::Exile);
+        let cost = self.state.cards[*card].sacrifice_cost().cloned();
+        self.begin_payment(player, *payment, cost)
     }
 
     pub(crate) fn cast_spell(
@@ -859,6 +1004,9 @@ impl Game {
             self.change_life(player, -(life as i32));
         }
         self.state.turn.spells_cast[player.0].push(card);
+        if self.state.cards[card].types.is_creature() {
+            self.end_next_creature_cast_flash(player);
+        }
         // CR 601.2i — A cast spell is put onto the stack.
         self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, cast);
         self.emit(GameEvent::SpellCast {
@@ -927,6 +1075,11 @@ impl Game {
         if ability.zone != ActivationZone::Battlefield {
             return Err(AgentError(
                 "ability does not function on the battlefield".into(),
+            ));
+        }
+        if self.activations_prohibited(permanent_id) {
+            return Err(AgentError(
+                "its activated abilities can't be activated".into(),
             ));
         }
         if ability.mana_choices().is_some() {
@@ -1057,13 +1210,28 @@ impl Game {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
-        if self.state.players[player.0].life < ability.life_cost as i32 {
+        if self.payable_life(player) < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {
             return Err(AgentError("activation requires sorcery timing".into()));
         }
+        if ability.before_attackers && !self.before_attackers_declared() {
+            return Err(AgentError(
+                "activation requires a time before attackers".into(),
+            ));
+        }
         Ok(())
+    }
+
+    /// Whether this turn's attackers are not yet declared: the beginning
+    /// phase, the first main phase or the beginning of combat.
+    fn before_attackers_declared(&self) -> bool {
+        match self.state.turn.current_phase_kind() {
+            PhaseKind::Beginning | PhaseKind::PrecombatMain => true,
+            PhaseKind::Combat => self.state.turn.current_step_kind() == StepKind::BeginningOfCombat,
+            _ => false,
+        }
     }
 
     /// The ability at `ability_index` of `card` when the card is in the
@@ -1128,11 +1296,12 @@ impl Game {
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) -> Result<(), AgentError> {
-        if ability.requires_target()
-            && self
-                .activated_ability_targets(player, source, ability_index, &[])
-                .is_empty()
-        {
+        let requirements = ability.target_requirements();
+        debug_assert!(
+            requirements.len() < 2 || requirements.iter().all(|r| r.min == r.max),
+            "several activation clauses each name a fixed number of targets"
+        );
+        if !self.activation_targets_available(player, source, ability_index) {
             return Err(AgentError("no legal ability targets".into()));
         }
         self.pending_choice = Some(PendingChoice::ActivatedTarget {
@@ -1140,35 +1309,101 @@ impl Game {
             source,
             ability_index,
             chosen: Vec::new(),
+            requirement: 0,
         });
         Ok(())
     }
 
-    /// The targeting clause of the activation in progress.
-    fn activation_target_requirement(
+    /// Whether every required targeting clause has a legal candidate.
+    pub(crate) fn activation_targets_available(
+        &self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+    ) -> bool {
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return false;
+        };
+        ability
+            .target_requirements()
+            .iter()
+            .enumerate()
+            .all(|(index, requirement)| {
+                requirement.min == 0
+                    || !self
+                        .activated_ability_targets(player, source, ability_index, index, &[])
+                        .is_empty()
+            })
+    }
+
+    /// Targeting clause `requirement` of the activation in progress.
+    pub(crate) fn activation_target_requirement(
         &self,
         source: ActivationSource,
         ability_index: usize,
+        requirement: usize,
     ) -> Option<TargetRequirement> {
         self.activation_ability(source, ability_index)?
-            .target_requirement()
+            .target_requirements()
+            .get(requirement)
+            .cloned()
     }
 
-    /// Targets the activation can choose next, given those already `chosen`.
-    /// Under "that share a creature type", a target is offered only with
-    /// the chosen ones and, while the minimum is unmet, a remaining partner.
+    /// Who chooses clause `requirement` of `player`'s activation: they do,
+    /// or their opponent for "of an opponent's choice".
+    pub(crate) fn activation_target_chooser(
+        &self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        requirement: usize,
+    ) -> PlayerId {
+        match self.activation_target_requirement(source, ability_index, requirement) {
+            Some(clause) if clause.opponent_chooses => PlayerId(1 - player.0),
+            _ => player,
+        }
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    pub(crate) fn activation_clause_chosen(
+        &self,
+        source: ActivationSource,
+        ability_index: usize,
+        requirement: usize,
+        chosen: &[Target],
+    ) -> Vec<Target> {
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return Vec::new();
+        };
+        let indices = ability.target_clause_indices(chosen.len());
+        chosen
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| indices.get(*slot).copied().unwrap_or(0) == requirement)
+            .map(|(_, target)| *target)
+            .collect()
+    }
+
+    /// Targets clause `requirement` of `player`'s activation can choose
+    /// next, given those already `chosen` (all clauses). Legality is from
+    /// `player`'s side whoever chooses. Under "that share a creature type",
+    /// a target is offered only with the chosen ones and, while the minimum
+    /// is unmet, a remaining partner.
     pub(crate) fn activated_ability_targets(
         &self,
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
+        requirement: usize,
         chosen: &[Target],
     ) -> Vec<Target> {
-        let Some(requirement) = self.activation_target_requirement(source, ability_index) else {
+        let Some(clause) = self.activation_target_requirement(source, ability_index, requirement)
+        else {
             return Vec::new();
         };
+        let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&requirement.spec, player)
+            .legal_targets_for_spec(&clause.spec, player)
             .into_iter()
             .filter(|target| {
                 let is_source = match source {
@@ -1180,10 +1415,10 @@ impl Game {
                 !is_source && !chosen.contains(target)
             })
             .collect();
-        if !requirement.shares_creature_type {
+        if !clause.shares_creature_type {
             return candidates;
         }
-        let needs_partner = chosen.len() + 1 < requirement.min;
+        let needs_partner = chosen.len() + 1 < clause.min;
         candidates
             .iter()
             .copied()
@@ -1217,65 +1452,129 @@ impl Game {
         common.is_some_and(|common| !common.is_empty())
     }
 
-    /// Finish choosing activation targets once the clause's minimum is met.
-    pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
+    /// The pending activation targeting.
+    fn pending_activated_target(&self) -> Result<ActivatedTargeting, AgentError> {
         let Some(PendingChoice::ActivatedTarget {
-            player: chooser,
+            player,
             source,
             ability_index,
             chosen,
+            requirement,
         }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let requirement = self
-            .activation_target_requirement(source, ability_index)
+        Ok(ActivatedTargeting {
+            player,
+            source,
+            ability_index,
+            chosen,
+            requirement,
+        })
+    }
+
+    /// Finish choosing the current clause's targets once its minimum is met.
+    pub(crate) fn decline_activated_target(&mut self, actor: PlayerId) -> Result<(), AgentError> {
+        let ActivatedTargeting {
+            player,
+            source,
+            ability_index,
+            chosen,
+            requirement,
+        } = self.pending_activated_target()?;
+        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
+        let clause = self
+            .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        if chooser != player || chosen.len() < requirement.min {
+        let count = self
+            .activation_clause_chosen(source, ability_index, requirement, &chosen)
+            .len();
+        if chooser != actor || count < clause.min {
             return Err(AgentError("target required".into()));
         }
-        self.begin_activation_payment(player, source, ability_index, chosen, 0)
+        self.next_activation_clause(player, source, ability_index, requirement + 1, chosen)
     }
 
     pub(crate) fn choose_activated_target(
         &mut self,
-        player: PlayerId,
+        actor: PlayerId,
         target: Target,
     ) -> Result<(), AgentError> {
-        let Some(PendingChoice::ActivatedTarget {
-            player: chooser,
+        let ActivatedTargeting {
+            player,
             source,
             ability_index,
             mut chosen,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no activated target pending".into()));
-        };
-        if player != chooser
+            requirement,
+        } = self.pending_activated_target()?;
+        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
+        if actor != chooser
             || !self
-                .activated_ability_targets(player, source, ability_index, &chosen)
+                .activated_ability_targets(player, source, ability_index, requirement, &chosen)
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        let requirement = self
-            .activation_target_requirement(source, ability_index)
+        let clause = self
+            .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
         chosen.push(target);
-        if chosen.len() >= requirement.max
+        let count = self
+            .activation_clause_chosen(source, ability_index, requirement, &chosen)
+            .len();
+        if count >= clause.max
             || self
-                .activated_ability_targets(player, source, ability_index, &chosen)
+                .activated_ability_targets(player, source, ability_index, requirement, &chosen)
                 .is_empty()
         {
-            return self.begin_activation_payment(player, source, ability_index, chosen, 0);
+            return self.next_activation_clause(
+                player,
+                source,
+                ability_index,
+                requirement + 1,
+                chosen,
+            );
         }
         self.pending_choice = Some(PendingChoice::ActivatedTarget {
             player,
             source,
             ability_index,
             chosen,
+            requirement,
         });
         Ok(())
+    }
+
+    /// Move on to clause `requirement`, skipping optional clauses without a
+    /// candidate, or to payment once every clause is chosen.
+    fn next_activation_clause(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        mut requirement: usize,
+        chosen: Vec<Target>,
+    ) -> Result<(), AgentError> {
+        while let Some(clause) =
+            self.activation_target_requirement(source, ability_index, requirement)
+        {
+            if clause.min > 0
+                || !self
+                    .activated_ability_targets(player, source, ability_index, requirement, &chosen)
+                    .is_empty()
+            {
+                self.pending_choice = Some(PendingChoice::ActivatedTarget {
+                    player,
+                    source,
+                    ability_index,
+                    chosen,
+                    requirement,
+                });
+                return Ok(());
+            }
+            requirement += 1;
+        }
+        self.begin_activation_payment(player, source, ability_index, chosen, 0)
     }
 
     pub(crate) fn payment_candidates(
@@ -1304,12 +1603,13 @@ impl Game {
         let ability = self
             .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing source".into()))?;
-        if ability.tap_cost.is_some() {
+        if let Some(cost) = &ability.tap_cost {
             self.pending_choice = Some(PendingChoice::TapPayment {
                 player,
                 source,
                 ability_index,
                 targets,
+                remaining: cost.count,
             });
             return Ok(());
         }
@@ -1323,7 +1623,7 @@ impl Game {
         player: PlayerId,
         ability: &ActivatedAbilityDefinition,
     ) -> Vec<PermanentId> {
-        let Some(predicate) = &ability.tap_cost else {
+        let Some(cost) = &ability.tap_cost else {
             return Vec::new();
         };
         self.battlefield_permanents(player)
@@ -1332,7 +1632,7 @@ impl Game {
                 self.state.permanents[*id]
                     .as_ref()
                     .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_matches_predicate(*id, predicate)
+                    && self.permanent_matches_predicate(*id, &cost.predicate)
             })
             .collect()
     }
@@ -1348,6 +1648,7 @@ impl Game {
             source,
             ability_index,
             targets,
+            remaining,
         }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no tap payment pending".into()));
@@ -1362,8 +1663,29 @@ impl Game {
                 "tap cost must be an untapped permanent you control".into(),
             ));
         };
+        let payment = Payment::Activation {
+            source,
+            ability_index,
+            targets: targets.clone(),
+            x: 0,
+        };
+        if !self.tap_activation_payment_possible(player, &payment, remaining, Some(tapped)) {
+            return Err(AgentError(
+                "tap cost selection cannot complete the activation".into(),
+            ));
+        }
         self.pending_choice = None;
         self.tap_permanent(tapped, false);
+        if remaining > 1 {
+            self.pending_choice = Some(PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                targets,
+                remaining: remaining - 1,
+            });
+            return Ok(());
+        }
         self.continue_activation_payment(player, source, ability_index, targets, 0)
     }
 
@@ -1956,6 +2278,7 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         Ok((
             ActivatedAbilityOnStack {
+                target_req_indices: ability.target_clause_indices(targets.len()),
                 effects: ability.effects,
                 program,
                 source_transforms,
@@ -1998,6 +2321,7 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         Ok((
             ActivatedAbilityOnStack {
+                target_req_indices: ability.target_clause_indices(targets.len()),
                 effects: ability.effects,
                 program: false,
                 source_transforms: 0,

@@ -47,6 +47,10 @@ pub struct ActivatedAbilityOnStack {
     pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    /// The clause of each target when the ability has several; empty means
+    /// every target is clause 0.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub target_req_indices: Vec<usize>,
     /// The exact object the source Aura or Equipment was attached to when
     /// the ability was activated, before costs such as sacrificing it.
     #[serde(skip_serializing_if = "Option::is_none")]

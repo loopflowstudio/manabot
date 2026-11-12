@@ -92,6 +92,9 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Spells this player cast this turn (`TurnState::spells_cast`).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one (CR 500.7).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
@@ -106,7 +109,8 @@ pub struct PlayerData {
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
 /// one of `spells`' subtypes, or abilities of sources with one of
-/// `abilities`' subtypes. Amounts are W/U/B/R/G/C.
+/// `abilities`' subtypes; or, with `except_nonartifact_spells`, on anything
+/// but casting a nonartifact spell (Powerstone). Amounts are W/U/B/R/G/C.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RestrictedManaData {
@@ -114,6 +118,8 @@ pub struct RestrictedManaData {
     pub spells: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub abilities: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub except_nonartifact_spells: bool,
     pub mana: [i32; 6],
 }
 
@@ -130,6 +136,7 @@ impl RestrictedManaData {
         Self {
             spells: names(restriction.spells),
             abilities: names(restriction.abilities),
+            except_nonartifact_spells: restriction.except_nonartifact_spells,
             mana: amounts.map(i32::from),
         }
     }
@@ -287,6 +294,10 @@ pub struct CardData {
     /// when its mana cost has X.
     #[serde(default)]
     pub x: Option<i32>,
+    /// A graveyard card that was put there from the battlefield this turn
+    /// (`TurnState::graveyard_from_battlefield`); policy input v10.
+    #[serde(default)]
+    pub from_battlefield_this_turn: bool,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -466,7 +477,7 @@ pub struct ContinuousEffectData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
-    /// `WhileYouControlSource`).
+    /// `WhileYouControlSource`, `UntilYourNextTurn`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -528,7 +539,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 28] = [
+pub const MODIFICATION_NAMES: [&str; 36] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -550,10 +561,18 @@ pub const MODIFICATION_NAMES: [&str; 28] = [
     "CantBeBlocked",
     "CantBlock",
     "DoesntUntap",
+    "CantActivateAbilities",
+    "MustBeBlockedByAllAble",
     "LoseKeywords",
     "ExileIfWouldDie",
+    "ExileIfWouldLeave",
     "KeepUnspentMana",
     "NoMaximumHandSize",
+    "NextCreatureCastFlash",
+    "SkipsCombatPhasesNextTurn",
+    "LifeTotalCantChange",
+    "ProtectionFromEverything",
+    "PhasedOut",
     "ControlChanged",
     "ModeChosen",
     "HasAbilitiesOfSource",
@@ -646,16 +665,24 @@ impl ContinuousEffectData {
             Modification::CantBeBlocked => "CantBeBlocked",
             Modification::CantBlock => "CantBlock",
             Modification::DoesntUntap => "DoesntUntap",
+            Modification::CantActivateAbilities => "CantActivateAbilities",
+            Modification::MustBeBlockedByAllAble => "MustBeBlockedByAllAble",
             Modification::LoseKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
                 "LoseKeywords"
             }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::ExileIfWouldLeave => "ExileIfWouldLeave",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
+            Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
+            Modification::LifeTotalCantChange => "LifeTotalCantChange",
+            Modification::ProtectionFromEverything => "ProtectionFromEverything",
+            Modification::PhasedOut => "PhasedOut",
             Modification::ControlChanged { previous } => {
                 data.amount = Some(previous.0 as i32);
                 "ControlChanged"
@@ -1154,6 +1181,7 @@ impl Observation {
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            spells_cast: game.state.turn.spells_cast[player.0].len() as u32,
             extra_turns: game
                 .state
                 .turn
@@ -1244,9 +1272,9 @@ impl Observation {
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_candidates(decision)
                     }
-                    decision @ Decision::SearchDistinctLands { selected, .. } => {
+                    decision @ Decision::SearchDistinctNames { selected, .. } => {
                         let mut cards = selected.clone();
-                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards.extend(game.distinct_name_search_candidates(decision));
                         cards
                     }
                     decision => decision.revealed_cards().to_vec(),
@@ -1273,10 +1301,10 @@ impl Observation {
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
                 let mut card = Self::card_data(game, spell.card, ZoneType::Stack);
-                if game.state.cards[spell.card]
-                    .mana_cost
-                    .as_ref()
-                    .is_some_and(|cost| cost.x > 0)
+                let definition = &game.state.cards[spell.card];
+                // A replicated spell's announced count is its X.
+                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+                    || definition.replicate().is_some()
                 {
                     card.x = Some(i32::from(spell.x));
                 }
@@ -1288,7 +1316,7 @@ impl Observation {
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
         let ids = [agent_player, PlayerId((agent_player.0 + 1) % 2)]
             .into_iter()
-            .flat_map(|player| game.iter_battlefield_permanents(player));
+            .flat_map(|player| game.iter_battlefield_including_phased_out(player));
         for (perm_id, characteristics) in game.characteristics_many(ids) {
             let permanent = game.state.permanents[perm_id].as_ref().unwrap();
             self.add_permanent(game, perm_id, permanent, &characteristics);
@@ -1503,6 +1531,10 @@ impl Observation {
                     foretold: grant.foretold,
                 }),
             x: None,
+            from_battlefield_this_turn: zone == ZoneType::Graveyard
+                && game.current_object_ref(card_id).is_some_and(|object| {
+                    game.state.turn.graveyard_from_battlefield.contains(&object)
+                }),
         }
     }
 
@@ -2014,6 +2046,10 @@ impl Observation {
                         Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
                             game.payment_source_card(payment)
                         }
+                        Some(crate::flow::game::PendingChoice::ExileFromHandPayment {
+                            payment,
+                            ..
+                        }) => game.payment_source_card(payment),
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
                             | crate::flow::game::PendingChoice::ManaPayment { .. },

@@ -115,6 +115,7 @@ def baseline(
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
+    bucketed_shapes: bool = False,
 ) -> TrainingRecipe:
     """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
     selected = accelerator() if device is None else device
@@ -128,7 +129,11 @@ def baseline(
             "use --recipe local for CPU"
         )
     return _baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device=selected
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device=selected,
+        bucketed_shapes=bucketed_shapes,
     )
 
 
@@ -137,10 +142,15 @@ def baseline_test(
     *,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    bucketed_shapes: bool = False,
 ) -> TrainingRecipe:
     """The baseline on CPU for tests and diagnostics without accelerator hardware."""
     return _baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device="cpu"
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device="cpu",
+        bucketed_shapes=bucketed_shapes,
     )
 
 
@@ -150,6 +160,7 @@ def _baseline(
     seconds: float | None,
     learning_seats: Literal["one", "both"],
     device: Literal["cpu", "mps", "cuda"],
+    bucketed_shapes: bool,
 ) -> TrainingRecipe:
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
@@ -196,7 +207,10 @@ def _baseline(
                         gradient="damped_policy", iteration_schedule=schedule
                     ),
                     execution=Execution(
-                        wall_seconds=allowance * 0.85, threads=1, device=device
+                        wall_seconds=allowance * 0.85,
+                        threads=1,
+                        device=device,
+                        bucketed_shapes=bucketed_shapes,
                     ),
                 )
             ],
@@ -214,9 +228,14 @@ def run_baseline(
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
     device: Literal["cpu", "mps", "cuda"] | None = None,
+    bucketed_shapes: bool = False,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
     plan = baseline(
-        steps, seconds=seconds, learning_seats=learning_seats, device=device
+        steps,
+        seconds=seconds,
+        learning_seats=learning_seats,
+        device=device,
+        bucketed_shapes=bucketed_shapes,
     )
     return plan.run(seed=seed, out=out)

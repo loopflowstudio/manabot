@@ -18,6 +18,9 @@ The output layer starts at zero, so a fresh model's objects are unchanged until
 the facts earn weight; gradients reach every fact row that names a valid object.
 
 Captured programs are encoded in row order and preserve signed numeric tokens.
+
+`admit_facts` checks rows once at observation admission; the encoder assumes
+admitted rows and keeps only its data-dependent compaction and packing.
 """
 
 from typing import Literal
@@ -48,8 +51,14 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     FACT_VALUE_INDEX,
 )
+from manabot.model.numerics import buffer_on
 from manabot.model.records import program_number
-from manabot.model.semantic_cards import RecordEmbeddings, RecordNamespace
+from manabot.model.semantic_cards import (
+    RecordEmbeddings,
+    RecordNamespace,
+    SemanticCardEncoder,
+    admit_definition_ids,
+)
 
 RecordVocabulary = Literal["hashed", "catalog"]
 
@@ -73,6 +82,34 @@ def _word(rows: torch.Tensor, index: int) -> torch.Tensor:
 
 def _isin(kinds: torch.Tensor, values: tuple[int, ...]) -> torch.Tensor:
     return torch.isin(kinds, kinds.new_tensor(values))
+
+
+def _catalog_columns(
+    kinds: torch.Tensor, detail: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Masks of rows with a named id, a named detail and a program token, and
+    the namespaces of their ids and details."""
+    named = (kinds > 0) & ~_isin(kinds, _ORDINAL_ID_KINDS)
+    program = _isin(kinds, _PROGRAM_KINDS)
+    restriction = kinds == FACT_COMBAT_RESTRICTION
+    named_detail = (_isin(kinds, _NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
+    id_space = torch.where(
+        kinds == FACT_SET_NAME, RecordNamespace.NAME, RecordNamespace.TOKEN
+    )
+    detail_space = torch.where(
+        restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
+    )
+    return named, named_detail, program, id_space, detail_space
+
+
+def _program_lengths(rows: torch.Tensor) -> list[int]:
+    """Lengths of the contiguous programs in program rows [P, FACT_DIM].
+
+    Each admitted program starts at ordinal zero, so starts are the zeros.
+    """
+    starts = (rows[:, FACT_VALUE_INDEX + 1] == 0).nonzero().flatten().tolist()
+    ends = [*starts[1:], len(rows)]
+    return [end - start for start, end in zip(starts, ends, strict=True)]
 
 
 class FactEncoder(nn.Module):
@@ -101,6 +138,9 @@ class FactEncoder(nn.Module):
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
+        # Bucketed shapes look ids up at the fact axis's shape instead of
+        # selecting live rows, and keep every slot on CPU inference.
+        self.bucketed = False
 
     def _programs(
         self, hidden: torch.Tensor, facts: torch.Tensor, kinds: torch.Tensor
@@ -113,36 +153,10 @@ class FactEncoder(nn.Module):
         meaning; token order within each program does. No state crosses programs.
         """
         program = _isin(kinds, _PROGRAM_KINDS)
-        if not program.any():
-            return hidden
-        positions = program.nonzero()
         rows = facts[program]
-        ordinals = rows[:, FACT_VALUE_INDEX + 1]
-        starts = (ordinals == 0).nonzero().flatten().tolist()
-        if not starts or starts[0] != 0:
-            raise ValueError("fact program must start at ordinal zero")
-        ends = [*starts[1:], len(rows)]
-        lengths = [end - start for start, end in zip(starts, ends, strict=True)]
-        expected = torch.cat(
-            [torch.arange(length, device=facts.device) for length in lengths]
-        )
-        if not torch.equal(ordinals, expected):
-            raise ValueError("fact program ordinals must be consecutive")
-        # A sequence cannot change batch, holder, kind, frame/modification ID,
-        # duration, timestamp or source halfway through its program.
-        owners = torch.cat(
-            (
-                positions[:, :1],
-                rows[:, :FACT_DETAIL_INDEX],
-                rows[:, FACT_DURATION_INDEX:FACT_VALID_INDEX],
-            ),
-            -1,
-        )
-        expected_owners = torch.repeat_interleave(
-            owners[starts], owners.new_tensor(lengths, dtype=torch.long), dim=0
-        )
-        if not torch.equal(owners, expected_owners):
-            raise ValueError("fact program changes owner or provenance")
+        if len(rows) == 0:
+            return hidden
+        lengths = _program_lengths(rows)
         word = _word(rows, FACT_DETAIL_INDEX)
         signed = torch.where(word >= 2**31, word - 2**32, word).float()
         token_kind = rows[:, FACT_VALUE_INDEX]
@@ -164,22 +178,20 @@ class FactEncoder(nn.Module):
     ) -> torch.Tensor:
         """Id, detail and source embeddings [B,F,D] from the card vocabulary.
 
-        Padding rows have kind 0 and contribute nothing. A detail on a kind
-        that names none, or any id outside the vocabulary, is rejected.
+        Padding rows have kind 0 and contribute nothing. Admission rejects a
+        detail on a kind that names none and any id outside the vocabulary.
         """
         ident, detail = _word(facts, FACT_ID_INDEX), _word(facts, FACT_DETAIL_INDEX)
-        named = (kinds > 0) & ~_isin(kinds, _ORDINAL_ID_KINDS)
-        program = _isin(kinds, _PROGRAM_KINDS)
-        restriction = kinds == FACT_COMBAT_RESTRICTION
-        named_detail = (_isin(kinds, _NAMED_DETAIL_KINDS) & (detail != 0)) | restriction
-        if bool((~(program | named_detail) & (detail != 0)).any()):
-            raise ValueError("fact kind carries no detail")
-        id_space = torch.where(
-            kinds == FACT_SET_NAME, RecordNamespace.NAME, RecordNamespace.TOKEN
+        named, named_detail, program, id_space, detail_space = _catalog_columns(
+            kinds, detail
         )
-        detail_space = torch.where(
-            restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
-        )
+        if self.bucketed:
+            return (
+                catalog.masked_names(id_space, ident, named)
+                + catalog.masked_names(detail_space, detail, named_detail)
+                + catalog.masked_tokens(facts[..., FACT_VALUE_INDEX], detail, program)
+                + catalog.sources(facts[..., FACT_SOURCE_INDEX])
+            )
         zeros = catalog.cards.token_embedding.weight.new_zeros(
             (*kinds.shape, self.kind.embedding_dim)
         )
@@ -208,17 +220,17 @@ class FactEncoder(nn.Module):
         objects: torch.Tensor,
         catalog: RecordEmbeddings | None = None,
     ) -> torch.Tensor:
-        """Add each valid fact's embedding to its object; `objects` is [B,N,D].
+        """Add each admitted fact's embedding to its object; `objects` is [B,N,D].
 
-        Catalog ids need `catalog`; hashed ids ignore it.
+        Catalog ids need `catalog`; hashed ids ignore it. Bucketed callers may
+        pass facts trimmed to fewer rows than `max_facts`.
         """
-        if facts.shape[1:] != (self.max_facts, FACT_DIM):
-            raise ValueError(f"expected [batch, {self.max_facts}, {FACT_DIM}] facts")
-        valid = facts[..., FACT_VALID_INDEX]
-        if not ((valid == 0) | (valid == 1)).all():
-            raise ValueError("fact validity must be binary")
-        valid = valid.bool()
-        if facts.device.type == "cpu" and not torch.is_grad_enabled():
+        valid = facts[..., FACT_VALID_INDEX].bool()
+        if (
+            facts.device.type == "cpu"
+            and not torch.is_grad_enabled()
+            and not self.bucketed
+        ):
             # Padding contributes no object delta. Select the ordered union of
             # live columns for this forward only, including the empty union;
             # ordinals, batch ownership and duplicate program occurrences stay
@@ -230,12 +242,6 @@ class FactEncoder(nn.Module):
         facts = torch.where(valid.unsqueeze(-1), facts, 0)
         links = facts[..., FACT_OBJECT_INDEX]
         kinds = facts[..., FACT_KIND_INDEX]
-        if not (
-            (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
-        ).all():
-            raise ValueError("invalid fact object reference")
-        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
-            raise ValueError("invalid fact kind")
         duration = facts[..., FACT_DURATION_INDEX]
         columns = [
             facts[..., FACT_VALUE_INDEX],
@@ -275,3 +281,83 @@ class FactEncoder(nn.Module):
             1, targets, encoded.masked_fill(~linked, 0).to(objects.dtype)
         )
         return objects + delta
+
+
+def admit_facts(
+    facts: torch.Tensor,
+    max_facts: int,
+    object_count: int,
+    cards: SemanticCardEncoder | None,
+) -> None:
+    """Reject malformed fact rows before any forward.
+
+    Checks shape, binary validity, object joins into `object_count` objects,
+    kinds and contiguous programs; padding rows are ignored. With `cards`
+    (catalog ids), ids, details, program tokens and sources must be in its
+    vocabulary.
+    """
+    if facts.shape[1:] != (max_facts, FACT_DIM):
+        raise ValueError(f"expected [batch, {max_facts}, {FACT_DIM}] facts")
+    valid = facts[..., FACT_VALID_INDEX]
+    if not ((valid == 0) | (valid == 1)).all():
+        raise ValueError("fact validity must be binary")
+    facts = torch.where(valid.bool().unsqueeze(-1), facts, 0)
+    links = facts[..., FACT_OBJECT_INDEX]
+    kinds = facts[..., FACT_KIND_INDEX]
+    if not ((links == links.floor()) & (links >= 0) & (links <= object_count)).all():
+        raise ValueError("invalid fact object reference")
+    if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
+        raise ValueError("invalid fact kind")
+    if cards is not None:
+        _admit_catalog_ids(facts, kinds.long(), cards)
+    _admit_programs(facts, kinds)
+
+
+def _admit_catalog_ids(
+    facts: torch.Tensor, kinds: torch.Tensor, cards: SemanticCardEncoder
+) -> None:
+    ident, detail = _word(facts, FACT_ID_INDEX), _word(facts, FACT_DETAIL_INDEX)
+    named, named_detail, program, id_space, detail_space = _catalog_columns(
+        kinds, detail
+    )
+    if bool((~(program | named_detail) & (detail != 0)).any()):
+        raise ValueError("fact kind carries no detail")
+    cards.require_record_names(id_space[named], ident[named])
+    cards.require_record_names(detail_space[named_detail], detail[named_detail])
+    cards.require_record_tokens(facts[..., FACT_VALUE_INDEX][program], detail[program])
+    lookup = buffer_on(cards, "definition_rows", facts.device)
+    admit_definition_ids(facts[..., FACT_SOURCE_INDEX], len(lookup), lookup)
+
+
+def _admit_programs(facts: torch.Tensor, kinds: torch.Tensor) -> None:
+    """Programs are contiguous runs with consecutive zero-based ordinals."""
+    program = _isin(kinds, _PROGRAM_KINDS)
+    if not program.any():
+        return
+    positions = program.nonzero()
+    rows = facts[program]
+    ordinals = rows[:, FACT_VALUE_INDEX + 1]
+    starts = (ordinals == 0).nonzero().flatten().tolist()
+    if not starts or starts[0] != 0:
+        raise ValueError("fact program must start at ordinal zero")
+    lengths = _program_lengths(rows)
+    expected = torch.cat(
+        [torch.arange(length, device=facts.device) for length in lengths]
+    )
+    if not torch.equal(ordinals, expected):
+        raise ValueError("fact program ordinals must be consecutive")
+    # A sequence cannot change batch, holder, kind, frame/modification ID,
+    # duration, timestamp or source halfway through its program.
+    owners = torch.cat(
+        (
+            positions[:, :1],
+            rows[:, :FACT_DETAIL_INDEX],
+            rows[:, FACT_DURATION_INDEX:FACT_VALID_INDEX],
+        ),
+        -1,
+    )
+    expected_owners = torch.repeat_interleave(
+        owners[starts], owners.new_tensor(lengths, dtype=torch.long), dim=0
+    )
+    if not torch.equal(owners, expected_owners):
+        raise ValueError("fact program changes owner or provenance")

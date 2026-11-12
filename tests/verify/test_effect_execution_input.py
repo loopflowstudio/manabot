@@ -18,6 +18,7 @@ from manabot.env.observation import ObservationSpace, _timestamp_ranks
 from manabot.infra.config import ModelConfig
 from manabot.managym.decision_capture import DecisionInput
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import priority_root
 import managym
@@ -132,7 +133,7 @@ def test_effect_execution_pairs_reach_actual_model_and_text() -> None:
             key: torch.from_numpy(np.stack([value[key] for value in encoded]))
             for key in encoded[0]
         }
-        logits, values = model(batch)
+        logits, values = model(admit_observation(model, batch))
         assert torch.isfinite(values).all()
         assert not torch.equal(values[0], values[1]), records[start].case
         assert not torch.equal(logits[0], logits[1]), records[start].case

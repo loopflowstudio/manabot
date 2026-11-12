@@ -75,12 +75,37 @@ publish, land or choose the next Graph step from here.
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` process; it stops both servers.
+  Without a connected browser, run a Node Playwright script from `academy/ui`
+  (its `playwright` package and cached Chromium resolve there; delete the
+  script afterwards). Click only `[data-testid=action-panel] button` offers:
+  other buttons open the deck picker or start a New Game. Triggered abilities
+  appear under "Stack · top first" as `Card — <trigger>: <effects> ·
+  triggered ability · Seat N`; read that text while the stack is non-empty.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Local-update search changes: `uv run --extra dev python
+  scripts/bench_local_update.py --reference main --worlds 4 16` checks in
+  seconds that default receipts still equal main's, field for field; the
+  `--rollout-evidence`/`--native-encoder` arms check opt-in parity. To play
+  games, build two players per arm with `make_player` and drive `act`,
+  `prepare_step`, `env.step_semantic` and `observe_step` as
+  `manabot/sim/native_game.py` does; the default `decision_seconds=1` times
+  out full evidence at 16 worlds × depth 20 (about 0.9 s on the
+  initialized fixture), so set the budget explicitly.
+- Model or training-path changes: `uv run manabot train --recipe local --device
+  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
+  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
+  checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
+  <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
+  sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
+  checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
+  `Sideboard` section, because the default sim match is refused. Fixed seeds
+  make equal win, timeout and mean-step counts a check that every sampled
+  action matched. Ten games took about two minutes on a loaded laptop.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -103,3 +128,31 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+- Training recipes: write a regime JSON from Python
+  (`TrainingRegime(...).model_dump_json()`) and run
+  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
+  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
+  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
+  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
+  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
+  an empty directory to act like a new machine.
+- TLA Limited decks (the MTG-282 pool corpus) overflow default observation
+  capacities within a few dozen games; copy the `observation` block and the
+  `game_errors` policy (`recover_capacity: true`) of
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
+  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+- Served evaluation without a GPU: `evaluate(request, out_dir=...,
+  execution=EvalExecution(device="cpu", deadline_unix=time.time() + 900))`
+  runs the same serving child (and its checkpoint ABI checks) as CUDA; omitting
+  `execution` plays scalar, which never compares ABI hashes. An experiment's
+  `_registration` takes an Etude `Model` whose `checkpoint.key.address` and
+  `artifact.uri` are a `file://` URI with `sha256`/`size_bytes`. To compare
+  with `main`, `git worktree add --detach /private/tmp/<x> <merge-base>`, copy
+  this checkout's `managym/_managym.cpython-313-darwin.so` into it (only when
+  the Rust is unchanged), and run the driver with
+  `PYTHONPATH=/private/tmp/<x>`; use the resolved `/private` path, or
+  `_source()`'s `relative_to(ROOT)` fails. Remove the worktree afterwards.
+- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
+  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
+  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
+  ignores SIGINT, so `pkill -INT` appears to hang.

@@ -225,6 +225,13 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
 
 
+def test_x_cost_definition_renders_its_x() -> None:
+    """A visible {X} card renders instead of failing capture validation."""
+    env = priority_root(("Black Sun's Zenith",), ("Swamp", "Swamp"))
+    text = capture_text_decision(env).text
+    assert "Black Sun's Zenith. Sorcery; cost {X}{B}{B};" in text
+
+
 def _viewer_observation(decision: TextDecision) -> managym.Observation:
     source = DecisionInput.model_validate_json(decision.capture_json)
     return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
@@ -531,6 +538,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "face_down": "face down",
         "cast_permission": "may be played from exile by",
         "x": "announced X",
+        "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
         "stack_object_id": "S<n>",
@@ -551,6 +559,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_lost": "lost N life",
     },
     managym.Player: {
         "id": "the player's alias",
@@ -571,6 +580,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
         "turn_history": "This turn:",
+        "spells_cast": "cast N spells",
         "extra_turns": "extra turn",
         "additional_combats": "additional combat phase",
         "restricted_mana": "Restricted mana for",
@@ -644,12 +654,17 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "keeps_red_mana": True,
         "no_maximum_hand_size": True,
         "extra_turns": 1,
+        "spells_cast": 2,
         "turn_history": {
             "attacked": True,
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_lost": 3,
         },
+        "restricted_mana": [
+            {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
+        ],
     }
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
@@ -662,8 +677,9 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card." in text
+        "their control; drew 1 card; lost 3 life; cast 2 spells." in text
     )
+    assert "Restricted mana for anything but nonartifact spells: C 2." in text
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:

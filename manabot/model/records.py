@@ -1,7 +1,9 @@
 """Shared primitives for typed observation records, independent of their schema.
 
-Validate live rows and one-based joins before indexing; RecordReducer combines
-within-observation tokens with a GRU without retaining temporal state.
+Admission validates live rows and one-based joins (`admit_record_rows`,
+`record_indexes`); the forward only masks padding before indexing.
+RecordReducer combines within-observation tokens with a GRU without retaining
+temporal state.
 """
 
 from itertools import accumulate
@@ -21,22 +23,28 @@ def program_number(value: torch.Tensor) -> torch.Tensor:
     return value.sign() * value.abs().log1p() / 10
 
 
-def masked_record_rows(
+def masked_record_rows(value: torch.Tensor, valid_column: int) -> torch.Tensor:
+    """Zero padding rows before any arithmetic or indexing."""
+    return torch.where(value[..., valid_column].bool().unsqueeze(-1), value, 0)
+
+
+def admit_record_rows(
     value: torch.Tensor, count: int, width: int, valid_column: int
 ) -> torch.Tensor:
-    """Mask padding before any arithmetic or indexing; reject malformed live rows."""
+    """Reject malformed live rows; return them with padding zeroed."""
     if value.ndim != 3 or value.shape[1:] != (count, width):
         raise ValueError(f"expected [batch, {count}, {width}] state records")
     valid = value[..., valid_column]
     if not ((valid == 0) | (valid == 1)).all():
         raise ValueError("state record validity must be binary")
-    clean = torch.where(valid.bool().unsqueeze(-1), value, 0)
+    clean = masked_record_rows(value, valid_column)
     if not torch.isfinite(clean).all():
         raise ValueError("state records must be finite")
     return clean
 
 
 def record_indexes(values: torch.Tensor, maximum: int, name: str) -> torch.Tensor:
+    """Admit integral references in [0, maximum]; return them as int64."""
     if not ((values == values.floor()) & (values >= 0) & (values <= maximum)).all():
         raise ValueError(f"invalid {name} reference")
     return values.long()

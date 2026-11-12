@@ -45,7 +45,6 @@ from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
 from manabot.training.mps import mps_torch_error
-from manabot.training.outcome_tables import OUTCOME_TABLE_METRIC, write_outcomes
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
@@ -90,7 +89,12 @@ from manabot.training.state.recovery import (
     save_update,
     settle_orphan,
 )
-from manabot.training.update_metrics import metric_row, phase_seconds, time_since
+from manabot.training.update_metrics import (
+    OUTCOME_TABLE,
+    metric_row,
+    phase_seconds,
+    time_since,
+)
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -1115,7 +1119,8 @@ def _execute_regime(
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
                         opponent_agent, opponent_space = load_checkpoint(
-                            str(opponent_path)
+                            str(opponent_path),
+                            bucketed_shapes=stage.execution.bucketed_shapes,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
@@ -1132,7 +1137,11 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(
+                        space,
+                        regime.agent,
+                        bucketed_shapes=stage.execution.bucketed_shapes,
+                    ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
                         copied = out / f"{stage.id}-initialization-source.pt"
@@ -1504,11 +1513,6 @@ def _execute_regime(
                         record.learning_timings = _phase_timings(
                             learner.profiler, "Learning"
                         )
-                    outcome_metrics: dict[str, str] = {}
-                    if collector.opponent_mode == "self":
-                        outcome_metrics[OUTCOME_TABLE_METRIC] = write_outcomes(
-                            experiment.run.files.root, collector.stats.self_play.drain()
-                        )
                     record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
                     if record.optimizer_updates is not None:
@@ -1530,7 +1534,6 @@ def _execute_regime(
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
                         metric_row(diagnostic)
-                        | outcome_metrics
                         | time_since(timed, spent)
                         | cuda_peak_metrics(stage.execution.device)
                         | mps_memory_metrics(stage.execution.device),
@@ -1539,6 +1542,15 @@ def _execute_regime(
                             diagnostic["coordinates"]["learner_transitions"]
                         ),
                     )
+                    if collector.opponent_mode == "self":
+                        experiment.log_table(
+                            OUTCOME_TABLE,
+                            collector.stats.self_play.drain(),
+                            updates=int(diagnostic["coordinates"]["updates"]),
+                            transitions=int(
+                                diagnostic["coordinates"]["learner_transitions"]
+                            ),
+                        )
                     timed = spent
                     if stage.active_seconds is None or (
                         record.collection_seconds + record.learning_seconds

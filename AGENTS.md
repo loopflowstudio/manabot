@@ -153,12 +153,16 @@ checkpoints or experiment evidence.
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries one policy input, v9 (`ObservationConfig.policy_input_version`);
-  it is always serialized. A checkpoint, replay or saved configuration bound to
-  any other version, or omitting it, raises `UnsupportedPolicyInput`, which
-  names the revision to run it from (`ac601834d` is the last revision
-  supporting v1-v8). Do not add version branches to the encoders or the model;
-  a new layout replaces this one at a world freeze.
+- Main carries policy input v9, the fresh default, and explicit v10
+  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
+  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
+  presence selects it natively; a v9 encoder refuses an observation that needs
+  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+  replay or saved configuration bound to any other version, or omitting it,
+  raises `UnsupportedPolicyInput`, which names the revision to run it from
+  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
+  append is the only version branch in the encoders and the model; add no
+  others, and a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`
@@ -226,6 +230,8 @@ checkpoints or experiment evidence.
   Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
+- Format all Rust workspace members with `cargo fmt --manifest-path managym/Cargo.toml --all`;
+  formatting only the root package does not format the `state` and `cards` crates.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
@@ -255,6 +261,11 @@ model or policy.
 benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
+
+**No test runs for five minutes.** `tests/conftest.py` ends the run when a
+single test reaches 300 seconds, with every thread's stack and exit status 1.
+Fix or split a test that hits the limit; never raise it. Run the tests for the
+files you changed, not whole directories; CI runs the suite.
 
 Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
@@ -378,6 +389,10 @@ mechanic a directed test there. Static and cost rows name a real card and its
 behavior test in `tests/cards/<set>.rs`, which the guard checks.
 
 Support is definition: the world pool is every defined card from every set.
+Retained `Decklist` records include the diagnostics of their original admission.
+For explicit current-world re-admission, parse `Decklist(record.source,
+record.filename)` before admitting; passing the retained record keeps its old
+issues. Preserve the original record and source bytes as evidence.
 Defined non-token cards are supported for deck entry; tokens, rules fixtures
 and unknown cards are rejected. Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
@@ -454,7 +469,9 @@ max_mana_value }`), never a `<Verb><Object>` or `<Verb>All` variant:
 the instruction on `Decision::ChooseObject` for any verb ("tap a creature you
 control"); a verb that depends on which object it hit is an `If` composition,
 and "if you do" is `Condition::Moved` over the frame's latest `Move` or
-`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. Amounts are
+`Sacrifice`. Flicker is two `Move`s, the second over `Moved`. A `Move` to the
+library a card is already in, with a stated `library_end`, reorders it without a
+zone change ("then shuffle and put that card on top"). Amounts are
 `EffectValue` (`Fixed(n)` or read at resolution); a verb never has a
 `<Verb>Value` twin. Use the constructors (`Effect::exile`, `return_to_hand`,
 `put_counters`, `destroy`, `deal_damage`, `gain_life`, `discard`,
@@ -465,6 +482,29 @@ A stack ability is no card object, so `CounterAbility` reads the clause's
 `Target` directly; `Destroy` over several objects is one simultaneous event
 with pre-batch trigger sources.
 
+A `TriggerCondition` is "whenever X does Y": an event over its actor, never an
+`<Actor><Event>` variant. A player actor is an `Actor` (`You`, `Opponent`,
+`AnyPlayer`): `Casts { who, predicate, nth }`, `Draws { who, nth }`,
+`BeginningOf { step, whose }`, `Performs { who, any_of }` for keyword actions
+(search, scry, surveil, the four bends) and `PutIntoGraveyard { whose,
+predicate }`, `PutsCounters { who, kind, on }`. An object actor is a
+`TriggerSubject` (`This`, `EnchantedCreature`, or `Matching { controlled_by,
+predicate, another }`, whose controller is the same `Actor`; card code uses
+`you_control`, `another_you_control`, `any`, `another`), as in
+`Dies { subject }`, `Sacrificed { subject }`,
+`Attacks { subject, per, attackers }` ("alone" and "with at least one other"
+are `AttackSize`) and `DealsCombatDamage { subject, to, per }`. Counts,
+predicates, recipients and once-per-object versus once-per-batch ("one or
+more") are fields of the event, never names. The player who acted (or, for a
+step, the active player; for a graveyard, its owner) is "that player",
+`PlayerSelector::TriggeringPlayer`. `ActiveIf`, `OnceEachTurn`, `FromZone`,
+`InGraveyard`, `WasCast` and `WhileSourceAttacking` wrap any event. Ability
+descriptions and learning tokens come from one template per event that fills
+in the actor and parameters, so a new actor or count needs no new variant,
+text or token. Card code writes the common forms with
+`TriggerCondition::casts(who, predicate)`, `beginning_of(step, whose)` and
+`attacks(subject, per)`.
+
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
 `Action::ActivateCardAbility`. An ability's index is its position in
@@ -473,7 +513,10 @@ Activated abilities that function from hand or graveyard set
 Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana ability, not multiple fixed mana abilities. Verify each
-choice by paying a real cost and checking the remaining mana.
+choice by paying a real cost and checking the remaining mana. A mana ability
+with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
+the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
+the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 

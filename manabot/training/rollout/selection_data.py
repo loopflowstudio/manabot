@@ -22,6 +22,7 @@ from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.training.learning.references import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
@@ -138,7 +139,9 @@ def collect_selection_game(
             encoded = space.encode(raw)
             if len(frame.offers) != int(encoded["actions_valid"].sum()):
                 raise ValueError("selection policy cannot encode every legal offer")
-            tensors = {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            tensors = admit_observation(
+                agent, {k: torch.as_tensor(v).unsqueeze(0) for k, v in encoded.items()}
+            )
             logits, value = agent(tensors)
             probabilities = logits.softmax(-1)
             action = int(torch.multinomial(probabilities[0], 1, generator=generator))

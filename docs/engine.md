@@ -19,6 +19,7 @@ cross-package contract is in the
 - [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
+- [Decks](#decks)
 - [What we know](#what-we-know)
 - [Where the code lives](#where-the-code-lives)
 
@@ -438,7 +439,7 @@ features. Do not log-scale them or infer similarity from their magnitude.
 Retain the installed world's content identity with saved arrays and catalog
 references.
 
-`observation_layout(*, policy_history=False)` returns a mapping keyed by the
+`observation_layout(*, policy_history=False, turn_state=False)` returns a mapping keyed by the
 encoder's array names. Each array describes its `axes`, `shape` and stored
 `dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
 default. The seat axis is viewer-relative (agent first, opponent second).
@@ -455,7 +456,9 @@ without inventing a feature axis. Shared headers own the detail/member slices;
 unused rows are zero. `policy_history=True` describes the 12-column public
 history rows of `events` instead of the 7-column raw events; public history is
 bounded to 32 rows, even though its allocated event capacity is selected
-separately.
+separately. `turn_state=True` adds policy input v10's `player_turn_state` (columns
+`life_lost`, `spells_cast`, then `nonartifact_mana_white` through
+`nonartifact_mana_colorless`) and `card_turn_state`.
 
 Read the stored encoding before adding preprocessing: permanent damage, power
 and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
@@ -540,6 +543,38 @@ card, its back face's `PrintedCharacteristics` (`back_face`; the outer
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- A trigger is "whenever X does Y": an event over its actor, with the event's
+  own parameters as fields. Monastery Swiftspear's prowess
+  ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
+  with you as the actor:
+
+  ```rust
+  condition: TriggerCondition::casts(
+      Actor::You,
+      CardPredicate {
+          not_card_types: vec![CardType::Creature],
+          ..Default::default()
+      },
+  ),
+  ```
+
+  `casts` builds `Casts { who, predicate, nth: None }`. Changing `who` to
+  `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an opponent casts" or
+  "whenever a player casts"; `nth: Some(2)` gives "your second spell each
+  turn". The same applies to draws (`Draws { who, nth }`), steps
+  (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
+  or bending (`Performs { who, any_of }`), cards reaching a graveyard
+  (`PutIntoGraveyard { whose, predicate }`) and putting counters
+  (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
+  instead, whose controller is the same kind of `Actor` ("a creature an
+  opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
+  `Dies`, `Sacrificed`, `Attacks { subject, per, attackers }` and
+  `DealsCombatDamage { subject, to, per }`, where `per` says whether "one or
+  more" creatures trigger once per batch or once each, and `attackers` says
+  whether the attack is alone or with at least one other creature. The ability
+  description ("Whenever an opponent draws their second card each turn, ...")
+  and the learning tokens come from one template per event, so a card that
+  needs a new actor or count needs no new variant.
 - Learning tokens derive from the same definition
   ([`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs)), so the
   policy can read what a card does and a new variant reaches the model without
@@ -764,6 +799,58 @@ to an authored setup refuse imported decks even when shapes agree
 (`manabot.model.world.validate_agent_setup`). Academy imports a pair through
 **Import decklist files**; the CLI takes `--hero-deck-file` and
 `--villain-deck-file` ([Academy](academy.md)).
+
+### TLA decks with TLE bonus-sheet cards
+
+TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
+Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
+importer, with no extra pack or flag. The engine defines 58 of the 61:
+
+```python
+import managym
+
+decklist = managym.Decklist(
+    "1 Avatar Enthusiasts\n1 Scout's Warning\n17 Plains\n",
+    filename="tla-with-bonus-sheet.txt",
+)
+admitted, = managym.admit_decklists([("hero", decklist)])
+print(managym.check_decks([admitted.deck]))
+# [[]] — no admission issues
+```
+
+Every defined non-token card belongs to the world pool. This small example
+checks `development-v1` admission, not Limited construction or booster
+contents; use a complete deck for play.
+
+Three bonus-sheet cards are not yet defined, so a deck listing one of them
+raises `managym.DeckImportError` naming it as unknown:
+
+| Card | Waits for |
+| --- | --- |
+| Release to Memory | Tokens with their own definition type, resolved by key |
+| Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
+| Heartbeat of Spring | A redesign of how mana production triggers see what a land produced |
+
+Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 995
+admit; the five that fail list Heartbeat of Spring (three) or Lita (two). Do
+not drop or substitute the card to admit such a deck; it admits once its
+definition exists.
+
+Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
+policy input v9 cannot hold: life lost this turn, cards put into a graveyard
+from the battlefield this turn, and Powerstone mana that can't be spent on
+nonartifact spells. Their decks admit and play under any input, but a v9 policy
+refuses an observation that needs that state; train on them with input v10
+([policy inputs](observation-and-model.md#input-v10-turn-history-and-powerstone-mana)).
+
+`managym.set_cards(["tla"])` selects definitions by their first-printing set.
+Adding `"tle"` still excludes reprints defined under earlier sets. Admit the
+actual counted decklist against the world to include its bonus-sheet cards.
+
+For unknown names in `DeckImportError`, check spelling and the installed
+engine's definitions. Engine and checkpoint worlds must remain compatible;
+keep frozen runs on their recorded world. New card support does not expand
+saved training corpora or change their split assignments.
 
 ## What we know
 

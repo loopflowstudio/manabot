@@ -28,7 +28,7 @@ fn sazh_s_chocobo() -> CardDefinition {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Land),
                         ..Default::default()
                     }),

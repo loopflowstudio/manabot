@@ -611,7 +611,7 @@ impl Game {
                     ..Default::default()
                 });
                 frame.source_transforms = ability.source_transforms;
-                &[]
+                &ability.target_req_indices
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
@@ -666,7 +666,8 @@ impl Game {
                     sacrifice.map(|id| self.target_reference(Target::Permanent(id), viewer));
                 frame.cost(&self.payment_mana_cost(*player, payment, alternative.as_ref()));
             }
-            PendingChoice::SacrificePayment { payment, .. } => {
+            PendingChoice::SacrificePayment { payment, .. }
+            | PendingChoice::ExileFromHandPayment { payment, .. } => {
                 self.payment_frame(payment, viewer, &mut frame)
             }
             PendingChoice::ChooseTargets {
@@ -697,12 +698,17 @@ impl Game {
                 source,
                 ability_index,
                 chosen,
+                requirement,
                 ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
-                frame.active_clause = Some(0);
-                frame.targets = self.clause_targets(chosen, &[], viewer);
+                frame.active_clause = Some(*requirement);
+                let clauses = self
+                    .activation_ability(*source, *ability_index)
+                    .map(|ability| ability.target_clause_indices(chosen.len()))
+                    .unwrap_or_default();
+                frame.targets = self.clause_targets(chosen, &clauses, viewer);
             }
             PendingChoice::DiscardPayment {
                 source,
@@ -742,6 +748,21 @@ impl Game {
                     .payment_mana_cost(*player, payment, None)
                     .reduced_generic(*tapped);
                 frame.cost(&owed);
+            }
+        }
+        if let PendingChoice::TapPayment {
+            remaining,
+            source,
+            ability_index,
+            ..
+        } = pending
+        {
+            if self
+                .activation_ability(*source, *ability_index)
+                .and_then(|a| a.tap_cost)
+                .is_some_and(|cost| cost.count > 1)
+            {
+                frame.mode = Some(*remaining);
             }
         }
         frame
@@ -873,10 +894,14 @@ impl Game {
             Decision::ManaUpfront {
                 permanent,
                 ability_index,
+                tap_remaining,
                 ..
             } => {
                 frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);
+                if *tap_remaining > 0 {
+                    frame.mode = Some(*tap_remaining);
+                }
                 frame.cost(
                     &self.characteristics(*permanent).activated_abilities[*ability_index].mana_cost,
                 );
@@ -949,7 +974,7 @@ impl Game {
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
 /// frames are validated against it; raise it with each new code.
-pub const MAX_DECISION_CODE: u8 = 29;
+pub const MAX_DECISION_CODE: u8 = 30;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
 /// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
@@ -957,6 +982,7 @@ pub const MAX_DECISION_CODE: u8 = 29;
 pub fn decision_code(decision: &Decision) -> u8 {
     match decision {
         Decision::OrderReplacement { .. } => 29,
+        Decision::EnterAsCopy { .. } => 30,
         Decision::ChoosePaymentX { .. } => 24,
         Decision::SearchNamed { .. } => 25,
         Decision::Payment(_) => 1,
@@ -970,7 +996,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,
-        Decision::SearchDistinctLands { .. } => 14,
+        Decision::SearchDistinctNames { .. } => 14,
         Decision::OpponentSplitsRevealed { .. } => 15,
         Decision::DiscardFromRevealedHand { .. } => 16,
         Decision::CastDuringResolution { .. } => 17,
@@ -1147,6 +1173,7 @@ pub fn encode_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::ability::DistinctSearchEnd;
     use std::collections::HashMap;
 
     #[test]
@@ -1255,6 +1282,7 @@ mod tests {
                 player,
                 permanent: PermanentId(0),
                 ability_index: 0,
+                tap_remaining: 0,
                 resume: None,
             },
             Decision::ManaChoice {
@@ -1322,11 +1350,12 @@ mod tests {
                 min_select: 0,
                 max_select: 1,
             },
-            Decision::SearchDistinctLands {
+            Decision::SearchDistinctNames {
                 player,
+                predicate: predicate.clone(),
                 remaining: 1,
                 selected: vec![],
-                opponent_picks: 1,
+                end: DistinctSearchEnd::OpponentSplits { picks: 1 },
             },
             Decision::DiscardFromRevealedHand {
                 player,
@@ -1387,6 +1416,11 @@ mod tests {
                 player,
                 groups: vec![],
                 keep: vec![],
+            },
+            Decision::EnterAsCopy {
+                player,
+                card: CardId(0),
+                candidates: vec![],
             },
         ];
         let codes: Vec<u8> = decisions.iter().map(decision_code).collect();

@@ -15,6 +15,7 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.learning.learner import Learner, observation_tensors
@@ -105,12 +106,14 @@ def _collector(
 
 def _behavior_matches(batch: RolloutBatch, agent: ActorCritic) -> None:
     rows = batch.observations()
-    obs = observation_tensors(
-        {
-            key: value.reshape((-1,) + value.shape[2:])
-            for key, value in rows.observation.items()
-        },
-        "cpu",
+    obs = admit_observation(
+        agent,
+        observation_tensors(
+            {
+                key: value.reshape((-1,) + value.shape[2:])
+                for key, value in rows.observation.items()
+            }
+        ),
     )
     with torch.no_grad():
         logits, values = agent(obs)

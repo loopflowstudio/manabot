@@ -42,7 +42,7 @@ impl Game {
                     .cloned()
             }
             StackObject::ActivatedAbility(ability) => effect_target_requirements(&ability.effects)
-                .first()
+                .get(ability.target_req_indices.get(slot).copied().unwrap_or(0))
                 .cloned(),
             StackObject::TriggeredAbility(triggered) => {
                 let effects = match &triggered.inline_effects {
@@ -85,7 +85,9 @@ impl Game {
         let indices: Vec<usize> = match stacked {
             StackObject::Spell(spell) => spell.target_req_indices.clone(),
             StackObject::TriggeredAbility(triggered) => triggered.target_req_indices.clone(),
-            StackObject::ActivatedAbility(_) => vec![0; targets.len()],
+            StackObject::ActivatedAbility(ability) => (0..targets.len())
+                .map(|slot| ability.target_req_indices.get(slot).copied().unwrap_or(0))
+                .collect(),
         };
         let x = match stacked {
             StackObject::Spell(s) => s.x,

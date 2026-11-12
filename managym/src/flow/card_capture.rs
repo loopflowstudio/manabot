@@ -369,7 +369,7 @@ mod tests {
             let source = game.current_object_ref(card).unwrap();
             game.step(usize::from(outcome == "declined")).unwrap();
             if outcome == "countered" {
-                game.counter_spell(card, None);
+                game.counter_spell(card, None, ZoneType::Graveyard);
             }
             if outcome == "completed" {
                 game.resolve_top_of_stack();

@@ -182,16 +182,11 @@ pub fn encode(
             row[effect::POWER + i] = value.unwrap_or(0) as f32 / 10.0;
             row[effect::HAS_POWER + i] = u8::from(value.is_some()) as f32;
         }
-        row[effect::DURATION] = match effect.duration.as_str() {
-            "EndOfTurn" => 1.0,
-            "Indefinite" => 2.0,
-            "WhileYouControlSource" if record.source.is_some() => 3.0,
-            _ => {
-                return Err(Error::InvalidShared(
-                    "invalid shared effect duration/source",
-                ))
-            }
-        };
+        row[effect::DURATION] = duration_code(&effect.duration)
+            .filter(|_| effect.duration != "WhileYouControlSource" || record.source.is_some())
+            .ok_or(Error::InvalidShared(
+                "invalid shared effect duration/source",
+            ))?;
         row[effect::TIMESTAMP] = *ranks
             .get(&effect.timestamp)
             .ok_or(Error::InvalidShared("missing effect timestamp"))?;
@@ -247,4 +242,16 @@ pub fn encode(
         row[effect::VALID] = 1.0;
     }
     Ok(())
+}
+
+/// The header duration column and the copy-exception fact's duration: the record's
+/// `EffectDuration` code, or `None` for a name no record carries.
+pub(super) fn duration_code(duration: &str) -> Option<f32> {
+    match duration {
+        "EndOfTurn" => Some(1.0),
+        "Indefinite" => Some(2.0),
+        "WhileYouControlSource" => Some(3.0),
+        "UntilYourNextTurn" => Some(4.0),
+        _ => None,
+    }
 }
