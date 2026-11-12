@@ -165,6 +165,10 @@ run speeds; filesystem timing must not decide the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
+Package initializer changes also require
+`uv run --extra dev --extra artifacts --extra evaluation pytest tests/test_package_boundaries.py tests/eval/test_inference_receipts.py -q`;
+offline receipt reports must work without probing the native engine, even to
+diagnose an installation problem.
 Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.

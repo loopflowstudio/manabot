@@ -90,6 +90,39 @@ def test_manabot_compatibility_import_is_the_separate_engine() -> None:
     assert Path(managym._managym.__file__).parent == REPO_ROOT / "managym"
 
 
+def test_engine_compatibility_import_diagnoses_incomplete_upgrade(
+    tmp_path: Path,
+) -> None:
+    # pip can remove the old wheel's shared __init__.py after installing the
+    # new engine. Reproduce that namespace package without installed packages.
+    for relative in ("manabot/__init__.py", "manabot/managym/__init__.py"):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((REPO_ROOT / relative).read_text())
+    (tmp_path / "managym").mkdir()
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        sys.path.insert(0, {str(tmp_path)!r})
+        import manabot
+        assert 'managym' not in sys.modules
+        try:
+            from manabot import managym
+        except ImportError as error:
+            assert 'managym is missing its package files' in str(error), error
+            assert 'uv pip install --reinstall-package managym' in str(error), error
+        else:
+            raise AssertionError('Incomplete engine installation was accepted')
+        """
+    )
+    subprocess.run(
+        [sys.executable, "-I", "-S", "-c", probe],
+        cwd=tmp_path,
+        check=True,
+        timeout=30,
+    )
+
+
 class _RefuseTraining(importlib.abc.MetaPathFinder):
     """Simulation must remain usable without learning or run orchestration."""
 
