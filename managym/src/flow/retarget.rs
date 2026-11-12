@@ -2,7 +2,8 @@
 //! targets (CR 115.7).
 //!
 //! A copy is a new stack object with the original's choices; a copied spell
-//! is a new token card that ceases to exist off the stack (CR 704.5e). Each
+//! is a new `ObjectKind::SpellCopy` object that ceases to exist off the
+//! stack (CR 704.5e), or becomes a token as a permanent spell resolves. Each
 //! new or changed target is chosen through `Decision::Retarget`, one target
 //! slot at a time, from the targeted object's controller's perspective.
 
@@ -170,7 +171,7 @@ impl Game {
                 let mut card = self.state.cards[spell.card].clone();
                 card.id = id;
                 card.owner = controller;
-                card.is_token = true;
+                let card = card.with_kind(crate::state::card::ObjectKind::SpellCopy);
                 let copied = CardId(self.state.cards.len());
                 self.state.cards.push(card);
                 self.state.card_to_permanent.push(None);

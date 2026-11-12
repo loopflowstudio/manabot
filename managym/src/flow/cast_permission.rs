@@ -305,7 +305,7 @@ impl Game {
     /// card a replacement kept out of exile, receives no grant.
     fn grant_if_exiled(&mut self, card: CardId, grant: impl FnOnce(ObjectRef) -> ExileCastGrant) {
         if self.state.zones.zone_of(card) != Some(ZoneType::Exile)
-            || self.state.cards[card].is_token
+            || !self.state.cards[card].is_card()
         {
             return;
         }

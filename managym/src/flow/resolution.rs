@@ -704,7 +704,7 @@ impl Game {
                     // A token cannot return after leaving the battlefield (CR 111.7).
                     // Returning transformed requires a back face (CR 712.14a).
                     if *to == ZoneType::Battlefield
-                        && ((self.state.cards[card].is_token
+                        && ((!self.state.cards[card].is_card()
                             && from != Some(ZoneType::Battlefield))
                             || (*transformed
                                 && default_content_pack()

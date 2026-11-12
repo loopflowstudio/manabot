@@ -824,9 +824,9 @@ pub struct CardDefinition {
     pub keywords: Keywords,
     /// Explicit color identity for cards without a mana cost (tokens).
     pub color_override: Option<Colors>,
-    /// Token status (CR 111.1): set on a [`TokenDefinition`]'s catalog row
-    /// and on token copies, never by a card. Tokens cease to exist outside
-    /// the battlefield (CR 111.7, 704.5d).
+    /// Set on a [`TokenDefinition`]'s catalog row, never by a card. An
+    /// object's kind ([`Card::kind`]) says whether it is a token; this only
+    /// says which rows instantiate as tokens.
     pub is_token: bool,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
@@ -997,9 +997,28 @@ impl CardDefinition {
     }
 }
 
+/// The kind of object a runtime object is (CR 109.1). An object keeps its
+/// kind for its whole life; the one change is a copy of a permanent spell,
+/// which becomes a token as it resolves (CR 111.12, 608.3f).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum ObjectKind {
+    /// A Magic card (CR 108.2), from a card definition.
+    Card,
+    /// A token (CR 111.1), from a [`TokenDefinition`] or a copy effect. It
+    /// ceases to exist in any zone but the battlefield (CR 111.7, 704.5d).
+    Token,
+    /// A copy of a spell (CR 707.10), made on the stack. It ceases to exist
+    /// in any zone but the stack (CR 704.5e).
+    SpellCopy,
+}
+
+/// One object in a game: a card, a token or a copy of a spell, told apart
+/// by [`Card::kind`]. Its characteristics are its definition's, read
+/// through `Deref`; zone state (a `Permanent`, a stack entry) lives beside it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Card {
     pub id: ObjectId,
+    kind: ObjectKind,
     pub definition_id: CardDefId,
     /// Compatibility name for the existing observation ABI. This is always
     /// the numeric representation of `definition_id`.
@@ -1015,6 +1034,8 @@ pub struct Card {
 }
 
 impl Card {
+    /// An object of a catalog row: a token for a token definition's row, a
+    /// card otherwise.
     pub fn from_definition(
         id: ObjectId,
         owner: PlayerId,
@@ -1023,12 +1044,41 @@ impl Card {
     ) -> Self {
         Self {
             id,
+            kind: if definition.is_token {
+                ObjectKind::Token
+            } else {
+                ObjectKind::Card
+            },
             definition_id,
             registry_key: ObjectId(definition_id.0),
             owner,
             copy: None,
             definition,
             front: None,
+        }
+    }
+
+    /// The same object as `kind`: a token made by a copy effect (CR 707.2,
+    /// 111.1) or a copy of a spell (CR 707.10), before it enters the game.
+    pub fn with_kind(self, kind: ObjectKind) -> Self {
+        Self { kind, ..self }
+    }
+
+    pub fn kind(&self) -> ObjectKind {
+        self.kind
+    }
+
+    /// Whether it is a Magic card (CR 108.2): not a token or a copy. Effects
+    /// that say "card" see only these.
+    pub fn is_card(&self) -> bool {
+        self.kind == ObjectKind::Card
+    }
+
+    /// A copy of a permanent spell becomes a token as it resolves
+    /// (CR 111.12, 608.3f).
+    pub fn resolve_into_token(&mut self) {
+        if self.kind == ObjectKind::SpellCopy {
+            self.kind = ObjectKind::Token;
         }
     }
 
@@ -1070,16 +1120,13 @@ impl Card {
         }
     }
 
-    /// Show one face. A token is a double-faced token on either face, and a
-    /// copy's exceptions are in the copiable values of each (CR 707.8a, 707.9b).
+    /// Show one face. Its kind stays (a double-faced token is a token on
+    /// either face), and a copy's exceptions are in the copiable values of
+    /// each (CR 707.8a, 707.9b).
     fn show(&mut self, id: CardDefId, definition: Arc<CardDefinition>) {
-        let token = self.is_token;
         self.definition_id = id;
         self.registry_key = ObjectId(id.0);
         self.definition = definition;
-        if token && !self.is_token {
-            self.is_token = true;
-        }
         if let Some(mut copy) = self.copy.take() {
             copy.of = id;
             for exception in &copy.exceptions {

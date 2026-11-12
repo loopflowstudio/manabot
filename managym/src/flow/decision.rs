@@ -2582,7 +2582,7 @@ impl Game {
                 .into_iter()
                 .filter(|id| self.permanent_matches_predicate(*id, predicate))
                 .filter_map(|id| self.state.permanents[id].as_ref().map(|p| p.card))
-                .filter(|card| !self.state.cards[*card].is_token)
+                .filter(|card| self.state.cards[*card].is_card())
                 .collect(),
             _ => self
                 .state

@@ -128,7 +128,10 @@ impl CardPredicate {
         {
             return false;
         }
-        if self.token.is_some_and(|token| token != card.is_token) {
+        if self
+            .token
+            .is_some_and(|token| token != (card.kind() == crate::card::ObjectKind::Token))
+        {
             return false;
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {

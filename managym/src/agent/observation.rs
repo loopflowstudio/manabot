@@ -263,6 +263,7 @@ pub struct CardData {
     pub text_box: String,
     pub power: i32,
     pub toughness: i32,
+    /// Set for an object that is no card: a token or a copy of a spell.
     pub is_token: bool,
     pub is_legendary: bool,
     /// Subtype tags the current pool cares about.
@@ -1469,7 +1470,7 @@ impl Observation {
             text_box: card.text_box.clone(),
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
-            is_token: card.is_token,
+            is_token: !card.is_card(),
             is_legendary: card.is_legendary(),
             is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),

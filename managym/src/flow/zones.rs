@@ -14,7 +14,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::{Card, CardDefId, Restriction, StaticAbility},
+        card::{Card, CardDefId, ObjectKind, Restriction, StaticAbility},
         effect::{CopyEffect, Modification},
         game_object::{
             CardId, Incarnation, ObjectId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target,
@@ -310,8 +310,9 @@ impl Game {
     }
 
     /// Create a token from the token definition keyed `key` (`token.<name>`)
-    /// under `controller`'s control. Tokens are full cards in `GameState::cards`; state-based
-    /// actions remove them once they leave the battlefield (CR 704.5d).
+    /// under `controller`'s control. A token is an `ObjectKind::Token` object in
+    /// `GameState::cards`, never a card; state-based actions remove it once it
+    /// leaves the battlefield (CR 704.5d).
     /// Returns the token's permanent, absent if it did not stay on the battlefield.
     pub fn create_token(
         &mut self,
@@ -380,11 +381,7 @@ impl Game {
     ) -> CardId {
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
-        // Any write detaches the shared definition (`DerefMut`), so a copy
-        // of a token without exceptions keeps sharing its source's.
-        if !copy.is_token {
-            copy.is_token = true;
-        }
+        let mut copy = copy.with_kind(ObjectKind::Token);
         for exception in &exceptions {
             let copiable = exception.apply_copiable(&mut copy);
             debug_assert!(copiable, "copy exception {exception:?} is a rules effect");
@@ -618,6 +615,7 @@ impl Game {
         self.state.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
+            self.state.cards[card].resolve_into_token();
             if entry.transformed {
                 self.show_back_face(card);
             }

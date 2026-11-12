@@ -6,3 +6,13 @@
   stable. Renaming the wire name would move every token-creating card's learning tokens.
 - The content digest move is unavoidable once effects name tokens by key; all w17 corpora were
   re-recorded in this change.
+
+## MTG-320
+- Emblem: room only. No `ObjectKind::Emblem` or command-zone admission until a card creates one
+  (nothing would use it). Docs say "none yet".
+- Kept the runtime record named `Card` and the table `GameState::cards`; the kind distinguishes objects.
+  A rename (e.g. to an object record) would touch ~500 sites; Jack Heart: "im not sure the
+  Card->GameObject rename is totally clean". Left for review; docs list it as a departure.
+- Predicate `token` filters now match `ObjectKind::Token` only; spell copies used to match (they were
+  tokens). No defined card filters spells by token status, so no behavior moves.
+- Spell copies stop being tokens internally (CR 704.5e); observation `is_token` stays true for them.

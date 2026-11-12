@@ -18,6 +18,7 @@ use managym::{
 
 use crate::support::game::*;
 use crate::support::inspect::card_of;
+use managym::state::card::ObjectKind;
 
 /// Player 0's Gray Ogre (no printed keywords) in player 0's main phase.
 fn ogre_scenario() -> (Scenario, PermanentId) {
@@ -1090,7 +1091,7 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
     let copy = s
         .battlefield_permanents_named(0, "Gray Ogre")
         .into_iter()
-        .find(|&id| s.game().state.cards[card_of(&s, id)].is_token)
+        .find(|&id| s.game().state.cards[card_of(&s, id)].kind() == ObjectKind::Token)
         .unwrap();
     let view = s.game().characteristics(copy);
     assert!(view.keywords.has(Keyword::Flying));

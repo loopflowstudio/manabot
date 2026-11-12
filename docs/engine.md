@@ -550,6 +550,104 @@ fn lightning_bolt() -> CardDefinition {
   A token carries the Scryfall id of its first token printing, or none when it
   was never printed. Tokens are never deck entries or part of the card pool.
 
+## Objects and zones
+
+The engine's runtime types and their names come from the Comprehensive Rules.
+A definition says what something is; an object is one instance of it in a
+game, and a zone says where that object is. Take one Spirit token through a
+turn:
+
+| Step | What the rules say | What the engine holds |
+| --- | --- | --- |
+| `Effect::create_tokens("token.spirit", 1)` resolves | A token enters the battlefield under its creator's control (CR 111.2); it is a permanent (CR 110.1) | an object of kind `ObjectKind::Token` from `TokenDefinition` `token.spirit`, with a `Permanent` for its battlefield state |
+| The Spirit is destroyed | It is put into its owner's graveyard and dies (CR 700.4); it is still a token | the same token, now in the graveyard; death triggers read its last known information |
+| State-based actions are checked | A token in a zone other than the battlefield ceases to exist (CR 111.7, 704.5d) | the token leaves every zone and no longer exists |
+
+At no point is the Spirit a card. An effect that says "card" (return target
+creature card from your graveyard) never sees it, because "card" means only a
+Magic card (CR 108.2); engine code asks `is_card()`.
+
+### Objects
+
+CR 109.1 lists every kind of object. Cards, tokens and copies of spells are
+all held in `GameState::cards` as `state::card::Card` values, the engine's
+object record, and `Card::kind()` returns which of them each one is
+(`ObjectKind`). An object keeps its kind for its whole life; a zone change
+makes a new object of the same kind (CR 400.7). The one change of kind is a
+copy of a permanent spell, which becomes a token as it resolves (CR 111.12,
+608.3f).
+
+| Object | Rule | Engine representation |
+| --- | --- | --- |
+| Card | CR 108 | `ObjectKind::Card`, from a `CardDefinition` |
+| Token | CR 111 | `ObjectKind::Token`, from a `TokenDefinition` or a copy effect that creates a token |
+| Copy of a spell | CR 707.10 | `ObjectKind::SpellCopy`, made from a spell on the stack |
+| Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card |
+| Activated or triggered ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` |
+| Emblem | CR 114 | none yet; no defined card creates one |
+
+A definition's `is_token` says only that its catalog row is a token
+definition's; an object's kind is the authority for what it is.
+
+Two more names are statuses of those objects in a zone, not kinds of their own:
+
+- A **permanent** is a card or token on the battlefield (CR 110.1).
+  `Permanent` holds its battlefield state (tapped, damage, counters,
+  attachment) beside the card or token it is; `PermanentId` names it.
+- A **spell** is a card, or a copy of a card or spell, on the stack
+  (CR 112.1). `StackObject::Spell` holds its cast choices (targets, X,
+  modes, kicker) beside the card or copy it is.
+
+A Clone is still a card. A copy effect changes a card's or token's copiable
+values (CR 707.2) and is recorded on that object (`copy`); it does not make a
+copy object. A copy of a permanent spell becomes a token as it resolves
+(CR 111.12, 608.3f).
+
+### Zones
+
+CR 400.1 names seven zones (ante aside). Each holds only the objects its rule allows:
+
+| Zone | Rule | Holds |
+| --- | --- | --- |
+| Library | CR 401 | cards |
+| Hand | CR 402 | cards |
+| Graveyard | CR 404 | cards |
+| Exile | CR 406 | cards |
+| Battlefield | CR 403 | permanents: cards and tokens |
+| Stack | CR 405 | spells (cards and copies) and abilities |
+| Command | CR 408 | cards (commanders, CR 903.6) and emblems (CR 114.1); empty until a format or card puts something there |
+
+A token or copy that leaves the battlefield or stack is briefly in another
+zone until state-based actions are checked: a token in any zone but the
+battlefield (CR 111.7, 704.5d), a copy of a spell in any zone but the stack, and
+a copy of a card in any zone but the stack or battlefield (CR 704.5e). Library,
+hand, graveyard and exile therefore hold cards plus, for that moment, those
+objects. They keep their kind there; such a token can't return to the
+battlefield (CR 111.8), exile grants and "card" selections skip it, and
+`flow/sba.rs` removes it by its kind.
+
+Outside the game is not a zone (CR 400.11). Sideboards are fixed rosters held
+beside the game (see [Decks](#decks)); a companion starts there and is put into
+its owner's hand by a special action (CR 702.139a, 116.2g), becoming a card in that
+zone.
+
+### Where the engine departs from the rules
+
+- **One object table.** Cards, tokens and copies of spells share
+  `GameState::cards`, indexed by `CardId`, and the record type is named
+  `Card`; zone lists hold `CardId`s of any kind. `Card::kind()` carries the
+  distinction the rules draw.
+- **Shared zones are stored per player.** Battlefield, stack, exile and command
+  are shared zones (CR 400.1); the engine keeps one list per player for each.
+  Stack order is `GameState::stack_objects`.
+- **Ante is not modeled** (CR 407).
+- **Observations keep their names and columns.** The observation API's
+  `CardData` rows cover cards, tokens and copies alike, and its `is_token`
+  column is set for tokens and for copies of spells. Observations stay
+  byte-identical to the layout frozen evidence was recorded with; the column
+  reads "not a card", which is what a viewer can tell. The match-state hash
+  likewise records a token's or copy's characteristics with `is_token` set.
+
 ## Resolution contracts
 
 Three boundaries inside a transition have fixed contracts.

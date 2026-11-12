@@ -15,7 +15,7 @@ use crate::{
             DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue, ObjectSelector,
             TargetRequirement, TargetSpec,
         },
-        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords},
+        card::{ActivatedAbilityDefinition, CardType, Keyword, Keywords, ObjectKind},
         effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -3515,7 +3515,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
             .enumerate()
             .skip(cards_before)
             .map(|(id, card)| {
-                assert!(card.is_token);
+                assert_eq!(card.kind(), ObjectKind::Token);
                 branch.state.card_to_permanent[CardId(id)].unwrap()
             })
             .collect();

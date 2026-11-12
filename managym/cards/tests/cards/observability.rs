@@ -21,6 +21,7 @@ use crate::support::{
     play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
 };
 use managym::agent::observation_layout::{action, card, fact, permanent, player, relation};
+use managym::state::card::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
@@ -4095,9 +4096,10 @@ fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
     cast(&mut s, "Ran and Shaw");
     settle(&mut s);
     let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
-    let is_token = |id: PermanentId| s.game().state.cards[card_of(&s, id)].is_token;
-    let token = *dragons.iter().find(|id| is_token(**id)).unwrap();
-    let source = *dragons.iter().find(|id| !is_token(**id)).unwrap();
+    let is_tok =
+        |id: PermanentId| s.game().state.cards[card_of(&s, id)].kind() == ObjectKind::Token;
+    let token = *dragons.iter().find(|id| is_tok(**id)).unwrap();
+    let source = *dragons.iter().find(|id| !is_tok(**id)).unwrap();
     let key = s.game().state.cards[card_of(&s, source)].registry_key.0 as f32;
     for viewer in [0, 1] {
         let rows = facts_about(&s, viewer, object_index(&s, viewer, token));

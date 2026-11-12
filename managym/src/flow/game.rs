@@ -37,6 +37,8 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub struct GameState {
+    /// Every object a game has made: its cards, tokens and copies of spells,
+    /// told apart by `Card::kind` (CR 109.1).
     pub cards: CardVec<crate::state::card::Card>,
     pub permanents: PermanentVec<Option<crate::state::permanent::Permanent>>,
     pub card_to_permanent: CardVec<Option<PermanentId>>,

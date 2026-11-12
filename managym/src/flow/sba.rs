@@ -1,7 +1,7 @@
 // sba.rs
 // State-based actions.
 
-use crate::state::card::Keyword;
+use crate::state::card::{Keyword, ObjectKind};
 use crate::{
     flow::{
         decision::{EffectFrame, FrameCompletion},
@@ -213,19 +213,21 @@ impl Game {
             performed = true;
         }
 
-        // CR 704.5d — A token in a zone other than the battlefield ceases to
-        // exist. This runs after the move to the graveyard, so death triggers
-        // from tokens have already been enqueued.
+        // CR 704.5d-e — A token in a zone other than the battlefield, or a
+        // copy of a spell in a zone other than the stack, ceases to exist.
+        // This runs after the move to the graveyard, so death triggers from
+        // tokens have already been enqueued.
         let mut tokens_to_remove = Vec::new();
         for (index, card) in self.state.cards.iter().enumerate() {
-            if !card.is_token {
-                continue;
-            }
             let card_id = CardId(index);
-            match self.state.zones.zone_of(card_id) {
-                // A spell copy is a token card while on the stack (CR 704.5e).
-                Some(ZoneType::Battlefield | ZoneType::Stack) | None => {}
-                Some(_) => tokens_to_remove.push((card_id, card.owner)),
+            let zone = self.state.zones.zone_of(card_id);
+            let ceases = match card.kind() {
+                ObjectKind::Card => false,
+                ObjectKind::Token => !matches!(zone, Some(ZoneType::Battlefield) | None),
+                ObjectKind::SpellCopy => !matches!(zone, Some(ZoneType::Stack) | None),
+            };
+            if ceases {
+                tokens_to_remove.push((card_id, card.owner));
             }
         }
         for (card_id, owner) in tokens_to_remove {

@@ -8,7 +8,7 @@ use crate::{
         ability::{Condition, Effect, EffectiveTrigger},
         card::{
             AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keyword, Keywords,
-            LayerValue, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
+            LayerValue, ObjectKind, PowerCda, StaticAbility, StaticPtBuff, StaticScope,
         },
         effect::Modification,
         game_object::{ObjectId, PermanentId, PlayerId},
@@ -1168,7 +1168,8 @@ pub(super) fn matches_view(
         && (!p.with_counter || permanent.counter_count(CounterKind::PlusOnePlusOne) > 0)
         && (!p.attacking || permanent.attacking)
         && (!p.tapped || permanent.tapped)
-        && p.token.is_none_or(|token| token == card.is_token)
+        && p.token
+            .is_none_or(|token| token == (card.kind() == ObjectKind::Token))
         && (p.any_of.is_empty()
             || p.any_of
                 .iter()

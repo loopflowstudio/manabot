@@ -25,6 +25,7 @@ use crate::support::{
         settle_targeting_opponent, target_opponent,
     },
 };
+use managym::state::card::ObjectKind;
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
@@ -3942,7 +3943,7 @@ fn fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist() {
     let clues = s.battlefield_permanents_named(0, "Clue");
     assert_eq!(clues.len(), 1, "Clue token should be created");
     let clue_card = permanent(&s, clues[0]).card;
-    assert!(s.game().state.cards[clue_card].is_token);
+    assert!(s.game().state.cards[clue_card].kind() == ObjectKind::Token);
     assert!(s.game().state.cards[clue_card].types.is_artifact());
 
     // "{2}, Sacrifice this token: Draw a card."
@@ -5015,7 +5016,7 @@ fn battlefield_token(s: &Scenario, player: usize) -> PermanentId {
         .zones
         .zone_cards(ZoneType::Battlefield, PlayerId(player))
         .iter()
-        .find(|card| s.game().state.cards[**card].is_token)
+        .find(|card| s.game().state.cards[**card].kind() == ObjectKind::Token)
         .and_then(|card| s.game().state.card_to_permanent[*card])
         .expect("a token")
 }
@@ -7506,7 +7507,7 @@ fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature
 
     assert_eq!(joo_dees(&s), [token]);
     let copy = permanent(&s, token);
-    assert!(s.game().state.cards[copy.card].is_token);
+    assert!(s.game().state.cards[copy.card].kind() == ObjectKind::Token);
     assert!(!copy.tapped);
     assert_eq!(counters(&s, token), 0);
     assert_eq!(s.game().characteristics(token).pt(), (2, 2));
@@ -7549,7 +7550,7 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
     assert_eq!(remaining.len(), 2);
     let newest = *remaining.iter().find(|id| **id != joo_dee).unwrap();
     let card = &s.game().state.cards[card_of(&s, newest)];
-    assert!(card.is_token);
+    assert!(card.kind() == ObjectKind::Token);
     assert_eq!(card.name, "Joo Dee, One of Many");
     assert_eq!(card.mana_cost.as_ref().unwrap().mana_value, 2);
     let printed = s.game().state.cards[card_of(&s, joo_dee)].definition_id;
@@ -7699,7 +7700,7 @@ fn kyoshi_warriors_etb_creates_ally_token_via_stack() {
     assert_eq!(tokens.len(), 1, "one Ally token should have been created");
     let token = permanent(&s, tokens[0]);
     let token_card = &s.game().state.cards[token.card];
-    assert!(token_card.is_token);
+    assert!(token_card.kind() == ObjectKind::Token);
     assert!(token_card.has_subtype("Ally"));
     assert!(token_card.types.is_creature());
     assert_eq!(token_card.power, Some(1));
@@ -8223,7 +8224,7 @@ fn phoenix_fleet_airship_copies_itself_at_your_end_step_only_after_a_sacrifice()
     assert_eq!(fleet.len(), 2);
     let token = *fleet.iter().find(|id| **id != airship).unwrap();
     let card = &s.game().state.cards[card_of(&s, token)];
-    assert!(card.is_token);
+    assert!(card.kind() == ObjectKind::Token);
     assert_eq!(
         card.copy,
         Some(CopyEffect {
@@ -8252,7 +8253,7 @@ fn phoenix_fleet_airship_copies_itself_as_it_last_existed_after_leaving() {
     let fleet = airships(&s);
     assert_eq!(fleet.len(), 1, "the copy of the departed Airship");
     let token = &s.game().state.cards[card_of(&s, fleet[0])];
-    assert!(token.is_token);
+    assert!(token.kind() == ObjectKind::Token);
     assert!(token.keywords.has(Keyword::Flying));
     assert_eq!(
         token.activated_abilities[0].crew,
@@ -8353,7 +8354,7 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
         .iter()
         .find_map(|id| {
             let p = s.game().state.permanents[*id].as_ref().unwrap();
-            s.game().state.cards[p.card].is_token.then_some(p)
+            (s.game().state.cards[p.card].kind() == ObjectKind::Token).then_some(p)
         })
         .unwrap();
     assert!(!token.was_cast);
@@ -8380,10 +8381,10 @@ fn ran_and_shaw_copy_records_its_copy_effect_and_exception() {
     let cards = &s.game().state.cards;
     let pair: [CardId; 2] = [card_of(&s, dragons[0]), card_of(&s, dragons[1])];
     let (copy, source) = match pair {
-        [a, b] if cards[a].is_token => (a, b),
+        [a, b] if cards[a].kind() == ObjectKind::Token => (a, b),
         [a, b] => (b, a),
     };
-    assert!(!cards[source].is_token);
+    assert!(cards[source].is_card());
     assert_eq!(cards[source].copy, None);
     assert_eq!(
         cards[copy].copy,
@@ -8461,7 +8462,10 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
         let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
         assert_eq!(dragons.len(), 1);
         let dragon = s.game().state.permanents[dragons[0]].as_ref().unwrap();
-        assert_eq!(s.game().state.cards[dragon.card].is_token, mode == 2);
+        assert_eq!(
+            s.game().state.cards[dragon.card].kind() == ObjectKind::Token,
+            mode == 2
+        );
         assert_eq!(s.game().characteristics(dragons[0]).power, 4);
     }
 }
@@ -13941,7 +13945,7 @@ fn ember_island_production_copies_either_side_with_its_exceptions() {
     let token = *copies.iter().find(|id| **id != kuruk).expect("a copy");
     let card = &s.game().state.cards[card_of(&s, token)];
     assert!(
-        card.is_token && card.is_transformed(),
+        card.kind() == ObjectKind::Token && card.is_transformed(),
         "the face that's up, transformed"
     );
     assert!(!card.supertypes.iter().any(|t| t == "Legendary"));
@@ -14264,6 +14268,21 @@ fn fire_lord_azula_copies_spells_cast_while_she_attacks() {
         }
     }
     s.assert_life(1, 11);
+    let cards = &s.game().state.cards;
+    let copies: Vec<CardId> = (0..cards.len())
+        .map(CardId)
+        .filter(|card| cards[*card].kind() == ObjectKind::SpellCopy)
+        .collect();
+    assert_eq!(
+        copies.len(),
+        1,
+        "the copy is a copy of a spell, not a token"
+    );
+    assert_eq!(
+        zone_of(&s, copies[0]),
+        None,
+        "it ceased to exist off the stack (CR 704.5e)"
+    );
 }
 
 /// I destroys all creatures; II names a card and exiles up to four with
@@ -14497,14 +14516,17 @@ fn a_token_copy_of_a_double_faced_creature_keeps_being_a_token_on_either_face() 
     settle(&mut s);
     let card = &s.game().state.cards[token_card];
     assert_eq!(card.name, "Aang and La, Ocean's Fury");
-    assert!(card.is_token, "the back face of a token is a token");
+    assert!(
+        card.kind() == ObjectKind::Token,
+        "the back face of a token is a token"
+    );
     assert!(card.has_subtype("Hero"), "exceptions apply to each face");
     assert!(!card.supertypes.iter().any(|t| t == "Legendary"));
     assert_eq!(s.game().characteristics(token).power, 4);
 
     s.game_mut().move_card(token_card, ZoneType::Graveyard);
     s.advance_to_active_step(0, StepKind::End);
-    assert!(s.game().state.cards[token_card].is_token);
+    assert!(s.game().state.cards[token_card].kind() == ObjectKind::Token);
     assert_eq!(zone_of(&s, token_card), None, "a token ceases to exist");
 }
 
@@ -14577,7 +14599,7 @@ fn fire_lord_azula_copies_a_permanent_spell_into_a_token() {
     assert_eq!(reinforcements.len(), 2);
     let tokens = reinforcements
         .iter()
-        .filter(|id| s.game().state.cards[card_of(&s, **id)].is_token)
+        .filter(|id| s.game().state.cards[card_of(&s, **id)].kind() == ObjectKind::Token)
         .count();
     assert_eq!(tokens, 1);
 }
