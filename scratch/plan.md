@@ -47,10 +47,18 @@
   slot is held by machine `l4-etude-9249bc075105` (not this Task's; rented until 18:05
   UTC). Not launched; other Tasks' on-demands (mtg281-l4, b015d5-l4) left alone.
 
+- Compress (`fe7043665`): dropped the unused `Arm.environment` (no arm sets env since
+  `LAYOUTS`); test reads `OBJECT_VALIDITY_KEYS`; doc serialization paragraph trimmed.
+  `test_live_tokens.py`: 5 passed. Merged main `4c9ba1957` (no conflict with this diff).
+
 ## Remaining
 
-- L4 run (<= USD 3; `--rent l4-etude` once its slot frees, revision = branch head) and
-  the report's Results/Decision; gate suites.
-- Compress: dropped the unused `Arm.environment` (no arm sets env since `LAYOUTS`); test
-  reads `OBJECT_VALIDITY_KEYS`; doc serialization paragraph trimmed. `test_live_tokens.py`:
-  5 passed.
+- L4 run (<= USD 3; `--rent l4-etude` once a slot is free, revision = branch head
+  `1987cc259` or later). Last observed slot state is the 16:28 UTC poll above.
+- Report Results/Decision in `experiments/live_token_attention.md`, reader-first per
+  main's `.lf/skills/experiment-report.md` step 5 (`4c9ba1957`): plain answer (speedup at
+  w384l8 vs the 1.5x bar, numerics equal or not) before any table, step time in ms,
+  cost once, run IDs and receipts in a closing appendix. Then an `experiments/README.md`
+  index line.
+- Gate suites (model, training, `tests/infra/test_experiment_data_untracked.py` if the
+  run's data lands under `experiments/data/`).
