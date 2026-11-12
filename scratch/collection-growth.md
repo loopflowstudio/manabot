@@ -127,3 +127,6 @@ execution record, frozen paired analysis) and `experiments/README.md` (Data
 pointer). Reviewed 2026-11-12 against the execution facts above; they already
 state the inconclusive outcome and need no edit until the open budget decision
 is made.
+- Write-docs 2026-11-12 (after realign): re-read both docs against the execution
+  facts; no new Task comment or budget choice, so no edit. No Desktop Files view
+  was attached for presentation.
