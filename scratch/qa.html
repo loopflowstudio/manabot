@@ -46,6 +46,12 @@
 </ul>
 <img src="qa307/game-over-bc35142.png" alt="Academy game over at bc35142da">
 
+<h2>Re-run at abeab7a87</h2>
+<p>Since bc35142da only scratch notes changed. The Rust sources are the same and the cp313 extension in use was built from them. Main is two commits ahead (#480 policy-input admission, MTG-301 experiment files), and neither touches <code>managym/</code>.</p>
+<p><b>Random games:</b> <code>uv run python .runs/qa307/play.py</code> played 1332 full games in 22 s with 0 errors. Its output is byte-identical to the bc35142da run.</p>
+<p><b>Academy:</b> started <code>./scripts/play --port 18731 --frontend-port 18732</code> and saw ACADEMY_PLAY_READY (cp313, this worktree's module). Played one headless-browser game to Game Over by clicking only offered choices: 63 clicks, no page errors. The changed BeginningOf trigger was on the stack with its new text:</p>
+<img src="qa307/upkeep-abeab7a.png" alt="Stack: Tiger-Seal - At the beginning of your upkeep: Tap this">
+<p>Nothing needed fixing. The &quot;Not reached&quot; and &quot;Still wrong&quot; lists below still apply.</p>
 <h2>Fixed</h2><p>Nothing in the change needed fixing. Updated the repository QA skill with the headless Academy driving recipe.</p>
 
 <h2>Not reached</h2>

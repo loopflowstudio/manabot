@@ -157,3 +157,7 @@ changed; no suite inputs moved, so no reruns. PR #484 CI pending at this pass.
 Compress (head 5a7ab52ea): since 17768efe2 only the base merge and scratch
 changed; no code to reduce. Dropped inherited MTG-286 notes from
 `scratch/questions.md` (at `5a7ab52ea:scratch/questions.md`); scratch 2651 tokens.
+
+QA re-run (head abeab7a87): only scratch changed since bc35142da. 1332 random
+games, 0 errors, output identical; one Academy game to Game Over (63 clicks, no
+page errors) with Tiger-Seal's upkeep trigger on the stack. No fixes.
