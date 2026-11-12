@@ -126,6 +126,11 @@ def test_old_recipe_bytes_and_invalid_endpoint() -> None:
         TrainingRegime.model_validate(payload)
 
 
+# Bounds a wait that should never be reached; real training beside other test
+# processes takes a varying share of it, so it is no statement about speed.
+_HANG_SECONDS = 120
+
+
 @pytest.mark.parametrize("admitted", [True, False])
 def test_initial_admission_precedes_collection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admitted: bool
@@ -163,7 +168,7 @@ def test_initial_admission_precedes_collection(
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         future = pool.submit(train)
-        deadline = time.monotonic() + 30
+        deadline = time.monotonic() + _HANG_SECONDS
         while time.monotonic() < deadline:
             if (out / "run.json").exists():
                 run = TrainingRun.model_validate_json((out / "run.json").read_text())
@@ -177,14 +182,14 @@ def test_initial_admission_precedes_collection(
             pytest.fail("initial checkpoint unavailable")
         assert run.updates_through() == 0
         assert run.stages[0].learner_transitions == 0
-        assert waiting.wait(timeout=5)
+        assert waiting.wait(timeout=_HANG_SECONDS)
         # A slow admission cannot consume the active training allocation.
         clock.offset += 100
         digest = run.stages[0].artifacts["initial_raw"]["sha256"]
         gate.write_text(digest if admitted else "wrong-checkpoint")
         # Subtracting the real clock epoch can round the injected 100-second wait.
         if admitted:
-            finished = future.result(timeout=30)
+            finished = future.result(timeout=_HANG_SECONDS)
             assert finished.status == "completed"
             assert finished.stages[0].updates == 2
             assert finished.stages[0].admission_wait_seconds is not None
@@ -192,7 +197,7 @@ def test_initial_admission_precedes_collection(
             assert finished.stages[0].admission_wait_seconds >= 100 - 1e-6
         else:
             with pytest.raises(ValueError, match="admission differs"):
-                future.result(timeout=30)
+                future.result(timeout=_HANG_SECONDS)
             failed = TrainingRun.model_validate_json((out / "run.json").read_text())
             assert failed.updates_through() == 0
             assert failed.stages[0].learner_transitions == 0

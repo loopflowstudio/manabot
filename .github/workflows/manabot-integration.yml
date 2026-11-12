@@ -83,21 +83,19 @@ jobs:
             tests/training/test_time_profile.py tests/training/test_time_cohort.py \
             tests/training/test_active_training.py \
             tests/training/test_process_tree_rss.py \
-            tests/training/test_precision.py \
+            tests/training/test_precision.py tests/training/test_training_throughput_sizes.py \
             tests/training/test_experiment_data.py \
             tests/training/test_checkpoint_queue.py \
             tests/training/test_experiments.py tests/training/test_builders.py tests/training/test_regimes.py tests/training/test_study.py \
             tests/training/test_batch_closure.py tests/training/test_frozen_opponent.py \
             tests/training/test_outcome_tables.py
 
-      - name: Recovery, cadence and model-size tests
+      - name: Recovery and cadence tests
         if: matrix.group == 'recovery'
         run: |
           uv run pytest -n logical --durations=20 \
             tests/training/test_recovery.py tests/training/test_active_recovery.py \
-            tests/training/test_step_cadence.py tests/training/test_learning_state.py \
-            tests/training/test_elemental_uniform.py \
-            tests/training/test_training_throughput_sizes.py
+            tests/training/test_step_cadence.py tests/training/test_learning_state.py
 
       - name: Experiment runner, monitoring and verification tests
         if: matrix.group == 'experiment'
@@ -112,13 +110,14 @@ jobs:
             tests/verify/test_observation_parity.py::test_fact_capacity_fills_exactly_and_rejects_overflow \
             tests/verify/test_observation_parity.py::test_vector_buffers_derive_fact_capacity
 
-      - name: Two-seat and Etude evaluation integration
+      - name: Two-seat, Elemental and Etude evaluation integration
         if: matrix.group == 'evaluation'
         run: |
           uv run pytest -n logical --durations=20 \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
             tests/training/test_adaptive_sampler.py tests/training/test_adaptive_two_seat.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
+            tests/training/test_elemental_uniform.py \
             tests/eval/ -q \
             --ignore=tests/eval/test_elemental_long_report.py --ignore=tests/eval/test_elemental_long_eval.py \
             --ignore=tests/eval/test_card_evaluation.py --ignore=tests/eval/test_mtg186_cards.py \
