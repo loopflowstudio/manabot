@@ -156,13 +156,16 @@ def test_unknown_legs_and_seeds_are_refused() -> None:
 def test_a_size_cell_trains_through_the_real_worker_on_cpu(
     tmp_path: Path, leg: str
 ) -> None:
-    """The leg's regime at 8 streams of 16 transitions and 1 update, moved to CPU."""
+    """The leg's regime at 2 streams and 1 update, moved to CPU.
+
+    Collection plays every stream's game to its end, so the stream count, not
+    the transition floor, sets how long the largest model takes here.
+    """
     chosen = sizes.LEGS[leg]
     regime = sizes.recipe(chosen.size, chosen.precision, 1)
     regime.wall_seconds = 600
     stage = regime.stages[0]
-    stage.streams = 8
-    stage.transitions = 16
+    stage.streams = 2
     stage.execution.device = "cpu"
     stage.execution.wall_seconds = 600
     spec = TrainingJob(regime=regime, experiment=sizes.EXPERIMENT)

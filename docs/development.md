@@ -263,8 +263,13 @@ $ gh run view <run-id> --json jobs \
 6 min  Integration / Integration (ubuntu-latest, evaluation)
 ```
 
-Each Integration group prints its 20 slowest tests (`pytest --durations=20`) at
-the end of its test step. When a job passes 8 minutes, in order of preference:
+Integration and Academy Integration install every extra they use in one
+`uv sync` that leaves `managym` out, build the extension once with
+`maturin develop`, and run with `UV_NO_SYNC=1` so no later `uv run` compiles the
+engine a second time. Each Integration group runs one pytest worker per logical core
+(`pytest -n logical`; [TESTING.md](../TESTING.md) says what that asks of a test)
+and prints its 20 slowest tests (`--durations=20`) at the end of its test step.
+When a job passes 8 minutes, in order of preference:
 
 1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
    a shared setup) while keeping what they assert.

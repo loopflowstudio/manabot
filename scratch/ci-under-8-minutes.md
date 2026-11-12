@@ -25,3 +25,27 @@ time; report before/after from CI runs. Do not drop or weaken tests."
   behavior (groups name exact paths); no completeness check is promised.
 - The macOS nightly is not held to the 8-minute limit (the Task says "on the
   ordinary ubuntu runner").
+
+## Built (first cut, measured by CI dispatch on the branch)
+
+- Baseline, main run 43312163427 (job wall s): core 1443, long 1056,
+  evaluation 746, Engine Budget 720 (exempt), every other job <= 302. Other
+  main runs: core 1102-1726. Setup was ~180 s per Integration job because
+  `uv sync` compiled managym (release, ~94 s) and `maturin develop` compiled it
+  again (dev, ~83 s); the `actions/cache` step on `~/.cache/uv` never hit
+  (setup-uv moves `UV_CACHE_DIR`).
+- Change: one sync with all extras and `--no-install-package managym`, one
+  `maturin develop`, `UV_NO_SYNC=1` (the Perf proof script calls `uv run`
+  itself); `pytest -n auto` (pytest-xdist added to `dev`); groups `model`,
+  `training`, `recovery`, `experiment`, `evaluation`;
+  `test_a_size_cell_trains...` runs 16 transitions instead of 64 (215 s test).
+  `tests/conftest.py` no longer arms the five-minute clock in the xdist
+  controller, where nothing restarts it.
+- `tests/training/test_credit_assignment.py` was listed in both `core` and
+  `long`; it now runs once, in `training`.
+- Python Integration still runs the dev-profile extension (debug assertions
+  on). A release build would make engine-heavy tests faster but drops those
+  assertions from Python-driven games; not done, a coverage decision.
+- Local timing is not usable as evidence: the machine was at load ~330 from
+  other work. CI dispatches on the branch (`gh workflow run ci.yml --ref
+  <branch>`) are the measurements.
