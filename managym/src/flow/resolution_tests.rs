@@ -134,6 +134,7 @@ fn stack(
             player: None,
             inline_effects: Some(effects),
             x: 0,
+            spent: Default::default(),
         }),
         Entry::Spell => unreachable!(),
     };
@@ -673,6 +674,7 @@ fn counter_spell_cannot_affect_an_ability() {
             exile: false,
         }]),
         x: 0,
+        spent: Default::default(),
     }));
     game.resolve_top_of_stack();
     assert_eq!(game.state.stack_objects.len(), 1);

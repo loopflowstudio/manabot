@@ -451,6 +451,7 @@ impl Game {
                 kicked: cast.kicked,
                 x: cast.x,
                 mode: None,
+                spent: Default::default(),
             }));
     }
 
@@ -583,9 +584,9 @@ impl Game {
             .flatten()
             .map(|index| self.state.stack_objects_mut().remove(index));
         let was_cast = cast_spell.is_some();
-        let cast_x = match cast_spell {
-            Some(StackObject::Spell(spell)) => spell.x,
-            _ => 0,
+        let (cast_x, cast_spent) = match cast_spell {
+            Some(StackObject::Spell(spell)) => (spell.x, spell.spent),
+            _ => Default::default(),
         };
 
         let holder = match (to_zone, entry.controller) {
@@ -612,6 +613,7 @@ impl Game {
             permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.cast_x = cast_x;
+            permanent.cast_spent = cast_spent;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             event_controller = permanent.controller;

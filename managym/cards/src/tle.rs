@@ -9,9 +9,10 @@ use managym_state::{
         ReplacementEffect, StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticScope, TapCost,
     },
     effect::Modification,
-    mana::{Mana, ManaCost},
+    mana::{Mana, ManaCost, SpendEffect},
     permanent::CounterKind,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -19,6 +20,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         aang_air_nomad(),
         aardvark_sloth(),
         allied_teamwork(),
+        animal_attendant(),
         capital_guard(),
         deer_dog(),
         dragon_moose(),
@@ -42,9 +44,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         sokka_wolf_cove_s_protector(),
         the_cabbage_merchant(),
         the_terror_of_serpent_s_pass(),
+        toph_greatest_earthbender(),
         toucan_puffin(),
         tundra_wall(),
         turtle_seals(),
+        uncle_s_musings(),
         warship_scout(),
         wolf_cove_villager(),
         zhao_the_seething_flame(),
@@ -743,6 +747,105 @@ fn sokka_s_sword_training() -> CardDefinition {
             Effect::create_tokens("Clue", 1),
         ],
         targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn animal_attendant() -> CardDefinition {
+    let text_box = "{T}: Add one mana of any color. If that mana is spent to cast a non-Human creature spell, that creature enters with an additional +1/+1 counter on it.";
+    let effect = SpendEffect::CreatureEntersWithPlusOneCounter {
+        without_subtype: "Human".into(),
+    };
+    CardDefinition {
+        key: "tle.animal_attendant",
+        scryfall_id: "a3e6ff4d-bf7d-488f-a02f-f40e7f8761ca",
+        name: "Animal Attendant".into(),
+        mana_cost: Some(ManaCost::parse("{1}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Citizen".into()],
+        power: Some(2),
+        toughness: Some(2),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            // One mode per color, W through G, each carrying the rider.
+            effects: vec![Effect::mana_choice((0..5).map(|slot| {
+                let mut amounts = [0; 6];
+                amounts[slot] = 1;
+                Mana::of_class(effect.clone().into(), amounts)
+            }))],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn toph_greatest_earthbender() -> CardDefinition {
+    let text_box = "When Toph enters, earthbend X, where X is the amount of mana spent to cast her. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nLand creatures you control have double strike.";
+    CardDefinition {
+        key: "tle.toph_greatest_earthbender",
+        scryfall_id: "b15acc09-dd32-4e93-a788-7c0ae965a0c8",
+        name: "Toph, Greatest Earthbender".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        supertypes: vec!["Legendary".into()],
+        power: Some(3),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::Earthbend {
+                count: EffectValue::ManaSpentToCast,
+                what: ObjectSelector::Target(TargetSpec::LandYouControl),
+            }],
+        }],
+        statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+            scope: StaticScope::YouControl(CardPredicate {
+                card_type: Some(CardType::Land),
+                card_types_any: vec![CardType::Creature],
+                ..Default::default()
+            }),
+            condition: None,
+            keywords: Keywords::of(&[Keyword::DoubleStrike]),
+        })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn uncle_s_musings() -> CardDefinition {
+    let text_box = "Converge — Return up to X permanent cards from your graveyard to your hand, where X is the number of colors of mana spent to cast this spell.\nExile Uncle's Musings.";
+    CardDefinition {
+        key: "tle.uncle_s_musings",
+        scryfall_id: "55724dab-93c8-4a7f-89c2-13e94820635b",
+        name: "Uncle's Musings".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![
+            Effect::SelectCards {
+                from: ObjectSelector::Zone(ZoneType::Graveyard),
+                predicate: CardPredicate {
+                    card_types_any: vec![
+                        CardType::Artifact,
+                        CardType::Battle,
+                        CardType::Creature,
+                        CardType::Enchantment,
+                        CardType::Land,
+                        CardType::Planeswalker,
+                    ],
+                    ..Default::default()
+                },
+                min: 0,
+                max: EffectValue::ColorsSpentToCast,
+                effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
+                if_declined: vec![],
+            },
+            Effect::exile(ObjectSelector::This),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -1931,7 +1931,7 @@ impl Game {
         self.produce_mana(player, &cost)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
-        self.spend_mana(player, &cost)?;
+        let spent = self.spend_mana(player, &cost)?;
         let mut events = Vec::new();
         if let Some(target) = sacrifice.and_then(|id| self.permanent_object_ref(id)) {
             events.push(ProposedEvent::Sacrifice { target });
@@ -1941,7 +1941,11 @@ impl Game {
         }
         self.pending_choice = None;
         let completion = match payment {
-            Payment::Spell { .. } => FrameCompletion::Paid { player, payment },
+            Payment::Spell { .. } => FrameCompletion::Paid {
+                player,
+                payment,
+                spent,
+            },
             Payment::Activation {
                 source,
                 ability_index,

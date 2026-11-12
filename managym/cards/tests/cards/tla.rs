@@ -9989,7 +9989,7 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     activate(&mut s, hideout, 1);
     choose_mode(&mut s, 1);
     assert_eq!(pool(&s).mana, [0, 1, 0, 0, 0, 0]);
-    assert!(pool(&s).restricted().is_empty());
+    assert!(pool(&s).classes().is_empty());
 }
 
 #[test]

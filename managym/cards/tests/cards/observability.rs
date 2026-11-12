@@ -127,7 +127,7 @@ fn keyword_columns(keyword: Keyword) -> (usize, usize) {
     }
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 19] {
     let Permanent {
         transforms: _,
         id: _,
@@ -143,6 +143,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
         attacking: _,
         was_cast: _,
         cast_x: _,
+        cast_spent: _,
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
@@ -178,6 +179,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 18] {
         (
             "cast_x",
             Seen::Transient("copied into its own entering trigger's X as it fires"),
+        ),
+        (
+            "cast_spent",
+            Seen::Transient("copied into its own entering trigger's mana spent as it fires"),
         ),
         ("attached_to", Seen::Permanent(permanent::ATTACHED_TO)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),

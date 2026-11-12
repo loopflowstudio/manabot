@@ -469,14 +469,14 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
             activate_named(&mut s, "Prophetic Prism", 0);
             assert_eq!(s.game().state.players[0].mana_pool.mana[1], 0);
             assert_eq!(
-                s.game().state.players[0].mana_pool.restricted(),
-                restricted.restricted()
+                s.game().state.players[0].mana_pool.classes(),
+                restricted.classes()
             );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
             assert_eq!(s.game().state.players[0].mana_pool.mana[4], 1);
             assert_eq!(
-                s.game().state.players[0].mana_pool.restricted(),
-                restricted.restricted()
+                s.game().state.players[0].mana_pool.classes(),
+                restricted.classes()
             );
         }
     }

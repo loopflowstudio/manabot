@@ -116,6 +116,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "linked exile",
     "linked return",
     "linked source",
+    "mana spent",
     "maximum total power",
     "mode",
     "moved",
@@ -418,8 +419,15 @@ impl<'a> Projection<'a> {
                     self.object("attach to", *object);
                 }
             }
-            FrameCompletion::Paid { player, payment } => {
+            FrameCompletion::Paid {
+                player,
+                payment,
+                spent,
+            } => {
                 self.paid_summary();
+                if !spent.is_empty() {
+                    self.field("mana spent", spent);
+                }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
                 match payment {

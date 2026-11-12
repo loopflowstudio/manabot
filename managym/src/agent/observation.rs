@@ -1172,9 +1172,12 @@ impl Observation {
             mana: pool.mana.map(i32::from),
             lesson_mana: pool.restricted_colors().map(i32::from),
             restricted_mana: pool
-                .restricted()
+                .classes()
                 .iter()
-                .map(|(restriction, amounts)| RestrictedManaData::new(restriction, *amounts))
+                .filter_map(|(class, amounts)| {
+                    let restriction = class.restriction.as_ref()?;
+                    Some(RestrictedManaData::new(restriction, *amounts))
+                })
                 .collect(),
             hand_only_until: game
                 .hand_only_until(player)

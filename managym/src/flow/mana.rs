@@ -21,7 +21,7 @@ use crate::{
             TriggeredManaOutput,
         },
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
-        mana::{Color, Mana, ManaCost},
+        mana::{Color, Mana, ManaCost, ManaSpent},
     },
 };
 
@@ -1495,22 +1495,23 @@ impl Game {
         Ok(())
     }
 
-    /// Pay `cost` from eligible pools. Within each color, restricted mana is
-    /// spent first; combat mana is spent first within each restriction class.
+    /// Pay `cost` from eligible pools and report the mana spent. Within each
+    /// color, classes are spent in `Mana::pay`'s order; combat mana is spent
+    /// first within each class.
     pub(crate) fn spend_mana(
         &mut self,
         player: PlayerId,
         cost: &ManaCost,
-    ) -> Result<(), AgentError> {
+    ) -> Result<ManaSpent, AgentError> {
         let combined = self.pooled_mana(player);
         if !combined.can_pay(cost) {
             return Err(AgentError("insufficient mana in pool".to_string()));
         }
         let mut remaining = combined;
-        remaining.pay(cost);
+        let spent = remaining.pay(cost);
 
         self.spend_mana_to_remainder(player, remaining);
-        Ok(())
+        Ok(spent)
     }
 
     /// Commit an already validated pool payment. Feasibility probes and real
@@ -1520,25 +1521,25 @@ impl Game {
         // expiring combat pool before the regular pool within each class.
         let (mana_pool, combat_mana_pool) = self.state.mana_pools_mut(player);
         let mut classes = mana_pool
-            .restricted()
+            .classes()
             .iter()
-            .chain(combat_mana_pool.restricted())
+            .chain(combat_mana_pool.classes())
             .map(|(class, _)| class.clone())
             .collect::<Vec<_>>();
         classes.sort();
         classes.dedup();
         for class in &classes {
-            let mut regular = mana_pool.restricted_of(class);
-            let mut combat = combat_mana_pool.restricted_of(class);
-            let left = remaining.restricted_of(class);
+            let mut regular = mana_pool.class_of(class);
+            let mut combat = combat_mana_pool.class_of(class);
+            let left = remaining.class_of(class);
             for slot in 0..left.len() {
                 let spent = regular[slot] + combat[slot] - left[slot];
                 let from_combat = spent.min(combat[slot]);
                 combat[slot] -= from_combat;
                 regular[slot] -= spent - from_combat;
             }
-            mana_pool.set_restricted(class, regular);
-            combat_mana_pool.set_restricted(class, combat);
+            mana_pool.set_class(class, regular);
+            combat_mana_pool.set_class(class, combat);
         }
         for slot in 0..remaining.mana.len() {
             let spent = mana_pool.mana[slot] + combat_mana_pool.mana[slot] - remaining.mana[slot];

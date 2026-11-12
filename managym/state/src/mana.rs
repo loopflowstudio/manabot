@@ -165,6 +165,132 @@ impl ManaRestriction {
     }
 }
 
+/// What spending one mana does beyond paying (CR 106.6): the rider a mana
+/// ability attaches to the mana it produces.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub enum SpendEffect {
+    /// "If that mana is spent to cast a non-[subtype] creature spell, that
+    /// creature enters with an additional +1/+1 counter on it" (Animal
+    /// Attendant). One counter for each such mana spent.
+    CreatureEntersWithPlusOneCounter { without_subtype: String },
+}
+
+impl SpendEffect {
+    /// Whether spending this mana in `context` has its effect.
+    pub fn applies(&self, context: &SpendingContext) -> bool {
+        match (self, context) {
+            (
+                Self::CreatureEntersWithPlusOneCounter { without_subtype },
+                SpendingContext::Cast(spell),
+            ) => {
+                spell.0.types.is_creature()
+                    && !spell.0.subtypes.iter().any(|name| name == without_subtype)
+            }
+            _ => false,
+        }
+    }
+
+    /// "a +1/+1 counter on a non-Human creature spell it casts".
+    pub fn describe(&self) -> String {
+        match self {
+            Self::CreatureEntersWithPlusOneCounter { without_subtype } => {
+                format!("a +1/+1 counter on a non-{without_subtype} creature spell it casts")
+            }
+        }
+    }
+}
+
+/// Every rule-visible property that tells pooled mana apart from ordinary
+/// mana of its type: a spending restriction, a spend effect, or both. Mana
+/// merges only within one class; units of a class are indistinguishable.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
+pub struct ManaClass {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restriction: Option<ManaRestriction>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effect: Option<SpendEffect>,
+}
+
+impl From<ManaRestriction> for ManaClass {
+    fn from(restriction: ManaRestriction) -> Self {
+        Self {
+            restriction: Some(restriction),
+            effect: None,
+        }
+    }
+}
+
+impl From<SpendEffect> for ManaClass {
+    fn from(effect: SpendEffect) -> Self {
+        Self {
+            restriction: None,
+            effect: Some(effect),
+        }
+    }
+}
+
+impl ManaClass {
+    /// Whether mana of this class may pay a cost spent in `context`.
+    pub fn allows(&self, context: &SpendingContext) -> bool {
+        self.restriction
+            .as_ref()
+            .is_none_or(|restriction| restriction.allows(context))
+    }
+
+    /// Whether spending this class in `context` has its spend effect.
+    fn effect_applies(&self, context: &SpendingContext) -> bool {
+        self.effect
+            .as_ref()
+            .is_some_and(|effect| effect.applies(context))
+    }
+
+    /// The automatic spending order: restricted mana and mana whose effect
+    /// applies go before ordinary mana (`true`), narrowest restriction
+    /// first; unrestricted mana whose effect would be wasted goes after it.
+    fn spend_order(&self, context: &SpendingContext) -> (bool, usize) {
+        let breadth = self
+            .restriction
+            .as_ref()
+            .map_or(usize::MAX, ManaRestriction::breadth);
+        (
+            self.restriction.is_some() || self.effect_applies(context),
+            breadth,
+        )
+    }
+}
+
+/// The mana one payment actually spent (CR 601.2h): amounts by W/U/B/R/G/C
+/// and the spend effects that applied. A cast spell keeps it for "mana spent
+/// to cast" and converge; it never reads the printed cost.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
+pub struct ManaSpent {
+    pub amounts: [u8; 6],
+    /// +1/+1 counters the spell's permanent enters with, one for each mana
+    /// spent whose `SpendEffect` applied to this spell.
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub entry_counters: u8,
+}
+
+impl ManaSpent {
+    pub fn is_empty(&self) -> bool {
+        *self == Self::default()
+    }
+
+    /// "The amount of mana spent to cast" it.
+    pub fn total(&self) -> u16 {
+        self.amounts.iter().map(|amount| u16::from(*amount)).sum()
+    }
+
+    /// Converge (an ability word, CR 207.2c): the number of colors of mana
+    /// spent; colorless is not a color (CR 105.1).
+    pub fn colors(&self) -> u8 {
+        self.amounts[..5]
+            .iter()
+            .filter(|amount| **amount > 0)
+            .count() as u8
+    }
+}
+
 /// An activation's source as its cost is priced: the subtypes the
 /// `ActivateSubtype` predicate reads. A snapshot shared by the cost's clones,
 /// witnesses and forks; it never follows the live object.
@@ -471,19 +597,19 @@ impl ManaCost {
     }
 }
 
-/// One restriction and its pooled amounts by W/U/B/R/G/C.
-pub type RestrictedClass = (ManaRestriction, [u8; 6]);
+/// One class and its pooled amounts by W/U/B/R/G/C.
+pub type PooledClass = (ManaClass, [u8; 6]);
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct Mana {
     pub mana: [u8; 6],
-    /// Mana that keeps a spending restriction until spent or lost (CR 106.6),
-    /// by restriction and color. Canonical: sorted by use, no all-zero entry,
-    /// `None` when empty. Boxed so ordinary pools stay small and
-    /// allocation-free when cloned.
+    /// Mana that keeps a spending restriction or a spend effect until spent
+    /// or lost (CR 106.6), by class and color. Canonical: sorted by class, no
+    /// all-zero entry, `None` when empty. Boxed so ordinary pools stay small
+    /// and allocation-free when cloned.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every pool
-    pub restricted: Option<Box<Vec<RestrictedClass>>>,
+    pub classes: Option<Box<Vec<PooledClass>>>,
 }
 
 impl Mana {
@@ -532,31 +658,42 @@ impl Mana {
 
     /// Mana of `amounts` restricted to `restriction`.
     pub fn restricted_to(restriction: ManaRestriction, amounts: [u8; 6]) -> Self {
+        Self::of_class(restriction.into(), amounts)
+    }
+
+    /// Mana of `amounts` in `class`.
+    pub fn of_class(class: ManaClass, amounts: [u8; 6]) -> Self {
         let mut out = Mana::default();
-        out.add_restricted(&restriction, amounts);
+        out.add_class(&class, amounts);
         out
     }
 
-    /// Restricted classes with their amounts by color, sorted by use.
-    pub fn restricted(&self) -> &[RestrictedClass] {
-        self.restricted.as_deref().map_or(&[], Vec::as_slice)
+    /// Non-ordinary classes with their amounts by color, sorted by class.
+    pub fn classes(&self) -> &[PooledClass] {
+        self.classes.as_deref().map_or(&[], Vec::as_slice)
     }
 
-    /// The restricted amounts of one restriction class, by color.
-    pub fn restricted_of(&self, restriction: &ManaRestriction) -> [u8; 6] {
-        self.restricted()
+    /// One class's amounts, by color.
+    pub fn class_of(&self, class: &ManaClass) -> [u8; 6] {
+        self.classes()
             .iter()
-            .find(|(class, _)| class == restriction)
+            .find(|(pooled, _)| pooled == class)
             .map_or([0; 6], |(_, amounts)| *amounts)
     }
 
+    /// The amounts restricted to exactly `restriction` with no spend effect,
+    /// by color.
+    pub fn restricted_of(&self, restriction: &ManaRestriction) -> [u8; 6] {
+        self.class_of(&restriction.clone().into())
+    }
+
     /// The class's amounts, inserting a zero entry; callers prune.
-    fn class_mut(&mut self, restriction: &ManaRestriction) -> &mut [u8; 6] {
-        let classes = self.restricted.get_or_insert_with(Default::default);
-        let index = match classes.binary_search_by(|(class, _)| class.cmp(restriction)) {
+    fn class_mut(&mut self, class: &ManaClass) -> &mut [u8; 6] {
+        let classes = self.classes.get_or_insert_with(Default::default);
+        let index = match classes.binary_search_by(|(pooled, _)| pooled.cmp(class)) {
             Ok(index) => index,
             Err(index) => {
-                classes.insert(index, (restriction.clone(), [0; 6]));
+                classes.insert(index, (class.clone(), [0; 6]));
                 index
             }
         };
@@ -565,34 +702,48 @@ impl Mana {
 
     /// Restore the canonical form after spending.
     fn prune(&mut self) {
-        if let Some(classes) = &mut self.restricted {
+        if let Some(classes) = &mut self.classes {
             classes.retain(|(_, amounts)| *amounts != [0; 6]);
             if classes.is_empty() {
-                self.restricted = None;
+                self.classes = None;
             }
         }
     }
 
-    fn add_restricted(&mut self, restriction: &ManaRestriction, amounts: [u8; 6]) {
+    fn add_class(&mut self, class: &ManaClass, amounts: [u8; 6]) {
         if amounts == [0; 6] {
             return;
         }
-        let class = self.class_mut(restriction);
-        for (slot, amount) in class.iter_mut().zip(amounts) {
+        let pooled = self.class_mut(class);
+        for (slot, amount) in pooled.iter_mut().zip(amounts) {
             *slot = slot.saturating_add(amount);
         }
     }
 
     /// Set one class's amounts, keeping the canonical form.
-    pub fn set_restricted(&mut self, restriction: &ManaRestriction, amounts: [u8; 6]) {
-        *self.class_mut(restriction) = amounts;
+    pub fn set_class(&mut self, class: &ManaClass, amounts: [u8; 6]) {
+        *self.class_mut(class) = amounts;
         self.prune();
     }
 
-    /// All restricted mana by color, whatever it may be spent on.
+    /// All spend-restricted mana by color, whatever it may be spent on.
     pub fn restricted_colors(&self) -> [u8; 6] {
+        self.class_colors(|class| class.restriction.is_some())
+    }
+
+    /// Unrestricted mana by color: ordinary mana and mana that only carries
+    /// a spend effect.
+    pub fn unrestricted_colors(&self) -> [u8; 6] {
+        let mut out = self.class_colors(|class| class.restriction.is_none());
+        for (slot, amount) in out.iter_mut().zip(self.mana) {
+            *slot = slot.saturating_add(amount);
+        }
+        out
+    }
+
+    fn class_colors(&self, include: impl Fn(&ManaClass) -> bool) -> [u8; 6] {
         let mut out = [0_u8; 6];
-        for (_, amounts) in self.restricted() {
+        for (_, amounts) in self.classes().iter().filter(|(class, _)| include(class)) {
             for (slot, amount) in out.iter_mut().zip(amounts) {
                 *slot = slot.saturating_add(*amount);
             }
@@ -604,8 +755,8 @@ impl Mana {
         for i in 0..self.mana.len() {
             self.mana[i] = self.mana[i].saturating_add(other.mana[i]);
         }
-        for (restriction, amounts) in other.restricted() {
-            self.add_restricted(restriction, *amounts);
+        for (class, amounts) in other.classes() {
+            self.add_class(class, *amounts);
         }
     }
 
@@ -614,9 +765,9 @@ impl Mana {
         for i in 0..self.mana.len() {
             self.mana[i] = self.mana[i].max(other.mana[i]);
         }
-        for (restriction, amounts) in other.restricted() {
-            let class = self.class_mut(restriction);
-            for (slot, amount) in class.iter_mut().zip(amounts) {
+        for (class, amounts) in other.classes() {
+            let pooled = self.class_mut(class);
+            for (slot, amount) in pooled.iter_mut().zip(amounts) {
                 *slot = (*slot).max(*amount);
             }
         }
@@ -625,20 +776,29 @@ impl Mana {
     pub fn total(&self) -> u16 {
         self.mana
             .iter()
-            .chain(self.restricted().iter().flat_map(|(_, amounts)| amounts))
+            .chain(self.classes().iter().flat_map(|(_, amounts)| amounts))
             .map(|x| *x as u16)
             .sum()
     }
 
-    /// Indices into [`Mana::restricted`] of the classes that may pay for
-    /// `cost`, narrowest first.
-    fn usable_classes(&self, cost: &ManaCost) -> Vec<usize> {
-        let classes = self.restricted();
+    /// Indices into [`Mana::classes`] of the classes that may pay for
+    /// `cost`, in automatic spending order: those spent before ordinary
+    /// mana, then those spent after it (`ManaClass::spend_order`).
+    fn usable_classes(&self, cost: &ManaCost) -> (Vec<usize>, Vec<usize>) {
+        let classes = self.classes();
         let mut usable = (0..classes.len())
             .filter(|index| classes[*index].0.allows(&cost.purpose))
+            .map(|index| (classes[index].0.spend_order(&cost.purpose), index))
             .collect::<Vec<_>>();
-        usable.sort_by_key(|index| (classes[*index].0.breadth(), *index));
-        usable
+        usable.sort_by_key(|((_, breadth), index)| (*breadth, *index));
+        let of = |first: bool| {
+            usable
+                .iter()
+                .filter(|((before, _), _)| *before == first)
+                .map(|(_, index)| *index)
+                .collect()
+        };
+        (of(true), of(false))
     }
 
     /// Total usable for one spend purpose, without promising a color assignment.
@@ -646,7 +806,7 @@ impl Mana {
         self.mana
             .iter()
             .chain(
-                self.restricted()
+                self.classes()
                     .iter()
                     .filter(|(class, _)| class.allows(&cost.purpose))
                     .flat_map(|(_, amounts)| amounts),
@@ -719,8 +879,9 @@ impl Mana {
             }
         }
         let mut remaining = self.mana;
-        for class in self.usable_classes(cost) {
-            for (available, restricted) in remaining.iter_mut().zip(self.restricted()[class].1) {
+        let (before, after) = self.usable_classes(cost);
+        for class in before.into_iter().chain(after) {
+            for (available, restricted) in remaining.iter_mut().zip(self.classes()[class].1) {
                 *available = available.saturating_add(restricted);
             }
         }
@@ -739,13 +900,14 @@ impl Mana {
         !self.payment_remainders(cost, false).is_empty()
     }
 
-    pub fn pay(&mut self, cost: &ManaCost) {
+    /// Pay `cost` with the first automatic payment and report what it spent.
+    pub fn pay(&mut self, cost: &ManaCost) -> ManaSpent {
         let remaining = self
             .payment_remainders(cost, false)
             .into_iter()
             .next()
             .expect("insufficient mana");
-        self.apply_payment_remainder(cost, remaining);
+        self.apply_payment_remainder(cost, remaining)
     }
 
     /// Eligible concrete pool payments, retaining spending restrictions and
@@ -761,28 +923,47 @@ impl Mana {
             .collect()
     }
 
-    /// Spend down to `remaining` per color: usable restricted mana first,
-    /// narrowest restriction first, then unrestricted mana.
-    fn apply_payment_remainder(&mut self, cost: &ManaCost, remaining: [u8; 6]) {
-        let classes = self.usable_classes(cost);
+    /// Spend down to `remaining` usable mana per color, in the automatic
+    /// order of `usable_classes` around ordinary mana, and report what was
+    /// spent with the spend effects that applied.
+    fn apply_payment_remainder(&mut self, cost: &ManaCost, remaining: [u8; 6]) -> ManaSpent {
+        let (before, after) = self.usable_classes(cost);
+        let mut receipt = ManaSpent::default();
         for (slot, left) in remaining.into_iter().enumerate() {
-            let before = classes.iter().fold(self.mana[slot], |sum, class| {
-                sum.saturating_add(self.restricted()[*class].1[slot])
-            });
-            let mut spent = before - left;
+            let available = before
+                .iter()
+                .chain(&after)
+                .fold(self.mana[slot], |sum, class| {
+                    sum.saturating_add(self.classes()[*class].1[slot])
+                });
+            let mut spent = available - left;
+            receipt.amounts[slot] = spent;
             let pool = self
-                .restricted
+                .classes
                 .as_mut()
                 .map_or(&mut [][..], |classes| &mut classes[..]);
-            for class in &classes {
-                let amounts = &mut pool[*class].1;
-                let restricted = spent.min(amounts[slot]);
-                amounts[slot] -= restricted;
-                spent -= restricted;
+            let mut spend_class = |class: usize, spent: &mut u8| {
+                let (class, amounts) = &mut pool[class];
+                let from_class = (*spent).min(amounts[slot]);
+                amounts[slot] -= from_class;
+                *spent -= from_class;
+                if class.effect_applies(&cost.purpose) {
+                    receipt.entry_counters = receipt.entry_counters.saturating_add(from_class);
+                }
+            };
+            for class in &before {
+                spend_class(*class, &mut spent);
             }
-            self.mana[slot] -= spent;
+            let ordinary = spent.min(self.mana[slot]);
+            self.mana[slot] -= ordinary;
+            spent -= ordinary;
+            for class in &after {
+                spend_class(*class, &mut spent);
+            }
+            debug_assert_eq!(spent, 0, "the remainder fits the usable pool");
         }
         self.prune();
+        receipt
     }
 
     /// All unspent mana becomes red, keeping its spending restrictions
@@ -797,7 +978,7 @@ impl Mana {
             pool[red] = total;
         };
         all_red(&mut self.mana);
-        if let Some(classes) = &mut self.restricted {
+        if let Some(classes) = &mut self.classes {
             for (_, amounts) in classes.iter_mut() {
                 all_red(amounts);
             }
@@ -809,10 +990,10 @@ impl Mana {
         let red = Color::Red as usize;
         let mut kept = Self::default();
         kept.mana[red] = self.mana[red];
-        for (restriction, amounts) in self.restricted() {
+        for (class, amounts) in self.classes() {
             let mut only_red = [0; 6];
             only_red[red] = amounts[red];
-            kept.add_restricted(restriction, only_red);
+            kept.add_class(class, only_red);
         }
         kept
     }
@@ -820,7 +1001,7 @@ impl Mana {
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
-        self.restricted = None;
+        self.classes = None;
     }
 }
 
@@ -893,7 +1074,7 @@ mod tests {
         assert_eq!(options.len(), 2);
         assert!(options.iter().any(|p| p.mana == Mana::parse("W").mana));
         assert!(options.iter().any(|p| p.mana == Mana::parse("U").mana));
-        assert!(options.iter().all(|p| p.restricted() == pool.restricted()));
+        assert!(options.iter().all(|p| p.classes() == pool.classes()));
         assert!(pool.payment_options(&ManaCost::parse("G")).is_empty());
         let cost = ManaCost {
             purpose: SpendingContext::cast(["Lesson"], []),
@@ -902,7 +1083,7 @@ mod tests {
         let options = pool.payment_options(&cost);
         assert!(options
             .iter()
-            .any(|p| p.mana == pool.mana && p.restricted().is_empty()));
+            .any(|p| p.mana == pool.mana && p.classes().is_empty()));
         let hybrid = Mana::parse("WU").payment_options(&ManaCost::parse("{W/U}"));
         assert_eq!(
             hybrid,
@@ -971,7 +1152,7 @@ mod tests {
         paid.pay(&cost("U", SpendingContext::cast(["Lesson"], [])));
         assert_eq!(paid.restricted_of(&lesson), [0; 6]);
         assert_eq!(paid.restricted_of(&lesson_or_shrine), [0, 1, 0, 0, 0, 0]);
-        assert_eq!(paid.restricted().len(), 2);
+        assert_eq!(paid.classes().len(), 2);
         assert_eq!(pool.restricted_colors(), [1, 2, 0, 0, 0, 0]);
         assert_eq!(ally.describe(), "Ally spells or abilities of Ally sources");
         assert_eq!(lesson_or_shrine.describe(), "Lesson or Shrine spells");
@@ -988,7 +1169,7 @@ mod tests {
             elemental_sources.clone(),
             [0, 0, 0, 0, 1, 0],
         ));
-        assert_eq!(pool.restricted().len(), 2);
+        assert_eq!(pool.classes().len(), 2);
         assert_eq!(dragon.describe(), "Dragon spells");
         let cost = |text: &str, purpose: SpendingContext| ManaCost {
             purpose,
@@ -1026,6 +1207,6 @@ mod tests {
             [0, 0, 0, 0, 0, 1],
         ));
         mixed.pay(&cost(SpendingContext::ability(["Golem"])).with_generic(1));
-        assert_eq!(mixed.restricted(), pool.restricted());
+        assert_eq!(mixed.classes(), pool.classes());
     }
 }

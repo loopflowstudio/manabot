@@ -44,9 +44,11 @@ pub enum FrameCompletion {
         next: Box<FrameCompletion>,
     },
     CombatNormal,
+    /// `spent` is the mana the announced cost actually took (CR 601.2h).
     Paid {
         player: PlayerId,
         payment: Payment,
+        spent: crate::state::mana::ManaSpent,
     },
     Activated {
         ability: crate::state::stack_object::ActivatedAbilityOnStack,
@@ -132,6 +134,10 @@ pub struct EffectFrame {
     pub kicked: bool,
     /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
+    /// The mana spent to cast the resolving spell, or the permanent whose
+    /// entering triggered the resolving ability; empty otherwise.
+    #[serde(skip_serializing_if = "crate::state::mana::ManaSpent::is_empty")]
+    pub spent: crate::state::mana::ManaSpent,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
@@ -216,6 +222,7 @@ impl EffectFrame {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            spent: Default::default(),
             excess_damage: 0,
             this_way: Vec::new(),
             selected: Vec::new(),
@@ -247,6 +254,7 @@ impl EffectFrame {
             resolutions_this_turn: self.resolutions_this_turn,
             kicked: self.kicked,
             x: self.x,
+            spent: self.spent,
             targets: self.targets.clone(),
             active_requirement: self.active_requirement,
             context_target: self.context_target,
@@ -1229,7 +1237,11 @@ impl Game {
                         frame.completion = FrameCompletion::Continue;
                         continue;
                     }
-                    FrameCompletion::Paid { player, payment } => {
+                    FrameCompletion::Paid {
+                        player,
+                        payment,
+                        spent,
+                    } => {
                         let Payment::Spell {
                             card,
                             cast,
@@ -1246,6 +1258,7 @@ impl Game {
                             self.state.stack_objects_mut().last_mut()
                         {
                             spell.mode = mode;
+                            spell.spent = spent;
                         }
                     }
                     FrameCompletion::Activated {
@@ -1277,6 +1290,17 @@ impl Game {
                                     crate::flow::proposed_event::ZoneEntry {
                                         controller: Some(frame.controller),
                                         x: frame.x,
+                                        // Spend effects that applied to
+                                        // this spell as it was cast.
+                                        counters: {
+                                            let mut counters =
+                                                crate::state::permanent::Counters::default();
+                                            counters.change(
+                                                crate::state::permanent::CounterKind::PlusOnePlusOne,
+                                                i32::from(frame.spent.entry_counters),
+                                            );
+                                            counters
+                                        },
                                         ..Default::default()
                                     },
                                 )

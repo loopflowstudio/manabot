@@ -1,8 +1,8 @@
 //! TLE card behavior through ordinary choices and exact Command forks.
 use crate::support::{
     game::{
-        clear_summoning_sickness, five_color_setup, five_color_unfunded_setup, move_to_hand,
-        Scenario,
+        clear_summoning_sickness, enter_battlefield, five_color_setup, five_color_unfunded_setup,
+        move_from_library, move_to_hand, plant_in_graveyard, Scenario,
     },
     inspect::{
         assert_choice_contract, can_activate, can_cast, card_of, counters, has_action, keywords,
@@ -23,6 +23,8 @@ use managym::{
     state::{
         card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
+        mana::{ManaClass, ManaSpent, SpendEffect},
+        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -525,4 +527,223 @@ fn merchant_paid_foods_are_not_offered_again_for_waterbending() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     assert!(foods.iter().all(|food| tapped(&s, *food)));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+}
+
+// ---------------------------------------------------------------------------
+// Mana spent to cast: Toph, Uncle's Musings, Animal Attendant
+// ---------------------------------------------------------------------------
+
+/// Player 0 has exactly `mana` floating and no untapped permanent.
+fn only_pool(s: &mut Scenario, mana: &str) {
+    for permanent in s.game_mut().state.permanents.iter_mut().flatten() {
+        permanent.tapped = true;
+    }
+    s.set_player_mana_pool(0, mana);
+}
+
+fn spell_spent(s: &Scenario, card: managym::state::game_object::CardId) -> ManaSpent {
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .find_map(|object| match object {
+            StackObject::Spell(spell) if spell.card == card => Some(spell.spent),
+            _ => None,
+        })
+        .expect("spell on the stack")
+}
+
+/// Resolve everything, choosing `land` whenever a target is asked for.
+fn settle_targeting(s: &mut Scenario, land: PermanentId) {
+    for _ in 0..50 {
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            assert!(s.choose_target(Target::Permanent(land)));
+        } else if s.action_space().kind == ActionSpaceKind::Priority
+            && s.game().state.stack_objects.is_empty()
+            && s.game().state.pending_triggers.is_empty()
+        {
+            return;
+        } else {
+            s.pass_priority();
+        }
+    }
+    panic!("did not settle");
+}
+
+/// Toph's X is the mana her spell's payment took (CR 601.2h), carried from
+/// the stack to her own entering trigger; the land she earthbends is a land
+/// creature, so it has double strike.
+#[test]
+fn toph_earthbends_the_amount_of_mana_spent_to_cast_her() {
+    let mut s = five_color_unfunded_setup(&["Toph, Greatest Earthbender"]);
+    let land = s.force_permanent_on_battlefield(0, "Forest");
+    only_pool(&mut s, "RGGG");
+    let toph = cast_owned(&mut s, "Toph, Greatest Earthbender");
+    assert_eq!(spell_spent(&s, toph).amounts, [0, 0, 0, 1, 3, 0]);
+    assert_eq!(spell_spent(&s, toph).total(), 4);
+    settle_targeting(&mut s, land);
+    assert_eq!(counters(&s, land), 4);
+    let view = s.game().characteristics(land);
+    assert!(view.is_creature());
+    assert!(view.keywords.has(Keyword::DoubleStrike));
+    assert!(s.game().state.players[0].mana_pool.total() == 0);
+}
+
+/// A Toph that was not cast spent no mana: her trigger's X is 0.
+#[test]
+fn toph_put_onto_the_battlefield_earthbends_zero() {
+    let mut s = five_color_unfunded_setup(&["Toph, Greatest Earthbender"]);
+    s.force_permanent_on_battlefield(0, "Forest");
+    let toph = move_from_library(
+        &mut s,
+        0,
+        "Toph, Greatest Earthbender",
+        ZoneType::Battlefield,
+    );
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let permanent = s.game().state.card_to_permanent[toph].unwrap();
+    assert!(s.game().state.permanents[permanent]
+        .as_ref()
+        .unwrap()
+        .cast_spent
+        .is_empty());
+    assert!(s
+        .game()
+        .state
+        .pending_triggers
+        .iter()
+        .chain(&[])
+        .all(|trigger| trigger.spent.is_empty()));
+}
+
+/// Converge counts the colors of the mana actually spent: the same printed
+/// cost returns up to three, one or one permanent cards as the generic part
+/// is paid with two other colors, with green, or with colorless.
+#[test]
+fn uncles_musings_counts_the_colors_of_mana_spent_and_exiles_itself() {
+    for (mana, colors) in [("WUGG", 3), ("GGGG", 1), ("2GG", 1), ("RRGG", 2)] {
+        let mut s = five_color_unfunded_setup(&["Uncle's Musings", "Craw Wurm", "Explosive Shot"]);
+        let permanents = [
+            plant_in_graveyard(&mut s, 0, "Craw Wurm"),
+            plant_in_graveyard(&mut s, 0, "Forest"),
+            plant_in_graveyard(&mut s, 0, "Island"),
+        ];
+        let shot = plant_in_graveyard(&mut s, 0, "Explosive Shot");
+        only_pool(&mut s, mana);
+        let musings = cast_owned(&mut s, "Uncle's Musings");
+        assert_eq!(spell_spent(&s, musings).colors(), colors, "{mana}");
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let offered = offered_cards(&s);
+        assert!(!offered.contains(&shot), "{mana}: only permanent cards");
+        assert!(permanents.iter().all(|card| offered.contains(card)));
+        let mut returned = 0;
+        for card in permanents {
+            if s.action_space().kind != ActionSpaceKind::LookAndSelect
+                || !offered_cards(&s).contains(&card)
+            {
+                break;
+            }
+            select_card(&mut s, card);
+            returned += 1;
+        }
+        settle(&mut s);
+        assert_eq!(returned, colors as usize, "{mana}");
+        let in_hand = permanents
+            .iter()
+            .filter(|card| s.game().state.zones.zone_of(**card) == Some(ZoneType::Hand))
+            .count();
+        assert_eq!(in_hand, colors as usize, "{mana}");
+        assert_eq!(
+            s.game().state.zones.zone_of(musings),
+            Some(ZoneType::Exile),
+            "{mana}"
+        );
+    }
+}
+
+fn attendant_class() -> ManaClass {
+    SpendEffect::CreatureEntersWithPlusOneCounter {
+        without_subtype: "Human".into(),
+    }
+    .into()
+}
+
+/// A ready Animal Attendant tapped for green; the rest of the pool is `mana`.
+fn attendant_mana(s: &mut Scenario, mana: &str, attendants: usize) -> Vec<PermanentId> {
+    only_pool(s, mana);
+    (0..attendants)
+        .map(|_| {
+            let attendant = enter_battlefield(s, "Animal Attendant");
+            clear_summoning_sickness(s, attendant);
+            activate(s, attendant, 0);
+            choose_mode(s, 4);
+            attendant
+        })
+        .collect()
+}
+
+/// Each Attendant mana spent on a non-Human creature spell adds a counter to
+/// the creature it becomes; the mana keeps its rider in the pool until then.
+#[test]
+fn animal_attendant_mana_adds_a_counter_to_a_non_human_creature_spell() {
+    for attendants in [1, 2] {
+        let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+        attendant_mana(&mut s, if attendants == 1 { "1W" } else { "W" }, attendants);
+        let pool = &s.game().state.players[0].mana_pool;
+        assert_eq!(
+            pool.class_of(&attendant_class()),
+            [0, 0, 0, 0, attendants as u8, 0]
+        );
+        let sheep = cast_owned(&mut s, "Koala-Sheep");
+        let spent = spell_spent(&s, sheep);
+        assert_eq!(spent.entry_counters, attendants as u8);
+        assert_eq!(spent.total(), 3);
+        settle(&mut s);
+        let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+        assert_eq!(counters(&s, permanent), attendants as i32);
+        assert!(s.game().state.players[0].mana_pool.classes().is_empty());
+    }
+}
+
+/// The rider is captured in the mana: it applies after the Attendant has
+/// left, and does nothing for a Human creature or a noncreature spell.
+#[test]
+fn animal_attendant_mana_needs_no_attendant_and_skips_humans_and_noncreatures() {
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    let attendant = attendant_mana(&mut s, "1W", 1)[0];
+    let card = card_of(&s, attendant);
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    let sheep = cast_owned(&mut s, "Koala-Sheep");
+    settle(&mut s);
+    let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+    assert_eq!(counters(&s, permanent), 1);
+
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    attendant_mana(&mut s, "R", 1);
+    let guard = cast_owned(&mut s, "Capital Guard");
+    assert_eq!(spell_spent(&s, guard).entry_counters, 0);
+    settle(&mut s);
+    let permanent = s.game().state.card_to_permanent[guard].unwrap();
+    assert_eq!(counters(&s, permanent), 0);
+
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Explosive Shot", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(1, "Craw Wurm");
+    attendant_mana(&mut s, "R", 1);
+    let shot = cast_owned(&mut s, "Explosive Shot");
+    if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+        s.step_action(0);
+    }
+    assert_eq!(spell_spent(&s, shot).entry_counters, 0);
+}
+
+/// Mana whose rider would be wasted is spent after ordinary mana of its
+/// color, so it stays for a spell it helps.
+#[test]
+fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Capital Guard"]);
+    attendant_mana(&mut s, "RG", 1);
+    cast_owned(&mut s, "Capital Guard");
+    let pool = &s.game().state.players[0].mana_pool;
+    assert_eq!(pool.class_of(&attendant_class()), [0, 0, 0, 0, 1, 0]);
+    assert_eq!(pool.mana, [0; 6]);
 }
