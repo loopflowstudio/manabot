@@ -19,6 +19,10 @@ Jack Heart replied "c" to (a) after-arm only / (b) raise the cap to ~$23 /
 report with the inconclusive verdict, file one follow-up Task for the controlled
 comparison (carrying the baseline-stall question and prepared jobs), deliver.
 
+Done 2026-11-12: report states the closed-inconclusive outcome (summary and end
+of the execution section); follow-up filed as MTG-305 in the experiments Wave.
+Remaining: delivery (gate/publish), no code change.
+
 ## Former open decision: remaining budget cannot buy the frozen pair
 
 The iteration direction asks to "execute the pinned arms serially within the
@@ -136,5 +140,4 @@ with limitations, inventories and rental accounting once execution is possible).
 User-facing docs: `experiments/self-play-collection-273.md` (report, reproduction,
 execution record, frozen paired analysis) and `experiments/README.md` (Data
 pointer). Reviewed 2026-11-12 against the execution facts above; they already
-state the inconclusive outcome and need no edit until the open budget decision
-is made.
+state the inconclusive outcome; closing paragraph added after the decision.

@@ -58,5 +58,5 @@ less. Treat these as provisional billing; retain the full $7.20 live reservation
 and reconcile with the larger whole-lifetime estimate, not the falling status
 amount. This is no scientific-runtime change and no billing-finality claim.
 
-Open (2026-11-12): the remaining-budget choice (after arm alone, a ~$23 cap,
-or close as inconclusive) is in collection-growth.md; no paid launch until chosen.
+Decided (2026-11-12): Jack Heart replied "c" (close as inconclusive); no paid
+launch. Follow-up comparison is MTG-305.

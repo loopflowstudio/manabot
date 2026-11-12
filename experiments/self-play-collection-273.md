@@ -145,7 +145,10 @@ the outcome-table fix flattens training. The new baseline stopped at 251/500
 updates and was cancelled; its rental is confirmed deleted. A fresh quote for
 the repaired arm refused L4 capacity before submission. Whole-rental baseline
 compute is estimated at $3.78 within the authorized $15; billing is provisional.
-The paired scientific result remains incomplete (see execution below).
+MTG-281 closes **inconclusive** at that spend, with no further rentals: the
+remaining $11.22 cannot buy the frozen pair, so whether the fix flattens
+collection time and RSS is unanswered. The controlled comparison, including why
+the baseline stalled, is a separate follow-up (see execution below).
 
 ### Evidence and differences
 
@@ -366,6 +369,14 @@ The fixed 451–500 endpoint is absent from the baseline,
 and the repaired arm has no measurements. The frozen comparison command cannot
 run without genuine after inputs; no replacement receipt or shorter-window
 flattening score is supplied. These data cannot rank residual causes after the fix.
+
+**Closed inconclusive.** About $11.22 remained after the baseline, below the
+frozen two-arm envelope ($7.80 per arm with ancillary reserve) and the expected
+$11.86 pair. Running the after arm alone would leave no baseline 451–500
+endpoint, and comparing updates 51–251 would be a post-hoc endpoint, so no
+further rental was made. A follow-up Task carries the controlled comparison:
+explain or rule out the baseline stall at update 251, then run both jobs in
+`prepared/` unchanged under a budget that covers the full envelope.
 
 The manifest-published `execution-20261112/` directory retains the baseline
 capture/receipt, pre-stop output archive, launch/provider/teardown/billing records,
