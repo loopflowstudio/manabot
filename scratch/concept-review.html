@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-285 · Release concept review</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
+  body { max-width: 52rem; margin: 2rem auto; padding: 0 1rem 2rem; }
+  header, footer { color: light-dark(#545454, #bdbdbd); font-size: .9rem; }
+  h1 { font-size: 1.6rem; line-height: 1.2; }
+  h2 { font-size: 1.1rem; margin-top: 1.6rem; }
+  code { overflow-wrap: anywhere; font-size: .92em; }
+  .gap { border-left: .25rem solid light-dark(#865621, #ddb57e); padding-left: 1rem; }
+  ol { padding-left: 1.3rem; }
+  li { margin: .7rem 0; }
+</style>
+<header>MTG-285 · concept-review · 2026-11-11<br>
+Sources: working design, <code>release/v0.2.1/NOTES.md</code>,
+<code>docs/development.md</code>, <code>.github/workflows/release.yml</code>,
+<code>scripts/release/{check,validate,complete}.py</code> and the Task steer.</header>
+<main>
+<h1>Advance: no design change or open product choice</h1>
+<p>One installable Manabot release, delivered automatically under the existing
+Task authorization. Publication and consumer verification remain pending.</p>
+<blockquote>Jack Heart: “when this lands, publish 0.2.1 patch release”;<br>
+“make sure it runs automatically”.</blockquote>
+
+<h2>Consumer action → concept → API</h2>
+<p><strong>Before:</strong> published 0.2.0 requires CPython 3.12; unpublished
+compatibility work is installed from a local wheel.</p>
+<p><strong>Prepared for 0.2.1:</strong> install one distribution on CPython 3.12
+or 3.13. The bundled rules engine has no separate installation step.</p>
+<pre><code>uv pip install --python .venv/bin/python \
+  --only-binary :all: --torch-backend cpu 'manabot==0.2.1'</code></pre>
+<p>Read a seat’s authoritative hand → detached <code>HandSnapshot</code> →
+<code>hand_snapshot(player)</code> or <code>hand_snapshots(players)</code>.
+Release notes explain hidden information, reset identities and the four collector
+migrations. Package version does not replace world or checkpoint identity.</p>
+
+<h2>Release action → concept → API</h2>
+<ol>
+<li>Validate and merge → one source commit → release PR checks and
+<code>check.py</code>.</li>
+<li>Tag that commit → immutable version and five artifacts →
+<code>release.yml</code> builds one sdist and four wheels;
+<code>validate.py --complete</code> checks the inventory.</li>
+<li>Inspect artifacts and approve → authorized PyPI publication →
+pending deployment API, then trusted publishing in environment <code>pypi</code>.</li>
+<li>Complete the public entry → matching tag, notes and PyPI link →
+<code>complete.py --github</code>.</li>
+<li>Install from PyPI → verified consumer release → fresh 3.12/3.13 environments
+on Linux x86-64 and Apple Silicon, <code>smoke.py</code>, publication record.</li>
+</ol>
+<p><strong>Existing machinery:</strong> all build, inventory and publication
+steps above. <strong>Pending delivery work:</strong> approvals, publication and
+the separate PyPI consumer proofs. No new release service is proposed.</p>
+
+<div class="gap">
+<h2>Biggest mismatch: a green wheel check is not a PyPI install</h2>
+<p>The existing install matrix consumes workflow artifacts. The working design
+already requires four additional checks against PyPI. Arrange their unpaid
+execution during delivery; do not mark completion from the upload alone.</p>
+</div>
+
+<h2>Failure and recovery preserve the release</h2>
+<p>PyPI succeeds, GitHub completion fails → retain the tag and original build
+artifacts → retry only completion. A matching entry is a no-op.</p>
+<p>Counterexample: rebuilding the same version can change archive bytes.
+Partial publication or different SHA-256 digests must stop for inspection.
+Never move the tag or replace published files.</p>
+<p>Next evidence: gate results, then the exact commit, tag, workflow, five hashes,
+attestations, GitHub Release link and four installed-environment results.</p>
+</main>
+<footer>No builds, runtime tests or external publication checks ran in this review.
+No product questions remain for loop-or-next.</footer>
+</html>

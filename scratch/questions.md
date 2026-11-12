@@ -27,3 +27,11 @@ comment "0.2.1 artifacts verified". Recheck reviewers/trusted publisher before
 tagging. Confirm PyPI, GitHub Release, attestations and clean installs on both
 platforms/interpreters; retain a publication record. Stop on a mismatch.
 No tag, upload, approval or install proof has happened in implementation.
+
+Realign, 2026-11-11: GitHub compare of the MTG-272 merge above against `main`
+returned `identical` (zero commits ahead/behind). `lf task status MTG-285`
+reported the active `code` Graph at `realign`, no PR and no Wave. No upstream
+change or new product decision alters the release scope. Existing 23-pass
+release-tooling evidence is reused; no runtime tests were rerun. Source review
+found the workflow tests downloaded wheels before publication, so the plan now
+keeps the separate post-publication PyPI install matrix explicit.

@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>MTG-285 QA — manabot 0.2.1</title>
+<style>body{font:15px/1.5 system-ui;max-width:860px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.8em;overflow:auto;font-size:13px}td,th{border-bottom:1px solid #ddd;padding:.3em .6em;text-align:left}</style>
+<h1>QA: manabot 0.2.1 release artifacts (2026-11-11)</h1>
+<p>Who uses this change: a library consumer installing <code>manabot==0.2.1</code> into their own project and reading the release notes. I built the release the same way the workflow does, from staged source → sdist → wheels, then installed it outside the checkout with <code>PYTHONPATH</code> unset. Work dir: <code>/tmp/mtg285-qa.ScDu</code>.</p>
+
+<h2>Scenarios</h2>
+<table>
+<tr><th>Scenario</th><th>Result</th></tr>
+<tr><td><code>scripts/release/check.py --tag v0.2.1</code></td><td>"validated release v0.2.1"</td></tr>
+<tr><td><code>prepare.py</code> → <code>uv build --sdist --no-sources</code></td><td><code>manabot-0.2.1.tar.gz</code>, 220 engine <code>.rs</code> files bundled</td></tr>
+<tr><td>Wheels built from the sdist (shared CARGO_TARGET_DIR)</td><td>cp313 in 1:16, cp312 in 1:03 (macOS arm64). METADATA: Version 0.2.1, Requires-Python &gt;=3.12,&lt;3.14, torch&gt;=2.10.0, etude-sdk&gt;=0.2.15</td></tr>
+<tr><td>Fresh 3.13 venv, minimum pins (torch 2.10.0, etude-sdk 0.2.15), copied <code>smoke.py</code></td><td><pre>release smoke passed: Python 3.13.7, manabot 0.2.1, torch 2.10.0, etude-sdk 0.2.15</pre><code>manabot --help</code> lists the commands; a local train run wrote <code>self-play-raw.pt</code> in about 24 s</td></tr>
+<tr><td>Fresh 3.12 venv, minimum pins</td><td><pre>release smoke passed: Python 3.12.12, manabot 0.2.1, torch 2.10.0, etude-sdk 0.2.15</pre></td></tr>
+<tr><td>Ran the release notes' HandSnapshot example as written, plus the migration claims</td><td>Passed on both interpreters. Output:
+<pre>0 1 {'Gray Ogre': 2, 'Llanowar Elves': 2, 'Mountain': 3}
+  fields 1 42 1
+1 0 {'Forest': 1, 'Gray Ogre': 4, 'Llanowar Elves': 2}
+  fields 2 43 1
+generations [1, 2]
+passive -> ValueError: unsupported opponent_policy: passive</pre>
+Slots come back in the requested seat order and the seeds are base+slot. Gym <code>Env.__init__</code> no longer takes <code>auto_reset</code>, so passing it raises TypeError as the notes say.</td></tr>
+<tr><td><code>uv init</code> project + <code>uv add "manabot[academy,reports,artifacts,evaluation,notebook,llm,openrouter] @ file://…cp313.whl"</code> (latest resolution)</td><td>Resolved torch 2.15.0, numpy 2.5.4, pydantic 2.14.3; smoke passed</td></tr>
+<tr><td>Link targets in the release notes and docs</td><td>All of these anchors exist: <code>development.md#install</code>, <code>#build-and-verify</code>, <code>engine.md#hand-snapshots</code>, <code>training.md#run-training</code>, <code>python-api-audit.md</code> and <code>WORLDS.md</code>. The notes link through <code>blob/v0.2.1/</code>, so the links only resolve once the tag exists.</td></tr>
+<tr><td><code>tests/infra/test_release.py</code></td><td>23 passed</td></tr>
+</table>
+
+<h2>Fixed</h2><p>Nothing. No defect found.</p>
+
+<h2>Not reached</h2>
+<ul>
+<li><b>Installing from PyPI:</b> PyPI returns 404 for 0.2.1, and its only release is 0.2.0. No <code>v0.2.1</code> tag or PR exists yet. Until publication, the documented <code>'manabot==0.2.1'</code> command fails, as expected. The four-combination install-from-PyPI matrix stays a delivery/verify step.</li>
+<li><b>Linux x86-64 wheels:</b> this Mac can't build or run them. The release workflow's build and install jobs cover them before publication.</li>
+<li><b><code>validate.py --complete</code></b> needs all five files, and only three were built locally. CI runs it.</li>
+</ul>
+
+<h2>Notes</h2>
+<ul>
+<li>Local macOS wheels are tagged <code>macosx_11_0_arm64</code>, but the notes say macOS 14+. That matches what torch 2.10 requires on Apple Silicon, so the notes are correct for a working install. The macOS 14+ requirement comes from torch, not from the wheel tag.</li>
+</ul>
+</html>
