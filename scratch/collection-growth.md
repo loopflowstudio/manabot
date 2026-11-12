@@ -115,12 +115,12 @@ Earlier blocker history, procedure, concept review and check detail:
 `scratch/concept-review.html` (no product change; show the actual paired report
 with limitations, inventories and rental accounting once execution is possible).
 
-- Implement pass 2026-11-12: no new Task comment or budget choice; RunPod lists
-  only `etude-8a95fe6d04e9` (not an MTG-281 rental, untouched). No code change.
-- Realign 2026-11-12: still no Task comment beyond the claim; main has no
-  commits past the branch base. Plan, code and report agree; nothing changed.
-- Implement pass 3, 2026-11-12: still no budget choice or new Task comment; main
-  unchanged past base; RunPod lists only `etude-8a95fe6d04e9` (untouched). No code change.
+- Implement (×3), realign and write-docs passes on 2026-11-12 found no Task
+  comment or budget choice and main unchanged past base; RunPod listed only
+  `etude-8a95fe6d04e9` (not an MTG-281 rental, untouched). No code or doc change.
+- Compress 2026-11-12: `report_collection_growth.py` shares one phase/RSS series
+  helper; regenerated `summary.json`, `phases.png`, `growth.png` byte-identical.
+  Frozen comparison reader (`e9adf766…`, bound by `reader-erratum.json`) untouched.
 
 ## Docs
 
@@ -129,6 +129,3 @@ execution record, frozen paired analysis) and `experiments/README.md` (Data
 pointer). Reviewed 2026-11-12 against the execution facts above; they already
 state the inconclusive outcome and need no edit until the open budget decision
 is made.
-- Write-docs 2026-11-12 (after realign): re-read both docs against the execution
-  facts; no new Task comment or budget choice, so no edit. No Desktop Files view
-  was attached for presentation.

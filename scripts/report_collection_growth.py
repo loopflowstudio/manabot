@@ -45,6 +45,7 @@ WINDOWS = [
     (850, 900),
     (1600, 1700),
 ]
+RUNS = ("w64", "w160")
 
 
 @dataclass(frozen=True)
@@ -116,10 +117,16 @@ def median25(values: FloatArray) -> FloatArray:
     )
 
 
-def windows(run: Reading) -> list[Window]:
-    values = {
+def _phases_and_rss(run: Reading) -> dict[str, FloatArray]:
+    return {
         **{label: run.metrics[key] for label, key in PHASES.items()},
         "RSS GB": run.metrics["coordinates/rss_bytes"] / 1e9,
+    }
+
+
+def windows(run: Reading) -> list[Window]:
+    values = {
+        **_phases_and_rss(run),
         "Rows": run.metrics["rows"],
         "Games": run.games,
         "Native decisions/game": run.decisions_per_game,
@@ -147,8 +154,7 @@ def windows(run: Reading) -> list[Window]:
 def slopes(run: Reading, end: int) -> dict[str, float]:
     mask = (run.update >= 51) & (run.update <= end)
     series = {
-        **{label: run.metrics[key] for label, key in PHASES.items()},
-        "RSS GB": run.metrics["coordinates/rss_bytes"] / 1e9,
+        **_phases_and_rss(run),
         "Collection seconds/1000 rows": run.metrics["time/collection"]
         / run.metrics["rows"]
         * 1000,
@@ -177,9 +183,6 @@ def fold_alignment(run: Reading, end: int) -> dict[str, FoldStatistics]:
         for offset, values in groups.items()
         if values
     }
-
-
-RUNS = ("w64", "w160")
 
 
 def report(data: Path, out: Path) -> None:
