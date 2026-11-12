@@ -529,5 +529,10 @@ the code diff against #474 was 4,332 / 2,500.
   (e38518093 changes games): `before.json` from #503's tree, `after.json`
   from this branch, same extension: parameters and residuals identical;
   `value_scale` float64 stds differ by 1 ulp (3 stats, categorical).
-- Pass 2 queued: revision bb7c3e6a0 (base main a343904ee), cohort
+- Pass 1 complete (3 ABAB pairs, `scratch/speed/run1/compare.txt`), medians
+  [min, max] base vs head: damped 6.16 [6.04, 6.19] vs 4.57 [4.56, 4.68]
+  steps/s (0.742); PPO 0.2196 vs 0.157 (0.715); inference 822 vs 1,087 obs/s
+  (1.32); save 0.032 vs 0.032 s; load 0.169 vs 0.168 s. Same 52,226 learner
+  rows and 204 damped steps in every process. Launcher cost ~$0.27.
+- Pass 2 queued as Etude e978886d15e5: revision bb7c3e6a0 (base main a343904ee), cohort
   `mtg325-speed-2`, `--max-usd 9` (pass 1 counts against the USD10).
