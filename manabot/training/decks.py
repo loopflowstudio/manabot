@@ -20,6 +20,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from manabot.game_results import GameSeat
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.model.world import admit_world_decks
@@ -121,10 +122,10 @@ class UniformDecks(StrictModel):
                 player.name = name
         return players
 
-    def seats_by_player(self) -> dict[str, tuple[str, str | None]]:
-        """Pooled decks' (pool, build) by native player name."""
+    def seats_by_player(self) -> dict[str, GameSeat]:
+        """Pooled decks' result seats by native player name."""
         return {
-            name: (pool, build)
+            name: GameSeat(pool=pool, build=build)
             for name, (pool, build) in zip(
                 self._player_names(), self.seats(), strict=True
             )

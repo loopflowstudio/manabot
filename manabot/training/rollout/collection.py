@@ -83,6 +83,8 @@ from manabot.training.state.game_errors import (
 from managym import WORLD_SETUP, Deck
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
+# The result seat of a deck with no pool.
+_NO_POOL = GameSeat(pool=None, build=None)
 
 # -----------------------------------------------------------------------------
 # Seat-routed rollout collection
@@ -707,10 +709,6 @@ class SeatRoutedCollector:
         if not hasattr(self.stats, "learned_game_rows"):
             self.stats.learned_game_rows = {}
 
-    def _result_seat(self, player: str) -> GameSeat:
-        pool, build = self._result_seats.get(player, (None, None))
-        return GameSeat(pool=pool, build=build)
-
     def _refresh_roots(self, rows: np.ndarray) -> None:
         """Read native sampling after resets, before counting the next game's rows.
 
@@ -1287,8 +1285,8 @@ class SeatRoutedCollector:
                         stream=int(row),
                         game=self.stats.games_by_stream[int(row)],
                         seats=(
-                            self._result_seat(match.hero),
-                            self._result_seat(match.villain),
+                            self._result_seats.get(match.hero, _NO_POOL),
+                            self._result_seats.get(match.villain, _NO_POOL),
                         ),
                         winner=winner,
                     )

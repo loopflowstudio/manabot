@@ -11,7 +11,7 @@ import pytest
 from experiments.tla_corpus import Corpus, GameEvidence, Source, Trophy
 from experiments.tla_pools import derive_pools, main as pools_main
 from manabot import managym
-from manabot.game_results import read_game_results
+from manabot.game_results import GameSeat, read_game_results
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import file_sha256
 from manabot.managym.format import LimitedBuild
@@ -338,7 +338,7 @@ def test_pooled_deck_sources_require_unique_aligned_builds() -> None:
         builds=(None, None),
         sampling="uniform-independent-v1",
     )
-    assert source.seats_by_player() == {"p": ("p", None)}
+    assert source.seats_by_player() == {"p": GameSeat(pool="p", build=None)}
     for pools, builds in (
         (("p", "p"), (None, None)),
         ((None, None), ("b", None)),

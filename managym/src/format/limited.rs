@@ -352,10 +352,6 @@ impl LimitedBuild {
     pub fn deck(&self) -> BTreeMap<String, usize> {
         names(&self.deck)
     }
-
-    pub fn deck_counts(&self) -> &[u32] {
-        &self.deck
-    }
 }
 
 #[cfg(test)]
@@ -433,7 +429,7 @@ mod tests {
             assert_eq!(names(&available.copies), by_name);
             assert_eq!(
                 available.can_stop,
-                Limited.legal(pool.counts(), build.deck_counts()).unwrap()
+                Limited.legal(pool.counts(), &build.deck).unwrap()
             );
             assert_eq!(
                 available.can_stop,
