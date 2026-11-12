@@ -45,3 +45,7 @@ documented in parity's docstring. Moving the writer into the package would edit 
 
 Compress after single-file conversion (2026-11-12): inlined the one-use `converted_path`; `_METADATA_KEYS` private.
 ruff clean; local boundary test 10 passed (MLX tests not rerun: no behavior change, M2-only per steer f6ed5b35).
+
+Concept review, second pass (2026-11-12, headless): checked the built change against the design. Public surface is
+still the three actions (`convert`, `load_mlx_policy`, `parity`); provenance mismatch is resolved in code and guide.
+Nothing to change, no open product choice. scratch/concept-review.html marked as built.
