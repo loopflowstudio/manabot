@@ -106,3 +106,11 @@ definition by printed name, and it is the one that breaks the Task's outcome
   decision surface, world, mirror admission, belief, temur, static tokens).
   `ruff check` reports one import-order error in untouched
   `manabot/semantic/text_observation.py`.
+
+## Docs for the key binding (2026-11-12)
+Changed: `content/semantic/README.md` (Learning projection: join by key,
+`catalog_tokens()["keys"]`, keyless-manifest failure), `docs/engine.md` (Card
+definition IDs: join on `key`), `WORLDS.md` (MTG-298 paragraph under w17),
+`AGENTS.md` (identity is the key, in the token paragraph). The
+`catalog_tokens()` example was read from the installed engine. No open product
+choice.
