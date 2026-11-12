@@ -1,7 +1,6 @@
 # Assumptions (reversible)
 
-- Merged PR #489's branch into this one to reuse its harness and docs section, rather than
-  waiting for it to land.
+- Merged PR #489's branch early to reuse its harness and docs section; #489 has since landed.
 - A/B report name: `experiments/precision_ladder.md` / `.py`.
 - Ladder keys on `ModelConfig.hidden_dim` only (the Task says "model width"); depth ignored.
 - Width-changing builders re-resolve `auto`; explicit precisions are kept. Taken as the

@@ -34,8 +34,9 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
    paragraph says what separated. The docs' learning-comparison sentence currently states
    the accepted outcome and is unverified until (2) runs.
 
-Both runs wait for the L4: on 2026-11-12 MTG-318 (qa) and MTG-319 (implement) were still
-running, and the Task says not to start until they have had their L4 time.
+Both runs wait for the L4: the Task says not to start until MTG-318 and MTG-319 have had
+their L4 time. Rechecked 2026-11-12 (realign): both still active/moving. PR #489 has landed
+and the branch contains current main, so no upstream change affects the plan.
 
 ## Compress (2026-11-12)
 Kept `_from_ladder` + `Execution.__eq__` + `authored_dump`: deriving "from ladder" from
