@@ -69,6 +69,7 @@ from pydantic import Field
 import torch
 
 from experiments import tla_frontier
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest, evaluate
 from manabot.eval.models import EvaluationKey
 from manabot.experiment.job import TOOLCHAIN_ENV, TrainingJob, machine_setup
@@ -76,7 +77,7 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.infra.runtime import regime_tag
-from manabot.model.checkpoint import load_checkpoint, local_checkpoint_file
+from manabot.model.checkpoint import local_checkpoint_file
 from manabot.sim.matchup import DeckMatchup
 from manabot.sim.registration import PlayerRegistration
 from manabot.training.panels import ML, PERF
@@ -949,25 +950,26 @@ def _registration(
     observation: ObservationConfig,
 ) -> tuple[PlayerRegistration, Path | None]:
     setup = matchup.match()
-    fingerprints = runtime_fingerprints(match_config=setup)
-    common = dict(
-        player_id=name,
-        display_name=player.name,
-        role="challenger" if name == "candidate" else "anchor",
-        world=managym.WORLD_VERSION,
-        content_suite=matchup.content_suite,
-        information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
-        matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
-        player_seed_derivation_id="arena-pair-deal-player-v1",
-        compute_class_id="policy-cpu-one-thread-one-pass",
+    role: Literal["challenger", "anchor"] = (
+        "challenger" if name == "candidate" else "anchor"
     )
     if isinstance(player, Code):
         if player.config != HEURISTIC:
             raise ValueError("heuristic support differs from frontier protocol")
+        # Code players read no policy input; their ABI fields name the fresh space.
+        fingerprints = runtime_fingerprints(match_config=setup)
         return PlayerRegistration(
-            **common,
+            player_id=name,
+            display_name=player.name,
+            role=role,
+            world=managym.WORLD_VERSION,
+            content_suite=matchup.content_suite,
+            information_boundary="acting-viewer",
+            observation_abi_sha256=fingerprints["observation_abi_sha256"],
+            action_abi_sha256=fingerprints["action_abi_sha256"],
+            matchup_sha256=canonical_sha256(setup.model_dump(mode="json")),
+            player_seed_derivation_id="arena-pair-deal-player-v1",
+            compute_class_id="policy-cpu-one-thread-one-pass",
             runner_kind="code",
             player_spec=dict(HEURISTIC),
             source_sha256=canonical_sha256(
@@ -975,25 +977,19 @@ def _registration(
             ),
         ), None
     path = local_checkpoint_file(player)
-    agent, space = load_checkpoint(str(path))
-    if space.encoder.config != observation:
+    admission = register_checkpoint(
+        path,
+        match=setup,
+        content_suite=matchup.content_suite,
+        player_id=name,
+        display_name=player.name,
+        role=role,
+        artifact_prefix="c5fba4",
+        allow_deck_repetition=True,
+    )
+    if admission.space.encoder.config != observation:
         raise ValueError("checkpoint observation differs from frontier protocol")
-    digest = file_sha256(path)
-    return PlayerRegistration(
-        **common,
-        runner_kind="checkpoint",
-        player_spec={
-            "kind": "checkpoint",
-            "device": "cpu",
-            "batch_size": 1,
-            "deterministic": False,
-            "allow_deck_repetition": True,
-        },
-        checkpoint_sha256=digest,
-        checkpoint_bytes=path.stat().st_size,
-        parameter_count=sum(p.numel() for p in agent.parameters()),
-        artifact_id=f"c5fba4/{digest}",
-    ), path
+    return admission.registration, path
 
 
 @contextmanager

@@ -27,7 +27,7 @@ use crate::{
     },
     infra::profiler::InfoDict,
     python::{
-        bindings::{map_agent_err, PyObservation, PyPlayerConfig},
+        bindings::{map_agent_err, PyEnv, PyObservation, PyPlayerConfig},
         convert::{info_dict_to_pydict, require_numpy_array},
     },
     state::player::PlayerConfig,
@@ -68,6 +68,12 @@ struct ObservationBuffers {
     opponent_permanents_valid: Py<PyAny>,
     actions_valid: Py<PyAny>,
     events_valid: Py<PyAny>,
+    // Step outcomes; absent for observation-only writes.
+    step_state: Option<StepStateBuffers>,
+}
+
+#[cfg(feature = "python")]
+struct StepStateBuffers {
     rewards: Py<PyAny>,
     terminated: Py<PyAny>,
     truncated: Py<PyAny>,
@@ -188,7 +194,7 @@ impl PyVectorEnv {
     fn set_buffers(&mut self, buffers: Bound<'_, PyDict>, action_overflow: &str) -> PyResult<()> {
         let mut config = input_buffer_config(&buffers)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
-        let buffers = read_observation_buffers(&buffers, self.num_envs, &config)?;
+        let buffers = read_observation_buffers(&buffers, self.num_envs, &config, true)?;
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
@@ -563,6 +569,7 @@ fn read_observation_buffers(
     buffers: &Bound<'_, PyDict>,
     n: usize,
     c: &ObservationEncoderConfig,
+    step_state: bool,
 ) -> PyResult<ObservationBuffers> {
     let required = |name: &str, shape: &[usize]| -> PyResult<Option<Py<PyAny>>> {
         Ok(Some(
@@ -775,9 +782,15 @@ fn read_observation_buffers(
         .unbind(),
         events_valid: require_numpy_array(buffers, "events_valid", &[n, c.max_events], "float32")?
             .unbind(),
-        rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
-        terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
-        truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
+        step_state: if step_state {
+            Some(StepStateBuffers {
+                rewards: require_numpy_array(buffers, "rewards", &[n], "float64")?.unbind(),
+                terminated: require_numpy_array(buffers, "terminated", &[n], "uint8")?.unbind(),
+                truncated: require_numpy_array(buffers, "truncated", &[n], "uint8")?.unbind(),
+            })
+        } else {
+            None
+        },
     })
 }
 
@@ -915,7 +928,7 @@ impl PyRolloutPool {
                 self.inner.num_slots()
             )));
         }
-        let buffers = read_observation_buffers(&buffers, capacity, &config)?;
+        let buffers = read_observation_buffers(&buffers, capacity, &config, true)?;
         self.config = config;
         self.buffers = Some(buffers);
         Ok(())
@@ -959,8 +972,52 @@ impl PyRolloutPool {
 
 #[cfg(feature = "python")]
 pub fn register_vector_env_bindings(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(encode_observations_into, m)?)?;
     m.add_class::<PyVectorEnv>()?;
     m.add_class::<PyRolloutPool>()
+}
+
+/// Write each env's acting-player observation into row `i` of buffers from
+/// `ObservationEncoder.allocate(capacity)`; returns each row's legal-action count.
+///
+/// Every legal action must fit (`action_overflow="error"`). Rows at and past
+/// `len(envs)` are untouched, and no step-state buffers are read. The GIL stays
+/// held, so no Python code can touch the caller-owned buffers during writes.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn encode_observations_into(
+    py: Python<'_>,
+    envs: Vec<PyRef<'_, PyEnv>>,
+    buffers: Bound<'_, PyDict>,
+    capacity: usize,
+) -> PyResult<Vec<usize>> {
+    if envs.len() > capacity {
+        return Err(PyValueError::new_err(format!(
+            "{} envs exceed buffer capacity {capacity}",
+            envs.len()
+        )));
+    }
+    let config = input_buffer_config(&buffers)?;
+    let buffers = read_observation_buffers(&buffers, capacity, &config, false)?;
+    with_observation_field_slices(py, &buffers, |out| {
+        envs.iter()
+            .enumerate()
+            .map(|(index, branch)| {
+                let env = branch
+                    .inner
+                    .lock()
+                    .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+                let actor = env
+                    .current_agent_index()
+                    .ok_or_else(|| PyValueError::new_err("env has no acting player"))?;
+                let observation = env.observation_for_player(actor).map_err(map_agent_err)?;
+                let row = out.encoded_row_mut(index, &config).map_err(map_agent_err)?;
+                encode_into(&observation, &config, row)
+                    .map_err(|err| PyValueError::new_err(err.to_string()))?;
+                Ok(observation.action_space.actions.len())
+            })
+            .collect()
+    })
 }
 
 #[cfg(feature = "python")]
@@ -1387,6 +1444,29 @@ fn with_send_write_buffers<R>(
     buffers: &ObservationBuffers,
     f: impl FnOnce(SendWriteBuffers) -> PyResult<R>,
 ) -> PyResult<R> {
+    let step_state = buffers
+        .step_state
+        .as_ref()
+        .ok_or_else(|| PyRuntimeError::new_err("step-state buffers are required"))?;
+    let rewards_buffer = typed_numpy_buffer::<f64>(py, &step_state.rewards, "rewards")?;
+    let terminated_buffer = typed_numpy_buffer::<u8>(py, &step_state.terminated, "terminated")?;
+    let truncated_buffer = typed_numpy_buffer::<u8>(py, &step_state.truncated, "truncated")?;
+    with_observation_field_slices(py, buffers, |fields| {
+        f(SendWriteBuffers {
+            fields,
+            rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
+            terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
+            truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
+        })
+    })
+}
+
+#[cfg(feature = "python")]
+fn with_observation_field_slices<R>(
+    py: Python<'_>,
+    buffers: &ObservationBuffers,
+    f: impl FnOnce(SendObservationFieldSlices) -> PyResult<R>,
+) -> PyResult<R> {
     let relations_buffer = buffers
         .relations
         .as_ref()
@@ -1469,10 +1549,6 @@ fn with_send_write_buffers<R>(
     let actions_valid_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.actions_valid, "actions_valid")?;
     let events_valid_buffer = typed_numpy_buffer::<f32>(py, &buffers.events_valid, "events_valid")?;
-    let rewards_buffer = typed_numpy_buffer::<f64>(py, &buffers.rewards, "rewards")?;
-    let terminated_buffer = typed_numpy_buffer::<u8>(py, &buffers.terminated, "terminated")?;
-    let truncated_buffer = typed_numpy_buffer::<u8>(py, &buffers.truncated, "truncated")?;
-
     let field_slices = SendObservationFieldSlices {
         relations: relations_buffer
             .as_ref()
@@ -1559,10 +1635,5 @@ fn with_send_write_buffers<R>(
         events_valid: send_slice_from_buffer(py, &events_valid_buffer, "events_valid")?,
     };
 
-    f(SendWriteBuffers {
-        fields: field_slices,
-        rewards: send_slice_from_buffer(py, &rewards_buffer, "rewards")?,
-        terminated: send_slice_from_buffer(py, &terminated_buffer, "terminated")?,
-        truncated: send_slice_from_buffer(py, &truncated_buffer, "truncated")?,
-    })
+    f(field_slices)
 }
