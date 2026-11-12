@@ -6,4 +6,4 @@
 - `ActorCritic(..., bucketed_shapes: bool = False)` constructor argument replaces the env reader.
 - `token_stream="pooled"` + `bucketed_shapes=True` fails regime validation (earlier than the current ActorCritic construction error).
 - Receipt: the regime in `run.json` carries the field; no separate Etude param documented.
-- `MANABOT_BUCKETED_SHAPES` is simply not read any more (docs say so); no warning on a leftover setting.
+- `MANABOT_BUCKETED_SHAPES` is no longer read and no longer mentioned anywhere outside scratch; a leftover setting gets no warning.
