@@ -19,7 +19,7 @@ bucketing.
 Module: `experiments/token_stream.py`. Model option:
 `ModelConfig.token_stream="pooled"` (`manabot/model/token_stream.py`); omitted,
 it is `tables` and every existing recipe, checkpoint and architecture identity
-is unchanged.
+is unchanged. Both were removed after this pilot; run them from `439379869`.
 
 ### Arms
 

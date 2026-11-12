@@ -114,3 +114,16 @@ definition IDs: join on `key`), `WORLDS.md` (MTG-298 paragraph under w17),
 `AGENTS.md` (identity is the key, in the token paragraph). The
 `catalog_tokens()` example was read from the installed engine. No open product
 choice.
+
+## Merge of main e38518093 (2026-11-12)
+PR #476 was CONFLICTING with main's typed mana restrictions (`ManaRestriction`,
+`SpendingContext`, new `spm`/`woe` sets), so no checks ran on 9c2c6db03.
+- Code: kept this branch's shapes with main's `ManaRestriction` calls; `spm.rs`
+  and `woe.rs` nest under `PrintedCharacteristics`; `SETS` is 62;
+  `SpellSnapshot` holds `Arc<PrintedCharacteristics>` (what
+  `copiable_definition` returns here).
+- Evidence re-recorded on the merged content (procedure in
+  `conformance/README.md`): `semantic-kernel-w17-v2`, authored-match receipt
+  (SHA `28ed11cc…`, terminal state `ebd8947a…`, both pinned), both parity
+  receipts, the five Academy fixtures (same Commands and revisions) and the
+  four belief v3 pins.

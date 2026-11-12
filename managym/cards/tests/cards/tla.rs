@@ -41,7 +41,7 @@ use managym::{
         card::{Keyword, Keywords, StaticAbility},
         effect::{CopyEffect, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{Color, Mana, ManaCost, ManaUse},
+        mana::{Color, Mana, ManaCost, ManaRestriction, SpendingContext},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -630,7 +630,7 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
 /// sources, and nothing else.
 #[test]
 fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
-    let ally = ManaUse::new(["Ally"], ["Ally"]);
+    let ally = ManaRestriction::only(["Ally"], ["Ally"]);
     let mut s = five_color_setup(&[
         "Jasmine Dragon Tea Shop",
         "Rebellious Captives",
@@ -640,7 +640,7 @@ fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, shop, 0);
     choose_mode(&mut s, 4);
-    assert_eq!(pool(&s).restricted_of(ally), [0, 0, 0, 0, 1, 0]);
+    assert_eq!(pool(&s).restricted_of(&ally), [0, 0, 0, 0, 1, 0]);
     s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
     let captives = library_card(&s, 0, "Rebellious Captives");
     let ogre = library_card(&s, 0, "Gray Ogre");
@@ -1578,7 +1578,7 @@ fn hermitic_herbalist_offers_each_two_color_combination_once() {
     settle(&mut s);
     let player = &s.game().state.players[0].mana_pool;
     assert_eq!(
-        player.restricted_of(ManaUse::spell(["Lesson"])),
+        player.restricted_of(&ManaRestriction::spell(["Lesson"])),
         [1, 1, 0, 0, 0, 0]
     );
     assert_eq!(player.total(), 2);
@@ -5922,10 +5922,10 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     let mut s = five_color_unfunded_setup(&["Ozai, the Phoenix King"]);
     let ozai = s.force_permanent_on_battlefield(0, "Ozai, the Phoenix King");
     s.set_player_mana_pool(0, "WUB");
-    let lesson = ManaUse::spell(["Lesson"]);
+    let lesson = ManaRestriction::spell(["Lesson"]);
     s.game_mut().state.players[0]
         .mana_pool
-        .add(&Mana::restricted_to(lesson, [0, 0, 0, 0, 1, 0]));
+        .add(&Mana::restricted_to(lesson.clone(), [0, 0, 0, 0, 1, 0]));
     assert!(!observed_keywords(&s, ozai).flying);
 
     declare_attackers(&mut s, &[ozai]);
@@ -7084,7 +7084,7 @@ fn herbalist_restriction_survives_color_selection_and_cannot_pay_abilities() {
     assert_eq!(
         s.game().state.players[0]
             .mana_pool
-            .restricted_of(ManaUse::spell(["Lesson"])),
+            .restricted_of(&ManaRestriction::spell(["Lesson"])),
         [0, 0, 0, 2, 0, 0]
     );
     let lesson = library_card(&s, 0, "Firebending Lesson");
@@ -9953,7 +9953,7 @@ fn waterbending_scroll_draws_for_one_less_per_island() {
 
 #[test]
 fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
-    let lesson_or_shrine = ManaUse::spell(["Lesson", "Shrine"]);
+    let lesson_or_shrine = ManaRestriction::spell(["Lesson", "Shrine"]);
     let mut s = five_color_setup(&[
         "White Lotus Hideout",
         "Firebending Lesson",
@@ -9969,9 +9969,12 @@ fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
     s.set_player_mana_pool(0, "");
     activate(&mut s, hideout, 0);
     choose_mode(&mut s, 3);
-    assert_eq!(pool(&s).restricted_of(lesson_or_shrine), [0, 0, 0, 1, 0, 0]);
+    assert_eq!(
+        pool(&s).restricted_of(&lesson_or_shrine),
+        [0, 0, 0, 1, 0, 0]
+    );
     let shrine = ManaCost {
-        purpose: ManaUse::spell(["Shrine"]),
+        purpose: SpendingContext::cast(["Shrine"], []),
         ..ManaCost::parse("R")
     };
     assert!(pool(&s).can_pay(&shrine));

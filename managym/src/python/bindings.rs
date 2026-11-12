@@ -4372,6 +4372,14 @@ fn input_v10_state(obs: PyObservation) -> Option<&'static str> {
     crate::agent::observation_encoder::input_v10_state(&Observation::from(obs))
 }
 
+/// State in `obs` the policy input cannot represent, if any (see
+/// `observation_encoder::unrepresentable_state`); every encoder refuses it.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn unrepresentable_state(obs: PyObservation) -> Option<String> {
+    crate::agent::observation_encoder::unrepresentable_state(&Observation::from(obs))
+}
+
 #[cfg(feature = "python")]
 fn authored_setup(name: &str) -> PyResult<&'static crate::cards::setups::AuthoredSetup> {
     crate::cards::setups::authored_setup(name)
@@ -4726,6 +4734,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
     m.add_function(wrap_pyfunction!(input_v10_state, m)?)?;
+    m.add_function(wrap_pyfunction!(unrepresentable_state, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<crate::agent::continuation::VisibleReference>()?;
