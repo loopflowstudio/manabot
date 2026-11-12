@@ -402,3 +402,63 @@ parity sample shows the torch lines and `parity: pass (torch, mlx)` (torch
 figures from a laptop run of the MTG-321 capture: forward logits 9.7e-09,
 values 2.7e-07, collection 0, cosine 1.000000 over 169, one step 7.5e-09);
 the updates return `UpdateDiagnostics`, a typed dictionary.
+
+## Concept review (2026-11-12, after steer 449b1a8e)
+
+State reviewed: HEAD 8420fb69d. The three layers hold: `manabot.policy`
+(NumPy), `manabot.backends.{torch,mlx}` (matched files), updates taking the
+backend module. One mismatch and one new direction; the scope question stays
+open.
+
+Next implement direction, in order:
+
+1. One owner for the host recursions. Torch's `rl.terminal_distances`,
+   `reverse_waves` and `transition_gae` already run on the host (`.cpu()`),
+   duplicating `manabot.policy.returns` bit for bit, while MLX's `rl` calls
+   `policy.returns`. The matched rule is that a backend may import
+   `manabot.policy` (framework-free) and never another backend; torch's `rl`
+   should follow it like MLX. Make torch's `transition_gae` a wrapper over
+   `returns.transition_gae` (`arrays.to_numpy` in, `from_numpy` back to the
+   rewards' device), delete torch's `terminal_distances`/`reverse_waves`, and
+   add `manabot.policy.returns` to `_GENERIC_ALLOWED` in
+   `test_generic_learning_pieces_import_only_themselves` (and the runtime
+   probe's allowed set). Keep torch's device-side selection
+   (`selected_rows`, `torch.quantile`): it runs on the minibatch's device,
+   and moving it to the host adds a device read per PPO minibatch on CUDA.
+   Check: `scratch/equivalence/updates.py` against `after.json` (only the
+   known 1-ulp `value_scale` std), returns, update backends, minimal loop,
+   boundaries. Update `backends/README.md`/`mlx.md` sentences that say torch
+   keeps its own recursions, and drop the questions.md follow-up line.
+2. Speed check, steer 449b1a8e (Jack Heart: "lets give a $10 budget for
+   making sure there is no performance regression on pytorch due to this
+   change"). Run it after item 1 so it measures the code that ships.
+   - Base: `manabot/` at `git merge-base HEAD origin/main` (adf601acb at
+     review time; it excludes #474, so a regression found there is bisected
+     against #474's tip e0e99309a before blaming this branch). Head: HEAD.
+     One L4, one venv and native build, only `manabot/` swapped
+     (regenerate `base.patch` from that merge-base).
+   - Measure, ABAB interleaved, at least 3 repeats each, medians with spread:
+     damped and PPO learner steps/s at a current-recipe size (Elemental),
+     padded, `bucketed_shapes`, `live_tokens`, `precision="tf32"`;
+     `PolicyInference` obs/s for collection; `save_checkpoint` /
+     `load_checkpoint` time.
+   - Suspects to time separately if a gap shows: buckets measured on the
+     host at admission; NumPy `reference_distribution` plus its upload per
+     minibatch; host reads for `selection_diagnostics`, `value_scale`,
+     `batch_health`; the `learner.loss` closure; NumPy minibatch indexes and
+     PPO epoch order; the zip-magic sniff in `load_checkpoint`.
+   - A regression is any median slower than the run-to-run spread; fix it in
+     this PR before gate. Launch through Etude with `--max-usd 10` for the
+     whole check; record the launcher's cost once here and in the PR body.
+     A short targeted CPU run of the same harness on the laptop first, no
+     load. Rerun if the forward changes (the Prepared rewrite).
+
+Settled without change: `backend` stays typed `types.ModuleType`; the
+`BACKEND` object in `checkpoint.py` (MTG-321's published name) is the
+parity loader, the module is the backend the updates take; both read
+clearly at their call sites.
+
+Open product choice (unchanged): steer aeac5366, ship this PR with
+Remaining 1 and 2 stacked, or build them here. Steer 449b1a8e's "Rerun this
+check if the forward changes (e.g. if the Prepared rewrite lands here)"
+leaves it open. Items 1 and 2 above are needed on either answer.
