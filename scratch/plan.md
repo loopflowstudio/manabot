@@ -58,7 +58,14 @@ decklists 64, permanents 32.
 Checks: `pytest tests/model/test_bucketed_shapes.py` 9 passed;
 11 existing model/boundary test files 162 passed, 2 skipped.
 
-Remaining: gate; MTG-301 L4 A/B (`MANABOT_BUCKETED_SHAPES=1`).
+Remaining: gate; MTG-301 L4 A/B (`MANABOT_BUCKETED_SHAPES=1`). The switch is
+read in the training process, so the L4 job must set it in that process's
+environment; whether the Etude launcher forwards it is unchecked.
+
+Upstream (2026-11-12): origin/main is still the checkout base `b2ff1aaed`;
+MTG-299, MTG-300 and MTG-301 are started and unmerged, so the expected
+conflicts (catalog selection in `actor_critic.py`, encoder count checks) are
+resolved by whichever lands second.
 
 Compress: `_ownership` reads the forward's `BucketSizes` instead of rebuilding a
 partial one from shapes; fact count check uses an explicit `None` default.
