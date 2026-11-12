@@ -36,9 +36,9 @@ execution of that four-combination proof remains to be arranged during delivery.
 
 ## Remaining work
 
-- Gate: staged build/metadata validation and actual locked sync; offline lock
-  metadata checks alone do not prove usable wheels. Obtain green release PR CI,
-  including the four wheels and outside-checkout consumer installs.
+- Obtain green release PR CI, including the four wheels and outside-checkout
+  consumer installs. Local gate is complete: staged macOS builds, metadata,
+  consumer checks and actual isolated locked sync passed (see questions.md).
 - Delivery: merge the green release PR, confirm its release workflow result,
   recheck environment reviewers/trusted publisher, then tag that exact main
   commit. Inspect the tag run's five artifacts, version and preflight result;
