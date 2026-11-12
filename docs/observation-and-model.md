@@ -237,9 +237,9 @@ The stage's collection and learner policies, including a frozen opponent
 (`load_checkpoint(..., live_tokens=True)`), use the layout; evaluation and
 search do not. Code that builds a policy directly passes
 `ActorCritic(..., live_tokens=True)`. Like `bucketed_shapes`, the field is
-serialized only when set. The setting changes how a forward is computed, not the model: no `ModelConfig`
-field, checkpoint, world binding or policy input changes, and a checkpoint
-trained with it loads and runs without it. Action probabilities, values,
+serialized only when set. The setting changes how a forward is computed, not
+the model: no `ModelConfig` field, checkpoint, world binding or policy input
+changes, and a checkpoint trained with it loads and runs without it. Action probabilities, values,
 losses and gradients agree with the padded path to within 1e-5 on CPU; on CUDA
 they differ only by accumulation order, as bucketed shapes do. It is rejected
 with `token_stream="pooled"`, which already packs its own sequence, at regime

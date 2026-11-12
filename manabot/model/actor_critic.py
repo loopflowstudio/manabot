@@ -455,12 +455,10 @@ class ActorCritic(nn.Module):
         if not self.live_tokens or not self.config.attention_on:
             return None
         batch = obs["actions_valid"].shape[0]
-        keys = OBJECT_VALIDITY_KEYS
+        count = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
         if self.belief_count_buckets > 0:
-            keys = (*keys, "belief_validity")
-        count = sum(int(obs[key].count_nonzero()) for key in keys)
-        if self.belief_count_buckets > 0:
-            count += batch
+            # Belief rows plus one global belief row per observation.
+            count += int(obs["belief_validity"].count_nonzero()) + batch
         if self.value_token is not None:
             count += batch
         return count

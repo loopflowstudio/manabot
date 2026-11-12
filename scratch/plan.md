@@ -77,3 +77,7 @@
   `RolloutBatch` has no `batch`); `test_head_to_head` x2 (duckdb, needs `--extra
   evaluation`). `test_active_recovery` and `test_learning_state` failed in the full run
   but pass alone (17 passed). Leave the rest of the suite to CI.
+
+- Compress after the pilot: `live_object_count` counts belief rows in one branch; docs
+  paragraph rewrapped. Nothing to delete (pilot passed, layout stays).
+  `pytest tests/model/test_live_tokens.py tests/training/test_bucketed_execution.py`: 13 passed.
