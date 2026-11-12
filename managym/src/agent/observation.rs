@@ -15,7 +15,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaRestriction},
+        mana::{ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -134,16 +134,18 @@ impl RestrictedManaData {
         }
     }
 
-    /// The restriction this projects, described as the rules text states it.
-    pub fn describe(&self) -> String {
+    /// The restriction this projects. Subtype order and repeats do not matter.
+    pub fn restriction(&self) -> ManaRestriction {
         if self.except_nonartifact_spells {
-            return ManaRestriction::ExceptNonartifactSpells.describe();
+            return ManaRestriction::ExceptNonartifactSpells;
         }
-        ManaRestriction::only(
-            self.spells.iter().map(String::as_str),
-            self.abilities.iter().map(String::as_str),
-        )
-        .describe()
+        let spells = self.spells.iter().cloned().map(SpendPredicate::CastSubtype);
+        let sources = self
+            .abilities
+            .iter()
+            .cloned()
+            .map(SpendPredicate::ActivateSubtype);
+        ManaRestriction::Only(spells.chain(sources).collect())
     }
 
     /// Whether this mana may pay for a spell or an ability source with `subtype`.

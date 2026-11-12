@@ -5,14 +5,17 @@ use super::observation_layout::{
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
+    sync::LazyLock,
 };
 
 use crate::{
     agent::observation::{
-        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData, TurnData,
+        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
+        RestrictedManaData, TurnData,
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
+    state::mana::ManaRestriction,
 };
 
 // Feature widths. Column indices, names and value encodings live in
@@ -943,22 +946,20 @@ fn turn_state_reads(registry_key: i32) -> TurnStateReads {
 /// admitting several subtypes counts under each column.
 const RESTRICTED_SUBTYPE_COLUMNS: [&str; 3] = ["Lesson", "Shrine", "Ally"];
 
-/// The `Only` classes, as (spell subtypes, source subtypes), that the
-/// columns state exactly. With the total, the overlapping Lesson and Shrine
-/// columns solve uniquely for these classes and no others: a Lesson-or-Ally
-/// class beside a Shrine class sums like a Lesson class beside a
-/// Shrine-or-Ally one. Powerstone mana has its own v10 columns.
-const REPRESENTABLE_CLASSES: [(&[&str], &[&str]); 3] = [
-    (&["Lesson"], &[]),
-    (&["Lesson", "Shrine"], &[]),
-    (&["Ally"], &["Ally"]),
-];
-
-fn same_subtypes(names: &[String], expected: &[&str]) -> bool {
-    let mut names: Vec<&str> = names.iter().map(String::as_str).collect();
-    names.sort_unstable();
-    names.dedup();
-    names == expected
+/// The restrictions the player columns state exactly. With the total, the
+/// overlapping Lesson and Shrine columns solve uniquely for these classes and
+/// no others: a Lesson-or-Ally class beside a Shrine class sums like a Lesson
+/// class beside a Shrine-or-Ally one. Powerstone mana has its own v10 columns.
+fn representable(restriction: &ManaRestriction) -> bool {
+    static REPRESENTABLE: LazyLock<[ManaRestriction; 4]> = LazyLock::new(|| {
+        [
+            ManaRestriction::spell(["Lesson"]),
+            ManaRestriction::spell(["Lesson", "Shrine"]),
+            ManaRestriction::only(["Ally"], ["Ally"]),
+            ManaRestriction::ExceptNonartifactSpells,
+        ]
+    });
+    REPRESENTABLE.contains(restriction)
 }
 
 /// Restricted mana in `obs` that the player columns cannot state exactly, if
@@ -969,14 +970,9 @@ pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
         .restricted_mana
         .iter()
         .chain(&obs.opponent.restricted_mana)
-        .find(|class| {
-            !class.except_nonartifact_spells
-                && !REPRESENTABLE_CLASSES.iter().any(|(spells, abilities)| {
-                    same_subtypes(&class.spells, spells)
-                        && same_subtypes(&class.abilities, abilities)
-                })
-        })
-        .map(|class| format!("mana restricted to {}", class.describe()))
+        .map(RestrictedManaData::restriction)
+        .find(|restriction| !representable(restriction))
+        .map(|restriction| format!("mana restricted to {}", restriction.describe()))
 }
 
 /// The v10-only state this observation needs, if any: a definition visible

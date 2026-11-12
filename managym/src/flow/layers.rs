@@ -556,20 +556,19 @@ impl<'a> Context<'a> {
         // Activations are paid as abilities of this source (CR 106.6), read
         // from its final subtypes; an unchanged source keeps sharing its
         // earlier snapshot.
-        let current =
-            view.activated_abilities
+        if !view.activated_abilities.is_empty() {
+            let shared = view
+                .activated_abilities
                 .iter()
-                .find_map(|ability| match &ability.mana_cost.purpose {
-                    SpendingContext::Activate {
+                .map(|ability| &ability.mana_cost.purpose)
+                .find(|purpose| {
+                    matches!(purpose, SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes) => {
-                        Some(ability.mana_cost.purpose.clone())
-                    }
-                    _ => None,
-                });
-        if !view.activated_abilities.is_empty() {
-            let purpose = current.unwrap_or_else(|| SpendingContext::Activate {
+                    } if source.describes(&view.subtypes))
+                })
+                .cloned();
+            let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
                 zone: ZoneType::Battlefield,
                 source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
             });
