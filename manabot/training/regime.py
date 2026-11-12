@@ -874,13 +874,7 @@ class TrainingRegime(Strict):
                     raise ValueError(
                         f"{accelerator} requires self-contained ordinary self-play"
                     )
-                if (
-                    self.agent.token_stream == "pooled"
-                    and stage.execution.bucketed_shapes
-                ):
-                    raise ValueError(
-                        "token_stream='pooled' does not support bucketed shapes"
-                    )
+                # `Stage` already rejects bucketed shapes outside self-play.
                 continue
             check_self_play(
                 stage,

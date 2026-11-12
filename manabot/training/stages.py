@@ -13,10 +13,11 @@ with `Run.finish_stage`. There is one implementation of each kind of work:
   `TrainingRegime`: one stage-function call per saved stage, in order;
   `execute_regime` runs it.
 
-Each public function admits its own arguments (decks, world, curriculum,
-input digests), builds the stage's typed settings record (`TrainSelfPlay`,
-...) and hands a private body exactly what it reads: the decks, the model
-and observation configuration, the settings and the schedule clock.
+Each function admits its own arguments (decks, world, curriculum, input
+digests), builds the stage's typed settings record (`TrainSelfPlay`, ...),
+shrinks it under a smoke run (`smoke_stage`) and does the work. Self-play's
+loop is `_train_self_play`, which reads only the decks, the model and
+observation configuration, the settings and the schedule clock.
 """
 
 from copy import deepcopy
@@ -32,7 +33,6 @@ import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
 from manabot.belief.sampling_data import (
-    SamplerDataset,
     collect_frozen_policy,
     read_dataset,
     save_dataset,
@@ -70,6 +70,7 @@ from manabot.training.regime import (
     ImportPolicy,
     Learning,
     LearningStateImport,
+    Operation,
     PretrainedPolicy,
     ScheduleClock,
     SelectionGameSpec,
@@ -214,21 +215,18 @@ def _record_inputs(run: Run, scope: StageScope, producer: str) -> None:
 
 def _open_stage(
     run: Run,
-    name: str,
-    execution: Execution,
+    declaration: Operation,
     *,
-    operation: str,
     arguments: dict[str, object],
     producer: str | None = None,
-    self_play: bool = False,
 ) -> StageScope:
-    """Open stage `name`, record its producer's artifacts and commit."""
+    """Open the declared stage, record its producer's artifacts and commit."""
     scope = run.begin_stage(
-        name,
-        execution,
-        self_play=self_play,
+        declaration.id,
+        declaration.execution,
+        self_play=isinstance(declaration, TrainSelfPlay),
         keep_restored=True,
-        operation=operation,
+        operation=declaration.operation,
         arguments=arguments,
     )
     assert scope is not None
@@ -865,212 +863,17 @@ def _train_self_play(
 # Policy admission, selection and belief stages
 
 
-def _import_policy(
-    run: Run,
-    scope: StageScope,
-    stage: ImportPolicy,
-    *,
-    decks: Decks,
-    agent: ModelConfig,
-    observation: ObservationConfig,
-) -> None:
-    record = scope.record
-    tick = time.perf_counter()
-    record.inputs = {
-        "source_run": dict(stage.source_run),
-        "checkpoint": dict(stage.checkpoint),
-    }
-    run.persist()
-    admitted = admit_policy(
-        stage, run.out, decks=decks, agent=agent, observation=observation
-    )
-    record.artifacts[stage.weights] = admitted.checkpoint
-    record.artifacts["source_run"] = admitted.source_run
-    record.producer_cost = admitted.producer_cost
-    record.export_seconds = time.perf_counter() - tick
-    run.finish_stage(scope)
-
-
-def _collect_selection(
-    run: Run,
-    scope: StageScope,
-    stage: CollectSelection,
-    *,
-    match: MatchConfig,
-    agent_config: ModelConfig,
-    observation: ObservationConfig,
-) -> None:
-    record = scope.record
-    check = scope.check
-    out = run.out
-    policy_run = (
-        run.store.training_run(stage.source_run) if stage.source_run else run.record
-    )
-    source = next(item for item in policy_run.stages if item.id == stage.policy)
-    self_play_policy = (
-        isinstance(
-            next(item for item in policy_run.regime.stages if item.id == stage.policy),
-            TrainSelfPlay,
-        )
-        if policy_run.regime is not None
-        else source.operation == "train_self_play"
-    )
-    if source.status != "completed" or not self_play_policy:
-        raise ValueError("selection requires a completed self-play checkpoint stage")
-    frozen = source.artifacts[stage.weights]
-    record.inputs["policy"] = dict(frozen)
-    run.persist()
-    if file_sha256(frozen["path"]) != frozen["sha256"]:
-        raise ValueError("selection policy artifact changed")
-    agent, policy_space = load_checkpoint(frozen["path"])
-    if agent.config != agent_config or policy_space.encoder.config != observation:
-        raise ValueError("selection policy configuration differs from regime")
-    if file_sha256(frozen["path"]) != frozen["sha256"]:
-        raise ValueError("selection policy artifact changed while loading")
-    population = [game.model_dump(mode="json") for game in stage.population]
-    population_path = out / f"{stage.id}-population.json"
-    atomic_json(population_path, population)
-    record.artifacts["population"] = artifact(population_path)
-    run.persist()
-    games = []
-    root = Match(match)
-    for index, spec in enumerate(stage.population):
-        target = out / f"{stage.id}-{index}.receipts.jsonl"
-        tick = time.perf_counter()
-        game = collect_selection_game(
-            agent,
-            policy_space,
-            root if spec.assignment == 0 else root.swapped(),
-            spec,
-            target,
-            reference=stage.learning.reference,
-            max_steps=stage.max_steps,
-            check=check,
-        )
-        record.collection_seconds += time.perf_counter() - tick
-        tick = time.perf_counter()
-        if replay_selection_game(target) != len(game.rows):
-            raise ValueError("selection replay decision count mismatch")
-        record.diagnostic_seconds += time.perf_counter() - tick
-        record.artifacts[f"game-{index}"] = artifact(target)
-        record.games += 1
-        record.environment_decisions += len(game.rows)
-        games.append(game)
-        run.persist(progress=True)
-    dataset = SelectionDataset(
-        run_id=run.id,
-        stage_id=stage.id,
-        policy_run_id=policy_run.id,
-        policy_stage_id=stage.policy,
-        policy_sha256=frozen["sha256"],
-        weights=stage.weights,
-        world_binding_sha256=canonical_sha256(agent.world_binding),
-        population_sha256=canonical_sha256(population),
-        games=tuple(games),
-    )
-    target = out / f"{stage.id}-dataset.json"
-    atomic_json(target, dataset.model_dump(mode="json"))
-    record.artifacts["dataset"] = artifact(target)
-    tick = time.perf_counter()
-    report = analyze_selection(dataset, stage, check=check)
-    target = out / f"{stage.id}-analysis.json"
-    atomic_json(target, report.model_dump(mode="json"))
-    record.artifacts["analysis"] = artifact(target)
-    target = out / f"{stage.id}-report.md"
-    write_selection_report(report, target)
-    record.artifacts["report"] = artifact(target)
-    record.diagnostic_seconds += time.perf_counter() - tick
-    record.diagnostics = [
-        {
-            "selection_groups": report.selection_groups,
-            "optimizer_exposures": 0,
-            "bootstrapped_tail_fraction": 0,
-            "analysis": "frozen-complete-game-associations",
-        }
-    ]
-    run.finish_stage(scope)
-
-
-def _collect_belief(
-    run: Run,
-    scope: StageScope,
-    match: MatchConfig,
-    stage: CollectBelief,
-    policy: ArtifactReference,
-) -> SamplerDataset:
-    record = scope.record
-    dataset = collect_frozen_policy(
-        checkpoint=Path(policy["path"]),
-        match_config=match,
-        games=stage.games,
-        seed=run.seeds["belief_collection"] + run.belief_games,
-        max_steps=stage.max_steps,
-        check=scope.check,
-    )
-    record.collection_seconds = time.perf_counter() - scope.stage_start
-    record.games = len(dataset.games)
-    record.environment_decisions = sum(
-        len(game.examples) // 2 for game in dataset.games
-    )
-    run.belief_games += len(dataset.games)
-    tick = time.perf_counter()
-    target = run.out / f"{stage.id}-dataset.json"
-    save_dataset(dataset, target)
-    record.artifacts["dataset"] = artifact(target)
-    record.export_seconds = time.perf_counter() - tick
-    run.finish_stage(scope)
-    return dataset
-
-
-def _train_belief(
-    run: Run, scope: StageScope, stage: TrainBelief, dataset: SamplerDataset
-) -> ArtifactReference:
-    record = scope.record
-    tick = time.perf_counter()
-    result = fit_belief_sampler(
-        dataset,
-        steps=stage.steps,
-        batch_size=stage.batch_size,
-        hidden_size=stage.hidden_size,
-        learning_rate=stage.learning_rate,
-        history_dropout=stage.history_dropout,
-        evaluation_samples=stage.evaluation_samples,
-        seed=run.seeds["belief_initialization"],
-        check=scope.check,
-    )
-    record.learning_seconds = time.perf_counter() - tick
-    record.optimizer_exposures = result.optimizer_exposures
-    record.diagnostics = [asdict(result.metrics)]
-    tick = time.perf_counter()
-    target = run.out / f"{stage.id}-sampler.pt"
-    checkpoint_identity = save_belief_sampler(target, result, dataset)
-    candidate = artifact(target)
-    try:
-        load_belief_sampler(
-            target,
-            expected_dataset_identity=dataset.identity,
-            expected_policy_identity=dataset.policy_identity,
-            expected_schema_identity=dataset.schema.identity,
-            expected_world_identity=dataset.world_identity,
-            expected_checkpoint_identity=checkpoint_identity,
-        )
-    except Exception:
-        record.rejected_artifacts["sampler"] = candidate
-        raise
-    record.artifacts["sampler"] = candidate
-    record.export_seconds = time.perf_counter() - tick
-    run.finish_stage(scope)
-    return candidate
-
-
-def smoke_stage[S: Stage](stage: S, execution: Execution) -> S:
+def smoke_stage[S: Stage](stage: S, execution: Execution | None) -> S:
     """A stage run tiny under `execution`: one update of one transition per stream.
 
     Belief collection plays its minimum three games and belief training takes
     one step. Stream counts that a curriculum stratifies are kept. Every stage
-    function shrinks its settings here, so a smoke run means one thing. The
-    result is validated again.
+    function shrinks its settings here (`run.smoke_execution`; `None` runs the
+    stage as declared), so a smoke run means one thing. The result is
+    validated again.
     """
+    if execution is None:
+        return stage
     update: dict[str, object] = {"execution": execution}
     if isinstance(stage, TrainSelfPlay):
         update |= {
@@ -1208,8 +1011,7 @@ def self_play(
         learning_state=learning_state,
         execution=execution,
     )
-    if run.smoke_execution is not None:
-        declaration = smoke_stage(declaration, run.smoke_execution)
+    declaration = smoke_stage(declaration, run.smoke_execution)
     if session is not None:
         if run.live_session is not session:
             raise ValueError(
@@ -1232,9 +1034,7 @@ def self_play(
     )
     scope = _open_stage(
         run,
-        name,
-        declaration.execution,
-        operation="train_self_play",
+        declaration,
         arguments={
             "model": model.name,
             "opponent": opponent.name if isinstance(opponent, Model) else None,
@@ -1243,7 +1043,6 @@ def self_play(
             "schedule_clock": schedule_clock,
         },
         producer=model.source,
-        self_play=True,
     )
     live = _train_self_play(
         run,
@@ -1338,24 +1137,31 @@ def import_policy(
             weights=weights,
             execution=execution,
         )
-        if run.smoke_execution is not None:
-            declaration = smoke_stage(declaration, run.smoke_execution)
+        declaration = smoke_stage(declaration, run.smoke_execution)
         scope = _open_stage(
             run,
-            stage_id,
-            declaration.execution,
-            operation="import_policy",
+            declaration,
             arguments={"model": name, "decks": decks, "settings": declaration},
         )
-        _import_policy(
-            run, scope, declaration, decks=decks, agent=agent, observation=observation
-        )
         recorded = scope.record
+        tick = time.perf_counter()
+        recorded.inputs = {
+            "source_run": dict(source_run),
+            "checkpoint": dict(checkpoint),
+        }
+        run.persist()
+        admitted = admit_policy(
+            declaration, run.out, decks=decks, agent=agent, observation=observation
+        )
+        recorded.artifacts[weights] = admitted.checkpoint
+        recorded.artifacts["source_run"] = admitted.source_run
+        recorded.producer_cost = admitted.producer_cost
+        recorded.export_seconds = time.perf_counter() - tick
+        run.finish_stage(scope)
     with torch.random.fork_rng(devices=[]):
         network, space = load_checkpoint(recorded.artifacts[weights]["path"])
     model = run.adopt(name, network, space.encoder.config)
-    model.exports = {weights: recorded.artifacts[weights]}  # type: ignore[dict-item]
-    model.source = recorded.id
+    _published(model, recorded)
     return model
 
 
@@ -1400,24 +1206,106 @@ def collect_selection(
         bootstrap_seed=bootstrap_seed,
         execution=execution,
     )
-    if run.smoke_execution is not None:
-        declaration = smoke_stage(declaration, run.smoke_execution)
+    declaration = smoke_stage(declaration, run.smoke_execution)
     scope = _open_stage(
-        run,
-        name,
-        declaration.execution,
-        operation="collect_selection",
-        arguments={"decks": decks, "settings": declaration},
+        run, declaration, arguments={"decks": decks, "settings": declaration}
     )
-    _collect_selection(
-        run,
-        scope,
-        declaration,
-        match=decks,
-        agent_config=agent,
-        observation=observation,
+    record = scope.record
+    check = scope.check
+    out = run.out
+    policy_run = (
+        run.store.training_run(declaration.source_run)
+        if declaration.source_run
+        else run.record
     )
-    return scope.record.artifacts["dataset"]  # type: ignore[return-value]
+    source = next(item for item in policy_run.stages if item.id == declaration.policy)
+    self_play_policy = (
+        isinstance(
+            next(
+                item
+                for item in policy_run.regime.stages
+                if item.id == declaration.policy
+            ),
+            TrainSelfPlay,
+        )
+        if policy_run.regime is not None
+        else source.operation == "train_self_play"
+    )
+    if source.status != "completed" or not self_play_policy:
+        raise ValueError("selection requires a completed self-play checkpoint stage")
+    frozen = source.artifacts[declaration.weights]
+    record.inputs["policy"] = dict(frozen)
+    run.persist()
+    if file_sha256(frozen["path"]) != frozen["sha256"]:
+        raise ValueError("selection policy artifact changed")
+    network, policy_space = load_checkpoint(frozen["path"])
+    if network.config != agent or policy_space.encoder.config != observation:
+        raise ValueError("selection policy configuration differs from regime")
+    if file_sha256(frozen["path"]) != frozen["sha256"]:
+        raise ValueError("selection policy artifact changed while loading")
+    population = [game.model_dump(mode="json") for game in declaration.population]
+    population_path = out / f"{declaration.id}-population.json"
+    atomic_json(population_path, population)
+    record.artifacts["population"] = artifact(population_path)
+    run.persist()
+    games = []
+    root = Match(decks)
+    for index, spec in enumerate(declaration.population):
+        target = out / f"{declaration.id}-{index}.receipts.jsonl"
+        tick = time.perf_counter()
+        game = collect_selection_game(
+            network,
+            policy_space,
+            root if spec.assignment == 0 else root.swapped(),
+            spec,
+            target,
+            reference=declaration.learning.reference,
+            max_steps=declaration.max_steps,
+            check=check,
+        )
+        record.collection_seconds += time.perf_counter() - tick
+        tick = time.perf_counter()
+        if replay_selection_game(target) != len(game.rows):
+            raise ValueError("selection replay decision count mismatch")
+        record.diagnostic_seconds += time.perf_counter() - tick
+        record.artifacts[f"game-{index}"] = artifact(target)
+        record.games += 1
+        record.environment_decisions += len(game.rows)
+        games.append(game)
+        run.persist(progress=True)
+    dataset = SelectionDataset(
+        run_id=run.id,
+        stage_id=declaration.id,
+        policy_run_id=policy_run.id,
+        policy_stage_id=declaration.policy,
+        policy_sha256=frozen["sha256"],
+        weights=declaration.weights,
+        world_binding_sha256=canonical_sha256(network.world_binding),
+        population_sha256=canonical_sha256(population),
+        games=tuple(games),
+    )
+    target = out / f"{declaration.id}-dataset.json"
+    atomic_json(target, dataset.model_dump(mode="json"))
+    record.artifacts["dataset"] = artifact(target)
+    tick = time.perf_counter()
+    report = analyze_selection(dataset, declaration, check=check)
+    target = out / f"{declaration.id}-analysis.json"
+    atomic_json(target, report.model_dump(mode="json"))
+    record.artifacts["analysis"] = artifact(target)
+    target = out / f"{declaration.id}-report.md"
+    write_selection_report(report, target)
+    record.artifacts["report"] = artifact(target)
+    record.diagnostic_seconds += time.perf_counter() - tick
+    record.diagnostics = [
+        {
+            "selection_groups": report.selection_groups,
+            "optimizer_exposures": 0,
+            "bootstrapped_tail_fraction": 0,
+            "analysis": "frozen-complete-game-associations",
+        }
+    ]
+    run.finish_stage(scope)
+    return record.artifacts["dataset"]  # type: ignore[return-value]
 
 
 def collect_belief(
@@ -1451,18 +1339,36 @@ def collect_belief(
         max_steps=max_steps,
         execution=execution,
     )
-    if run.smoke_execution is not None:
-        declaration = smoke_stage(declaration, run.smoke_execution)
+    declaration = smoke_stage(declaration, run.smoke_execution)
     scope = _open_stage(
         run,
-        name,
-        declaration.execution,
-        operation="collect_belief",
+        declaration,
         arguments={"model": model.name, "decks": decks, "settings": declaration},
         producer=model.source,
     )
-    _collect_belief(run, scope, decks, declaration, policy)
-    return BeliefCorpus(name, scope.record.artifacts["dataset"])  # type: ignore[arg-type]
+    record = scope.record
+    dataset = collect_frozen_policy(
+        checkpoint=Path(policy["path"]),
+        match_config=decks,
+        games=declaration.games,
+        seed=run.seeds["belief_collection"] + run.belief_games,
+        max_steps=declaration.max_steps,
+        check=scope.check,
+    )
+    record.collection_seconds = time.perf_counter() - scope.stage_start
+    record.games = len(dataset.games)
+    record.environment_decisions = sum(
+        len(game.examples) // 2 for game in dataset.games
+    )
+    run.belief_games += len(dataset.games)
+    tick = time.perf_counter()
+    target = run.out / f"{name}-dataset.json"
+    save_dataset(dataset, target)
+    corpus = BeliefCorpus(name, artifact(target))
+    record.artifacts["dataset"] = corpus.dataset
+    record.export_seconds = time.perf_counter() - tick
+    run.finish_stage(scope)
+    return corpus
 
 
 def train_belief(
@@ -1498,18 +1404,50 @@ def train_belief(
         evaluation_samples=evaluation_samples,
         execution=execution,
     )
-    if run.smoke_execution is not None:
-        declaration = smoke_stage(declaration, run.smoke_execution)
+    declaration = smoke_stage(declaration, run.smoke_execution)
     scope = _open_stage(
         run,
-        name,
-        declaration.execution,
-        operation="train_belief",
+        declaration,
         arguments={"settings": declaration},
         producer=corpus.stage,
     )
     dataset = read_dataset(Path(corpus.dataset["path"]))
-    return _train_belief(run, scope, declaration, dataset)
+    record = scope.record
+    tick = time.perf_counter()
+    result = fit_belief_sampler(
+        dataset,
+        steps=declaration.steps,
+        batch_size=declaration.batch_size,
+        hidden_size=declaration.hidden_size,
+        learning_rate=declaration.learning_rate,
+        history_dropout=declaration.history_dropout,
+        evaluation_samples=declaration.evaluation_samples,
+        seed=run.seeds["belief_initialization"],
+        check=scope.check,
+    )
+    record.learning_seconds = time.perf_counter() - tick
+    record.optimizer_exposures = result.optimizer_exposures
+    record.diagnostics = [asdict(result.metrics)]
+    tick = time.perf_counter()
+    target = run.out / f"{name}-sampler.pt"
+    checkpoint_identity = save_belief_sampler(target, result, dataset)
+    candidate = artifact(target)
+    try:
+        load_belief_sampler(
+            target,
+            expected_dataset_identity=dataset.identity,
+            expected_policy_identity=dataset.policy_identity,
+            expected_schema_identity=dataset.schema.identity,
+            expected_world_identity=dataset.world_identity,
+            expected_checkpoint_identity=checkpoint_identity,
+        )
+    except Exception:
+        record.rejected_artifacts["sampler"] = candidate
+        raise
+    record.artifacts["sampler"] = candidate
+    record.export_seconds = time.perf_counter() - tick
+    run.finish_stage(scope)
+    return candidate
 
 
 # ---------------------------------------------------------------------------
