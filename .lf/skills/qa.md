@@ -131,7 +131,14 @@ publish, land or choose the next Graph step from here.
   (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
   64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
   `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine.
+  an empty directory to act like a new machine. To A/B an `Execution` switch
+  the CLI lacks (such as `live_tokens`), start from
+  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
+  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
+  the same `--seed`. Equal layouts then give `run.json` files that differ only in
+  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
+  `bucketed_shapes` makes learning about 7× slower than padded, so time
+  bucketed arms against a bucketed control.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of

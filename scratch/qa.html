@@ -1,0 +1,44 @@
+<!doctype html><meta charset="utf-8"><title>MTG-319 QA: live-token attention</title>
+<style>body{font:15px/1.5 system-ui;max-width:52em;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.6em;overflow:auto}td,th{padding:.2em .7em;text-align:right}td:first-child,th:first-child{text-align:left}</style>
+<h1>MTG-319 QA: live-token attention</h1>
+<p>Who this is for: someone setting <code>Execution.live_tokens</code> in a training regime, then playing the checkpoint it writes. Everything below ran through the real <code>manabot train</code> and <code>manabot sim</code> CLIs on the laptop CPU, with outputs under the ignored <code>.runs/qa319/</code>. Nothing needed fixing.</p>
+
+<h2>1. Train with the switch</h2>
+<p>I built regimes from <code>local_smoke(steps=3, device="cpu")</code> and set <code>stages[0].execution.live_tokens</code>, then ran <code>uv run manabot train --regime &lt;f&gt; --seed 7 --out .runs/qa319/run-&lt;arm&gt;</code>. The padded regime's JSON has no <code>live_tokens</code> key, so existing regime digests are unchanged. All four runs finished with <code>status: completed</code>.</p>
+<table><tr><th>Arm (CPU, 3 updates)</th><th>Collection s</th><th>Learning s</th><th>Max RSS</th></tr>
+<tr><td>padded</td><td>2.83</td><td>6.03</td><td>729 MB</td></tr>
+<tr><td>live</td><td>4.88</td><td>6.85</td><td>733 MB</td></tr>
+<tr><td>bucketed (CLI <code>--bucketed-shapes</code>, control)</td><td>3.52</td><td>44.93</td><td>n/a</td></tr>
+<tr><td>bucketed-live</td><td>5.65</td><td>44.01</td><td>936 MB</td></tr></table>
+<p>On CPU, live collection is about 1.7× slower, which matches the documented per-observation math fallback ("meant for CUDA"). Bucketed-live learning takes 44 s, but bucketed alone takes 45 s, so that CPU cost belongs to bucketed shapes and was there before this change.</p>
+
+<h2>2. Equal outputs</h2>
+<p>With the same seed, padded and live <code>run.json</code> files agree on all 263 non-timing fields except <code>regime_digest</code>, which is expected. The weights in <code>self-play-raw.pt</code> agree within <b>7.1e-7</b> after 3 updates and have the same keys. No checkpoint field mentions the switch.</p>
+
+<h2>3. Play the checkpoint</h2>
+<pre>uv run manabot sim --hero-deck-file deck0.txt --villain-deck-file deck1.txt \
+  --set sim.hero=run-live/self-play-raw.pt --set sim.villain=run-padded/self-play-raw.pt \
+  --set sim.num_games=10 --set sim.num_threads=1
+Hero wins: 8 (80.00%)  Villain wins: 2  Timeouts: 0  Average steps per game: 208.9</pre>
+<p>The deck files come from the checkpoint's <code>world_binding.setups</code>. The checkpoint trained with live tokens loads and plays without the switch. The 10 games took 112 s.</p>
+
+<h2>4. Wrong configurations</h2>
+<ul>
+<li>A regime with <code>token_stream="pooled"</code> plus live tokens is refused by the CLI at validation: <code>token_stream='pooled' does not support live tokens</code>.</li>
+<li><code>ActorCritic(space, pooled_cfg, live_tokens=True)</code> raises <code>ValueError: token_stream='pooled' packs its own sequence and does not support live tokens</code>.</li>
+</ul>
+
+<h2>5. Experiment file and report</h2>
+<p><code>experiments.live_token_attention.runs("5095779a8")</code> builds its <code>Job</code> offline. I did not run the launcher, since the L4 run already happened. Etude does not discover the file (it has <code>runs()</code> only, like <code>l4_step_profile</code>), so <code>test_etude_finds_each_current_experiment_and_nothing_else</code> passes with no new entry. The manifest has 75 <code>live_token_attention</code> entries. The report's internal links resolve.</p>
+<p>Tests: <code>tests/model/test_live_tokens.py</code> and <code>tests/training/test_bucketed_execution.py</code> gave 13 passed.</p>
+
+<h2>Could not reach</h2>
+<ul><li>CUDA. The fused jagged kernels and the speedup exist only in the L4 receipts of Etude run <code>308602b435fe</code>. The task forbids heavy measurements on the laptop and needs no new rental.</li>
+<li>A frozen-opponent stage using <code>load_checkpoint(..., live_tokens=True)</code> inside training. It is covered by code and tests; I did not run a regime with a checkpoint opponent.</li></ul>
+
+<h2>Still rough, worst first</h2>
+<ol>
+<li><code>manabot train</code> has <code>--bucketed-shapes</code> but no <code>--live-tokens</code>. Recipe users must write a regime JSON to try the layout. This is a product choice for after the pilot; I added no flag.</li>
+<li>On CPU, bucketed shapes, with or without live tokens, make learning about 7× slower than padded. This was not introduced here. Anyone trying this on a laptop will see it.</li>
+<li>The report gives its results as tables rather than one chart per question.</li>
+</ol>
