@@ -1,31 +1,24 @@
-"""Small end-to-end contracts for pools, Limited builds, public results and stage modules."""
+"""Small end-to-end contracts for pools, Limited builds and public game results."""
 
-from collections.abc import Mapping
-from copy import deepcopy
 import json
 from pathlib import Path
 import subprocess
 import sys
-from types import ModuleType
 
-from pydantic import BaseModel
+import numpy as np
 import pytest
-import torch
 
 from experiments.tla_corpus import Corpus, GameEvidence, Source, Trophy
 from experiments.tla_pools import derive_pools, main as pools_main
 from manabot import managym
 from manabot.game_results import read_game_results
 from manabot.infra.config import ModelConfig
-from manabot.infra.identity import StrictModel, file_sha256
+from manabot.infra.identity import file_sha256
 from manabot.managym.format import LimitedBuild
-from manabot.model.checkpoint import load_checkpoint
 from manabot.pools import PoolCorpus
 from manabot.training.decks import UniformDecks
 from manabot.training.execution import execute_regime
-from manabot.training.regime import ModuleStage, TrainingRegime, TrainSelfPlay
-from manabot.training.stages.contract import StageContext, StageDefinition
-from manabot.training.stages.model_inventory import ModelInventory
+from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.verify.store import VerifyStore
 from managym.format import Limited
 
@@ -36,19 +29,21 @@ def test_limited_builds_select_from_a_pool_and_reject_bad_input() -> None:
     build = limited.build(pool)
     for _ in range(6):
         build.select("Llanowar Elves")
-    with pytest.raises(ValueError, match="not selectable"):
+    with pytest.raises(ValueError, match="not available"):
         build.select("Llanowar Elves")
     assert build.deck == {"Llanowar Elves": 6}  # A rejected selection changes nothing.
     for _ in range(34):
         build.select("Forest")
-    assert build.can_stop and "Forest" in build.selectable
+    assert build.can_stop and build.available == dict.fromkeys(
+        limited.basic_cards(), 20
+    )
     assert limited.issues(pool, build.deck) == []
     assert limited.issues(pool, {"Forest": 61}) == []  # Construction is not the cap.
     assert limited.issues(pool, {"Llanowar Elves": 7, "Forest": 40})
     capped = limited.build(pool, max_cards=40)
     for _ in range(40):
         capped.select("Forest")
-    assert capped.selectable == [] and capped.can_stop
+    assert capped.available == {} and capped.can_stop
     assert set(limited.basic_cards()) >= {"Forest", "Island"}
     with pytest.raises(ValueError):
         limited.build(pool, max_cards=39)
@@ -58,6 +53,63 @@ def test_limited_builds_select_from_a_pool_and_reject_bad_input() -> None:
     for count in (True, 1.5, -1, 0, "2"):
         with pytest.raises(ValueError, match="Forest: count"):
             managym.CardPool({"Forest": count})
+
+
+def _card_axis() -> list[str]:
+    return [d["name"] for d in json.loads(managym.card_definitions_json())]
+
+
+def test_array_rules_agree_with_the_name_form_at_every_step() -> None:
+    names = _card_axis()
+    limited = managym.format.Limited()
+    pool = managym.CardPool({"Llanowar Elves": 2, "Island": 1})
+    assert limited.min_cards == 40 and pool.counts.shape == (len(names),)
+    assert managym.CardPool.from_counts(pool.counts).cards == pool.cards
+    assert {names[i] for i in np.flatnonzero(limited.basics)} == set(
+        limited.basic_cards()
+    )
+    build = limited.build(pool, max_cards=42)
+    picks = ["Llanowar Elves", "Island", "Llanowar Elves"] + ["Forest"] * 39
+    pools, decks = [], []
+    for pick in [*picks, None]:
+        deck = np.zeros(len(names), dtype=np.int64)
+        for name, count in build.deck.items():
+            deck[names.index(name)] = count
+        pools.append(pool.counts)
+        decks.append(deck)
+        if pick is not None:
+            build.select(pick)
+    available, can_stop = limited.available(np.stack(pools), np.stack(decks), 42)
+    legal = limited.legal(np.stack(pools), np.stack(decks))
+    assert available.dtype == np.int32 and can_stop.dtype == np.bool_
+    assert list(legal) == list(can_stop) == [n >= 40 for n in range(len(picks) + 1)]
+    replay = limited.build(pool, max_cards=42)
+    for row, pick in zip(available, [*picks, None]):
+        assert {names[i]: int(row[i]) for i in np.flatnonzero(row)} == replay.available
+        if pick is not None:
+            replay.select(pick)
+    assert not available[-1].any()
+
+
+def test_array_rules_reject_unreachable_rows_and_report_illegal_decks() -> None:
+    names = _card_axis()
+    limited = managym.format.Limited()
+    pools = np.zeros((2, len(names)), dtype=np.int32)
+    decks = np.zeros_like(pools)
+    decks[1, names.index("Llanowar Elves")] = 1
+    assert list(limited.legal(pools, decks)) == [False, False]
+    with pytest.raises(ValueError, match="row 1: Llanowar Elves: not in the pool"):
+        limited.available(pools, decks)
+    for bad in (decks[0], decks.astype(np.float32), decks[:, :-1], -decks):
+        with pytest.raises(ValueError):
+            limited.available(pools, bad)
+    with pytest.raises(ValueError, match="rows"):
+        limited.legal(pools, decks[:1])
+    token = np.zeros(len(names), dtype=np.int32)
+    token[names.index("Ally")] = 1
+    with pytest.raises(ValueError, match="Ally: not supported"):
+        managym.CardPool.from_counts(token)
+    assert not limited.legal(pools[:1], token[None])[0]
 
 
 def _pool_source(event_ids: tuple[str, ...] = ("a", "b", "c")) -> Corpus:
@@ -257,122 +309,6 @@ def test_self_play_without_recovery_emits_public_game_rows(tmp_path: Path) -> No
     assert not any(key in path.read_text() for key in ("actions", "seed", "matchup"))
 
 
-def _named_regime(stages: list[ModuleStage]) -> TrainingRegime:
-    source = _tiny_regime()
-    return TrainingRegime(
-        schema_version=3,
-        id="named-models",
-        world=source.world,
-        deck_source=source.deck_source,
-        models={"builder": source.agent, "pilot": source.agent.model_copy(deep=True)},
-        stages=stages,
-    )
-
-
-def test_two_models_execute_module_and_preserve_legacy_serialization(
-    tmp_path: Path,
-) -> None:
-    legacy = _tiny_regime().model_dump(mode="json")
-    assert "models" not in legacy and "trains" not in legacy["stages"][0]
-    assert TrainingRegime.model_validate(legacy).model_dump(mode="json") == legacy
-    regime = _named_regime(
-        [
-            ModuleStage(
-                id="inspect",
-                module="manabot.training.stages.model_inventory",
-                trains=("builder",),
-                frozen=("pilot",),
-            )
-        ]
-    )
-    encoded = regime.model_dump(mode="json")
-    assert "agent" not in encoded
-    assert TrainingRegime.model_validate(encoded).model_dump(mode="json") == encoded
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 12, tmp_path / "run", store)
-    assert run.status == "completed"
-    output = ModelInventory.model_validate_json(
-        Path(run.stages[0].artifacts["result"]["path"]).read_bytes()
-    )
-    assert output.trainable_parameters["builder"] == output.frozen_parameters["pilot"]
-    assert output.frozen_parameters["pilot"] > 0
-    assert set(run.selected_models) == {"builder"}
-    for change in (
-        {"trains": ("missing",)},
-        {"trains": ("builder", "builder")},
-        {"frozen": ("builder",)},
-        {"inputs": {"future": "later"}},
-    ):
-        invalid = deepcopy(encoded)
-        invalid["stages"][0].update(change)
-        with pytest.raises(ValueError):
-            TrainingRegime.model_validate(invalid)
-
-
-class WeightReceipt(StrictModel):
-    value: float
-
-
-def test_modules_exchange_typed_artifacts_and_cannot_mutate_frozen_owner(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def train(context: StageContext, inputs: Mapping[str, BaseModel]) -> WeightReceipt:
-        with torch.no_grad():
-            next(context.trainable["builder"].parameters()).fill_(3)
-            next(context.frozen["pilot"].parameters()).fill_(99)
-        return WeightReceipt(value=3)
-
-    def consume(
-        context: StageContext, inputs: Mapping[str, BaseModel]
-    ) -> WeightReceipt:
-        receipt = inputs["weights"]
-        assert isinstance(receipt, WeightReceipt)
-        assert receipt.value == 3
-        assert not any(p.requires_grad for p in context.frozen["builder"].parameters())
-        assert next(context.frozen["builder"].parameters()).flatten()[0].item() == 3
-        assert next(context.frozen["pilot"].parameters()).flatten()[0].item() != 99
-        return receipt
-
-    for name, definition in (
-        ("foundation.train", StageDefinition({}, WeightReceipt, train)),
-        (
-            "foundation.consume",
-            StageDefinition({"weights": WeightReceipt}, WeightReceipt, consume),
-        ),
-    ):
-        module = ModuleType(name)
-        module.STAGE = definition
-        monkeypatch.setitem(sys.modules, name, module)
-    stages = [
-        ModuleStage(
-            id="train",
-            module="foundation.train",
-            trains=("builder",),
-            frozen=("pilot",),
-        ),
-        ModuleStage(
-            id="consume",
-            module="foundation.consume",
-            frozen=("builder", "pilot"),
-            inputs={"weights": "train"},
-        ),
-    ]
-    regime = _named_regime(stages)
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 12, tmp_path / "run", store)
-    assert run.status == "completed"
-    model, _ = load_checkpoint(run.stages[0].artifacts["raw/builder"]["path"])
-    assert next(model.parameters()).flatten()[0].item() == 3
-    assert run.stages[1].inputs["weights"] == run.stages[0].artifacts["result"]
-    with pytest.raises(ValueError, match="earlier"):
-        _named_regime(list(reversed(stages)))
-    incompatible = stages[0].model_copy(
-        update={"module": "manabot.training.stages.model_inventory"}
-    )
-    with pytest.raises(ValueError, match="incompatible"):
-        _named_regime([incompatible, stages[1]])
-
-
 def test_completed_rows_survive_optimizer_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -392,63 +328,6 @@ def test_completed_rows_survive_optimizer_failure(
     assert run.status == "failed"
     results = read_game_results(Path(run.stages[0].artifacts["game_results"]["path"]))
     assert len(results) == 2
-
-
-def test_named_self_play_keeps_its_model_and_exports_by_name(tmp_path: Path) -> None:
-    source = _tiny_regime()
-    play = source.stages[0]
-    assert isinstance(play, TrainSelfPlay)
-    play.trains = ("pilot",)
-    regime = TrainingRegime(
-        schema_version=3,
-        id="named-play",
-        world=source.world,
-        deck_source=source.deck_source,
-        models={"pilot": source.agent, "builder": source.agent.model_copy(deep=True)},
-        schedule_clock="iteration_fraction",
-        stages=[
-            play,
-            ModuleStage(
-                id="inspect",
-                module="manabot.training.stages.model_inventory",
-                frozen=("pilot", "builder"),
-            ),
-        ],
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 17402, tmp_path / "run", store)
-    assert run.status == "completed"
-    assert run.selected_artifact is None
-    assert run.selected_models == {"pilot": run.stages[0].artifacts["raw"]}
-    model, _ = load_checkpoint(run.selected_models["pilot"]["path"])
-    assert model.config == source.agent
-    assert (
-        len(read_game_results(Path(run.stages[0].artifacts["game_results"]["path"])))
-        == 2
-    )
-
-
-def test_joint_module_stage_trains_several_models(tmp_path: Path) -> None:
-    regime = _named_regime(
-        [
-            ModuleStage(
-                id="joint",
-                module="manabot.training.stages.model_inventory",
-                trains=("builder", "pilot"),
-            )
-        ]
-    )
-    with VerifyStore(tmp_path / "store.sqlite") as store:
-        run = execute_regime(regime, 12, tmp_path / "run", store)
-    assert run.status == "completed"
-    assert run.selected_models == {
-        name: run.stages[0].artifacts[f"raw/{name}"] for name in ("builder", "pilot")
-    }
-    play = _tiny_regime().stages[0]
-    assert isinstance(play, TrainSelfPlay)
-    play.trains = ("builder", "pilot")
-    with pytest.raises(ValueError, match="one trained model"):
-        _named_regime([play])
 
 
 def test_pooled_deck_sources_require_unique_aligned_builds() -> None:

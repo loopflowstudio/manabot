@@ -20,7 +20,6 @@ from manabot.infra.config import (
 )
 from manabot.training.decks import UniformDecks
 from manabot.training.rollout.adaptive import AdaptiveConfig
-from manabot.training.stages.contract import load_stage
 from manabot.training.state.game_errors import GameErrorPolicy
 
 BatchClosure = Literal["exact-quota", "complete-games"]
@@ -236,9 +235,6 @@ class Execution(Strict):
 class Stage(Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
     execution: Execution = Execution()
-    # Schema-3 model roles: named models this stage updates and reads frozen.
-    trains: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
-    frozen: tuple[str, ...] = Field(default=(), exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def supported_workers(self) -> "Stage":
@@ -624,21 +620,8 @@ class TrainBelief(Stage):
     evaluation_samples: int = Field(default=32, ge=1)
 
 
-class ModuleStage(Stage):
-    """A trusted Python module owns execution and typed JSON artifact contracts."""
-
-    operation: Literal["module"] = "module"
-    module: str = Field(pattern=r"^[A-Za-z_]\w*(\.[A-Za-z_]\w*)+$")
-    inputs: dict[str, str] = {}
-
-
 Operation = Annotated[
-    ImportPolicy
-    | TrainSelfPlay
-    | CollectBelief
-    | CollectSelection
-    | TrainBelief
-    | ModuleStage,
+    ImportPolicy | TrainSelfPlay | CollectBelief | CollectSelection | TrainBelief,
     Field(discriminator="operation"),
 ]
 
@@ -663,7 +646,7 @@ def _read_saved_self_play(
 
 
 class TrainingRegime(Strict):
-    schema_version: Literal[1, 2, 3] = 2
+    schema_version: Literal[1, 2] = 2
     id: str
     world: str
     # Exactly one owner of the run's setups: an authored match, or a deck source
@@ -676,9 +659,6 @@ class TrainingRegime(Strict):
     )
     observation: ObservationConfig = ObservationConfig()
     agent: ModelConfig = ModelConfig()
-    models: dict[str, ModelConfig] | None = Field(
-        default=None, exclude_if=lambda value: value is None
-    )
     stages: list[Operation] = Field(min_length=1)
     wall_seconds: float = Field(default=900, gt=0)
     schedule_clock: Literal["run_elapsed_budget", "iteration_fraction"] = (
@@ -704,12 +684,6 @@ class TrainingRegime(Strict):
         Retired `train_compound` stages fail with the reproduction commit
         rather than as an unknown discriminator.
         """
-        if (
-            isinstance(value, dict)
-            and value.get("schema_version") == 3
-            and "agent" in value
-        ):
-            raise ValueError("schema 3 uses named models, not agent")
         if isinstance(value, dict) and any(
             isinstance(stage, dict) and stage.get("operation") == "train_compound"
             for stage in value.get("stages") or ()
@@ -734,8 +708,6 @@ class TrainingRegime(Strict):
         self, handler: SerializerFunctionWrapHandler
     ) -> dict[str, object]:
         values: dict[str, object] = handler(self)
-        if self.schema_version == 3:
-            values.pop("agent", None)
         if self.schema_version == 1:
             # Old hashes include omitted defaults. Two-seat treatments are always
             # explicit, including when authored from a schema-1 experiment.
@@ -765,51 +737,6 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
-        if (self.schema_version == 3) != (self.models is not None):
-            raise ValueError("named models require schema 3")
-        if self.models is not None:
-            if not self.models or any(not name.strip() for name in self.models):
-                raise ValueError("models must have nonempty names")
-            if self.recoverable:
-                raise ValueError("named-model process recovery is not supported")
-            for stage in self.stages:
-                if not isinstance(stage, (ModuleStage, TrainSelfPlay)):
-                    raise ValueError(
-                        f"stage {stage.id}: named models support module and self-play stages"
-                    )
-                for role, names in (
-                    ("trained", stage.trains),
-                    ("frozen", stage.frozen),
-                ):
-                    if len(set(names)) != len(names) or any(
-                        name not in self.models for name in names
-                    ):
-                        raise ValueError(
-                            f"stage {stage.id}: {role} model names must be declared and unique"
-                        )
-                if set(stage.trains) & set(stage.frozen):
-                    raise ValueError(
-                        f"stage {stage.id}: a model cannot be trained and frozen in one stage"
-                    )
-                if isinstance(stage, TrainSelfPlay) and (
-                    len(stage.trains) != 1
-                    or stage.frozen
-                    or stage.pretrained is not None
-                    or stage.learning_state is not None
-                ):
-                    raise ValueError(
-                        f"stage {stage.id}: named self-play requires one trained model; producer and learning-state imports remain single-agent operations"
-                    )
-            histories = {model.recent_events for model in self.models.values()}
-            if len(histories) != 1:
-                raise ValueError(
-                    "named models must share the observation history contract"
-                )
-        elif any(
-            stage.trains or stage.frozen or isinstance(stage, ModuleStage)
-            for stage in self.stages
-        ):
-            raise ValueError("model roles and module stages require schema 3")
         if self.match is None and self.deck_source is None:
             raise ValueError("regime requires a match or a deck source")
         if self.match is not None and self.deck_source is not None:
@@ -817,15 +744,10 @@ class TrainingRegime(Strict):
                 "the deck source owns the run's setups; remove the authored match"
             )
         if self.deck_source is not None and any(
-            not isinstance(stage, (TrainSelfPlay, ModuleStage))
-            or (
-                isinstance(stage, TrainSelfPlay)
-                and (
-                    stage.behavior != "current-self"
-                    or stage.root is not None
-                    or stage.matchup_curriculum != "fixed"
-                )
-            )
+            not isinstance(stage, TrainSelfPlay)
+            or stage.behavior != "current-self"
+            or stage.root is not None
+            or stage.matchup_curriculum != "fixed"
             for stage in self.stages
         ):
             raise ValueError(
@@ -852,20 +774,14 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "learning-state continuation requires one step-target stage without process recovery"
             )
-        model_configs = self.model_configs
-        if any(model.recent_events and model.world is None for model in model_configs):
+        if self.agent.recent_events and self.agent.world is None:
             raise ValueError("recent events require a world for public identities")
-        if (
-            any(model.recent_events for model in model_configs)
-            and not 1 <= self.observation.max_events <= 32
-        ):
+        if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
             raise ValueError("public history v1 requires 1..32 event rows")
         # The model treatment owns this input contract; callers cannot silently
         # train history-on against the historical drained event tensor.
         self.observation = self.observation.model_copy(
-            update={
-                "policy_history_version": 1 if model_configs[0].recent_events else 0
-            }
+            update={"policy_history_version": 1 if self.agent.recent_events else 0}
         )
         if self.recovery is not None and self.recovery_max_microsteps is not None:
             raise ValueError("select one recovery contract")
@@ -896,9 +812,8 @@ class TrainingRegime(Strict):
             )
             if self.recoverable:
                 raise ValueError(f"{accelerator} process recovery is unsupported")
-            if any(model.belief_count_buckets for model in model_configs) or any(
-                not isinstance(stage, (TrainSelfPlay, ModuleStage))
-                or (isinstance(stage, TrainSelfPlay) and stage.opponent is not None)
+            if self.agent.belief_count_buckets or any(
+                not isinstance(stage, TrainSelfPlay) or stage.opponent is not None
                 for stage in self.stages
             ):
                 raise ValueError(
@@ -909,25 +824,6 @@ class TrainingRegime(Strict):
         for stage in self.stages:
             if stage.id in previous:
                 raise ValueError("stage IDs must be unique")
-            if isinstance(stage, ModuleStage):
-                definition = load_stage(stage.module)
-                if set(stage.inputs) != set(definition.inputs):
-                    raise ValueError(
-                        f"stage {stage.id}: module artifact inputs differ from its declared contract"
-                    )
-                for name, producer_id in stage.inputs.items():
-                    producer = previous.get(producer_id)
-                    if not isinstance(producer, ModuleStage):
-                        raise ValueError(
-                            f"stage {stage.id}: input {name} requires an earlier module artifact"
-                        )
-                    if (
-                        load_stage(producer.module).output
-                        is not definition.inputs[name]
-                    ):
-                        raise ValueError(
-                            f"stage {stage.id}: input {name} has an incompatible artifact type"
-                        )
             if isinstance(stage, CollectSelection) and stage.source_run is None:
                 policy = previous.get(stage.policy)
                 if not isinstance(policy, TrainSelfPlay):
@@ -971,8 +867,7 @@ class TrainingRegime(Strict):
                         "live self-play continuation cannot branch from an older collector"
                     )
                 if (
-                    parent.trains != stage.trains
-                    or parent.execution.device != stage.execution.device
+                    parent.execution.device != stage.execution.device
                     or parent.execution.workers != stage.execution.workers
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
@@ -990,8 +885,8 @@ class TrainingRegime(Strict):
                         "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers and opponent"
                     )
             if (
-                isinstance(stage, TrainSelfPlay)
-                and self.model_for(stage).value_kind == "categorical_wdl"
+                self.agent.value_kind == "categorical_wdl"
+                and isinstance(stage, TrainSelfPlay)
                 and not isinstance(stage.learning, DampedPolicyLearning)
             ):
                 raise ValueError("categorical outcome training requires damped_policy")
@@ -999,12 +894,3 @@ class TrainingRegime(Strict):
             if isinstance(stage, TrainSelfPlay):
                 latest_self_play = stage
         return self
-
-    @property
-    def model_configs(self) -> tuple[ModelConfig, ...]:
-        """All model configurations without changing the saved schema."""
-        return tuple(self.models.values()) if self.models is not None else (self.agent,)
-
-    def model_for(self, stage: TrainSelfPlay) -> ModelConfig:
-        # Admission guarantees that named self-play trains exactly one model.
-        return self.agent if self.models is None else self.models[stage.trains[0]]

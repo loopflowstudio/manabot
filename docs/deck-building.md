@@ -13,15 +13,15 @@ limited = managym.format.Limited()               # The rules, for any pool.
 build = limited.build(pool)
 for _ in range(6):
     build.select("Llanowar Elves")
-assert "Llanowar Elves" not in build.selectable  # All six copies are used.
+assert "Llanowar Elves" not in build.available  # All six copies are used.
 
 for _ in range(33):
-    build.select("Forest")                       # Basics are not in the pool.
-assert not build.can_stop                        # Only 39 cards.
+    build.select("Forest")                      # Basics are not in the pool.
+assert not build.can_stop                       # Only 39 cards.
 
 build.select("Forest")
-assert build.can_stop                            # A legal 40-card main deck.
-assert "Forest" in build.selectable              # Forty is a minimum.
+assert build.can_stop                           # A legal 40-card main deck.
+assert build.available["Forest"] == 20          # Forty is a minimum; 60 is the cap.
 assert build.deck == {"Llanowar Elves": 6, "Forest": 34}
 assert limited.issues(pool, build.deck) == []
 ```
@@ -51,24 +51,86 @@ main deck, an empty list when it is legal. It applies no size cap.
 
 `limited.build(pool)` starts an empty deck. `build.select(card)` adds one
 copy and commits it; there is no unselect. Cards may be selected in any order.
-`build.selectable` lists the cards that can be selected next, and
-`build.can_stop` is true exactly when the current deck passes the Limited
-rules. Reaching 40 does not stop the build; the caller decides when to stop.
-`build.deck` returns the deck so far as names and counts.
+`build.available` maps each card that can still be selected to the copies
+that can still be added, and `build.can_stop` is true exactly when the current
+deck passes the Limited rules. Reaching 40 does not stop the build; the
+caller decides when to stop. `build.deck` returns the deck so far as names
+and counts.
 
-Selecting a card outside `selectable` raises `ValueError` and leaves the build
-unchanged. Correct the caller rather than clipping counts or skipping cards
-silently.
+Selecting a card absent from `available` raises `ValueError` and leaves the
+build unchanged. Correct the caller rather than clipping counts or skipping
+cards silently.
 
 A build has a size cap, 60 by default: `limited.build(pool, max_cards=...)`,
-never below 40. At the cap `selectable` is empty, and a legal deck can still
+never below 40. At the cap `available` is empty, and a legal deck can still
 stop. The cap bounds a building episode; it is neither a Limited rule nor a
 fact about the pool, so `issues` may accept a deck larger than a build's cap.
 
-Each `selectable` read calls one stateless native function over the pool and
-deck counts. Batched builders that score many decks at once compute their own
-masks from `basic_cards()` and the pool counts, then check each finished deck
-with `limited.issues`.
+## Rules as arrays
+
+Learned and search-based builders work on many decks at once. The same rules
+are available as NumPy arrays over the engine's card axis: index `i` is
+`card_def_id` `i`, the `i`-th entry of `managym.card_definitions_json()`, with
+`managym.CARD_DEFINITION_COUNT` entries. This is the index the policy's card
+embedding already uses.
+
+```python
+import json
+
+import numpy as np
+from manabot import managym
+
+limited = managym.format.Limited()
+names = [d["name"] for d in json.loads(managym.card_definitions_json())]
+elves, forest = names.index("Llanowar Elves"), names.index("Forest")
+
+pools = np.zeros((2, managym.CARD_DEFINITION_COUNT), dtype=np.int32)
+pools[:, elves] = 6
+decks = np.zeros_like(pools)
+decks[0, forest] = 34                       # Deck 0: 34 Forests.
+decks[1, elves], decks[1, forest] = 6, 34   # Deck 1: the deck built above.
+
+available, can_stop = limited.available(pools, decks)
+print(available[:, elves], available[:, forest], can_stop)
+print(limited.legal(pools, decks), limited.min_cards)
+```
+
+```text
+[6 0] [26 20] [False  True]
+[False  True] 40
+```
+
+| Call or field | Shape | Meaning |
+| --- | --- | --- |
+| `limited.min_cards` | int | The 40-card minimum |
+| `limited.basics` | bool `[cards]` | Cards the pool does not limit |
+| `pool.counts` | int `[cards]` | A `CardPool`'s counts; `managym.CardPool.from_counts(counts)` makes one |
+| `limited.available(pools, decks, max_cards=60)` | int `[n, cards]`, bool `[n]` | Copies that can still be added, and whether each deck can stop |
+| `limited.legal(pools, decks)` | bool `[n]` | Whether each deck passes the Limited rules, with no cap |
+
+`pools` and `decks` are integer arrays of shape `[n, cards]`; a single
+`[cards]` row is not broadcast. For a non-basic, `available` is its pool
+count minus its deck count; for a basic, it is the slots left under the cap.
+A deck at the cap has no copies available. The legal-pick mask is
+`available > 0`, so a builder masks its logits with that and reads `can_stop`
+for its stop action. `legal` matches `limited.issues(...) == []` and
+`can_stop` matches `legal`, row by row.
+
+`available` takes decks a build could have reached: each non-basic within its
+pool count, only pool cards and basics, and no more than `max_cards` cards.
+Any other row, a negative count, a mismatched shape or a card axis of the
+wrong length raises `ValueError` naming the row. `legal` accepts any
+non-negative counts and reports an illegal deck as `False`. A pool row, and
+`CardPool.from_counts`, may not hold tokens, rules fixtures or other cards
+the world does not support; both forms raise `ValueError`, as the name form
+does.
+
+`limited.basics` and `min_cards` are plain data, so a builder on a GPU can
+compute `where(basics, slots_left, pools - decks)`, zeroed at the cap, without
+a round trip; the native forms are the authority it is tested against. The
+name form is the same native function: `build.available` and
+`build.can_stop` read one row of `limited.available`. managym returns NumPy
+arrays and never imports torch.
 
 Native world admission still applies when starting a game with the resulting
 deck. Construction legality does not establish checkpoint compatibility or
@@ -241,84 +303,3 @@ While a stage runs, it fsyncs each completed result to a `.partial` journal.
 Completion or failure seals the rows under the metric run's
 `artifacts/game-results/<sha256>.jsonl`. Completed games survive a later
 optimizer failure.
-
-## Several models in one regime
-
-A regime can name separate models and declare, for each stage, the models it
-trains and the models it reads frozen. For a builder stage with a frozen
-pilot, the roles are:
-
-| Model name | Stage use | Weights |
-| --- | --- | --- |
-| `builder` | Train from builds and game outcomes | Updated by this stage |
-| `pilot` | Play the games that supply outcomes | Frozen for this stage |
-
-A joint stage trains both from the same games: `trains=("builder", "pilot")`.
-Names identify models, not smaller networks or shared parameters. The builder
-has its own weights; initializing its card encoder from a pilot checkpoint
-copies those weights without establishing live sharing. A deck-score model
-can be named separately when a stage uses one. Declaring models does not by
-itself construct a builder learner or start games.
-
-Each stage's references must resolve to declared models, and a model is
-either trained or frozen in a stage, not both. Frozen readers do not receive
-optimizer updates from that stage. Artifacts passed between stages have
-declared input and output types; a missing producer, forward reference or
-incompatible artifact is an error to correct in the recipe before execution.
-A new stage owns its execution in its own module. Existing self-play and
-belief operations retain their entry points and behavior.
-
-Saved single-agent regimes keep their serialized identity and interpretation.
-Loading an old `agent` configuration does not silently rewrite it into a
-multi-model recipe or change the model an existing stage trains. Use a new
-regime when declaring additional model roles, and preserve the original
-regime with its run evidence. See [training](training.md#regimes-and-stages)
-for execution, checkpoint admission and recovery contracts.
-
-Named-model recipes explicitly select schema 3. For example, this recipe
-inspects two independent models without playing games or changing weights:
-
-```python
-from manabot import managym
-from manabot.infra.config import MatchConfig, ModelConfig
-from manabot.training.regime import ModuleStage, TrainingRegime
-
-regime = TrainingRegime(
-    schema_version=3,
-    id="builder-foundations",
-    world=managym.WORLD_VERSION,
-    match=MatchConfig(),
-    models={
-        "builder": ModelConfig(world=managym.WORLD_SETUP),
-        "pilot": ModelConfig(world=managym.WORLD_SETUP),
-    },
-    stages=[ModuleStage(
-        id="inspect",
-        module="manabot.training.stages.model_inventory",
-        trains=("builder",),
-        frozen=("pilot",),
-    )],
-)
-```
-
-Run this through the ordinary `execute_regime` entry point. Named checkpoints
-are returned in `run.selected_models`; schema 3 does not select one arbitrary
-model as the run's `selected_artifact`.
-
-A module exports `STAGE`, a `StageDefinition` from
-`manabot.training.stages.contract`: named Pydantic input types, one Pydantic
-output type and an `execute(context, inputs)` callable. `ModuleStage.inputs`
-maps each input name to an earlier module stage ID. `StageDefinition.run` parses
-the typed inputs and validates and writes the result. The executor verifies
-input bytes, records the stage's `result` artifact and exports each trained
-model through ordinary checkpoint admission. `StageContext` provides the live
-trainable models by name, detached frozen readers, an output directory and a
-resource check to call during long operations. Modules are trusted Python
-code, like experiment files.
-
-Schema 3 currently supports module stages and existing self-play stages. A
-self-play stage trains exactly one named model and may initialize it from
-`initial_weights`; producer-policy imports, learning-state imports and belief
-stages retain their single-agent entry points. Named-model process recovery is
-not implemented. All named models share the regime's observation/history
-contract.

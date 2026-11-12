@@ -10,7 +10,9 @@ stay in this directory. Start with the
 
 For building a deck before play, see [Limited deck building](../docs/deck-building.md):
 `CardPool` holds the cards available, `format.Limited` holds the rules, and a
-build started from both reports the selectable cards and when stopping is legal.
+build started from both reports the copies still available and when stopping
+is legal. The same rules read and write NumPy arrays over the card axis for
+batched builders.
 Format rules live in `src/format/` (`format::limited`); they build on the
 definitions, decklists and world admission in `src/cards/`.
 

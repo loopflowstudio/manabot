@@ -98,7 +98,7 @@ publish, land or choose the next Graph step from here.
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
   fresh `--out` each time; success prints nothing, so read `<run>/run.json`
-  (`status`, `stages[].artifacts`, `selected_models`). Keep it small (4 streams,
+  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
   64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
   `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
   an empty directory to act like a new machine.

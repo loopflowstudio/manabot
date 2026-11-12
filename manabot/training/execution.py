@@ -60,7 +60,6 @@ from manabot.training.regime import (
     CollectBelief,
     CollectSelection,
     ImportPolicy,
-    ModuleStage,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,
@@ -73,7 +72,6 @@ from manabot.training.rollout.selection_data import (
     collect_selection_game,
     replay_selection_game,
 )
-from manabot.training.stages.contract import StageContext, load_stage
 from manabot.training.state.admission import admit_policy
 from manabot.training.state.game_errors import (
     GameAttempt,
@@ -199,12 +197,7 @@ def validate_regime(
         for stage in regime.stages
     ):
         elemental_roster(Match(regime.root_match))
-        if any(
-            regime.model_for(stage).world != "elemental-world-v2"
-            for stage in regime.stages
-            if isinstance(stage, TrainSelfPlay)
-            and stage.matchup_curriculum == "elemental-uniform"
-        ):
+        if regime.agent.world != "elemental-world-v2":
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
@@ -212,17 +205,17 @@ def validate_regime(
         if isinstance(stage, TrainSelfPlay) and stage.adaptive is not None:
             if regime.recovery_max_microsteps is not None:
                 raise ValueError("adaptive sampling requires current-game recovery")
-            if regime.model_for(stage).world == "elemental-world-v2":
+            if regime.agent.world == "elemental-world-v2":
                 for cell in stage.adaptive.cells:
                     elemental_roster(Match(cell))
     if regime.deck_source is not None:
         if require_current_world:
             regime.deck_source.check()
-        if any(model.world != managym.WORLD_SETUP for model in regime.model_configs):
+        if regime.agent.world != managym.WORLD_SETUP:
             raise ValueError(
                 "a deck source requires the complete world policy vocabulary"
             )
-    if any(model.belief_count_buckets for model in regime.model_configs):
+    if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime
 
@@ -246,14 +239,7 @@ def _runtime_identities(
         del identities["matchup"], identities["matchup_sha256"]
         identities.update(deck_source_sha256=regime.deck_source.digest)
     identities.update(
-        architecture=(
-            {
-                name: architecture_identity(model, space)
-                for name, model in regime.models.items()
-            }
-            if regime.models is not None
-            else architecture_identity(regime.agent, space)
-        ),
+        architecture=architecture_identity(regime.agent, space),
         hardware={
             "platform": platform.platform(),
             "processor": platform.processor(),
@@ -557,7 +543,6 @@ def _execute_regime(
     else:
         store.claim_training_recovery(parent.id, run)
     self_play_session = None
-    named_models: dict[str, ActorCritic] = {}
     result_writer: GameResultWriter | None = None
     resources = ExitStack()
     resources.callback(apply_matmul_precision, "float32")
@@ -748,19 +733,6 @@ def _execute_regime(
 
     try:
         space = ObservationSpace(regime.observation)
-
-        def named_model(name: str) -> ActorCritic:
-            assert regime.models is not None
-            if name not in named_models:
-                # Independent weights and stable seeds; constructing a reader
-                # must not perturb the acting policy RNG.
-                with torch.random.fork_rng(devices=[]):
-                    torch.manual_seed(
-                        seeds["initialization"] + sorted(regime.models).index(name)
-                    )
-                    named_models[name] = ActorCritic(space, regime.models[name])
-            return named_models[name]
-
         identities = _runtime_identities(seed, regime, space)
         run.identities = identities
         run.host = host_facts()
@@ -926,50 +898,7 @@ def _execute_regime(
                     record.inputs[f"{reference}/{name}"] = dict(item)
             persist()
             check()
-            if isinstance(stage, ModuleStage):
-                definition = load_stage(stage.module)
-                module_inputs: dict[str, Path] = {}
-                for name, producer_id in stage.inputs.items():
-                    source = next(item for item in run.stages if item.id == producer_id)
-                    item = source.artifacts["result"]
-                    if file_sha256(item["path"]) != item["sha256"]:
-                        raise ValueError(
-                            f"input artifact changed: {producer_id}/result"
-                        )
-                    record.inputs[name] = dict(item)
-                    module_inputs[name] = Path(item["path"])
-                context = StageContext(
-                    trainable={
-                        name: named_model(name).to(stage.execution.device)
-                        for name in stage.trains
-                    },
-                    frozen={
-                        name: deepcopy(named_model(name))
-                        .to(stage.execution.device)
-                        .requires_grad_(False)
-                        .eval()
-                        for name in stage.frozen
-                    },
-                    directory=out / stage.id,
-                    check=check,
-                )
-                record.artifacts["result"] = artifact(
-                    definition.run(context, module_inputs)
-                )
-                # Each trained model passes ordinary checkpoint admission.
-                for name, model in context.trainable.items():
-                    target = context.directory / f"{name}.pt"
-                    temporary = target.with_suffix(".partial")
-                    save_checkpoint(
-                        model,
-                        space,
-                        temporary,
-                        player_configs=_checkpoint_setups(regime),
-                    )
-                    temporary.replace(target)
-                    load_checkpoint(str(target))
-                    record.artifacts[f"raw/{name}"] = artifact(target)
-            elif isinstance(stage, ImportPolicy):
+            if isinstance(stage, ImportPolicy):
                 tick = time.perf_counter()
                 record.inputs = {
                     "source_run": dict(stage.source_run),
@@ -1132,7 +1061,6 @@ def _execute_regime(
                 record.artifacts["sampler"] = candidate
                 record.export_seconds = time.perf_counter() - tick
             elif isinstance(stage, TrainSelfPlay):
-                stage_model = regime.model_for(stage)
                 imported = None
                 if stage.learning_state is not None:
                     record.inputs.update(
@@ -1214,11 +1142,7 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = (
-                        named_model(stage.trains[0]).to(stage.execution.device)
-                        if stage.trains
-                        else ActorCritic(space, stage_model).to(stage.execution.device)
-                    )
+                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
                         copied = out / f"{stage.id}-initialization-source.pt"
@@ -1255,7 +1179,7 @@ def _execute_regime(
                         with torch.random.fork_rng(devices=[]):
                             initialization, initial_space = load_checkpoint(copied)
                         if (
-                            initialization.config != stage_model
+                            initialization.config != regime.agent
                             or initial_space.encoder.config != space.encoder.config
                         ):
                             raise ValueError(
@@ -1757,19 +1681,10 @@ def _execute_regime(
                     run.prior_seconds + time.perf_counter() - start
                 )
             persist()
-        if regime.models is not None:
-            stages_by_id = {stage.id: stage for stage in regime.stages}
-            for completed_stage in run.stages:
-                spec = stages_by_id[completed_stage.id]
-                for name in spec.trains:
-                    key = "raw" if isinstance(spec, TrainSelfPlay) else f"raw/{name}"
-                    if key in completed_stage.artifacts:
-                        run.selected_models[name] = completed_stage.artifacts[key]
-        else:
-            completed_models = [
-                item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
-            ]
-            run.selected_artifact = completed_models[-1] if completed_models else None
+        completed_models = [
+            item.artifacts["raw"] for item in run.stages if "raw" in item.artifacts
+        ]
+        run.selected_artifact = completed_models[-1] if completed_models else None
         if wall_bounded:
             run.status = "paused"
             run.error = (

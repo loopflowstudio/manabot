@@ -913,5 +913,11 @@ def policy_action_count(
 class CardPool:
     """The cards available to a build: supported names and positive counts."""
     def __init__(self, cards: dict[str, int]) -> None: ...
+    @staticmethod
+    def from_counts(counts: np.ndarray) -> CardPool:
+        """A pool from int counts of shape ``[cards]`` over the card axis."""
     @property
     def cards(self) -> dict[str, int]: ...
+    @property
+    def counts(self) -> np.ndarray:
+        """Int32 counts of shape ``[cards]``, indexed by ``card_def_id``."""

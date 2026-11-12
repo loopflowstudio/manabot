@@ -98,3 +98,24 @@ commit. Main moved engine stubs to `managym/__init__.pyi` with
 `manabot/managym/__init__.pyi` a star re-export, so `CardPool` and
 `format.pyi` moved to the engine package. The qa skill's training-recipe note
 dropped its stale `policy_input_version=8` advice (main accepts only v9).
+
+## Docs for tensor-native rules — 2026-11-12 (headless, reversible)
+
+Steer 39c19262 (Jack Heart: "sadd it"): `limited.available(pool, deck,
+max_cards=...)` -> int `[n, cards]` copies plus `can_stop` bool `[n]`;
+`build.available` (`{name: copies}`) replaces `build.selectable`, no alias;
+no separate bool-mask method. So the earlier `limited.selectable(...)` array
+form is not built. Implied details settled in the docs:
+
+- Card axis index = position in `managym.card_definitions_json()` (CardDefId
+  order, 360 today, tokens included; tokens are never available). Docs map
+  names through that existing call; no new name-index helper.
+- Non-basic copies are pool minus deck, not clipped to slots left; basics get
+  slots left; all zero at the cap.
+- `available` raises `ValueError` naming the row for unreachable decks
+  (over pool, non-pool non-basic, over cap, negative, bad shape); `legal`
+  returns `False` for any non-negative illegal deck. No broadcasting of a
+  single `[cards]` row.
+- `managym.CardPool.from_counts(counts)` constructs from an array;
+  `limited.basic_cards()` (names) stays for `experiments/tla_pools.py`.
+- `limited.min_cards` is an int attribute; `limited.basics` bool `[cards]`.
