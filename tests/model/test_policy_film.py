@@ -11,6 +11,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.recipes.baseline import baseline_test
 from manabot.recipes.local import local_smoke
 from manabot.verify.action_cases import decision_case, reorder_objects, reorder_offers
@@ -51,7 +52,12 @@ def test_film_starts_as_the_additive_policy() -> None:
     torch.testing.assert_close(torch.rand(1), after_additive)
     obs = decision_case("mode").observation
     with torch.no_grad():
-        torch.testing.assert_close(film(obs)[0], additive(obs)[0], rtol=0, atol=0)
+        torch.testing.assert_close(
+            film(admit_observation(film, obs))[0],
+            additive(admit_observation(additive, obs))[0],
+            rtol=0,
+            atol=0,
+        )
 
 
 def test_film_gradient_couples_offer_and_state() -> None:
@@ -62,7 +68,7 @@ def test_film_gradient_couples_offer_and_state() -> None:
         k: torch.cat([c.observation[k] for c in cases]) for k in cases[0].observation
     }
     labels = torch.tensor([c.preferred for c in cases])
-    logits, _ = film(batch)
+    logits, _ = film(admit_observation(film, batch))
     torch.nn.functional.cross_entropy(logits, labels).backward()
     assert film.policy_film is not None and film.policy_film.weight.grad is not None
     assert film.policy_film.weight.grad.abs().max() > 1e-6
@@ -79,8 +85,10 @@ def test_film_preserves_offer_and_object_order_invariance() -> None:
     count = int(obs["actions_valid"].sum())
     order = torch.randperm(count, generator=torch.Generator().manual_seed(3))
     with torch.no_grad():
-        expected = film(obs)[0].softmax(-1)
-        offers = film(reorder_offers(obs, order))[0].softmax(-1)
-        objects = film(reorder_objects(obs))[0].softmax(-1)
+        expected = film(admit_observation(film, obs))[0].softmax(-1)
+        offers = film(admit_observation(film, reorder_offers(obs, order)))[0].softmax(
+            -1
+        )
+        objects = film(admit_observation(film, reorder_objects(obs)))[0].softmax(-1)
     torch.testing.assert_close(offers[:, :count], expected[:, order], atol=1e-6, rtol=0)
     torch.testing.assert_close(objects, expected, atol=1e-6, rtol=0)

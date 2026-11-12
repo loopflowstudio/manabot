@@ -10,7 +10,6 @@ import torch
 
 from manabot.env.observation import RELATION_VALID_INDEX
 from manabot.model.actor_critic import ActorCritic, EmbeddedObservation
-from manabot.model.inference import PreparedObservation
 from manabot.model.semantic_cards import SemanticCardEncoder
 
 
@@ -50,13 +49,7 @@ class DenseActionReference(ActorCritic):
         """
         state = self._gather_object_embeddings(obs)
 
-        encoded = self._attend_objects(
-            state.objects,
-            state.is_agent,
-            state.validity,
-            objects_checked=isinstance(obs, PreparedObservation)
-            and obs.objects_checked,
-        )
+        encoded = self._attend_objects(state.objects, state.is_agent, state.validity)
         # The optional trailing token is a critic input, never an action focus.
         post_attention_objects = encoded[:, : state.validity.shape[1]]
 

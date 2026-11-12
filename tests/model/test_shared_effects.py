@@ -10,8 +10,9 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.model.shared_effects import SharedEffectEncoder, admit_shared_effects
 from manabot.recipes.local import local_smoke
 from manabot.sim.rollout import BatchedSampler
 from manabot.sim.search.value import ValueScorer
@@ -68,7 +69,7 @@ def test_memberships_share_gradients_preserve_multiplicity_and_ignore_padding() 
     )
     headers[0, 0, 16] = 2049
     with pytest.raises(ValueError, match="CSR"):
-        encoder(headers, details, members, objects)
+        admit_shared_effects(headers, details, members, objects.shape[1], None)
 
 
 def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
@@ -85,9 +86,11 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
         ),
     )
     values = _batch(space.encode(obs))
-    logits, value = model(values)
+    logits, value = model(admit_observation(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
-    reordered_logits, reordered_value = model(reorder_objects(values))
+    reordered_logits, reordered_value = model(
+        admit_observation(model, reorder_objects(values))
+    )
     torch.testing.assert_close(reordered_logits, logits)
     torch.testing.assert_close(reordered_value, value)
     (
@@ -104,7 +107,11 @@ def test_policy_routes_shared_effects_and_reloads(tmp_path: Path) -> None:
     restored.eval()
     model.eval()
     with torch.no_grad():
-        for expected, actual in zip(model(values), restored(values), strict=True):
+        for expected, actual in zip(
+            model(admit_observation(model, values)),
+            restored(admit_observation(restored, values)),
+            strict=True,
+        ):
             torch.testing.assert_close(expected, actual)
 
 
