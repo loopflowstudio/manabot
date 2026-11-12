@@ -16,6 +16,7 @@ import argparse
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -53,7 +54,9 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(learner, AdmittedRollout(learner.agent, batch), learning)
+    targets = _targets(
+        torch_backend, learner, AdmittedRollout(learner.agent, batch), learning
+    )
     advantages = targets.advantages.flatten().numpy()
     value_targets = targets.values.flatten().numpy()
     kept = targets.selected.flatten().numpy()
@@ -104,7 +107,7 @@ def main() -> None:
     try:
         for iteration in range(1, args.updates + 1):
             batch = collector.collect(agent, 64)
-            update_damped_iteration(learner, batch, learning, iteration)
+            update_damped_iteration(torch_backend, learner, batch, learning, iteration)
         _report(collector.collect(agent, 64), learner, learning, args.rows)
     finally:
         collector.close()

@@ -8,7 +8,8 @@ cannot trust (`NumericalError`, `manabot.backends.torch.rl`); an optional
 `StepRecorder` (the player's `OptimizerHealth` in
 `manabot.training.updates.health` is one) observes what it did. `update_ema`
 keeps the averaged model that evaluation and exports read. `forward_precision` and
-`apply_matmul_precision` apply a stage's declared numeric precision.
+`apply_matmul_precision` apply a stage's declared numeric precision;
+`no_grad` wraps work whose outputs are constants (targets, diagnostics).
 """
 
 from contextlib import AbstractContextManager, nullcontext
@@ -198,6 +199,11 @@ def forward_precision(
     return torch.autocast(device.type, dtype=torch.bfloat16)
 
 
+def no_grad() -> AbstractContextManager[object]:
+    """Compute constants: nothing inside records a gradient graph."""
+    return torch.no_grad()
+
+
 # -- Learner -------------------------------------------------------------------
 
 
@@ -232,3 +238,8 @@ class Learner:
     def forward_precision(self) -> AbstractContextManager[object]:
         """Wrap each policy forward; callers cast its outputs to float32."""
         return forward_precision(self.precision, self.device)
+
+    def set_learning_rate(self, rate: float) -> None:
+        """The rate every following optimizer step uses."""
+        for group in self.optimizer.param_groups:
+            group["lr"] = rate

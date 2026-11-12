@@ -8,6 +8,7 @@ This is a bounded wiring check on real games, not a learning-quality claim.
 import numpy as np
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -74,6 +75,7 @@ def test_rollout_and_ppo_update_cover_group_and_name_transitions() -> None:
     assert agent.name_candidates is not None
     before = agent.name_candidates.embedding.weight.detach().clone()
     update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(retained_fraction=1, epochs=1, minibatches=1, collection_kl=0),

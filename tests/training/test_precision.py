@@ -8,6 +8,7 @@ import pytest
 import torch
 
 from experiments import training_throughput_packing as packing
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch import learner as torch_learner
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
@@ -120,6 +121,7 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
     batch = collector.collect(agent, 1)
     learner = Learner(agent, "cpu", minibatch_rows=2, precision="bf16")
     result = update_damped_iteration(
+        torch_backend,
         learner,
         batch,
         DampedPolicyLearning(

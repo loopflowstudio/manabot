@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
@@ -329,6 +330,7 @@ def test_move_learning_consumes_complete_seat_trajectories(
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     result = update_damped_iteration(
+        torch_backend,
         trainer,
         batch,
         DampedPolicyLearning(

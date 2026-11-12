@@ -5,19 +5,11 @@ from copy import deepcopy
 import numpy as np
 import torch
 
-from manabot.backends.torch.learner import gradient_step, update_ema
+from manabot.backends.torch import learner, rl
 from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import (
-    clipped_surrogate,
-    entropy,
-    squared_value_loss,
-    standardized_advantages,
-    transition_gae,
-)
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.updates.learner import AdmittedRollout
 
@@ -52,12 +44,12 @@ def train(
             values = torch.as_tensor(batch.values)
             # Complete games end every trajectory, so the tail value is never read.
             tail = torch.zeros(ends.shape[1])
-            advantages, returns = transition_gae(
+            advantages, returns = rl.transition_gae(
                 torch.as_tensor(batch.rewards), values, ends, tail, gamma=1.0, lam=0.95
             )
             # Time-major [T,E] rows, the order `batch.observations` indexes.
             advantages, returns = advantages.flatten(), returns.flatten()
-            advantages = standardized_advantages(advantages)
+            advantages = rl.standardized_advantages(advantages)
             actions = torch.as_tensor(batch.actions).flatten()
             behavior = torch.as_tensor(batch.logprobs).flatten()
 
@@ -69,19 +61,19 @@ def train(
                 order = torch.as_tensor(rng.permutation(len(actions)))
                 for rows in order.split(256):
                     obs, _ = admitted.rows(rows.numpy(), torch.device("cpu"))
-                    valid = legal_mask(obs["actions_valid"])
+                    valid = rl.legal_mask(obs["actions_valid"])
                     logits, value = agent(obs)
-                    logs = policy_logs(logits, valid)
-                    chosen = logs.gather(-1, actions[rows, None]).squeeze(-1)
+                    logs = rl.policy_logs(logits, valid)
+                    chosen = rl.action_logs(logs, actions[rows])
                     loss = (
-                        clipped_surrogate(
+                        rl.clipped_surrogate(
                             chosen - behavior[rows], advantages[rows], 0.2
                         ).mean()
-                        + 0.5 * squared_value_loss(value, returns[rows]).mean()
-                        - 0.01 * entropy(logs, valid).mean()
+                        + 0.5 * rl.squared_value_loss(value, returns[rows]).mean()
+                        - 0.01 * rl.entropy(logs, valid).mean()
                     )
-                    gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
-            update_ema(averaged, agent, rate=0.99)
+                    learner.gradient_step(loss, agent, optimizer, max_grad_norm=0.5)
+            learner.update_ema(averaged, agent, rate=0.99)
     finally:
         collector.close()
     return averaged

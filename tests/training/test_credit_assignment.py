@@ -13,6 +13,7 @@ import pytest
 import torch
 from torch import Tensor
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -220,7 +221,9 @@ def test_complete_game_targets_and_actual_loss_gradients(
     assert batch.actions.size == len(expected_ids)  # no trajectory padding
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning()
-    targets = _targets(trainer, AdmittedRollout(trainer.agent, batch), rule)
+    targets = _targets(
+        torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
+    )
     torch.testing.assert_close(
         targets.advantages[:, 0], torch.tensor([ADVANTAGES[i] for i in ids])
     )
@@ -255,7 +258,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
         agent.offers.register_hook(capture_policy),
         agent.predictions.register_hook(capture_value),
     ]
-    result = update_damped_iteration(trainer, batch, rule, 1)
+    result = update_damped_iteration(torch_backend, trainer, batch, rule, 1)
     assert result["actor_exposures"] == result["critic_exposures"] == len(ids)
     for row, marker in enumerate(ids):
         n = min(2, len(ids) - (row // 2) * 2)
@@ -298,6 +301,7 @@ def test_exact_quota_uses_same_player_paused_value_and_resamples(
     assert not any(collector._pending) and not any(collector._streams)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     targets = _targets(
+        torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
         learning(),
@@ -331,6 +335,7 @@ def test_draw_reset_has_no_previous_game_credit(seats: Seats) -> None:
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     targets = _targets(
+        torch_backend,
         trainer,
         AdmittedRollout(trainer.agent, batch),
         learning(policy_lambda=1.0, value_lambda=1.0),
@@ -369,6 +374,7 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
     # Its B win gives A4=1.6 and A2=-.6-.4+.5*1.6=-.2;
     # its stream-1 A loss gives A11=-1.6.
     target = _targets(
+        torch_backend,
         trainers[1],
         AdmittedRollout(trainers[1].agent, b),
         learning(),
@@ -383,11 +389,11 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
         target.values[:, 0], torch.tensor(expected, dtype=torch.float32)
     )
     before_second = second.predictions.detach().clone()
-    update_damped_iteration(trainers[0], a, learning(), 1)
+    update_damped_iteration(torch_backend, trainers[0], a, learning(), 1)
     assert second.predictions.grad is None
     torch.testing.assert_close(second.predictions, before_second)
     before_first = first.predictions.detach().clone()
-    update_damped_iteration(trainers[1], b, learning(), 1)
+    update_damped_iteration(torch_backend, trainers[1], b, learning(), 1)
     torch.testing.assert_close(first.predictions, before_first)
     assert not torch.equal(second.predictions, before_second)
 
@@ -401,14 +407,16 @@ def test_filter_retains_negative_credit_and_critic_coverage(
     batch = collector.collect(agent, 1)
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     rule = learning(min_advantage=0.6, filter_scope=scope)
-    targets = _targets(trainer, AdmittedRollout(trainer.agent, batch), rule)
+    targets = _targets(
+        torch_backend, trainer, AdmittedRollout(trainer.agent, batch), rule
+    )
     # Magnitude selection includes the losing player's -1.4, not just winners.
     np.testing.assert_array_equal(targets.selected[:, 0], [0, 0, 1, 1, 0, 0, 0, 1])
     old_policy, old_values = (
         agent.offers.detach().clone(),
         agent.predictions.detach().clone(),
     )
-    result = update_damped_iteration(trainer, batch, rule, 1)
+    result = update_damped_iteration(torch_backend, trainer, batch, rule, 1)
     assert result["actor_exposures"] == 3
     assert result["critic_exposures"] == (8 if scope == "actor" else 3)
     for marker in markers(batch):
@@ -439,7 +447,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
     assert markers(batch) == [0, 1, 3, 10, 12]
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     before = opponent.offers.detach().clone()
-    update_damped_iteration(trainer, batch, learning(), 1)
+    update_damped_iteration(torch_backend, trainer, batch, learning(), 1)
     assert opponent.offers.grad is None
     torch.testing.assert_close(opponent.offers, before)
     assert collector.stats.opponent_decisions == 3
@@ -463,7 +471,7 @@ def test_damped_learning_materializes_only_selected_rows(
 
     monkeypatch.setattr(RolloutBatch, "observations", materialize)
     update_damped_iteration(
-        Learner(agent, "cpu", minibatch_rows=2), batch, learning(), 1
+        torch_backend, Learner(agent, "cpu", minibatch_rows=2), batch, learning(), 1
     )
     # Admission reads every row once; minibatches re-read only selected rows.
     assert seen and sum(seen) <= 2 * batch.actions.size

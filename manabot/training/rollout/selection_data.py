@@ -23,8 +23,8 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
+from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
-from manabot.training.updates.references import reference_distribution
 import managym
 from managym.decision import Command, DecisionFrame, Observation
 
@@ -146,7 +146,12 @@ def collect_selection_game(
             probabilities = logits.softmax(-1)
             action = int(torch.multinomial(probabilities[0], 1, generator=generator))
             logs = probabilities.clamp_min(1e-12).log()
-            ref = reference_distribution(tensors, reference)
+            ref = torch.from_numpy(
+                reference_distribution(
+                    {k: encoded[k][None] for k in ("actions_valid", "actions")},
+                    reference,
+                )
+            )
             row = SelectionDecision(
                 step=len(rows),
                 actor=actor,

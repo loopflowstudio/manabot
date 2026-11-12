@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import transition_gae
@@ -296,6 +297,7 @@ def test_quarantine_refills_without_leaking_seats_or_returns(
     assert not any(collector._pending) and not any(collector._streams)
     learner = Learner(model, "cpu", minibatch_rows=collector.num_envs)
     result = update_iteration(
+        torch_backend,
         learner,
         batch,
         Learning(epochs=1, minibatches=1),

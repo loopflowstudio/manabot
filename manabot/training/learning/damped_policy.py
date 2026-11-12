@@ -5,8 +5,11 @@ from manabot.infra.deprecation import moved
 __getattr__ = moved(
     __name__,
     dict.fromkeys(
-        ("update_damped_iteration", "damped_policy_loss", "DampedTargets"),
+        ("update_damped_iteration", "DampedTargets"),
         "manabot.training.updates.damped_policy",
     )
-    | {"categorical_lambda_returns": "manabot.backends.torch.rl"},
+    | dict.fromkeys(
+        ("damped_policy_loss", "categorical_lambda_returns"),
+        "manabot.backends.torch.rl",
+    ),
 )

@@ -6,14 +6,15 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner, update_ema
 from manabot.backends.torch.rl import selected_rows, transition_gae
+from manabot.policy.prepare import reference_distribution
 from manabot.training.regime import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.updates import learner as learner_module
 from manabot.training.updates.ppo import update_iteration
-from manabot.training.updates.references import reference_distribution
 
 
 class TinyPolicy(torch.nn.Module):
@@ -94,7 +95,9 @@ def control(**changes):
 
 
 def run(trainer, batch, learning):
-    return update_iteration(trainer, batch, learning, 0.5, np.random.default_rng(9))
+    return update_iteration(
+        torch_backend, trainer, batch, learning, 0.5, np.random.default_rng(9)
+    )
 
 
 def test_nonzero_values_adjacent_episodes_and_exact_tail():
@@ -112,23 +115,21 @@ def test_nonzero_values_adjacent_episodes_and_exact_tail():
 
 def test_reference_and_filter_support_order_and_threshold():
     _, batch = fixture()
-    obs = {
-        k: torch.as_tensor(v[:, 0]) for k, v in batch.observations().observation.items()
-    }
+    obs = {k: v[:, 0] for k, v in batch.observations().observation.items()}
     for kind, expected in [
         ("uniform", [1 / 3, 1 / 3, 1 / 3, 0]),
         ("action_type_uniform", [0.25, 0.25, 0.5, 0]),
     ]:
         result = reference_distribution(obs, kind)
-        torch.testing.assert_close(result[0], torch.tensor(expected))
-        assert torch.equal(result > 0, obs["actions_valid"] > 0)
-        permutation = torch.tensor([2, 3, 0, 1])
+        np.testing.assert_allclose(result[0], expected, rtol=1e-6)
+        assert np.array_equal(result > 0, obs["actions_valid"] > 0)
+        permutation = np.array([2, 3, 0, 1])
         moved = reference_distribution(
             {k: v[:, permutation] for k, v in obs.items()}, kind
         )
-        torch.testing.assert_close(moved, result[:, permutation])
+        np.testing.assert_allclose(moved, result[:, permutation], rtol=1e-6)
     assert selected_rows(torch.tensor([0.1, -3, 2, 0]), 0.5, 2.5).tolist() == [1]
-    obs["actions_valid"].zero_()
+    obs["actions_valid"] = np.zeros_like(obs["actions_valid"])
     with pytest.raises(ValueError, match="legal offer"):
         reference_distribution(obs, "uniform")
 
@@ -252,6 +253,7 @@ def test_bootstrap_uses_collection_model() -> None:
         0.95,
     )
     diagnostics = update_iteration(
+        torch_backend,
         trainer,
         batch,
         control(min_advantage=100),

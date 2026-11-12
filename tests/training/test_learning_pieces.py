@@ -20,10 +20,10 @@ from manabot.backends.torch.rl import (
     NumericalError,
     categorical_value_loss,
     entropy,
+    policy_logs,
     squared_value_loss,
     standardized_advantages,
 )
-from manabot.model.policy_distribution import policy_logs
 from manabot.training.learning import objectives
 from manabot.training.regime import DampedPolicyLearning, Learning
 from manabot.training.rollout.collection import RolloutBatch
@@ -189,7 +189,7 @@ _MOVED = [
     (
         "manabot.training.learning.damped_policy",
         "damped_policy_loss",
-        "manabot.training.updates.damped_policy",
+        "manabot.backends.torch.rl",
     ),
     (
         "manabot.training.learning.damped_policy",
@@ -231,11 +231,8 @@ _MOVED = [
         "OptimizerHealth",
         "manabot.training.updates.health",
     ),
-    (
-        "manabot.training.learning.references",
-        "reference_distribution",
-        "manabot.training.updates.references",
-    ),
+    ("manabot.model.policy_distribution", "legal_mask", "manabot.backends.torch.rl"),
+    ("manabot.model.policy_distribution", "policy_logs", "manabot.backends.torch.rl"),
     (
         "manabot.model.policy_distribution",
         "NumericalError",

@@ -18,6 +18,7 @@ import numpy as np
 import psutil
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.checkpoint import load_checkpoint, save_checkpoint
 from manabot.backends.torch.learner import Learner, apply_matmul_precision, update_ema
 from manabot.backends.torch.policy import ActorCritic
@@ -1467,6 +1468,7 @@ def _execute_regime(
                                     }
                                 elif isinstance(stage.learning, DampedPolicyLearning):
                                     diagnostic = update_damped_iteration(
+                                        torch_backend,
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1475,6 +1477,7 @@ def _execute_regime(
                                     )
                                 else:
                                     diagnostic = update_iteration(
+                                        torch_backend,
                                         learner,
                                         batch,
                                         stage.learning,

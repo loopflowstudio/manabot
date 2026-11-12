@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -139,6 +140,7 @@ def test_learning_admits_each_trained_row_once(
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(
+                torch_backend,
                 learner,
                 batch,
                 Learning(epochs=epochs, minibatches=2),
@@ -147,7 +149,11 @@ def test_learning_admits_each_trained_row_once(
             )
         else:
             update_damped_iteration(
-                learner, batch, DampedPolicyLearning(gradient="damped_policy"), 1
+                torch_backend,
+                learner,
+                batch,
+                DampedPolicyLearning(gradient="damped_policy"),
+                1,
             )
         # Bootstrap rows first, then trained rows in minibatch-sized chunks.
         assert rows[0] == len(batch.next_done)

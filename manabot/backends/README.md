@@ -24,7 +24,7 @@ files; a backend may add private modules that its `policy.py` uses (torch's
 | `__init__.py` | the import guard naming the optional extra; nothing else |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
 | `policy.py` | the forward over a `Prepared` batch: logits and values |
-| `rl.py` | the loss terms of `manabot.training.learning` over the framework's arrays |
+| `rl.py` | the policy terms, losses, returns and selection the updates call, over the framework's arrays |
 | `learner.py` | the optimizer, gradient step and precision |
 | `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
 
@@ -37,13 +37,60 @@ outside `manabot/backends/torch/` only the modules the boundary test lists by
 name import torch; that list shrinks as training and evaluation become
 backend-generic.
 
+## Algorithms are written once
+
+An update or a loop is written once and takes the backend as an argument:
+the backend's module itself, not a class to subclass or a configuration
+string. The maintained updates in `manabot/training/updates/` take it first:
+
+```python
+import manabot.backends.torch as backend
+
+diagnostics = update_damped_iteration(
+    backend, learner, batch, move_learning(), iteration=1
+)
+```
+
+Inside an update, array math goes only through the backend's modules:
+
+- `backend.arrays`: moving host rows in and out (`from_numpy`, `to_numpy`).
+- `backend.rl`: the policy terms (`legal_mask`, `policy_logs`,
+  `action_logs`, `reference_logs`, `damped_policy_loss`), the losses
+  (`clipped_surrogate`, `reverse_kl`, `squared_value_loss`,
+  `categorical_value_loss`, `entropy`, `clip_fraction`), returns
+  (`transition_gae`, `standardized_advantages`, `categorical_lambda_returns`),
+  selection (`selected_rows`, `selection_mask`, `selected_mean`) and the
+  refusals (`require`, `require_finite`, `float64_operand`).
+- `backend.learner`: `gradient_step`, `update_ema`, the `forward_precision`
+  context and `no_grad` for constants; its `Learner` holds the policy and
+  optimizer and sets the learning rate (`set_learning_rate`).
+
+NumPy keeps the host-side bookkeeping: admitted rollouts, which rows train,
+minibatch indexes, action-type counts and diagnostics. Policy logic that is
+pure NumPy or index logic, such as `reference_distribution`, lives once in
+`manabot.policy`. The update modules import no framework and no backend at
+runtime (`tests/test_package_boundaries.py` enforces it); the torch types
+they name are annotations only.
+
+A function has the same name, arguments, shapes and per-row results in every
+backend; the torch backend's signatures are the reference, and
+[training loops](../../docs/training-loop.md#standard-methods-kept-local)
+documents them. A backend never carries its own copy of an update's loss.
+Two gaps remain for a second backend. The updates call a few array methods
+directly (`.float()`, `.flatten()`, `.abs().mean()`, `.detach()`, and
+`.softmax()` on categorical bootstrap logits), and they admit rows, record
+optimizer health and summarize selection through torch-only modules
+(`AdmittedRollout`, `OptimizerHealth`, `selection_diagnostics`,
+`value_scale`). Running the shared update on another backend moves what that
+backend lacks into its modules.
+
 ## The torch backend
 
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic` |
-| `manabot.backends.torch.rl` | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `selection_mask`, `selected_mean`, `NumericalError` |
-| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `apply_matmul_precision` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `require`, `require_finite`, `NumericalError` |
+| `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
 

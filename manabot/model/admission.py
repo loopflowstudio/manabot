@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from manabot.backends.torch.arrays import to_numpy
+from manabot.backends.torch.rl import legal_mask
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
@@ -39,7 +40,6 @@ from manabot.env.observation import (
 from manabot.model.continuation import admit_relations
 from manabot.model.facts import admit_facts
 from manabot.model.numerics import buffer_on
-from manabot.model.policy_distribution import legal_mask
 from manabot.model.recent_events import admit_recent_events
 from manabot.model.semantic_cards import (
     CardReferences,

@@ -37,12 +37,12 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.model.admission import (
     AdmittedObservation,
     admission_binding,
     measure_buckets,
 )
+from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
 from manabot.model.inference import PreparedObservation, trim_admitted

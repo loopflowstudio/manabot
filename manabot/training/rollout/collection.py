@@ -34,14 +34,13 @@ import torch
 
 from manabot.backends.torch.learner import forward_precision
 from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import NumericalError, require
+from manabot.backends.torch.rl import NumericalError, legal_mask, policy_logs, require
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.inference import PolicyInference
-from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.sim.rollout import (
     BatchedSampler,
     RandomBatchController,

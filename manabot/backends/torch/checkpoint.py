@@ -24,7 +24,12 @@ import torch
 
 from manabot.backends.torch.learner import gradient_step
 from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import selected_mean, squared_value_loss
+from manabot.backends.torch.rl import (
+    damped_policy_loss,
+    legal_mask,
+    selected_mean,
+    squared_value_loss,
+)
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
@@ -39,7 +44,6 @@ from manabot.infra.artifacts import (
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.architecture import validate_architecture_receipt
-from manabot.model.policy_distribution import legal_mask
 from manabot.model.world import (
     checkpoint_source,
     checkpoint_world,
@@ -312,10 +316,6 @@ class TorchLearner:
     def _loss(
         self, batch: Prepared, targets: Targets, settings: Settings
     ) -> torch.Tensor:
-        # Imported here: the update module reaches collection and search,
-        # which load checkpoints through this module.
-        from manabot.training.updates.damped_policy import damped_policy_loss
-
         obs = _admitted(batch)
         self.agent.train()
         logits, values = self.agent.forward_distribution(obs)

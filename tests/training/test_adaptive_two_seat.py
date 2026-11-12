@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import torch
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match, Reward
@@ -100,9 +101,11 @@ def test_both_seat_targets_and_recovery_preserve_physical_games(
     expected -= batch.values
     learner = Learner(agent, "cpu", minibatch_rows=2)
     diagnostic = (
-        update_damped_iteration(learner, batch, learning, 1)
+        update_damped_iteration(torch_backend, learner, batch, learning, 1)
         if isinstance(learning, DampedPolicyLearning)
-        else update_iteration(learner, batch, learning, 0.0, np.random.default_rng(17))
+        else update_iteration(
+            torch_backend, learner, batch, learning, 0.0, np.random.default_rng(17)
+        )
     )
     assert batch.target_residuals is not None
     assert batch.target_residuals.shape == batch.values.shape

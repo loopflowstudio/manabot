@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 
+import manabot.backends.torch as torch_backend
 from manabot.backends.torch.learner import Learner
 from manabot.backends.torch.policy import ActorCritic
 from manabot.infra.deprecation import moved
@@ -40,9 +41,15 @@ def update_iteration(
     )
     if isinstance(learning, DampedPolicyLearning):
         return update_damped_iteration(
-            learner, batch, learning, iteration, bootstrap_agent=bootstrap_agent
+            torch_backend,
+            learner,
+            batch,
+            learning,
+            iteration,
+            bootstrap_agent=bootstrap_agent,
         )
     return ppo.update_iteration(
+        torch_backend,
         learner,
         batch,
         learning,

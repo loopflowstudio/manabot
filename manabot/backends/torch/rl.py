@@ -1,7 +1,10 @@
 """The standard reinforcement-learning functions over torch tensors.
 
-Returns (GAE, standardized advantages, categorical lambda returns), per-row
-loss terms, advantage selection and the named numerical refusals they raise.
+The masked policy distribution (legal mask, normalized logs and the checks on
+collected behavior), returns (GAE, standardized advantages, categorical lambda
+returns), per-row loss terms including the damped policy objective, advantage
+selection and the named numerical refusals they raise. The updates in
+`manabot.training.updates` reach these as `backend.rl`.
 They read tensors and small typed records and import nothing else from
 manabot (`tests/test_package_boundaries.py` enforces it), so another role
 reuses them unchanged. Every backend under `manabot.backends` has the same
@@ -41,6 +44,12 @@ def require(condition: Tensor, invariant: str, **tensors: Tensor) -> None:
         raise NumericalError(invariant, {**tensors, "failed": ~condition})
 
 
+def require_finite(invariant: str, **tensors: Tensor) -> None:
+    """Raise `NumericalError(invariant)` unless every element of each tensor is finite."""
+    for tensor in tensors.values():
+        require(torch.isfinite(tensor), invariant, **tensors)
+
+
 def float64_operand(tensor: Tensor) -> Tensor:
     """Move MPS operands to the host, where float64 is supported.
 
@@ -50,6 +59,160 @@ def float64_operand(tensor: Tensor) -> Tensor:
     are returned, with no transfer or additional tensor operation.
     """
     return tensor.cpu() if tensor.device.type == "mps" else tensor
+
+
+# -- Policy distribution -------------------------------------------------------
+# Masked categorical policies with retained log-space support.
+#
+# Normalized legal logs describe the policy; exp(logs) are the finite precision
+# sampling weights. Underflow in the latter is counted, never repaired with a
+# floor. Collection and learning share this normalization and legal mask.
+
+
+def legal_mask(mask: Tensor) -> Tensor:
+    require(
+        torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
+        "invalid_action_mask",
+        mask=mask,
+    )
+    return mask.bool()
+
+
+def policy_logs(logits: Tensor, valid: Tensor) -> Tensor:
+    """Normalize [*,A] logits; padding is -inf and legal logs must be finite.
+
+    log_softmax subtracts the maximum before reduction, avoiding cancellation
+    from subtracting a large absolute logsumexp. Unrepresentable log differences
+    fail explicitly even when the original logits were finite.
+    """
+    if logits.shape != valid.shape or logits.ndim < 2:
+        raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
+    require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
+    require(
+        torch.isfinite(logits) | ~valid,
+        "nonfinite_legal_logits",
+        logits=logits,
+        valid=valid,
+    )
+    logs = logits.masked_fill(~valid, -torch.inf).log_softmax(-1)
+    require(
+        torch.isfinite(logs) | ~valid,
+        "nonfinite_legal_logs",
+        logs=logs,
+        logits=logits,
+        valid=valid,
+    )
+    return logs
+
+
+def action_logs(logs: Tensor, actions: Tensor) -> Tensor:
+    """The entry of each row of `logs` [B,A] at its sampled action [B]: [B]."""
+    return logs.gather(-1, actions[:, None]).squeeze(-1)
+
+
+def reference_logs(reference: Tensor, valid: Tensor) -> Tensor:
+    """Log probabilities [B,A] of a constant reference, zero off `valid`."""
+    return reference.detach().masked_fill(~valid, 1).log()
+
+
+def check_probabilities(
+    probabilities: Tensor, valid: Tensor, *, positive: bool
+) -> None:
+    if probabilities.shape != valid.shape or probabilities.ndim < 2:
+        raise NumericalError(
+            "distribution_shape", {"probabilities": probabilities, "valid": valid}
+        )
+    tensors = {"probabilities": probabilities, "valid": valid}
+    require(valid.any(-1), "empty_legal_support", **tensors)
+    require(torch.isfinite(probabilities), "nonfinite_probabilities", **tensors)
+    require(probabilities >= 0, "negative_probabilities", **tensors)
+    if positive:
+        require((probabilities > 0) | ~valid, "nonpositive_legal_support", **tensors)
+    require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
+    require(
+        torch.isclose(
+            probabilities.sum(-1),
+            torch.ones_like(probabilities[..., 0]),
+            atol=1e-5,
+            rtol=1e-5,
+        ),
+        "probability_normalization",
+        **tensors,
+    )
+
+
+def check_logs(logs: Tensor, valid: Tensor) -> None:
+    if logs.shape != valid.shape:
+        raise NumericalError("log_shape", {"logs": logs, "valid": valid})
+    require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
+    require(
+        torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", logs=logs, valid=valid
+    )
+    require(torch.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
+    require(
+        torch.isclose(
+            logs.logsumexp(-1), torch.zeros_like(logs[..., 0]), atol=1e-5, rtol=0
+        ),
+        "log_normalization",
+        logs=logs,
+        valid=valid,
+    )
+
+
+def check_behavior(
+    logs: Tensor,
+    probabilities: Tensor,
+    actions: Tensor,
+    selected_logs: Tensor,
+    valid: Tensor,
+) -> None:
+    """Admit copied collection evidence, including rounded legal zeros.
+
+    Zero is accepted only when exp(the saved finite legal log) also rounds to
+    zero. Positive sampled mass and its selected log identity remain mandatory.
+    """
+    check_probabilities(probabilities, valid, positive=False)
+    tensors = dict(
+        logs=logs,
+        probabilities=probabilities,
+        actions=actions,
+        selected_logs=selected_logs,
+        valid=valid,
+    )
+    if (
+        logs.shape != valid.shape
+        or actions.shape != valid.shape[:-1]
+        or selected_logs.shape != actions.shape
+    ):
+        raise NumericalError("behavior_shape", tensors)
+    require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
+    require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
+    require(
+        torch.isclose(
+            logs.logsumexp(-1), torch.zeros_like(selected_logs), atol=1e-5, rtol=0
+        ),
+        "log_normalization",
+        **tensors,
+    )
+    # Zero absolute tolerance prevents accepting fabricated tiny probabilities.
+    require(
+        torch.isclose(logs.exp(), probabilities, atol=0, rtol=1e-5),
+        "behavior_log_probability_mismatch",
+        **tensors,
+    )
+    require(
+        (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
+    )
+    chosen = actions[..., None]
+    require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
+    require(probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors)
+    require(
+        torch.isclose(
+            logs.gather(-1, chosen).squeeze(-1), selected_logs, atol=1e-5, rtol=1e-5
+        ),
+        "selected_log_mismatch",
+        **tensors,
+    )
 
 
 # -- Returns -------------------------------------------------------------------
@@ -257,6 +420,68 @@ def categorical_value_loss(value_logits: Tensor, targets: Tensor) -> Tensor:
 def entropy(logs: Tensor, valid: Tensor) -> Tensor:
     """Policy entropy [B] of normalized log-probabilities `[B,A]` over `valid` entries."""
     return -(logs.exp() * logs.masked_fill(~valid.bool(), 0)).sum(-1)
+
+
+def damped_policy_loss(
+    logits: Tensor,
+    actions: Tensor,
+    advantages: Tensor,
+    behavior_logs: Tensor,
+    reference: Tensor,
+    valid: Tensor,
+    *,
+    clip: float,
+    collection_kl: float,
+    tau: float,
+) -> Tensor:
+    """The damped policy objective, equation (6), per row [B] over offers [B,A].
+
+    Sources and departures: docs/learning.md#fidelity-to-the-sources.
+
+    Ratios use the actual action likelihood at collection, even after earlier
+    minibatches change the learner. The reverse KLs sum all legal actions.
+    This is per-action reuse correction, not trajectory importance weighting.
+    MPS combines these terms on the host to retain float64 surrogate range.
+    """
+    valid = valid.bool()
+    if logits.ndim != 2 or logits.shape != valid.shape:
+        raise ValueError("policy logits require [B,A] legal support")
+    if actions.shape != logits.shape[:1] or advantages.shape != actions.shape:
+        raise ValueError("actions and advantages require [B]")
+    if not 0 < clip < 1 or collection_kl < 0 or tau < 0:
+        raise ValueError("invalid damping coefficients")
+    check_logs(behavior_logs, valid)
+    check_probabilities(reference, valid, positive=True)
+    require(
+        torch.isfinite(advantages),
+        "nonfinite_advantages",
+        advantages=advantages,
+        valid=valid,
+    )
+    if ((actions < 0) | (actions >= logits.shape[-1])).any():
+        raise ValueError("action index outside legal support")
+    if not valid.gather(-1, actions[:, None]).all():
+        raise ValueError("sampled action is not legal")
+    logs = policy_logs(logits, valid)
+    ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
+    surrogate = clipped_surrogate(ratio_logs, advantages, clip)
+    return (
+        surrogate
+        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
+        + tau
+        * float64_operand(reverse_kl(logs, reference_logs(reference, valid), valid))
+    )
+
+
+@torch.no_grad()
+def clip_fraction(log_ratio: Tensor, clip: float) -> float:
+    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
+
+    The ratio is exponentiated in float64 so large log ratios do not overflow.
+    """
+    return float(
+        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
+    )
 
 
 # -- Selection -----------------------------------------------------------------

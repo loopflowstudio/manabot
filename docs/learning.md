@@ -296,12 +296,10 @@ has a separate job:
 The **behavior policy** is the frozen weights that played the batch, and the
 ratio measures how far the learner has moved from them. From
 `damped_policy_loss` in
-[`manabot/training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py):
+[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
 
 ```python
-ratio_logs = (
-    (logs - behavior_logs.detach()).gather(-1, actions[:, None]).squeeze(-1)
-)
+ratio_logs = action_logs(logs - behavior_logs.detach(), actions)
 surrogate = clipped_surrogate(ratio_logs, advantages, clip)
 ```
 
@@ -311,12 +309,16 @@ per-action correction; there is no trajectory-level importance weighting.
 
 The **magnet** is a fixed reference policy built for each row from its legal
 actions. From `reference_distribution` in
-[`manabot/training/updates/references.py`](../manabot/training/updates/references.py):
+[`manabot/policy/prepare.py`](../manabot/policy/prepare.py), in NumPy:
 
 ```python
-counts.scatter_add_(-1, types, valid.to(counts.dtype))
-weights = valid / counts.gather(-1, types).clamp_min(1)
-return weights / weights.sum(-1, keepdim=True)
+slots = types + width * np.arange(valid.shape[0])[:, None]
+counts = np.bincount(
+    slots.ravel(), weights=valid.ravel(), minlength=valid.shape[0] * width
+)
+counts = counts.reshape(valid.shape[0], width).astype(np.float32)
+weights = valid / np.take_along_axis(counts, types, -1).clip(min=1)
+return (weights / weights.sum(-1, keepdims=True)).astype(np.float32)
 ```
 
 Each action type present gets equal mass, split evenly among that type's legal
@@ -460,8 +462,9 @@ objects, and paired evaluation were built for this project. The PPO-style
 
 ## Fidelity to the sources
 
-`damped_policy_loss` in `manabot/training/updates/damped_policy.py` owns the
-objective and `update_damped_iteration` beside it applies it; recipes select
+`damped_policy_loss` in `manabot/backends/torch/rl.py` owns the
+objective and `update_damped_iteration` in
+`manabot/training/updates/damped_policy.py` applies it; recipes select
 `DampedPolicyLearning(gradient="damped_policy")`. Historical `ataraxos_move`
 regimes are rejected and need their pinned source; frozen evidence keeps the
 old tag. Per retained observation the policy loss is the negative clipped-ratio
@@ -531,10 +534,10 @@ each piece they are made of as a public function.
 | Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
 | Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
 | Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
-| Loss terms | `damped_policy_loss` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Loss terms | `damped_policy_loss`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
 | Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
 | Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
-| Magnet | [`training/updates/references.py`](../manabot/training/updates/references.py) |
+| Magnet | `reference_distribution` in [`policy/prepare.py`](../manabot/policy/prepare.py) |
 | Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |
