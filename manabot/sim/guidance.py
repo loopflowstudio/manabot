@@ -174,6 +174,11 @@ def _build_policy_player(
                 raise ValueError("local-update implementation source drift")
             spec["checkpoint"] = checkpoint_path
             spec["checkpoint_sha256"] = registration.checkpoint_sha256
+            # A registration omitting the evidence mode predates compact
+            # evidence and plays with full evidence, as it was registered.
+            spec["config"] = local_update.LocalSearchConfig.from_recorded(
+                spec["config"]
+            ).model_dump()
     player, obs_space = make_player(spec, seed=seed)
     attribute_names = {
         "sims": "simulations"
