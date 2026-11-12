@@ -2,11 +2,12 @@
 
 Catalog models (`ModelConfig.record_vocabulary="catalog"`) embed fact and
 effect ids through the card encoder's exact vocabulary and reject an id outside
-it. That vocabulary is native `learning_record_names`, a list maintained beside
+it. That vocabulary is native `record_vocabulary`, a list maintained beside
 the encoders, so an encoder that starts hashing a new name without listing it
 would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
-v9 and runs a tiny catalog policy over the batch, so a missing name fails here
+v10 (v9 refuses positions with turn state its cards read) and runs a tiny
+catalog policy over the batch, so a missing name fails here
 with the game that produced it. `--decks elemental` instead exercises the curated
 Elemental matchups, whose searches and composed effects retain execution state.
 
@@ -25,6 +26,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 import managym
 
 _BASICS = ("Plains", "Island", "Swamp", "Mountain", "Forest")
@@ -52,6 +54,12 @@ def _eligible_spells() -> list[str]:
         for row in pool
         if row["eligibility"] == "eligible" and row["registry_name"] not in _BASICS
     )
+
+
+def games_to_deal_every_card() -> int:
+    """The fewest games whose decks deal every eligible world card once."""
+    per_game = 2 * _SPELLS_PER_DECK
+    return -(-len(_eligible_spells()) // per_game)
 
 
 def _decks(games: int, seed: int) -> list[tuple[list[str], list[str]]]:
@@ -87,7 +95,7 @@ def coverage_sweep(
     """Play `games` seeded random games and embed every decision through a
     catalog policy; raises `ValueError` naming the game on an unknown id."""
     torch.manual_seed(seed)
-    space = ObservationSpace(ObservationConfig())
+    space = ObservationSpace(ObservationConfig(policy_input_version=10))
     model = ActorCritic(
         space,
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),
@@ -168,7 +176,7 @@ def _embed(
     batch = {key: torch.from_numpy(np.stack([r[key] for r in rows])) for key in rows[0]}
     try:
         with torch.no_grad():
-            model(batch)
+            model(admit_observation(model, batch))
     except ValueError as error:
         raise ValueError(
             f"game {game} (decks {first} / {second}) emitted an id outside the "

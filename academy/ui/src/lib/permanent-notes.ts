@@ -5,7 +5,8 @@ import type { ContinuousEffect, CopyEffect, PermanentState } from './types';
 // (`manabot/semantic/text_observation.py`, `effect_phrase`).
 export function effectNote(effect: ContinuousEffect): string {
   const until = effect.duration === 'EndOfTurn' ? 'until end of turn: '
-    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: " : '';
+    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: "
+    : effect.duration === 'UntilYourNextTurn' ? "until its controller's next turn: " : '';
   return `${until}${modificationPhrase(effect)}${effect.source ? ` (${effect.source})` : ''}`;
 }
 
@@ -39,16 +40,32 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return "can't be blocked";
     case 'CantBlock':
       return "can't block";
+    case 'CantActivateAbilities':
+      return "activated abilities can't be activated";
+    case 'MustBeBlockedByAllAble':
+      return 'all creatures able to block it do so';
     case 'DoesntUntap':
       return "doesn't untap during its controller's untap step";
     case 'LoseKeywords':
       return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
     case 'ExileIfWouldDie':
       return 'exiled instead if it would die';
+    case 'ExileIfWouldLeave':
+      return 'exiled instead if it would leave the battlefield';
     case 'KeepUnspentMana':
       return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
     case 'NoMaximumHandSize':
       return 'no maximum hand size';
+    case 'NextCreatureCastFlash':
+      return 'the next creature card cast can be cast as though it had flash';
+    case 'SkipsCombatPhasesNextTurn':
+      return 'skips all combat phases of their next turn';
+    case 'LifeTotalCantChange':
+      return "life total can't change";
+    case 'ProtectionFromEverything':
+      return 'protection from everything';
+    case 'PhasedOut':
+      return "phased out (treated as though it doesn't exist)";
     case 'ControlChanged':
       return `control changed from seat ${(effect.amount ?? 0) + 1}`;
     case 'ModeChosen':

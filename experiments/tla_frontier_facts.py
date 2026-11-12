@@ -85,6 +85,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.identity import StrictModel
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import fetch_etude_checkpoint, load_checkpoint
 from manabot.model.facts import FactEncoder
 from manabot.training.regime import TrainingRegime
@@ -268,7 +269,7 @@ def read_model(model: ActorCritic, positions: Observation) -> ModelContribution:
                 key: torch.from_numpy(value[start : start + BATCH])
                 for key, value in positions.items()
             }
-            model(batch)
+            model(admit_observation(model, batch))
             assert captured.pre is not None and captured.rows is not None
             pre, rows = captured.pre, captured.rows
             facts = batch["facts"]

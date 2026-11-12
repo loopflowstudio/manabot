@@ -8,7 +8,7 @@
 //! condition or an `ActiveIf`.
 
 use managym::state::{
-    ability::{Ability, Condition, Effect, TriggerCondition},
+    ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
     card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -31,7 +31,7 @@ enum Place {
 /// Paths (JSON pointers) of resolution-only conditions outside an
 /// `Effect::If` condition, and of source questions outside an `Effect::If`
 /// condition, an intervening-if clause or a type grant's / land-type
-/// overwrite's own condition.
+/// overwrite's / P/T buff's own condition (layers ask those of the source).
 fn misplaced_resolution_conditions(definition: &CardDefinition) -> Vec<String> {
     let value = serde_json::to_value(definition).expect("definitions serialize");
     let mut found = Vec::new();
@@ -76,7 +76,7 @@ fn walk(value: &Value, path: String, place: Place, found: &mut Vec<String>) {
                         }
                     }
                     ("intervening_if", _) => walk(field, child, Place::InterveningIf, found),
-                    ("TypeGrant" | "SetsLandType", Value::Object(ability)) => {
+                    ("TypeGrant" | "SetsLandType" | "PtBuff", Value::Object(ability)) => {
                         for (part, inner) in ability {
                             let place = if part == "condition" {
                                 Place::SourceStatic
@@ -121,7 +121,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     let intervening = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::TargetDealtDamageThisTurn),
             effects: vec![Effect::discard()],
         }],
@@ -134,7 +134,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
                 active_if: Condition::Kicked,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
             },
             intervening_if: None,
             effects: vec![Effect::discard()],
@@ -146,7 +146,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     let source_intervening = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::SourceTapped),
             effects: vec![Effect::discard()],
         }],
@@ -159,7 +159,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
                 active_if: Condition::SourceTapped,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
             },
             intervening_if: None,
             effects: vec![Effect::discard()],
@@ -184,11 +184,12 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     };
     assert!(misplaced_resolution_conditions(&source_type_grant).is_empty());
 
+    // Beastmaster Ascension: layers ask a buff's condition of its source.
     let source_buff = CardDefinition {
         name: "Witness".into(),
         statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
-            condition: Some(fire),
+            condition: Some(fire.clone()),
             power: 1,
             toughness: 1,
             per_creature_type_max: None,
@@ -197,7 +198,17 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         })],
         ..Default::default()
     };
-    assert_eq!(misplaced_resolution_conditions(&source_buff).len(), 1);
+    assert!(misplaced_resolution_conditions(&source_buff).is_empty());
+
+    let source_unblockable = CardDefinition {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::CantBeBlockedIf(fire)],
+        ..Default::default()
+    };
+    assert_eq!(
+        misplaced_resolution_conditions(&source_unblockable).len(),
+        1
+    );
 }
 
 /// Planning inventory is audited against the catalog, never used to admit a

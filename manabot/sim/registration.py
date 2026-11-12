@@ -138,7 +138,7 @@ class PlayerRegistration(StrictModel):
                     SamplerArtifact,
                 )
 
-                config = LocalSearchConfig.model_validate(
+                config = LocalSearchConfig.from_recorded(
                     self.player_spec.get("config", {})
                 )
                 required = {
@@ -159,7 +159,11 @@ class PlayerRegistration(StrictModel):
                     raise ValueError(
                         "local-update inference spec must be fully explicit"
                     )
-                if config.model_dump() != self.player_spec["config"]:
+                expected_config = config.model_dump()
+                if "rollout_evidence" not in self.player_spec["config"]:
+                    # Registrations written before the field keep their bytes.
+                    expected_config.pop("rollout_evidence")
+                if expected_config != self.player_spec["config"]:
                     raise ValueError("local-update config must include every parameter")
                 digest = self.player_spec["implementation_source_sha256"]
                 if (
@@ -172,7 +176,7 @@ class PlayerRegistration(StrictModel):
                     self.search_semantics is None
                     or self.search_semantics.model_dump()
                     != {
-                        "branch_audit": True,
+                        "branch_audit": config.rollout_evidence == "full",
                         "root_prior": "two-kl-local-update/v1",
                         "leaf_evaluator": "frozen-viewer-policy-signed-value/v1",
                     }

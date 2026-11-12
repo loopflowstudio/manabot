@@ -1,10 +1,44 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from enum import IntEnum
 import os
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
 
 import numpy as np
+from typing_extensions import deprecated
+
+class ObservationValueLayout(TypedDict):
+    kind: Literal[
+        "id", "reference", "category", "flag", "count", "number", "rank", "tagged"
+    ]
+    encoding: str
+    range: str
+
+class ObservationColumnLayout(ObservationValueLayout):
+    index: int
+
+class ObservationArrayLayout(TypedDict):
+    axes: list[str]
+    shape: list[int | None]
+    dtype: Literal["float32", "int32"]
+    columns: dict[str, ObservationColumnLayout]
+    row_kinds: dict[int, str]
+    element: NotRequired[ObservationValueLayout]
+
+def observation_layout(
+    *, policy_history: bool = False, turn_state: bool = False
+) -> dict[str, ObservationArrayLayout]:
+    """Column names, value encodings and fixed extents of each encoded array.
+
+    Keys match `encode_observation` and the vector env buffers; a None extent
+    is a caller-selected capacity. `policy_history` selects the public history
+    rows of `events` instead of raw events; `turn_state` adds policy input
+    v10's `player_turn_state` and `card_turn_state`. Seats are viewer-relative.
+    No game or buffer is created.
+    """
+
+from . import format as format
 
 class PoolDefinition(TypedDict):
     card_def_id: int
@@ -35,7 +69,7 @@ def set_cards(sets: list[str]) -> list[PoolDefinition]:
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
-class LearningCatalog(TypedDict):
+class CatalogTokens(TypedDict):
     content_digest: str
     registry_names: list[str]
     token_kind: list[int]
@@ -47,19 +81,28 @@ class LearningCatalog(TypedDict):
     definition_ref_source_tokens: list[int]
     definition_ref_target_rows: list[int]
 
-def learning_catalog() -> LearningCatalog:
-    """Learning tokens for every catalog definition, rows by CardDefId."""
+LearningCatalog = CatalogTokens  # Deprecated spelling, removed in 0.3.0.
+
+def catalog_tokens() -> CatalogTokens:
+    """Tokenized rules text of every catalog definition, rows by CardDefId."""
 
 def card_definitions_json() -> str:
-    """Every catalog definition as the JSON its learning tokens serialize."""
+    """Every catalog definition as the JSON its catalog tokens serialize."""
 
-def learning_token_value(name: str) -> int:
-    """The learning catalog's stable token value for a Rust or printed name."""
+def catalog_token_value(name: str) -> int:
+    """The catalog's stable token value for a Rust or printed name."""
 
-def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]:
+def record_vocabulary() -> list[tuple[str, str, int, int | None, int | None]]:
     """Every name fact/shared-effect encoders hash, as `(namespace, name,
     value, token_kind, token_value)`; the token is card text's for the same
     concept. Namespaces: `token`, `name`, `restriction`."""
+
+@deprecated("use catalog_tokens; removed in 0.3.0")
+def learning_catalog() -> CatalogTokens: ...
+@deprecated("use catalog_token_value; removed in 0.3.0")
+def learning_token_value(name: str) -> int: ...
+@deprecated("use record_vocabulary; removed in 0.3.0")
+def learning_record_names() -> list[tuple[str, str, int, int | None, int | None]]: ...
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -541,6 +584,8 @@ class ManaCost:
     hybrid: List[tuple[int, int]]
     cost: List[int]
     mana_value: int
+    # Number of {X} symbols; mana_value counts none of them (CR 202.3e).
+    x: int
 
 class CardTypes:
     is_castable: bool
@@ -592,6 +637,8 @@ class Player:
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
+    # Spells this player cast this turn.
+    spells_cast: int
     # Extra turns this player will take after this one (CR 500.7).
     extra_turns: int
     # Additional combat phases still to come this turn (active player only).
@@ -613,10 +660,14 @@ class PlayerTurnHistory:
     cards_drawn: int
     # Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     bent: int
+    # Life lost this turn (CR 119.3).
+    life_lost: int
 
 class RestrictedMana:
     spells: List[str]
     abilities: List[str]
+    # Spendable on anything but casting nonartifact spells (Powerstone).
+    except_nonartifact_spells: bool
     mana: tuple[int, int, int, int, int, int]
 
 class CastPermission:
@@ -657,6 +708,8 @@ class Card:
     face_down: bool
     cast_permission: Optional[CastPermission]
     x: Optional[int]
+    # A graveyard card put there from the battlefield this turn (input v10).
+    from_battlefield_this_turn: bool
 
 class SideboardCard:
     candidate_id: int
@@ -735,7 +788,7 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
-    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore).
+    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, age, ice, ...).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
     attached_to: int | None
@@ -907,3 +960,30 @@ def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...
+def encode_observations_into(
+    envs: Sequence[Env], buffers: Dict[str, np.ndarray], capacity: int
+) -> list[int]:
+    """Write each env's acting-player view into rows 0..len(envs) of buffers.
+
+    Buffers come from `ObservationEncoder.allocate(capacity)`; later rows are
+    untouched. Returns each row's legal-action count. Shape, dtype and
+    writability failures raise before any write; an observation exceeding a
+    capacity (every legal action must fit) raises, leaving earlier rows written.
+    """
+    ...
+
+def input_v10_state(obs: Observation) -> str | None:
+    """The state only policy input v10 holds that `obs` needs, if any."""
+    ...
+
+class CardPool:
+    """The cards available to a build: supported names and positive counts."""
+    def __init__(self, cards: dict[str, int]) -> None: ...
+    @staticmethod
+    def from_counts(counts: np.ndarray) -> CardPool:
+        """A pool from int counts of shape ``[cards]`` over the card axis."""
+    @property
+    def cards(self) -> dict[str, int]: ...
+    @property
+    def counts(self) -> np.ndarray:
+        """Int32 counts of shape ``[cards]``, indexed by ``card_def_id``."""

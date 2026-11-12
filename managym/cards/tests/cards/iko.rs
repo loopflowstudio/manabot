@@ -88,3 +88,24 @@ fn weaponize_keeps_its_exact_damage_source_after_removal() {
     assert_eq!(s.game().state.players[1].life, 18);
     assert!(s.game().state.events.iter().any(|event|matches!(event,managym::flow::event::GameEvent::DamageDealt {source:Some(card),target:managym::flow::event::DamageTarget::Player(PlayerId(1)),amount:2} if *card==weapon)));
 }
+
+#[test]
+fn drannith_magistrate_stops_opponents_casting_from_the_graveyard() {
+    use crate::support::{game::plant_in_graveyard, inspect::can_cast, play::castable};
+    let mut s = five_color_setup(&["Drannith Magistrate", "Join the Dance"]);
+    let dance = plant_in_graveyard(&mut s, 0, "Join the Dance");
+    assert!(castable(&mut s, dance));
+    // Your own Magistrate does not restrict you.
+    let mine = s.force_permanent_on_battlefield(0, "Drannith Magistrate");
+    assert!(castable(&mut s, dance));
+    let theirs = s.force_permanent_on_battlefield(1, "Drannith Magistrate");
+    assert!(!castable(&mut s, dance));
+    // The restriction ends with the source.
+    for magistrate in [mine, theirs] {
+        let card = s.game().state.permanents[magistrate].as_ref().unwrap().card;
+        s.game_mut()
+            .move_card(card, managym::state::zone::ZoneType::Graveyard);
+    }
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(can_cast(&s, dance));
+}

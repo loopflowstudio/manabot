@@ -27,9 +27,11 @@ actual counts through Etude and exports admitted checkpoints. `--steps`,
 `--seconds`, `--seed`, `--out` and `--learning-seats one|both` make local controls
 explicit. This is a software smoke, not playing-strength evidence.
 
-The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
-`--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
-the local device; baseline rejects CPU. MPS self-play uses float32; evaluation
+The local recipe selects CUDA when available and CPU otherwise; Apple MPS is used
+only with an explicit `--device mps`. `--recipe baseline` requires CUDA or an
+explicit `--device mps`. `--device cpu|mps|cuda` overrides the local device;
+baseline rejects CPU. MPS self-play uses float32 and requires
+Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
 
@@ -102,7 +104,7 @@ linked capture audit for boundaries and supervision limits.
 
 The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
 corpus and `experiments/tla_frontier.py` for Etude training and paired
-evaluation ([protocol](../experiments/protocols/tla-frontier-c5fba4-v1.md)).
+evaluation ([report](../experiments/tla-frontier-c5fba4-results.md)).
 The earlier trophy pilots execute from their pinned source; see the
 [pilot evidence](../experiments/tla-trophy-pilot.md).
 
@@ -189,6 +191,94 @@ singleton inference over the full padded layout. Rollout seeds
 remain independent, but a probability at a sampling threshold can turn that
 rounding into a different trajectory; replay uses the retained allocation and
 implementation identity.
+
+### Rollout evidence
+
+Search retains compact evidence by default. An audit run selects full evidence
+in the search config to keep a per-Command witness and viewer hash for every
+rollout step:
+
+```python
+player, observation_space = make_player(
+    {
+        "kind": "local_update",
+        "checkpoint": str(checkpoint),
+        "checkpoint_sha256": file_sha256(checkpoint),
+        "config": {
+            "worlds": 16,
+            "depth": 20,
+            "decision_seconds": 30,
+            "rollout_evidence": "full",
+        },
+    },
+    seed=42,
+)
+```
+
+Omit `"rollout_evidence"` (or set it to `"compact"`) and
+`player.last_receipt.schema` is `regularized-local-update/v4`. Every rollout
+keeps its seed, signed value, terminal flag and Command count. Its
+`actor_observation_hashes` list is empty, and its branch audit records
+`audit: false` with empty tapes. During rollouts, search records no native
+witness for each Command and computes no viewer hash for each actor. Each
+Command it applies still increments a count, and the receipt checks that count
+against the native session's counters. Search still checks the root viewer,
+validates every sampled world, checks Command preconditions and keeps the same
+policy inputs and rollout budgets. Compact receipts cannot show that each
+rollout step matches the witness that full evidence would have recorded.
+`verify_replay` checks only the evidence a receipt retains.
+
+`rollout_evidence="full"` writes `regularized-local-update/v3` receipts, with
+the same `config_json` bytes that receipts had before the field existed. For
+the same checkpoint, root, history and seed, compact and full evidence choose
+the same Commands and produce the same tensors and values; they differ only in
+what the receipt retains.
+
+The evidence mode is part of the implementation and receipt identity. Readers
+accept historical v1–v4 receipts, and a v1–v3 receipt is always read as full
+evidence. A registration whose config omits `rollout_evidence` predates the
+field and also means full evidence, so frozen registrations keep their
+meaning; a new registration states the mode, and one selecting compact evidence
+declares `search_semantics.branch_audit: false`. Changing the default never
+relabels an existing experiment's receipts or registrations.
+
+### Native frontier encoding
+
+Each teacher keeps frontier buffers from
+`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
+every live branch's acting-player observation into these buffers with one call,
+`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
+row's legal-action count. The buffers grow only when a frontier exceeds their
+capacity, and rows past the live frontier are left untouched. The tensor layout
+is the checkpoint's own, and every legal action is still required. The encoder
+leaves inference threads, rollout depth, legal support and the search config
+unchanged, and is not recorded in the receipt, so registered evaluation players
+use it without changing their identity.
+
+`LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
+`"native_encoder": false` beside `"config"` in a `make_player` spec, instead
+allocates a fresh batch for each frontier forward and fills its rows one branch
+at a time in Python. Use it to compare encoders; both write identical tensors.
+
+A teacher reuses its buffers between calls, so only one search may use it at a
+time; give each concurrent search its own teacher. An extension without the
+batch writer, or a buffer whose shape, dtype or writability does not match the
+selected observation space, raises before any inference. Search never falls
+back to the Python encoder: rebuild the extension, or select
+`native_encoder=False` explicitly.
+
+### Inference threads
+
+Search never changes Torch's thread settings. A process chooses its intra-op
+thread count once, before constructing a teacher, with
+`torch.set_num_threads(n)`. Evaluation game children always use one thread.
+`scripts/bench_local_update.py --inference-threads N` (default 1) sets the
+count before loading the model and records the requested and effective intra-op
+counts, plus the inter-op count, which it leaves unchanged. A single-process
+measurement with more threads does not predict throughput when several workers
+share the machine.
+
+### Budgets and failures
 
 The decision budget includes viewer-history work. Exceeding it raises
 `TimeoutError` with no target; increase `decision_seconds` or reduce `worlds` or
@@ -487,7 +577,7 @@ observed learning difficulty; chunking changes no checkpoint weights or buffers.
 
 Fresh models (`ModelConfig.record_vocabulary`,
 default `catalog`) embed fact and shared-effect ids through the same token
-embedding. Native `learning_record_names` lists every counter kind, color,
+embedding. Native `record_vocabulary` lists every counter kind, color,
 subtype, keyword, modification, set name and combat restriction the encoders
 hash. Each reads the row of the card token for the same concept (a granted
 `flying` and a printed `Keyword::flying` share one row) or a row appended after

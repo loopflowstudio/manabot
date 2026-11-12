@@ -126,6 +126,11 @@ impl Game {
                 }
             }
             Action::PayCost { .. } => match &self.pending_choice {
+                Some(PendingChoice::KickerChoice { card, .. })
+                    if self.state.cards[*card].exile_alternative().is_some() =>
+                {
+                    Some("Exile a card from your hand instead of paying the mana cost".into())
+                }
                 Some(PendingChoice::SacrificePayment { cost, .. }) => {
                     cost.or_mana.as_ref().map(|alternative| {
                         let mut label = String::new();
@@ -145,7 +150,12 @@ impl Game {
                 _ => None,
             },
             Action::SelectCard { card, .. } => {
-                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ExileFromHandPayment { .. })
+                ) {
+                    Some(format!("Exile {} to pay", self.state.cards[*card].name))
+                } else if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
                     Some(format!("Tap {} to crew", self.state.cards[*card].name))
                 } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
                     Some(format!("Tap {} to pay", self.state.cards[*card].name))
@@ -156,6 +166,9 @@ impl Game {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
+                        Decision::ManaUpfront { tap_remaining, .. } if *tap_remaining > 0 => {
+                            Some(format!("Tap {} to pay", self.state.cards[*card].name))
+                        }
                         Decision::ChooseObject { effect, .. } => Some(format!(
                             "{} {}",
                             choice_verb(effect),
@@ -195,6 +208,15 @@ impl Game {
                 } else {
                     None
                 }
+            }
+            Action::Decline { .. }
+                if matches!(
+                    &self.pending_choice,
+                    Some(PendingChoice::KickerChoice { card, .. })
+                        if self.state.cards[*card].exile_alternative().is_some()
+                ) =>
+            {
+                Some("Pay the mana cost".into())
             }
             Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
                 Decision::SearchNamed { .. } => Some("Stop searching and shuffle".into()),
@@ -236,6 +258,9 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
+            if self.activations_prohibited(permanent_id) {
+                continue;
+            }
             for (ability_index, ability) in self
                 .characteristics(permanent_id)
                 .activated_abilities
@@ -244,10 +269,7 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
-                    || (ability.requires_target()
-                        && self
-                            .activated_ability_targets(player, source, ability_index, &[])
-                            .is_empty())
+                    || !self.activation_targets_available(player, source, ability_index)
                 {
                     continue;
                 }
@@ -311,12 +333,9 @@ impl Game {
                 {
                     continue;
                 }
-                if ability.tap_cost.is_some()
-                    && self.tap_cost_candidates(player, ability).is_empty()
-                {
-                    continue;
-                }
-                let affordable = if ability.waterbend {
+                let affordable = if let Some(cost) = &ability.tap_cost {
+                    self.tap_activation_payment_possible(player, &payment, cost.count, None)
+                } else if ability.waterbend {
                     self.can_pay_waterbend_activation(player, permanent_id, ability)
                 } else {
                     self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
@@ -355,10 +374,7 @@ impl Game {
                     };
                     let source = ActivationSource::Card(card);
                     if self.check_activation_terms(player, &ability).is_err()
-                        || (ability.requires_target()
-                            && self
-                                .activated_ability_targets(player, source, ability_index, &[])
-                                .is_empty())
+                        || !self.activation_targets_available(player, source, ability_index)
                     {
                         continue;
                     }
@@ -442,7 +458,16 @@ impl Game {
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
         let Some(additional) = card.sacrifice_cost() else {
-            return self.can_pay_cast(player, card_id, cast);
+            return self.can_pay_cast(player, card_id, cast)
+                || (card.exile_alternative().is_some()
+                    && self.can_pay_cast(
+                        player,
+                        card_id,
+                        CastChoices {
+                            kicked: true,
+                            ..cast
+                        },
+                    ));
         };
         let payment = Payment::Spell {
             card: card_id,
@@ -520,7 +545,8 @@ impl Game {
                 player,
                 source,
                 ability_index,
-                ..
+                targets,
+                remaining,
             } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
@@ -529,10 +555,38 @@ impl Game {
                     .map(|ability| self.tap_cost_candidates(*player, &ability))
                     .unwrap_or_default()
                     .into_iter()
+                    .filter(|id| {
+                        self.tap_activation_payment_possible(
+                            *player,
+                            &Payment::Activation {
+                                source: *source,
+                                ability_index: *ability_index,
+                                targets: targets.clone(),
+                                x: 0,
+                            },
+                            *remaining,
+                            Some(*id),
+                        )
+                    })
                     .filter_map(|id| self.state.permanents[id].as_ref())
                     .map(|permanent| Action::SelectCard {
                         player: *player,
                         card: permanent.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
+            PendingChoice::ExileFromHandPayment { player, payment } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .payment_source_card(payment)
+                    .map(|card| self.exile_alternative_cards(*player, card))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
                     })
                     .collect(),
                 focus: Vec::new(),
@@ -573,23 +627,34 @@ impl Game {
                 source,
                 ability_index,
                 chosen,
+                requirement,
             } => {
+                let chooser =
+                    self.activation_target_chooser(*player, *source, *ability_index, *requirement);
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(*player, *source, *ability_index, chosen)
+                    .activated_ability_targets(
+                        *player,
+                        *source,
+                        *ability_index,
+                        *requirement,
+                        chosen,
+                    )
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
-                        player: *player,
+                        player: chooser,
                         target,
                     })
                     .collect();
-                let requirement = self
-                    .activation_ability(*source, *ability_index)?
-                    .target_requirement()?;
-                if chosen.len() >= requirement.min {
-                    actions.push(Action::Decline { player: *player });
+                let clause =
+                    self.activation_target_requirement(*source, *ability_index, *requirement)?;
+                let in_clause = self
+                    .activation_clause_chosen(*source, *ability_index, *requirement, chosen)
+                    .len();
+                if in_clause >= clause.min {
+                    actions.push(Action::Decline { player: chooser });
                 }
                 Some(ActionSpace {
-                    player: Some(*player),
+                    player: Some(chooser),
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
                     focus: Vec::new(),
@@ -829,6 +894,14 @@ impl Game {
                 ) =>
             {
                 self.sacrifice_payment_action(*player, Some(*card))
+            }
+            Action::SelectCard { player, card }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::ExileFromHandPayment { .. })
+                ) =>
+            {
+                self.exile_payment_action(*player, *card)
             }
             Action::SelectCard { player, card }
                 if matches!(

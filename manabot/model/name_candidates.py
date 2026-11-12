@@ -18,6 +18,7 @@ from collections.abc import Sequence
 import torch
 from torch import nn
 
+from manabot.model.numerics import buffer_on
 from manabot.model.semantic_cards import admit_definition_ids
 import managym
 
@@ -48,6 +49,8 @@ class NameCandidateEncoder(nn.Module):
             ),
         )
         self.embedding = nn.Embedding(len(candidates) + 1, hidden_dim, padding_idx=0)
+        # Bucketed shapes join names without a data-dependent selection.
+        self.bucketed = False
         # Optional definition joins are already bound by checkpoint admission.
         # Several validated names may refer to one definition; retain all edges.
         self.register_buffer(
@@ -55,26 +58,31 @@ class NameCandidateEncoder(nn.Module):
             definition_rows[self.definitions] if definition_rows is not None else None,
         )
 
-    def forward(self, candidates: torch.Tensor) -> torch.Tensor:
-        """Embed one-based `[..., 4]` candidate rows; a `[..., 2]` prefix has no group span."""
-        rows = admit_definition_ids(candidates[..., 0], len(self.definitions))
-        if not torch.equal(
-            candidates[..., 1], self.definitions[rows].to(candidates.dtype)
-        ):
+    def admit(self, candidates: torch.Tensor) -> None:
+        """Reject candidate rows whose names, definitions or spans disagree
+        with the vocabulary (observation admission)."""
+        definitions = buffer_on(self, "definitions", candidates.device)
+        rows = admit_definition_ids(candidates[..., 0], len(definitions))
+        if not torch.equal(candidates[..., 1], definitions[rows].to(candidates.dtype)):
             raise ValueError("name candidate definition disagrees with vocabulary")
-        embedded = self.embedding(rows)
+        if candidates.shape[-1] == 4:
+            first = admit_definition_ids(candidates[..., 2], len(definitions))
+            last = admit_definition_ids(candidates[..., 3], len(definitions))
+            if not torch.equal(first > 0, last > 0) or bool((first > last).any()):
+                raise ValueError("invalid naming group span")
+
+    def forward(self, candidates: torch.Tensor) -> torch.Tensor:
+        """Embed admitted one-based `[..., 4]` candidate rows; a `[..., 2]`
+        prefix has no group span."""
+        embedded = self.embedding(candidates[..., 0].long())
         if candidates.shape[-1] == 4:
             embedded = embedded + self._groups(candidates[..., 2], candidates[..., 3])
         return embedded
 
     def _groups(self, first: torch.Tensor, last: torch.Tensor) -> torch.Tensor:
         """Mean member vector of each one-based inclusive span; zero for none."""
-        size = len(self.definitions)
-        first = admit_definition_ids(first, size)
-        last = admit_definition_ids(last, size)
+        first, last = first.long(), last.long()
         present = first > 0
-        if not torch.equal(present, last > 0) or bool((first > last).any()):
-            raise ValueError("invalid naming group span")
         # prefix[k] sums name rows 1..k; padding row 0 never enters the sum,
         # so it receives no gradient.
         names = self.embedding.weight[1:]
@@ -94,6 +102,15 @@ class NameCandidateEncoder(nn.Module):
         """
         assert self.program_rows is not None
         named = self.definitions != 0
+        if self.bucketed:
+            # Definition-free names add zero to padding row 0.
+            return programs.index_add(
+                0,
+                torch.where(named, self.program_rows, 0),
+                torch.where(named[:, None], self.embedding.weight, 0).to(
+                    programs.dtype
+                ),
+            )
         return programs.index_add(
             0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
         )

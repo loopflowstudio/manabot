@@ -52,6 +52,7 @@ def make_teacher(
     *,
     config: LocalSearchConfig | None = None,
     observation: ObservationConfig | None = None,
+    native_encoder: bool = True,
 ) -> tuple[LocalUpdateTeacher, Env]:
     torch.set_num_threads(1)
     torch.manual_seed(15)
@@ -80,6 +81,7 @@ def make_teacher(
         file_sha256(path),
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
+        native_encoder=native_encoder,
     )
     env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
@@ -241,7 +243,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
         },
         search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
         search_semantics=SearchSemantics(
-            branch_audit=True,
+            branch_audit=teacher.config.rollout_evidence == "full",
             root_prior="two-kl-local-update/v1",
             leaf_evaluator="frozen-viewer-policy-signed-value/v1",
         ),
@@ -364,3 +366,180 @@ def test_learned_search_direct_worlds_replay_and_rejection(tmp_path: Path) -> No
             teacher.config,
             sampler=artifact.model_copy(update={"policy_identity": "wrong"}),
         )
+
+
+def _searched_roots(env: Env, steps: int) -> list[managym.Env]:
+    """The opening root plus later roots reached by first-offer Commands."""
+    roots = [env._engine]
+    for _ in range(steps):
+        root = roots[-1].clone_env()
+        root.step(0)
+        if root.is_game_over():
+            break
+        roots.append(root)
+    return roots
+
+
+def test_compact_native_defaults_match_full_evidence_and_row_encoding(
+    tmp_path: Path,
+) -> None:
+    compact_config = LocalSearchConfig(
+        worlds=2, depth=6, decision_seconds=60, sampling="compatible_prior"
+    )
+    assert compact_config.rollout_evidence == "compact"
+    full_config = compact_config.model_copy(update={"rollout_evidence": "full"})
+    full, env = make_teacher(tmp_path, config=full_config, native_encoder=False)
+    checkpoint = full.likelihood.checkpoint
+    digest = full.likelihood.checkpoint_sha256
+    arms = {
+        "compact": LocalUpdateTeacher(
+            checkpoint, digest, compact_config, native_encoder=False
+        ),
+        "native": LocalUpdateTeacher(checkpoint, digest, full_config),
+        "defaults": LocalUpdateTeacher(checkpoint, digest, compact_config),
+    }
+    assert arms["defaults"].native_encoder
+    for root in _searched_roots(env, 4):
+        viewer = root.current_agent_index()
+        history = ViewerHistory.from_observation(
+            Observation.from_json(root.semantic_observation_json(viewer))
+        )
+        reference = full.search(root, history, seed=11)
+        assert reference.schema == "regularized-local-update/v3"
+        assert "rollout_evidence" not in reference.config_json
+        # v3 receipts omit the field and still read as full evidence.
+        assert (
+            LocalUpdateReceipt.from_json(reference.to_json()).replay_identity()
+            == reference.replay_identity()
+        )
+        for name, teacher in arms.items():
+            receipt = teacher.search(root, history, seed=11)
+            compact = teacher.config.rollout_evidence == "compact"
+            assert receipt.schema == (
+                "regularized-local-update/v4" if compact else reference.schema
+            ), name
+            for field in ("base", "values", "target", "allocation_counts"):
+                assert getattr(receipt, field) == getattr(reference, field), name
+            for row, expected in zip(receipt.rollouts, reference.rollouts, strict=True):
+                assert row.canonical_commands == expected.canonical_commands
+                assert row.signed_value == expected.signed_value
+                assert row.terminal == expected.terminal
+                assert row.rollout_seed == expected.rollout_seed
+                if compact:
+                    assert row.actor_observation_hashes == ()
+                    assert '"audit": false' in row.branch_audit_json
+                else:
+                    assert row == expected
+            assert (
+                LocalUpdateReceipt.from_json(receipt.to_json()).replay_identity()
+                == receipt.replay_identity()
+            )
+            teacher.verify_replay(root, history, receipt)
+
+    receipt = arms["compact"].search(root, history, seed=11)
+    shortened = replace(
+        receipt,
+        rollouts=(
+            replace(
+                receipt.rollouts[0],
+                canonical_commands=receipt.rollouts[0].canonical_commands - 1 or 2,
+            ),
+            *receipt.rollouts[1:],
+        ),
+    )
+    with pytest.raises(ValueError, match="Command"):
+        LocalUpdateReceipt.from_json(shortened.to_json())
+    relabeled = replace(receipt, schema="regularized-local-update/v3")
+    with pytest.raises(ValueError, match="v4"):
+        LocalUpdateReceipt.from_json(relabeled.to_json())
+
+
+def test_native_frontier_encoding_writes_the_row_encoder_tensors(
+    tmp_path: Path,
+) -> None:
+    teacher, env = make_teacher(tmp_path, native_encoder=False)
+    roots = _searched_roots(env, 6)
+    rows, counts = teacher._encode_rows(roots)
+    buffers = teacher.space.encoder.allocate(len(roots) + 2)
+    for value in buffers.values():
+        value.fill(7)
+    assert managym.encode_observations_into(roots, buffers, len(roots) + 2) == counts
+    for key, expected in rows.items():
+        np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
+        assert (buffers[key][len(roots) :] == 7).all(), key
+    # A smaller frontier rewrites only its own rows of a reused buffer.
+    assert (
+        managym.encode_observations_into(roots[:1], buffers, len(roots) + 2)
+        == (counts[:1])
+    )
+    for key, expected in rows.items():
+        np.testing.assert_array_equal(buffers[key][: len(roots)], expected, key)
+    with pytest.raises(ValueError, match="capacity"):
+        managym.encode_observations_into(roots, buffers, 1)
+    narrow = teacher.space.encoder.allocate(len(roots))
+    narrow["actions"] = narrow["actions"][..., :-1].copy()
+    with pytest.raises(ValueError):
+        managym.encode_observations_into(roots, narrow, len(roots))
+    frozen = teacher.space.encoder.allocate(len(roots))
+    frozen["agent_cards"].flags.writeable = False
+    with pytest.raises(ValueError, match="writable"):
+        managym.encode_observations_into(roots, frozen, len(roots))
+
+    native = LocalUpdateTeacher(
+        teacher.likelihood.checkpoint,
+        teacher.likelihood.checkpoint_sha256,
+        teacher.config,
+    )
+    for expected, actual in zip(
+        teacher.predict_batch(roots), native.predict_batch(roots), strict=True
+    ):
+        np.testing.assert_array_equal(expected[0], actual[0])
+        assert expected[1] == actual[1]
+
+
+def test_compact_registration_declares_no_branch_audit() -> None:
+    identity = "0" * 64
+
+    def register(config: dict[str, object], branch_audit: bool) -> PlayerRegistration:
+        return PlayerRegistration(
+            role="challenger",
+            compute_class_id="bounded-fixture",
+            information_boundary="acting-viewer-history-only-v1",
+            world="w4",
+            content_suite="tiny-fixture",
+            observation_abi_sha256=identity,
+            action_abi_sha256=identity,
+            matchup_sha256=identity,
+            player_seed_derivation_id="fixture-seed",
+            player_id="local-fixture",
+            display_name="Local fixture",
+            runner_kind="checkpoint",
+            checkpoint_sha256=identity,
+            checkpoint_bytes=1,
+            parameter_count=1,
+            training_seed=15,
+            artifact_id="untrained-fixture-15",
+            evidence_class="fixture",
+            player_spec={
+                "kind": "local_update",
+                "config": config,
+                "implementation_source_sha256": identity,
+            },
+            search_call_seed_derivation_id="local-policy-seed-times-1000003-plus-call-mod-2pow63/v1",
+            search_semantics=SearchSemantics(
+                branch_audit=branch_audit,
+                root_prior="two-kl-local-update/v1",
+                leaf_evaluator="frozen-viewer-policy-signed-value/v1",
+            ),
+        )
+
+    full = LocalSearchConfig(rollout_evidence="full").model_dump()
+    historical = {k: v for k, v in full.items() if k != "rollout_evidence"}
+    register(historical, True)
+    register(full, True)
+    compact = LocalSearchConfig().model_dump()
+    register(compact, False)
+    with pytest.raises(ValueError, match="search and seed semantics"):
+        register(compact, True)
+    with pytest.raises(ValueError, match="search and seed semantics"):
+        register(historical, False)

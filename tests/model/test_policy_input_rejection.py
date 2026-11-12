@@ -1,8 +1,8 @@
 """Checkpoints and replays of another policy input are rejected, never loaded.
 
-This revision encodes, binds and models exactly one policy input. A saved
-configuration naming another version, or omitting it (the input-v1 contract),
-names the revision that can run it.
+This revision encodes, binds and models policy inputs v9 (the fresh default)
+and v10. A saved configuration naming another version, or omitting it (the
+input-v1 contract), names the revision that can run it.
 """
 
 from pathlib import Path
@@ -62,15 +62,18 @@ def _assert_names_the_recording_revision(message: str, version: int) -> None:
     )
 
 
-def test_the_single_policy_input_is_the_fresh_default_and_serialized() -> None:
+def test_v9_is_the_fresh_default_and_both_inputs_are_serialized() -> None:
     config = ObservationConfig()
     assert config.policy_input_version == POLICY_INPUT_VERSION == 9
     dumped = config.model_dump()
     assert dumped["policy_input_version"] == 9 and dumped["max_facts"] == 512
     assert ObservationConfig.from_checkpoint(dumped) == config
+    v10 = ObservationConfig(policy_input_version=10)
+    assert v10.model_dump()["policy_input_version"] == 10
+    assert ObservationConfig.from_checkpoint(v10.model_dump()) == v10
 
 
-@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 10])
+@pytest.mark.parametrize("version", [1, 5, 6, 7, 8, 11])
 def test_saved_configuration_of_another_input_is_rejected(version: int) -> None:
     payload = {**ObservationConfig().model_dump(), "policy_input_version": version}
     with pytest.raises(UnsupportedPolicyInput) as raised:

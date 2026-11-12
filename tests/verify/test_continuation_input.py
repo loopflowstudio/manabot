@@ -17,6 +17,7 @@ from manabot.infra.config import (
     UnsupportedPolicyInput,
 )
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import render_decision
@@ -50,7 +51,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
         key: torch.from_numpy(np.stack([obs[key] for obs in encoded]))
         for key in encoded[0]
     }
-    logits, value = agent(batch)
+    logits, value = agent(admit_observation(agent, batch))
     assert not torch.equal(value[0], value[1])
     assert not torch.equal(logits[0], logits[1])
     (value.sum() + logits[batch["actions_valid"].bool()].sum()).backward()
@@ -229,7 +230,7 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
         batch = {
             key: torch.from_numpy(np.stack([left[key], right[key]])) for key in left
         }
-        _, value = agent(batch)
+        _, value = agent(admit_observation(agent, batch))
         assert not torch.equal(value[0], value[1])
 
 
@@ -332,20 +333,22 @@ def test_same_source_trigger_choices_follow_facts_not_frame_positions(
     batch["actions"][0, :2, -2] = torch.tensor([1, 2])
     batch["action_focus"].fill_(-1)
     agent = ActorCritic(space, ModelConfig(hidden_dim=16))
-    logits, _ = agent(batch)
+    logits, _ = agent(admit_observation(agent, batch))
     assert not torch.isclose(logits[0, 0], logits[0, 1])
     reordered = {key: value.clone() for key, value in batch.items()}
     reordered["relations"] = rows.flip(1)
-    torch.testing.assert_close(agent(reordered)[0], logits)
+    torch.testing.assert_close(agent(admit_observation(agent, reordered))[0], logits)
     swapped = {key: value.clone() for key, value in batch.items()}
     swapped["actions"][0, :2, -2] = torch.tensor([2, 1])
-    torch.testing.assert_close(agent(swapped)[0][0, :2], logits[0, :2].flip(0))
+    torch.testing.assert_close(
+        agent(admit_observation(agent, swapped))[0][0, :2], logits[0, :2].flip(0)
+    )
     batch["actions"][0, :2, -2] = 0
-    ablated, _ = agent(batch)
+    ablated, _ = agent(admit_observation(agent, batch))
     torch.testing.assert_close(ablated[0, 0], ablated[0, 1])
     batch["actions"][0, 0, -2] = 64
     with pytest.raises(ValueError, match="reference has no frame"):
-        agent(batch)
+        admit_observation(agent, batch)
 
 
 def test_retained_capture_schema_cannot_admit_current_name_references() -> None:

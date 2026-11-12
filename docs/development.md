@@ -41,8 +41,8 @@ atomically.
   `--no-frontend`, `--demo learn`.
 - `uv run manabot train --out .runs/<name>` runs a training smoke.
 
-The `manabot` public dependency requirements are `etude-sdk>=0.2.15` (also for
-its `eval` and `s3` extras) and `torch>=2.10.0`. All extras, including `llm`, inherit the core
+The `manabot` public dependency requirements are `etude-sdk>=0.2.16` (also for
+its `eval` and `s3` extras) and `torch>=2.15.0`. All extras, including `llm`, inherit the core
 requirements. A downstream project resolves those with its own dependencies. The repository's
 `uv.lock` records exact versions, and its dedicated training and play runtime
 groups retain exact Torch/backend choices. Those development pins are not
@@ -135,6 +135,13 @@ public encoder boundary, before the retained action list reaches row encoding.
 includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
+`tests/sim/test_local_update.py` checks the defaults, compact rollout evidence
+and native frontier encoding, against full evidence and the Python per-branch
+encoder: the same roots and seeds must choose identical Commands and write
+identical tensors. It also checks that v3 receipts and registrations omitting
+`rollout_evidence` still read as full evidence. A change to
+`managym.encode_observations_into` also runs `tests/env/test_observation.py`
+and the debug native suite.
 Inspect collector fixtures before selecting laptop-safe model tests:
 `SeatRoutedCollector` defaults to `batch_closure="complete-games"`, so even
 `collect(model, 1)` can play a complete game.
@@ -158,10 +165,9 @@ focused tests too. Synthetic scheduling/analysis fixtures must pin both identity
 and schema; test real runtime rejection separately, and keep those fixtures off
 replay, encoding and training paths. Never rewrite frozen protocols to fit the
 current runtime.
-Checkpoint-time scheduling changes also require
-`uv run --extra dev --extra artifacts --extra evaluation pytest tests/eval/test_tla_frontier.py -q`.
-Store synthetic checkpoints with an injected wall clock, and cover both relative
-run speeds; filesystem timing must not decide the expected matchup set.
+Store synthetic checkpoints for checkpoint-time scheduling tests with an injected
+wall clock, and cover both relative run speeds; filesystem timing must not decide
+the expected matchup set.
 When moving modules, tests or entry points, collect the
 exact paths in `.github/workflows/manabot-integration.yml` and run
 `uv run --extra dev pytest tests/infra/test_ci_selection.py tests/infra/test_release.py -q`.
@@ -351,7 +357,23 @@ dispatch input on `ci.yml` selects only Engine Budget, benchmarks that commit
 with the dispatched ref's benchmarks and uploads the same artifact without
 comparing (`gh workflow run ci.yml --ref <branch> -f measure=<commit>`).
 
-**Current reference.** Commit `ea316ff14` is adopted from
+**Current reference.** Commit `7ef6ce588` is adopted from
+[PR #469 CI run 43221435403](https://github.com/loopflowstudio/manabot/actions/runs/43221435403)
+(2026-11-12 UTC, AMD EPYC 7763) as an accepted cost. MTG-286's TLE rules
+additions (mana payment, casting, proposed events and triggers) leave every
+search digest, the step digest and the 101,650-step count unchanged, but slow
+headless steps by 9.2%. Both candidate step samples (8.79 s, 8.64 s) were slower
+than both reference samples (7.98 s, 7.84 s), with user CPU time matching wall
+time, so the gap is engine cost rather than scheduling. Search stayed within
+budget.
+
+| Metric | Previous reference `ea316ff14` | Adopted candidate |
+|---|---:|---:|
+| Worst search reply | 4.913 s | 4.944 s |
+| Total search | 167.486 s | 169.186 s |
+| Step throughput | 12,880.0/s | 11,693.6/s |
+
+**Previous reference: MTG-239 rules.** Commit `ea316ff14` was adopted from
 [PR #415 CI run 41711692234](https://github.com/loopflowstudio/manabot/actions/runs/41711692234)
 (2026-11-03 UTC, AMD EPYC 7763). MTG-239 gives Accumulate Wisdom explicit
 bottom-order decisions and makes Rallier evaluate Suki's power in the library.
@@ -466,13 +488,16 @@ for API migration guidance.
 The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
 environment when reproducing that release.
 
-For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
-explicitly. CI validates CPU, not GPU, execution.
+For Linux NVIDIA training use `--torch-backend cu132`; always select the backend
+explicitly. Torch 2.15 publishes no CUDA 12 wheels, so the CUDA 13.2 build needs
+an NVIDIA driver from the 580 series or newer and a Turing or newer GPU
+(compute capability 7.5+). CI validates CPU, not GPU, execution.
 
 Supported: ordinary CPython 3.12 and 3.13 (no free-threaded ABI) on Linux x86-64 with glibc
-2.28+ (CPU or CUDA 12.8 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
-MPS is admitted for float32 self-play training with Torch 2.10. Baseline requires
-CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
+2.28+ (CPU or CUDA 13.2 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
+MPS is admitted, on explicit request, for float32 self-play training with Torch 2.15 or
+newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
+available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
 `baseline_test()`, which shares baseline construction and changes only the device.
 No speed or strength claim is implied. Windows,
@@ -482,7 +507,7 @@ The platform-specific `managym` wheels contain the compiled engine; its sdist
 needs Rust and a C linker (`--only-binary :all:` refuses source builds).
 `manabot` is a pure-Python wheel and gets the engine through its exact dependency.
 The engine's runtime requirements are NumPy and Pydantic. `manabot` retains its
-training requirements, including `torch>=2.10.0` and `etude-sdk>=0.2.15`.
+training requirements, including `torch>=2.15.0` and `etude-sdk>=0.2.16`.
 These minimums allow newer versions to resolve; they do not certify every future
 dependency release. Keep your project's lockfile for reproducibility. If
 resolution fails, check for an incompatible Python version, an older exact

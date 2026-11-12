@@ -33,8 +33,9 @@ from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.inference import PolicyInference, transfer
+from manabot.model.inference import PolicyInference, transfer_admitted
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
@@ -243,8 +244,9 @@ def _infer(
                 prepared = policy.scope.prepare(tensors)
                 transfers = prepared.transfers
             else:
-                prepared, transfers = transfer(
-                    tensors, torch.device(store.execution.device)
+                prepared, transfers = transfer_admitted(
+                    admit_observation(policy.agent, tensors),
+                    torch.device(store.execution.device),
                 )
         if store.execution.device == "cuda":
             perf.count("host_to_device_bytes", size)

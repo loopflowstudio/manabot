@@ -112,18 +112,24 @@ def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
 
 @overload
 def load_checkpoint(
-    path: str | StoredArtifact,
+    path: str | StoredArtifact, *, bucketed_shapes: bool = False
 ) -> tuple[ActorCritic, ObservationSpace]: ...
 
 
 @overload
 def load_checkpoint(
-    path: str | StoredArtifact, *, include_belief_binding: Literal[True]
+    path: str | StoredArtifact,
+    *,
+    include_belief_binding: Literal[True],
+    bucketed_shapes: bool = False,
 ) -> tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]: ...
 
 
 def load_checkpoint(
-    path: str | StoredArtifact, *, include_belief_binding: bool = False
+    path: str | StoredArtifact,
+    *,
+    include_belief_binding: bool = False,
+    bucketed_shapes: bool = False,
 ) -> (
     tuple[ActorCritic, ObservationSpace]
     | tuple[ActorCritic, ObservationSpace, BeliefCheckpointBinding | None]
@@ -131,6 +137,8 @@ def load_checkpoint(
     """Load saved configuration and validate world/schema; verify S3 bytes before loading.
 
     Raises `UnsupportedPolicyInput` for a checkpoint of another policy input.
+    `bucketed_shapes` selects the forward's padding path (see `ActorCritic`);
+    it is an execution choice, not a checkpoint field.
     """
 
     if isinstance(path, StoredArtifact):
@@ -144,7 +152,7 @@ def load_checkpoint(
 
     world_binding = validate_checkpoint_world(checkpoint, obs_space)
     agent_config = ModelConfig.from_checkpoint(config["agent_hypers"])
-    agent = ActorCritic(obs_space, agent_config)
+    agent = ActorCritic(obs_space, agent_config, bucketed_shapes=bucketed_shapes)
     value_semantic = checkpoint.get("bc", {}).get("value_semantic")
     if value_semantic is not None:
         if value_semantic not in ("signed_outcome", "win_logit"):

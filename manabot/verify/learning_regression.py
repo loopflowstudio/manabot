@@ -22,6 +22,7 @@ from manabot.experiment.evaluation_queue import Attempt, checkpoints
 from manabot.experiment.execution import ExperimentRun
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.matchup import selected_decks
@@ -147,7 +148,10 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
         managym.authored_deck_setup(PACK, key) for key in ("ur_lessons", "gw_allies")
     ]
     validate_agent_setup(agent, configs)
-    batch = {key: torch.cat([case.obs[key] for case in cases]) for key in cases[0].obs}
+    batch = admit_observation(
+        agent,
+        {key: torch.cat([case.obs[key] for case in cases]) for key in cases[0].obs},
+    )
     logits, values = agent(batch)
     probabilities = logits.softmax(-1)
     if not torch.isfinite(probabilities).all() or not torch.isfinite(values).all():
@@ -161,12 +165,14 @@ def inspect_policy(path: Path, cases: list[Case], updates: int) -> PolicySnapsho
     scores = []
     for row, case in enumerate(cases):
         obs = case.obs
-        single, value = agent(obs)
+        single, value = agent(admit_observation(agent, obs))
         p = single.softmax(-1)
         count = int(obs["actions_valid"].sum())
         order = torch.arange(count - 1, -1, -1)
-        offers, offer_value = agent(reorder_offers(obs, order))
-        objects, object_value = agent(reorder_objects(obs))
+        offers, offer_value = agent(
+            admit_observation(agent, reorder_offers(obs, order))
+        )
+        objects, object_value = agent(admit_observation(agent, reorder_objects(obs)))
         errors.extend(
             [
                 float((p[0] - probabilities[row]).abs().max()),

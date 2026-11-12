@@ -224,6 +224,10 @@ class Execution(Strict):
     # Historical opt-in; phase timers are now always recorded. Retained so
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
+    # Collection and learner forwards trim variable axes to power-of-two
+    # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
+    # hashes are unchanged; never part of the model or its checkpoints.
+    bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def reduced_precision_on_cuda(self) -> "Execution":
@@ -238,15 +242,13 @@ class Stage(Strict):
 
     @model_validator(mode="after")
     def supported_workers(self) -> "Stage":
-        if (
-            self.execution.profile_collection
-            and getattr(self, "operation", None) != "train_self_play"
-        ):
+        if getattr(self, "operation", None) == "train_self_play":
+            return self
+        if self.execution.profile_collection:
             raise ValueError("collection profiling requires train_self_play")
-        if (
-            self.execution.workers != 1
-            and getattr(self, "operation", None) != "train_self_play"
-        ):
+        if self.execution.bucketed_shapes:
+            raise ValueError("bucketed shapes require train_self_play")
+        if self.execution.workers != 1:
             raise ValueError(
                 "multiple producers are supported only for train_self_play"
             )
@@ -819,6 +821,10 @@ class TrainingRegime(Strict):
                 raise ValueError(
                     f"{accelerator} requires self-contained ordinary self-play"
                 )
+        if self.agent.token_stream == "pooled" and any(
+            stage.execution.bucketed_shapes for stage in self.stages
+        ):
+            raise ValueError("token_stream='pooled' does not support bucketed shapes")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
@@ -869,6 +875,8 @@ class TrainingRegime(Strict):
                 if (
                     parent.execution.device != stage.execution.device
                     or parent.execution.workers != stage.execution.workers
+                    or parent.execution.bucketed_shapes
+                    != stage.execution.bucketed_shapes
                     or parent.behavior != stage.behavior
                     or parent.streams != stage.streams
                     or parent.learning_seats != stage.learning_seats
@@ -882,7 +890,7 @@ class TrainingRegime(Strict):
                     or parent.learning.gradient != stage.learning.gradient
                 ):
                     raise ValueError(
-                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers and opponent"
+                        "live self-play continuation must preserve streams, batch closure, curriculum, gradient, EMA clock, workers, bucketed shapes and opponent"
                     )
             if (
                 self.agent.value_kind == "categorical_wdl"

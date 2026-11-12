@@ -95,6 +95,7 @@ impl Game {
             abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             power: characteristics.power,
+            toughness: characteristics.toughness,
             counters: permanent.counters.clone(),
             object_ref,
             card,

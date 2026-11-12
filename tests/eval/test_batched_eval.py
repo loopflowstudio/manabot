@@ -17,6 +17,7 @@ import torch
 
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
+from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
@@ -223,6 +224,51 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
         resident.scope.catalog()
     assert PolicyKey.from_registration(second, execution) != requests[0].policy
     store.close()
+
+
+def test_registered_non_default_checkpoint_is_admitted_by_serving(
+    tmp_path: Path,
+) -> None:
+    key, _, _, _ = fixture_policy(tmp_path)
+    space = ObservationSpace(ObservationConfig(max_facts=256))
+    agent = ActorCritic(
+        space,
+        ModelConfig(
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
+        ),
+    )
+    path = tmp_path / "non-default.pt"
+    save_checkpoint(
+        agent, space, path, player_configs=Match(selected_match()).to_rust()
+    )
+    player = register_checkpoint(
+        path,
+        match=selected_match(),
+        content_suite=SELECTED_SUITE,
+        player_id="non-default",
+        display_name="Non-default space",
+    ).registration
+    fresh = runtime_fingerprints(match_config=selected_match())
+    assert player.observation_abi_sha256 != fresh["observation_abi_sha256"]
+    execution = EvalExecution(deadline_unix=time.time() + 120)
+    _, (player,) = bind_execution(key, (player,), execution)
+    store = PolicyStore(execution, EvalPerformance("test"))
+    try:
+        assert store.admit(PolicyAdmission(player, str(path), (selected_match(),))) == (
+            space.encoder.config
+        )
+    finally:
+        store.close()
+    # A registration hashed from fresh defaults is the refusal it replaces.
+    drifted = player.model_copy(
+        update={"observation_abi_sha256": fresh["observation_abi_sha256"]}
+    )
+    store = PolicyStore(execution, EvalPerformance("test"))
+    try:
+        with pytest.raises(ValueError, match="checkpoint observation ABI drift"):
+            store.admit(PolicyAdmission(drifted, str(path), (selected_match(),)))
+    finally:
+        store.close()
 
 
 def test_matchups_of_one_checkpoint_share_its_policy_and_batches(

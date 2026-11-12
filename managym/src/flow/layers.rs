@@ -142,6 +142,9 @@ impl ReadSet {
         if p.supertype.is_some() {
             self.fields |= SUPERTYPES;
         }
+        if !p.colors_any.is_empty() {
+            self.fields |= COLORS;
+        }
         if p.flying {
             self.fields |= KEYWORDS;
         }
@@ -367,10 +370,14 @@ impl<'a> Context<'a> {
             let seed = seeds[slot].as_ref().unwrap();
             context.objects.insert(id, seed.object.clone());
             known.extend(seed.object.statics.iter().map(|entry| entry.key.clone()));
-            for node in &seed.nodes {
-                context.reads_mana |= node.reads.mana;
-                context.reads_tapped |= node.reads.tapped;
-                nodes.push(node.clone());
+            // A phased-out permanent's static abilities apply to nothing
+            // (CR 702.26b); its own view still takes the records on it.
+            if !game.is_phased_out(id) {
+                for node in &seed.nodes {
+                    context.reads_mana |= node.reads.mana;
+                    context.reads_tapped |= node.reads.tapped;
+                    nodes.push(node.clone());
+                }
             }
             for (kind, count) in p.counters.iter() {
                 if let Some(keyword) = kind.keyword().filter(|_| count > 0) {
@@ -456,9 +463,10 @@ impl<'a> Context<'a> {
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
-                    let count = game
-                        .live_permanent(id)
-                        .counter_count(CounterKind::PlusOnePlusOne);
+                    // CR 613.4c: +1/+1 and -1/-1 counters apply together.
+                    let permanent = game.live_permanent(id);
+                    let count = permanent.counter_count(CounterKind::PlusOnePlusOne)
+                        - permanent.counter_count(CounterKind::MinusOneMinusOne);
                     if count != 0 {
                         let view = Arc::make_mut(&mut Arc::make_mut(object).view);
                         view.power += count;
@@ -555,6 +563,9 @@ impl<'a> Context<'a> {
         // Occurrence provenance preserves duplicate grants, including statics
         // discovered during layer 6 that start applying in a later layer.
         for (&id, object) in &self.objects {
+            if self.game.is_phased_out(id) {
+                continue;
+            }
             for entry in &object.statics {
                 if known.insert(entry.key.clone()) {
                     if let Some(node) = self.node(id, entry) {
@@ -1161,7 +1172,9 @@ pub(super) fn matches_view(
     };
     let card = &game.state.cards[permanent.card];
     let mana_value = card.mana_value_cost().map_or(0, |m| m.mana_value);
-    (!p.namesake || source_name == Some(view.name.as_str()))
+    // A permanent is on the battlefield, never a graveyard card.
+    !p.from_battlefield_this_turn
+        && (!p.namesake || source_name == Some(view.name.as_str()))
         && (!p.flying || view.keywords.has(Keyword::Flying))
         && (!p.no_counters || !permanent.has_counters())
         && (!p.in_combat || game.permanent_in_combat(id))
@@ -1195,6 +1208,7 @@ pub(super) fn matches_view(
             .all(|t| !view.types.types.contains(t))
         && p.subtype.as_ref().is_none_or(|s| view.subtypes.contains(s))
         && (p.subtypes_any.is_empty() || p.subtypes_any.iter().any(|s| view.subtypes.contains(s)))
+        && (p.colors_any.is_empty() || p.colors_any.iter().any(|c| view.colors.contains(c)))
         && p.not_subtypes.iter().all(|s| !view.subtypes.contains(s))
         && p.min_power.is_none_or(|min| view.power >= min)
         && p.max_power.is_none_or(|max| view.power <= max)

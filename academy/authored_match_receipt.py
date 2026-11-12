@@ -86,12 +86,12 @@ def _program_index() -> tuple[
 ]:
     """Name every program of the world's catalog from the engine's own tokens.
 
-    A program is one span of ``managym.learning_catalog``: each triggered,
+    A program is one span of ``managym.catalog_tokens``: each triggered,
     mana, triggered-mana and activated ability, plus the spell. Its key is
     ``<definition key>.<kind>.<ordinal within the definition>``.
     """
     pool = managym.content_pool(managym.WORLD_SETUP)
-    catalog = managym.learning_catalog()
+    catalog = managym.catalog_tokens()
     kind_names = {value: name for name, value in PROGRAM_KINDS.items()}
     definitions = {int(row["card_def_id"]): row for row in pool["definitions"]}
     offsets = catalog["definition_program_offsets"]
