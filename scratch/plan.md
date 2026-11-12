@@ -7,6 +7,8 @@ The report records every assumption earlier kept in `scratch/questions.md`
 (decision-rule thresholds, host, re-captured inputs, compile flags).
 
 `experiments/collection_tail_graphs.py` stays byte-identical to `8b753ade3`:
-the report cites that revision as the freeze.
+the report cites that revision as the freeze. It defines no train/eval/report,
+so Etude does not discover it and `tests/eval/test_experiment_files.py` needs
+no entry (its exact-set discovery test passes).
 
 Remaining: delete `scratch/` in the pre-land commit, publish the PR.
