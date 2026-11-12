@@ -109,6 +109,7 @@ and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
 in docs. This pass only reworded the event list in `docs/engine.md`.
 Re-checked at d002b743b against `ability.rs` (variants, constructors, links): no edits.
 Re-checked at 27eb17aab: since d002b743b only `docs/development.md` (base) moved; no stale variant names; no edits.
+Re-checked at e95481614: only scratch changed since 27eb17aab; no stale variant names; no edits.
 
 ## Compress (2026-11-12, head 079a8de32)
 
