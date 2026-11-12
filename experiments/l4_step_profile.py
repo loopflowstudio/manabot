@@ -1316,7 +1316,7 @@ def _finish(out: Path, captures: Path) -> None:
     shutil.move(packed, out / "results.tar.gz")
 
 
-def runs(revision: str, candidate: str = "option3") -> Any:
+def runs(revision: str, candidate: str = "option3", hours: str = "1.25") -> Any:
     """`candidate`: option3, or bucketed at a revision carrying MTG-302's switch."""
     from etude.launch.records import Job, Variable
 
@@ -1340,7 +1340,7 @@ def runs(revision: str, candidate: str = "option3") -> Any:
         ),
         repo=str(ROOT),
         revision=revision,
-        max_hours=1.25,
+        max_hours=float(hours),
         max_usd=Decimal("1.50"),
         max_attempts=1,
     )
