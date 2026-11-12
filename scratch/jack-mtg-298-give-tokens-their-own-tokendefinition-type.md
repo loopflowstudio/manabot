@@ -75,40 +75,28 @@ definition by printed name, and it is the one that breaks the Task's outcome
   rows registered in name-then-key order).
 - No open product choice.
 
-## Remaining
-- Concept-review change made in e22a18a29 (`named_definition` returns the single
-  Eligible row; test `a_card_is_admitted_when_a_token_shares_its_printed_name`).
-  Compressed in ff1f16a66 to one match over eligible rows (with none, all rows
-  are Unsupported, so only the shared reason is compared). Debug
+## Status (2026-11-12)
+Both concept-review changes are in code:
+- Deck entry: e22a18a29, compressed in ff1f16a66 (test
+  `a_card_is_admitted_when_a_token_shares_its_printed_name`). Debug
   `cargo test --lib -- cards::decklist cards::deck_admission`: 12 passed.
-- All pushed; HEAD 24a69d953 (main merge, no `managym/` file). CI runs on
-  686a4724f and e22a18a29 were cancelled by later pushes (Rust Tests had passed
-  on 686a4724f). CI run 43305686368 on 24a69d953 in progress when read; PR
-  body Checks names it. Remaining: that run green.
-- Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
-  `CardDefId`;
-  keying Academy curated token art by `token.*`.
-- Concept review 2 change made: `BoundSemanticPack.bind` joins by key, else
-  name (`catalog_tokens()["keys"]`, manifest `key`, `bind_policy_catalog`). Each
-  side's identity is its key, or its name when it has none (back faces,
-  fixtures); cards bind by key too. Compressed 2026-11-12: dropped the
-  fallback for manifests saved without keys. It was unreachable, because every
-  `bind` caller passes a live manifest (which carries `key`), and a manifest
-  from before this branch fails the content-digest check first. Checks:
-  pytest `tests/semantic` + learn setup + policy catalog, 233 passed.
+- Key binding: 9c2c6db03, compressed in 7b5cb7e72 to one identity map (key, or
+  name for keyless back faces and fixtures; the fallback for manifests saved
+  without keys was unreachable and is gone). pytest `tests/semantic` + learn
+  setup + policy catalog: 233 passed.
 - Contrary to "nothing moves": the env manifest gained `key`, and retained
-  evidence embeds that manifest. Re-recorded (only `key` lines added; content
-  digest, binding_hash, state digests, tokens and observations unchanged):
-  `academy/fixtures/{learn,precision,precision-mana}-demo-w17.json`, the
-  authored-match receipt (SHA now `1b0568bd…`, pinned as `AUTHORITY_SHA256`;
-  `TERMINAL_STATE` unchanged) and both parity receipts. A checkpoint world
-  binding stores the manifest, so one written earlier on this branch differs.
-- Checks: debug `cargo test --lib -- content_pack agent::env cards::pool` 6
-  passed; pytest 47 passed (learning projection, current content, policy
-  catalog, projection env) and 107 passed (authority, both parities, learn,
-  decision surface, world, mirror admission, belief, temur, static tokens).
-  `ruff check` reports one import-order error in untouched
+  evidence embeds it, so fixtures and receipts were re-recorded with only
+  `key` lines added (digests, binding_hash, tokens, observations unchanged).
+  A checkpoint written earlier on this branch has a different world binding.
+- `ruff check` reports one import-order error in untouched
   `manabot/semantic/text_observation.py`.
+
+HEAD 15e50b205 merges main a343904ee (#474, training files only; no engine,
+evidence or catalog file), level with origin/main. Remaining: CI on
+15e50b205 green (in progress when read). PR mergeable.
+
+Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
+`CardDefId`; keying Academy curated token art by `token.*`.
 
 ## Docs for the key binding (2026-11-12)
 Changed: `content/semantic/README.md` (Learning projection: join by key,
@@ -130,3 +118,13 @@ PR #476 was CONFLICTING with main's typed mana restrictions (`ManaRestriction`,
   (SHA `28ed11cc…`, terminal state `ebd8947a…`, both pinned), both parity
   receipts, the five Academy fixtures (same Commands and revisions) and the
   four belief v3 pins.
+
+## Concept review 3 (2026-11-12): nothing to change
+Read on f45aa4d71: every identity join is by key or CardDefId (pack
+registration, `token_id`, `CreateToken`, learning-catalog binding), and deck
+entry picks the one eligible card of a name. Remaining name reads are display
+or card-only (name vocabulary, `unsupported_cards`, belief id-name pairs,
+receipt id-to-name, capacity-failure text). Academy `curated_pack` identities
+are still keyed by printed name with a card/token kind, so a matchup cannot
+hold a card and a token of one name; that is the out-of-scope follow-up above.
+No open product choice.

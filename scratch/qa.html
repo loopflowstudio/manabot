@@ -49,4 +49,40 @@ code; it may be a frontend race with rapid commands.</li>
 <li>Still open for the gate (from the plan): syncing with main moves two new readers of the row's <code>is_token</code>
 (<code>TriggerCondition::PutIntoGraveyard</code> and <code>Card::become_copy_of</code>) onto the kind.</li>
 </ul>
+<hr>
+<section aria-label="MTG-298 QA evidence">
+<h1>MTG-298 QA: tokens are their own definitions</h1>
+<p>On aef531540 (level with origin/main a343904ee). The installed extension had been built before the merge of main, so I rebuilt it in release (maturin, cp313) and replaced it atomically before running anything below.</p>
+
+<h2>1. Library consumer: <code>managym.catalog_tokens()</code></h2>
+<p>I loaded the engine and read the catalog. It has 462 rows. 453 carry a key, and 16 of those are <code>token.*</code> rows (Ally, Ballistic Boulder, Bear, Clue, Dragon, Elf Warrior, Food, Human, Human Soldier, Koma's Coil, Marit Lage, Monk, Powerstone, Soldier, Spirit, Treasure). The 9 keyless rows are back faces. The content digest is <code>9508c560…</code>, which matches the pins in the Academy fixtures and the authored-match receipt.</p>
+
+<h2>2. Deck submitter: naming a token in a decklist</h2>
+<p>Through <code>managym.admit_decklists</code>, I submitted lists with 4 Treasure, 4 Ally, 4 Marit Lage, and 1 Clue in the sideboard. Each one was refused with a reason, while a valid list (Mountain/Island/Lightning Bolt) was admitted.</p>
+<pre>treasure REJECTED: deck.txt:3: Treasure: A token, created by its card; not a deck entry
+side     REJECTED: deck.txt:6: Clue: A token, created by its card; not a deck entry
+unknown  REJECTED: deck.txt:3: Unknown card name: Zzyzx Not A Card.
+ok       ADMITTED (… "name":"Mountain","card_def_id":267,"key":"lea.mountain" …)</pre>
+<p>In Academy (<code>./scripts/play --port 8298 --frontend-port 5298</code>, driven headlessly with Playwright), I imported "20 Forest / 16 Tireless Tracker / 4 Clue". The import form shows the same reason under the source:</p>
+<img src="qa-shots/01-token-refused.png">
+
+<h2>3. Player: a token created in a real game</h2>
+<p>I imported 24 Forest + 16 Tireless Tracker against 40 Island, chose the passive opponent and pressed New Game. Then I played lands and cast Trackers until a land triggered the Tracker. The trigger offers read "Create 1 Clue token". After they resolved, two Clue tokens were in the "Artifact tokens" zone with their own art. Inspecting one shows "{2}, Sacrifice this token: Draw a card."</p>
+<img src="qa-shots/03-clue-inspected.png">
+
+<h2>Fixed</h2>
+<p>Nothing in the change needed fixing.</p>
+
+<h2>Not reached</h2>
+<ul>
+<li>Two tokens actually sharing a printed name in play: no such pair is defined, so it can only be reached through the directed tests listed in the plan.</li>
+<li>Training run with the new manifest <code>key</code>: not run. <code>tests/semantic</code> covers binding, according to the earlier record.</li>
+</ul>
+
+<h2>Still wrong, worst first</h2>
+<ul>
+<li>(Already recorded as out of scope) Academy <code>curated_pack</code> identities are keyed by printed name with a card/token kind, so one pack cannot hold a card and a token of the same name.</li>
+<li>(Existing, not this change) While you are deciding, the narration popover ("Beat 9 of 10 · Hero casts Tireless Tracker") covers the opponent's side of the table.</li>
+</ul>
+</section>
 </body></html>
