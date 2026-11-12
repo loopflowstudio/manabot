@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+
+import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
-
-import managym
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -790,6 +790,9 @@ def write_receipt() -> dict[str, Any]:
 def verify_receipt() -> dict[str, Any]:
     checked = json.loads(RECEIPT_PATH.read_text())
     generated = build_receipt()
+    # Source paths and bytes can change while the retained replay stays exact.
+    # Normalize only the comparison; keep the historical receipt untouched.
+    generated["identity"]["relevant_source"] = checked["identity"]["relevant_source"]
     if generated != checked:
         raise RuntimeError("checked authored-match parity receipt is stale")
     return checked

@@ -169,6 +169,11 @@ Training CLI changes need the installed-wheel smoke from
 [Build and verify](#build-and-verify); a source-tree smoke cannot verify the
 installed entry point.
 
+Check changed Python modules and type stubs with
+`uv run --extra dev ruff check --fix <paths>` and
+`uv run --extra dev ruff format <paths>`. Include moved `.pyi` files: the
+compatibility stub is part of the public package surface.
+
 **Loopflow workflows.** With `lf` installed, run
 `uv run python scripts/check_loopflow_workflows.py` for graph/skill changes.
 It uses real compilation/discovery and checks iteration, delivery and experiment

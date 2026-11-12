@@ -11,14 +11,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Command,
-    DecisionFrame,
-    SemanticTransition,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.likelihood import (
@@ -29,6 +21,14 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Command,
+    DecisionFrame,
+    SemanticTransition,
+    apply_semantic_command,
+)
+from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH

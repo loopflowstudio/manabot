@@ -29,7 +29,6 @@ from typing import (
     TypeAlias,
 )
 
-from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 from pydantic import Field, TypeAdapter, model_validator
 
 from academy.advice_identity import (
@@ -46,6 +45,7 @@ from academy.replay_index import (
 )
 from academy.shared_table_protocol import BeliefScenario, ViewerIdentity
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
+from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
 
 if TYPE_CHECKING:
     from manabot.sim.search.conditional import (
