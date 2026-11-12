@@ -131,3 +131,6 @@ Nothing remains to build. Parent PR #469 landed on main as 306612865
 or AGENTS/CLAUDE files, so earlier checks stand. Branch is level with
 origin/main. Remaining: PR #484 CI on 38f6311a6 (started 13:36Z). Its Engine
 Budget digest likely moves (definitions changed): adopt #484's own run.
+QA re-run at 6430cd60c (after the #469/#480/MTG-301 merges; no `managym/`
+change since abeab7a87): 1332 games byte-identical, 0 errors; Academy game to
+Game Over (39 clicks, no page errors) with the Tiger-Seal upkeep trigger on the stack.
