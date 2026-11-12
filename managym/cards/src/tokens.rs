@@ -8,7 +8,7 @@ use managym_state::{
         Keywords, StaticAbility,
     },
     effect::Modification,
-    mana::{Color, Colors, Mana, ManaCost},
+    mana::{Color, Colors, Mana, ManaCost, ManaUse},
     predicate::CardPredicate,
 };
 
@@ -19,9 +19,14 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         bear(),
         clue(),
         dragon(),
+        elf_warrior(),
         food(),
+        human(),
         human_soldier(),
+        komas_coil(),
+        marit_lage(),
         monk(),
+        powerstone(),
         soldier(),
         spirit(),
         treasure(),
@@ -151,6 +156,18 @@ fn dragon() -> CardDefinition {
     }
 }
 
+fn elf_warrior() -> CardDefinition {
+    let base = token(
+        "token.elf_warrior",
+        "49180301-f72f-48ca-8be1-df295e89cdd7",
+        "Elf Warrior",
+        [CardType::Creature],
+        &["Elf", "Warrior"],
+        "",
+    );
+    creature(base, 1, 1, [Color::Green, Color::White])
+}
+
 fn food() -> CardDefinition {
     CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -171,6 +188,18 @@ fn food() -> CardDefinition {
     }
 }
 
+fn human() -> CardDefinition {
+    let base = token(
+        "token.human",
+        "7d13a93a-a43d-4cf5-8300-8341f3b7f1b1",
+        "Human",
+        [CardType::Creature],
+        &["Human"],
+        "",
+    );
+    creature(base, 1, 1, [Color::White])
+}
+
 fn human_soldier() -> CardDefinition {
     let base = token(
         "token.human_soldier",
@@ -181,6 +210,34 @@ fn human_soldier() -> CardDefinition {
         "",
     );
     creature(base, 1, 1, [Color::White])
+}
+
+fn komas_coil() -> CardDefinition {
+    let base = token(
+        "token.komas_coil",
+        "54a1c6a9-3531-4432-9157-e4400dbc89fd",
+        "Koma's Coil",
+        [CardType::Creature],
+        &["Serpent"],
+        "",
+    );
+    creature(base, 3, 3, [Color::Blue])
+}
+
+fn marit_lage() -> CardDefinition {
+    let base = token(
+        "token.marit_lage",
+        "8f5c3863-c876-48a8-9bc8-be20cd61074c",
+        "Marit Lage",
+        [CardType::Creature],
+        &["Avatar"],
+        "Flying, indestructible",
+    );
+    CardDefinition {
+        supertypes: vec!["Legendary".into()],
+        keywords: Keywords::of(&[Keyword::Flying, Keyword::Indestructible]),
+        ..creature(base, 20, 20, [Color::Black])
+    }
 }
 
 fn monk() -> CardDefinition {
@@ -257,6 +314,28 @@ fn spirit() -> CardDefinition {
             StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(non_spirit())),
         ],
         ..creature(base, 1, 1, [])
+    }
+}
+
+/// Cityscape Leveler's token (first token printing, BRO).
+fn powerstone() -> CardDefinition {
+    CardDefinition {
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![Effect::add_mana(Mana::restricted_to(
+                ManaUse::except_nonartifact_spells(),
+                [0, 0, 0, 0, 0, 1],
+            ))],
+            ..Default::default()
+        }],
+        ..token(
+            "token.powerstone",
+            "d45fe4b6-aeaf-4f84-b660-c7b482ed8512",
+            "Powerstone",
+            [CardType::Artifact],
+            &["Powerstone"],
+            "{T}: Add {C}. This mana can't be spent to cast a nonartifact spell.",
+        )
     }
 }
 

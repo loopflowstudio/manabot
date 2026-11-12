@@ -90,8 +90,14 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
+        // Indexed with counter changes; `check_state_triggers` asks it, never
+        // an event.
+        TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
         TriggerCondition::YouCastSpell { .. }
+        | TriggerCondition::YouCastThis
         | TriggerCondition::YouCastNthSpellThisTurn { .. }
+        | TriggerCondition::OpponentCastsSpell { .. }
+        | TriggerCondition::SpellTargetsOnlyThis { .. }
         | TriggerCondition::PlayerCastsSpell { .. } => EventKinds::of(EventKind::SpellCast),
         TriggerCondition::EntersTheBattlefield { .. }
         | TriggerCondition::Dies { .. }
@@ -100,7 +106,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::AttacksWithAnother
         | TriggerCondition::AttacksAlone { .. } => EventKinds::of(EventKind::AttackersDeclared),
         TriggerCondition::OpponentSearchesLibrary => EventKinds::of(EventKind::LibrarySearched),
-        TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
+        TriggerCondition::CardPutIntoOpponentsGraveyard => EventKinds::of(EventKind::CardMoved),
+        TriggerCondition::CreatureDealsCombatDamageToYou
+        | TriggerCondition::CreatureDealsCombatDamageToPlayer { .. }
         | TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
             EventKinds::of(EventKind::CombatDamageToPlayers)
         }
@@ -110,6 +118,8 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::BecomesTargeted { .. } => EventKinds::of(EventKind::PermanentTargeted),
         TriggerCondition::BeginningOfYourUpkeep
         | TriggerCondition::BeginningOfEachUpkeep
+        | TriggerCondition::BeginningOfEachDrawStep
+        | TriggerCondition::BeginningOfEachEndStep
         | TriggerCondition::BeginningOfYourCombat
         | TriggerCondition::BeginningOfYourEndStep
         | TriggerCondition::BeginningOfYourFirstMainPhase => EventKinds::of(EventKind::StepStarted),
@@ -763,6 +773,7 @@ impl Game {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
             TargetSpec::Spell
+            | TargetSpec::SpellMatching { .. }
             | TargetSpec::SpellOrPermanent { .. }
             | TargetSpec::CreatureOrSpell => self
                 .state
@@ -869,6 +880,7 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
+        self.cast_triggers(event);
         self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources {
@@ -1001,6 +1013,14 @@ impl Game {
             let player = match event {
                 GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
                 GameEvent::LibrarySearched { player } => Some(*player),
+                // "that player": whose graveyard the card was put into.
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                } => Some(self.state.cards[*card].owner),
+                // "that player": whose step it is.
+                GameEvent::StepStarted { .. } => Some(self.active_player()),
                 _ => None,
             };
             // CR 107.3m: an entering permanent's own trigger sees its spell's
@@ -1023,7 +1043,7 @@ impl Game {
                     .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
                 _ => None,
             };
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 remembered: Vec::new(),
                 targets: Vec::new(),
@@ -1044,11 +1064,6 @@ impl Game {
                 inline_effects: granted,
                 program,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1238,6 +1253,15 @@ impl Game {
         .remembered = trigger.remembered.clone();
     }
 
+    /// A fresh identity for the trigger occurrence about to be enqueued.
+    fn next_trigger_id(&mut self) -> TriggerId {
+        let id = TriggerId(self.state.trigger_enqueue_counter);
+        *self.state.trigger_enqueue_counter_mut() =
+            id.0.checked_add(1)
+                .expect("trigger occurrence identity exhausted");
+        id
+    }
+
     /// Put an occurrence with inline effects (no `Card::abilities` entry to
     /// reference: a delayed, reflexive or granted-firebending ability) in the
     /// waiting list, with its source's last known information when that was
@@ -1257,7 +1281,7 @@ impl Game {
                     .flatten()
             })
         });
-        let id = TriggerId(self.state.trigger_enqueue_counter);
+        let id = self.next_trigger_id();
         self.state.pending_triggers_mut().push(PendingTrigger {
             program: false,
             remembered: Vec::new(),
@@ -1278,15 +1302,112 @@ impl Game {
             attacker: None,
             inline_effects: Some(effects),
         });
-        *self.state.trigger_enqueue_counter_mut() = self
-            .state
-            .trigger_enqueue_counter
-            .checked_add(1)
-            .expect("trigger occurrence identity exhausted");
         self.state
             .pending_triggers_mut()
             .last_mut()
             .expect("enqueued trigger")
+    }
+
+    /// State triggers (CR 603.8) of battlefield sources whose state holds,
+    /// unless that exact source's occurrence is still waiting or on the stack.
+    pub(crate) fn check_state_triggers(&mut self) {
+        let mut fired = Vec::new();
+        for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
+            let Some(permanent) = self.state.card_to_permanent[source.card]
+                .and_then(|id| self.state.permanents[id].as_ref())
+            else {
+                continue;
+            };
+            let face = self
+                .source_face(source.card, source.lki.definition_id)
+                .expect("source face");
+            for (ability_index, ability) in face.abilities.iter().enumerate() {
+                let Ability::Triggered {
+                    condition: TriggerCondition::NoCounters { kind },
+                    ..
+                } = ability
+                else {
+                    continue;
+                };
+                let object = Some(source.lki.object_ref);
+                let waiting = self.state.pending_triggers.iter().any(|trigger| {
+                    trigger.source_ref == object && trigger.ability_index == ability_index
+                }) || self.state.stack_objects.iter().any(|item| {
+                    matches!(item, StackObject::TriggeredAbility(trigger)
+                        if trigger.source_ref == object && trigger.ability_index == ability_index)
+                });
+                if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
+                    fired.push((source.clone(), ability_index));
+                }
+            }
+        }
+        for (source, ability_index) in fired {
+            let id = self.next_trigger_id();
+            self.state.pending_triggers_mut().push(PendingTrigger {
+                program: false,
+                remembered: Vec::new(),
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+                requirement_index: 0,
+                source_card: source.card,
+                source_ref: Some(source.lki.object_ref),
+                source_lki: Some(source.lki),
+                ability_index,
+                controller: source.controller,
+                id,
+                ordering_class: TriggerOrderingClass::Ordinary,
+                context: None,
+                player: None,
+                x: 0,
+                chosen_modes: Vec::new(),
+                attacker: None,
+                inline_effects: None,
+            });
+        }
+    }
+
+    /// "When you cast this spell" abilities of the spell just cast; the spell
+    /// is the source and its caster controls the trigger.
+    fn cast_triggers(&mut self, event: &GameEvent) {
+        let GameEvent::SpellCast { card, .. } = event else {
+            return;
+        };
+        let card = *card;
+        let caster = self.spell_caster(card);
+        let fired: Vec<Vec<Effect>> = self.state.cards[card]
+            .abilities
+            .iter()
+            .filter(|ability| {
+                let Ability::Triggered { condition, .. } = ability;
+                *condition == TriggerCondition::YouCastThis
+            })
+            .map(|ability| ability.effects().to_vec())
+            .collect();
+        let source_ref = self.current_object_ref(card);
+        for effects in fired {
+            self.enqueue_inline_trigger(card, source_ref, caster, effects, None);
+        }
+        // CR 702.56a: replicate copies the spell once per payment, each copy
+        // with a chance to choose new targets.
+        let replicated = match self
+            .find_spell_on_stack_index(card)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) if self.state.cards[card].replicate().is_some() => {
+                usize::from(spell.x)
+            }
+            _ => 0,
+        };
+        if replicated > 0 {
+            let copies = vec![Effect::CopyTriggeringObject; replicated];
+            self.enqueue_inline_trigger(
+                card,
+                source_ref,
+                caster,
+                copies,
+                Some(Target::StackSpell(card)),
+            );
+        }
     }
 
     /// Abilities that function from their owner's graveyard (CR 113.6k):
@@ -1312,7 +1433,7 @@ impl Game {
         }
         for (card, ability_index, owner) in fired {
             let source_ref = self.current_object_ref(card);
-            let id = TriggerId(self.state.trigger_enqueue_counter);
+            let id = self.next_trigger_id();
             self.state.pending_triggers_mut().push(PendingTrigger {
                 program: false,
                 remembered: Vec::new(),
@@ -1333,11 +1454,6 @@ impl Game {
                 attacker: None,
                 inline_effects: None,
             });
-            *self.state.trigger_enqueue_counter_mut() = self
-                .state
-                .trigger_enqueue_counter
-                .checked_add(1)
-                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -1395,7 +1511,11 @@ impl Game {
 
     fn build_trigger_index(&self) -> TriggerIndex {
         let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .layer_views(
+                (0..self.state.permanents.len())
+                    .map(PermanentId)
+                    .filter(|&id| !self.is_phased_out(id)),
+            )
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 TriggerSourceEntry {
@@ -1469,6 +1589,17 @@ impl Game {
             (TriggerCondition::OpponentSearchesLibrary, GameEvent::LibrarySearched { player }) => {
                 *player != source_controller
             }
+            (
+                TriggerCondition::CardPutIntoOpponentsGraveyard,
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Graveyard,
+                    ..
+                },
+            ) => {
+                let card = &self.state.cards[*card];
+                !card.is_token && card.owner != source_controller
+            }
             (TriggerCondition::FromZone { zone, condition }, _) => {
                 self.event_origin(event) == Some(*zone)
                     && self.trigger_condition_fires(
@@ -1504,6 +1635,18 @@ impl Game {
                 GameEvent::StepStarted {
                     step: StepKind::Upkeep,
                 },
+            )
+            | (
+                TriggerCondition::BeginningOfEachDrawStep,
+                GameEvent::StepStarted {
+                    step: StepKind::Draw,
+                },
+            )
+            | (
+                TriggerCondition::BeginningOfEachEndStep,
+                GameEvent::StepStarted {
+                    step: StepKind::End,
+                },
             ) => true,
             (TriggerCondition::YouBend, GameEvent::Bent { player, .. }) => {
                 *player == source_controller
@@ -1530,14 +1673,36 @@ impl Game {
                         .position(|cast| cast == card)
                         == Some(*n as usize - 1)
             }
+            // `check_state_triggers` and `cast_triggers` own these; a
+            // battlefield source never fires them from an event.
+            (TriggerCondition::NoCounters { .. } | TriggerCondition::YouCastThis, _) => false,
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller
+                    && self.card_matches_predicate(*card, predicate)
+            }
+            (
+                TriggerCondition::OpponentCastsSpell { predicate },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                self.spell_caster(*card) != source_controller
                     && self.card_matches_predicate(*card, predicate)
             }
             (
                 TriggerCondition::PlayerCastsSpell { predicate },
                 GameEvent::SpellCast { card, .. },
             ) => self.card_matches_predicate(*card, predicate),
+            (
+                TriggerCondition::SpellTargetsOnlyThis { predicate },
+                GameEvent::SpellCast { card, .. },
+            ) => {
+                let this = self.state.card_to_permanent[source_card].map(Target::Permanent);
+                self.card_matches_predicate(*card, predicate)
+                    && this.is_some()
+                    && self.find_spell_on_stack_index(*card).is_some_and(|index| {
+                        let targets = self.state.stack_objects[index].targets();
+                        !targets.is_empty() && targets.iter().all(|target| Some(*target) == this)
+                    })
+            }
             (
                 TriggerCondition::AttacksWithAnother,
                 GameEvent::AttackersDeclared { attackers, .. },
@@ -1694,7 +1859,8 @@ impl Game {
                 }
             }
             (
-                TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
+                TriggerCondition::CreatureDealsCombatDamageToYou
+                | TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
                 GameEvent::CombatDamageToPlayers { .. },
             ) => self.trigger_multiplicity(condition, source_card, source_controller, event) > 0,
             (
@@ -1857,6 +2023,18 @@ impl Game {
         event: &GameEvent,
     ) -> usize {
         match (condition, event) {
+            (
+                TriggerCondition::CreatureDealsCombatDamageToYou,
+                GameEvent::CombatDamageToPlayers { creatures },
+            ) => {
+                // In the two-seat combat model, only the defending player can
+                // receive combat damage. The event excludes prevented damage.
+                if source_controller != self.active_player() {
+                    creatures.len()
+                } else {
+                    0
+                }
+            }
             (
                 TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
                 GameEvent::CombatDamageToPlayers { creatures },

@@ -76,5 +76,11 @@ describe('permanent notes', () => {
     expect(
       effectNote({ modification: 'KeepUnspentMana', color: 'Red', duration: 'EndOfTurn', timestamp: 1 }),
     ).toBe('until end of turn: keeps unspent red mana');
+    expect(
+      effectNote({ modification: 'LifeTotalCantChange', duration: 'UntilYourNextTurn', timestamp: 2 }),
+    ).toBe("until its controller's next turn: life total can't change");
+    expect(effectNote({ modification: 'PhasedOut', duration: 'Indefinite', timestamp: 3 })).toBe(
+      "phased out (treated as though it doesn't exist)",
+    );
   });
 });

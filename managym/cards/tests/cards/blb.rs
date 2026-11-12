@@ -42,3 +42,18 @@ fn savor_makes_food_with_a_real_tap_cost_and_cindermaw_prevents_its_life_gain() 
         assert_eq!(s.life(0), life + if blocked { 0 } else { 3 });
     }
 }
+
+#[test]
+fn diresight_surveils_two_draws_two_and_loses_two_life() {
+    use managym::state::zone::ZoneType;
+    let mut s = five_color_setup(&["Diresight"]);
+    cast(&mut s, "Diresight");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let library = s.zone_size(0, ZoneType::Library);
+    settle(&mut s);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 2);
+    let milled = s.zone_size(0, ZoneType::Graveyard) - 1;
+    assert!(milled <= 2);
+    s.assert_zone_size(0, ZoneType::Library, library - 2 - milled);
+    s.assert_life(0, 18);
+}

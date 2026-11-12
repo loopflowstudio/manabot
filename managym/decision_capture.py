@@ -32,6 +32,8 @@ class ManaCost(CaptureModel):
     mana_value: int
     hybrid: list[list[int | str]] = []
     spend_on_lesson: bool = False
+    # Number of {X} symbols, omitted when zero; mana_value counts none of them.
+    x: int = 0
 
 
 class Keywords(CaptureModel):

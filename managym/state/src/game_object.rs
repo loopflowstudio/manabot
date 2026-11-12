@@ -91,6 +91,9 @@ pub struct ObjectLki {
     /// Its power as it last existed ("that creature's power").
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub power: i32,
+    /// Its toughness as it last existed ("its toughness").
+    #[serde(skip_serializing_if = "crate::is_zero")]
+    pub toughness: i32,
     /// Its counters as it last existed ("put its counters on ...").
     #[serde(skip_serializing_if = "crate::permanent::Counters::is_empty")]
     pub counters: crate::permanent::Counters,

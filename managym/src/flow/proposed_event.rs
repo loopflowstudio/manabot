@@ -184,6 +184,9 @@ impl ReplacementCandidate {
             ReplacementEffect::EntersWithXCounters { kind } => {
                 format!("Enter with X {kind:?} counters")
             }
+            ReplacementEffect::EntersWithCounters { kind, count } => {
+                format!("Enter with {count} {kind:?} counters")
+            }
             ReplacementEffect::OpponentDamagePlusCounters { kind } => {
                 format!("Increase damage by this source's {kind:?} counters")
             }
@@ -196,6 +199,7 @@ impl ReplacementCandidate {
                 additional,
                 ..
             } => format!("Place {multiplier} times the counters, plus {additional}"),
+            ReplacementEffect::EntersAsCopy { .. } => "Enter as a copy".into(),
         }
     }
 }
@@ -207,6 +211,9 @@ pub(crate) struct PendingEvent {
     pub(crate) ordinal: usize,
     pub(crate) sacrifice: Option<(CardId, PlayerId)>,
     pub(crate) applied: Vec<ReplacementId>,
+    /// Its "enter as a copy" choice has been made (or had no candidate).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) copy_chosen: bool,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -285,6 +292,14 @@ pub(crate) enum BatchProgress {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
     },
+    /// The member at the cursor may enter as a copy of one of `candidates`
+    /// (CR 707.5); its entering controller chooses before any other entry
+    /// replacement applies (CR 616.1c).
+    EntryCopy {
+        player: PlayerId,
+        card: CardId,
+        candidates: Vec<PermanentId>,
+    },
     /// Every member committed. Cards returning as a linked exile ends are
     /// consequences of the committed event: a new simultaneous event the
     /// caller runs next, which never replaces these results.
@@ -343,6 +358,7 @@ impl Game {
             ordinal,
             sacrifice,
             applied: Vec::new(),
+            copy_chosen: false,
         })
     }
 
@@ -356,6 +372,17 @@ impl Game {
             ..
         } = event
         {
+            // CR 702.84a: an unearthed permanent leaving for anywhere but
+            // exile is exiled instead.
+            if *to != ZoneType::Exile
+                && *to != ZoneType::Battlefield
+                && self
+                    .lookup_current_permanent(*object)
+                    .is_ok_and(|id| self.exiled_if_it_would_leave(id))
+            {
+                *to = ZoneType::Exile;
+                return;
+            }
             if *to == ZoneType::Graveyard
                 && self
                     .lookup_current_permanent(*object)
@@ -379,6 +406,9 @@ impl Game {
         // sacrifice must not erase the source's already-earned tap trigger.
         self.process_game_events();
         while batch.cursor < batch.events.len() {
+            if let Some(choice) = self.entry_copy_choice(&mut batch.events[batch.cursor]) {
+                return choice;
+            }
             let pending = &batch.events[batch.cursor];
             let candidates: Vec<_> = self
                 .collect_replacements(&pending.event)
@@ -658,6 +688,87 @@ impl Game {
         entries
     }
 
+    /// The pending entry's "enter as a copy" question, once: `None` when it
+    /// has none, was answered, or has nothing to copy.
+    fn entry_copy_choice(&self, pending: &mut PendingEvent) -> Option<BatchProgress> {
+        let ProposedEvent::ZoneMove {
+            card,
+            to: ZoneType::Battlefield,
+            entry,
+            ..
+        } = &pending.event
+        else {
+            return None;
+        };
+        if pending.copy_chosen {
+            return None;
+        }
+        let (scope, predicate, _) = self.entry_copy_terms(*card)?;
+        let player = entry.controller.unwrap_or(self.state.cards[*card].owner);
+        let controllers = match scope {
+            crate::state::ability::Scope::YouControl => vec![player],
+            crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
+            _ => vec![PlayerId(0), PlayerId(1)],
+        };
+        let candidates: Vec<PermanentId> = controllers
+            .into_iter()
+            .flat_map(|controller| self.battlefield_permanents(controller))
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .collect();
+        let card = *card;
+        if candidates.is_empty() {
+            pending.copy_chosen = true;
+            return None;
+        }
+        Some(BatchProgress::EntryCopy {
+            player,
+            card,
+            candidates,
+        })
+    }
+
+    /// Answer the cursor member's entry-copy question: it becomes a copy of
+    /// `of` (or stays itself) before its other entry replacements are found.
+    pub(crate) fn choose_entry_copy(&mut self, batch: &mut EventBatch, of: Option<PermanentId>) {
+        let pending = &mut batch.events[batch.cursor];
+        pending.copy_chosen = true;
+        let ProposedEvent::ZoneMove { card, .. } = pending.event else {
+            return;
+        };
+        let Some(source) = of.and_then(|id| self.state.permanents[id].as_ref()) else {
+            return;
+        };
+        let source = self.state.cards[source.card].clone();
+        let Some((_, _, exceptions)) = self.entry_copy_terms(card) else {
+            return;
+        };
+        let exceptions = exceptions.to_vec();
+        self.state.cards[card].become_copy_of(&source, &exceptions);
+    }
+
+    /// The scope, predicate and copy exceptions of the card's "enter as a
+    /// copy" replacement, if it has one.
+    fn entry_copy_terms(
+        &self,
+        card: CardId,
+    ) -> Option<(
+        crate::state::ability::Scope,
+        &crate::state::predicate::CardPredicate,
+        &[crate::state::effect::Modification],
+    )> {
+        self.state.cards[card]
+            .replacement_effects
+            .iter()
+            .find_map(|effect| match effect {
+                ReplacementEffect::EntersAsCopy {
+                    scope,
+                    predicate,
+                    exceptions,
+                } => Some((*scope, predicate, exceptions.as_slice())),
+                _ => None,
+            })
+    }
+
     pub(crate) fn choose_replacement(
         &self,
         batch: &mut EventBatch,
@@ -702,25 +813,29 @@ impl Game {
 
     /// Commit `batch` and every consequence of it without a retained caller,
     /// returning the root's results.
+    /// An optional entry copy is declined: no caller can ask for it.
     pub(crate) fn complete_immediate_batch(&mut self, mut batch: EventBatch) -> Vec<EventResult> {
-        let BatchProgress::Complete {
-            results,
-            mut followups,
-        } = self.advance_event_batch(&mut batch)
-        else {
-            panic!("event requiring a choice needs a retained caller")
-        };
+        let (results, mut followups) = self.advance_immediate_batch(&mut batch);
         while !followups.is_empty() {
             let mut next = self.event_batch(followups);
-            let BatchProgress::Complete {
-                followups: more, ..
-            } = self.advance_event_batch(&mut next)
-            else {
-                panic!("event requiring a choice needs a retained caller")
-            };
-            followups = more;
+            followups = self.advance_immediate_batch(&mut next).1;
         }
         results
+    }
+
+    fn advance_immediate_batch(
+        &mut self,
+        batch: &mut EventBatch,
+    ) -> (Vec<EventResult>, Vec<ProposedEvent>) {
+        loop {
+            match self.advance_event_batch(batch) {
+                BatchProgress::Complete { results, followups } => return (results, followups),
+                BatchProgress::EntryCopy { .. } => self.choose_entry_copy(batch, None),
+                BatchProgress::Choice { .. } => {
+                    panic!("event requiring a choice needs a retained caller")
+                }
+            }
+        }
     }
 
     fn proposal_is_current(&self, event: &ProposedEvent) -> bool {
@@ -779,11 +894,20 @@ impl Game {
         }
     }
 
+    /// A damage source is the current object, a departed one with last known
+    /// information, or an earlier incarnation of a real card: a resolved
+    /// spell is the source of the delayed triggers it created (CR 603.7d)
+    /// though no battlefield record of it exists.
     fn object_ref_is_known(&self, object_ref: ObjectRef) -> bool {
         let card = CardId::from(object_ref.entity);
         self.state.cards.get(card.0).is_some()
             && (self.current_object_ref(card) == Some(object_ref)
-                || self.object_lki(object_ref).is_some())
+                || self.object_lki(object_ref).is_some()
+                || self
+                    .state
+                    .object_incarnations
+                    .get(card.0)
+                    .is_some_and(|current| object_ref.incarnation < *current))
     }
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
@@ -896,7 +1020,8 @@ impl Game {
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
                             ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            | ReplacementEffect::EntersWithXCounters { .. }
+                            | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
                                     self.check_static_condition(condition, entering_controller)
@@ -1141,6 +1266,12 @@ impl Game {
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
                 entry.counters.change(*kind, i32::from(entry.x));
+            }
+            (
+                ProposedEvent::ZoneMove { entry, .. },
+                ReplacementEffect::EntersWithCounters { kind, count },
+            ) => {
+                entry.counters.change(*kind, (*count).max(0));
             }
             // Damage reduced to zero is no longer dealt (release notes).
             (

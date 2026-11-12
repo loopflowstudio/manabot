@@ -319,6 +319,7 @@ class PlayerTurnHistoryView(ProtocolModel):
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     bent: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    life_lost: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class LegacyCardView(ProtocolModel):
@@ -491,6 +492,7 @@ class LegacyPlayerView(ProtocolModel):
         default_factory=PlayerTurnHistoryView,
         exclude_if=lambda value: value == PlayerTurnHistoryView(),
     )
+    spells_cast: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     extra_turns: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     additional_combats: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     no_maximum_hand_size: bool = Field(

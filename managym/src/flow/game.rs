@@ -142,12 +142,16 @@ pub enum PendingChoice {
         cost: Box<crate::state::card::SacrificeCost>,
     },
     /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
-    /// `chosen` holds those already selected for its single clause.
+    /// `chosen` holds those already selected, clause by clause, and
+    /// `requirement` is the clause being chosen. `player` activates; a
+    /// clause the opponent chooses is offered to them.
     ActivatedTarget {
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
         chosen: Vec<Target>,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        requirement: usize,
     },
     /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
     /// control" activation cost.
@@ -156,6 +160,15 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        #[serde(skip_serializing_if = "is_single_tap")]
+        remaining: usize,
+    },
+    /// Choosing the card from hand to exile for a spell's alternative cost
+    /// (`AdditionalCost::ExileFromHandAlternative`), before the rest of its
+    /// payment.
+    ExileFromHandPayment {
+        player: PlayerId,
+        payment: Box<Payment>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -585,4 +598,8 @@ impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
         std::mem::take(self.state.observation_events_mut())
     }
+}
+
+fn is_single_tap(remaining: &usize) -> bool {
+    *remaining == 1
 }

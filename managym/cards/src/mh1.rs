@@ -1,14 +1,51 @@
 //! Modern Horizons.
-use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
-    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
-    mana::ManaCost,
+    card::{
+        ActivatedAbilityDefinition, AdditionalCost, CardDefinition, CardType, CardTypes, Keyword,
+        Keywords,
+    },
+    effect::Modification,
+    mana::{Color, Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fists_of_flame(), prismatic_vista()]
+    vec![
+        fists_of_flame(),
+        force_of_negation(),
+        prismatic_vista(),
+        sunbaked_canyon(),
+    ]
+}
+
+fn force_of_negation() -> CardDefinition {
+    let text_box = "If it's not your turn, you may exile a blue card from your hand rather than pay this spell's mana cost.\nCounter target noncreature spell. If that spell is countered this way, exile it instead of putting it into its owner's graveyard.";
+    CardDefinition {
+        key: "mh1.force_of_negation",
+        scryfall_id: "e9be371c-c688-44ad-ab71-bd4c9f242d58",
+        name: "Force of Negation".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
+        types: CardTypes::new([CardType::Instant]),
+        additional_costs: vec![AdditionalCost::ExileFromHandAlternative {
+            predicate: CardPredicate {
+                colors_any: vec![Color::Blue],
+                ..Default::default()
+            },
+            not_your_turn: true,
+        }],
+        spell_effects: vec![Effect::CounterSpell {
+            what: ObjectSelector::Target(TargetSpec::SpellMatching {
+                predicate: CardPredicate {
+                    not_card_types: vec![CardType::Creature],
+                    ..Default::default()
+                },
+            }),
+            exile: true,
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn fists_of_flame() -> CardDefinition {
@@ -63,6 +100,35 @@ fn prismatic_vista() -> CardDefinition {
             )],
             ..Default::default()
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sunbaked_canyon() -> CardDefinition {
+    let text_box = "{T}, Pay 1 life: Add {R} or {W}.\n{1}, {T}, Sacrifice this land: Draw a card.";
+    CardDefinition {
+        key: "mh1.sunbaked_canyon",
+        scryfall_id: "c36820fa-ee86-4206-9a0d-737a67cf5208",
+        name: "Sunbaked Canyon".into(),
+        types: CardTypes::new([CardType::Land]),
+        activated_abilities: vec![
+            ActivatedAbilityDefinition {
+                tap_source: true,
+                life_cost: 1,
+                effects: vec![Effect::mana_choice(["R", "W"].map(Mana::parse))],
+                ..Default::default()
+            },
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                sacrifice_source: true,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

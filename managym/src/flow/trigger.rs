@@ -123,7 +123,7 @@ pub enum DelayedTriggerEvent {
         your_turn: bool,
     },
     /// "When you cast a [predicate] spell"; that spell is the context.
-    YouCastSpell(CardPredicate),
+    YouCastSpell(Box<CardPredicate>),
     /// "At the beginning of upkeep".
     Upkeep,
 }
