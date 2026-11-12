@@ -47,7 +47,7 @@ fn intruder_alarm() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::Another(CardPredicate::creature()),
+                subject: TriggerSubject::another(CardPredicate::creature()),
             },
             effects: vec![Effect::untap(ObjectSelector::each(
                 Scope::Battlefield,

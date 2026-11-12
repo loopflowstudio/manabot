@@ -129,7 +129,7 @@ def _artifacts(directory: Path) -> None:
                 "Requires-Dist: managym==0.2.0\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
                 "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
-                "Requires-Dist: etude-sdk>=0.2.15\n"
+                "Requires-Dist: etude-sdk>=0.2.16\n"
             )
             tags = ["py3-none-any"]
         for tag in tags:
@@ -184,7 +184,7 @@ def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
         (b"Name: manabot", b"Name: managym"),
         (b"Version: 0.2.0", b"Version: 9.9.9"),
         (b">=3.12, <3.14", b">=3.12, <3.13"),
-        (b"etude-sdk>=0.2.15", b"etude-sdk==0.2.15"),
+        (b"etude-sdk>=0.2.16", b"etude-sdk==0.2.16"),
     ],
 )
 def test_source_metadata_must_match_wheels(

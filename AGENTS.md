@@ -459,6 +459,29 @@ A stack ability is no card object, so `CounterAbility` reads the clause's
 `Target` directly; `Destroy` over several objects is one simultaneous event
 with pre-batch trigger sources.
 
+A `TriggerCondition` is "whenever X does Y": an event over its actor, never an
+`<Actor><Event>` variant. A player actor is an `Actor` (`You`, `Opponent`,
+`AnyPlayer`): `Casts { who, predicate, nth }`, `Draws { who, nth }`,
+`BeginningOf { step, whose }`, `Performs { who, any_of }` for keyword actions
+(search, scry, surveil, the four bends) and `PutIntoGraveyard { whose,
+predicate }`, `PutsCounters { who, kind, on }`. An object actor is a
+`TriggerSubject` (`This`, `EnchantedCreature`, or `Matching { controlled_by,
+predicate, another }`, whose controller is the same `Actor`; card code uses
+`you_control`, `another_you_control`, `any`, `another`), as in
+`Dies { subject }`, `Sacrificed { subject }`,
+`Attacks { subject, per, attackers }` ("alone" and "with at least one other"
+are `AttackSize`) and `DealsCombatDamage { subject, to, per }`. Counts,
+predicates, recipients and once-per-object versus once-per-batch ("one or
+more") are fields of the event, never names. The player who acted (or, for a
+step, the active player; for a graveyard, its owner) is "that player",
+`PlayerSelector::TriggeringPlayer`. `ActiveIf`, `OnceEachTurn`, `FromZone`,
+`InGraveyard`, `WasCast` and `WhileSourceAttacking` wrap any event. Ability
+descriptions and learning tokens come from one template per event that fills
+in the actor and parameters, so a new actor or count needs no new variant,
+text or token. Card code writes the common forms with
+`TriggerCondition::casts(who, predicate)`, `beginning_of(step, whose)` and
+`attacks(subject, per)`.
+
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
 `Action::ActivateCardAbility`. An ability's index is its position in

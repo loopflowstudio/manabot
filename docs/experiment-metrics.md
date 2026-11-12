@@ -382,12 +382,13 @@ play/draw imbalance remains informative. Different training seeds and stages
 never share a curve. No uncertainty interval claims independent training seeds.
 
 Keep the complete Etude metric run when copying evidence, including
-`artifacts/self-play-outcomes/`. Each update references an immutable table of
-deck/opponent/position counts; the report resolves those references after
-selecting resumed and duplicate updates. See [update metrics](training.md#update-metrics)
+`artifacts/`. Each update references an immutable Etude row table of
+deck/opponent/position counts; Etude resolves those references after selecting
+resumed and duplicate updates. See [update metrics](training.md#update-metrics)
 for storage and reader details. Copying only metric blocks leaves the counts
-unavailable. A missing or corrupt referenced table raises an error: restore the
-original table bytes from the run's retained source and regenerate the report.
+unavailable. A missing or damaged referenced table raises an error naming its
+file: restore the original bytes from the run's retained source (or rerun
+`uv run etude sync` after an interrupted delivery) and regenerate the report.
 Do not edit the table or replace missing evidence with zero counts.
 
 Historical scalar metrics and retained stage diagnostics remain readable without

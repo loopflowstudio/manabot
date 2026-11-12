@@ -10,8 +10,8 @@ Object attention runs over the fixed object tables, or, with
 `ModelConfig.token_stream="pooled"`, over one packed token sequence of valid
 objects, continuation relations and legal actions (`manabot.model.token_stream`).
 Both share every embedding and join before attention and the critic after it.
-With `MANABOT_BUCKETED_SHAPES=1` (`manabot.model.buckets`), each forward trims
-its variable axes to power-of-two buckets and returns logits at full capacity.
+With `bucketed_shapes=True` (`manabot.model.buckets`), each forward trims its
+variable axes to power-of-two buckets and returns logits at full capacity.
 """
 
 from dataclasses import dataclass
@@ -37,7 +37,6 @@ from manabot.model.admission import AdmittedObservation, admission_binding
 from manabot.model.buckets import (
     BucketSizes,
     bucket_sizes,
-    bucketed_shapes_enabled,
     object_columns,
 )
 from manabot.model.continuation import ContinuationEncoder
@@ -92,7 +91,11 @@ class ActorCritic(nn.Module):
     """
 
     def __init__(
-        self, observation_space: ObservationSpace, config: ModelConfig
+        self,
+        observation_space: ObservationSpace,
+        config: ModelConfig,
+        *,
+        bucketed_shapes: bool = False,
     ) -> None:
         super().__init__()
         self.observation_space = observation_space
@@ -314,9 +317,9 @@ class ActorCritic(nn.Module):
             else None,
         )
 
-        # Runtime profiling choice, never model state: no parameter, buffer or
-        # configuration field records it.
-        self.bucketed_shapes = bucketed_shapes_enabled()
+        # An execution choice of the training stage, never model state: no
+        # parameter, buffer or configuration field records it.
+        self.bucketed_shapes = bucketed_shapes
         self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
 
@@ -336,7 +339,7 @@ class ActorCritic(nn.Module):
             if self.bucketed_shapes:
                 raise ValueError(
                     "token_stream='pooled' sizes its token types at full capacity "
-                    "and does not support MANABOT_BUCKETED_SHAPES"
+                    "and does not support bucketed shapes"
                 )
             self.token_types = nn.Embedding(TOKEN_TYPES, embed_dim)
             nn.init.normal_(self.token_types.weight, std=embed_dim**-0.5)

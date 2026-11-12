@@ -883,7 +883,9 @@ fn cr_613_sun_urborg_magus_and_saga_keep_earlier_layers_and_external_grants() {
 #[test]
 fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
     use managym::state::{
-        ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
+        ability::{
+            Ability, Actor, Effect, EffectValue, TriggerCondition, TriggerSubject, TurnStep,
+        },
         card::{CardType, LayerValue, StaticScope},
         predicate::CardPredicate,
     };
@@ -930,7 +932,7 @@ fn cr_613_dress_down_enters_animated_without_draw_or_end_step_trigger() {
             }],
         },
         Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: None,
             effects: vec![Effect::sacrifice_this()],
         },

@@ -2,7 +2,7 @@
 use managym_state::{
     ability::{
         Ability, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
+        ObjectSelector, Per, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
@@ -96,9 +96,7 @@ fn cityscape_leveler() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::Attacks {
-                    subject: TriggerSubject::This,
-                },
+                condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
                 effects: level(),
             },
         ],

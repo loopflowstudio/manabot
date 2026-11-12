@@ -12,8 +12,8 @@
     "Swamp": 40
   },
   "world_version": "w17",
-  "content_digest": "f90667d4ba68254bded0754b38526b480b058026cacf52067361f7e982db62d1",
-  "root_digest": "fee8958539ac7f7d892ec4dee981d63f2aa8ad3d69de643324e90f85169527af",
+  "content_digest": "4ffe1fcdc5d614da36ce3be2c1cba1178ebfd35e4c9a00b031e309c6852007e8",
+  "root_digest": "fe471f50291586b3fd2c82b2aa0926e8043e06d6b478979803f4372a5c8faecf",
   "expected_life_by_first_placement": {
     "Callous Inspector": 1,
     "Bastion of Remembrance": 0
