@@ -9,11 +9,14 @@ from manabot.env.observation import FACT_OBJECT_INDEX
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.buckets import (
     BUCKETED_SHAPES_ENV,
+    ONE_BASED_REFERENCES,
+    ZERO_BASED_REFERENCES,
     bucket,
     bucket_sizes,
     bucketed_shapes_enabled,
 )
 from manabot.model.inference import PolicyInference
+import managym
 from tests.model.test_inference import PolicyFixture, _policy
 
 
@@ -56,6 +59,25 @@ def test_bucket_rule() -> None:
     assert bucket(31, 96) == 32
     assert bucket(70, 96) == 96
     assert bucket(0, 4) == 4
+
+
+def test_remapped_references_are_every_object_table_column() -> None:
+    """A new object-table reference must be remapped, not trimmed silently."""
+    layout = managym.observation_layout(policy_history=True)
+    one_based: set[tuple[str, int]] = set()
+    zero_based: set[tuple[str, int]] = set()
+    for key, array in layout.items():
+        for column in array["columns"].values():
+            encoding = column["encoding"].lower()
+            if column["kind"] != "reference" or "object" not in encoding:
+                continue
+            target = zero_based if encoding.startswith("zero-based") else one_based
+            target.add((key, column["index"]))
+        element = array.get("element")
+        if element is not None and element["kind"] == "reference":
+            assert key == "action_focus", key
+    assert one_based == set(ONE_BASED_REFERENCES)
+    assert zero_based == set(ZERO_BASED_REFERENCES)
 
 
 def test_switch_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:

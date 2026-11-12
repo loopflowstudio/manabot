@@ -31,11 +31,8 @@ import os
 
 import torch
 
-from manabot.env.observation import (
-    FACT_OBJECT_INDEX,
-    PERMANENT_LINK_INDEXES,
-    ObservationEncoder,
-)
+from manabot.env.observation import ObservationEncoder
+from managym import observation_layout
 
 BUCKETED_SHAPES_ENV = "MANABOT_BUCKETED_SHAPES"
 MIN_BUCKET = 8
@@ -70,22 +67,43 @@ _SEAT_KEYS: dict[str, tuple[str, ...]] = {
 }
 # Read only at legal rows, which `actions_valid` bounds; its padding is -1.
 _UNMEASURED_KEYS = ("action_focus",)
-# One-based object references (0: none): (key, column).
-_ONE_BASED_REFERENCES = (
-    ("facts", FACT_OBJECT_INDEX),
-    ("effects", 10),
-    ("effects", 12),
-    ("effect_members", 0),
-    ("relations", 6),
-    ("relations", 24),
-    *(
-        (key, column)
-        for key in ("agent_permanents", "opponent_permanents")
-        for column in PERMANENT_LINK_INDEXES
-    ),
+# Column positions come from the native layout by name, so a moved or added
+# column cannot silently shift what is remapped. Policy history v1 is the
+# event layout whose context columns are object references.
+_LAYOUT = observation_layout(policy_history=True)
+
+
+def _column(key: str, name: str) -> int:
+    return int(_LAYOUT[key]["columns"][name]["index"])
+
+
+# Object-table references, one-based (0: none) or zero-based (-1: none):
+# (key, column). `action_focus` is a whole zero-based reference buffer.
+ONE_BASED_REFERENCES: tuple[tuple[str, int], ...] = tuple(
+    (key, _column(key, name))
+    for key, name in (
+        ("facts", "object"),
+        ("effects", "controller"),
+        ("effects", "source"),
+        ("effect_members", "object"),
+        ("relations", "source"),
+        ("relations", "reference"),
+        ("agent_permanents", "attached_to"),
+        ("agent_permanents", "blocking"),
+        ("opponent_permanents", "attached_to"),
+        ("opponent_permanents", "blocking"),
+    )
 )
-# Public history v1 context references are zero-based (-1: none).
-_EVENT_FOCUS_COLUMNS = (5, 10)
+ZERO_BASED_REFERENCES: tuple[tuple[str, int], ...] = (
+    ("events", _column("events", "source_context")),
+    ("events", _column("events", "target_context")),
+)
+_EVENT_WIDTH = len(_LAYOUT["events"]["columns"])
+# Row joins into other variable axes.
+_DETAIL_SPAN = (_column("effects", "detail_offset"), _column("effects", "detail_count"))
+_MEMBER_SPAN = (_column("effects", "member_offset"), _column("effects", "member_count"))
+_RELATION_FRAME = _column("relations", "frame")
+_ACTION_CONTINUATION = _column("actions", "continuation")
 
 
 def bucketed_shapes_enabled() -> bool:
@@ -157,13 +175,17 @@ def _reference_extent(values: torch.Tensor, capacity: int) -> torch.Tensor:
 def _object_references(obs: dict[str, torch.Tensor]) -> list[torch.Tensor]:
     """Every object reference in zero-based full object coordinates."""
     references = [obs["action_focus"].float()]
-    references.extend(
-        obs[key][..., column] - 1 for key, column in _ONE_BASED_REFERENCES
-    )
-    events = obs.get("events")
-    if events is not None and events.ndim == 3 and events.shape[-1] == 12:
-        references.extend(events[..., column] for column in _EVENT_FOCUS_COLUMNS)
+    references.extend(obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES)
+    if _has_history_events(obs):
+        references.extend(
+            obs[key][..., column] for key, column in ZERO_BASED_REFERENCES
+        )
     return references
+
+
+def _has_history_events(obs: dict[str, torch.Tensor]) -> bool:
+    events = obs.get("events")
+    return events is not None and events.ndim == 3 and events.shape[-1] == _EVENT_WIDTH
 
 
 def _object_extents(
@@ -214,17 +236,27 @@ def bucket_sizes(
     # Live effect headers name detail and member spans [offset, offset + count).
     effects = obs["effects"]
     needs["details"].append(
-        _reference_extent(effects[..., 13] + effects[..., 14], capacities["details"])
+        _reference_extent(
+            effects[..., _DETAIL_SPAN[0]] + effects[..., _DETAIL_SPAN[1]],
+            capacities["details"],
+        )
     )
     needs["members"].append(
-        _reference_extent(effects[..., 15] + effects[..., 16], capacities["members"])
+        _reference_extent(
+            effects[..., _MEMBER_SPAN[0]] + effects[..., _MEMBER_SPAN[1]],
+            capacities["members"],
+        )
     )
     # Frame ids and action continuation joins index the relation axis.
     needs["relations"].append(
-        _reference_extent(obs["relations"][..., 1], capacities["relations"])
+        _reference_extent(
+            obs["relations"][..., _RELATION_FRAME], capacities["relations"]
+        )
     )
     needs["relations"].append(
-        _reference_extent(obs["actions"][..., -2], capacities["relations"])
+        _reference_extent(
+            obs["actions"][..., _ACTION_CONTINUATION], capacities["relations"]
+        )
     )
     if objects:
         card_need, permanent_need = _object_extents(
@@ -277,17 +309,16 @@ def trim_observation(
     if not buckets.trims_objects:
         return trimmed
     trimmed["action_focus"] = object_remap(trimmed["action_focus"], buckets)
-    for key in {key for key, _ in _ONE_BASED_REFERENCES}:
-        columns = [column for name, column in _ONE_BASED_REFERENCES if name == key]
-        value = trimmed[key].clone()
-        value[..., columns] = object_remap(value[..., columns] - 1, buckets) + 1
-        trimmed[key] = value
-    events = trimmed.get("events")
-    if events is not None and events.ndim == 3 and events.shape[-1] == 12:
-        events = events.clone()
-        columns = list(_EVENT_FOCUS_COLUMNS)
-        events[..., columns] = object_remap(events[..., columns], buckets)
-        trimmed["events"] = events
+    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
+        for key in dict.fromkeys(key for key, _ in references):
+            if key == "events" and not _has_history_events(trimmed):
+                continue
+            columns = [column for name, column in references if name == key]
+            value = trimmed[key].clone()
+            value[..., columns] = (
+                object_remap(value[..., columns] - base, buckets) + base
+            )
+            trimmed[key] = value
     return trimmed
 
 

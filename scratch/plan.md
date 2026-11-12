@@ -55,7 +55,7 @@ are 64 facts and 194 objects there. Median buckets: facts 64, effects 32,
 details 16, members 64, relations 32, actions 16, events 8, cards 64, known 8,
 decklists 64, permanents 32.
 
-Checks: `pytest tests/model/test_bucketed_shapes.py` 9 passed;
+Checks: `pytest tests/model/test_bucketed_shapes.py` 10 passed;
 11 existing model/boundary test files 162 passed, 2 skipped.
 
 Remaining: gate; MTG-301 L4 A/B (docs give the Etude `Job.environment` recipe; `Variable` is Pydantic, keyword arguments only).
@@ -87,14 +87,10 @@ engine guide says to look columns up by name. `_ONE_BASED_REFERENCES` and
 column added later would be trimmed away and not renumbered: wrong objects, no
 error.
 
-Next implement direction:
-- Name each remapped column through the layout (`layout[key]["columns"][name]["index"]`,
-  events via `observation_layout(policy_history=True)`); keep the env constants
-  where they already exist only if they agree.
-- Add a test that the remapped set equals every layout column whose encoding is
-  an object-table index (one-based or zero-based), so a new reference fails the
-  test instead of corrupting a trimmed batch.
-- The merge changed Rust; the checkout's `_managym` extension is stale
-  (`import managym` fails: no `catalog_tokens`). Rebuild it per CLAUDE.md before
-  any test; that build is the only native step, no cargo tests.
-
+Layout lookups (done): `buckets.py` names every remapped reference and row join
+(effect detail/member spans, relation frame, action continuation) through
+`observation_layout(policy_history=True)`; no column literals remain.
+`test_remapped_references_are_every_object_table_column` asserts the remapped set
+equals every layout reference column whose encoding names the object table.
+Extension rebuilt (release wheel, cp313 darwin `.so` replaced by rename).
+`pytest tests/model tests/test_package_boundaries.py` 307 passed, 4 skipped.
