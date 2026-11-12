@@ -10,7 +10,6 @@ keeps only the portable presentation/content envelope.
 import json
 from typing import Literal
 
-from managym.decision import Observation
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -21,6 +20,7 @@ from pydantic import (
 )
 
 import managym
+from managym.decision import Observation
 
 
 class CaptureModel(BaseModel):

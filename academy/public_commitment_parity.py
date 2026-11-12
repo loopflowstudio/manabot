@@ -11,14 +11,6 @@ from tempfile import TemporaryDirectory
 from typing import Any, Mapping
 
 from fastapi.testclient import TestClient
-from managym.decision import (
-    SEMANTIC_DECISION_VERSION,
-    Command,
-    DecisionFrame,
-    SemanticTransition,
-    apply_semantic_command,
-)
-from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.likelihood import (
@@ -29,6 +21,14 @@ from manabot.belief.likelihood import (
 )
 from manabot.belief.tracker import BeliefTracker
 import managym
+from managym.decision import (
+    SEMANTIC_DECISION_VERSION,
+    Command,
+    DecisionFrame,
+    SemanticTransition,
+    apply_semantic_command,
+)
+from managym.possible_worlds import PossibleWorldSpace
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -494,13 +494,13 @@ def _source_manifest() -> dict[str, Any]:
         "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
-        "manabot/managym/experience_projection.py",
+        "managym/experience_projection.py",
         "experiments/contracts/int-9-exact-range-v1.json",
         "manabot/belief/likelihood.py",
         "manabot/belief/tracker.py",
-        "manabot/managym/__init__.pyi",
-        "manabot/managym/decision.py",
-        "manabot/managym/possible_worlds.py",
+        "managym/__init__.pyi",
+        "managym/decision.py",
+        "managym/possible_worlds.py",
         "managym/src/agent/env.rs",
         "managym/src/agent/structured_offer.rs",
         "managym/src/decision.rs",

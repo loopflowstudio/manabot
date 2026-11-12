@@ -81,9 +81,16 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
-- Library consumers: `uv run --no-project python scripts/release/prepare.py <staging>`, `uv build --sdist
-  --no-sources <staging>`, then `uv build --wheel --python 3.12|3.13 <sdist>`
-  (reuse a `CARGO_TARGET_DIR`). In a fresh `/tmp` venv with PYTHONPATH unset,
-  install the wheel with `--torch-backend cpu` at the minimum pins and run a
-  copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
-  "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
+- Library consumers: follow `docs/development.md#build-and-verify` into an
+  ignored `.runs/` output (the engine staging is `<staging>/managym`), then
+  `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
+  (reuse a `CARGO_TARGET_DIR`). In a fresh `/tmp` venv with PYTHONPATH unset and
+  a PATH holding only a `uv` symlink plus `/usr/bin:/bin` (no Cargo), install the
+  engine wheel alone and run `scripts/release/engine_smoke.py` and the
+  `docs/engine-python.md` commands verbatim; then add both wheels at the minimum
+  Torch/Etude pins and run a copy of `scripts/release/smoke.py` (CPU training,
+  about 20 s). Also `uv init` a project and `uv add` both `file://` wheels for
+  latest resolution. Returning users: install PyPI `manabot==0.2.0` in a
+  `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
+  and the CPU Torch index), since uv's one-step upgrade hides file-ownership
+  problems that pip's install order exposes.

@@ -2,9 +2,11 @@
 
 The deterministic Magic: The Gathering rules engine and training environment
 behind Manabot. Rust, with PyO3 bindings consumed by `manabot` (the agent)
-and `academy` (the optional play UI). The Python API is `manabot.managym`,
-bundled with the `manabot` distribution; `import managym` remains a compatibility
-alias. Rust sources stay in this directory.
+and `academy` (the optional play UI). Install the `managym` distribution for
+`import managym` without the training stack. `manabot` depends on the exact
+same version and keeps `manabot.managym` as a compatibility alias. Rust sources
+stay in this directory. Start with the
+[Python installation example](../docs/engine-python.md).
 
 [Engine development principles](PRINCIPLES.md) records the lessons from
 Allies–Lessons, Elemental and TLA: shared rule ownership, preserved choices and

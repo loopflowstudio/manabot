@@ -32,10 +32,7 @@ impl DeckSection {
 /// One actionable problem with a submitted deck. `line` is the 1-based source
 /// line when the deck came from a decklist; admission of counts alone has none.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, eq, module = "managym"))]
 #[serde(deny_unknown_fields)]
 pub struct DeckIssue {
     pub line: Option<usize>,
