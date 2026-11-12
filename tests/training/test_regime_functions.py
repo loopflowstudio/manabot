@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+import re
 
 import pytest
 import torch
@@ -14,8 +15,10 @@ from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
+    ArtifactReference,
     Execution,
     Learning,
+    PretrainedPolicy,
     RecoveryPolicy,
     TrainingRegime,
     TrainSelfPlay,
@@ -320,6 +323,47 @@ def test_a_continuation_without_learner_or_snapshot_is_refused(
     tmp_path: Path, regime: Callable[[Run], None]
 ) -> None:
     with pytest.raises(ValueError, match="neither its live learner"):
+        execute(regime, out=tmp_path / "run", seed=5)
+
+
+_REFERENCE: ArtifactReference = {"path": "unused.pt", "sha256": "0" * 64, "bytes": 1}
+
+
+def pretrained_over_published(run: Run) -> None:
+    model = run.model("policy", AGENT, ObservationConfig())
+    run.export(model, decks=MatchConfig())
+    pretrained = PretrainedPolicy(
+        source_run=_REFERENCE, source_stage="self-play", checkpoint=_REFERENCE
+    )
+    self_play(run, model, decks=MatchConfig(), pretrained=pretrained, **_settings(1))  # type: ignore[arg-type]
+
+
+def weights_over_trained(run: Run) -> None:
+    model = run.model("policy", AGENT, ObservationConfig())
+    self_play(run, model, decks=MatchConfig(), **_settings(1))  # type: ignore[arg-type]
+    self_play(
+        run, model, decks=MatchConfig(), initial_weights=_REFERENCE, **_settings(1)
+    )  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("regime", "message"),
+    [
+        (
+            pretrained_over_published,
+            "load pretrained into model 'policy', which holds weights from stage 'export-policy'",
+        ),
+        (
+            weights_over_trained,
+            "load initial_weights into model 'policy', which holds weights from stage 'self-play'",
+        ),
+    ],
+)
+def test_a_starting_state_over_a_model_with_weights_is_refused(
+    tmp_path: Path, regime: Callable[[Run], None], message: str
+) -> None:
+    torch.set_num_threads(1)
+    with pytest.raises(ValueError, match=re.escape(message)):
         execute(regime, out=tmp_path / "run", seed=5)
 
 

@@ -207,6 +207,11 @@ function admits its own decks, world and curriculum, and checks the digest of
 every input it reads. Training the same model in the next self-play stage
 continues its live learner, Adam state, EMA and collector, as `initial` does
 in a saved regime, and must keep the settings that continuation fixes. A
+regime function starts from a published policy through `import_policy`,
+whose model the stage then records as its input. `initial_weights`,
+`pretrained` and `learning_state` start only a fresh `run.model`: on a model
+that already holds weights from a stage (trained, imported or exported)
+`self_play` refuses them by name before the stage opens. A
 stage's name defaults to the function's, numbered in call order (`self-play`,
 `self-play-2`); `stage=` chooses one. Regime functions do not yet tolerate
 game failures, and a regime function's run cannot yet be the producer of an

@@ -183,20 +183,14 @@ never hit this: each fresh stage gets a new `run.model`, and
 `TrainingRegime` validation already refuses `initial` with another starting
 state.
 
-Next implement direction (settled by the design: the model owns its
-weights, a record names what was read):
-
-- `self_play` refuses `initial_weights`, `pretrained` or `learning_state`
-  unless the model still holds its own random initialization
-  (`model.source is None and model.trained_by is None`), naming the model,
-  the argument and the stage that gave it weights. Check before
-  `_open_stage`, so a refusal costs nothing and smoke catches it.
-- Docs (`docs/training.md`, regime-function section): a function regime
-  starts from a published policy with `import_policy`; the three
-  arguments are how saved stages start and stay accepted on a fresh model.
-- Test in `test_regime_functions.py`: imported model + `pretrained` is
-  refused by name; a fresh `run.model` + `pretrained` path is unchanged
-  (existing saved-regime tests cover it).
+Done: `self_play` refuses the three starting states on a model with
+`source` or `trained_by` set, naming model, argument and stage, before
+`_open_stage`; docs say so. Test
+`test_a_starting_state_over_a_model_with_weights_is_refused` uses real
+paths (exported fresh model + `pretrained`; trained model +
+`initial_weights`) rather than a faked import. Check: regime_functions,
+regimes, policy_import, learning_state, recovery, package_boundaries — 87
+passed.
 
 No saved-regime record, digest or stage id changes. Unchanged: the open
 Etude budget choice and the `run.stage` resume limit.
