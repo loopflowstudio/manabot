@@ -212,6 +212,19 @@ fn condition_description(condition: &TriggerCondition) -> String {
 }
 
 fn subject_description(subject: &TriggerSubject) -> String {
+    subject_phrase(subject, ["a", "another"], "permanent")
+}
+
+/// A subject read as a batch ("one or more other Allies you control"); a
+/// single object reads as itself.
+fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
+    subject_phrase(subject, ["one or more", "one or more other"], plural)
+}
+
+/// "[quantity] [objects] [controller controls]", where `quantity` is the
+/// words for any object and for another one; any player's objects name no
+/// controller.
+fn subject_phrase(subject: &TriggerSubject, quantity: [&str; 2], objects: &str) -> String {
     match subject {
         TriggerSubject::This => "this".into(),
         TriggerSubject::EnchantedCreature => "enchanted creature".into(),
@@ -219,44 +232,20 @@ fn subject_description(subject: &TriggerSubject) -> String {
             controlled_by,
             predicate,
             another,
-        } => matching_description(
-            if *another { "another" } else { "a" },
-            predicate_description(predicate, "permanent"),
-            *controlled_by,
-        ),
-    }
-}
-
-/// A subject read as a batch ("one or more other Allies you control"); a
-/// single object reads as itself.
-fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
-    match subject {
-        TriggerSubject::This | TriggerSubject::EnchantedCreature => subject_description(subject),
-        TriggerSubject::Matching {
-            controlled_by,
-            predicate,
-            another,
-        } => matching_description(
-            if *another {
-                "one or more other"
-            } else {
-                "one or more"
-            },
-            predicate_description(predicate, plural),
-            *controlled_by,
-        ),
-    }
-}
-
-/// "[quantity] [objects] [controller controls]"; any player's objects name
-/// no controller.
-fn matching_description(quantity: &str, objects: String, controlled_by: Actor) -> String {
-    match controlled_by {
-        Actor::AnyPlayer => format!("{quantity} {objects}"),
-        _ => format!(
-            "{quantity} {objects} {}",
-            actor_does(controlled_by, "control", "controls")
-        ),
+        } => {
+            let phrase = format!(
+                "{} {}",
+                quantity[usize::from(*another)],
+                predicate_description(predicate, objects)
+            );
+            match controlled_by {
+                Actor::AnyPlayer => phrase,
+                _ => format!(
+                    "{phrase} {}",
+                    actor_does(*controlled_by, "control", "controls")
+                ),
+            }
+        }
     }
 }
 

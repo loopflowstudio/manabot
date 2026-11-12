@@ -401,5 +401,5 @@ questions above don't block gate. Remaining work is the plan's gate list.
   single-consumer meta-event). `Attacks`, `Sacrificed` and `PutsCounters` are
   folded into event-over-actor form in this change.
 - Assumption (reversible): Beastmaster Ascension's subject is
-  `AnyYouControl(creature)` (printed "a creature you control"); a `This`
+  `TriggerSubject::you_control(creature)` (printed "a creature you control"); a `This`
   subject's `Attacks` uses `Per::Object`, which cannot differ from `Batch`.

@@ -49,8 +49,8 @@ The `Any`/`Another` × `YouControl`/whoever grid is now one
 beside `This` and `EnchantedCreature`; card code uses `you_control`,
 `another_you_control`, `any`, `another`. Each matcher in `flow/triggers.rs`
 is one test through `Actor::includes` (moved-card path keeps the
-`source_was_on_battlefield` gate); `subject_description`/`one_or_more` share
-`matching_description` ("a creature an opponent controls" covered in
+`source_was_on_battlefield` gate); `subject_description`/`one_or_more` are one
+`subject_phrase` differing only in quantity words ("a creature an opponent controls" covered in
 `trigger_descriptions_fill_one_template_per_event`). The learning-token test
 now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
 
@@ -60,8 +60,8 @@ now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
   `checked_semantic_conformance_evidence_reproduces` fails as on base
   d95734088 (state_hash/content_digest only). Clippy: no findings in changed code.
 - Subject fold: debug nextest filter `trigger|attack|combat_damage|dies|sacrific|observability|description|token` 249/249; extension rebuilt, imports.
-- Compress pass: trigger-filtered debug nextest (`attack|combat_damage|trigger|…`)
-  139/139.
+- Compress passes: trigger-filtered debug nextest 139/139, then after the
+  `subject_phrase` fold (`trigger|description|attack|combat_damage|dies|sacrific|observability|token`) 249/249.
 - `uv run --extra dev pytest tests/semantic -q`: 197 passed (rebuilt extension).
 
 ## Remaining
