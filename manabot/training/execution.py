@@ -1122,6 +1122,7 @@ def _execute_regime(
                         opponent_agent, opponent_space = load_checkpoint(
                             str(opponent_path),
                             bucketed_shapes=stage.execution.bucketed_shapes,
+                            live_tokens=stage.execution.live_tokens,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
@@ -1142,6 +1143,7 @@ def _execute_regime(
                         space,
                         regime.agent,
                         bucketed_shapes=stage.execution.bucketed_shapes,
+                        live_tokens=stage.execution.live_tokens,
                     ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights

@@ -15,7 +15,9 @@ instead of one per key.
 With bucketed shapes, admission measures each batch's buckets on the host
 before transfer (`manabot.policy.buckets`); the forward trims the device tensors
 to them without a device read (`trim_admitted`). The prepared dictionary itself
-keeps full-capacity tensors.
+keeps full-capacity tensors. With live tokens, preparation likewise counts the
+batch's live attention tokens, so the forward packs them without reading the
+count back.
 """
 
 from collections.abc import Mapping
@@ -115,11 +117,17 @@ def admit_on_device(
 class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them.
+    `transfers` counts the host-to-device copies that produced them;
+    `live_token_count` is the host-measured number of packed tokens when the
+    policy uses live tokens.
     """
 
     def __init__(
-        self, admitted: AdmittedObservation, scope: "PolicyInference", transfers: int
+        self,
+        admitted: AdmittedObservation,
+        scope: "PolicyInference",
+        transfers: int,
+        live_token_count: int | None = None,
     ) -> None:
         super().__init__(
             admitted,
@@ -130,6 +138,7 @@ class PreparedObservation(AdmittedObservation):
         )
         self.scope = scope
         self.transfers = transfers
+        self.live_token_count = live_token_count
 
 
 def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
@@ -200,7 +209,9 @@ def trim_admitted(
         obs.legal,
     )
     if isinstance(obs, PreparedObservation):
-        return PreparedObservation(trimmed, obs.scope, obs.transfers)
+        return PreparedObservation(
+            trimmed, obs.scope, obs.transfers, obs.live_token_count
+        )
     return trimmed
 
 
@@ -266,5 +277,6 @@ class PolicyInference:
         if any(tensor.device.type != "cpu" for tensor in obs.values()):
             raise ValueError("inference preparation requires CPU observations")
         admitted = admit_observation(self.agent, obs)
+        live = self.agent.live_token_count(admitted)
         moved, transfers = transfer_admitted(admitted, self.device)
-        return PreparedObservation(moved, self, transfers)
+        return PreparedObservation(moved, self, transfers, live)
