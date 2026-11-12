@@ -38,3 +38,17 @@ with stack attribution, input captures. Stage B offline replays of captured inpu
 - Realign: MTG-302 landed on main as bf4e280f7; `git diff 54cd65420 bf4e280f7 -- manabot/model` is empty, so the
   bucketed arm measured main's code (noted in the report's runs section). Remaining: push `mtg301-bucketed-run`
   (questions.md) at publish.
+
+## Concept review (2026-11-12) — next implement direction
+The measurements, decision and MTG-312 recommendation stand; the report's shape does not yet read as
+science (question → plain answer → one result per question → cost → limits; provenance in a collapsed
+appendix). Report-only edits, no new numbers:
+1. Order: Answer, then Results as the brief's four questions with their letters — (a) syncs, (b) GPU idle /
+   launch-bound (today unlabeled inside "Where a window's time goes"; name it, with the small-call host-bound
+   finding), (c) catalog, (d) kernel compute and the arms — then scale, Decision, Implications, one-line cost,
+   Limits.
+2. Move "Runs and cost" (run/pod ids, torch versions, the four dated failure/admission lines), the numerical
+   gates and the Evidence/reproduce block into a closing `<details>` appendix. Keep the cross-job baseline
+   agreement sentence beside the arms table, where it qualifies the comparison.
+3. Leave `experiments/l4_step_profile.py` and the option-3 patch unchanged (they are what ran).
+No open product choice. Publish still needs the `mtg301-bucketed-run` ref pushed (questions.md).
