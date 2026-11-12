@@ -11,6 +11,7 @@ on:
       - 'tests/infra/test_release.py'
       - 'release/**'
       - 'pyproject.toml'
+      - 'LICENSE'
       - 'uv.lock'
       - '.github/workflows/release.yml'
   push:
@@ -45,15 +46,19 @@ jobs:
           else
             uv run --no-project python scripts/release/check.py
           fi
-      - name: Build the shared source distribution
+      - name: Build both source distributions and the pure-Python wheel
         run: |
           uv run --no-project python scripts/release/prepare.py staging
-          uv build --sdist staging --out-dir dist
+          uv build --no-sources --sdist staging/managym --out-dir dist
+          uv build --no-sources --sdist staging --out-dir dist
+          mkdir bot-source
+          tar -xzf dist/manabot-*.tar.gz -C bot-source --strip-components=1
+          uv build --no-sources --wheel bot-source --out-dir dist
           uv run --no-project --with twine twine check --strict dist/*
       - uses: actions/upload-artifact@v4
         with:
-          name: manabot-sdist
-          path: dist/*.tar.gz
+          name: release-sources
+          path: dist/*
           if-no-files-found: error
       - name: Check release tooling
         run: uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q
@@ -75,13 +80,13 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: actions/download-artifact@v4
         with:
-          name: manabot-sdist
+          name: release-sources
           path: source
-      - name: Unpack the shared source distribution
+      - name: Unpack the engine source distribution
         run: |
           mkdir wheel-source
-          tar -xzf source/manabot-*.tar.gz -C wheel-source --strip-components=1
-      - name: Build Manabot wheel with bundled engine from the sdist
+          tar -xzf source/managym-*.tar.gz -C wheel-source --strip-components=1
+      - name: Build managym wheel from its sdist
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
@@ -90,7 +95,7 @@ jobs:
       - run: uv run --no-project --with twine twine check --strict dist/*
       - uses: actions/upload-artifact@v4
         with:
-          name: manabot-${{ matrix.platform.target }}-${{ matrix.python }}
+          name: release-engine-${{ matrix.platform.target }}-${{ matrix.python }}
           path: dist/*.whl
           if-no-files-found: error
 
@@ -111,13 +116,33 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: actions/download-artifact@v4
         with:
-          name: manabot-${{ matrix.platform.target }}-${{ matrix.python }}
+          name: release-engine-${{ matrix.platform.target }}-${{ matrix.python }}
           path: dist
-      - name: Install wheel and exercise CPU training outside the checkout
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-sources
+          path: dist
+      - name: Install engine alone and play a complete game outside the checkout
         shell: bash
         run: |
           uv venv --python "${{ matrix.python }}" "$RUNNER_TEMP/release-venv"
-          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/manabot-*.whl 'torch==2.10.0' 'etude-sdk==0.2.15'
+          # Only binary distributions can be installed; Rust is unavailable to this proof.
+          mkdir "$RUNNER_TEMP/no-rust"
+          for command in cargo rustc rustup; do
+            printf '#!/bin/sh\necho "Rust is unavailable in the consumer proof" >&2\nexit 1\n' > "$RUNNER_TEMP/no-rust/$command"
+            chmod +x "$RUNNER_TEMP/no-rust/$command"
+          done
+          export PATH="$RUNNER_TEMP/no-rust:$PATH"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: dist/managym-*.whl
+          cp scripts/release/engine_smoke.py "$RUNNER_TEMP/engine_smoke.py"
+          cd "$RUNNER_TEMP"
+          unset PYTHONPATH
+          uv run --no-project --python "$RUNNER_TEMP/release-venv/bin/python" engine_smoke.py
+      - name: Install wheel and exercise CPU training outside the checkout
+        shell: bash
+        run: |
+          export PATH="$RUNNER_TEMP/no-rust:$PATH"
+          uv pip install --python "$RUNNER_TEMP/release-venv/bin/python" --only-binary :all: --torch-backend cpu dist/managym-*.whl dist/manabot-*.whl 'torch==2.10.0' 'etude-sdk==0.2.15'
           uv pip check --python "$RUNNER_TEMP/release-venv/bin/python"
           cp scripts/release/smoke.py "$RUNNER_TEMP/smoke.py"
           cd "$RUNNER_TEMP"
@@ -156,7 +181,7 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
-          pattern: manabot-*
+          pattern: release-*
           merge-multiple: true
           path: dist
       - run: uv run --no-project python scripts/release/validate.py dist --complete
@@ -179,17 +204,35 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
-          pattern: manabot-*
+          pattern: release-*
           merge-multiple: true
           path: dist
+      - name: Validate both packages before either upload
+        run: uv run --no-project python scripts/release/validate.py dist --complete
       - name: Check whether these exact artifacts are already published
         id: publication
         env:
           RELEASE_TAG: ${{ github.ref_name }}
         run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG"
-      - name: Publish Manabot with PyPI attestations
-        if: steps.publication.outputs.upload == 'true'
+      - name: Separate validated package inventories
+        run: |
+          mkdir engine-dist bot-dist
+          cp dist/managym-* engine-dist/
+          cp dist/manabot-* bot-dist/
+      - name: Publish managym with PyPI attestations
+        if: steps.publication.outputs.managym == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: engine-dist/
+      - name: Require the complete engine inventory before training upload
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG" --require-engine
+      - name: Publish manabot with PyPI attestations
+        if: steps.publication.outputs.manabot == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: bot-dist/
 
   github-release:
     if: startsWith(github.ref, 'refs/tags/')
@@ -204,7 +247,7 @@ jobs:
           python-version: '3.13'
       - uses: actions/download-artifact@v4
         with:
-          pattern: manabot-*
+          pattern: release-*
           merge-multiple: true
           path: dist
       - name: Require PyPI artifacts and matching GitHub Release

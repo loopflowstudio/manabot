@@ -1,17 +1,7 @@
-"""Compatibility import for the engine bundled as ``manabot.managym``."""
+"""The rules engine and native public API.
 
-from importlib import import_module
-import sys
+The engine types are implemented by PyO3 and described in ``__init__.pyi``;
+shared decision/protocol adapters live beside this module.
+"""
 
-_engine = import_module("manabot.managym")
-sys.modules[__name__] = _engine
-for _name in (
-    "_managym",
-    "decision",
-    "decision_capture",
-    "enums",
-    "experience",
-    "experience_projection",
-    "possible_worlds",
-):
-    sys.modules[f"{__name__}.{_name}"] = import_module(f"manabot.managym.{_name}")
+from ._managym import *  # noqa: F403 — expose the native API described by the stub.

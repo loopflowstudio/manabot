@@ -57,7 +57,7 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     # Hashed record ids are the historical layout and hash as omitted; the
     # selector names the catalog layout only where it changes the model.
     payload.pop("record_vocabulary", None)
-    if resolved.catalog_records(space.encoder.config.policy_input_version):
+    if resolved.catalog_records():
         payload["record_vocabulary"] = "catalog"
     return canonical_sha256(
         {

@@ -33,40 +33,47 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     stage = tmp_path / "stage"
     _load("prepare").prepare(stage)
     config = tomllib.loads((stage / "pyproject.toml").read_text())
-    assert (stage / "pyproject.toml").read_bytes() == (
-        ROOT / "pyproject.toml"
-    ).read_bytes()
-    assert not any(
-        dep.startswith("managym") for dep in config["project"]["dependencies"]
+    for name in ("LICENSE", "protocol/experience-v1.schema.json"):
+        assert (stage / name).read_bytes() == (ROOT / name).read_bytes(), name
+    assert (
+        config["project"]
+        == tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
     )
-    assert config["tool"]["maturin"]["module-name"] == "manabot.managym._managym"
-    assert (stage / "managym/src/lib.rs").is_file()
+    assert (
+        f"managym=={config['project']['version']}" in config["project"]["dependencies"]
+    )
+    assert config["build-system"]["build-backend"] == "hatchling.build"
+    engine = stage / "managym"
+    engine_config = tomllib.loads((engine / "pyproject.toml").read_text())
+    assert engine_config["tool"]["maturin"]["module-name"] == "managym._managym"
+    assert engine_config["tool"]["maturin"]["python-source"] == "."
+    assert (engine / "managym/src/lib.rs").is_file()
     for crate in ("state", "cards"):
-        assert (stage / "managym" / crate / "Cargo.toml").is_file()
-        assert (stage / "managym" / crate / "src/lib.rs").is_file()
-    assert (stage / "manabot/managym/decision.py").is_file()
+        assert (engine / "managym" / crate / "Cargo.toml").is_file()
+        assert (engine / "managym" / crate / "src/lib.rs").is_file()
+    assert (engine / "managym/decision.py").is_file()
+    assert (engine / "content/semantic/current/setups.json").is_file()
+    assert not (stage / "manabot/managym/decision.py").exists()
     assert (stage / "manabot/sim/match.py").is_file()
     assert (stage / "manabot/eval/cards.py").is_file()
     assert (stage / "manabot/experiment/checkpoint_evaluation.py").is_file()
     assert not (stage / "manabot/arena").exists()
-    assert not (stage / "managym/pyproject.toml").exists()
-    assert not (stage / "managym/libmanagym.dylib.dSYM").exists()
+    assert not (engine / "managym/libmanagym.dylib.dSYM").exists()
     assert (stage / "content/semantic/current/setups.json").is_file()
     assert (
         stage / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json"
     ).is_file()
-    assert (stage / "protocol/experience-v1.schema.json").read_bytes() == (
-        ROOT / "protocol/experience-v1.schema.json"
-    ).read_bytes()
     assert (stage / "manabot/reports/time_cohort.html").is_file()
     assert not (stage / "academy/ui/node_modules").exists()
     assert not (stage / "experiments").exists()
     source = json.loads((stage / ".manabot-source.json").read_text())
     assert len(source["commit"]) == 40
     assert "manabot/training/execution.py" in source["files"]
+    assert "managym/decision.py" in source["files"]
     assert "protocol/experience-v1.schema.json" in source["files"]
     for name, digest in source["files"].items():
-        assert hashlib.sha256((stage / name).read_bytes()).hexdigest() == digest
+        path = stage / "managym" / name if name.startswith("managym/") else stage / name
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
 
     with pytest.raises(FileExistsError):
         _load("prepare").prepare(stage)
@@ -82,9 +89,14 @@ def test_release_requires_matching_tag_and_notes(
     module = _load("check")
     (tmp_path / "managym").mkdir()
     (tmp_path / "pyproject.toml").write_text(
-        '[project]\nversion = "9.9.9"\ndependencies = []\n'
+        '[project]\nversion = "9.9.9"\ndependencies = ["managym==9.9.9"]\n'
     )
     (tmp_path / "managym/Cargo.toml").write_text('[package]\nversion = "9.9.9"\n')
+    (tmp_path / "managym/pyproject.toml").write_text('[project]\nversion = "9.9.9"\n')
+    for crate in ("state", "cards"):
+        path = tmp_path / "managym" / crate / "Cargo.toml"
+        path.parent.mkdir()
+        path.write_text('[package]\nversion = "9.9.9"\n')
     monkeypatch.setattr(module, "ROOT", tmp_path)
     with pytest.raises(ValueError, match="release/v9.9.9/NOTES.md"):
         module.check(None)
@@ -100,31 +112,46 @@ def test_release_requires_matching_tag_and_notes(
 
 
 def _artifacts(directory: Path) -> None:
-    """Small archives exercise the same inventory/metadata checks as real wheels."""
-    metadata = (
-        "Name: manabot\nVersion: 0.2.0\nRequires-Python: >=3.12, <3.14\n"
-        "Requires-Dist: torch>=2.10.0 ; sys_platform == 'linux'\n"
-        "Requires-Dist: torch>=2.10.0 ; sys_platform != 'linux'\n"
-        "Requires-Dist: etude-sdk>=0.2.15\n"
-    )
-    for python in ("312", "313"):
-        for target in ("manylinux_2_28_x86_64", "macosx_11_0_arm64"):
+    """Small archives exercise paired inventories without compiling the engine."""
+    for project in ("managym", "manabot"):
+        metadata = f"Name: {project}\nVersion: 0.2.0\nRequires-Python: >=3.12, <3.14\n"
+        if project == "managym":
+            metadata += (
+                "Requires-Dist: numpy>=1.24.0\nRequires-Dist: pydantic>=2.12.0\n"
+            )
+            tags = [
+                f"cp{python}-cp{python}-{target}"
+                for python in ("312", "313")
+                for target in ("manylinux_2_28_x86_64", "macosx_11_0_arm64")
+            ]
+        else:
+            metadata += (
+                "Requires-Dist: managym==0.2.0\n"
+                "Requires-Dist: torch>=2.10.0 ; sys_platform == 'linux'\n"
+                "Requires-Dist: torch>=2.10.0 ; sys_platform != 'linux'\n"
+                "Requires-Dist: etude-sdk>=0.2.15\n"
+            )
+            tags = ["py3-none-any"]
+        for tag in tags:
             with zipfile.ZipFile(
-                directory / f"manabot-0.2.0-cp{python}-cp{python}-{target}.whl", "w"
+                directory / f"{project}-0.2.0-{tag}.whl", "w"
             ) as archive:
-                archive.writestr("manabot-0.2.0.dist-info/METADATA", metadata)
-                archive.writestr(
-                    f"manabot/managym/_managym.cpython-{python}.so", b"native fixture"
-                )
-                archive.writestr("content/semantic/current/learning_schema.json", "{}")
-    with tarfile.open(directory / "manabot-0.2.0.tar.gz", "w:gz") as archive:
-        for name, data in (
-            ("PKG-INFO", metadata),
-            ("content/semantic/current/learning_schema.json", "{}"),
-        ):
-            info = tarfile.TarInfo(f"manabot-0.2.0/{name}")
-            info.size = len(data.encode())
-            archive.addfile(info, io.BytesIO(data.encode()))
+                archive.writestr(f"{project}-0.2.0.dist-info/METADATA", metadata)
+                if project == "managym":
+                    archive.writestr("managym/_managym.cpython.so", b"native fixture")
+                    archive.writestr("managym/Cargo.lock", "# lockfile fixture\n")
+                else:
+                    archive.writestr(
+                        "content/semantic/current/learning_schema.json", "{}"
+                    )
+        with tarfile.open(directory / f"{project}-0.2.0.tar.gz", "w:gz") as archive:
+            for name, data in (
+                ("PKG-INFO", metadata),
+                ("content/semantic/current/learning_schema.json", "{}"),
+            ):
+                info = tarfile.TarInfo(f"{project}-0.2.0/{name}")
+                info.size = len(data.encode())
+                archive.addfile(info, io.BytesIO(data.encode()))
 
 
 def test_release_requires_both_platforms_and_interpreters(tmp_path: Path) -> None:
@@ -134,6 +161,21 @@ def test_release_requires_both_platforms_and_interpreters(tmp_path: Path) -> Non
     next(tmp_path.glob("*cp313*whl")).unlink()
     with pytest.raises(ValueError, match="four wheels"):
         module.validate(tmp_path, True)
+
+
+def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
+    tmp_path: Path,
+) -> None:
+    _artifacts(tmp_path)
+    wheel = next(tmp_path.glob("managym-*cp313*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        files = {name: archive.read(name) for name in archive.namelist()}
+    del files["managym/Cargo.lock"]
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+    with pytest.raises(ValueError, match="provenance lockfile"):
+        _load("validate").validate(tmp_path, True)
 
 
 @pytest.mark.parametrize(
@@ -149,7 +191,7 @@ def test_source_metadata_must_match_wheels(
     tmp_path: Path, before: bytes, after: bytes
 ) -> None:
     _artifacts(tmp_path)
-    wheel = next(tmp_path.glob("*.whl"))
+    wheel = next(tmp_path.glob("manabot-*.whl"))
     with zipfile.ZipFile(wheel) as archive:
         files = {name: archive.read(name) for name in archive.namelist()}
     name = "manabot-0.2.0.dist-info/METADATA"
@@ -172,21 +214,23 @@ def test_registry_failures_only_allow_absent_projects(
 
     monkeypatch.setattr(module, "urlopen", fail)
     if status == 404:
-        assert module.published_files("0.2.0") == {}
+        assert module.published_files("managym", "0.2.0") == {}
     else:
         with pytest.raises(HTTPError):
-            module.published_files("0.2.0")
+            module.published_files("managym", "0.2.0")
 
 
 @pytest.mark.parametrize(
     "state", ["absent", "complete", "partial", "different", "extra"]
 )
+@pytest.mark.parametrize("project", ["managym", "manabot"])
 def test_pypi_retry_requires_complete_identical_artifacts(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, state: str, project: str
 ) -> None:
     _artifacts(tmp_path)
     files = {
-        p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in tmp_path.iterdir()
+        p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in tmp_path.glob(f"{project}-*")
     }
     if state == "absent":
         files = {}
@@ -197,12 +241,12 @@ def test_pypi_retry_requires_complete_identical_artifacts(
     elif state == "extra":
         files["unexpected.whl"] = "0" * 64
     module = _load("complete")
-    monkeypatch.setattr(module, "published_files", lambda version: files)
+    monkeypatch.setattr(module, "published_files", lambda name, version: files)
     if state in {"absent", "complete"}:
-        assert module.needs_upload(tmp_path, "0.2.0") is (state == "absent")
+        assert module.needs_upload(tmp_path, project, "0.2.0") is (state == "absent")
     else:
         with pytest.raises(ValueError, match="inspect"):
-            module.needs_upload(tmp_path, "0.2.0")
+            module.needs_upload(tmp_path, project, "0.2.0")
 
 
 @pytest.mark.parametrize("existing", [False, True])
@@ -212,7 +256,10 @@ def test_github_release_is_created_or_verified_without_republishing(
     module = _load("complete")
     monkeypatch.setenv("GH_TOKEN", "fixture-token")
     notes = "Compatibility changes"
-    body = notes + "\n\nInstall from [PyPI](https://pypi.org/project/manabot/0.2.0/).\n"
+    body = (
+        notes
+        + "\n\nInstall [managym](https://pypi.org/project/managym/0.2.0/) or [manabot](https://pypi.org/project/manabot/0.2.0/) from PyPI.\n"
+    )
     saved: dict[str, object] = (
         {
             "tag_name": "v0.2.0",
@@ -262,7 +309,10 @@ def test_incomplete_github_release_fails(
     module = _load("complete")
     monkeypatch.setenv("GH_TOKEN", "fixture-token")
     notes = "Compatibility changes"
-    body = notes + "\n\nInstall from [PyPI](https://pypi.org/project/manabot/0.2.0/).\n"
+    body = (
+        notes
+        + "\n\nInstall [managym](https://pypi.org/project/managym/0.2.0/) or [manabot](https://pypi.org/project/manabot/0.2.0/) from PyPI.\n"
+    )
     release = {
         "tag_name": "v0.2.0",
         "draft": False,
@@ -274,3 +324,80 @@ def test_incomplete_github_release_fails(
     monkeypatch.setattr(module, "_json", lambda request: release)
     with pytest.raises(ValueError, match="GitHub Release"):
         module.complete_github("example/repo", "v0.2.0", "abc", notes)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "managym/pyproject.toml",
+        "managym/Cargo.toml",
+        "managym/state/Cargo.toml",
+        "managym/cards/Cargo.toml",
+    ],
+)
+def test_each_package_version_must_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, path: str
+) -> None:
+    for name in (
+        "pyproject.toml",
+        "managym/pyproject.toml",
+        "managym/Cargo.toml",
+        "managym/state/Cargo.toml",
+        "managym/cards/Cargo.toml",
+    ):
+        target = tmp_path / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((ROOT / name).read_text())
+    target = tmp_path / path
+    version = tomllib.loads((tmp_path / "pyproject.toml").read_text())["project"][
+        "version"
+    ]
+    target.write_text(
+        target.read_text().replace(f'version = "{version}"', 'version = "9.9.9"')
+    )
+    module = _load("check")
+    monkeypatch.setattr(module, "ROOT", tmp_path)
+    with pytest.raises(ValueError, match="versions must match"):
+        module.check(None)
+
+
+def test_second_project_failure_prevents_all_upload_instructions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _artifacts(tmp_path)
+    module = _load("complete")
+
+    def registry(project: str, version: str) -> dict[str, str]:
+        return {} if project == "managym" else {"partial.whl": "0" * 64}
+
+    monkeypatch.setattr(module, "published_files", registry)
+    output = tmp_path / "outputs"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr("sys.argv", ["complete.py", str(tmp_path), "--tag", "v0.2.0"])
+    with pytest.raises(ValueError, match="inspect"):
+        module.main()
+    assert not output.exists()
+
+
+def test_completed_engine_can_resume_absent_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _artifacts(tmp_path)
+    module = _load("complete")
+
+    def registry(project: str, version: str) -> dict[str, str]:
+        return (
+            {
+                p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in tmp_path.glob("managym-*")
+            }
+            if project == "managym"
+            else {}
+        )
+
+    monkeypatch.setattr(module, "published_files", registry)
+    output = tmp_path / "outputs"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setattr("sys.argv", ["complete.py", str(tmp_path), "--tag", "v0.2.0"])
+    module.main()
+    assert output.read_text() == "managym=false\nmanabot=true\n"

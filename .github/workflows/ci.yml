@@ -248,7 +248,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           uv venv .venv --python 3.13
-          uv export --quiet --frozen --extra dev --no-emit-project \
+          uv export --quiet --frozen --extra dev --no-emit-workspace \
             --prune torch --prune typer --prune psutil \
             --prune httpx --prune jsonschema --prune ruff \
             --output-file /tmp/visual-requirements.txt

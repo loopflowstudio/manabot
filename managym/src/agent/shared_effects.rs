@@ -100,22 +100,14 @@ pub fn project(game: &Game) -> Vec<SharedEffectData> {
     shared
 }
 
-// V7 CSR: headers own half-open slices of typed details and object memberships.
+// CSR: headers own half-open slices of typed details and object memberships.
 // Header: modification halves, three values, three presence flags, duration,
 // timestamp rank, controller/source joins, detail offset/count, member offset/count,
 // validity. A membership retains its original one-based record order.
 pub const EFFECT_ROWS: usize = 128;
 pub const EFFECT_DIM: usize = 18;
-pub const DETAIL_ROWS: usize = 512;
+pub const DETAIL_ROWS: usize = 4096;
 pub const DETAIL_DIM: usize = 3;
-pub const V8_DETAIL_ROWS: usize = 4096;
-pub fn detail_rows(version: u8) -> usize {
-    if version >= 8 {
-        V8_DETAIL_ROWS
-    } else {
-        DETAIL_ROWS
-    }
-}
 pub const MEMBER_ROWS: usize = 2048;
 pub const MEMBER_DIM: usize = 2;
 
@@ -134,7 +126,7 @@ pub fn encode(
         .shared_effects
         .as_ref()
         .ok_or(Error::InvalidShared(
-            "v7 requires native shared-effect provenance; historical absence is unknown",
+            "policy input requires native shared-effect provenance; historical absence is unknown",
         ))?;
     let detail_count: usize = records
         .iter()

@@ -17,7 +17,7 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
 | Errors and capacities | Invalid action rejects; later rules/encoder failure need not be transactional | Strict calls may advance a prefix before failing; isolated gameplay/capacity outcomes are opt-in; malformed buffers remain fatal | CapturedVector retains private replay inputs around buffered calls. Discard failed-call rows and recover/reset; neither an old buffer nor an empty snapshot denotes a successful transition. |
 | Capture and diagnostics | Viewer decision captures, Commands, state/selected-search witnesses, optional card/exposure capture and profiler | Semantic decision frames, current setups/seeds/action summaries, exposure and buffered timing counters | Vector frames are not scalar DecisionCapture authorization. Snapshots are separate privileged records; no automatic collection or addition to capture/diagnostic payloads. |
 | Search and possible worlds | Fork/selected fork, determinization, fixed-view spaces/materialization, MC/PUCT, RolloutPool | No arbitrary slot fork or possible-world operations | RolloutPool batches simulations from one scalar root; it is not VectorEnv. Closed-decklist search admission remains native. No parity shim added. |
-| Installation and typing | `from manabot import managym`; legacy `import managym` aliases the same classes | Same installed extension and stub, now including HandSnapshot | Explicit typed methods on CapturedVector and Torch. Added missing vector stubs for existing roster, matchup and exposure methods. Release/version/dependency changes remain separate. |
+| Installation and typing | `import managym` from the engine distribution; `from manabot import managym` is the compatibility alias | Same installed extension and stub, including HandSnapshot | Explicit typed methods on CapturedVector and Torch. Engine-only consumers need no training package; see [installation](engine-python.md). |
 
 ## Code evidence
 
@@ -32,8 +32,8 @@ and snapshot contract are in [Hand snapshots](engine.md#hand-snapshots).
   [`python/vector_env_bindings.rs`](../managym/src/python/vector_env_bindings.rs):
   scalar lock/Command checks; vector active-state clearing, buffer validation,
   GIL release around buffered calls, and Python result conversion.
-- [`__init__.pyi`](../manabot/managym/__init__.pyi) is the installed type surface;
-  [`managym/__init__.py`](../managym/__init__.py) owns the compatibility alias.
+- [`__init__.pyi`](../managym/__init__.pyi) is the installed type surface;
+  [`manabot/managym/__init__.py`](../manabot/managym/__init__.py) owns the compatibility alias.
 - [`env.py`](../manabot/env/env.py),
   [`vector_env.py`](../manabot/env/vector_env.py), and
   [`failures.py`](../manabot/env/failures.py): wrapper rewards, reset policies,

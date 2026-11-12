@@ -90,3 +90,11 @@ remains for implementation; broad validation belongs to gate.
   collector joins result seats by player name.
 - Module stages export each trained model as artifact `raw/<name>`.
 - `CardPool` count errors name the card (binding parses counts itself).
+
+## Sync onto main dac7f9005 — 2026-11-11
+
+Main deleted `scratch/questions.md`; this branch keeps it until its pre-land
+commit. Main moved engine stubs to `managym/__init__.pyi` with
+`manabot/managym/__init__.pyi` a star re-export, so `CardPool` and
+`format.pyi` moved to the engine package. The qa skill's training-recipe note
+dropped its stale `policy_input_version=8` advice (main accepts only v9).

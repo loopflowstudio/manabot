@@ -138,10 +138,8 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
         .actions
         .is_empty());
 
-    // Policy inputs: v9 encodes group spans at ordinary capacity; earlier
-    // inputs see anonymous modal choices.
+    // The policy input encodes group spans at ordinary capacity.
     let v9 = ObservationEncoderConfig {
-        policy_input_version: 9,
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };
@@ -153,11 +151,6 @@ fn catalog_naming_is_a_complete_bounded_hierarchy_beyond_512() {
             [0.0, 0.0, (first + 1) as f32, (last + 1) as f32]
         );
     }
-    let v8 = ObservationEncoderConfig {
-        policy_input_version: 8,
-        ..v9
-    };
-    assert!(encode(&obs, &v8).unwrap().name_candidates.is_empty());
     assert!(encode(&obs, &ObservationEncoderConfig::default()).is_ok());
 
     let back = names
@@ -347,7 +340,6 @@ fn catalog_naming_cost_attribution() {
     });
     let obs = Observation::for_player(&game, PlayerId(0));
     let config = ObservationEncoderConfig {
-        policy_input_version: 9,
         max_actions: NAME_BRANCHING,
         ..Default::default()
     };

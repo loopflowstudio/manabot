@@ -56,7 +56,7 @@ class NameCandidateEncoder(nn.Module):
         )
 
     def forward(self, candidates: torch.Tensor) -> torch.Tensor:
-        """Embed `[..., 2]` (v8) or `[..., 4]` (v9) one-based candidate rows."""
+        """Embed one-based `[..., 4]` candidate rows; a `[..., 2]` prefix has no group span."""
         rows = admit_definition_ids(candidates[..., 0], len(self.definitions))
         if not torch.equal(
             candidates[..., 1], self.definitions[rows].to(candidates.dtype)

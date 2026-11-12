@@ -121,26 +121,18 @@ def _coverage(coverage: list[Step]) -> None:
 
 
 def _experiment(experiment: list[Step]) -> None:
-    router = _one(experiment, "experiment-route")
-    routes = {path.name: path.steps for path in router.paths}
-    assert set(routes) == {"software", "ready"} and not routes["ready"]
-    software = routes["software"]
-    _delivery(software, _one(software, "implement").key, "experiment-software-review")
-    assert not any(step.label == "verify" for step in _flatten(experiment))
-    for review, target in (
-        ("experiment-design-review", "experiment-design"),
-        ("experiment-execution-review", "experiment-freeze"),
-        ("experiment-evidence-review", "pool-validation"),
-    ):
-        step = _one(experiment, review)
-        assert step.interactive and step.returns_to == _one(experiment, target).key
-    assert (
-        router.key
-        < _one(experiment, "experiment-freeze").key
-        < _one(experiment, "experiment-execution-review").key
-        < _one(experiment, "pool-validation").key
-        < _one(experiment, "experiment-analysis").key
-    )
+    """Design, then run and report; only a finding ends in a person's review."""
+    assert experiment[0].label == "experiment-design"
+    router = _one(experiment, "experiment-tier")
+    routes = {path.name: [step.label for step in path.steps] for path in router.paths}
+    assert routes == {
+        "exploratory": ["experiment-run", "experiment-report"],
+        "finding": ["experiment-run", "experiment-report", "experiment-review"],
+    }
+    finding = next(path.steps for path in router.paths if path.name == "finding")
+    interactive = [step for step in _flatten(experiment) if step.interactive]
+    assert interactive == [finding[-1]]
+    assert finding[-1].returns_to == finding[0].key
 
 
 def _performance(steps: list[Step], measure: str, review: str) -> None:
@@ -180,7 +172,7 @@ def main() -> None:
     )
     _experiment(graphs["experiment"])
     print(
-        "Coverage/performance loops, single delivery, optional software and experiment review boundaries: valid"
+        "Coverage/performance loops, single delivery and the experiment review boundary: valid"
     )
 
 
