@@ -263,7 +263,9 @@ class ValueSearchPlayer:
 
 
 def load_value_scorer(checkpoint: str, *, device: str = "cpu") -> ValueScorer:
-    agent, _ = load_checkpoint(checkpoint)
+    """Load a value scorer; on CUDA with the forward layout CUDA serving uses."""
+    cuda = device == "cuda"
+    agent, _ = load_checkpoint(checkpoint, bucketed_shapes=cuda, live_tokens=cuda)
     return ValueScorer(agent, device=device)
 
 

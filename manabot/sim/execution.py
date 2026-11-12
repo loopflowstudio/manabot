@@ -12,6 +12,11 @@ sampling is per row, so allocation settings change throughput, not the
 contract: Commands are reproducible from retained traces, not by recomputing
 the policy live across batch sizes. `shared-eval-v1` hashed the allocation
 settings too; its frozen records stay readable through `EvalComputeV1`.
+
+The forward layout (`bucketed_shapes`, `live_tokens`) is an allocation setting
+for the same reason: like batch composition, it changes only the order of
+floating-point sums. Both resolve `auto` from the device when an allocation is
+validated (on for CUDA, off for CPU), so receipts retain the resolved values.
 """
 
 from __future__ import annotations
@@ -19,7 +24,7 @@ from __future__ import annotations
 import time
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from manabot.infra.identity import StrictModel, canonical_sha256
 
@@ -46,6 +51,33 @@ class EvalAllocation(EvalCompute):
     request_seconds: float = Field(default=60.0, gt=0, allow_inf_nan=False)
     cache_catalog: bool = True
     resident: bool = True
+    # Bucketed padding and live-token attention for served policies
+    # (`manabot.model.buckets`, `manabot.model.live_tokens`). Written `auto` or
+    # omitted, each resolves to whether the device is CUDA.
+    bucketed_shapes: bool = False
+    live_tokens: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_forward_layout(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        cuda = value.get("device") == "cuda"
+        return {
+            **value,
+            **{
+                name: cuda
+                for name in ("bucketed_shapes", "live_tokens")
+                if value.get(name, "auto") == "auto"
+            },
+        }
+
+    @model_validator(mode="after")
+    def live_tokens_on_cuda(self) -> "EvalAllocation":
+        # Off CUDA, jagged attention falls back to one call per observation.
+        if self.live_tokens and self.device != "cuda":
+            raise ValueError("live tokens require CUDA")
+        return self
 
     @property
     def compute(self) -> EvalCompute:

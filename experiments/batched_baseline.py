@@ -72,7 +72,7 @@ def scale_ladder() -> TrainingRegime:
     )
     regime.wall_seconds = 400_000
     regime.schedule_clock = "iteration_fraction"
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegime:
@@ -93,7 +93,7 @@ def seat_comparison(seats: Literal["one", "both"], updates: int) -> TrainingRegi
     stage.learning_seats = seats
     stage.batch_closure = "complete-games"
     stage.games_per_stream = 1 if seats == "both" else 2
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def scale_ladder_both() -> TrainingRegime:
@@ -104,7 +104,7 @@ def scale_ladder_both() -> TrainingRegime:
     assert isinstance(stage, TrainSelfPlay)
     stage.learning_seats = "both"
     stage.batch_closure = "complete-games"
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
@@ -125,7 +125,7 @@ def closure_comparison(closure: BatchClosure, updates: int) -> TrainingRegime:
     stage.transitions = (
         CLOSURE_QUOTA if closure == "exact-quota" else CLOSURE_COMPLETE_FLOOR
     )
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def lambda_sweep(
@@ -138,4 +138,4 @@ def lambda_sweep(
     assert isinstance(stage, TrainSelfPlay)
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())

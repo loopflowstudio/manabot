@@ -110,7 +110,11 @@ class FrozenPolicyLikelihood:
         self.batch_observer = batch_observer
         from manabot.model.checkpoint import load_checkpoint
 
-        self.agent, self.obs_space = load_checkpoint(str(path))
+        # A CUDA policy runs the forward layout CUDA training and serving use.
+        cuda = self.device.type == "cuda"
+        self.agent, self.obs_space = load_checkpoint(
+            str(path), bucketed_shapes=cuda, live_tokens=cuda
+        )
         self.agent.to(self.device)
         self.agent.eval()
 
