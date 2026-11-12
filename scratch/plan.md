@@ -50,14 +50,15 @@
 
 ## Remaining
 
-1. Gate: the whole-suite run stalled at 62% on a busy host (syspolicyd
-   ~180% CPU, load ~8) and was stopped. Module reruns: all pass except
-   test_etude_evaluation (4) and test_head_to_head (2): `No module named
-   'duckdb'`, and test_game_errors (3): fixture replay returns
-   `binding_mismatch`; the diff touches none of env/, game_errors, managym,
-   sim or fixtures. Not yet run to completion here: tests/training modules
-   after test_precision in collection order, test_package_boundaries,
-   tests/model/test_attack_choice, test_shared_effects, test_experiment_files.
+1. Gate (module by module; whole-suite run stalled on a busy host): every
+   module in tests/training, test_package_boundaries, test_experiment_files,
+   test_attack_choice and test_shared_effects passes except failures outside
+   this diff: test_etude_evaluation (4) and test_head_to_head (2)
+   `No module named 'duckdb'`; test_game_errors (3) fixture replay
+   `binding_mismatch` (diff touches no env/, game_errors, managym, sim or
+   fixtures); test_training_throughput::test_a_packed_seed_digests_as_it_does_solo
+   (checkpoint `source/etude_run`, added in #464, is not in the packing
+   digest's volatile list). Re-run these on a quiet host before landing.
 2. `TrainingJob(regime=callable)`: jobs are built around one saved
    self-play stage (Etude `until=updates=N`, continuations, stop reserve);
    a function job needs a declared update target. Docs say not yet.
