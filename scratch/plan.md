@@ -22,29 +22,26 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
   test_experiment_files` → 54 passed.
 
 ## Remaining (blocks landing)
-1. w256l8 step run with `experiments/cuda_precision.py` (bucketed on/off), ~USD 0.20.
-   If BF16 learner and large collection calls are both >= 1.1x float32 at w256, set
-   `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment.
-2. Learning A/B: written, not launched. `experiments/precision_ladder.py` (arms
-   float32/bf16 explicit, w384l8 bucketed, `sampled_self_play` Elemental, seeds 32401/32402,
-   64 updates, horizon 64; `runs` and the heuristic matchups reuse `learning_signal`'s
-   `training_runs` / `scheduled_matchups` (scored at 20, 40 and each run's end), plus
-   bf16-vs-float32 head-to-heads at the last shared checkpoint)
-   and `experiments/precision_ladder.md` (pre-registered paragraph, USD 10 cap). Launch:
-   `etude launch experiments/precision_ladder.py --rent l4 --parallel 4 --max-usd 10
-   --revision COMMIT`, then `etude eval ... --rent cpu32`. Check: `read_experiment` loads it,
-   `runs('HEAD')` gives 4 runs at 3.0 h, `evaluation_matchups` on a fake state (one run
-   stopped at 57, one unended) gives 11 heuristic + 2 head-to-heads (u64, u40); ruff clean.
+Steers (Jack Heart, 2026-11-12): "Run the w256l8 step now"; then "Budget raised: Jack approved
+about USD 30 for the learning A/B ("sure thats fine"). Run the full-length version, about 300
+updates per arm ... Task cap is now USD 35 total."
+Supplies: on-demands `mtg324-l4` (max 4, USD 0.60/h ceiling, the A/B) and `mtg324-l4-step`
+(max 1, USD 0.70/h, the step run only: L4 listed at USD 0.69/h on 2026-11-12 18:52 UTC).
+Driving both: `/tmp/mtg324-etude.sh wait RUN COHORT` (0.2.15 overlay + nested doppler + certifi);
+an unbooted pod needs a live controller loop, or it is lost (first step run d9976d77ffb1 was).
+1. w256l8 step run: `cuda_precision.py --sizes w256l8` at 35764ee13, run 5fcf338bac39.
+   If BF16 learner and large collection calls are both >= 1.1x float32 at w256 (bucketed), set
+   `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment; record the run
+   as a dated line in `experiments/cuda_precision.md`. Then `etude terminate` its machine.
+2. Learning A/B, scored: 300 updates, cohort `mtg324-precision-ab-300` at 3efb3bdf1, runs
+   5713f9936db8 / 51a6ea46563e (float32) and a504bd8e523f / a9a39029b2dd (bf16), USD 7.85 each,
+   `--max-usd 32`; eval pass USD 2 on cpu32 after. The 64-update cohort was cancelled unrented.
+   Float32 pace at w384l8 on the L4 is assumed 150 s; slower runs stop at the watchdog and the
+   comparison uses *M* (pre-registered in `experiments/precision_ladder.md`).
 3. Apply the A/B decision. Accepted: keep the docs sentence and fill the report. Rejected or
    unresolved: `ladder_precision` returns float32 everywhere and the docs paragraph says what
-   separated. The docs' learning-comparison sentence (`docs/training.md` § Reduced precision,
-   "In a learning comparison at w384l8 ... against the heuristic") states the accepted outcome
-   and is unverified until (2) runs.
-
-Both runs (step run and A/B) are deferred: they wait for the L4: the Task says not to start until MTG-318 and MTG-319 have had
-their L4 time. Rechecked 2026-11-12 (second realign): MTG-318 at pr-publish with PR #493 open; MTG-319 at
-implement (loop 1 pass 2). origin/main has nothing new since the last merge. PR #489 has landed
-and the branch contains current main, so no upstream change affects the plan.
+   separated. The docs' learning-comparison sentence (`docs/training.md` § Reduced precision)
+   states the accepted outcome and is unverified until (2) runs.
 
 ## Compress (2026-11-12)
 Kept `_from_ladder` + `Execution.__eq__` + `authored_dump`: deriving "from ladder" from
