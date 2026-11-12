@@ -51,7 +51,8 @@ appendix). Report-only edits, no new numbers:
    gates and the Evidence/reproduce block into a closing `<details>` appendix. Keep the cross-job baseline
    agreement sentence beside the arms table, where it qualifies the comparison.
 3. Leave `experiments/l4_step_profile.py` and the option-3 patch unchanged (they are what ran).
-No open product choice. Publish still needs the `mtg301-bucketed-run` ref pushed (questions.md).
+Done: report reordered (Answer → (a)–(d) → Scale → Decision → Implications → cost → Limits → <details>
+appendix); every number of 035b58723's report retained. Publish still needs the `mtg301-bucketed-run` ref pushed (questions.md).
 
 ## Performance review (2026-11-12)
 Checked against `summary.json`/`job.json`/in-situ traces of both jobs:

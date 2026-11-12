@@ -4,7 +4,9 @@ Exploratory. The question was whether the host synchronizations and data-depende
 shapes found on Apple MPS also cost CUDA training. It sizes removing validation
 syncs (MTG-299), catalog encoding (MTG-300), the earlier fixed-shape "option 3"
 lookups and MTG-302's bucketed shapes. It is also the measured basis for an
-accelerator-first redesign of the policy for larger models.
+accelerator-first redesign of the policy for larger models. One real w160l8
+update was profiled on an L4, and its retained inputs were replayed per arm at
+w160l8 and w384l8 (method in the appendix).
 
 **Answer.** On an L4 the w160l8 learner step and large collection forwards are
 GPU-bound (87–96% busy). Most of that time is fp32 attention blocks running at
@@ -14,145 +16,16 @@ about 18 s of a ~180 s GPU-phase update. Catalog encoding costs at most about
 in both phases, and the gain holds at w384l8. Padded work, not synchronization,
 is the CUDA cost.
 
-## Runs and cost
-
-| Job | Etude run | Source | Torch | Arms |
-|---|---|---|---|---|
-| option 3 | `d8ad784530d7` | `4a002968e` = main `92560a1e0` + module | 2.10.0+cu128 | baseline, option 3 |
-| bucketed | `1999b57daf19` | `e55157ac5` = MTG-302 branch `54cd65420` (newer main) + module | 2.15.0+cu132 | baseline (switch off), bucketed (`MANABOT_BUCKETED_SHAPES=1`) |
-
-Both jobs ran in sequence on one hand-held L4 window: machine
-`l4-etude-6fc061afd2e6`, RunPod pod `jvkaqth5y6wyt9`, 11:27–12:40 UTC on
-2026-11-12. The host was an AMD EPYC 9254 with 48 schedulable CPUs.
-MTG-302 later landed on main as `bf4e280f7` with `manabot/model` identical to
-`54cd65420`, so the bucketed arm measures the code on main.
-
-Cost: RunPod had posted $0.143 when this was written ($0.032 for the first
-attempt's pod `26qog3f0upfmuy`, $0.112 for `jvkaqth5y6wyt9`). The window at the
-quoted $0.59/hour bounds the total at about $0.80 once billing settles, under
-the USD 10 cap. The rental was terminated at 12:40; no pod remains.
-
-Comparisons are within a job: same machine, same retained inputs, interleaved
-order and a baseline repeat at the end. The two jobs' baselines differ in torch
-version and source, and they agree within 3% (inference pass 9.05 / 8.78 s,
-learner pass 7.88 / 7.96 s).
-
-Dated lines, 2026-11-12:
-- Run `6441cc948c6a` failed in its first minutes because the bundle has no
-  `.git` for `source_commit`. Run `42e16409d083` failed the same way. Run
-  `ee82615b12e2` failed on a stale `/tmp` work directory from the previous
-  attempt. Each fix is a later commit on this branch; the question is unchanged.
-- At 10:24 UTC the first `etude launch` also admitted an already-queued
-  MTG-267 run (`tla-frontier-c5fba4-cpu-split-v1-53dd18c20036`, cpu32). It was
-  left running and noted on MTG-267; its cost is not this experiment's.
-
-## Method
-
-1. **In situ.** The frozen MTG-267 w160l8 regime (`tla_frontier.frozen()`)
-   plays one real update on CUDA from its own initialization, unchanged except
-   for `updates=1`. That regime is input v9, 512 facts, catalog vocabulary,
-   256 streams × 64 transitions with complete games, both seats, four
-   producers, float32, seed 21501.
-   - Hooks profile inference calls 122–137 and learner steps 32–39 with
-     `torch.profiler` (CPU and CUDA).
-   - `torch.cuda.set_sync_debug_mode("warn")` attributes synchronizing calls to
-     their innermost repository line over inference calls 200–215 and the
-     backward/step of learner steps 50–59.
-   - The hooks retain 48 collection observations (every 12th call up to call
-     576) and 20 learner minibatches (steps 70–89).
-2. **Replay.** Those inputs run through collection's preparation and *Policy
-   inference and action selection* block, and through `update_damped_iteration`'s
-   minibatch body, including its index round trip, `OptimizerHealth` and
-   diagnostic reads. Each arm runs at w160l8 (the in-situ initial weights) and at
-   w384l8, a random initialization with 31.4M parameters, which fit the L4.
-   Labels on every top-level module attribute kernels to their launching code.
-3. **Bounds.** Per window:
-   - wall time;
-   - GPU busy, the union of kernel, memcpy and memset intervals;
-   - host time blocked in CUDA waits.
-
-   With no waits the host and GPU overlap fully, so the window cannot fall below
-   max(GPU busy, wall − waits). The difference from the wall is the upper bound
-   on what removing synchronizations alone could save.
-
-Numerical gates at fixed weights (`numerics`, `compare`):
-- **Option 3, CPU, before timing** (four real learner minibatches and eight
-  collection observations): logits and values bit-identical; losses within
-  1e-10; gradients within 4e-7 (cosine ≥ 0.9999999999987).
-- **Option 3, CUDA:** gradients within 8.3e-5, cosine ≥ 0.99999990.
-- **Bucketed, CUDA:** losses within 9e-8, logits within 5e-9, gradients within
-  2.3e-5, cosine ≥ 0.9999999941.
-
-The CUDA differences are atomic-accumulation order. They exceed the strict
-CPU-tuned gradient tolerance in `compare`, which therefore reports `ok: false`
-for both; no CUDA baseline-to-baseline numerics reading was taken to set a
-tolerance.
-
 ## Results
 
-### One in-situ update (baseline, w160l8)
+### (a) Synchronizations
 
-| | option-3 job | bucketed job |
-|---|---:|---:|
-| Collection | 188.4 s | 291.2 s |
-| … policy inference and action selection | 97.7 s | 99.7 s |
-| … rollout recording | 76.3 s | 171.6 s |
-| … environment step and encoding | 7.2 s | 6.9 s |
-| Learning (196 optimizer steps) | 78.6 s | 79.0 s |
-| Learner step, median | 0.387 s | 0.392 s |
-
-The profiling hooks were active throughout, and this is update 1. MTG-267's
-calibration read 194.5 s/update; its later updates read 86 s of collection with
-71 s of inference.
-
-*Rollout recording* took 76–172 s. That is a host-side CPU phase larger than any
-GPU phase here, and it varied 2.3× between two runs on one machine. It is not
-explained by this profile. Whether it recurs past update 1 is unmeasured.
-In the slower bucketed job, the 16 profiled inference calls (122–137) also
-carried 45–1,330 ms of host time that no recorded torch op covers. The same
-calls in the option-3 job carried 17–22 ms (`insitu/collection-trace.json.gz`,
-inside `mtg301/sample_learning_rows`). So that job's host was slowed
-outside the GPU in both collection phases. The window table below uses the
-option-3 job, and replays ran on retained inputs, which this does not affect.
-
-Inference calls by rows, in situ (seconds include preparation and recording):
-
-| Rows per call | Calls | Seconds | Median per call |
-|---|---:|---:|---:|
-| 1 | 1,050 | 17.4 | 15.9 ms |
-| 2–8 | 335 | 6.3 | 17.9 ms |
-| 9–63 | 100 | 5.7 | 51.5 ms |
-| 64–127 | 50 | 52.5 | 167.5 ms |
-| 128–256 | 182 | 96.2 | 403.3 ms |
-
-The complete-game tail produces 1,385 calls of eight rows or fewer (389,609
-idle stream steps).
-
-### Where a window's time goes (w160l8 baseline)
-
-| Window | Wall | GPU busy | Host waits | Sync-removal bound | Kernels | Syncs |
-|---|---:|---:|---:|---:|---:|---:|
-| Learner step, in situ | 345 ms | 290 ms (84%) | 256 ms | 57 ms | 4,885 | 195 |
-| Learner step, replay | 400 ms | 349 ms | — | 51 ms (13%) | 4,935 | 208 |
-| Collection call, ~200 rows, in situ | 319 ms | 296 ms (93%) | 285 ms | 26 ms | 1,195 | 118 |
-| Collection call, 2–8 rows, replay | 22–27 ms | 5 ms | — | 1.4 ms | ~830 | 118 |
-
-Median kernel duration is 2.4–2.6 µs, and 86% of learner kernels run under
-10 µs. Nonetheless a few large kernels dominate the time:
-
-- **Collection forward at ~200 rows:** fp32 memory-efficient SDPA (37%),
-  fp32 SGEMMs (27%), the attention-block FFN ReLU (11%) and copies/adds (17%).
-- **Learner step:** SDPA backward (25%), `index_put_` accumulate (the backward
-  of advanced-index gathers, 12.5%), SDPA forward (9%) and SGEMMs (~15%).
-
-Attention blocks are 80% of replay inference wall. In the learner they are 20%
-forward, plus most of the 60% that is backward on the autograd thread.
-
-Small collection calls are host-bound: about 1,000 kernels and only ~5 ms of GPU
-work in a 22–27 ms call. Syncs bound only 1.4 ms of that; the rest is per-op
-host dispatch.
-
-### Synchronizations (a)
+Each window's wall time, GPU busy time (the union of kernel, memcpy and memset
+intervals) and host time blocked in CUDA waits were read. With no waits the
+host and GPU overlap fully, so the window cannot fall below max(GPU busy,
+wall − waits). The difference from the wall is the upper bound on what removing
+synchronizations alone could save (the *sync-removal bound* in the table under
+(b)).
 
 The replay counts are exact per call:
 - **Collection forward, 118 syncs.** By file: `semantic_cards.py` 36,
@@ -172,7 +45,63 @@ Upper bound for removing all of them, per w160l8 update: about 10.5 s of
 learning (13.4% of 78.6 s) and 7.6 s of inference (5–24% by call size), about
 18 s in total. At $0.59/hour that is at most about $0.30 per 100-update run.
 
-### Catalog encoding (c)
+### (b) GPU idle and launch-bound work
+
+**Large calls and learner steps keep the GPU busy; small collection calls are
+host-bound.**
+
+| Window (w160l8 baseline) | Wall | GPU busy | Host waits | Sync-removal bound | Kernels | Syncs |
+|---|---:|---:|---:|---:|---:|---:|
+| Learner step, in situ | 345 ms | 290 ms (84%) | 256 ms | 57 ms | 4,885 | 195 |
+| Learner step, replay | 400 ms | 349 ms | — | 51 ms (13%) | 4,935 | 208 |
+| Collection call, ~200 rows, in situ | 319 ms | 296 ms (93%) | 285 ms | 26 ms | 1,195 | 118 |
+| Collection call, 2–8 rows, replay | 22–27 ms | 5 ms | — | 1.4 ms | ~830 | 118 |
+
+A small collection call launches about 1,000 kernels for only ~5 ms of GPU work
+in a 22–27 ms call. Syncs bound only 1.4 ms of that; the rest is per-op host
+dispatch. Those calls are most of the calls in an update:
+
+| Rows per call | Calls | Seconds | Median per call |
+|---|---:|---:|---:|
+| 1 | 1,050 | 17.4 | 15.9 ms |
+| 2–8 | 335 | 6.3 | 17.9 ms |
+| 9–63 | 100 | 5.7 | 51.5 ms |
+| 64–127 | 50 | 52.5 | 167.5 ms |
+| 128–256 | 182 | 96.2 | 403.3 ms |
+
+(In situ; seconds include preparation and recording.) The complete-game tail
+produces 1,385 calls of eight rows or fewer (389,609 idle stream steps).
+
+Median kernel duration is 2.4–2.6 µs, and 86% of learner kernels run under
+10 µs, but in the busy windows a few large kernels dominate the time (see (d)).
+
+The whole in-situ update (baseline, w160l8) also has a host-side phase larger
+than any GPU phase:
+
+| | option-3 job | bucketed job |
+|---|---:|---:|
+| Collection | 188.4 s | 291.2 s |
+| … policy inference and action selection | 97.7 s | 99.7 s |
+| … rollout recording | 76.3 s | 171.6 s |
+| … environment step and encoding | 7.2 s | 6.9 s |
+| Learning (196 optimizer steps) | 78.6 s | 79.0 s |
+| Learner step, median | 0.387 s | 0.392 s |
+
+The profiling hooks were active throughout, and this is update 1. MTG-267's
+calibration read 194.5 s/update; its later updates read 86 s of collection with
+71 s of inference.
+
+*Rollout recording* took 76–172 s and varied 2.3× between two runs on one
+machine. It is not explained by this profile. Whether it recurs past update 1
+is unmeasured. In the slower bucketed job, the 16 profiled inference calls
+(122–137) also carried 45–1,330 ms of host time that no recorded torch op
+covers. The same calls in the option-3 job carried 17–22 ms
+(`insitu/collection-trace.json.gz`, inside `mtg301/sample_learning_rows`). So
+that job's host was slowed outside the GPU in both collection phases. The
+window table above uses the option-3 job, and replays ran on retained inputs,
+which this does not affect.
+
+### (c) Catalog encoding
 
 In the learner forward, `SemanticCardEncoder.definitions` costs 1.7 ms of GPU
 and 9.6 ms of host span per step. Full-table encoding alone (361 definitions)
@@ -184,7 +113,17 @@ MTG-300 established that the catalog is encoded exactly once per weights
 version, so this is the encoder's own cost: a GRU over referenced card
 programs. It is not removable duplication.
 
-### Kernel compute (d) and the candidate arms
+### (d) Kernel compute and the candidate arms
+
+**The busy time is fp32 attention at padded capacity.**
+
+- **Collection forward at ~200 rows:** fp32 memory-efficient SDPA (37%),
+  fp32 SGEMMs (27%), the attention-block FFN ReLU (11%) and copies/adds (17%).
+- **Learner step:** SDPA backward (25%), `index_put_` accumulate (the backward
+  of advanced-index gathers, 12.5%), SDPA forward (9%) and SGEMMs (~15%).
+
+Attention blocks are 80% of replay inference wall. In the learner they are 20%
+forward, plus most of the 60% that is backward on the autograd thread.
 
 Replay pass totals (48 collection inputs; 20 learner minibatches with 29–103
 rows):
@@ -201,8 +140,11 @@ rows):
 | bucketed | w384l8 | 7.64 s (0.39×) | 7.70 s (0.42×) | 402 ms | 7,580 | 5.02 GB | 1.66 GB |
 
 The first four rows come from the option-3 job and the last four from the
-bucketed job. Ratios are to the same job's baseline. Baseline repeats at the end
-of each job read within 2–3% of their first readings.
+bucketed job. Ratios are to the same job's baseline: same machine, same retained
+inputs, interleaved order and a baseline repeat at the end, which read within
+2–3% of the first readings. The two jobs' baselines differ in torch version and
+source, and they agree within 3% (inference pass 9.05 / 8.78 s, learner pass
+7.88 / 7.96 s).
 
 **Option 3 is not faster on CUDA.** It removes 44 inference and 87 learner
 syncs, but launches 5× more kernels and processes facts and effect records at
@@ -228,7 +170,7 @@ This is a projection, not a whole-update measurement. Recording time was
 subtracted per row and preparation per call. Against MTG-267's 194.5 s
 calibration update, about 85 s less is roughly $1.40 per 100-update L4 run.
 
-### Scale (w160l8 → w384l8, 5.5× parameters)
+## Scale (w160l8 → w384l8, 5.5× parameters)
 
 | Quantity | w160l8 → w384l8 |
 |---|---|
@@ -295,6 +237,9 @@ Ranked by the measured share of CUDA time each direction addresses.
    observed, and needs its own reading over later updates before any
    accelerator design assumes collection is inference-bound.
 
+**Cost:** about $0.80 for both jobs on one L4 window ($0.143 posted when
+written), under the USD 10 cap.
+
 ## Limits
 
 - One update, one host and one GPU type.
@@ -305,9 +250,78 @@ Ranked by the measured share of CUDA time each direction addresses.
 - Sync-debug mode is a prototype and may miss some synchronizing operations.
 - Kernels with no runtime launch record (4–17% of learner time, larger at
   w384l8) are unattributed.
+- No CUDA baseline-to-baseline numerics reading (see the gates in the appendix).
 - No learning or strength evidence for any arm.
 
-## Evidence
+<details>
+<summary>Appendix: method, runs and cost, numerical gates, evidence</summary>
+
+### Method
+
+1. **In situ.** The frozen MTG-267 w160l8 regime (`tla_frontier.frozen()`)
+   plays one real update on CUDA from its own initialization, unchanged except
+   for `updates=1`. That regime is input v9, 512 facts, catalog vocabulary,
+   256 streams × 64 transitions with complete games, both seats, four
+   producers, float32, seed 21501.
+   - Hooks profile inference calls 122–137 and learner steps 32–39 with
+     `torch.profiler` (CPU and CUDA).
+   - `torch.cuda.set_sync_debug_mode("warn")` attributes synchronizing calls to
+     their innermost repository line over inference calls 200–215 and the
+     backward/step of learner steps 50–59.
+   - The hooks retain 48 collection observations (every 12th call up to call
+     576) and 20 learner minibatches (steps 70–89).
+2. **Replay.** Those inputs run through collection's preparation and *Policy
+   inference and action selection* block, and through `update_damped_iteration`'s
+   minibatch body, including its index round trip, `OptimizerHealth` and
+   diagnostic reads. Each arm runs at w160l8 (the in-situ initial weights) and at
+   w384l8, a random initialization with 31.4M parameters, which fit the L4.
+   Labels on every top-level module attribute kernels to their launching code.
+3. **Bounds.** Wall time, GPU busy and host waits per window, as defined
+   under (a).
+
+### Runs and cost
+
+| Job | Etude run | Source | Torch | Arms |
+|---|---|---|---|---|
+| option 3 | `d8ad784530d7` | `4a002968e` = main `92560a1e0` + module | 2.10.0+cu128 | baseline, option 3 |
+| bucketed | `1999b57daf19` | `e55157ac5` = MTG-302 branch `54cd65420` (newer main) + module | 2.15.0+cu132 | baseline (switch off), bucketed (`MANABOT_BUCKETED_SHAPES=1`) |
+
+Both jobs ran in sequence on one hand-held L4 window: machine
+`l4-etude-6fc061afd2e6`, RunPod pod `jvkaqth5y6wyt9`, 11:27–12:40 UTC on
+2026-11-12. The host was an AMD EPYC 9254 with 48 schedulable CPUs.
+MTG-302 later landed on main as `bf4e280f7` with `manabot/model` identical to
+`54cd65420`, so the bucketed arm measures the code on main.
+
+Cost: RunPod had posted $0.143 when this was written ($0.032 for the first
+attempt's pod `26qog3f0upfmuy`, $0.112 for `jvkaqth5y6wyt9`). The window at the
+quoted $0.59/hour bounds the total at about $0.80 once billing settles, under
+the USD 10 cap. The rental was terminated at 12:40; no pod remains.
+
+Dated lines, 2026-11-12:
+- Run `6441cc948c6a` failed in its first minutes because the bundle has no
+  `.git` for `source_commit`. Run `42e16409d083` failed the same way. Run
+  `ee82615b12e2` failed on a stale `/tmp` work directory from the previous
+  attempt. Each fix is a later commit on this branch; the question is unchanged.
+- At 10:24 UTC the first `etude launch` also admitted an already-queued
+  MTG-267 run (`tla-frontier-c5fba4-cpu-split-v1-53dd18c20036`, cpu32). It was
+  left running and noted on MTG-267; its cost is not this experiment's.
+
+### Numerical gates
+
+At fixed weights (`numerics`, `compare`):
+- **Option 3, CPU, before timing** (four real learner minibatches and eight
+  collection observations): logits and values bit-identical; losses within
+  1e-10; gradients within 4e-7 (cosine ≥ 0.9999999999987).
+- **Option 3, CUDA:** gradients within 8.3e-5, cosine ≥ 0.99999990.
+- **Bucketed, CUDA:** losses within 9e-8, logits within 5e-9, gradients within
+  2.3e-5, cosine ≥ 0.9999999941.
+
+The CUDA differences are atomic-accumulation order. They exceed the strict
+CPU-tuned gradient tolerance in `compare`, which therefore reports `ok: false`
+for both; no CUDA baseline-to-baseline numerics reading was taken to set a
+tolerance.
+
+### Evidence and reproduction
 
 Everything is under `experiments/data/l4_step_profile/{option3,bucketed}/`
 (manifest entries in `experiments/data.manifest.json`):
@@ -327,3 +341,5 @@ etude queue experiments/l4_step_profile.py --rent l4-etude --cohort NAME \
 
 and test locally with `ETUDE_OUTPUT_DIR=… uv run python -m
 experiments.l4_step_profile job --smoke`.
+
+</details>

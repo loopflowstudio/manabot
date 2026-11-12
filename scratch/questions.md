@@ -6,3 +6,6 @@
 - Bucketed run 1999b57daf19 ran from `e55157ac5`, which exists only on local branch
   `mtg301-bucketed-run` (no remote contains it). Publishing should push that ref (e.g. a tag
   `mtg301-bucketed-run`) so the report's source commit stays reachable; left to the publish step.
+- Report reorder (concept review): Method was not placed in the brief's order, so it moved into the
+  closing appendix; the bounds definition (wall / GPU busy / waits → sync-removal bound) moved into (a),
+  and the in-situ update table moved into (b) with the rollout-recording and host-stall notes. Reversible.
