@@ -471,3 +471,13 @@ leaves it open. Items 1 and 2 above are needed on either answer.
   `manabot.policy.returns` and `manabot.backends.torch.arrays`. Check: returns,
   boundaries, update backends, minimal loop 58 passed; `updates.py` vs
   `after.json`: only the known 1-ulp `value_scale` std (3 damped configs).
+- Item 2 harness: `scratch/speed/{bench,compare,mtg325_speed}.py`, `base.patch`
+  (HEAD→adf601acb, `manabot/` only). One process = one arm: elemental-long-183
+  re-pinned (w64l2, 256 streams x 64, both seats, elemental-uniform),
+  bucketed + live tokens + tf32 on CUDA; warm-up then 3 damped and 3 PPO
+  updates from the same weights (optimizer steps/s via a global step hook),
+  50 `PolicyInference` collection forwards at B=256, 5 save/load. ABAB, 3
+  processes per arm. Laptop CPU smoke (8 streams x 4, one repeat each): both
+  arms collect the same 1,711 rows and 159 damped steps; damped 5.84 vs 5.80
+  steps/s, PPO 1.41 vs 1.40, load 0.050 vs 0.049 s (base vs head; single
+  samples, no spread).
