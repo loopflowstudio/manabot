@@ -171,9 +171,11 @@ the list closed, Shrine column = Lesson-or-Shrine amount, Lesson column minus
 that = Lesson-only amount. Native `restrictions_on_any_subtype_pay_exactly_their_purposes`
 and `tests/semantic/test_restricted_mana_input.py` cover A, B and
 Lesson-or-Ally. No layout or digest change.
-Check: debug `rules_tests mana|restrict`, lib `observation_encoder`, cards
-`mana` pass; extension rebuilt; restricted-mana, text-observation and Temur
-Python tests pass (2026-11-12).
+`d0f92723a` makes the list typed `ManaRestriction` values (set equality, so
+subtype order is irrelevant), Powerstone included.
+Check (`d0f92723a`, debug): `cargo test --workspace -- mana restrict
+observation_encoder` all pass, 0 failed; extension rebuilt from that source;
+`tests/semantic/test_restricted_mana_input.py` 7 passed (2026-11-12).
 
 Considered and kept: `SpellSnapshot` compares by definition pointer while
 `SpendingObject` compares by content. It is a second identity rule for one
