@@ -56,8 +56,28 @@ impl Game {
     }
 
     pub fn can_play_land(&self, player: PlayerId) -> bool {
-        // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to one per turn.
-        self.can_cast_sorceries(player) && self.state.turn.lands_played < 1
+        // CR 305.1, 305.2 — Land plays use sorcery timing and are limited to
+        // one per turn, plus each additional land play granted.
+        self.can_cast_sorceries(player)
+            && self.state.turn.lands_played < 1 + self.additional_land_plays()
+    }
+
+    /// Additional land plays every player has on their turns (CR 305.2).
+    fn additional_land_plays(&self) -> u32 {
+        let permanents = [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.iter_battlefield_permanents(player));
+        self.layer_views(permanents)
+            .into_iter()
+            .map(|(_, view)| {
+                view.static_abilities
+                    .iter()
+                    .filter(|ability| {
+                        matches!(ability, StaticAbility::AdditionalLandPlayEachPlayer)
+                    })
+                    .count() as u32
+            })
+            .sum()
     }
 
     pub fn can_pay_mana_cost(&self, player: PlayerId, cost: &ManaCost) -> bool {

@@ -657,6 +657,9 @@ impl Game {
                     .count()
                     == *count
             }
+            Condition::CardsInHandAtLeast { count } => {
+                self.state.zones.size(ZoneType::Hand, controller) >= *count
+            }
             Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }

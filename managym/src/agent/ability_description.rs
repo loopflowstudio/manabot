@@ -150,6 +150,12 @@ fn condition_description(condition: &TriggerCondition) -> String {
         ),
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
         TriggerCondition::BeginningOfEachUpkeep => "At the beginning of each upkeep".into(),
+        TriggerCondition::BeginningOfEachDrawStep => {
+            "At the beginning of each player's draw step".into()
+        }
+        TriggerCondition::BeginningOfEachEndStep => {
+            "At the beginning of each player's end step".into()
+        }
         TriggerCondition::YouBend => {
             "Whenever you waterbend, earthbend, firebend, or airbend".into()
         }
@@ -236,6 +242,9 @@ fn condition_text(condition: &Condition) -> String {
         ),
         Condition::ControlsUnownedAtLeast { count } => {
             format!("you control {count} or more permanents you don't own")
+        }
+        Condition::CardsInHandAtLeast { count } => {
+            format!("you have {count} or more cards in hand")
         }
         Condition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")

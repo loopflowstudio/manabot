@@ -76,3 +76,25 @@ fn scout_s_warning_ends_with_the_turn() {
     on_opponents_upkeep(&mut s);
     assert!(!can_cast(&s, ogre));
 }
+
+#[test]
+fn rites_of_flourishing_draws_for_each_player_and_grants_a_land_play() {
+    use crate::support::{
+        inspect::has_action,
+        play::{play_land, resolve_everything},
+    };
+    use managym::agent::action::Action;
+    let mut s = five_color_setup(&["Rites of Flourishing"]);
+    s.force_permanent_on_battlefield(0, "Rites of Flourishing");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    play_land(&mut s, "Forest");
+    play_land(&mut s, "Island");
+    move_to_hand(&mut s, "Plains");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!has_action(&s, |a| matches!(a, Action::PlayLand { .. })));
+    // The opponent's draw step: their turn-based draw and the additional one.
+    s.advance_to_active_step(1, StepKind::Draw);
+    let hand = s.zone_size(1, ZoneType::Hand);
+    resolve_everything(&mut s);
+    s.assert_zone_size(1, ZoneType::Hand, hand + 1);
+}

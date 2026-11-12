@@ -146,6 +146,12 @@ pub enum TriggerCondition {
     BeginningOfYourUpkeep,
     /// "At the beginning of each upkeep."
     BeginningOfEachUpkeep,
+    /// "At the beginning of each player's draw step": the active player is
+    /// "that player" (`PlayerSelector::TriggeringPlayer`).
+    BeginningOfEachDrawStep,
+    /// "At the beginning of each [player's] end step": the active player is
+    /// "that player".
+    BeginningOfEachEndStep,
     /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
     /// bending instruction or waterbend payment.
     YouBend,
@@ -233,6 +239,10 @@ pub enum Condition {
     /// "if you control `count` or more permanents you don't own" (Agent of
     /// Treachery).
     ControlsUnownedAtLeast {
+        count: usize,
+    },
+    /// "if you have `count` or more cards in hand".
+    CardsInHandAtLeast {
         count: usize,
     },
     /// "as long as you have `count` or more unspent mana" (both pools).
@@ -349,6 +359,7 @@ impl Condition {
             | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
             | Condition::ControlsUnownedAtLeast { .. }
+            | Condition::CardsInHandAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
             | Condition::LandEnteredThisTurn

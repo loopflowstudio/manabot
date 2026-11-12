@@ -112,6 +112,8 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         TriggerCondition::BecomesTargeted { .. } => EventKinds::of(EventKind::PermanentTargeted),
         TriggerCondition::BeginningOfYourUpkeep
         | TriggerCondition::BeginningOfEachUpkeep
+        | TriggerCondition::BeginningOfEachDrawStep
+        | TriggerCondition::BeginningOfEachEndStep
         | TriggerCondition::BeginningOfYourCombat
         | TriggerCondition::BeginningOfYourEndStep
         | TriggerCondition::BeginningOfYourFirstMainPhase => EventKinds::of(EventKind::StepStarted),
@@ -1003,6 +1005,8 @@ impl Game {
             let player = match event {
                 GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
                 GameEvent::LibrarySearched { player } => Some(*player),
+                // "that player": whose step it is.
+                GameEvent::StepStarted { .. } => Some(self.active_player()),
                 _ => None,
             };
             // CR 107.3m: an entering permanent's own trigger sees its spell's
@@ -1505,6 +1509,18 @@ impl Game {
                 TriggerCondition::BeginningOfEachUpkeep,
                 GameEvent::StepStarted {
                     step: StepKind::Upkeep,
+                },
+            )
+            | (
+                TriggerCondition::BeginningOfEachDrawStep,
+                GameEvent::StepStarted {
+                    step: StepKind::Draw,
+                },
+            )
+            | (
+                TriggerCondition::BeginningOfEachEndStep,
+                GameEvent::StepStarted {
+                    step: StepKind::End,
                 },
             ) => true,
             (TriggerCondition::YouBend, GameEvent::Bent { player, .. }) => {

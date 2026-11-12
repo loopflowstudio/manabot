@@ -1001,6 +1001,8 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
         TriggerCondition::BeginningOfEachUpkeep => "TriggerCondition::BeginningOfEachUpkeep",
+        TriggerCondition::BeginningOfEachDrawStep => "TriggerCondition::BeginningOfEachDrawStep",
+        TriggerCondition::BeginningOfEachEndStep => "TriggerCondition::BeginningOfEachEndStep",
         TriggerCondition::YouBend => "TriggerCondition::YouBend",
         TriggerCondition::YouCastNthSpellThisTurn { .. } => {
             "TriggerCondition::YouCastNthSpellThisTurn"
@@ -1082,6 +1084,8 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::Chapter { chapter: 2 },
         TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
         TriggerCondition::BeginningOfEachUpkeep,
+        TriggerCondition::BeginningOfEachDrawStep,
+        TriggerCondition::BeginningOfEachEndStep,
         TriggerCondition::YouBend,
         TriggerCondition::WhileSourceAttacking {
             condition: Box::new(TriggerCondition::YouCastSpell {
@@ -1107,6 +1111,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::AnyGraveyardAtLeast { .. } => "Condition::AnyGraveyardAtLeast",
         Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
         Condition::ControlsUnownedAtLeast { .. } => "Condition::ControlsUnownedAtLeast",
+        Condition::CardsInHandAtLeast { .. } => "Condition::CardsInHandAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
         Condition::BentAllFourThisTurn => "Condition::BentAllFourThisTurn",
@@ -1144,6 +1149,7 @@ fn condition_witnesses() -> Vec<Condition> {
             predicate: CardPredicate::creature(),
         },
         Condition::ControlsUnownedAtLeast { count: 3 },
+        Condition::CardsInHandAtLeast { count: 4 },
         Condition::UnspentManaAtLeast { count: 3 },
         Condition::AttackedThisTurn,
         Condition::LandEnteredThisTurn,
@@ -1260,6 +1266,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "Allies at Last",
             "tla",
             "allies_at_last_affinity_and_two_attackers",
+        ),
+        StaticAbility::AdditionalLandPlayEachPlayer => witnessed(
+            "StaticAbility::AdditionalLandPlayEachPlayer",
+            Seen::Actions("a second land play is offered"),
+            "Rites of Flourishing",
+            "fut",
+            "rites_of_flourishing_draws_for_each_player_and_grants_a_land_play",
         ),
         StaticAbility::CantBeCountered => witnessed(
             "StaticAbility::CantBeCountered",
@@ -1523,6 +1536,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Flashback(ManaCost::parse("{2}")),
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
+        StaticAbility::AdditionalLandPlayEachPlayer,
         StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
             condition: None,

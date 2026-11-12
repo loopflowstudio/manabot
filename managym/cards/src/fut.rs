@@ -1,13 +1,13 @@
 //! Future Sight.
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector},
-    card::{CardDefinition, CardType, CardTypes},
+    ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition},
+    card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![scout_s_warning()]
+    vec![rites_of_flourishing(), scout_s_warning()]
 }
 
 fn scout_s_warning() -> CardDefinition {
@@ -25,6 +25,30 @@ fn scout_s_warning() -> CardDefinition {
                 count: EffectValue::Fixed(1),
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn rites_of_flourishing() -> CardDefinition {
+    let text_box = "At the beginning of each player's draw step, that player draws an additional card.\nEach player may play an additional land on each of their turns.";
+    CardDefinition {
+        key: "fut.rites_of_flourishing",
+        scryfall_id: "811458c7-dcdc-43ef-8c3e-a90e21ce315e",
+        name: "Rites of Flourishing".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::BeginningOfEachDrawStep,
+            effects: vec![Effect::ForPlayer {
+                player: PlayerSelector::TriggeringPlayer,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+            }],
+        }],
+        statics: vec![StaticAbility::AdditionalLandPlayEachPlayer],
         text_box: text_box.into(),
         ..Default::default()
     }
