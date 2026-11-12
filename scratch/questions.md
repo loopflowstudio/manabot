@@ -64,7 +64,7 @@
   `require_supported` no longer reads `token_stream`.
 - Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint` writing
   the container) are assumed to be a stacked follow-up Task, not this PR
-  (sized in plan.md "Pass of 21:45Z"). The Task outcome names them, so this
+  (sized in plan.md "Pass of 21:30Z"). The Task outcome names them, so this
   needs a person's yes; no Task was created from here. The docs state the
   interim (`.pt` save, torch does its own lookups), so they are true for
   this PR.

@@ -117,7 +117,7 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 ## Remaining
 
 1. ActorCritic over `manabot.policy.prepare.Prepared`: not built; sized in
-   "Pass of 21:45Z" below. Recommended as its own stacked Task.
+   "Pass of 21:30Z" below. Recommended as its own stacked Task.
 2. `save_checkpoint` writing the container: follows item 1 (the container
    must first carry every configuration and the `.pt` extras).
 3. Done (f61ed7dcc): `BACKENDS = {"torch", "mlx"}`; torch passes its own
@@ -300,7 +300,7 @@ Checks:
   files: 4 passed.
 - The M2 is no longer needed by this Task after this pass.
 
-## Pass of 21:45Z 2026-11-12: main merge, item 1 sized
+## Pass of 21:30Z 2026-11-12: main merge, item 1 sized
 
 - Merged main (71ab00215): #499 removed the pooled token stream. Kept this
   branch's `backends/torch/policy.py` homes; `policy/checkpoint.py`
