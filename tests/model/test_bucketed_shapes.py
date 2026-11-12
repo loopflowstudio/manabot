@@ -1,4 +1,4 @@
-"""Bucketed shapes agree with the default path and reject the same inputs."""
+"""Bucketed shapes agree with the default path on admitted inputs."""
 
 from collections.abc import Callable
 
@@ -7,6 +7,7 @@ import torch
 
 from manabot.env.observation import FACT_OBJECT_INDEX
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.buckets import (
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
@@ -90,7 +91,7 @@ def test_outputs_and_gradients_match_default(
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (case.agent, agent):
-        logits, values = model.forward_distribution(obs)
+        logits, values = model.forward_distribution(admit_observation(model, obs))
         outputs.append((logits, values))
         legal = obs["actions_valid"].bool()
         (logits[legal].square().mean() + values.square().mean()).backward()
@@ -157,7 +158,7 @@ def test_rejections_match_default(
     errors = []
     for model in (case.agent, agent):
         with pytest.raises(ValueError, match=message) as error:
-            model.forward_distribution(obs)
+            model.forward_distribution(admit_observation(model, obs))
         errors.append(str(error.value))
     assert errors[0] == errors[1]
 
@@ -173,6 +174,8 @@ def test_reference_to_padding_object_is_kept() -> None:
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():
-        expected, _ = case.agent.forward_distribution(obs)
-        actual, _ = agent.forward_distribution(obs)
+        expected, _ = case.agent.forward_distribution(
+            admit_observation(case.agent, obs)
+        )
+        actual, _ = agent.forward_distribution(admit_observation(agent, obs))
     torch.testing.assert_close(actual, expected, atol=1e-5, rtol=1e-5)

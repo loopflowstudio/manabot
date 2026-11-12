@@ -43,6 +43,7 @@ from manabot.belief.state import (
 from manabot.env.env import Env
 from manabot.infra.config import COMPOUND_DECISIONS_REMOVED
 from manabot.infra.identity import file_sha256
+from manabot.model.admission import admit_observation
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.rollout import Rollout
@@ -511,7 +512,10 @@ class LocalUpdateTeacher:
             if int(encoded["actions_valid"].sum()) != count:
                 raise ValueError("policy cannot represent complete legal offers")
             counts.append(count)
-        tensors = {key: torch.as_tensor(value) for key, value in encodings.items()}
+        tensors = admit_observation(
+            self.agent,
+            {key: torch.as_tensor(value) for key, value in encodings.items()},
+        )
         with torch.inference_mode():
             logits, values = self.agent(tensors)
             predictions = [
