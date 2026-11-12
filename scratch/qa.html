@@ -38,6 +38,14 @@
 <p>Opponent's stacked triggers (Earth King's Lieutenant above South Pole Voyager):</p><img src="qa307/stack-5.png" alt="Earth King's Lieutenant and South Pole Voyager triggers on the stack">
 <p>Game end:</p><img src="qa307/game-over.png" alt="Game over dialog">
 
+<h2>Re-run at bc35142da</h2>
+<p>Since the last run (da964c606), <code>managym/</code> changed only in <code>perf/baseline.json</code>, plus a base merge of Python token-stream code and docs reflows. The extension in use was built from the current Rust.</p>
+<ul>
+<li><b>Random games:</b> <code>uv run python .runs/qa307/play.py</code> played 1332 full games over every authored setup in 22 s with 0 errors. Its output, including the 76 stack trigger texts and their counts, is byte-identical to the previous run.</li>
+<li><b>Academy:</b> started with <code>./scripts/play --port 18751 --frontend-port 18752</code>, saw <code>ACADEMY_PLAY_READY</code> (cp313 extension from this worktree), then played two headless-browser games to Game Over (49 and 20 clicks), with no page errors. Only spells reached the stack in these games. Trigger display on the stack is covered by the earlier runs above, and the engine has not changed since.</li>
+</ul>
+<img src="qa307/game-over-bc35142.png" alt="Academy game over at bc35142da">
+
 <h2>Fixed</h2><p>Nothing in the change needed fixing. Updated the repository QA skill with the headless Academy driving recipe.</p>
 
 <h2>Not reached</h2>
