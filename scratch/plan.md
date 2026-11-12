@@ -311,3 +311,17 @@ Checks:
 Remaining after this pass: items 1, 2 and the item 4 rerun (ActorCritic over
 `Prepared`, container save, forward equivalence), then delete `scratch/`
 before landing.
+
+## Docs (write-docs pass, 2026-11-12)
+
+The docs that ship with this change: `manabot/backends/README.md` (contract,
+written-once updates, torch backend, convert, parity),
+`manabot/policy/README.md`, `manabot/backends/mlx.md`,
+`docs/training-loop.md`, and the backend paragraphs of `manabot/README.md`
+and `docs/training.md`. This pass corrected: `policy/README.md` said the
+torch model does not consume the package; `training-loop.md` linked a
+`policy/README.md` anchor that does not exist; `manabot/README.md` listed
+rollout admission and the reference magnet under `training/updates/`;
+"PPO" where the parity loss is the damped update's. They describe the
+branch as it stands (`.pt` save, torch forward not over `Prepared`, PPO on
+torch only); rewrite those sentences when Remaining 1 and 2 land.

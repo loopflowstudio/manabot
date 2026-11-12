@@ -1,7 +1,7 @@
 # Framework backends
 
-A backend runs the manabot policy forward and its PPO learner step in one
-array framework. Backends share the framework-free contract in
+A backend runs the manabot policy forward and the learner step of its
+updates in one array framework. Backends share the framework-free contract in
 [`manabot.policy`](../policy/README.md): host preparation of observation
 batches, the checkpoint container and the `BackendPolicy`,
 `BackendLearner` and `Backend` protocols. Training, evaluation and the CLI
@@ -135,7 +135,7 @@ documents them. A backend never carries its own copy of an update's loss:
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic` |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `NumericalError` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `outcome_probabilities`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `constant`, `require`, `require_finite`, `float64_operand`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `check_objective`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.rollout` | `AdmittedRollout`, `observation_tensors` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `float32`, `flat_numpy`, `device_of` |
@@ -228,7 +228,7 @@ capture directory written by `experiments/mlx_pilot.py capture` (real learner
 minibatches with their targets and settings, and real collection calls). Each
 backend loads the reference's weights through the canonical names and is
 compared in its own parameter layout. The check compares logits on legal
-actions and values (absolute difference), the PPO loss (relative difference)
+actions and values (absolute difference), the update's loss (relative difference)
 and each parameter's gradient (cosine similarity). Tolerances are fixed:
 logits and values within 1e-4, loss within 0.1%, every gradient cosine at
 least 0.999. A tensor whose gradient norm is below 1e-6 of the global norm in

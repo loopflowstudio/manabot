@@ -63,3 +63,7 @@
 - Steer 793944f0: main's `require_supported` reads `ModelConfig.token_stream`
   after #498 removed it; #499 fixes it. This branch has neither yet; take
   #499's two-line removal at the next main merge.
+- Do Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint`
+  writing the container) ship in this PR or a second stacked one? The docs
+  state the interim (`.pt` save, torch does its own lookups); assumed a
+  second PR, so they stay true for the first.

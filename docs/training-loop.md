@@ -288,7 +288,7 @@ from `manabot.backends.torch.checkpoint`, which binds it to the decks it
 played, as a recipe's checkpoints are bound to their setups;
 `load_checkpoint("policy.pt")` returns the policy and its observation
 space. `load_checkpoint` also reads the
-[shared container](../manabot/policy/README.md#the-checkpoint-container) that
+[shared container](../manabot/backends/README.md#convert-a-pytorch-checkpoint) that
 other backends load; `python -m manabot.backends.convert` writes one from a
 `.pt` file. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,

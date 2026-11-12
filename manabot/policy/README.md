@@ -9,6 +9,8 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   definition rows, record-vocabulary lookups, legal-action coordinates, packed
   GRU schedules, shared-effect routes and inference column compaction. A
   backend's graph then holds only gathers, scatters and arithmetic.
+  `reference_distribution` is the magnet a reverse KL pulls toward, `[B,A]`
+  float32 from the legal-action buffers.
 - `checkpoint.py` is the checkpoint container: one safetensors file of
   canonical float32 parameters, lookup buffers and the checkpoint's
   configuration, world binding and source record. It validates the world
@@ -26,6 +28,9 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   `BackendLearner`, `Backend`) and one captured minibatch's constants and
   coefficients (`Targets`, `Settings`). Values are `[B]`.
 
-Backends live in [`manabot/backends/`](../backends/README.md). The PyTorch
-model in `manabot.model` reads `.pt` checkpoints directly and does not yet
-consume this package.
+Backends live in [`manabot/backends/`](../backends/README.md), which also
+covers [writing and loading a container](../backends/README.md#convert-a-pytorch-checkpoint).
+The PyTorch backend uses the bucket sizes, the reference distribution, the
+NumPy returns in the update diagnostics and the container (`load_checkpoint`
+reads one). Its `ActorCritic` still does its own lookups in the forward rather
+than reading a `Prepared` batch, and `save_checkpoint` writes `.pt`.
