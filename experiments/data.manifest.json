@@ -3362,6 +3362,30 @@
    "sha256": "70672959564c060d7f906c492fad4b5386dc7847047e051fc37baf608f801336",
    "bytes": 1973
   },
+  "experiments/data/eval_forward_layout/cpu.json": {
+   "sha256": "ef7e47c9ceddaa6248b86709e67f5ef9c026397df089ed0e34cc7a2170dd56ba",
+   "bytes": 3639
+  },
+  "experiments/data/eval_forward_layout/cpu_cost.svg": {
+   "sha256": "ef1e6db37eebf251a4cb2a3d9227dc29acacb4fb299ec498c0a07060eebede0c",
+   "bytes": 17199
+  },
+  "experiments/data/eval_forward_layout/gpu-samples.csv": {
+   "sha256": "4c36685089b345920c907ce33b3f062e6f3c2b1288bd9e754405abc7d3f8328d",
+   "bytes": 16428
+  },
+  "experiments/data/eval_forward_layout/job.json": {
+   "sha256": "d40bf2b430ec11625feb3a21bb1cab22e664ff96708b108b5a671d864941cb9b",
+   "bytes": 552
+  },
+  "experiments/data/eval_forward_layout/served_forward.svg": {
+   "sha256": "cb0451f9a21efad94d397054f200658548d0c9fb4ddc5611e2f9e0c4dd2f2547",
+   "bytes": 11488
+  },
+  "experiments/data/eval_forward_layout/summary.json": {
+   "sha256": "00dfc015891ae183793465d1588aef9bb10ff72f2fdf115c4d5177c989f7f61b",
+   "bytes": 38102
+  },
   "experiments/data/exp-02-flat-mc.json": {
    "sha256": "9bf5dd1a5e6494f1c750736d8b969139c3a0f3818365ff74de4dc9859e3ab885",
    "bytes": 18407

@@ -213,6 +213,13 @@ class DampedPolicyLearning(Strict):
 Precision = Literal["float32", "tf32", "bf16"]
 
 
+# A forward-layout switch (`Execution.bucketed_shapes`, `live_tokens`). `auto`
+# exists only while authoring: the regime replaces it with the stage's resolved
+# layout (`TrainingRegime.resolve_forward_layout`), so no saved regime holds it.
+Layout = bool | Literal["auto"]
+LAYOUT_FIELDS = ("bucketed_shapes", "live_tokens")
+
+
 class Execution(Strict):
     device: Literal["cpu", "mps", "cuda"] = "cpu"
     precision: Precision = "float32"
@@ -225,19 +232,44 @@ class Execution(Strict):
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
     # Collection and learner forwards trim variable axes to power-of-two
-    # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
-    # hashes are unchanged; never part of the model or its checkpoints.
-    bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
+    # buckets (`manabot.model.buckets`). Off is omitted, so regimes saved
+    # before the `auto` default keep their hashes and read back as off; never
+    # part of the model or its checkpoints.
+    bucketed_shapes: Layout = Field(
+        default="auto", exclude_if=lambda value: value is False
+    )
     # The same forwards attend over valid objects only, packed into one
-    # sequence (`manabot.model.live_tokens`). Omitted when unset, like
-    # bucketed shapes, and likewise never model state.
-    live_tokens: bool = Field(default=False, exclude_if=lambda value: not value)
+    # sequence (`manabot.model.live_tokens`). Serialized like bucketed shapes,
+    # and likewise never model state.
+    live_tokens: Layout = Field(default="auto", exclude_if=lambda value: value is False)
 
     @model_validator(mode="after")
-    def reduced_precision_on_cuda(self) -> "Execution":
+    def cuda_settings(self) -> "Execution":
         if self.precision != "float32" and self.device != "cuda":
             raise ValueError(f"precision {self.precision} requires CUDA")
+        # Off CUDA, jagged attention falls back to one call per observation.
+        if self.live_tokens is True and self.device != "cuda":
+            raise ValueError(
+                'live tokens require CUDA; set live_tokens to false or "auto" '
+                f"for device {self.device}"
+            )
         return self
+
+    @property
+    def resolved_bucketed_shapes(self) -> bool:
+        """Whether a stage's forwards use buckets; `auto` must already be resolved."""
+        return _resolved(self.bucketed_shapes, "bucketed shapes")
+
+    @property
+    def resolved_live_tokens(self) -> bool:
+        """Whether a stage's forwards use live tokens; `auto` must be resolved."""
+        return _resolved(self.live_tokens, "live tokens")
+
+
+def _resolved(value: Layout, name: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{name} auto is resolved by the regime")
+    return value
 
 
 class Stage(Strict):
@@ -250,9 +282,9 @@ class Stage(Strict):
             return self
         if self.execution.profile_collection:
             raise ValueError("collection profiling requires train_self_play")
-        if self.execution.bucketed_shapes:
+        if self.execution.bucketed_shapes is True:
             raise ValueError("bucketed shapes require train_self_play")
-        if self.execution.live_tokens:
+        if self.execution.live_tokens is True:
             raise ValueError("live tokens require train_self_play")
         if self.execution.workers != 1:
             raise ValueError(
@@ -645,12 +677,22 @@ class RecoveryPolicy(Strict):
     checkpoint_updates: int = Field(default=128, ge=1)
 
 
-def _read_saved_self_play(
-    stage: dict[str, object], one_seat: bool
-) -> dict[str, object]:
-    seats = "one" if one_seat else _default_seats(stage.get("behavior"))
-    resolved = {"learning_seats": seats, **stage}
-    return {"batch_closure": _implied_closure(resolved), **resolved}
+def _read_saved_stage(stage: object, one_seat: bool) -> object:
+    if not isinstance(stage, dict):
+        return stage
+    # A saved execution omits an off layout, and every regime saved before the
+    # `auto` default omitted both: what it omits it trained without.
+    execution = stage.get("execution")
+    if isinstance(execution, dict):
+        stage = {
+            **stage,
+            "execution": {**dict.fromkeys(LAYOUT_FIELDS, False), **execution},
+        }
+    if stage.get("operation") == "train_self_play":
+        seats = "one" if one_seat else _default_seats(stage.get("behavior"))
+        stage = {"learning_seats": seats, **stage}
+        stage = {"batch_closure": _implied_closure(stage), **stage}
+    return stage
 
 
 class TrainingRegime(Strict):
@@ -688,9 +730,10 @@ class TrainingRegime(Strict):
         """Resolve what saved stages omit; never relabel frozen evidence.
 
         Schema 1 omitted the one-seat choice, and no saved stage declared its
-        batch closure. Stage instances are new authoring and keep their defaults.
-        Retired `train_compound` stages fail with the reproduction commit
-        rather than as an unknown discriminator.
+        batch closure. A saved execution that omits a forward-layout switch
+        trained with it off, never `auto`. Stage instances are new authoring
+        and keep their defaults. Retired `train_compound` stages fail with the
+        reproduction commit rather than as an unknown discriminator.
         """
         if isinstance(value, dict) and any(
             isinstance(stage, dict) and stage.get("operation") == "train_compound"
@@ -702,14 +745,29 @@ class TrainingRegime(Strict):
             return {
                 **value,
                 "stages": [
-                    _read_saved_self_play(stage, one_seat)
-                    if isinstance(stage, dict)
-                    and stage.get("operation") == "train_self_play"
-                    else stage
-                    for stage in value["stages"]
+                    _read_saved_stage(stage, one_seat) for stage in value["stages"]
                 ],
             }
         return value
+
+    def authored_dump(self) -> dict[str, object]:
+        """The regime as authored: layouts resolved from `auto` say `auto` again.
+
+        Builders that rebuild a regime through its dump use this, so a changed
+        device or operation resolves the layout again while
+        explicit values stay as written. It is not a record: `model_dump` is
+        what saves and hashes a regime.
+        """
+        values: dict[str, object] = self.model_dump()
+        stages = values["stages"]
+        assert isinstance(stages, list)
+        for stage, dumped in zip(self.stages, stages, strict=True):
+            execution = dumped["execution"]
+            assert isinstance(execution, dict)
+            for name in LAYOUT_FIELDS:
+                if name not in stage.execution.model_fields_set:
+                    execution[name] = "auto"
+        return values
 
     @model_serializer(mode="wrap")
     def retain_one_seat_regime(
@@ -742,6 +800,34 @@ class TrainingRegime(Strict):
     @property
     def recoverable(self) -> bool:
         return self.recovery is not None or self.recovery_max_microsteps is not None
+
+    @model_validator(mode="after")
+    def resolve_forward_layout(self) -> "TrainingRegime":
+        """Replace each `auto` layout switch with the stage's resolved value.
+
+        Bucketed shapes and live tokens pay on CUDA at every measured width
+        (experiments/live_token_attention.md), so `auto` is on for a CUDA
+        `train_self_play` stage and off on CPU and MPS and for every other
+        operation. Stages are copied, never mutated, so a stage instance shared
+        by several regimes resolves separately in each. Runs before
+        `references`, which validates the resolved values.
+        """
+        stages = []
+        for stage in self.stages:
+            execution = stage.execution
+            auto = [
+                name for name in LAYOUT_FIELDS if getattr(execution, name) == "auto"
+            ]
+            if auto:
+                on = isinstance(stage, TrainSelfPlay) and execution.device == "cuda"
+                execution = execution.model_copy(update=dict.fromkeys(auto, on))
+                # Resolved defaults remain unset. Pydantic tracks later explicit
+                # assignments/copies, so authored_dump preserves those overrides.
+                execution.model_fields_set.difference_update(auto)
+                stage = stage.model_copy(update={"execution": execution})
+            stages.append(stage)
+        self.stages = stages
+        return self
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
