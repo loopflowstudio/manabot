@@ -417,9 +417,14 @@ columns! { relation {
     48: THIS_TURN => ("this_turn", ValueLayout::FLAG),
 } }
 
-/// The installed engine's complete vocabulary, resolved once for a new consumer.
-/// This does not change implicit defaults or saved observation configurations.
+/// The newest policy-input version this engine encodes; layouts exist for 1..=it.
+pub const LATEST_POLICY_INPUT_VERSION: u8 = 9;
+
+/// The version a new consumer with no saved configuration should pin, resolved
+/// once. It can trail `LATEST_POLICY_INPUT_VERSION` while a new version is
+/// unproven, and does not change implicit defaults or saved configurations.
 pub const RECOMMENDED_POLICY_INPUT_VERSION: u8 = 9;
+const _: () = assert!(RECOMMENDED_POLICY_INPUT_VERSION <= LATEST_POLICY_INPUT_VERSION);
 
 #[derive(Clone, Debug)]
 pub struct ArrayLayout {
@@ -472,7 +477,7 @@ pub fn observation_layout(
     version: u8,
     history: u8,
 ) -> Result<BTreeMap<String, ArrayLayout>, &'static str> {
-    if !(1..=RECOMMENDED_POLICY_INPUT_VERSION).contains(&version) {
+    if !(1..=LATEST_POLICY_INPUT_VERSION).contains(&version) {
         return Err("unsupported policy input version; expected 1..9");
     }
     if history > 1 {
@@ -686,7 +691,7 @@ mod tests {
 
     #[test]
     fn named_layout_preserves_every_frozen_width_and_column() {
-        for version in 1..=9 {
+        for version in 1..=LATEST_POLICY_INPUT_VERSION {
             for history in 0..=1 {
                 let config = ObservationEncoderConfig {
                     policy_input_version: version,

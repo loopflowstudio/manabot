@@ -32,7 +32,10 @@ def observation_layout(
     """
 
 def recommended_policy_input_version() -> int:
-    """Input v9 for new consumers. Does not change implicit defaults or saved versions."""
+    """The input version a new consumer should pin, resolved once and saved.
+
+    Does not change implicit defaults or saved versions.
+    """
 
 class PoolDefinition(TypedDict):
     card_def_id: int

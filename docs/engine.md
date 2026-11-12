@@ -16,6 +16,7 @@ cross-package contract is in the
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
 - [Hand snapshots](#hand-snapshots)
+- [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
 - [What we know](#what-we-know)
@@ -124,13 +125,8 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
 
-For NumPy consumers, [reading arrays by name](observation-and-model.md#reading-arrays-by-name)
-shows how to look up columns, value kinds and encodings through
-`managym.observation_layout`. Start new consumers with the explicit
-`managym.recommended_policy_input_version()`; saved inputs keep their version,
-and the existing implicit default remains v6. See
-[choosing an input version](observation-and-model.md#choosing-an-input-version)
-for capacity limits and recovery from an unrepresentable observation.
+Consumers read the encoded arrays by name; see
+[encoded observations](#encoded-observations).
 
 ### Executing an action
 
@@ -396,6 +392,131 @@ remain separate from policy inputs, viewer-safe observations, shared decision
 captures and viewer trace exports. Public `known_hand` counts describe only
 revealed knowledge. Reading snapshots does not change deck disclosure or what a
 player may observe, and requires no policy-input version or checkpoint migration.
+
+## Encoded observations
+
+The native encoder turns an observation into NumPy arrays for a selected
+policy-input version. What each version adds, and how manabot's network reads
+it, is in [observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Reading arrays by name
+
+To read a permanent's card definition without hard-coding column 24, select an
+input version and ask the native API for its layout:
+
+```python
+from manabot import managym
+
+version = managym.recommended_policy_input_version()
+layout = managym.observation_layout(version)
+definition = layout["agent_permanents"]["columns"]["definition"]
+print(version, definition["index"], definition["kind"])
+# 9 24 id
+print(definition["encoding"])
+# CardDefId + 1; 0 means absent
+```
+
+With an installed `manabot` package, the same version works with the scalar
+encoder. This example starts a game with fixed decks and reads only valid
+permanent rows (the first decision can have none):
+
+```python
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+arrays = game.encode_observation(observation, policy_input_version=version)
+valid = arrays["agent_permanents_valid"].astype(bool)
+references = arrays["agent_permanents"][valid, definition["index"]]
+definition_ids = [int(reference) - 1 for reference in references if reference != 0]
+```
+
+These are definition IDs for catalog joins, not object identities or numeric
+features. Do not log-scale them or infer similarity from their magnitude.
+Retain the installed world's content identity with saved arrays and catalog
+references.
+
+`observation_layout(policy_input_version, *, policy_history_version=0)` returns
+a mapping keyed by the encoder's array names. It requires an explicit supported
+input version (1–9). Each array describes its `axes`, `shape` and stored `dtype`;
+a `None` extent in `shape` is a caller-selected capacity, not a default. The seat axis
+is viewer-relative (agent first, opponent second). Feature arrays have a
+`columns` mapping keyed by column name. Each column gives its
+zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish identities
+and references, categorical codes, flags, counts, numeric values and ranks.
+The encoding explains scaling, join targets, index bases and absence sentinels;
+the range describes stored values, including when no fixed bound exists.
+A `tagged` kind needs its row-kind description before preprocessing.
+Tagged fact, relation and effect rows describe meanings conditional on their
+row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+scalar-valued arrays have empty `columns` and describe their `element` meaning
+without inventing a feature axis. Shared headers own the detail/member slices;
+unused rows are zero. Public event history is bounded to 32 rows, even though
+its allocated event capacity is selected separately.
+
+Read the stored encoding before adding preprocessing: permanent damage, power
+and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
+Fact timestamp ranks are stored as ranks; the built-in model divides them by
+128, independently of fact capacity. The layout describes the array values,
+not a blanket normalization to apply to every column.
+
+The layout comes from the native encoder's layout authority, for the selected
+version, without starting a game or importing Torch. It includes only that
+version's arrays. `policy_history_version=1` selects the 12-column public-event
+layout; the default 0 selects the legacy 7-column events. Unsupported versions
+raise `ValueError`. Row capacities are a separate allocation choice: use the
+selected `ObservationSpace.shapes` when allocating caller-owned buffers, and
+retain all its keys. A layout lookup neither allocates buffers nor changes an
+observation or saved configuration.
+
+### Choosing an input version
+
+For a new consumer with no saved configuration, use
+`managym.recommended_policy_input_version()` and save the returned integer with
+the model and observation configuration. The recommendation is v9: it carries
+v8's composable layer and effect-execution programs plus card-name identities
+and group spans. V8 remains sufficient for those programs but presents naming
+choices without their name identities. The recommendation describes the
+installed engine and can advance in a future release; resolve it once when
+creating new work, not on each observation or checkpoint load.
+
+The recommendation does not change the existing defaults:
+`ObservationConfig()` and `Env.encode_observation(obs)` select v6. Choose
+explicitly for new work, for example
+`ObservationConfig(policy_input_version=version)`, and construct the collector
+and model with that same configuration. Keep saved versions and use
+`ObservationConfig.from_checkpoint` when loading; a missing saved version means
+v1. Changing a version changes the model's input contract, so never upgrade a
+checkpoint by editing its version or reshaping its weights.
+
+A legal game state can exceed an older input's representational vocabulary.
+Admission errors identify the selected version and a version that represents
+the rejected payload, for example `policy input v6 cannot represent layer
+payload; select v8 or later (recommended for new consumers: v9)`. Preserve the
+failed configuration and evidence, then use the recommended version for a new
+compatible run. Validation happens before
+encoded buffer writes, but does not undo a game action already executed.
+
+Representability does not promise unlimited capacity: even v9 can reject a
+legal board that exceeds its declared rows. Capacity errors require suitable
+buffer capacities and a compatible model, not merely a newer version. Some
+axes are fixed by the version; see
+[policy inputs](observation-and-model.md#policy-inputs). Do not truncate state or
+silently replace a saved policy to recover. World/checkpoint admission remains
+an independent requirement.
+
+### Card definition IDs
+
+A `CardDefId` is the definition's position in the installed catalog, sorted by
+definition key. Adding a card renumbers every definition after it, so IDs are
+stable only within one installed build. Do not key a saved embedding table or
+dataset by raw IDs. Join each ID to a stable identity for the installed build:
+`managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
+`registry_name`, definition `key` and `scryfall_id` (back faces have a name but
+no key). For card features rather than identities, `managym.learning_catalog()`
+gives each definition's learning tokens, rows by `CardDefId`, derived from its
+rules text, so they describe cards a model has not seen.
 
 ## Cards as programs
 
