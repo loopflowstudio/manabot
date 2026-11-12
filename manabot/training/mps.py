@@ -22,6 +22,7 @@ def mps_torch_error() -> str | None:
         return None
     return (
         f"MPS training requires Torch {MPS_MINIMUM_TORCH} or newer; installed Torch "
-        f"{torch.__version__} computes incorrect MPS gradients (seen on 2.10). "
-        "Upgrade Torch (uv sync --locked) or train on CPU with --recipe local"
+        f"{torch.__version__} is below that minimum (Torch 2.10 computed incorrect "
+        "MPS gradients on learner minibatches). Upgrade Torch (uv sync --locked) "
+        "or train on CPU"
     )

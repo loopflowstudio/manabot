@@ -135,7 +135,7 @@ def test_mps_torch_minimum_gates_selection(
     if admitted:
         assert baseline().regime.stages[0].execution.device == "mps"
     else:
-        with pytest.raises(ValueError, match=f"installed Torch {version} computes"):
+        with pytest.raises(ValueError, match=f"installed Torch {version} is below that minimum"):
             baseline()
 
 
@@ -147,7 +147,10 @@ def test_old_torch_mps_stage_fails_before_training(
     with VerifyStore(tmp_path / "runs.sqlite") as store:
         with pytest.raises(
             ValueError,
-            match="MPS training requires Torch 2.15 or newer; installed Torch 2.10.0",
+            match=(
+                "MPS training requires Torch 2.15 or newer; installed Torch 2.10.0 "
+                "is below that minimum"
+            ),
         ):
             execution.execute_regime(
                 local_smoke(steps=1, seconds=600, learning_seats="one", device="mps"),
