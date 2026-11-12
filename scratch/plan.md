@@ -44,6 +44,10 @@ Apple M2". test_mps_training + test_baseline_recipe: 58 passed.
 Code needed no cuts. docs/training.md MPS paragraph reflowed and aligned with the
 measured cause (M2, 2.10–2.13, linear weight gradients); the remedy lives in the error text.
 
+After merging main at dac7f9005 (managym published as its own package, release
+workflow rewritten): workflows still pin 2.15.0, no 2.10 pins remain outside
+evidence; test_release + test_mps_training 57 passed.
+
 ## Remaining work
 
 None in implementation. QA (scratch/qa.html) found and fixed explicit `baseline --device mps` on old Torch (6fab820bf). Left for gate/CI: full suites, CUDA cu132 on Linux.
