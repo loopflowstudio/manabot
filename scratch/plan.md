@@ -63,6 +63,11 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   scratch), so the copies here are current. #474 still 05c1203e9.
 - Rechecked 20:05Z: #495 still 0c7cd1419, #474 still 05c1203e9, no reply on
   MTG-321 to 8d8dc862. #497 merged to main (439379869), so Remaining 5 is done.
+- Rechecked after the L4 run: #495 at 90cc33d98 (merge of main/#497, already
+  here, plus one `test_experiment_files.py` line); shared `policy/` and
+  `backends/__init__.py` files identical to this branch apart from the
+  `buckets.py` README bullet, so no re-sync. #474 still 05c1203e9; no reply
+  on MTG-321 to 8d8dc862. Remaining 1-3 wait on #495 landing via #474/main.
 
 ## Checks
 
