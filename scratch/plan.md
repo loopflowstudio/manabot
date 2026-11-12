@@ -35,10 +35,11 @@
   A regime is any module-level function or `functools.partial` of one;
   `execute` calls it with the annotation-validated arguments it records.
   Saved and function stages shrink through one `stages.smoke_stage`.
-- `manabot/training/stages.py`: stage bodies extracted from the old
-  `_execute_regime`; public `self_play`, `import_policy`,
-  `collect_selection`, `collect_belief`, `train_belief`; `run_saved_regime`
-  calls them (see the concept-review follow-up below).
+- `manabot/training/stages.py`: public `self_play`, `import_policy`,
+  `collect_selection`, `collect_belief`, `train_belief`, each doing its own
+  work after `_open_stage(run, declaration, ...)`; only self-play keeps a
+  private loop (`_train_self_play`). `run_saved_regime` calls them (see the
+  concept-review follow-up below).
 - `execution.py`: `validate_regime`, `_runtime_identities`, `execute_regime`.
 - Records: `RunRecord.regime` optional + `regime_function`
   (`RegimeFunctionRecord`: function, arguments, sha, `SourceRevision`,
