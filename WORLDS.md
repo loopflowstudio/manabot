@@ -134,7 +134,7 @@ batch and its integration with T5, retaining Commands and decision revisions.
 Earthbend's effect records allocate object ids, so the combined authored tape
 retains its game outcome while ids differ from main's pre-integration receipt.
 
-Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
+Learning tokens are derived in Rust (`managym.catalog_tokens`) by walking each
 definition with a `serde` serializer: initially learning schema **9**, now
 **10** with delayed-trigger object roles. Token values are
 stable hashes of Rust and printed names, and IR opcodes, roles and enums are

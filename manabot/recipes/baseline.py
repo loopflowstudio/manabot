@@ -12,7 +12,6 @@ import socket
 from typing import Literal
 
 from pydantic import Field
-import torch
 
 from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.config import Baseline, Experiment
@@ -120,15 +119,13 @@ def baseline(
     """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
     selected = accelerator() if device is None else device
     # Reject unadmitted MPS here: the experiment runner would only report it from
-    # the training child's log. Automatic selection skips such MPS silently.
-    wants_mps = selected == "mps" or (
-        selected is None and torch.backends.mps.is_available()
-    )
-    if wants_mps and (error := mps_torch_error()) is not None:
+    # the training child's log.
+    if selected == "mps" and (error := mps_torch_error()) is not None:
         raise ValueError(error)
     if selected is None or selected == "cpu":
         raise ValueError(
-            "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+            "baseline requires CUDA or an explicit --device mps; "
+            "use --recipe local for CPU"
         )
     return _baseline(
         steps, seconds=seconds, learning_seats=learning_seats, device=selected

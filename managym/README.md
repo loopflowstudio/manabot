@@ -36,7 +36,7 @@ Each card is a function in the file of its first printing's set under
 `TokenDefinition` in `cards/src/tokens.rs`, keyed `token.*` and created by that
 key, with a Scryfall id unless it has no printing. The engine runs these values
 directly, and
-the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
+the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep

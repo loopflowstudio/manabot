@@ -473,8 +473,9 @@ an NVIDIA driver from the 580 series or newer and a Turing or newer GPU
 
 Supported: ordinary CPython 3.12 and 3.13 (no free-threaded ABI) on Linux x86-64 with glibc
 2.28+ (CPU or CUDA 13.2 Torch) and Apple Silicon macOS 14+ (CPU or MPS Torch).
-MPS is admitted for float32 self-play training with Torch 2.15 or newer. Baseline requires
-CUDA or Apple MPS; local selects the available accelerator (CUDA first) or CPU.
+MPS is admitted, on explicit request, for float32 self-play training with Torch 2.15 or
+newer. Baseline requires CUDA or an explicit `--device mps`; local selects CUDA when
+available and CPU otherwise.
 Evaluation and search run on CPU for this workflow. GPU-less tests use
 `baseline_test()`, which shares baseline construction and changes only the device.
 No speed or strength claim is implied. Windows,

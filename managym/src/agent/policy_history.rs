@@ -2,6 +2,8 @@
 //! Observation reads share the immutable suffix: no ledger replay, no permanent
 //! slot reconstruction. Native zone moves expire links before recording arrivals.
 
+use super::observation_layout::history;
+
 use crate::{
     agent::observation::Observation,
     flow::{
@@ -15,7 +17,7 @@ use crate::{
 };
 use std::{collections::VecDeque, sync::Arc};
 
-pub const HISTORY_DIM: usize = 12;
+pub const HISTORY_DIM: usize = history::WIDTH;
 pub const HISTORY_LIMIT: usize = 32;
 pub type HistoryWindow = Arc<VecDeque<HistoryEvent>>;
 
@@ -278,10 +280,12 @@ pub fn encode(
         .skip(obs.policy_history.len().saturating_sub(capacity))
         .map(|event| {
             let mut row = [0.0; HISTORY_DIM];
-            row[0] = event.kind as u8 as f32;
-            row[1] = event.amount as f32;
-            row[2..7].copy_from_slice(&reference(&event.source));
-            row[7..12].copy_from_slice(&reference(&event.target));
+            row[history::KIND] = event.kind as u8 as f32;
+            row[history::AMOUNT] = event.amount as f32;
+            row[history::SOURCE_DEFINITION..history::TARGET_DEFINITION]
+                .copy_from_slice(&reference(&event.source));
+            row[history::TARGET_DEFINITION..history::WIDTH]
+                .copy_from_slice(&reference(&event.target));
             row
         })
         .collect()
