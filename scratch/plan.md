@@ -506,3 +506,28 @@ the code diff against #474 was 4,332 / 2,500.
   (kept on disk).
 - No deprecation aliases in A despite the steer's wording: steer 8332334d
   removed them; noted as an open point in #503's body.
+
+## Speed check (steer 449b1a8e), pass 1: regression found and fixed
+
+- Etude 47636a275a9e (revision d035ae750, base adf601acb, one L4): head was
+  slower on the learner: damped 6.16 → 4.57 steps/s, PPO 0.219 → 0.157
+  steps/s (first pair; spread ~1%); `PolicyInference` faster, 823 → 1,061
+  obs/s. Cause: buckets measured on the host in NumPy (4746f4c9f, in #503),
+  twice per learner row (admission in `admit_rows`, then `bind_admitted`),
+  ~20 ms per 256-row minibatch on the laptop each; base measured on the GPU.
+  Learner observations are ~165 KB/row, almost all zero padding.
+- Fix (#503 d92b38b61): `bucket_sizes` reduces over the batch axis first with
+  no full-size temporaries and names objects with one boolean table (203 → 69
+  ms at 3,300 rows; one `any` pass over the data is 38 ms); `admit_rows` only
+  checks (`check_observation`). Learner host bucket work per 256-row step:
+  41 → 5.4 ms on the laptop. Sizes identical on the 1,960-batch parity
+  harness (poison included); CPU `run.py` 0 differ. Ruled out: per-row needs
+  cached at admission (per-row reduction costs 118 ms/3,300 rows, slower for
+  the damped update's single pass), and trimming on the host before transfer
+  (the updates and collection read full-capacity `actions_valid`).
+- Updates reference regenerated after the engine change merged with #474
+  (e38518093 changes games): `before.json` from #503's tree, `after.json`
+  from this branch, same extension: parameters and residuals identical;
+  `value_scale` float64 stds differ by 1 ulp (3 stats, categorical).
+- Pass 2 queued: revision bb7c3e6a0 (base main a343904ee), cohort
+  `mtg325-speed-2`, `--max-usd 9` (pass 1 counts against the USD10).
