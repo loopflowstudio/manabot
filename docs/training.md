@@ -562,7 +562,7 @@ float32 at w160l8 (autocast's casts cost more than the small matmuls save) and
 2–2.7× faster at w384l8
 ([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)). In a
 learning comparison at w384l8, BF16 and float32 from the same seeds reached
-the same strength against the frozen anchor at matched updates, with policy
+the same strength against the heuristic at matched updates, with policy
 and value loss, clip fraction and approximate KL inside float32's seed band
 ([`experiments/precision_ladder.md`](../experiments/precision_ladder.md)). TF32
 is 1.1× faster at w160l8 and 1.3–1.5× at w384l8 but has had no learning
