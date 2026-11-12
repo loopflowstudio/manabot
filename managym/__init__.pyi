@@ -613,10 +613,14 @@ class PlayerTurnHistory:
     cards_drawn: int
     # Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8.
     bent: int
+    # Life lost this turn (CR 119.3).
+    life_lost: int
 
 class RestrictedMana:
     spells: List[str]
     abilities: List[str]
+    # Spendable on anything but casting nonartifact spells (Powerstone).
+    except_nonartifact_spells: bool
     mana: tuple[int, int, int, int, int, int]
 
 class CastPermission:
@@ -657,6 +661,8 @@ class Card:
     face_down: bool
     cast_permission: Optional[CastPermission]
     x: Optional[int]
+    # A graveyard card put there from the battlefield this turn (input v10).
+    from_battlefield_this_turn: bool
 
 class SideboardCard:
     candidate_id: int
@@ -907,3 +913,6 @@ def naming_catalog() -> list[NameCandidate]: ...
 def policy_action_count(
     count: int, capacity: int, action_overflow: str = "error"
 ) -> int: ...
+def input_v10_state(obs: Observation) -> str | None:
+    """The state only policy input v10 holds that `obs` needs, if any."""
+    ...

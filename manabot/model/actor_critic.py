@@ -18,6 +18,7 @@ from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
+    TURN_STATE_DIM,
     ObservationSpace,
 )
 from manabot.infra.config import ModelConfig
@@ -87,6 +88,12 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
+        # Input v10 appends each seat's turn-state row to its player row and
+        # each card row's turn-state value to that card row.
+        self.turn_state = enc.config.policy_input_version == 10
+        if self.turn_state:
+            player_dim += TURN_STATE_DIM
+            card_dim += 1
         # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
         self._link_columns = PERMANENT_LINK_INDEXES
@@ -494,10 +501,19 @@ class ActorCritic(nn.Module):
                 raise RuntimeError(
                     "prepared inference observations cannot enter autograd"
                 )
-        enc_agent_player = self.player_embedding(obs["agent_player"])
-        enc_opp_player = self.player_embedding(obs["opponent_player"])
-        enc_agent_cards = self.card_embedding(obs["agent_cards"])
-        enc_opp_cards = self.card_embedding(obs["opponent_cards"])
+        agent_player, opp_player = obs["agent_player"], obs["opponent_player"]
+        agent_cards, opp_cards = obs["agent_cards"], obs["opponent_cards"]
+        if self.turn_state:
+            # [B, 2, TURN_STATE_DIM] and [B, 2, cards]: agent seat first.
+            players, cards = obs["player_turn_state"], obs["card_turn_state"]
+            agent_player = torch.cat((agent_player, players[:, 0:1]), dim=-1)
+            opp_player = torch.cat((opp_player, players[:, 1:2]), dim=-1)
+            agent_cards = torch.cat((agent_cards, cards[:, 0, :, None]), dim=-1)
+            opp_cards = torch.cat((opp_cards, cards[:, 1, :, None]), dim=-1)
+        enc_agent_player = self.player_embedding(agent_player)
+        enc_opp_player = self.player_embedding(opp_player)
+        enc_agent_cards = self.card_embedding(agent_cards)
+        enc_opp_cards = self.card_embedding(opp_cards)
         definitions = None
         programs = None
         references = obs.references if isinstance(obs, PreparedObservation) else None

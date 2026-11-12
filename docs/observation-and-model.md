@@ -164,11 +164,26 @@ the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
 in the same native scalar, vector and Python encoders, the LLM text observation
 and the learning tokens.
 
+V10 adds two buffers to the v9 layout; their presence is what selects v10 in
+the native encoders:
+
+| Key | Shape | Holds |
+| --- | --- | --- |
+| `player_turn_state` | 2 × 7 | Per seat, agent first: life lost this turn / 20, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
+| `card_turn_state` | 2 × 60 | Per seat card row (aligned with `semantic_cards`): 1 for a graveyard card put there from the battlefield this turn |
+
+The model appends each seat's row to its player row and each card value to its
+card row before embedding them.
+
 V9 and its checkpoints are unchanged: w17 checkpoints keep loading, and fresh
-configurations stay v9. A v9 encoder refuses a position that needs v10 state: one of these cards is visible to the viewer and the state
-it reads is present (life lost this turn, a card that left the battlefield this
-turn, or restricted Powerstone mana in a pool). It raises
-`UnsupportedPolicyInput` naming v10 and the state, before writing any buffer.
+configurations stay v9. A v9 encoder refuses a position that needs v10 state:
+a card visible to the viewer reads life lost this turn or graveyard cards put
+there from the battlefield and that state is present, or a pool holds mana
+that can't be spent to cast nonartifact spells. `managym.input_v10_state(obs)`
+names the needed state. The Python encoder raises `UnsupportedPolicyInput`
+naming v10 and the state, and the native encoders raise `ValueError` with the
+same reason, before writing any buffer. A v9 run over decks with these cards
+stops at the first such position, so train on them with v10.
 A game, replay or Academy session needs no policy input and plays these cards
 under any configuration. A v9 checkpoint cannot be widened to v10; train a new
 one.

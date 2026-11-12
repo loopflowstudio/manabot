@@ -275,11 +275,15 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
             kind for index, kind in enumerate(kinds) if history.bent & (1 << index)
         )
         parts.append(f"bent {bent}")
+    if amount := history.life_lost:
+        parts.append(f"lost {amount} life")
     return "; ".join(parts)
 
 
 def _spending(restricted: managym.RestrictedMana) -> str:
     """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    if restricted.except_nonartifact_spells:
+        return "anything but nonartifact spells"
     parts = []
     if restricted.spells:
         parts.append(" or ".join(restricted.spells) + " spells")
@@ -800,6 +804,8 @@ class _Renderer:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:
                 optional += f"; announced X {card.x}"
+            if card.from_battlefield_this_turn:
+                optional += "; put into the graveyard from the battlefield this turn"
             if card.cast_permission is not None:
                 optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(

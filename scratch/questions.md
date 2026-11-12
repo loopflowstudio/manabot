@@ -63,14 +63,10 @@ admission with the exact count of failures from those three names.
 
 ## Open questions
 
-- v10 against the one-input rule. `CLAUDE.md` and
-  `docs/observation-and-model.md` say main carries only v9, with "no version
-  branches" and a new layout replacing v9 at a world freeze. The decision says
-  v9 stays (w17 checkpoints keep loading) and v10 is explicit, which is two
-  inputs and a version branch on main. Its "fresh defaults stay v6" predates
-  v1–v8 removal; the docs assume fresh defaults stay **v9**. Exact question:
-  does v10 sit beside v9 on main (and `CLAUDE.md`'s one-input paragraph change
-  to say so), or does v10 replace v9 at a w17 freeze?
+- v10 beside v9 is built (thirteenth pass) and `AGENTS.md` changed to say
+  so; whether v10 should instead replace v9 at a w17 freeze stays open for
+  review. The decision's "fresh defaults stay v6" predates v1–v8 removal;
+  fresh defaults stay v9.
 - When a v9 encoder refuses (docs, written as the assumption): a v10-reading
   card is visible to the viewer and the state it reads is present. Refusing on
   any life lost this turn would refuse almost every game. Consequence to
@@ -330,3 +326,47 @@ warnings. Rebuilt cp313 (atomic replace); `--bonus-sheet` 6 missing, all
 blocked. Academy `test_citadel_payment_recovery.py` and Merchant recovery
 2 passed. Not run: the full workspace nextest, conformance evidence (digest
 moves again) and world-change Python suites (gate).
+
+## Thirteenth pass — Bloodchief Ascension, Brought Back, Cityscape Leveler, 2026-11-12 UTC
+
+Built per the 2026-11-12 decision ("New v10 input"). First-printing ids from
+`tle-inventory.jsonl`; card shells fetched from Scryfall `cards/collection` by
+pinned id 2026-11-12 UTC, Powerstone token id
+`d45fe4b6-aeaf-4f84-b660-c7b482ed8512` from Leveler's `all_parts`. The fixture
+also gained The Great Henge and Tarnished Citadel, missing since the twelfth
+pass (`every_registered_real_card_matches_scryfall` failed on them).
+
+The one-input question is resolved in code as v10 beside v9: `AGENTS.md`'s
+policy-input paragraph now says so (the turn-state append is the only version
+branch). V10 is selected by the presence of `player_turn_state` and
+`card_turn_state`, the v8/v9 precedent of layout-derived versions.
+
+Assumptions taken (reversible):
+- V9 refuses life lost / graveyard-from-battlefield only when a visible card's
+  definition reads it (serde walk of the definition for
+  `OpponentLostLifeThisTurnAtLeast` / `from_battlefield_this_turn`), and any
+  pooled Powerstone-class mana. Native raises `ValueError` ("policy input v10
+  required: ..."); the Python encoder raises `UnsupportedPolicyInput(10, state)`.
+- `manabot.verify.record_coverage` now encodes at v10 (it plays every world
+  card) and derives its game count from the eligible pool; the old fixed 14
+  games dealt 336 of 430 eligible cards, failing before this pass.
+- "That player" for any CardMoved-to-graveyard trigger is the graveyard owner;
+  no earlier definition read `TriggeringPlayer` from a CardMoved trigger.
+- Bloodchief's "you may ... If you do" is a zero-mana `OptionalPayment`; the
+  gain happens even if the loss is prevented by a locked life total.
+- Powerstone mana is spent after subtype-restricted mana and before ordinary
+  mana; it pays effect payments and every activation.
+- Unearth is the card's graveyard activation (no `Keyword`); its haste and
+  exile replacement are `Indefinite` records on the returned object.
+
+Results (debug): `cargo nextest run --workspace --profile ci` 1160 run, 1154
+passed before the schema/fixture fixes; after them the only failure is
+`checked_semantic_conformance_evidence_reproduces` (digest; gate). Protocol
+schemas patched for `PlayerTurnHistory.life_lost`; the five schema tests and
+conformance pass. Rebuilt cp313 extension (atomic replace); `--bonus-sheet`
+58 of 61. Pytest text observation, parity, policy-input rejection, native
+buffers, record vocabulary/coverage, policy catalog, catalog, package
+boundaries, TLE allocation, agent and the new `tests/verify/test_input_v10.py`
+passed. Not run (gate): world-change suites, Academy vitest and browser
+checks (no `node_modules`), Academy reconnect/fork for unearth and Bloodchief's
+optional payments, corpus admission, semantic-kernel evidence, clippy.

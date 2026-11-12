@@ -32,6 +32,8 @@ export interface CardState {
   cast_permission?: CastPermission;
   /** The value of X announced for this spell on the stack. */
   x?: number;
+  /** A graveyard card put there from the battlefield this turn. */
+  from_battlefield_this_turn?: boolean;
 }
 
 /** A public permission to play an exiled card; only set terms are present. */
@@ -57,6 +59,8 @@ export interface CastPermission {
 export interface RestrictedMana {
   spells?: string[];
   abilities?: string[];
+  /** Spendable on anything but casting nonartifact spells (Powerstone). */
+  except_nonartifact_spells?: boolean;
   mana: number[];
 }
 
@@ -147,6 +151,8 @@ export interface PlayerTurnHistory {
   cards_drawn?: number;
   /** Bending kinds done this turn: bits water 1, earth 2, fire 4, air 8. */
   bent?: number;
+  /** Life lost this turn (CR 119.3). */
+  life_lost?: number;
 }
 
 export interface PlayerState {

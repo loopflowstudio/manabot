@@ -11,7 +11,7 @@ from manabot.verify import record_coverage
 import managym
 
 # Enough games to deal every eligible card once (two decks of 12 spells each).
-_GAMES = 14
+_GAMES = record_coverage.games_to_deal_every_card()
 
 
 def test_every_id_random_games_emit_has_a_catalog_row() -> None:

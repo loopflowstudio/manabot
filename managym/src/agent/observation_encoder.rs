@@ -948,7 +948,7 @@ impl TurnStateReads {
                     for (key, value) in map {
                         match key.as_str() {
                             "OpponentLostLifeThisTurnAtLeast" => reads.life_lost = true,
-                            "from_battlefield_this_turn" if value == &true => {
+                            "from_battlefield_this_turn" if *value == true => {
                                 reads.from_battlefield = true
                             }
                             _ => {}

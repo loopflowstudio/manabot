@@ -82,6 +82,7 @@
   }
 
   function spendingText(restricted: RestrictedMana): string {
+    if (restricted.except_nonartifact_spells) return 'anything but nonartifact spells';
     const parts = [];
     if (restricted.spells?.length) parts.push(`${restricted.spells.join(' or ')} spells`);
     if (restricted.abilities?.length) parts.push(`abilities of ${restricted.abilities.join(' or ')} sources`);
@@ -171,6 +172,7 @@
         history.land_entered && 'a land entered',
         history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
         history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
+        history.life_lost && `lost ${history.life_lost} life`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

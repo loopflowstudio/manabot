@@ -146,12 +146,16 @@ checkpoints or experiment evidence.
   so a layout change refuses older checkpoints, naming that revision and the
   buffers that differ. Do not bump the input version for a layout change or add
   a loading path for an older layout.
-- Main carries one policy input, v9 (`ObservationConfig.policy_input_version`);
-  it is always serialized. A checkpoint, replay or saved configuration bound to
-  any other version, or omitting it, raises `UnsupportedPolicyInput`, which
-  names the revision to run it from (`ac601834d` is the last revision
-  supporting v1-v8). Do not add version branches to the encoders or the model;
-  a new layout replaces this one at a world freeze.
+- Main carries policy input v9, the fresh default, and explicit v10
+  (`ObservationConfig.policy_input_version`); it is always serialized. V10 is
+  v9 plus the `player_turn_state` and `card_turn_state` buffers, whose
+  presence selects it natively; a v9 encoder refuses an observation that needs
+  them (`managym.input_v10_state`) before writing buffers. A checkpoint,
+  replay or saved configuration bound to any other version, or omitting it,
+  raises `UnsupportedPolicyInput`, which names the revision to run it from
+  (`ac601834d` is the last revision supporting v1-v8). The v10 turn-state
+  append is the only version branch in the encoders and the model; add no
+  others, and a new layout replaces these at a world freeze.
 - Open-ended vocabularies (counter kinds, added subtypes, set names, used
   abilities, continuous-effect records, copy effects and their exceptions) are
   fact rows, never columns. Active effects are shared records: `effects`

@@ -39,7 +39,7 @@ from manabot.env.shared_effects import (
     SHARED_EFFECT_SHAPES,
     encode_shared_effects,
 )
-from manabot.infra.config import ObservationConfig
+from manabot.infra.config import ObservationConfig, UnsupportedPolicyInput
 from manabot.infra.log import getLogger
 import managym
 
@@ -138,6 +138,14 @@ PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # Decklist rows: definition id + 1, then main, unseen, sideboard and
 # remaining-sideboard counts. A closed opponent's rows are all zero.
 DECKLIST_DIM = 5
+# Input v10 turn state (observation_encoder.rs). `player_turn_state` has one
+# row per seat, agent first: life lost this turn / 20, then mana that can't be
+# spent to cast nonartifact spells by W/U/B/R/G/C / 10. `card_turn_state`
+# aligns with the seats' card rows: 1 for a graveyard card put there from the
+# battlefield this turn.
+TURN_STATE_LIFE_LOST_INDEX = 0
+TURN_STATE_NONARTIFACT_MANA_INDEX = 1
+TURN_STATE_DIM = TURN_STATE_NONARTIFACT_MANA_INDEX + 6
 _DECKLIST_COUNTS = (
     "main_counts",
     "unseen_counts",
@@ -246,6 +254,7 @@ class ObservationEncoder:
         # continuous-effect records are shared-effect rows.
         self.permanent_dim = PERMANENT_DIM
         self.event_dim = 12 if config.policy_history_version == 1 else 7
+        self.turn_state = config.policy_input_version == 10
 
         # Preserve attack/decline independently of action family and focus.
         self.action_dim = (
@@ -267,6 +276,14 @@ class ObservationEncoder:
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             "decklists": (2, self.cards_per_player, DECKLIST_DIM),
+            **(
+                {
+                    "player_turn_state": (2, TURN_STATE_DIM),
+                    "card_turn_state": (2, self.cards_per_player),
+                }
+                if self.turn_state
+                else {}
+            ),
             # Game objects
             "agent_player": (1, self.player_dim),
             "opponent_player": (1, self.player_dim),
@@ -329,6 +346,8 @@ class ObservationEncoder:
                 0 <= action.continuation_index < len(obs.continuation)
             ):
                 raise ValueError("invalid action continuation reference")
+        if not self.turn_state and (state := managym.input_v10_state(obs)):
+            raise UnsupportedPolicyInput(10, state)
         out = {
             "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
             "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
@@ -388,6 +407,25 @@ class ObservationEncoder:
                 )
             for slot, row in enumerate(rows):
                 out["decklists"][seat, slot] = row
+        if self.turn_state:
+            out["player_turn_state"] = np.zeros((2, TURN_STATE_DIM), dtype=np.float32)
+            out["card_turn_state"] = np.zeros(
+                (2, self.cards_per_player), dtype=np.float32
+            )
+            for seat, (cards, player) in enumerate(
+                ((obs.agent_cards, obs.agent), (obs.opponent_cards, obs.opponent))
+            ):
+                row = out["player_turn_state"][seat]
+                row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost / 20.0
+                for restricted in player.restricted_mana:
+                    if restricted.except_nonartifact_spells:
+                        row[TURN_STATE_NONARTIFACT_MANA_INDEX:] += (
+                            np.asarray(restricted.mana, dtype=np.float32) / 10.0
+                        )
+                for slot, card in enumerate(cards):
+                    out["card_turn_state"][seat, slot] = float(
+                        card.from_battlefield_this_turn
+                    )
         outside = obs.agent_sideboard
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:

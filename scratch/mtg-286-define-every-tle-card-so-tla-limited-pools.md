@@ -32,8 +32,9 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 55 of 61 defined,
-6 missing, no other issues (rebuilt extension, twelfth pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 58 of 61 defined;
+missing only Release to Memory, Lita and Heartbeat of Spring (rebuilt
+extension, thirteenth pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -102,14 +103,25 @@ Rules added on this branch, each with directed tests and observation parity
   the land and is preventable. `StaticAbility::CostsLessByGreatestPower`.
   Academy proof `tests/academy/test_citadel_payment_recovery.py`.
 
+- Thirteenth pass (Bloodchief Ascension zen, Brought Back m20, Cityscape
+  Leveler bro, Powerstone token): `PlayerTurnHistory.life_lost` (counted in
+  `emit` from every `LifeChanged`), `TurnState::graveyard_from_battlefield`
+  (exact graveyard incarnations), `Condition::OpponentLostLifeThisTurnAtLeast`,
+  `TriggerCondition::CardPutIntoOpponentsGraveyard` ("that player" = graveyard
+  owner for CardMoved-to-graveyard), `CardPredicate::from_battlefield_this_turn`,
+  unearth as a graveyard activation with `Modification::ExileIfWouldLeave`
+  (`normalize_proposal`) and a remembered end-step exile, `CreateToken.tapped`,
+  Powerstone mana as `ManaUse::except_nonartifact_spells` (broadest restricted
+  class) against a derived, unserialized `casting_nonartifact` spell purpose.
+  Policy input v10 built (layout in `docs/observation-and-model.md`).
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 6 bonus-sheet names (decisions 2026-11-12, `scratch/questions.md`)
+## Remaining: 3 bonus-sheet names (decisions 2026-11-12, `scratch/questions.md`)
 
 | Cards | Disposition |
 |---|---|
-| Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn), Cityscape Leveler (Powerstone restriction; trigger and unearth otherwise ready) | Build here on explicit input v10 |
 | Release to Memory; Lita, Mechanical Engineer | Wait for Task 6c0248 (TokenDefinition, tokens by key, scryfall_id optional only on tokens); allocation rows marked blocked on it |
 | Heartbeat of Spring | Split out to Task e698a9; don't implement `scratch/tle-production-design.md` here |
 

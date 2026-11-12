@@ -531,6 +531,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "face_down": "face down",
         "cast_permission": "may be played from exile by",
         "x": "announced X",
+        "from_battlefield_this_turn": "put into the graveyard from the battlefield this turn",
     },
     managym.StackObject: {
         "stack_object_id": "S<n>",
@@ -551,6 +552,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "land_entered": "had a land enter",
         "cards_drawn": "drew",
         "bent": "bent",
+        "life_lost": "lost N life",
     },
     managym.Player: {
         "id": "the player's alias",
@@ -649,7 +651,11 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
             "permanents_sacrificed": 2,
             "land_entered": True,
             "cards_drawn": 1,
+            "life_lost": 3,
         },
+        "restricted_mana": [
+            {"except_nonartifact_spells": True, "mana": [0, 0, 0, 0, 0, 2]}
+        ],
     }
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
@@ -662,8 +668,9 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Will take 1 extra turn(s) after this one." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 card." in text
+        "their control; drew 1 card; lost 3 life." in text
     )
+    assert "Restricted mana for anything but nonartifact spells: C 2." in text
 
 
 def test_layered_colors_keyword_counters_and_rules_payload_text() -> None:
