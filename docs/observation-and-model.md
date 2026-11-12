@@ -153,6 +153,10 @@ an `ActorCritic` is constructed:
 MANABOT_BUCKETED_SHAPES=1 uv run python experiments/<name>.py
 ```
 
+An Etude job enables it the same way, through the job's `environment`:
+`environment=(Variable("MANABOT_BUCKETED_SHAPES", "1"),)` on
+`etude.launch.records.Job`, with `Variable` from the same module. The job's
+environment is part of its identity, so the two settings are distinct jobs.
 Leave it unset, or set it to `0`, for the default path. To compare the two,
 run the same job once with each setting.
 
