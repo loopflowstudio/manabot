@@ -26,6 +26,11 @@ not re-qualified on rented GPUs (say so in the PR).
 is generic (`uv sync --locked`, or train on CPU) because `execute_regime` raises
 the same text. Committed in 6b64a6bb3, wording refined in 86b00b538.
 
+Re-reviewed 2026-11-12 after the main merge: one constant and one error
+function feed device selection, baseline and execution admission; automatic
+selection skipping old-Torch MPS is the Task's stated behaviour. Nothing to change,
+no open product choice.
+
 ## Root cause (for the PR description; steer 67f27f5c)
 
 On an Apple M2 (macOS 26.7) the MPS weight gradient of `F.linear` with a large
