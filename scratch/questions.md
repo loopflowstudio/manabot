@@ -1,5 +1,8 @@
 # MTG-286 decisions and evidence — 2026-11-11
 
+Sync resolution: retain this branch's active TLE notes when main deletes the
+inherited release-notes file; main's release and licensing changes apply unchanged.
+
 Jack Heart: "lets file a task for covering all of TLE".
 Inherited MTG-285 release notes remain in this file at checkout base
 `4c041d6cefe829c5b1b52273ba19991d663ee26b`; they do not direct this Task.
