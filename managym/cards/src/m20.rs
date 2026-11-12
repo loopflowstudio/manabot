@@ -8,7 +8,6 @@ use managym_state::{
     effect::EffectDuration,
     mana::ManaCost,
     predicate::CardPredicate,
-    zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -100,16 +99,10 @@ fn brought_back() -> CardDefinition {
         name: "Brought Back".into(),
         mana_cost: Some(ManaCost::parse("{W}{W}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::Move {
-            library_end: None,
-            what: ObjectSelector::Target(spec.clone()),
-            to: ZoneType::Battlefield,
-            tapped: true,
-            transformed: false,
-            under: None,
-            with_counter: None,
-            linked: None,
-        }],
+        spell_effects: vec![Effect::return_to_battlefield(
+            ObjectSelector::Target(spec.clone()),
+            true,
+        )],
         targeting: vec![TargetRequirement::up_to(2, spec)],
         text_box: text_box.into(),
         ..Default::default()

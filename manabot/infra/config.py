@@ -73,8 +73,8 @@ class UnsupportedPolicyInput(ValueError):
             message = (
                 f"the checkpoint was written for policy input v{version} and must "
                 "be run from the revision that recorded it; this revision supports "
-                "policy inputs v9 and v10, and "
-                f"{LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
+                f"policy inputs {' and '.join(f'v{v}' for v in SUPPORTED_POLICY_INPUTS)}, "
+                f"and {LAST_MULTI_INPUT_REVISION} is the last revision supporting v1-v8"
             )
         super().__init__(message)
 

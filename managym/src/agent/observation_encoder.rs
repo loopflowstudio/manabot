@@ -996,39 +996,39 @@ fn turn_state_reads(registry_key: i32) -> TurnStateReads {
 /// to the viewer reads it and it is present. V9 refuses such an observation
 /// before writing a buffer rather than hide state a visible card reads.
 pub fn input_v10_state(obs: &Observation) -> Option<&'static str> {
-    let cards = obs.agent_cards.iter().chain(&obs.opponent_cards);
-    let visible = cards
-        .clone()
-        .map(|card| card.registry_key)
-        .chain(
-            obs.agent_permanents
-                .iter()
-                .chain(&obs.opponent_permanents)
-                .map(|permanent| permanent.registry_key),
-        )
-        .chain(
-            obs.stack_objects
-                .iter()
-                .map(|object| object.source_card_registry_key),
-        )
-        .map(turn_state_reads)
-        .fold(TurnStateReads::default(), |all, reads| TurnStateReads {
-            life_lost: all.life_lost || reads.life_lost,
-            from_battlefield: all.from_battlefield || reads.from_battlefield,
-        });
-    if visible.life_lost
-        && [&obs.agent, &obs.opponent]
-            .iter()
-            .any(|player| player.turn_history.life_lost > 0)
+    let players = [&obs.agent, &obs.opponent];
+    let cards = || obs.agent_cards.iter().chain(&obs.opponent_cards);
+    let visible_reads = || {
+        cards()
+            .map(|card| card.registry_key)
+            .chain(
+                obs.agent_permanents
+                    .iter()
+                    .chain(&obs.opponent_permanents)
+                    .map(|permanent| permanent.registry_key),
+            )
+            .chain(
+                obs.stack_objects
+                    .iter()
+                    .map(|object| object.source_card_registry_key),
+            )
+            .map(turn_state_reads)
+    };
+    if players
+        .iter()
+        .any(|player| player.turn_history.life_lost > 0)
+        && visible_reads().any(|reads| reads.life_lost)
     {
         return Some("life lost this turn");
     }
-    if visible.from_battlefield && cards.clone().any(|card| card.from_battlefield_this_turn) {
+    if cards().any(|card| card.from_battlefield_this_turn)
+        && visible_reads().any(|reads| reads.from_battlefield)
+    {
         return Some("a card put into a graveyard from the battlefield this turn");
     }
     // Only a Powerstone-like source produces it, so its presence alone is
     // the need.
-    if [&obs.agent, &obs.opponent].iter().any(|player| {
+    if players.iter().any(|player| {
         player
             .restricted_mana
             .iter()
