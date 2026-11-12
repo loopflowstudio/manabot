@@ -21,8 +21,8 @@ Earlier assumptions (2026-11-04) are at
    published protocol schemas unchanged. A general "except" predicate set is
    unbuilt until a card needs it.
 3. **Activation context.** `SpendingContext::Activate` keeps the source's zone
-   and characteristics snapshot, not its object identity: no predicate reads
-   identity yet.
+   and subtypes, not its types or object identity: no predicate reads them
+   yet.
 
 ## Assumptions taken
 

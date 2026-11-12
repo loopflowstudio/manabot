@@ -282,7 +282,7 @@ Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
 `SpendPredicate`s naming any subtype a spell must have or an activation's
 source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
 Every cost carries a `SpendingContext`: `Cast` with the spell's announced
-subtypes and types, `Activate` with the source's zone and characteristics, or
+subtypes and types, `Activate` with the source's zone and subtypes, or
 `Resolving`, which only exclusions admit. Observation data names each
 restriction whole. The policy input's restricted-mana columns name exactly
 Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone

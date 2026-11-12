@@ -126,16 +126,9 @@ pub struct RestrictedManaData {
 impl RestrictedManaData {
     /// The complete restriction: every subtype it names, of any vocabulary.
     fn new(restriction: &ManaRestriction, amounts: [u8; 6]) -> Self {
-        let names = |activation| {
-            restriction
-                .subtypes(activation)
-                .into_iter()
-                .map(String::from)
-                .collect()
-        };
         Self {
-            spells: names(false),
-            abilities: names(true),
+            spells: restriction.spell_subtypes().map(String::from).collect(),
+            abilities: restriction.source_subtypes().map(String::from).collect(),
             except_nonartifact_spells: *restriction == ManaRestriction::ExceptNonartifactSpells,
             mana: amounts.map(i32::from),
         }

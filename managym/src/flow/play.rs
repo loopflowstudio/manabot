@@ -1249,10 +1249,7 @@ impl Game {
         let mut ability = ability.clone();
         ability.mana_cost.purpose = SpendingContext::Activate {
             zone: ability.zone.zone(),
-            source: SpendingObject::new(
-                card_ref.subtypes.iter().map(String::as_str),
-                card_ref.types.types.iter().copied(),
-            ),
+            source: SpendingObject::new(card_ref.subtypes.iter().map(String::as_str)),
         };
         self.price_activation(player, &mut ability);
         Some(ability)

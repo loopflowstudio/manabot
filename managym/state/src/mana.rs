@@ -111,20 +111,30 @@ impl ManaRestriction {
         }
     }
 
-    /// The subtypes named for casting (`activation` false) or for
-    /// activating abilities of sources (`activation` true), sorted.
-    pub fn subtypes(&self, activation: bool) -> Vec<&str> {
-        let Self::Only(predicates) = self else {
-            return Vec::new();
-        };
-        predicates
-            .iter()
-            .filter_map(|predicate| match predicate {
-                SpendPredicate::CastSubtype(name) if !activation => Some(name.as_str()),
-                SpendPredicate::ActivateSubtype(name) if activation => Some(name.as_str()),
-                _ => None,
-            })
-            .collect()
+    /// The subtypes a spell may have to be cast with this mana, sorted.
+    pub fn spell_subtypes(&self) -> impl Iterator<Item = &str> {
+        self.predicates().filter_map(|predicate| match predicate {
+            SpendPredicate::CastSubtype(name) => Some(name.as_str()),
+            SpendPredicate::ActivateSubtype(_) => None,
+        })
+    }
+
+    /// The subtypes a source may have for this mana to activate its
+    /// abilities, sorted.
+    pub fn source_subtypes(&self) -> impl Iterator<Item = &str> {
+        self.predicates().filter_map(|predicate| match predicate {
+            SpendPredicate::ActivateSubtype(name) => Some(name.as_str()),
+            SpendPredicate::CastSubtype(_) => None,
+        })
+    }
+
+    fn predicates(&self) -> impl Iterator<Item = &SpendPredicate> {
+        match self {
+            Self::Only(predicates) => Some(predicates),
+            Self::ExceptNonartifactSpells => None,
+        }
+        .into_iter()
+        .flatten()
     }
 
     /// Narrower mana is spent first: fewer admitted purposes, and mana
@@ -143,11 +153,11 @@ impl ManaRestriction {
             return "anything but nonartifact spells".into();
         }
         let mut parts = Vec::new();
-        let spells = self.subtypes(false);
+        let spells = self.spell_subtypes().collect::<Vec<_>>();
         if !spells.is_empty() {
             parts.push(format!("{} spells", spells.join(" or ")));
         }
-        let sources = self.subtypes(true);
+        let sources = self.source_subtypes().collect::<Vec<_>>();
         if !sources.is_empty() {
             parts.push(format!("abilities of {} sources", sources.join(" or ")));
         }
@@ -155,23 +165,22 @@ impl ManaRestriction {
     }
 }
 
-/// What a spell is announced as, or what an activation's source is, when its
-/// cost is priced. A snapshot shared by the cost's clones, witnesses and
-/// forks; it never follows the live object.
+/// An activation's source as its cost is priced: the subtypes the
+/// `ActivateSubtype` predicate reads. A snapshot shared by the cost's clones,
+/// witnesses and forks; it never follows the live object.
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct SpendingObject {
     /// Sorted and deduplicated.
     pub subtypes: Vec<String>,
-    pub types: BTreeSet<CardType>,
-    /// A hash of the fields above, computed once: payment search hashes
-    /// costs in every visited state.
+    /// A hash of `subtypes`, computed once: payment search hashes costs in
+    /// every visited state.
     #[serde(skip)]
     digest: u64,
 }
 
 impl PartialEq for SpendingObject {
     fn eq(&self, other: &Self) -> bool {
-        self.digest == other.digest && self.subtypes == other.subtypes && self.types == other.types
+        self.digest == other.digest && self.subtypes == other.subtypes
     }
 }
 
@@ -184,20 +193,15 @@ impl std::hash::Hash for SpendingObject {
 }
 
 impl SpendingObject {
-    pub fn new<'a>(
-        subtypes: impl IntoIterator<Item = &'a str>,
-        types: impl IntoIterator<Item = CardType>,
-    ) -> Arc<Self> {
+    pub fn new<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Arc<Self> {
         use std::hash::{Hash, Hasher};
         let mut subtypes = subtypes.into_iter().map(String::from).collect::<Vec<_>>();
         subtypes.sort_unstable();
         subtypes.dedup();
-        let types = types.into_iter().collect::<BTreeSet<_>>();
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        (&subtypes, &types).hash(&mut hasher);
+        subtypes.hash(&mut hasher);
         Arc::new(Self {
             subtypes,
-            types,
             digest: hasher.finish(),
         })
     }
@@ -208,17 +212,15 @@ impl SpendingObject {
             .is_ok()
     }
 
-    /// Whether this snapshot states exactly these characteristics, so a
-    /// rebuilt view can keep sharing it.
-    pub fn describes(&self, subtypes: &[String], types: &BTreeSet<CardType>) -> bool {
+    /// Whether this snapshot names exactly these subtypes (in any order, with
+    /// repeats), so a rebuilt view can keep sharing it without allocating.
+    pub fn describes(&self, subtypes: &[String]) -> bool {
         let distinct = subtypes
             .iter()
             .enumerate()
             .filter(|(i, name)| !subtypes[..*i].contains(name))
             .count();
-        self.types == *types
-            && distinct == self.subtypes.len()
-            && subtypes.iter().all(|name| self.has_subtype(name))
+        distinct == self.subtypes.len() && subtypes.iter().all(|name| self.has_subtype(name))
     }
 }
 
@@ -285,7 +287,7 @@ impl SpendingContext {
     pub fn ability<'a>(subtypes: impl IntoIterator<Item = &'a str>) -> Self {
         Self::Activate {
             zone: ZoneType::Battlefield,
-            source: SpendingObject::new(subtypes, []),
+            source: SpendingObject::new(subtypes),
         }
     }
 

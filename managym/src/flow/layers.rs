@@ -554,8 +554,8 @@ impl<'a> Context<'a> {
         view.creature_types.sort();
         view.creature_types.dedup();
         // Activations are paid as abilities of this source (CR 106.6), read
-        // from its final characteristics.
-        // An unchanged source keeps sharing its earlier snapshot.
+        // from its final subtypes; an unchanged source keeps sharing its
+        // earlier snapshot.
         let current =
             view.activated_abilities
                 .iter()
@@ -563,7 +563,7 @@ impl<'a> Context<'a> {
                     SpendingContext::Activate {
                         zone: ZoneType::Battlefield,
                         source,
-                    } if source.describes(&view.subtypes, &view.types.types) => {
+                    } if source.describes(&view.subtypes) => {
                         Some(ability.mana_cost.purpose.clone())
                     }
                     _ => None,
@@ -571,10 +571,7 @@ impl<'a> Context<'a> {
         if !view.activated_abilities.is_empty() {
             let purpose = current.unwrap_or_else(|| SpendingContext::Activate {
                 zone: ZoneType::Battlefield,
-                source: SpendingObject::new(
-                    view.subtypes.iter().map(String::as_str),
-                    view.types.types.iter().copied(),
-                ),
+                source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
             });
             for ability in &mut view.activated_abilities {
                 if ability.mana_cost.purpose != purpose {
