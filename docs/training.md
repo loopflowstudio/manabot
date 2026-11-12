@@ -111,7 +111,7 @@ interpretation and serialized identity.
 | `collect_selection` | Frozen-policy complete-game selection diagnostics; no weights change. |
 | `collect_belief` / `train_belief` | Collect hidden-hand labels from a policy stage and fit a sampler; see [beside the loop](../README.md#beside-the-loop). |
 
-Every stage declares device, float32 precision, worker count, Torch thread
+Every stage declares device, [numeric precision](#reduced-precision), worker count, Torch thread
 count, wall and memory limits (`Execution`). `execution.workers` accepts 1
 (default), 2 or 4 CPU observation producers for self-play only: persistent
 threads own disjoint native stream ranges, a barrier completes all writes
@@ -512,6 +512,43 @@ uv run python scripts/benchmark_numerical_health.py --device cpu
 
 Measured 1.74× (about 0.27 ms per step) on CPU on 2026-10-07 and 1.33× on an
 NVIDIA L4 on 2026-10-08; neither is full training throughput.
+
+### Reduced precision
+
+A CUDA stage can trade exact float32 arithmetic for tensor-core speed in its
+execution settings:
+
+```python
+from manabot.training.regime import Execution
+
+execution = Execution(device="cuda", precision="tf32", bucketed_shapes=True)
+```
+
+| `precision` | What changes |
+| --- | --- |
+| `float32` (default) | Nothing; the process's own TF32 switches are left as they were. |
+| `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
+| `bf16` | `torch.autocast(cuda, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
+
+Checkpoint evaluation and search run on CPU in float32. A reduced precision off CUDA fails
+validation (`precision tf32 requires CUDA`). The field is serialized in every
+stage, so a run's `run.json` regime names the precision it trained under, and
+a reduced-precision run is a declared regime variant, never an edit of a
+float32 regime. Precision changes no `ModelConfig` field, checkpoint or world
+binding: a checkpoint trained in any precision loads and runs in any other.
+
+Reduced precision changes learning numerics, not just speed, and finite
+metrics do not show that it learns the same. The admission measurement on an
+NVIDIA L4, for w160l8 and w384l8 with bucketed shapes on and off, is
+[`experiments/cuda_precision.md`](../experiments/cuda_precision.md): learner
+step and collection time and peak memory per precision, forward and gradient
+differences from float32 on retained minibatches, and a same-seed multi-update
+comparison of policy loss, value loss and clip fraction against a rule fixed
+before the scored runs. That report states which precision is the CUDA
+recommendation and which are rejected. To check a precision on another GPU or
+model size, run the same regime once per precision and compare those
+trajectories, then rerun the [CUDA numerics validation](#validation) on that
+host.
 
 ### Terminal incidents
 
