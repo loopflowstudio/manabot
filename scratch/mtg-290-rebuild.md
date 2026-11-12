@@ -68,4 +68,13 @@ passed; rules `cr_602_policy` 1 passed; clippy `-D warnings` clean.
 Steer (2026-11-12), Jack Heart: "i dont need to review again". Ship the rebuild at
 demo: remove scratch/, mark ready, enable squash auto-merge.
 
+Acceptance against the Task brief: (1) layout readable from Python, tied to native
+widths and the encoder's values (`tests/env/test_named_observation_layout.py`), and
+column 24 is `agent_permanents.columns.definition`; (2) default-version guidance and
+the version-naming rejection error are moot on v9-only main, where any other version
+raises `UnsupportedPolicyInput` naming `ac601834d`. Realign (2026-11-12): branch
+contains origin/main 92560a1e0; no stale `*_encoding_version` references remain;
+`LearningCatalog` is a stub-only TypedDict alias, as `LearningCatalog` was stub-only
+on main.
+
 Remaining: gate; delete `scratch/` in the final commit before landing.
