@@ -1172,48 +1172,38 @@ def _option3_tree(target: Path) -> Path:
     return target
 
 
-@dataclass(frozen=True)
-class Arm:
-    """Source tree for one arm's processes (None: the job revision); layout
-    switches come from the arm's name (`LAYOUTS`)."""
+def _arms(candidate: str, work: Path) -> dict[str, Path]:
+    """Each arm's source tree: the job revision, or option 3's patched copy.
 
-    tree: Path | None = None
-
-
-def _arms(candidate: str, work: Path) -> dict[str, Arm]:
-    """Baseline plus candidates: the option-3 patch, MTG-302's bucketed shapes,
-    or MTG-319's live tokens alone and over buckets (against bucketed)."""
+    Layout arms (MTG-302's bucketed shapes, MTG-319's live tokens alone and
+    over buckets) share the job revision; their switches come from the arm's
+    name (`LAYOUTS`)."""
     if candidate == "option3":
-        return {"baseline": Arm(), "option3": Arm(_option3_tree(work / "option3"))}
+        return {"baseline": ROOT, "option3": _option3_tree(work / "option3")}
     if candidate == "bucketed":
-        return {"baseline": Arm(), "bucketed": Arm()}
+        return {"baseline": ROOT, "bucketed": ROOT}
     if candidate == "live":
-        return {
-            "baseline": Arm(),
-            "bucketed": Arm(),
-            "live": Arm(),
-            "bucketed-live": Arm(),
-        }
+        return dict.fromkeys(("baseline", "bucketed", "live", "bucketed-live"), ROOT)
     raise ValueError(f"unknown candidate {candidate!r}")
 
 
-def _clean_env(arm: Arm) -> dict[str, str]:
+def _clean_env(tree: Path) -> dict[str, str]:
     # Stage processes track locally, never as the launcher's run.
     env = {k: v for k, v in os.environ.items() if not k.startswith("ETUDE_")}
     # A patched tree shadows the editable install's `manabot`.
-    env["PYTHONPATH"] = str(arm.tree or ROOT)
+    env["PYTHONPATH"] = str(tree)
     return env
 
 
-def _stage(args: list[str], log: Path, arm: Arm, timeout: float) -> dict[str, Any]:
+def _stage(args: list[str], log: Path, tree: Path, timeout: float) -> dict[str, Any]:
     tick = time.perf_counter()
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as handle:
         try:
             code = subprocess.run(
                 [sys.executable, str(Path(__file__).resolve()), *args],
-                cwd=arm.tree or ROOT,
-                env=_clean_env(arm),
+                cwd=tree,
+                env=_clean_env(tree),
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 timeout=timeout,
@@ -1242,7 +1232,7 @@ def job(smoke: bool = False) -> None:
     started = time.perf_counter()
 
     candidate = os.environ.get("MTG301_CANDIDATE", "option3")
-    arms: dict[str, Arm] = {"baseline": Arm()}
+    arms: dict[str, Path] = {"baseline": ROOT}
 
     def replay_stage(arm: str, size: str, name: str) -> bool:
         log.append(

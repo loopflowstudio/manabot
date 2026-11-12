@@ -38,6 +38,9 @@
 
 ## Checks
 
+- Compress: `l4_step_profile.Arm` (one field after the env switch went) is now a
+  source-tree `Path` per arm; ruff clean, `_arms('live')`/`runs(candidate='live')` checked.
+
 - `tests/model`: 310 passed, 4 skipped. `tests/model/test_live_tokens.py`,
   `tests/training/test_bucketed_execution.py`, `tests/model/test_bucketed_shapes.py`:
   22 passed (after the `live_token_count` rename). `test_experiment_data_untracked.py`: 1 passed.
