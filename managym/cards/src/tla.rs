@@ -2737,10 +2737,12 @@ fn dragonfly_swarm() -> CardDefinition {
         }],
         statics: vec![
             StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
-            StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(CardPredicate {
-                not_card_types: vec![CardType::Creature, CardType::Land],
-                ..Default::default()
-            })),
+            StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(Box::new(
+                CardPredicate {
+                    not_card_types: vec![CardType::Creature, CardType::Land],
+                    ..Default::default()
+                },
+            ))),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -5154,7 +5156,7 @@ fn jeong_jeong_the_deserter() -> CardDefinition {
                 Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
                 Effect::CreateDelayedTrigger {
                     remember: None,
-                    event: DelayedEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+                    event: DelayedEvent::YouCastSpell(Box::new(CardPredicate::subtype("Lesson"))),
                     frequency: DelayedFrequency::Once,
                     expiry: DelayedExpiry::ThisTurn,
                     effects: vec![Effect::CopyTriggeringObject],

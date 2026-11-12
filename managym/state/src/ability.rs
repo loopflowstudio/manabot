@@ -1228,7 +1228,7 @@ pub enum DelayedEvent {
         your_turn: bool,
     },
     /// The matching spell supplies event context, separate from captured subjects.
-    YouCastSpell(CardPredicate),
+    YouCastSpell(Box<CardPredicate>),
     Upkeep,
 }
 

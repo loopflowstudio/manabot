@@ -207,3 +207,34 @@ the saved `Trophy.decklist` keeps the old world's issues (134/1000). QA fixed
 - The guide's Scout's Warning example prints `[[]]` on the thirteenth-pass
   extension (wording now present tense); its "expected to fail" corpus
   sentence awaits the admission run. CI's Engine Budget covers speed.
+
+## Gate result (2026-11-12)
+
+Fixed in gate: clippy (`-D warnings`, local 1.98) on branch code — boxed the
+`CardPredicate` payloads of `PowerCda::GraveyardMatching`,
+`DelayedEvent::YouCastSpell` and `DelayedTriggerEvent::YouCastSpell` (serde
+output unchanged), `checked_div` for counted tap uses, a useless `into_iter`,
+`as_chunks` in two TLE tests; an unused parity-test import; the coverage
+script reads `catalog_tokens`. `test_equal_rule_names_learn_opposite_public_preferences`
+pairs Gray Ogre with Glory Seeker, since new names moved Hill Giant to the
+next name group. Re-recorded the content-bound evidence per
+`conformance/README.md`: semantic-kernel w17-v2 (14 cases, identical command
+counts and outcomes, new digest `f90667d4…`), Academy fixtures (offer labels
+replayed unchanged), authored-match receipt (same 135 decisions; new
+`AUTHORITY_SHA256`/`TERMINAL_STATE` pins), both parity receipts, belief v3 pins.
+
+Checks (current tree): cargo fmt clean; clippy all targets/features clean;
+`cargo nextest run --workspace --profile ci` 1164 passed, 2 skipped; arena
+admission/monitoring suite 65 passed; model, belief, Learn setup, choice
+navigation, decision surface, authored/public parity, text observation and
+parity 506 passed except below; env/agent/llm/action cutoff/active training
+352 passed; protocol, trigger order, forced decisions, shared-effect transport,
+record coverage, infra 180 passed; Academy svelte-check 0 errors, vitest 127
+passed; `--bonus-sheet` 58/61, `--allocation-only` clean. Engine Budget and
+Playwright release proofs left to CI.
+
+Not passing, not in CI: `tests/belief/test_learning.py::test_real_population_learning_is_held_out_and_beats_p0`.
+Passes at base f95949149 (held-out NLL improvement +0.126 nats); here −0.046.
+The belief schema's card vocabulary is every world definition (360 → 460), so
+the 16-step toy model grows from 2,980 to 3,780 parameters and its seeded
+result moves; population and supervision are identical. Not retuned here.

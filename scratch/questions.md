@@ -381,3 +381,12 @@ layout, `AGENTS.md` and `docs/observation-and-model.md`: one owner per fact,
 columns named for what they hold, docs agree. The earlier mismatch (spells cast
 missing from the policy) is closed. Nothing new for implement; the open v10
 questions above don't block gate. Remaining work is the plan's gate list.
+
+## Gate, 2026-11-12: belief learning demo vs world size
+
+`test_real_population_learning_is_held_out_and_beats_p0` (not in CI) fails
+after the added definitions: its model's card vocabulary is the whole world
+manifest, so every card addition reseeds it (base +0.126 nats held out, branch
+−0.046, same population). Open: whether the demo should size its vocabulary
+from the matchup's cards rather than the world, or the test is retired. Left
+unchanged; retuning a seed or threshold to pass would hide the dependence.

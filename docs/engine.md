@@ -664,9 +664,10 @@ raises `managym.DeckImportError` naming it as unknown:
 | Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
 | Heartbeat of Spring | A redesign of how mana production triggers see what a land produced |
 
-Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, only
-those listing one of these three are expected to fail. Do not drop or
-substitute the card to admit such a deck; it admits once its definition exists.
+Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, 995
+admit; the five that fail list Heartbeat of Spring (three) or Lita (two). Do
+not drop or substitute the card to admit such a deck; it admits once its
+definition exists.
 
 Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
 policy input v9 cannot hold: life lost this turn, cards put into a graveyard

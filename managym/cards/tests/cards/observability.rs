@@ -3765,7 +3765,7 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
         DelayedTriggerEvent::CreatureDies,
         DelayedTriggerEvent::EndStep { your_turn: false },
         DelayedTriggerEvent::EndStep { your_turn: true },
-        DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+        DelayedTriggerEvent::YouCastSpell(Box::new(CardPredicate::subtype("Lesson"))),
         DelayedTriggerEvent::Upkeep,
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();

@@ -117,7 +117,7 @@ def catalog_issues(inventory: list[InventoryCard]) -> list[str]:
     pool = managym.content_pool("world")["definitions"]
     by_name = {row["registry_name"]: row for row in pool}
     key_counts = Counter(row["key"] for row in pool)
-    catalog = managym.learning_catalog()
+    catalog = managym.catalog_tokens()
     learning_rows = {name: i for i, name in enumerate(catalog["registry_names"])}
     offsets = catalog["definition_offsets"]
     issues: list[str] = []

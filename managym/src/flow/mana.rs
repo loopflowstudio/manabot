@@ -184,13 +184,13 @@ impl PaymentModel {
         {
             return 0;
         }
-        let mut uses = if ability.tap_count > 0 {
-            self.tap_candidates(resources, &ability.tap_candidates)
-                .len()
-                / ability.tap_count
-        } else {
-            usize::MAX
-        };
+        // No counted tap cost leaves this bound open (usize::MAX) for the
+        // finite-resource limits below.
+        let mut uses = self
+            .tap_candidates(resources, &ability.tap_candidates)
+            .len()
+            .checked_div(ability.tap_count)
+            .unwrap_or(usize::MAX);
         if ability.tap_source || ability.sacrifice_source || ability.limited {
             uses = uses.min(1);
         }

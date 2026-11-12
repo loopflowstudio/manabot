@@ -866,7 +866,7 @@ fn delayed_capture_keeps_event_context_and_original_controller_after_source_chan
             Entry::Triggered,
             controller,
             vec![Effect::CreateDelayedTrigger {
-                event: DelayedEvent::YouCastSpell(CardPredicate::default()),
+                event: DelayedEvent::YouCastSpell(Box::default()),
                 frequency: DelayedFrequency::Once,
                 expiry: DelayedExpiry::ThisTurn,
                 remember: Some(ObjectSelector::Target(TargetSpec::Creature)),
