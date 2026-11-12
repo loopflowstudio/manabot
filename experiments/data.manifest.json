@@ -81998,6 +81998,50 @@
    "sha256": "b7d12fc52bcdbf27ef894dc5743884ca7f58dcbb78492130dd89f7d3c9c75323",
    "bytes": 217742
   },
+  "experiments/data/tla-frontier-c5fba4/receipts/evaluation-ledger.json": {
+   "sha256": "7da48f39606809ace3ff74f9241277485c4327bbfe7106cc7cfe02446c0a1345",
+   "bytes": 152178
+  },
+  "experiments/data/tla-frontier-c5fba4/receipts/tla-frontier-c5fba4-cpu-split-v1-db4bcf749222.json": {
+   "sha256": "fdd6425e3013df8f704019061349e11375136bc7c1cb08c91ad976544e759c74",
+   "bytes": 535
+  },
+  "experiments/data/tla-frontier-c5fba4/receipts/tla-frontier-c5fba4-gpu-split-v1-4c5dde665ee0.json": {
+   "sha256": "58378b1a6ce4b5fecb16c984e2b5f29c52541e472e54015785c5e5d3783eb359",
+   "bytes": 6358
+  },
+  "experiments/data/tla-frontier-c5fba4/receipts/tla-frontier-c5fba4-gpu-split-v1-76f6eba7fa0c-capacity-1.json": {
+   "sha256": "d42ef7b5a49ca6362aa55124353cd89c4ab10ec1809adacaf802d39018ccb6a0",
+   "bytes": 6369
+  },
+  "experiments/data/tla-frontier-c5fba4/receipts/tla-frontier-c5fba4-gpu-split-v1-76f6eba7fa0c.json": {
+   "sha256": "42b3b1f5a74a5ba038912affde804dae6168e90e49cc1f37bdcdd699bd8151ff",
+   "bytes": 2403
+  },
+  "experiments/data/tla-frontier-c5fba4/receipts/tla-frontier-c5fba4-gpu-split-v1-a00ce80d5f2b.json": {
+   "sha256": "15eeb7e316113611b02796c2065dfd250234656253841dccb05f31a6095dfaf5",
+   "bytes": 2403
+  },
+  "experiments/data/tla-frontier-c5fba4/report/damped-learning-schedule.json": {
+   "sha256": "58f4db7753dd5cdfa35e3a2227a72173224a856412847f5dd202cc8bb7446125",
+   "bytes": 1917
+  },
+  "experiments/data/tla-frontier-c5fba4/report/damped-learning-schedule.svg": {
+   "sha256": "b690b5d6aaa591148c724a04983050f422b6a969a4050836905cab50c44252a9",
+   "bytes": 41765
+  },
+  "experiments/data/tla-frontier-c5fba4/report/generation.json": {
+   "sha256": "ef0495ed8a9291de7351640eb29e16992a86cfb8b9d58ffc4c83ef1a2a191c5b",
+   "bytes": 620
+  },
+  "experiments/data/tla-frontier-c5fba4/report/page.json": {
+   "sha256": "0a7bb86f1cf49ff57c5dc36ab37ce60c9324b5dac968fc5c36fe09a5ba38cd17",
+   "bytes": 571504
+  },
+  "experiments/data/tla-frontier-c5fba4/report/tla_frontier.html": {
+   "sha256": "eca5de00c954425a2c688645e2360af5d01823fa79a4f91ef1111062c636df7e",
+   "bytes": 818632
+  },
   "experiments/data/token_stream/fill-tla-e1.json": {
    "sha256": "3c7dcf52a81e54e459f1712119fe6dd9f62a7cb72e871539de6e79e15606ec1a",
    "bytes": 14809

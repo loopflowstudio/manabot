@@ -104,7 +104,7 @@ linked capture audit for boundaries and supervision limits.
 
 The TLA frontier run uses `experiments/tla_corpus.py` for the fixed admitted
 corpus and `experiments/tla_frontier.py` for Etude training and paired
-evaluation ([protocol](../experiments/protocols/tla-frontier-c5fba4-v1.md)).
+evaluation ([report](../experiments/tla-frontier-c5fba4-results.md)).
 The earlier trophy pilots execute from their pinned source; see the
 [pilot evidence](../experiments/tla-trophy-pilot.md).
 

@@ -82,7 +82,7 @@ from experiments.tla_frontier import (
 )
 from manabot.eval.results import RateInterval, bootstrap_mean_interval
 from manabot.infra.files import atomic_json
-from manabot.infra.identity import StrictModel, file_sha256
+from manabot.infra.identity import StrictModel, canonical_sha256
 from manabot.training.regime import TrainingRegime
 
 if TYPE_CHECKING:
@@ -598,7 +598,7 @@ def analyze(
         issues.append(f"{unscored} of {played} played games have no score.")
     endpoints = next(c for c in comparisons if c.tag == "endpoint-head-to-head")
     return FrontierAnalysis(
-        protocol_sha256=file_sha256(PROTOCOL),
+        protocol_sha256=canonical_sha256(PROTOCOL.model_dump(mode="json")),
         bootstrap_seed=protocol.bootstrap_seed,
         counts=field_totals(Counts, [p.counts for p in unique_pairs]),
         policy_actions=field_totals(
