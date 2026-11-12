@@ -88,3 +88,5 @@ QA after backend layout (2026-11-12, headless, on the M2): convert / load_mlx_po
 parity on the published subset all match the guides. Fixed: `read_container` raises `NotAContainer` for a .pt or a
 pre-layout `.mlx.safetensors` (was TypeError / UnicodeDecodeError); `convert` refuses a `.safetensors` input (its
 output path would be its input). M2: 20 passed. scratch/qa.html rewritten.
+
+Published (2026-11-12): lf sync clean, lf pr publish updated #495 (mergeable). Comment c2eace66 lists checkpoint.py/test/README changes since c42eee948 for MTG-325 (steer 6297df46).
