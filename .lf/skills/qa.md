@@ -94,3 +94,20 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Training recipes: write a regime JSON from Python
+  (`TrainingRegime(...).model_dump_json()`) and run
+  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
+  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
+  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
+  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
+  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
+  an empty directory to act like a new machine.
+- TLA Limited decks (the MTG-282 pool corpus) overflow default observation
+  capacities within a few dozen games; copy the `observation` block and the
+  `game_errors` policy (`recover_capacity: true`) of
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
+  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
+  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
+  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
+  ignores SIGINT, so `pkill -INT` appears to hang.

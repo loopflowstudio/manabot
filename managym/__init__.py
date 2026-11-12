@@ -5,11 +5,18 @@ shared decision/protocol adapters live beside this module.
 """
 
 from collections.abc import Callable
+import sys
 from typing import ParamSpec, TypeVar
 import warnings
 
 from . import _managym
 from ._managym import *  # noqa: F403 — expose the native API described by the stub.
+from ._managym import format
+
+# PyO3 submodules are attributes, not importable modules; registering the
+# native ``format`` lets ``import managym.format`` and ``from managym.format
+# import Limited`` resolve to the same object as ``managym.format``.
+sys.modules[f"{__name__}.format"] = format
 
 # ---------------------------------------------------------------------------
 # Deprecated spellings, removed in 0.3.0. Engine names describe what managym
