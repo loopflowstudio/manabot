@@ -144,7 +144,12 @@ the definitions a batch references. Shared-effect routing, fact programs and
 legal-action selection keep their packed, data-dependent layouts. A forward
 therefore takes one of a few shapes per input axis instead of a new shape for
 nearly every batch, and does much less work than padding everything to
-capacity.
+capacity. The complete catalog is more work than the default path's
+referenced definitions: captured Elemental learner batches referenced 65 to
+154 of 360 definitions, so learning encodes 2.3 to 5.8 times as many catalog
+tokens. On CPU, where the recurrent catalog encoder dominates learning, a
+learner forward and backward is therefore slower than on the default path,
+most of all for small decks.
 
 Turn it on for a process with an environment variable, which takes effect when
 an `ActorCritic` is constructed:
