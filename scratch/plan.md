@@ -70,3 +70,13 @@ states the order dependence; scratch/questions.md keeps the alternative).
 Its two actions (docs command true to what runs; Etude Task for re-deriving
 matchups) are done: docs pass 2 and EXP-55. No manabot `_source` workaround,
 no edit to the frozen `experiments/tla_frontier.py` eval.
+
+## Concept review 2 (2026-11-12, headless)
+
+Concepts unchanged since review 1. One mismatch, settled by the design:
+`docs/experiments.md` says the frontier page's four Evals charts each have a
+line for Small and one for Large, but `head_to_head` draws only `subject`'s
+line (its own table row says so; the demo confirmed Small's mirrored line is
+dropped). Done: the frontier paragraph now says earlier-self and heuristic
+charts have a line per size and the two Large vs Small charts show Large's
+line only (above 0.5 means Large is stronger). No open product choice.

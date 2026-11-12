@@ -257,8 +257,11 @@ it, or from a file with its `report()` and no `eval` over its own run prefixes:
 source digest no longer agrees with the held runs (`tournament_conflict`).
 
 Over the frontier's retained evaluations, the page shows four charts under
-Evals, each with one line for Small (width 64) and one for Large (width 160,
-8 layers), scored from 0 to 1 with 0.5 drawn as even. Hovering a point reads
+Evals, scored from 0 to 1 with 0.5 drawn as even. The charts against the
+model's earlier self and against the heuristic have a line for Small (width
+64) and one for Large (width 160, 8 layers). The two Large vs Small charts, at
+a fixed number of updates and at fixed training time, show Large's line only,
+so above 0.5 means Large is stronger. Hovering a point reads
 like `0.62 · 95% interval 0.53–0.72 · 64 games · 16 matches`.
 The learning schedule opens ML details.
 
