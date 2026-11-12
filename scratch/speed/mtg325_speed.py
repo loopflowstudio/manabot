@@ -2,12 +2,12 @@
 
 One machine, one venv and one native build. Two arm directories each hold
 their own `manabot/` beside symlinks to every other checkout entry: `head` is
-the job revision's, `base` is that with `base.patch` applied (the merge-base
-adf601acb's `manabot/`). `bench.py` runs ABAB, `REPEATS` processes per arm,
+the job revision's, `base` is that with `base.patch` applied (main
+a343904ee's `manabot/`, the merge-base). `bench.py` runs ABAB, `REPEATS` processes per arm,
 then `compare.py` writes `summary.txt`.
 
 `base.patch` is generated, not tracked: commit it only on the launch commit
-(`git diff HEAD adf601acb -- manabot > scratch/speed/base.patch`).
+(`git diff HEAD a343904ee -- manabot > scratch/speed/base.patch`).
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
         scratch/speed/mtg325_speed.py --rent l4 --revision COMMIT \\

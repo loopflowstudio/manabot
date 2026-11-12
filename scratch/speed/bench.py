@@ -2,7 +2,7 @@
 
     uv run python scratch/speed/bench.py OUT.json [--device cuda] [--streams 256]
 
-Runs whichever `manabot/` is first on the path (the base merge-base or this
+Runs whichever `manabot/` is first on the path (main at the merge-base or this
 branch) and resolves the module homes of either. One process: one Elemental
 self-play batch from the current recipe (elemental-long-183 re-pinned to the
 current world: w64l2 FiLM-off, 256 streams x 64 transitions, both seats,
@@ -15,6 +15,7 @@ legal logs, sampling, host read), and `--checkpoints` save/load round trips.
 """
 
 import argparse
+import cProfile
 from copy import deepcopy
 import json
 from pathlib import Path
@@ -52,7 +53,7 @@ try:
     ARM = "head"
     LEAD: tuple[object, ...] = (_backend,)
     legal_mask, policy_logs = _rl.legal_mask, _rl.policy_logs
-except ImportError:
+except ImportError:  # main before this change (a343904ee)
     from manabot.model.actor_critic import ActorCritic  # type: ignore[no-redef]
     from manabot.model.checkpoint import (  # type: ignore[no-redef]
         load_checkpoint,
@@ -62,16 +63,16 @@ except ImportError:
         legal_mask,
         policy_logs,
     )
-    from manabot.training.learning.damped_policy import (  # type: ignore[no-redef]
-        update_damped_iteration,
-    )
-    from manabot.training.learning.learner import Learner  # type: ignore[no-redef]
-    from manabot.training.learning.objectives import (  # type: ignore[no-redef]
-        update_iteration,
-    )
     from manabot.training.precision import (  # type: ignore[no-redef]
         apply_matmul_precision,
         forward_precision,
+    )
+    from manabot.training.updates.damped_policy import (  # type: ignore[no-redef]
+        update_damped_iteration,
+    )
+    from manabot.training.updates.learner import Learner  # type: ignore[no-redef]
+    from manabot.training.updates.ppo import (  # type: ignore[no-redef]
+        update_iteration,
     )
 
     ARM = "base"
@@ -109,6 +110,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--inference", type=int, default=50)
     parser.add_argument("--checkpoints", type=int, default=5)
+    parser.add_argument("--profile", type=Path, help="cProfile one update of each kind")
     args = parser.parse_args()
     device = torch.device(args.device)
     precision = "tf32" if device.type == "cuda" else "float32"
@@ -169,7 +171,12 @@ def main() -> None:
             _sync(device)
             _steps = 0
             tick = time.perf_counter()
-            run(learner, copy)
+            if args.profile is not None and repeat == 1:
+                profiler = cProfile.Profile()
+                profiler.runcall(run, learner, copy)
+                profiler.dump_stats(f"{args.profile}.{name}")
+            else:
+                run(learner, copy)
             _sync(device)
             elapsed = time.perf_counter() - tick
             if repeat:
