@@ -150,3 +150,6 @@ da964c606; two Academy games to Game Over, no page errors. No fixes.
 Gate (head aaa6dd564): since b206873cd only the `docs/engine.md` reflow, the
 base merge (`managym/perf/baseline.json`, `docs/development.md`) and scratch
 changed; no suite inputs moved, so no reruns. PR #484 CI pending at this pass.
+Compress (head 5a7ab52ea): since 17768efe2 only the base merge and scratch
+changed; no code to reduce. Dropped inherited MTG-286 notes from
+`scratch/questions.md` (at `5a7ab52ea:scratch/questions.md`); scratch 2651 tokens.
