@@ -1,0 +1,56 @@
+# MTG-319 plan
+
+## Design (built)
+
+- Switch: `Execution.live_tokens: bool`, omitted when False; train_self_play only;
+  continuation must preserve it; rejected with `token_stream="pooled"` (regime and
+  `ActorCritic`). `ActorCritic(..., live_tokens=)`, `load_checkpoint(..., live_tokens=)`.
+- `manabot/model/live_tokens.py` `LiveTokens`: pack `validity != 0` (plus one value
+  token per observation) row-major into [L,D]; offsets = cumsum of per-row counts on
+  device. Every `GameObjectAttention` layer runs `forward_live` on [L,D]: QKV/out
+  projections from the module's own `nn.MultiheadAttention` weights, SDPA over jagged
+  NJTs (`nested_tensor_from_jagged(..., min_seqlen=1, max_seqlen=S)` so dispatch reads
+  nothing), norms and FFN on packed rows. Scatter back to [B,S,D] with zeros.
+- Embeddings, links, facts, shared effects, catalog, focus joins and critic stay on the
+  (optionally bucket-trimmed) table. Composes with `bucketed_shapes`.
+- Host reads: collection counts live tokens on the CPU batch in `PolicyInference.prepare`
+  (`PreparedObservation.live_objects`) and packs with `nonzero_static`; learning uses
+  `nonzero` (one read per forward).
+- `historical_mean` works unchanged (padding comes back zero, as padded layers leave it);
+  the drafted doc rejection was dropped.
+- CPU: NJT SDPA falls back to per-observation math (correct, slow). Docs say so; no
+  validator.
+
+## Pilot
+
+- `experiments/l4_step_profile.py` arms now select layouts by constructor flags
+  (`LAYOUTS`); its old `MANABOT_BUCKETED_SHAPES` env arm and `make_actor` signature were
+  stale since MTG-312. Candidate `live`: baseline, bucketed, live, bucketed-live.
+- `experiments/live_token_attention.py` launches it; report
+  `experiments/live_token_attention.md` (not yet written).
+- Decision rule: bucketed-live learner step at w384l8 <= bucketed / 1.5, equal outputs.
+
+## Checks
+
+- `pytest tests/model/test_live_tokens.py tests/training/test_bucketed_execution.py`: 13 passed.
+- `pytest tests/model`: 310 passed, 4 skipped.
+- `MTG301_CANDIDATE=live l4_step_profile job --smoke` (CPU): every stage exit 0; numerics
+  ok for bucketed, live, bucketed-live (live grads within 8.4e-8, logits 4e-9). The smoke
+  found and fixed harness drift: `observation_tensors` now takes no device (learner
+  admits on CPU, then `transfer_admitted`), and hyphenated arm names in numerics pairing.
+- Committed `2cf2389f3`. Launch: `etude launch experiments/live_token_attention.py
+  --rent l4-etude --revision <sha>` through the 0.2.15 overlay (`~/.etude/launcher.db`
+  is schema 13; the locked 0.2.16 is 14). 2026-11-12 15:49 UTC: l4-etude, mtg281-l4,
+  b015d5-l4 all "none available".
+
+- Polled `etude availability l4-etude` every 2 min, 15:49-16:28 UTC: since 15:51 its only
+  slot is held by machine `l4-etude-9249bc075105` (not this Task's; rented until 18:05
+  UTC). Not launched; other Tasks' on-demands (mtg281-l4, b015d5-l4) left alone.
+
+## Remaining
+
+- L4 run (<= USD 3; `--rent l4-etude` once its slot frees, revision = branch head) and
+  the report's Results/Decision; gate suites.
+- Compress: dropped the unused `Arm.environment` (no arm sets env since `LAYOUTS`); test
+  reads `OBJECT_VALIDITY_KEYS`; doc serialization paragraph trimmed. `test_live_tokens.py`:
+  5 passed.

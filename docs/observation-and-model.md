@@ -237,11 +237,7 @@ The stage's collection and learner policies, including a frozen opponent
 (`load_checkpoint(..., live_tokens=True)`), use the layout; evaluation and
 search do not. Code that builds a policy directly passes
 `ActorCritic(..., live_tokens=True)`. Like `bucketed_shapes`, the field is
-omitted from the serialized regime when unset, so existing regime hashes are
-unchanged, and a stage that sets it records `"live_tokens": true` in the regime
-in `run.json`.
-
-The setting changes how a forward is computed, not the model: no `ModelConfig`
+serialized only when set. The setting changes how a forward is computed, not the model: no `ModelConfig`
 field, checkpoint, world binding or policy input changes, and a checkpoint
 trained with it loads and runs without it. Action probabilities, values,
 losses and gradients agree with the padded path to within 1e-5. It is rejected

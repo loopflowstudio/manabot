@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from manabot.model.actor_critic import ActorCritic
+from manabot.model.actor_critic import OBJECT_VALIDITY_KEYS, ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.inference import PolicyInference
 from manabot.model.live_tokens import LiveTokens
@@ -71,17 +71,7 @@ def test_outputs_and_gradients_match_padded(
             torch.testing.assert_close(b.grad, a.grad, atol=1e-5, rtol=1e-4)
     with torch.no_grad(), PolicyInference(live) as scope:
         prepared = scope.prepare(obs)
-        present = sum(
-            int(obs[key].count_nonzero())
-            for key in (
-                "agent_player_valid",
-                "opponent_player_valid",
-                "agent_cards_valid",
-                "opponent_cards_valid",
-                "agent_permanents_valid",
-                "opponent_permanents_valid",
-            )
-        )
+        present = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
         tokens = len(obs["actions_valid"]) if value_aggregation == "value_token" else 0
         assert prepared.live_objects == present + tokens
         totals: list[int | None] = []

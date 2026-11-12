@@ -1174,10 +1174,10 @@ def _option3_tree(target: Path) -> Path:
 
 @dataclass(frozen=True)
 class Arm:
-    """Source tree (None: the job revision) and switches for one arm's processes."""
+    """Source tree for one arm's processes (None: the job revision); layout
+    switches come from the arm's name (`LAYOUTS`)."""
 
     tree: Path | None = None
-    environment: tuple[tuple[str, str], ...] = ()
 
 
 def _arms(candidate: str, work: Path) -> dict[str, Arm]:
@@ -1198,12 +1198,10 @@ def _arms(candidate: str, work: Path) -> dict[str, Arm]:
 
 
 def _clean_env(arm: Arm) -> dict[str, str]:
-    # Stage processes track locally, never as the launcher's run; only the
-    # arm's own switches reach them.
+    # Stage processes track locally, never as the launcher's run.
     env = {k: v for k, v in os.environ.items() if not k.startswith("ETUDE_")}
     # A patched tree shadows the editable install's `manabot`.
     env["PYTHONPATH"] = str(arm.tree or ROOT)
-    env.update(arm.environment)
     return env
 
 
