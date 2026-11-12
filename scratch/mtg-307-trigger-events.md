@@ -54,6 +54,15 @@ is one test through `Actor::includes` (moved-card path keeps the
 `trigger_descriptions_fill_one_template_per_event`). The learning-token test
 now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
 
+## Concept review 3 (2026-11-12)
+
+No change. Remaining non-event variants each have a rules-fixed actor or one
+consumer: `BecomesTargeted` (Ward's "an opponent controls", CR 702.21),
+`YouCastThis`, `SpellTargetsOnlyThis` (emn), `YourAttackingCreatureTriggers`
+(tla); `Chapter` and `NoCounters` are state triggers. Every printed "one or
+more" trigger in the card sets is an `Attacks`, `DealsCombatDamage` or
+`PutsCounters` field, so `Per` needs no other home yet.
+
 ## Checks
 
 - `cargo nextest run --workspace --profile ci` (debug): 1163/1164 pass;
@@ -75,3 +84,11 @@ now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
 
 Inherited MTG-286 design note removed from scratch; read it at
 `d95734088:scratch/tle-production-design.md`.
+
+## QA (2026-11-12, head 0c2ce18e1)
+
+`scratch/qa.html`: trigger text for all 276 catalog triggered abilities diffed
+base→head (91 changed, all closer to printed text); 1332 random full games over
+every authored setup, 0 errors; Academy table played to Game Over twice with
+triggers (incl. Tiger-Seal upkeep) on the stack. Pre-existing: non-self ETB/dies
+still say "When" (fix moves the w17 authored-match receipt).

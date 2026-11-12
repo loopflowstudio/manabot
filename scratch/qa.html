@@ -1,55 +1,39 @@
-<!doctype html>
-<meta charset="utf-8">
-<title>MTG-286 QA — 2026-11-12</title>
-<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}code,pre{background:#f4f1ea;padding:0 .2em}pre{padding:.6em;overflow:auto}</style>
-<h1>MTG-286 QA — 58 of 61 bonus-sheet cards</h1>
-<p>Run on HEAD 9bac1ba1c plus the fixes below, with the cp313 extension rebuilt from the branch (the earlier <code>.so</code> predated the last Rust commit).</p>
+<!doctype html><meta charset="utf-8"><title>MTG-307 QA: triggers as an event over an actor</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ccc}pre{background:#f6f6f6;padding:.6em;overflow:auto;font-size:12px}td,th{padding:.2em .6em;text-align:left;vertical-align:top}</style>
+<h1>MTG-307 QA — triggers as "whenever X does Y"</h1>
+<p>Head <code>0c2ce18e1</code>, base <code>fa56bd4a2</code>. Release extension rebuilt at head (cp313, atomic replace) before every check below.</p>
 
-<h2>1. Corpus admission (acceptance)</h2>
-<p>I fetched <code>experiments/data/mtg213/corpus-v1/corpus.json</code> through <code>manabot.data fetch</code> with Doppler <code>manabot/prd</code>. SHA256 <code>22f9b2b9…6043</code>, matching the manifest. I then admitted every one of the 1,000 trophy decklists through <code>managym.admit_decklists</code>, one event at a time (<code>scratch/qa/admit.py</code>; per-event receipt in <code>.runs/mtg286-qa/admission.json</code>, unpublished).</p>
-<pre>admitted 995 of 1000
-failures: Heartbeat of Spring 3, Lita, Mechanical Engineer 2; other failures 0
-Release to Memory: in no event
-count mismatches (main+sideboard vs source lines): 0 of 995
-admitted events containing bonus-sheet names: 78</pre>
-<p><b>Trap:</b> passing the corpus's saved <code>Trophy.decklist</code> object directly gives <b>134 of 1000</b>. The deserialized <code>Decklist</code> keeps the <code>issues</code> recorded by the world that built the corpus (for example "Lightning Strike: Any target must include planeswalkers"). Admission must re-parse <code>Decklist(trophy.decklist.source, trophy.decklist.filename)</code>. This behaviour is on main, not introduced by this branch.</p>
+<h2>1. Trigger text every player and model reads</h2>
+<p>Ran the engine's own <code>trigger_description</code> (what Academy's stack, the decision context and LLM text show) over every triggered ability of all 460 catalog definitions at base and head, via a throwaway test, since removed. 276 abilities each side, 91 changed, none lost. Full diff: <a href="qa307/trigger-text.diff">qa307/trigger-text.diff</a>.</p>
+<table><tr><th>Base</th><th>Head</th></tr>
+<tr><td>When you draw card 2 this turn</td><td>Whenever you draw your second card each turn</td></tr>
+<tr><td>When an opponent draws card 2 this turn</td><td>Whenever an opponent draws their second card each turn</td></tr>
+<tr><td>When this attacks</td><td>Whenever this attacks</td></tr>
+<tr><td>When this and at least one other creature attack</td><td>Whenever this attacks with at least one other creature</td></tr>
+<tr><td>At the beginning of each upkeep</td><td>At the beginning of each player's upkeep</td></tr>
+<tr><td>When permanent is sacrificed (Mayhem Devil)</td><td>Whenever a permanent is sacrificed</td></tr>
+<tr><td>Beastmaster Ascension: When one or more other creature permanents you control attack</td><td>Whenever a creature you control attacks (matches the printed per-creature trigger; behavior also changed to one trigger per attacker)</td></tr>
+</table>
+<p>Every changed line reads closer to the printed card. No changed line got worse.</p>
 
-<h2>2. Playing the admitted decks (engine, encoders, LLM text)</h2>
-<p>I played 78 random-action games with the 78 admitted bonus-sheet corpus decks (14,611 steps, all finished, no engine exception). I encoded every position with the Python v9 and v10 encoders and rendered the LLM text decision every seventh step (<code>scratch/qa/play.py</code>).</p>
-<ul>
-<li><b>Fixed:</b> text capture rejected every visible {X} card ("definitions.N.mana_cost.x: Extra inputs are not permitted"), which covered 681 of 2,115 renders: Black Sun's Zenith and Prosperity, plus main's Day of Black Sun, Wan Shi Tong, United Front and Fated Firepower. <code>managym/decision_capture.py::ManaCost</code> gains <code>x</code>; <code>_mana</code> renders <code>{X}</code>; native <code>ManaCost</code> exposes <code>x</code> (<code>bindings.rs</code>, <code>.pyi</code>). Test: <code>test_x_cost_definition_renders_its_x</code>. A definition now reads "Black Sun's Zenith. Sorcery; cost {X}{B}{B}".</li>
-<li>v9 refused 1 position, "policy input v10 required: … life lost this turn". This is the documented behaviour.</li>
-<li>22 positions hit the typed capacity overflow: agent cards plus sideboard 61 &gt; 60 (17-card sideboard plus 6 Elf Warrior tokens). This is the designed typed error. Corpus decks with full sideboards approach the default capacity.</li>
-</ul>
+<h2>2. Real games through the Python engine</h2>
+<p>Random legal play, <code>managym.Env</code> with skip_trivial on, every ordered deck pair of all 9 authored setups × 6 seeds: <b>1332 complete games, 0 errors, 0 unterminated</b>. 76 distinct stack-ability descriptions observed; changed event families that actually fired include casts (Monastery Swiftspear 104×), second draw (Otter-Penguin 136×, Knowledge Seeker, Foggy Swamp Spirit Keeper, Tiger-Seal), sacrificed (Tolls of War 240×, Tireless Tracker, Unlucky Cabbage Merchant, Mayhem Devil), attacks (Fire Nation Cadets, Ran and Shaw, Dai Li Agents, Suki, Master Piandao, Iroh) and beginning-of-upkeep (Tiger-Seal 228×). Script: <code>.runs/qa307/play.py</code>.</p>
 
-<h2>3. Academy with an imported TLE deck</h2>
-<p>I ran <code>./scripts/play --port 8286 --frontend-port 5286</code> and drove it with headless Playwright. I opened "Import decklist files", uploaded a W/B bonus deck (Black Sun's Zenith, Teferi's Protection, Bloodchief Ascension, Empty City Ruse, Drannith Magistrate, Scout's Warning) and a corpus villain deck, pressed Check decklists ("Ready — development-v1, w17") and then New Game. I played several games against Search 64 and one 45-turn game against Random.</p>
-<img src="qa/03-import-checked.png" alt="import checked">
-<p>Seen on the table:</p>
-<ul>
-<li>Phased-out lands under Teferi's Protection.</li>
-<li>"life total can't change" and "protection from everything" notes.</li>
-<li>Scout's Warning's flash record.</li>
-<li>Empty City Ruse's "skips all combat phases of their next turn".</li>
-<li>The X announcement for Black Sun's Zenith.</li>
-<li>"cast N spells" in both players' turn summaries.</li>
-</ul>
-<p>There were no console or page errors.</p>
-<img src="qa/tp-notes.png" alt="Teferi's Protection notes">
-<p><b>Fixed:</b> Academy vitest failed 1 of 127 (<code>protocol-conformance</code>). The TypeScript <code>CardState</code> declared <code>from_battlefield_this_turn</code>, which the projection never sends and no schema lists. I removed the declaration: vitest now passes 127 of 127, and svelte-check reports 0 errors.</p>
+<h2>3. Academy table in a browser</h2>
+<p><code>./scripts/play --port 18731 --frontend-port 18732</code>, headless Chromium (the browse extension was not connected), New Game, then only decision-panel offers clicked. Two full games to "Game Over"; no page errors. Stack showed triggers from both seats, including the changed <code>BeginningOf</code> event:</p>
+<pre>Top · Tiger-Seal — At the beginning of your upkeep: Tap this · triggered ability · Seat 1</pre>
+<img src="qa307/stack-7.png" alt="Tiger-Seal upkeep trigger on the Academy stack">
+<p>Opponent's stacked triggers (Earth King's Lieutenant above South Pole Voyager):</p><img src="qa307/stack-5.png" alt="Earth King's Lieutenant and South Pole Voyager triggers on the stack">
+<p>Game end:</p><img src="qa307/game-over.png" alt="Game over dialog">
 
-<h2>Still wrong or unchecked, worst first</h2>
+<h2>Fixed</h2><p>Nothing in the change needed fixing. Updated the repository QA skill with the headless Academy driving recipe.</p>
+
+<h2>Not reached</h2>
+<ul><li>No live game put a <code>Performs</code> (search/scry/bend), <code>PutIntoGraveyard</code>, <code>PutsCounters</code> or <code>DealsCombatDamage</code> trigger on the stack: no authored setup plays those cards. Their text is covered by section 1, and their behavior by the directed debug tests.</li>
+<li>Full debug nextest, semantic pytest, clippy and engine-budget at this head remain the gate's job (scratch notes list them as pending).</li></ul>
+
+<h2>Still wrong (predates this change, worst first)</h2>
 <ol>
-<li><b>Pre-existing on main, LLM text path</b> (the code is unchanged on this branch):
-  <ul>
-  <li>A revealed-hand choice (Dai Li Indoctrination) fails native capture with "viewer-safe projection leaked opponent-private state". <code>semantic_viewer_input</code> doesn't account for the revealed hand.</li>
-  <li>The "announcement" stage (Katara's X) is missing from <code>_STAGES</code>.</li>
-  <li>A cast permission naming an unseen object raises "unresolved visible object reference".</li>
-  </ul>
-  These are each 1–3 of 2,115 renders. They are worth a bug Task.</li>
-<li>Academy doesn't show which graveyard cards came from the battlefield this turn (Brought Back's targets). The policy and the LLM text do.</li>
-<li>Hand-card cost lines in LLM text still read "{B}{B}" for X cards. The frozen viewer-observation JSON (<code>CardMana</code>) carries no <code>x</code>. The definition line does.</li>
-<li>One Academy stall waited more than 20 s for "your action is being processed". Server CPU was near 100% during a later wait (Search 64 thinking), and longer waits never hung. It wasn't reproduced as a hang.</li>
-<li>Life lost ("lost N life") never appeared in the browser. Teferi's Protection and a Random opponent kept life at 20. The projection, schema and component tests cover it.</li>
-<li>Not run here: the debug Rust suite, conformance evidence regeneration, the Engine Budget, and the world-change Python suites from the gate list.</li>
+<li>ETB/dies/becomes-tapped triggers with a non-self subject still say "When" ("When a land you control enters the battlefield", "When a creature you control dies"); printed cards say "Whenever". Fixing it changes text in the checked-in w17 authored-match conformance receipt, so it belongs with that re-record.</li>
+<li>Article and count grammar from shared helpers: "a Ally permanent", "Draw 1 cards", "Put 1 +1/+1 counters", "Azula, On the Hunt — … you loses 1 life", "Add {R} for each of the number of …".</li>
 </ol>

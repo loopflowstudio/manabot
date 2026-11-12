@@ -1,0 +1,296 @@
+5c5
+< Aang, the Last Airbender — When you cast a Lesson spell: This gains lifelink until end of turn
+---
+> Aang, the Last Airbender — Whenever you cast a Lesson spell: This gains lifelink until end of turn
+14d13
+< Appa, Loyal Sky Bison — When this attacks: Choose one — Target creature you control gains flying until end of turn; or Choose 1–1 target nonland permanent you control for this clause: Airbend target nonland permanent you control. Its owner may cast it from exile for {2}
+15a15
+> Appa, Loyal Sky Bison — Whenever this attacks: Choose one — Target creature you control gains flying until end of turn; or Choose 1–1 target nonland permanent you control for this clause: Airbend target nonland permanent you control. Its owner may cast it from exile for {2}
+17,18c17,18
+< Appa, Steadfast Guardian — When you cast a spell (from exile): Create 1 Ally token
+< Avatar Aang — When this attacks: Add {R}{R}. This mana lasts until end of combat
+---
+> Appa, Steadfast Guardian — Whenever you cast a spell (from exile): Create 1 Ally token
+> Avatar Aang — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+22d21
+< Azula, Cunning Usurper — When this attacks: Add {R}{R}. This mana lasts until end of combat
+24,25c23,25
+< Azula, On the Hunt — When this attacks: Add {R}{R}. This mana lasts until end of combat
+< Azula, On the Hunt — When this attacks: you loses 1 life. Create 1 Clue token
+---
+> Azula, Cunning Usurper — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+> Azula, On the Hunt — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+> Azula, On the Hunt — Whenever this attacks: you loses 1 life. Create 1 Clue token
+30,31c30,31
+< Beastmaster Ascension — When one or more other creature permanents you control attack: You may pay {0}. If paid: Put 1 quest counters on this. Otherwise: Do nothing
+< Beetle-Headed Merchants — When this attacks: You may sacrifice another (creature or artifact) permanent. If you do: Draw 1 cards. Put 1 +1/+1 counters on this
+---
+> Beastmaster Ascension — Whenever a creature you control attacks: You may pay {0}. If paid: Put 1 quest counters on this. Otherwise: Do nothing
+> Beetle-Headed Merchants — Whenever this attacks: You may sacrifice another (creature or artifact) permanent. If you do: Draw 1 cards. Put 1 +1/+1 counters on this
+35c35
+< Bitter Work — When one or more creature permanents with power at least 4 you control attack: Draw 1 cards
+---
+> Bitter Work — Whenever one or more creature permanents with power at least 4 you control attack: Draw 1 cards
+37,40c37,40
+< Bloodchief Ascension — When a card is put into an opponent's graveyard from anywhere, if this has 3 or more quest counters: You may pay {0}. If paid: that player loses 2 life. You gain 2 life. Otherwise: Do nothing
+< Boar-q-pine — When you cast a noncreature spell: Put 1 +1/+1 counters on this
+< Boiling Rock Rioter — When this attacks: Add {R}. This mana lasts until end of combat
+< Boiling Rock Rioter — When this attacks: You may cast a Ally spell from among cards you own exiled with this
+---
+> Bloodchief Ascension — Whenever a card is put into an opponent's graveyard from anywhere, if this has 3 or more quest counters: You may pay {0}. If paid: that player loses 2 life. You gain 2 life. Otherwise: Do nothing
+> Boar-q-pine — Whenever you cast a noncreature spell: Put 1 +1/+1 counters on this
+> Boiling Rock Rioter — Whenever this attacks: Add {R}. This mana lasts until end of combat
+> Boiling Rock Rioter — Whenever this attacks: You may cast a Ally spell from among cards you own exiled with this
+42d41
+< Bumi, Unleashed — When this deals combat damage to a player: Untap each land you control. After this phase, there is an additional combat phase. Only land creatures can attack during that combat phase
+43a43
+> Bumi, Unleashed — Whenever this deals combat damage to a player: Untap each land you control. After this phase, there is an additional combat phase. Only land creatures can attack during that combat phase
+50,51c50
+< Cat-Owl — When this attacks: Untap target (artifact or creature) permanent
+< Cityscape Leveler — When this attacks: Choose 0–1 target nonland permanent for this clause: Destroy target nonland permanent. its controller does this: Create 1 tapped Powerstone token
+---
+> Cat-Owl — Whenever this attacks: Untap target (artifact or creature) permanent
+53c52,53
+< Combustion Man — When this attacks: Choose 1–1 target permanent for this clause: its controller does this: You may pay {0}. If paid: Deal this permanent's power damage to you. Otherwise: Destroy target permanent
+---
+> Cityscape Leveler — Whenever this attacks: Choose 0–1 target nonland permanent for this clause: Destroy target nonland permanent. its controller does this: Create 1 tapped Powerstone token
+> Combustion Man — Whenever this attacks: Choose 1–1 target permanent for this clause: its controller does this: You may pay {0}. If paid: Deal this permanent's power damage to you. Otherwise: Destroy target permanent
+58c58
+< Cruel Administrator — When this attacks: Create 1 Soldier token
+---
+> Cruel Administrator — Whenever this attacks: Create 1 Soldier token
+60d59
+< Dai Li Agents — When this attacks: Each opponent loses the number of creatures you control with +1/+1 counters life and you gain the number of creatures you control with +1/+1 counters life
+61a61
+> Dai Li Agents — Whenever this attacks: Each opponent loses the number of creatures you control with +1/+1 counters life and you gain the number of creatures you control with +1/+1 counters life
+64c64
+< Dragon — When this attacks: Add {R}{R}{R}{R}. This mana lasts until end of combat
+---
+> Dragon — Whenever this attacks: Add {R}{R}{R}{R}. This mana lasts until end of combat
+69c69
+< Earth Kingdom General — When you put one or more +1/+1 counters on a creature: You may: You gain life equal to the announced value of X. Do this only once each turn
+---
+> Earth Kingdom General — Whenever you put one or more +1/+1 counters on a creature: You may: You gain life equal to the announced value of X. Do this only once each turn
+78,79c78,79
+< Fire Lord Azula — When this attacks: Add {R}{R}. This mana lasts until end of combat
+< Fire Lord Azula — When you cast a spell while this is attacking: Copy it. You may choose new targets for the copy
+---
+> Fire Lord Azula — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+> Fire Lord Azula — Whenever you cast a spell while this is attacking: Copy it. You may choose new targets for the copy
+81,83c81,83
+< Fire Lord Zuko — When this attacks: Add {R} for each of this permanent's power. This mana lasts until end of combat
+< Fire Lord Zuko — When you cast a spell (from exile): Put 1 +1/+1 counters on each creature you control
+< Fire Nation Cadets — When this attacks (while your graveyard has at least 1 Lesson matching cards): Add {R}{R}. This mana lasts until end of combat
+---
+> Fire Lord Zuko — Whenever this attacks: Add {R} for each of this permanent's power. This mana lasts until end of combat
+> Fire Lord Zuko — Whenever you cast a spell (from exile): Put 1 +1/+1 counters on each creature you control
+> Fire Nation Cadets — Whenever this attacks (while your graveyard has at least 1 Lesson matching cards): Add {R}{R}. This mana lasts until end of combat
+87,88c87,88
+< Fire Navy Trebuchet — When one or more creature permanents you control attack: Create 1 Ballistic Boulder token tapped and attacking. Remember that token. When the end step begins (once), Sacrifice the remembered objects
+< Fire Sages — When this attacks: Add {R}. This mana lasts until end of combat
+---
+> Fire Navy Trebuchet — Whenever one or more creature permanents you control attack: Create 1 Ballistic Boulder token tapped and attacking. Remember that token. When the end step begins (once), Sacrifice the remembered objects
+> Fire Sages — Whenever this attacks: Add {R}. This mana lasts until end of combat
+91,92c91,92
+< Firebending Student — When this attacks: Add {R} for each of this permanent's power. This mana lasts until end of combat
+< Firebending Student — When you cast a noncreature spell: This gets +1/+1 until end of turn
+---
+> Firebending Student — Whenever this attacks: Add {R} for each of this permanent's power. This mana lasts until end of combat
+> Firebending Student — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+94c94
+< Foggy Swamp Spirit Keeper — When you draw card 2 this turn: Create 1 Spirit token
+---
+> Foggy Swamp Spirit Keeper — Whenever you draw your second card each turn: Create 1 Spirit token
+101c101
+< Guru Pathik — When you cast a (Lesson or Saga or Shrine) spell: Choose 1–1 target creature you control for this clause: Put 1 +1/+1 counters on target creature you control
+---
+> Guru Pathik — Whenever you cast a (Lesson or Saga or Shrine) spell: Choose 1–1 target creature you control for this clause: Put 1 +1/+1 counters on target creature you control
+104d103
+< Hei Bai, Spirit of Balance — When this attacks: You may sacrifice another (creature or artifact) permanent. If you do: Put 2 +1/+1 counters on this
+106a106
+> Hei Bai, Spirit of Balance — Whenever this attacks: You may sacrifice another (creature or artifact) permanent. If you do: Put 2 +1/+1 counters on this
+109c109
+< Iguana Parrot — When you cast a noncreature spell: This gets +1/+1 until end of turn
+---
+> Iguana Parrot — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+113d112
+< Invasion Tactics — When one or more Ally creatures you control deal combat damage to a player: Draw 1 cards
+115,116c114,116
+< Iroh, Firebending Instructor — When this attacks: Each attacking creature gets +1/+1 until end of turn
+< Iroh, Grand Lotus — When this attacks: Add {R}{R}. This mana lasts until end of combat
+---
+> Invasion Tactics — Whenever one or more Ally creatures you control deal combat damage to a player: Draw 1 cards
+> Iroh, Firebending Instructor — Whenever this attacks: Each attacking creature gets +1/+1 until end of turn
+> Iroh, Grand Lotus — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+119c119
+< Jeong Jeong, the Deserter — When this attacks: Add {R}. This mana lasts until end of combat
+---
+> Jeong Jeong, the Deserter — Whenever this attacks: Add {R}. This mana lasts until end of combat
+128c128
+< Knowledge Seeker — When you draw card 2 this turn: Put 1 +1/+1 counters on this
+---
+> Knowledge Seeker — Whenever you draw your second card each turn: Put 1 +1/+1 counters on this
+132c132
+< Koma, Cosmos Serpent — At the beginning of each upkeep: Create 1 Koma's Coil token
+---
+> Koma, Cosmos Serpent — At the beginning of each player's upkeep: Create 1 Koma's Coil token
+143,144c143,144
+< Mai, Jaded Edge — When you cast a noncreature spell: This gets +1/+1 until end of turn
+< Mai, Scornful Striker — When a player casts a noncreature spell: that player loses 2 life
+---
+> Mai, Jaded Edge — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+> Mai, Scornful Striker — Whenever a player casts a noncreature spell: that player loses 2 life
+147,149c147,149
+< Master Pakku — When you cast a noncreature spell: This gets +1/+1 until end of turn
+< Master Piandao — When this attacks: Reveal the top 4 cards of your library. Put 0–1 (Ally or Equipment or Lesson) cards from among them into your hand and the rest on the bottom in a random order
+< Mayhem Devil — When permanent is sacrificed: Deal 1 damage to target any target
+---
+> Master Pakku — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+> Master Piandao — Whenever this attacks: Reveal the top 4 cards of your library. Put 0–1 (Ally or Equipment or Lesson) cards from among them into your hand and the rest on the bottom in a random order
+> Mayhem Devil — Whenever a permanent is sacrificed: Deal 1 damage to target any target
+156c156
+< Monastery Swiftspear — When you cast a noncreature spell: This gets +1/+1 until end of turn
+---
+> Monastery Swiftspear — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+158c158
+< Monk — When you cast a noncreature spell: This gets +1/+1 until end of turn
+---
+> Monk — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+165d164
+< Obsessive Pursuit — When one or more creature permanents you control attack: Choose 1–1 target attacking creature for this clause: Put the number of permanents you have sacrificed this turn +1/+1 counters on target attacking creature. If you have sacrificed 3 or more permanents this turn: Target attacking creature gains lifelink until end of turn
+166a166
+> Obsessive Pursuit — Whenever one or more creature permanents you control attack: Choose 1–1 target attacking creature for this clause: Put the number of permanents you have sacrificed this turn +1/+1 counters on target attacking creature. If you have sacrificed 3 or more permanents this turn: Target attacking creature gains lifelink until end of turn
+168,169c168,169
+< Otter-Penguin — When you draw card 2 this turn: This gets +1/+2 until end of turn. This can't be blocked until end of turn
+< Ozai, the Phoenix King — When this attacks: Add {R}{R}{R}{R}. This mana lasts until end of combat
+---
+> Otter-Penguin — Whenever you draw your second card each turn: This gets +1/+2 until end of turn. This can't be blocked until end of turn
+> Ozai, the Phoenix King — Whenever this attacks: Add {R}{R}{R}{R}. This mana lasts until end of combat
+171,172c171,172
+< Pirate Peddlers — When another permanent you control is sacrificed: Put 1 +1/+1 counters on this
+< Planetarium of Wan Shi Tong — When you scry or surveil: You may: Look at the top card of your library. You may cast it without paying its mana cost. Do this only once each turn
+---
+> Pirate Peddlers — Whenever another permanent you control is sacrificed: Put 1 +1/+1 counters on this
+> Planetarium of Wan Shi Tong — Whenever you scry or surveil: You may: Look at the top card of your library. You may cast it without paying its mana cost. Do this only once each turn
+180d179
+< Ran and Shaw — When this attacks: Add {R}{R}. This mana lasts until end of combat
+182c181
+< Raven Eagle — When this attacks: Choose 0–1 target card from a graveyard for this clause: Exile target card from a graveyard. If a creature card was exiled this way: Create 1 Clue token
+---
+> Ran and Shaw — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+184c183,184
+< Raven Eagle — When you draw card 2 this turn: Each opponent loses 1 life and you gain 1 life
+---
+> Raven Eagle — Whenever this attacks: Choose 0–1 target card from a graveyard for this clause: Exile target card from a graveyard. If a creature card was exiled this way: Create 1 Clue token
+> Raven Eagle — Whenever you draw your second card each turn: Each opponent loses 1 life and you gain 1 life
+186c186
+< Rough Rhino Cavalry — When this attacks: Add {R}{R}. This mana lasts until end of combat
+---
+> Rough Rhino Cavalry — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+189d188
+< Sandbender Scavengers — When another permanent you control is sacrificed: Put 1 +1/+1 counters on this
+190a190
+> Sandbender Scavengers — Whenever another permanent you control is sacrificed: Put 1 +1/+1 counters on this
+193,197c193,197
+< Sokka, Bold Boomeranger — When you cast a (artifact or Lesson) spell: Put 1 +1/+1 counters on this
+< Sokka, Lateral Strategist — When this and at least one other creature attack: Draw 1 cards
+< Sokka, Tenacious Tactician — When you cast a noncreature spell: Create 1 Ally token
+< Sokka, Tenacious Tactician — When you cast a noncreature spell: This gets +1/+1 until end of turn
+< Soldier — When this attacks: Add {R}. This mana lasts until end of combat
+---
+> Sokka, Bold Boomeranger — Whenever you cast a (artifact or Lesson) spell: Put 1 +1/+1 counters on this
+> Sokka, Lateral Strategist — Whenever this attacks with at least one other creature: Draw 1 cards
+> Sokka, Tenacious Tactician — Whenever you cast a noncreature spell: Create 1 Ally token
+> Sokka, Tenacious Tactician — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+> Soldier — Whenever this attacks: Add {R}. This mana lasts until end of combat
+201c201
+< Standstill — When a player casts a spell: Sacrifice this. If you do: each of that player's opponents does this: Draw 3 cards
+---
+> Standstill — Whenever a player casts a spell: Sacrifice this. If you do: each of that player's opponents does this: Draw 3 cards
+203,207c203,207
+< Suki, Kyoshi Warrior — When this attacks: Create 1 Ally token tapped and attacking
+< Sun Warriors — When this attacks: Add {R} for each of the number of creature permanents you control. This mana lasts until end of combat
+< Team Avatar — When a creature you control attacks alone: It gets +(the number of creature permanents you control)/+(the number of creature permanents you control) until end of turn
+< Teo, Spirited Glider — When one or more flying creature permanents you control attack: Draw 1 cards. Discard a card. If a nonland card was milled or discarded this way: When you do: Put 1 +1/+1 counters on target creature you control
+< The Boulder, Ready to Rumble — When this attacks: Earthbend the number of creature permanents with power at least 4 you control target land you control: it becomes a 0/0 creature with haste that's still a land; put the number of creature permanents with power at least 4 you control +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped
+---
+> Suki, Kyoshi Warrior — Whenever this attacks: Create 1 Ally token tapped and attacking
+> Sun Warriors — Whenever this attacks: Add {R} for each of the number of creature permanents you control. This mana lasts until end of combat
+> Team Avatar — Whenever a creature you control attacks alone: It gets +(the number of creature permanents you control)/+(the number of creature permanents you control) until end of turn
+> Teo, Spirited Glider — Whenever one or more flying creature permanents you control attack: Draw 1 cards. Discard a card. If a nonland card was milled or discarded this way: When you do: Put 1 +1/+1 counters on target creature you control
+> The Boulder, Ready to Rumble — Whenever this attacks: Earthbend the number of creature permanents with power at least 4 you control target land you control: it becomes a 0/0 creature with haste that's still a land; put the number of creature permanents with power at least 4 you control +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped
+213d212
+< The Earth King — When one or more creature permanents with power at least 4 you control attack: Choose 0–the number of attacking creature creatures with power at least 4 you control basic land cards from your library: Put the selected cards onto the battlefield tapped. Shuffle your library. If none chosen: Shuffle your library
+214a214
+> The Earth King — Whenever one or more creature permanents with power at least 4 you control attack: Choose 0–the number of attacking creature creatures with power at least 4 you control basic land cards from your library: Put the selected cards onto the battlefield tapped. Shuffle your library. If none chosen: Shuffle your library
+230c230
+< The Mechanist, Aerial Artisan — When you cast a noncreature spell: Create 1 Clue token
+---
+> The Mechanist, Aerial Artisan — Whenever you cast a noncreature spell: Create 1 Clue token
+236c236
+< The Unagi of Kyoshi Island — When an opponent draws card 2 this turn: Draw 2 cards
+---
+> The Unagi of Kyoshi Island — Whenever an opponent draws their second card each turn: Draw 2 cards
+238c238
+< Tiger-Seal — When you draw card 2 this turn: Untap this
+---
+> Tiger-Seal — Whenever you draw your second card each turn: Untap this
+241,242c241
+< Tireless Tracker — When Clue permanent you control is sacrificed: Put 1 +1/+1 counters on this
+< Tolls of War — When permanent you control is sacrificed (while it is your turn) (once each turn): Create 1 Ally token
+---
+> Tireless Tracker — Whenever a Clue permanent you control is sacrificed: Put 1 +1/+1 counters on this
+243a243
+> Tolls of War — Whenever a permanent you control is sacrificed (while it is your turn) (once each turn): Create 1 Ally token
+245c245
+< Toph, Hardheaded Teacher — When you cast a spell: Earthbend 1 target land you control: it becomes a 0/0 creature with haste that's still a land; put 1 +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. If that spell is a Lesson spell: Put 1 +1/+1 counters on target land you control
+---
+> Toph, Hardheaded Teacher — Whenever you cast a spell: Earthbend 1 target land you control: it becomes a 0/0 creature with haste that's still a land; put 1 +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. If that spell is a Lesson spell: Put 1 +1/+1 counters on target land you control
+250d249
+< Tundra Tank — When this attacks: Add {R}. This mana lasts until end of combat
+251a251
+> Tundra Tank — Whenever this attacks: Add {R}. This mana lasts until end of combat
+253,254c253,254
+< Ty Lee, Artful Acrobat — When this attacks: You may pay {1}. If paid: When you do: Target creature can't block until end of turn. Otherwise: Do nothing
+< Ty Lee, Artful Acrobat — When you cast a noncreature spell: This gets +1/+1 until end of turn
+---
+> Ty Lee, Artful Acrobat — Whenever this attacks: You may pay {1}. If paid: When you do: Target creature can't block until end of turn. Otherwise: Do nothing
+> Ty Lee, Artful Acrobat — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+256,258c256,257
+< Ty Lee, Chi Blocker — When you cast a noncreature spell: This gets +1/+1 until end of turn
+< Uncle Iroh — When this attacks: Add {R}. This mana lasts until end of combat
+< Unlucky Cabbage Merchant — When Food permanent you control is sacrificed: Choose one — (1) Choose 0–1 basic land cards from your library: Put the selected cards onto the battlefield tapped. Put this on the bottom of its owner's library. Shuffle your library. If none chosen: Put this on the bottom of its owner's library. Shuffle your library; (2) Do nothing
+---
+> Ty Lee, Chi Blocker — Whenever you cast a noncreature spell: This gets +1/+1 until end of turn
+> Uncle Iroh — Whenever this attacks: Add {R}. This mana lasts until end of combat
+259a259
+> Unlucky Cabbage Merchant — Whenever a Food permanent you control is sacrificed: Choose one — (1) Choose 0–1 basic land cards from your library: Put the selected cards onto the battlefield tapped. Put this on the bottom of its owner's library. Shuffle your library. If none chosen: Put this on the bottom of its owner's library. Shuffle your library; (2) Do nothing
+261,262c261,262
+< Vengeful Villagers — When this attacks: Tap target creature an opponent controls. You may sacrifice a (artifact or creature) permanent. If you do: Put 1 stun counters on target creature an opponent controls
+< Vindictive Warden — When this attacks: Add {R}. This mana lasts until end of combat
+---
+> Vengeful Villagers — Whenever this attacks: Tap target creature an opponent controls. You may sacrifice a (artifact or creature) permanent. If you do: Put 1 stun counters on target creature an opponent controls
+> Vindictive Warden — Whenever this attacks: Add {R}. This mana lasts until end of combat
+265d264
+< Wan Shi Tong, Librarian — When an opponent searches their library: Put 1 +1/+1 counters on this. Draw 1 cards
+267c266,267
+< Wandering Musicians — When this attacks: Each creature you control gets +1/+0 until end of turn
+---
+> Wan Shi Tong, Librarian — Whenever an opponent searches their library: Put 1 +1/+1 counters on this. Draw 1 cards
+> Wandering Musicians — Whenever this attacks: Each creature you control gets +1/+0 until end of turn
+270,271c270,271
+< Waterbender Ascension — When a creature you control deals combat damage to a player: Put 1 quest counters on this. If this has 4 or more quest counters: Draw 1 cards
+< Wolfbat — When you draw card 2 this turn (while this is in your graveyard): You may pay {B}. If paid: Return this card to the battlefield with a finality counter on it. Otherwise: Do nothing
+---
+> Waterbender Ascension — Whenever a creature you control deals combat damage to a player: Put 1 quest counters on this. If this has 4 or more quest counters: Draw 1 cards
+> Wolfbat — Whenever you draw your second card each turn (while this is in your graveyard): You may pay {B}. If paid: Return this card to the battlefield with a finality counter on it. Otherwise: Do nothing
+273,274c273,274
+< Zhao, Ruthless Admiral — When another permanent you control is sacrificed: Each creature you control gets +1/+0 until end of turn
+< Zhao, Ruthless Admiral — When this attacks: Add {R}{R}. This mana lasts until end of combat
+---
+> Zhao, Ruthless Admiral — Whenever another permanent you control is sacrificed: Each creature you control gets +1/+0 until end of turn
+> Zhao, Ruthless Admiral — Whenever this attacks: Add {R}{R}. This mana lasts until end of combat
+276c276
+< Zuko, Exiled Prince — When this attacks: Add {R}{R}{R}. This mana lasts until end of combat
+---
+> Zuko, Exiled Prince — Whenever this attacks: Add {R}{R}{R}. This mana lasts until end of combat
