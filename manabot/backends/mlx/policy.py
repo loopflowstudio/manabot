@@ -1,6 +1,6 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
-`MLXActorCritic` mirrors `manabot.model.actor_critic.ActorCritic` module for
+`MLXActorCritic` mirrors `manabot.backends.torch.policy.ActorCritic` module for
 module, for the configurations `require_supported` admits (the w160l8 regime's: a
 catalog world with catalog record ids, table attention, masked-mean scalar
 critic, policy input v9). Its float arithmetic follows the PyTorch forward line

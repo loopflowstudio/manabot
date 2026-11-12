@@ -1,4 +1,4 @@
-"""The damped-policy PPO learner step in MLX (`manabot.training.learning.damped_policy`).
+"""The damped-policy PPO learner step in MLX (`manabot.backends.torch.rl.damped_policy_loss`).
 
 `damped_loss` is equation (6) of the damped update over one minibatch plus the
 scalar critic's squared error (`manabot.backends.mlx.rl`): a clipped

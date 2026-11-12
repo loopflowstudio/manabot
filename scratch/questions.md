@@ -10,8 +10,13 @@
   `hypers`, `world_binding`, `architecture`, `source`, `converted_from`.
   The write-docs drafts of `policy/README.md` and `backends/README.md` used
   other names; both were replaced by MTG-321's files.
-- `AdmittedRollout` stays in `manabot.training.updates.learner`;
-  `legal_mask`/`policy_logs` stay in `manabot.model.policy_distribution`.
+- `AdmittedRollout` stays in `manabot.training.updates.learner` (torch-only
+  admission). `legal_mask`/`policy_logs` moved to `backends/torch/rl.py`;
+  `model/policy_distribution.py` keeps #474's released names as aliases.
+- The update's `backend` parameter is typed `types.ModuleType` (no protocol
+  for a backend module yet); torch types are TYPE_CHECKING annotations.
+- `no_grad` lives in `backend.learner` and the learning rate is a `Learner`
+  method; MTG-326's list named neither. Reversible.
 - Torch-importing modules outside the backend are listed by path in
   `tests/test_package_boundaries.py::_TORCH_NOT_YET_MOVED`, checked both ways
   so the list can only shrink.
