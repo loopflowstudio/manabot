@@ -36,3 +36,8 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
 
 Both runs wait for the L4: on 2026-11-12 MTG-318 (qa) and MTG-319 (implement) were still
 running, and the Task says not to start until they have had their L4 time.
+
+## Compress (2026-11-12)
+Kept `_from_ladder` + `Execution.__eq__` + `authored_dump`: deriving "from ladder" from
+the value would re-resolve explicit/saved float32 on widening, which the tests forbid.
+Only cut: the docs table's `auto` row now points at the ladder paragraph. Docs-only, no rerun.
