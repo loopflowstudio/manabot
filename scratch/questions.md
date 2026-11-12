@@ -107,3 +107,7 @@ No new implementation direction or usage/skill rewrite is needed. Next show
 the wheel payload and strict metadata proofs already listed above. This review
 ran no builds or tests and did not publish. The review page is
 `scratch/concept-review.html`.
+
+Jack Heart, 2026-11-11: "yeah cut it out of the readme" — the README licence
+section no longer mentions the GPL-3.0 17Lands fixture; its own LICENSE and
+README stay.

@@ -456,9 +456,7 @@ guides are in each package README.
 
 ## Licence
 
-Manabot's original source code is licensed under the [MIT licence](LICENSE).
-Third-party material retains its own licences; see the
-[17Lands fixture licence](tests/fixtures/seventeenlands/LICENSE).
+Manabot is licensed under the [MIT licence](LICENSE).
 
 Manabot is an independent research project and unofficial Fan Content
 permitted under the Wizards of the Coast
