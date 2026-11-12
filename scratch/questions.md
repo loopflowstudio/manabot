@@ -132,19 +132,6 @@ permanent-note phrases were added without a frontend check (gate).
 did not change (`DelayedEvent`, `PowerCda`, `StackObject` variant sizes; a manual
 checked division in `flow/mana.rs`); CI does not run clippy. `git diff --check` clean.
 
-## Eighth-pass compress, 2026-11-12 UTC
-
-Shared `next_trigger_id` for the four trigger enqueue sites; `YouCastThis` and
-`NoCounters` never fire from `trigger_condition_fires` (their own scans own them);
-loop form of `activated_cost_reduction`; dropped `counter_description` arms equal
-to `kind.name()`; moved a misplaced doc comment. Debug `cargo nextest run
---workspace`: 1131 passed, 1 failed — `semantic_conformance_tests`
-`checked_semantic_conformance_evidence_reproduces`: all 14 traces drift because
-the pack `content_digest` moved (evidence `0798b2c7…`, regenerated `cd7a91d1…`)
-as the branch added definitions; the earlier passes did not run this target.
-Gate regenerates `conformance/semantic-kernel-w17-v2` evidence. Extension not
-rebuilt (no behavior change).
-
 ## Ninth pass — six bonus cards, 2026-11-12 UTC
 
 Defined: Clone Legion (dtk), Rhys the Redeemed (new `shm.rs`), Three Dreams
@@ -378,3 +365,10 @@ Found `spells_cast` reached the policy only through the optional
 Assumption taken (reversible): v9 adds no refusal for spells cast, since that
 would stop v9 runs over main's TLA cards that already played on v9; the
 alternative is one predicate in `input_v10_state`.
+
+## Sync onto main aeb9b8cf0 (2026-11-12)
+
+Main added named layout columns (`agent/observation_layout.rs`,
+`managym.observation_layout()`); the merge moved the branch's guards and
+shared-effect writes to those names and described duration code 4. Remaining
+work is in the plan.

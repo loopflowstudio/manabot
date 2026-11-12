@@ -140,12 +140,6 @@ so it is not local to this branch.
   selecting v10, what it adds, v9 refusal. Open questions on v10 beside v9
   are in `scratch/questions.md`.
 
-## Mana abilities with a suffix (built, twelfth pass)
-
-CR 605.1a/605.3b: Henge and Citadel needed no production occurrence. When the
-production occurrence lands, the `mana_suffix` frame becomes its suffix step,
-not a second path. The full direction is in git at 53231b511.
-
 ## Production boundary (split out to MTG-297): Heartbeat of Spring
 
 Heartbeat needs the land's actual produced types and either player's bonus
@@ -183,6 +177,17 @@ schema and protocol 16 passed; rebuilt cp313 extension (atomic); pytest
 `test_input_v10`, `test_observation_parity`, `test_text_observation`,
 `test_experience_protocol` 99 passed; schedule recovery, server, decklist
 disclosure 19 passed. Academy vitest/svelte-check not run (no `node_modules`).
+
+## Remaining implement work: v10 in the named layout
+
+Main's `managym.observation_layout(*, policy_history)` (`agent/observation_layout.rs`)
+lists only v9 buffers, so v10's `player_turn_state` / `card_turn_state` have no
+published names; their columns are bare `TURN_STATE_*` constants in
+`observation_encoder.rs`. Move them to a `columns! { turn_state { .. } }` module
+(life_lost /20, spells_cast /10, six nonartifact-restricted mana /10), add a
+`turn_state` argument mirroring `ObservationEncoderConfig.turn_state`, and extend
+`tests/env/test_named_observation_layout.py` to v10 (keys equal native, Python
+and `ObservationSpace.shapes`). Rebuild cp313 after.
 
 ## Acceptance checks (gate)
 
