@@ -116,7 +116,23 @@ def admit_observation(
     Run it on CPU tensors before any device transfer: every check reads the
     host. Malformed input raises `ValueError` (or `NumericalError` for the
     action mask) naming the failed check; nothing is truncated or repaired.
+    A policy with bucketed shapes also has the batch's buckets measured.
     """
+    references, legal = _check(agent, obs)
+    return AdmittedObservation(
+        obs, admission_binding(agent), references, legal, measure_buckets(agent, obs)
+    )
+
+
+def check_observation(agent: "ActorCritic", obs: Mapping[str, torch.Tensor]) -> None:
+    """`admit_observation`'s checks alone, for rows read later through
+    `bind_admitted` (which measures the buckets of the rows it groups)."""
+    _check(agent, obs)
+
+
+def _check(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> tuple[CardReferences, bool]:
     lookup = _semantic_lookup(agent, _device(obs))
     references = _references(agent, obs, lookup, check=True)
     object_count = sum(obs[key].shape[1] for key, _ in _OBJECT_KEYS)
@@ -159,13 +175,7 @@ def admit_observation(
             raise ValueError("value aggregation requires a valid object")
     legal = legal_mask(obs["actions_valid"])
     _admit_actions(agent, obs, legal, lookup, valid_count)
-    return AdmittedObservation(
-        obs,
-        admission_binding(agent),
-        references,
-        bool(legal.any(-1).all()),
-        measure_buckets(agent, obs),
-    )
+    return references, bool(legal.any(-1).all())
 
 
 def bind_admitted(

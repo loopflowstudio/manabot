@@ -15,6 +15,7 @@ from manabot.model.admission import (
     AdmittedObservation,
     admit_observation,
     bind_admitted,
+    check_observation,
 )
 from manabot.model.inference import transfer_admitted
 from manabot.training.rollout.actions import ActionRows
@@ -55,7 +56,7 @@ class AdmittedRollout:
         for start in range(0, len(pending), chunk_rows):
             chunk = pending[start : start + chunk_rows]
             rows = self.batch.observations(chunk)
-            admit_observation(self.agent, observation_tensors(rows.observation))
+            check_observation(self.agent, observation_tensors(rows.observation))
             self._admitted[chunk] = True
 
     def next_observation(self, device: torch.device) -> AdmittedObservation:

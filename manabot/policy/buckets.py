@@ -143,11 +143,15 @@ def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
 
 
 def _extent(value: np.ndarray, axis: int) -> int:
-    """One past the last row along `axis` holding any nonzero (or NaN) value."""
-    rows = value.shape[axis]
-    flags = (
-        (value != 0).swapaxes(axis, 1).reshape(value.shape[0], rows, -1).any(-1)
-    ).any(0)
+    """One past the last row along `axis` holding any nonzero (or NaN) value.
+
+    A learner minibatch is hundreds of megabytes of mostly zero padding, so
+    this pass is the measurement's cost: one reduction over the batch axis
+    first, with no full-size temporary.
+    """
+    flags = np.any(value, axis=0)
+    if flags.ndim > 1:
+        flags = np.any(flags, axis=tuple(d for d in range(flags.ndim) if d != axis - 1))
     used = np.flatnonzero(flags)
     return int(used[-1]) + 1 if used.size else 0
 
@@ -205,13 +209,19 @@ def _object_extents(
     references: list[np.ndarray], capacities: dict[str, int]
 ) -> dict[str, int]:
     """Rows of each card and permanent axis that any reference names."""
-    needs = {"cards": 0, "permanents": 0}
+    segments = object_segments(capacities)
+    objects = segments[-1][1] + segments[-1][2]
+    # Which full object coordinates any reference names: integer parts of
+    # finite values inside the table; NaN and infinities name none.
+    named = np.zeros(objects, dtype=bool)
     for values in references:
         index = np.floor(_float32(values, -1.0))
-        for axis, start, rows in object_segments(capacities):
-            offset = index - start
-            inside = (offset >= 0) & (offset < rows)
-            needs[axis] = max(needs[axis], _maximum(np.where(inside, offset + 1, 0)))
+        named[index[(index >= 0) & (index < objects)].astype(np.int64)] = True
+    needs = {"cards": 0, "permanents": 0}
+    for axis, start, rows in segments:
+        used = np.flatnonzero(named[start : start + rows])
+        if used.size:
+            needs[axis] = max(needs[axis], int(used[-1]) + 1)
     return needs
 
 
