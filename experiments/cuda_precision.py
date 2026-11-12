@@ -974,12 +974,134 @@ def runs(revision: str, hours: float = 1.5, usd: float = 1.5) -> list[Run]:
     ).runs(probe.seed)
 
 
+# --------------------------------------------------------------------------- charts
+
+_GROUPS = ("w160l8/padded", "w160l8/bucketed", "w384l8/padded", "w384l8/bucketed")
+_COLORS: dict[str, str] = {"tf32": "#2a78d6", "bf16": "#eb6834"}
+_INK, _MUTED, _GRID, _SURFACE = "#0b0b0b", "#898781", "#e1e0d9", "#fcfcfb"
+
+
+def charts(folder: Path) -> None:
+    """The report's two figures from a run's `summary.json` (needs matplotlib)."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    verdict = json.loads((folder / "summary.json").read_text())["verdict"]
+    groups = verdict["groups"]
+    plt.rcParams.update(
+        {
+            "font.size": 9,
+            "text.color": _INK,
+            "axes.edgecolor": _MUTED,
+            "axes.labelcolor": _INK,
+            "xtick.color": _MUTED,
+            "ytick.color": _INK,
+            "svg.fonttype": "none",
+        }
+    )
+
+    def frame(axis: Any) -> None:
+        axis.set_facecolor(_SURFACE)
+        axis.grid(axis="x", color=_GRID, linewidth=0.6)
+        axis.set_axisbelow(True)
+        for side in ("top", "right", "left"):
+            axis.spines[side].set_visible(False)
+        axis.tick_params(axis="y", length=0)
+
+    # Speed: float32 time / candidate time per group, two panels.
+    figure, axes = plt.subplots(1, 2, figsize=(8, 2.8), sharey=True)
+    figure.patch.set_facecolor(_SURFACE)
+    rows = list(range(len(_GROUPS)))
+    for axis, (key, title) in zip(
+        axes,
+        (
+            ("learner_step_ms", "Learner step"),
+            ("collection_large_ms", "Collection call, 64+ rows"),
+        ),
+        strict=True,
+    ):
+        frame(axis)
+        axis.axvline(1.0, color=_MUTED, linewidth=1)
+        for offset, candidate in ((-0.18, "tf32"), (0.18, "bf16")):
+            values = [
+                groups[g]["timing"]["float32"][key]
+                / groups[g]["timing"][candidate][key]
+                for g in _GROUPS
+            ]
+            axis.barh(
+                [r + offset for r in rows],
+                [v - 1 for v in values],
+                left=1,
+                height=0.34,
+                color=_COLORS[candidate],
+                label=candidate.upper(),
+            )
+            for r, v in zip(rows, values, strict=True):
+                axis.text(
+                    max(v, 1) + 0.04, r + offset, f"{v:.2f}×", va="center", fontsize=8
+                )
+        axis.set_title(title, loc="left", fontsize=9)
+        axis.set_xlim(0.5, 3.1)
+        axis.set_xlabel("speed relative to float32 (×)")
+    axes[0].set_yticks(rows, [g.replace("/", " ") for g in _GROUPS])
+    axes[0].invert_yaxis()
+    axes[1].legend(frameon=False, loc="lower right")
+    figure.tight_layout()
+    figure.savefig(folder / "speed.svg")
+    plt.close(figure)
+
+    # Equivalence: deviation / float32 reference per group and metric.
+    labels = [
+        f"{g.replace('/', ' ')} · {m.replace('_', ' ')}"
+        for g in _GROUPS
+        for m in METRICS
+    ]
+    figure, axis = plt.subplots(figsize=(7, 4.2))
+    figure.patch.set_facecolor(_SURFACE)
+    frame(axis)
+    axis.axvspan(0, RULE.accept_deviation_ratio, color=_GRID, alpha=0.6, linewidth=0)
+    axis.axvline(RULE.reject_deviation_ratio, color=_MUTED, linewidth=1, linestyle="--")
+    for offset, candidate in ((-0.15, "tf32"), (0.15, "bf16")):
+        ratios = [
+            groups[g]["candidates"][candidate]["deviation_ratio"][m]
+            for g in _GROUPS
+            for m in METRICS
+        ]
+        axis.scatter(
+            ratios,
+            [i + offset for i in range(len(labels))],
+            s=36,
+            color=_COLORS[candidate],
+            edgecolors=_SURFACE,
+            linewidths=1.5,
+            label=candidate.upper(),
+            zorder=3,
+        )
+    axis.set_yticks(range(len(labels)), labels)
+    axis.invert_yaxis()
+    axis.set_xlim(0, 3.4)
+    axis.set_xlabel("largest epoch-mean deviation from float32 ÷ float32's own spread")
+    axis.text(0.5, -0.9, "accept ≤ 1", ha="center", color=_MUTED, fontsize=8)
+    axis.text(2.05, -0.9, "reject > 2", ha="left", color=_MUTED, fontsize=8)
+    axis.legend(frameon=False, loc="lower right")
+    figure.tight_layout()
+    figure.savefig(folder / "equivalence.svg")
+    plt.close(figure)
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     smoke = sub.add_parser("smoke", help="every stage on CPU at toy scale")
     smoke.add_argument("--out", type=Path, default=None)
+    figures = sub.add_parser("charts", help="the report's figures from summary.json")
+    figures.add_argument("folder", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "charts":
+        charts(args.folder)
+        return
     out = args.out or Path(tempfile.mkdtemp(prefix="mtg317-smoke-"))
     os.environ["ETUDE_OUTPUT_DIR"] = str(out)
     measure(SMOKE)

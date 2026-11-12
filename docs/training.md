@@ -544,11 +544,14 @@ NVIDIA L4, for w160l8 and w384l8 with bucketed shapes on and off, is
 step and collection time and peak memory per precision, forward and gradient
 differences from float32 on retained minibatches, and a same-seed multi-update
 comparison of policy loss, value loss and clip fraction against a rule fixed
-before the scored runs. That report states which precision is the CUDA
-recommendation and which are rejected. To check a precision on another GPU or
-model size, run the same regime once per precision and compare those
-trajectories, then rerun the [CUDA numerics validation](#validation) on that
-host.
+before the scored runs. CUDA training stays float32: under that rule TF32 was
+unresolved and BF16 rejected, though both stayed within 0.7% of float32's loss
+at fixed weights. The 200-step replay could not resolve learning differences
+that small. BF16 is slower than float32 at w160l8 and about 2× faster at w384l8;
+TF32 is 1.1× and 1.3–1.5×. A reduced precision becomes a recommendation only
+after a real learning comparison: same seeds, bucketed shapes, strength at
+matched updates. Before training in one on another GPU or model size, rerun the
+[CUDA numerics validation](#validation) on that host.
 
 ### Terminal incidents
 
