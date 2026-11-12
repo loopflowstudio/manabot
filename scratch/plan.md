@@ -39,6 +39,11 @@ the pin. Recorded in the `manabot/training/mps.py` docstring; the error now
 says "Torch 2.10–2.13 compute incorrect MPS linear-layer weight gradients on
 Apple M2". test_mps_training + test_baseline_recipe: 58 passed.
 
+## Compress (2026-11-12)
+
+Code needed no cuts. docs/training.md MPS paragraph reflowed and aligned with the
+measured cause (M2, 2.10–2.13, linear weight gradients); the remedy lives in the error text.
+
 ## Remaining work
 
 None in implementation. QA (scratch/qa.html) found and fixed explicit `baseline --device mps` on old Torch (6fab820bf). Left for gate/CI: full suites, CUDA cu132 on Linux.
