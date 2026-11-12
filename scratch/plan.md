@@ -1,25 +1,38 @@
 # MTG-324 plan
 
-Changed docs (write-docs step): `docs/training.md` § Reduced precision.
+Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measurement links).
 
-Branch base: merged the open MTG-317 branch (`jack/mtg-317-run-cuda-training-in-tf32bf16-with-a-measured`,
-PR #489) into this branch, because the harness `experiments/cuda_precision.py` and the
-"Reduced precision" doc section exist only there. If #489 lands first, the merge is a no-op.
+## Built
+- `manabot.training.regime`: `Execution.precision` accepts `auto` (default);
+  `BF16_MIN_HIDDEN_DIM = 384`, `ladder_precision(device, hidden_dim)`.
+  `TrainingRegime.resolve_precision_ladder` replaces `auto` per stage (copies, never
+  mutates) and marks it with the private `Execution._from_ladder`.
+  `TrainingRegime.authored_dump()` restores `auto` for those stages; builders
+  (`with_agent`/`with_capacity`, `move_learning` baseline, `sampled_self_play`) and the
+  round trips in `experiments/batched_baseline.py`, `elemental_variants.py`,
+  `training_throughput_sizes.py` use it so a width change re-resolves. `model_dump` stays
+  the record (resolved value only). `Execution.__eq__` ignores the private flag so a
+  regime equals its saved form (`test_builders` relies on it).
+- Saved stage dicts whose execution omits `precision` (pre-#489) read as `float32`.
+- Runtime reads `Execution.resolved_precision` (raises on unresolved `auto`).
+- No named regime in `experiments/` changes precision (scanned all `regime_names()`).
+- Tests: `tests/training/test_precision.py` ladder both sides, off-CUDA, serialization,
+  explicit/saved kept, pre-field saved stage.
+- Check: `pytest test_precision test_regimes test_builders test_training_throughput_sizes
+  test_experiment_files` → 54 passed.
 
-The docs as written assume the outcome of two pending measurements; implementation must
-make them true or edit them:
-- `BF16_MIN_HIDDEN_DIM = 384` (in `manabot.training.regime`, torch-free, next to `Precision`).
-  Becomes 256 if the w256l8 run shows BF16 learner step and large collection calls both
-  >= 1.1x float32 with bucketed shapes. Update the "threshold" paragraph accordingly.
-- The learning-comparison sentence and link to `experiments/precision_ladder.md` (the A/B
-  report name chosen here). If BF16 is rejected, `auto` resolves to float32 everywhere and
-  that paragraph says what separated.
+## Remaining (blocks landing)
+1. w256l8 step run with `experiments/cuda_precision.py` (bucketed on/off), ~USD 0.20.
+   If BF16 learner and large collection calls are both >= 1.1x float32 at w256, set
+   `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment.
+2. Learning A/B `experiments/precision_ladder.py` / `.md` at w384l8 bucketed, frontier
+   regime (`sampled_self_play`), float32 vs bf16 written explicitly, >= 2 seeds each, a few
+   hundred updates, strength vs frozen anchor at matched updates + loss/clip/KL
+   trajectories. Pre-register in the report before any scored run. USD 8 budget, cap 10.
+   Not written yet.
+3. If BF16 is rejected: `ladder_precision` returns float32 everywhere and the docs
+   paragraph says what separated. The docs' learning-comparison sentence currently states
+   the accepted outcome and is unverified until (2) runs.
 
-Design implied by the docs:
-- `auto` is a `Precision` literal and the `Execution` default; it is never serialized.
-- Resolution needs the stage device and `regime.agent.hidden_dim`, so it runs in a
-  `TrainingRegime` validator; off CUDA → float32 (never trips the CUDA-only validator).
-- `with_capacity` / `with_agent` must re-resolve stages whose precision came from the
-  ladder, while keeping explicit values. A dump→validate round trip loses "came from auto",
-  so the builder needs to know (e.g. a PrivateAttr carried by model_copy, or builders
-  re-resolve only when the stored value equals the ladder's value for the old width).
+Both runs wait for the L4: on 2026-11-12 MTG-318 (qa) and MTG-319 (implement) were still
+running, and the Task says not to start until they have had their L4 time.

@@ -814,7 +814,7 @@ def _execute_regime(
             incident_learner = None
             batch = None
             torch.set_num_threads(stage.execution.threads)
-            apply_matmul_precision(stage.execution.precision)
+            apply_matmul_precision(stage.execution.resolved_precision)
             cuda = stage.execution.device == "cuda"
             mps = stage.execution.device == "mps"
             if cuda and not torch.cuda.is_available():
@@ -1284,7 +1284,7 @@ def _execute_regime(
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                         adaptive=stage.adaptive,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     producers.callback(collector.close)
                     experiment = RunContext(
@@ -1341,7 +1341,7 @@ def _execute_regime(
                         agent,
                         experiment.device,
                         minibatch_rows=stage.streams,
-                        precision=stage.execution.precision,
+                        precision=stage.execution.resolved_precision,
                     )
                     ema = deepcopy(agent) if stage.learning.ema is not None else None
                     iteration = 0

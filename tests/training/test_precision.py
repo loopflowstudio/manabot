@@ -8,16 +8,24 @@ import pytest
 import torch
 
 from experiments import training_throughput_packing as packing
+from experiments.batched_baseline import batched_baseline
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.experiment.job import TrainingJob
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.recipes.builders import with_capacity
 from manabot.training import precision
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_iteration
-from manabot.training.regime import DampedPolicyLearning, Execution, Precision
+from manabot.training.regime import (
+    BF16_MIN_HIDDEN_DIM,
+    DampedPolicyLearning,
+    Execution,
+    Precision,
+    TrainingRegime,
+)
 from manabot.training.rollout.collection import SeatRoutedCollector
 
 
@@ -28,7 +36,66 @@ def test_float32_regimes_keep_their_bytes() -> None:
         canonical_sha256(d1.regime.model_dump(mode="json"))
         == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
     )
-    assert Execution().model_dump()["precision"] == "float32"
+    assert batched_baseline().stages[0].execution.precision == "float32"
+
+
+def _precisions(regime: TrainingRegime) -> list[str]:
+    return [stage.execution.precision for stage in regime.stages]
+
+
+def _at_width(regime: TrainingRegime, width: int) -> TrainingRegime:
+    return with_capacity(regime, id=f"w{width}", width=width, depth=8, heads=8)
+
+
+def test_ladder_trains_bf16_on_cuda_from_the_threshold_width() -> None:
+    base = batched_baseline()
+    assert base.stages[0].execution.device == "cuda"
+    assert _precisions(_at_width(base, BF16_MIN_HIDDEN_DIM)) == ["bf16"]
+    assert _precisions(_at_width(base, BF16_MIN_HIDDEN_DIM - 8)) == ["float32"]
+    # A narrower rebuild of a wide regime resolves the ladder again.
+    wide = _at_width(base, BF16_MIN_HIDDEN_DIM)
+    assert _precisions(_at_width(wide, 128)) == ["float32"]
+
+
+def test_ladder_is_float32_off_cuda() -> None:
+    data = _at_width(batched_baseline(), BF16_MIN_HIDDEN_DIM).authored_dump()
+    data["stages"][0]["execution"]["device"] = "cpu"  # type: ignore[index]
+    assert _precisions(TrainingRegime.model_validate(data)) == ["float32"]
+
+
+def test_regimes_serialize_the_resolved_precision() -> None:
+    wide = _at_width(batched_baseline(), BF16_MIN_HIDDEN_DIM)
+    saved = wide.model_dump(mode="json")
+    assert saved["stages"][0]["execution"]["precision"] == "bf16"
+    assert '"auto"' not in wide.model_dump_json()
+    assert TrainingRegime.model_validate(saved) == wide
+    assert wide.stages[0].execution.resolved_precision == "bf16"
+    with pytest.raises(ValueError, match="resolved by the regime"):
+        Execution().resolved_precision
+
+
+def test_explicit_and_saved_precisions_are_kept() -> None:
+    base = batched_baseline()
+    data = base.model_dump()
+    data["stages"][0]["execution"]["precision"] = "float32"
+    # A saved regime names its precision; changing the model keeps it.
+    saved = TrainingRegime.model_validate(data)
+    assert _precisions(_at_width(saved, BF16_MIN_HIDDEN_DIM)) == ["float32"]
+    wide = TrainingRegime.model_validate(
+        _at_width(base, BF16_MIN_HIDDEN_DIM).model_dump(mode="json")
+    )
+    assert _precisions(_at_width(wide, 128)) == ["bf16"]
+    # Written in code, float32 is kept at any width.
+    stage = base.stages[0].model_copy(
+        update={"execution": Execution(device="cuda", precision="float32")}
+    )
+    explicit = base.model_copy(update={"stages": [stage]})
+    assert _precisions(_at_width(explicit, BF16_MIN_HIDDEN_DIM)) == ["float32"]
+    # A saved stage from before the field existed trained in float32.
+    del data["stages"][0]["execution"]["precision"]
+    data["agent"]["hidden_dim"] = BF16_MIN_HIDDEN_DIM
+    data["agent"]["num_attention_heads"] = 8
+    assert _precisions(TrainingRegime.model_validate(data)) == ["float32"]
 
 
 @pytest.mark.parametrize("declared", ["tf32", "bf16"])

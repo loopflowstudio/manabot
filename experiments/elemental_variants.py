@@ -63,7 +63,7 @@ def closure_comparison(
     stage.learning_seats = "one"
     stage.batch_closure = closure
     stage.transitions = transitions
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def lambda_sweep(
@@ -76,7 +76,7 @@ def lambda_sweep(
     stage = self_play_stage(regime)
     stage.learning.policy_lambda = policy_lambda
     stage.learning.value_lambda = value_lambda
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())
 
 
 def sized(
@@ -97,4 +97,4 @@ def sized(
     regime.agent.attention_layers = layers
     regime.agent.num_attention_heads = heads
     regime.agent.attention_feedforward_dim = feedforward
-    return TrainingRegime.model_validate(regime.model_dump())
+    return TrainingRegime.model_validate(regime.authored_dump())

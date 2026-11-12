@@ -547,7 +547,9 @@ ladder again for the new width; a precision written explicitly
 The ladder reads width alone: depth (`attention_layers`), bucketed shapes and
 the GPU model do not move it. Saved regimes and `run.json` files already name a precision in
 every stage, so they load, continue and [resume](#recovery) with the precision
-they were trained under; only a regime built fresh in code meets the ladder. A
+they were trained under; a saved stage from before the field existed names
+none and reads as `float32`, the precision it trained in. Only a regime built
+fresh in code meets the ladder. A
 reduced precision off CUDA fails validation (`precision tf32 requires CUDA`);
 `auto` off CUDA resolves to `float32` and never fails. Checkpoint evaluation
 and search run on CPU in float32. Precision changes no `ModelConfig` field,

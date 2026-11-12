@@ -7,6 +7,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    PrivateAttr,
     SerializerFunctionWrapHandler,
     model_serializer,
     model_validator,
@@ -211,11 +212,26 @@ class DampedPolicyLearning(Strict):
 # float32 is exact single precision. tf32 lets CUDA matmul and cuDNN use TF32
 # tensor cores; bf16 autocasts policy forwards to bfloat16 (manabot.training.precision).
 Precision = Literal["float32", "tf32", "bf16"]
+Device = Literal["cpu", "mps", "cuda"]
+
+# The precision ladder `auto` resolves to. On an L4 with bucketed shapes, BF16 is
+# slower than float32 at hidden_dim 160 and 2-2.7x faster at 384
+# (experiments/cuda_precision.md); depth, bucketing and GPU model do not move it.
+BF16_MIN_HIDDEN_DIM = 384
+
+
+def ladder_precision(device: Device, hidden_dim: int) -> Precision:
+    """What `auto` trains in: bf16 on CUDA at or above the threshold, else float32."""
+    if device == "cuda" and hidden_dim >= BF16_MIN_HIDDEN_DIM:
+        return "bf16"
+    return "float32"
 
 
 class Execution(Strict):
-    device: Literal["cpu", "mps", "cuda"] = "cpu"
-    precision: Precision = "float32"
+    device: Device = "cpu"
+    # `auto` exists only while authoring: the regime replaces it with
+    # `ladder_precision` for its model, so no regime stores or runs `auto`.
+    precision: Precision | Literal["auto"] = "auto"
     # Coarse native observation producers; policy/learning remain on one device.
     workers: Literal[1, 2, 4] = 1
     threads: int = Field(default=1, ge=1, le=4)
@@ -229,11 +245,40 @@ class Execution(Strict):
     # hashes are unchanged; never part of the model or its checkpoints.
     bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
 
+    # Whether `precision` came from the ladder rather than being written. Not
+    # serialized: a saved regime keeps the precision it names. Builders that
+    # change the model re-resolve these stages (`TrainingRegime.authored_dump`).
+    _from_ladder: bool = PrivateAttr(default=False)
+
     @model_validator(mode="after")
     def reduced_precision_on_cuda(self) -> "Execution":
-        if self.precision != "float32" and self.device != "cuda":
+        if self.precision not in ("float32", "auto") and self.device != "cuda":
             raise ValueError(f"precision {self.precision} requires CUDA")
         return self
+
+    def __eq__(self, other: object) -> bool:
+        # Equal settings are equal executions, however the precision was chosen:
+        # a regime equals its own saved form.
+        if not isinstance(other, Execution):
+            return NotImplemented
+        return type(self) is type(other) and self.__dict__ == other.__dict__
+
+    @property
+    def resolved_precision(self) -> Precision:
+        """The precision a stage runs in; `auto` must already be resolved."""
+        if self.precision == "auto":
+            raise ValueError("precision auto is resolved by the regime")
+        return self.precision
+
+    def on_ladder(self, hidden_dim: int) -> "Execution":
+        """This execution with `auto` resolved for a model of `hidden_dim`."""
+        if self.precision != "auto":
+            return self
+        resolved = self.model_copy(
+            update={"precision": ladder_precision(self.device, hidden_dim)}
+        )
+        resolved._from_ladder = True
+        return resolved
 
 
 class Stage(Strict):
@@ -647,6 +692,20 @@ def _read_saved_self_play(
     return {"batch_closure": _implied_closure(resolved), **resolved}
 
 
+def _read_saved_precision(stage: dict[str, object]) -> dict[str, object]:
+    execution = stage.get("execution")
+    if not isinstance(execution, dict) or "precision" in execution:
+        return stage
+    return {**stage, "execution": {**execution, "precision": "float32"}}
+
+
+def _read_saved_stage(stage: dict[str, object], one_seat: bool) -> dict[str, object]:
+    stage = _read_saved_precision(stage)
+    if stage.get("operation") == "train_self_play":
+        return _read_saved_self_play(stage, one_seat)
+    return stage
+
+
 class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
@@ -682,7 +741,9 @@ class TrainingRegime(Strict):
         """Resolve what saved stages omit; never relabel frozen evidence.
 
         Schema 1 omitted the one-seat choice, and no saved stage declared its
-        batch closure. Stage instances are new authoring and keep their defaults.
+        batch closure. A saved execution without a precision predates the
+        field and trained in float32, never the ladder. Stage instances are new
+        authoring and keep their defaults.
         Retired `train_compound` stages fail with the reproduction commit
         rather than as an unknown discriminator.
         """
@@ -696,14 +757,48 @@ class TrainingRegime(Strict):
             return {
                 **value,
                 "stages": [
-                    _read_saved_self_play(stage, one_seat)
+                    _read_saved_stage(stage, one_seat)
                     if isinstance(stage, dict)
-                    and stage.get("operation") == "train_self_play"
                     else stage
                     for stage in value["stages"]
                 ],
             }
         return value
+
+    @model_validator(mode="after")
+    def resolve_precision_ladder(self) -> "TrainingRegime":
+        """Replace each stage's `auto` precision with the ladder's for this model.
+
+        Stages are copied, never mutated, so a stage instance shared by regimes
+        of different widths resolves separately in each.
+        """
+        width = self.agent.hidden_dim
+        self.stages = [
+            stage
+            if stage.execution.precision != "auto"
+            else stage.model_copy(
+                update={"execution": stage.execution.on_ladder(width)}
+            )
+            for stage in self.stages
+        ]
+        return self
+
+    def authored_dump(self) -> dict[str, object]:
+        """The regime as authored: ladder-resolved stages say `auto` again.
+
+        Builders that rebuild a regime through its dump use this, so a changed
+        model re-resolves the ladder while explicit precisions stay as written.
+        It is not a record: `model_dump` is what saves and hashes a regime.
+        """
+        values: dict[str, object] = self.model_dump()
+        stages = values["stages"]
+        assert isinstance(stages, list)
+        for stage, dumped in zip(self.stages, stages, strict=True):
+            if stage.execution._from_ladder:
+                execution = dumped["execution"]
+                assert isinstance(execution, dict)
+                execution["precision"] = "auto"
+        return values
 
     @model_serializer(mode="wrap")
     def retain_one_seat_regime(

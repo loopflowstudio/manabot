@@ -10,8 +10,9 @@
   weights and Adam state stay float32 and no gradient scaler is used, since bf16
   keeps float32's exponent range.
 
-Both reduced precisions change numerics, so they are declared regime variants,
-never edits of a float32 regime; `Execution` rejects them off CUDA.
+Both reduced precisions change numerics; `Execution` rejects them off CUDA.
+The `auto` default never reaches these helpers: the regime resolves it by
+model width (`manabot.training.regime.ladder_precision`) and stores the result.
 """
 
 from contextlib import AbstractContextManager, nullcontext
