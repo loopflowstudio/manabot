@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>QA — MTG-318 collection-tail report</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:860px;margin:2em auto;padding:0 1em;color:#222}
+h1{font-size:1.4em}h2{font-size:1.15em;margin-top:1.6em}code,pre{background:#f4f2ee;padding:0 .2em}
+pre{padding:.6em;overflow-x:auto}td,th{border-bottom:1px solid #ddd;padding:.25em .6em;text-align:left}
+.ok{color:#1a7f37}.fix{color:#b35900}</style></head><body>
+<h1>QA: MTG-318 collection-tail report</h1>
+<p>The deliverable is a report (<code>experiments/collection_tail_graphs.md</code>), its published evidence and the
+frozen experiment file; no product code changes. Its users read the report, fetch its evidence and may rerun it.
+I did all three and checked each number the report states against the evidence it cites.</p>
+
+<h2>1. A new reader fetches the evidence</h2>
+<p>In a fresh detached checkout of HEAD with an empty <code>MANABOT_DATA_CACHE</code>:</p>
+<pre>doppler run --project manabot --config prd -- python -m manabot.data fetch \
+  experiments/data/collection_tail_graphs/{latency-by-band.svg,summary.json,insitu,probe,job.json}
+fetched 5 files; 0 already present; 0 digests from the cache, 5 downloaded (1407043 bytes)</pre>
+<p class="ok">The fetched <code>summary.json</code> is byte-identical to the local one. A <code>head_object</code> over all 66
+manifest entries found every object at its manifest size (268 MB not downloaded).</p>
+
+<h2>2. The chart</h2>
+<p>The chart renders cleanly: labelled axes, both sizes, four arms, and a title that states the answer.
+Like every report in <code>experiments/</code>, its image lives in the artifact store, so on GitHub it appears only after a fetch.</p>
+<img src="qa-chart.png" alt="Rendered latency-by-band chart" style="max-width:100%">
+
+<h2>3. Every stated number against the evidence</h2>
+<table>
+<tr><th>Claim</th><th>Evidence</th><th>Result</th></tr>
+<tr><td>Latency table (all 24 cells), speedups 1.32/1.19/1.17/1.06×</td><td><code>summary.json</code> replays, decision</td><td class="ok">match</td></tr>
+<tr><td>Numerics 9.8e-9 / 2.4e-7 / 4.8e-7; repeat drift</td><td>decision.numerics_worst, repeat-w160l8</td><td class="ok">match</td></tr>
+<tr><td>Rule 4 projection 58.8 → 57.8 / 58.5 s</td><td>projected_update_s</td><td class="ok">match</td></tr>
+<tr><td>23 synchronizing calls by site</td><td>probe.syncs.sites (6+6+5+2+1+1+1+1)</td><td class="ok">match</td></tr>
+<tr><td>Launches 681 → 145, syncs 33 → 19, trunk replaces ~165, GPU busy 1.9/3.1 ms</td><td>profiler windows, ≤ 8-row medians (681, 145, 517; 33.5, 19; 1.89, 3.12 ms)</td><td class="ok">match</td></tr>
+<tr><td>In-situ table (calls, ≤8 and 9–32 counts and times, phases)</td><td>insitu.updates</td><td class="ok">match</td></tr>
+<tr><td>Calls equal steps; 367–396 signatures</td><td>calls_equal_steps true ×3; 396/389/367</td><td class="ok">match</td></tr>
+<tr><td>Recording split, 81–89% explained, store doublings</td><td>insitu recording</td><td class="ok">match</td></tr>
+<tr><td>Graph breaks: nonzero 29, GRU 16, sort 30, two scalar reads</td><td>compile logs (both sizes)</td><td class="ok">match</td></tr>
+<tr><td>Admission-binding breaks “23”</td><td>logs: 17 <code>to_json</code> + 7 <code>named_modules</code> = 24</td><td class="fix">fixed → 24</td></tr>
+<tr><td>“24 retained inputs”, “1–5 inputs” per band (4 places)</td><td>kept = 20 (bands 1,4,1,4,3,3,2,2); 20 files in <code>inputs/inference</code>; 20 per_input per arm</td><td class="fix">fixed → 20, 1–4</td></tr>
+<tr><td>38 graph partitions per forward</td><td>not separately recorded in summary</td><td>not checked</td></tr>
+</table>
+
+<h2>4. Rerunning it</h2>
+<p><code>etude launch experiments/collection_tail_graphs.py --help</code> lists <code>--rent</code>, <code>--cohort</code>,
+<code>--max-usd</code> and the file's own <code>--revision</code> and <code>--hours</code>: the appendix command is valid.
+I did not launch it, because that rents a GPU.</p>
+<pre>ETUDE_OUTPUT_DIR=/tmp/qa318/smoke/out uv run python -m experiments.collection_tail_graphs job --smoke
+exit 0 in 2 m 39 s; all five replay arms status ok; summary.json written; no analyze-error.txt</pre>
+
+<h2>5. Repository checks</h2>
+<pre>pytest tests/eval/test_experiment_files.py tests/infra/test_experiment_data_untracked.py  → 5 passed
+git diff 8b753ade3 HEAD -- experiments/collection_tail_graphs.py                         → identical (freeze holds)</pre>
+
+<h2>Outcome</h2>
+<ul>
+<li><b>Works:</b> the evidence fetches on a cold machine, the chart renders, the reproduce commands are valid, the local smoke runs end to end,
+and the report's conclusion and decision-rule table agree with <code>summary.json</code>.</li>
+<li><b>Fixed:</b> the replayed-input count (24 → 20; per-band 1–5 → 1–4) and the admission-binding break count (23 → 24).
+Neither changes a conclusion.</li>
+<li><b>Not reached:</b> the paid L4 relaunch, by design; the “38 partitions” figure has no single field in the summary.</li>
+<li><b>Still wrong:</b> nothing found.</li>
+</ul>
+</body></html>
