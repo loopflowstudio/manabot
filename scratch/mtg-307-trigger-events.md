@@ -73,14 +73,16 @@ more" trigger in the card sets is an `Attacks`, `DealsCombatDamage` or
   `subject_phrase` fold (`trigger|description|attack|combat_damage|dies|sacrific|observability|token`) 249/249.
 - `uv run --extra dev pytest tests/semantic -q`: 197 passed (rebuilt extension).
 
-## Remaining
+## Gate at publish (2026-11-12, after syncing onto base 3eb1f283a)
 
-- Gate: full debug nextest and semantic pytest at the current head (the last
-  full runs predate compress e511f5adc, merge 55bc4a2b8 and the subject fold
-  3a96a0d1e–395e108df), clippy, Python
-  suites, engine budget digest (definitions changed).
-- Conformance evidence re-record belongs to whichever change moved it first
-  (the stack parent); re-record after rebase if still stale.
+- Re-recorded w17 (017d0ebfd): semantic-kernel evidence (same counts and
+  outcomes), Academy fixtures, authored-match receipt and parity receipts with
+  pins, belief v3 pins. Boxed `TriggerSubject::Matching.predicate` for clippy.
+- Debug nextest 1167/1167; clippy and fmt clean; Python semantic, world-change,
+  academy, env and model suites 960 passed.
+- `tests/belief/test_learning.py::test_real_population_learning_is_held_out_and_beats_p0`
+  fails here and on the base worktree at 3eb1f283a (held-out NLL -0.046 < 0.1).
+- Engine Budget digest likely moves (definitions changed): adopt the PR's run.
 
 Inherited MTG-286 design note removed from scratch; read it at
 `d95734088:scratch/tle-production-design.md`.
