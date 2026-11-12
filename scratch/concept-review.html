@@ -4,24 +4,22 @@
 :root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--code:#f0ede6;--prop:#2d6a4f}
 @media(prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--code:#2a2825;--prop:#74c69d}}
 body{font:16px/1.55 system-ui,sans-serif;color:var(--fg);background:var(--bg);max-width:44rem;margin:2rem auto;padding:0 1rem}
-code,pre{font:13px/1.45 ui-monospace,monospace;background:var(--code)}pre{padding:.7rem;overflow-x:auto}
-.mute{color:var(--mute)}.prop{border-left:3px solid var(--prop);padding-left:.8rem}
+code,pre{font:13px/1.45 ui-monospace,monospace;background:var(--code)}pre{padding:.7rem;overflow-x:auto;white-space:pre-wrap}
+.mute{color:var(--mute)}.built{border-left:3px solid var(--prop);padding-left:.8rem}
 </style>
-<p class="mute">MTG-321 · concept-review (headless, second pass) · 2026-11-12 · built from manabot/model/mlx/checkpoint.py, manabot/model/world.py, manabot/model/mlx.md, scratch/plan.md</p>
-<h1>Decision: none needed — the converted checkpoint is one file that keeps its source revision (built)</h1>
+<p class="mute">MTG-321 · concept-review (headless, third pass, after the backend layout) · 2026-11-12 · built from manabot/backends/{README.md,mlx.md,convert.py,parity.py,mlx/checkpoint.py}, manabot/policy/{README.md,protocol.py,checkpoint.py}, scratch/plan.md</p>
+<h1>Decision: none needed. The three actions, their concepts and APIs match (built)</h1>
 <h2>Actions → concepts → APIs</h2>
-<p><b>convert</b> a torch checkpoint → converted checkpoint (derived artifact) → <code>convert(path)</code><br>
-<b>load</b> it for inference or learning → MLX policy + observation space → <code>load_mlx_policy(path)</code><br>
-<b>gate</b> on agreement → parity report → <code>python -m manabot.model.mlx.parity</code></p>
-<h2>Biggest mismatch (before, now fixed)</h2>
-<pre>sidecar = {"hypers": ..., "world_binding": ..., "architecture": ...,
-           "source": str(checkpoint)}          # a path, replacing {commit, dirty, etude_run}
-validate_checkpoint_world(sidecar, space)    # refusal: "it records no source revision"</pre>
-<p>The guide says <code>load_mlx_policy</code> fails with the same errors as <code>load_checkpoint</code>. On a world mismatch it cannot name the revision to run from.</p>
-<div class="prop"><h2>Built (commit 616bd1489)</h2>
-<pre>checkpoint.mlx.safetensors   # arrays + metadata: hypers, world_binding,
-                             # architecture, source (unchanged), converted_from</pre>
-<p>One file, no sidecar lookup; a mismatch names the original revision. Test <code>test_a_refused_converted_checkpoint_names_the_original_revision</code>; 5 MLX tests passed on the M2. No timing or parity rerun.</p></div>
+<div class="built">
+<p><b>convert</b> a torch checkpoint → shared container (one safetensors file derived from one <code>.pt</code>, keeping its <code>source</code> record) → <code>uv run python -m manabot.backends.convert CHECKPOINT.pt</code></p>
+<p><b>load</b> it in MLX → policy + observation space → <code>manabot.backends.mlx.checkpoint.load_mlx_policy(path)</code></p>
+<p><b>gate</b> on agreement with PyTorch → parity report, exit 0/1/2 → <code>uv run --extra mlx python -m manabot.backends.parity INITIAL.pt --capture DIR</code></p>
+</div>
+<h2>Checked for a mismatch</h2>
+<pre>load_mlx_policy(path)        -> (policy, ObservationSpace)   # people: inference
+BACKEND.load(PolicyCheckpoint) -> (policy, learner)          # parity: one object per backend</pre>
+<p>Two loaders, two callers. Each one serves its caller, so neither is a duplicate. The earlier mismatch (a converted checkpoint that couldn't name its original revision when refused) stays fixed: <code>read_container</code> validates the world binding from the container's own metadata.</p>
+<p>Noted, not changed: <code>parity</code> reads the capture format written by <code>experiments/mlx_pilot.py capture</code>. Moving that writer into the package would mean editing the experiment file that produced the measurements.</p>
 <h2>Questions</h2>
-<ol><li>None open: the repository rule already settles this (a refusal names the revision that wrote the checkpoint).</li></ol>
+<ol><li>None open.</li></ol>
 </html>

@@ -75,3 +75,11 @@ private again. Local boundary + container tests: 14 passed; ruff clean. MLX test
 
 Published names posted to the Task thread (comment 8a4a16a3) per steers 4288a550/310e6b5f, including the
 metadata-key difference and that policy/buckets.py is not in this branch. MTG-325 follows them.
+
+Concept review, third pass (2026-11-12, headless, after the backend layout): public surface is now
+`python -m manabot.backends.convert`, `manabot.backends.mlx.checkpoint.load_mlx_policy`,
+`python -m manabot.backends.parity`; `Backend` (`BACKEND`) is the one object parity needs, so
+`load_mlx_policy` (path → policy + observation space, for people) and `Backend.load` (container → policy +
+learner, for parity) serve different callers and both stay. Provenance fix carried into the container
+(`read_container` validates world binding). Nothing to change, no open product choice.
+scratch/concept-review.html regenerated with the current paths.
