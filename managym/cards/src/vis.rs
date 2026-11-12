@@ -1,12 +1,15 @@
 //! Visions.
 use managym_state::{
-    ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![man_o_war()]
+    vec![man_o_war(), prosperity()]
 }
 
 fn man_o_war() -> CardDefinition {
@@ -30,6 +33,30 @@ fn man_o_war() -> CardDefinition {
                 TargetSpec::Creature,
             ))],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn prosperity() -> CardDefinition {
+    let text_box = "Each player draws X cards.";
+    CardDefinition {
+        key: "vis.prosperity",
+        scryfall_id: "3fa5e806-3cf2-4241-b45d-a05d2b715efd",
+        name: "Prosperity".into(),
+        mana_cost: Some(ManaCost::parse("{X}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![
+            Effect::DrawCards {
+                count: EffectValue::X,
+            },
+            Effect::ForPlayer {
+                player: PlayerSelector::EachOpponent,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::X,
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

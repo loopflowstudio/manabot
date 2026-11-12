@@ -2,7 +2,9 @@
 
 Run with ``uv run python scripts/check_tle_coverage.py`` after rebuilding the
 extension. ``--allocation-only`` checks planning coverage, not card support.
-Neither mode certifies printed behavior or the 1,000-event corpus outcome.
+``--bonus-sheet`` restricts the catalog check to the 61 TLE booster printings
+(collector numbers 1-61) that TLA play boosters carry. No mode certifies
+printed behavior or the 1,000-event corpus outcome.
 """
 
 import argparse
@@ -82,6 +84,34 @@ def check_allocation(fixtures: Path = _FIXTURES) -> list[InventoryCard]:
     return inventory
 
 
+class BonusSheetCard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    collector_number: str
+    card_name: str
+    tle_printing_id: UUID
+
+
+def bonus_sheet(
+    inventory: list[InventoryCard], fixtures: Path = _FIXTURES
+) -> list[InventoryCard]:
+    """The inventory rows printed on the bonus sheet, in collector order."""
+    rows = [
+        BonusSheetCard.model_validate_json(line)
+        for line in (fixtures / "tle-bonus-sheet.jsonl").read_bytes().splitlines()
+    ]
+    by_name = {card.card_name: card for card in inventory}
+    if [row.collector_number for row in rows] != [str(n) for n in range(1, 62)] or any(
+        row.card_name not in by_name
+        or by_name[row.card_name].tle_printing_id != row.tle_printing_id
+        for row in rows
+    ):
+        raise ValueError(
+            "TLE bonus sheet must be collector numbers 1-61 of the inventory"
+        )
+    return [by_name[row.card_name] for row in rows]
+
+
 def catalog_issues(inventory: list[InventoryCard]) -> list[str]:
     """Check actual definitions, first-printing identities and token row presence."""
     pool = managym.content_pool("world")["definitions"]
@@ -113,15 +143,17 @@ def catalog_issues(inventory: list[InventoryCard]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--allocation-only", action="store_true")
+    parser.add_argument("--bonus-sheet", action="store_true")
     args = parser.parse_args()
     inventory = check_allocation()
-    issues = [] if args.allocation_only else catalog_issues(inventory)
+    checked = bonus_sheet(inventory) if args.bonus_sheet else inventory
+    issues = [] if args.allocation_only else catalog_issues(checked)
     print(
         json.dumps(
             {
                 "check": "allocation" if args.allocation_only else "catalog_coverage",
-                "cards": len(inventory),
-                "paragraphs": sum(len(c.clauses) for c in inventory),
+                "cards": len(checked),
+                "paragraphs": sum(len(c.clauses) for c in checked),
                 "issues": issues,
             },
             indent=2,

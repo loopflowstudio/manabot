@@ -5192,5 +5192,142 @@
     "colors": [
       "W"
     ]
+  },
+  "Meteorite": {
+    "name": "Meteorite",
+    "mana_cost": "{5}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this artifact enters, it deals 2 damage to any target.\n{T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Sunbaked Canyon": {
+    "name": "Sunbaked Canyon",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}, Pay 1 life: Add {R} or {W}.\n{1}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Treetop Village": {
+    "name": "Treetop Village",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G}.\n{1}{G}: This land becomes a 3/3 green Ape creature with trample until end of turn. It's still a land. (It can deal excess combat damage to the player or planeswalker it's attacking.)",
+    "colors": []
+  },
+  "Cruel Tutor": {
+    "name": "Cruel Tutor",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a card, then shuffle and put that card on top. You lose 2 life.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Captain Sisay": {
+    "name": "Captain Sisay",
+    "mana_cost": "{2}{G}{W}",
+    "type_line": "Legendary Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{T}: Search your library for a legendary card, reveal that card, put it into your hand, then shuffle.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Prosperity": {
+    "name": "Prosperity",
+    "mana_cost": "{X}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each player draws X cards.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Insurrection": {
+    "name": "Insurrection",
+    "mana_cost": "{5}{R}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Untap all creatures and gain control of them until end of turn. They gain haste until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Intruder Alarm": {
+    "name": "Intruder Alarm",
+    "mana_cost": "{2}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures don't untap during their controllers' untap steps.\nWhenever a creature enters, untap all creatures.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Elemental Bond": {
+    "name": "Elemental Bond",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control with power 3 or greater enters, draw a card.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Beastmaster Ascension": {
+    "name": "Beastmaster Ascension",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control attacks, you may put a quest counter on this enchantment.\nAs long as this enchantment has seven or more quest counters on it, creatures you control get +5/+5.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Valakut, the Molten Pinnacle": {
+    "name": "Valakut, the Molten Pinnacle",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\nWhenever a Mountain you control enters, if you control at least five other Mountains, you may have this land deal 3 damage to any target.\n{T}: Add {R}.",
+    "colors": []
+  },
+  "Humble Defector": {
+    "name": "Humble Defector",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Rogue",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Draw two cards. Target opponent gains control of this creature. Activate only during your turn.",
+    "colors": [
+      "R"
+    ]
   }
 }

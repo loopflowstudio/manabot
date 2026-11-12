@@ -1,13 +1,24 @@
 //! Zendikar.
 use managym_state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes},
+    ability::{
+        Ability, Condition, Effect, ObjectSelector, PaymentCost, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
+    },
+    card::{
+        CardDefinition, CardType, CardTypes, ManaAbility, ReplacementEffect, StaticAbility,
+        StaticPtBuff, StaticScope,
+    },
     mana::{Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![lotus_cobra()]
+    vec![
+        beastmaster_ascension(),
+        lotus_cobra(),
+        valakut_the_molten_pinnacle(),
+    ]
 }
 
 fn lotus_cobra() -> CardDefinition {
@@ -33,6 +44,83 @@ fn lotus_cobra() -> CardDefinition {
             effects: vec![Effect::mana_choice(
                 ["W", "U", "B", "R", "G"].map(Mana::parse),
             )],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn beastmaster_ascension() -> CardDefinition {
+    let text_box = "Whenever a creature you control attacks, you may put a quest counter on this enchantment.\nAs long as this enchantment has seven or more quest counters on it, creatures you control get +5/+5.";
+    CardDefinition {
+        key: "zen.beastmaster_ascension",
+        scryfall_id: "02d7ea78-d539-4c34-8bb3-941353e3da46",
+        name: "Beastmaster Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+            },
+            effects: vec![Effect::OptionalPayment {
+                cost: PaymentCost::Mana(ManaCost::default()),
+                if_paid: vec![Effect::put_counters(
+                    ObjectSelector::This,
+                    CounterKind::Quest,
+                    1,
+                )],
+                if_declined: vec![],
+            }],
+        }],
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::YouControl(CardPredicate::creature()),
+            condition: Some(Condition::SourceCountersAtLeast {
+                kind: CounterKind::Quest,
+                count: 7,
+            }),
+            power: 5,
+            toughness: 5,
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn valakut_the_molten_pinnacle() -> CardDefinition {
+    let text_box = "This land enters tapped.\nWhenever a Mountain you control enters, if you control at least five other Mountains, you may have this land deal 3 damage to any target.\n{T}: Add {R}.";
+    CardDefinition {
+        key: "zen.valakut_the_molten_pinnacle",
+        scryfall_id: "37bce60d-2cb0-4772-9f5c-122a7ed426a0",
+        name: "Valakut, the Molten Pinnacle".into(),
+        types: CardTypes::new([CardType::Land]),
+        replacement_effects: vec![ReplacementEffect::EntersTapped],
+        mana_abilities: vec![ManaAbility {
+            mana: Mana::parse("R"),
+        }],
+        abilities: vec![Ability::Triggered {
+            // The entering Mountain and at least five others.
+            intervening_if: Some(Condition::ControlsAtLeast {
+                count: 6,
+                predicate: CardPredicate::subtype("Mountain"),
+            }),
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::AnotherYouControl(CardPredicate::subtype("Mountain")),
+            },
+            effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::AnyTarget),
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![Effect::deal_damage(
+                        3,
+                        ObjectSelector::Target(TargetSpec::AnyTarget),
+                    )],
+                    if_declined: vec![],
+                }],
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()

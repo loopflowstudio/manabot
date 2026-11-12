@@ -1,11 +1,16 @@
 //! Stronghold.
 use managym_state::{
-    card::{CardDefinition, CardType, CardTypes, Keyword, Keywords},
+    ability::{Ability, Effect, ObjectSelector, Scope, TriggerCondition, TriggerSubject},
+    card::{
+        CardDefinition, CardType, CardTypes, Keyword, Keywords, Restriction, StaticAbility,
+        StaticRestriction, StaticScope,
+    },
     mana::ManaCost,
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![youthful_knight()]
+    vec![intruder_alarm(), youthful_knight()]
 }
 
 fn youthful_knight() -> CardDefinition {
@@ -21,6 +26,34 @@ fn youthful_knight() -> CardDefinition {
         power: Some(2),
         toughness: Some(1),
         keywords: Keywords::of(&[Keyword::FirstStrike]),
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn intruder_alarm() -> CardDefinition {
+    let text_box = "Creatures don't untap during their controllers' untap steps.\nWhenever a creature enters, untap all creatures.";
+    CardDefinition {
+        key: "sth.intruder_alarm",
+        scryfall_id: "7e55f653-0952-4713-8d43-ca50acff9e3b",
+        name: "Intruder Alarm".into(),
+        mana_cost: Some(ManaCost::parse("{2}{U}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        statics: vec![StaticAbility::Restriction(StaticRestriction {
+            scope: StaticScope::All(CardPredicate::creature()),
+            kind: Restriction::DoesntUntap,
+            unless: None,
+        })],
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::Another(CardPredicate::creature()),
+            },
+            effects: vec![Effect::untap(ObjectSelector::each(
+                Scope::Battlefield,
+                CardPredicate::creature(),
+            ))],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

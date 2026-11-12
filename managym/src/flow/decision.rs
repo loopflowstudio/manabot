@@ -2855,12 +2855,21 @@ impl Game {
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
+        self.reorder_in_library(card, LibraryEnd::Bottom);
+    }
+
+    /// Put a card already in its owner's library at one end: a reorder
+    /// within one zone, so no zone change (CR 400.7) and no zone-move
+    /// inverse applies. Index 0 is the bottom; the last card is the top.
+    pub(crate) fn reorder_in_library(&mut self, card: CardId, end: LibraryEnd) {
         let owner = self.state.cards[card].owner;
-        // A reorder within one zone, so the zone-move inverse does not apply.
         let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
-            library.insert(0, card);
+            match end {
+                LibraryEnd::Bottom => library.insert(0, card),
+                LibraryEnd::Top => library.push(card),
+            }
         }
     }
 }

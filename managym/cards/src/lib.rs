@@ -19,15 +19,18 @@ mod dom;
 mod eld;
 mod fdn;
 mod fin;
+mod frf;
 mod fut;
 mod grn;
 mod hob;
 mod ice;
 mod iko;
+mod inv;
 mod isd;
 mod kld;
 mod ktk;
 mod lea;
+mod m15;
 mod m20;
 mod mbs;
 mod mh1;
@@ -50,6 +53,7 @@ mod ths;
 mod tla;
 mod tle;
 mod tokens;
+mod ulg;
 mod vis;
 mod war;
 mod wth;
@@ -72,7 +76,7 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 44] = [
+const SETS: [fn() -> Vec<CardDefinition>; 48] = [
     aer::cards,
     afr::cards,
     blb::cards,
@@ -82,15 +86,18 @@ const SETS: [fn() -> Vec<CardDefinition>; 44] = [
     eld::cards,
     fdn::cards,
     fin::cards,
+    frf::cards,
     fut::cards,
     grn::cards,
     hob::cards,
     ice::cards,
     iko::cards,
+    inv::cards,
     isd::cards,
     kld::cards,
     ktk::cards,
     lea::cards,
+    m15::cards,
     m20::cards,
     mbs::cards,
     mh1::cards,
@@ -113,6 +120,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 44] = [
     tla::cards,
     tle::cards,
     tokens::cards,
+    ulg::cards,
     vis::cards,
     war::cards,
     wth::cards,

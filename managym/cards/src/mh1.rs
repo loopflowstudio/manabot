@@ -1,14 +1,14 @@
 //! Modern Horizons.
-use managym_state::effect::Modification;
 use managym_state::{
     ability::{Effect, EffectValue, ObjectSelector, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
-    mana::ManaCost,
+    effect::Modification,
+    mana::{Mana, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![fists_of_flame(), prismatic_vista()]
+    vec![fists_of_flame(), prismatic_vista(), sunbaked_canyon()]
 }
 
 fn fists_of_flame() -> CardDefinition {
@@ -63,6 +63,35 @@ fn prismatic_vista() -> CardDefinition {
             )],
             ..Default::default()
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sunbaked_canyon() -> CardDefinition {
+    let text_box = "{T}, Pay 1 life: Add {R} or {W}.\n{1}, {T}, Sacrifice this land: Draw a card.";
+    CardDefinition {
+        key: "mh1.sunbaked_canyon",
+        scryfall_id: "c36820fa-ee86-4206-9a0d-737a67cf5208",
+        name: "Sunbaked Canyon".into(),
+        types: CardTypes::new([CardType::Land]),
+        activated_abilities: vec![
+            ActivatedAbilityDefinition {
+                tap_source: true,
+                life_cost: 1,
+                effects: vec![Effect::mana_choice(["R", "W"].map(Mana::parse))],
+                ..Default::default()
+            },
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                tap_source: true,
+                sacrifice_source: true,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+                ..Default::default()
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

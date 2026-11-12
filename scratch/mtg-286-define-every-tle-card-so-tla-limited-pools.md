@@ -1,4 +1,10 @@
-# Every TLE card in the development world
+# The 61 TLE bonus-sheet cards in the development world
+
+Scope (steer, fifth pass in `scratch/questions.md`): the 61 bonus-sheet printings
+in `managym/cards/tests/fixtures/tle-bonus-sheet.jsonl`; 19 are defined, 42
+missing (`check_tle_coverage.py --bonus-sheet`). Non-bonus TLE cards already
+included stay; the other ~180 are later work. The rest of this plan predates
+the steer and keeps the 242-name ledger as background.
 
 Status: implementation in progress. The 242-name/411-paragraph rule allocation
 is complete as a planning ledger, not a behavior proof. Merchant tap choices now

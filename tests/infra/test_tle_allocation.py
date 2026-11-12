@@ -6,13 +6,20 @@ import shutil
 
 import pytest
 
-from scripts.check_tle_coverage import check_allocation
+from scripts.check_tle_coverage import bonus_sheet, check_allocation
 
 
 def test_tle_allocation_covers_pinned_source() -> None:
     cards = check_allocation()
     assert len(cards) == 242
     assert sum(len(card.clauses) for card in cards) == 411
+
+
+def test_tle_bonus_sheet_is_collector_numbers_one_to_sixty_one() -> None:
+    cards = bonus_sheet(check_allocation())
+    assert len({card.card_name for card in cards}) == 61
+    assert cards[0].card_name == "Brought Back"
+    assert cards[-1].card_name == "Valakut, the Molten Pinnacle"
 
 
 @pytest.mark.parametrize("mutation", ["omit", "duplicate", "owner", "source"])

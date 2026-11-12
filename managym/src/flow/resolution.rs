@@ -701,6 +701,14 @@ impl Game {
                 for object in selected {
                     let card = CardId::from(object.entity);
                     let from = self.state.zones.zone_of(card);
+                    // "Put that card on top" of the library it is already in
+                    // (Cruel Tutor, after its shuffle) only reorders it.
+                    if let (Some(ZoneType::Library), ZoneType::Library, Some(end)) =
+                        (from, *to, library_end)
+                    {
+                        self.reorder_in_library(card, *end);
+                        continue;
+                    }
                     // A token cannot return after leaving the battlefield (CR 111.7).
                     // Returning transformed requires a back face (CR 712.14a).
                     if *to == ZoneType::Battlefield

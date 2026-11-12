@@ -209,3 +209,31 @@ Next slice candidate: player experience counters. A player `counters` field
 touches PlayerData, PyO3 bindings, experience projection, six protocol schemas,
 Python encoder facts, LLM text and Academy UI (traced from
 `no_maximum_hand_size`); counter facts on player rows need no new width.
+
+## Fifth pass — bonus-sheet scope, 2026-11-12 UTC
+
+Steer (Jack Heart, relayed by comment af74fb09): "Ok, we should start with only
+the TLE cards that are bonus sheet TLA cards" and "no need to remove anything
+already included though". The Task is retitled "Define the 61 TLE bonus-sheet
+cards so TLA Limited pools admit". Acceptance stays: all 1,000 corpus events admit.
+`managym/cards/tests/fixtures/tle-bonus-sheet.jsonl` pins the 61 booster printings
+(Scryfall `set:tle`, `booster: true`, collector numbers 1-61; same TLE printing
+ids as the inventory); `check_tle_coverage.py --bonus-sheet` checks that scope.
+
+Twelve non-bonus TLE definitions written before the steer arrived (Earthbending
+Student, Bumi, Suki, Momo, Inspired Insurgent, Mechanical Glider, Eel-Hounds,
+Ruthless Waterbender, Loyal Fire Sage, Dai Li Censor, The Art of Tea, Frantic
+Confrontation; 30 debug tests passed) were not committed; they are parked on local
+branch `mtg-286-nonbonus-batch3-parked` for the later non-bonus Task.
+
+Added bonus cards on existing rules: Meteorite, Sunbaked Canyon, Treetop Village,
+Cruel Tutor, Captain Sisay, Prosperity, Insurrection, Intruder Alarm, Elemental
+Bond, Beastmaster Ascension, Valakut, Humble Defector (13 debug tests passed).
+Two rule touches: `Move` to the library a card is already in, with a stated end,
+reorders it without a zone change (Cruel Tutor's "then shuffle and put that card
+on top"; the proposal check correctly rejects same-zone moves); the definitions
+guard now admits a source question in a P/T buff's own condition (layers ask it of
+the source, `layers.rs` node conditions), with `CantBeBlockedIf` as the retained
+negative. Cruel Tutor's caster knows the top card; no observation tracks library
+order knowledge (existing gap, not new information revealed).
+`check_tle_coverage.py --bonus-sheet` — 19 of 61 defined, 42 missing.
