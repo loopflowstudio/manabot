@@ -747,8 +747,10 @@ def test_supplied_price_converts_rates_without_printing_invalid_samples(
 ) -> None:
     baseline = _reading().model_copy(update={"hourly_price": 0.5})
     describe(baseline)
-    row = json.loads(capsys.readouterr().out.splitlines()[0])
+    printed = capsys.readouterr().out
+    row = json.loads(printed.splitlines()[0])
     assert row["per_dollar_at_supplied_price"] == 100 / 10 * 3600 / 0.5
+    assert "rows/call*" in printed and "including the warmup update" in printed
     bad = baseline.attempts[0].model_copy(update={"error": "source changed"})
     describe(baseline.model_copy(update={"attempts": [bad], "status": "incomplete"}))
     output = capsys.readouterr().out

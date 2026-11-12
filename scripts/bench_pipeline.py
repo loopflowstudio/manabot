@@ -845,6 +845,50 @@ def run_suite(
     return report
 
 
+_SUMMARY_PHASES = (
+    ("step+enc s", "time/collection/environment_step_and_encoding"),
+    ("infer s", "time/collection/policy_inference_and_action_selection"),
+    ("learn s", "time/learning"),
+)
+
+
+def _print_summary(report: Report) -> None:
+    """Print one aligned line per sample; phase seconds are per measured update.
+
+    The JSON rows above and report.json remain the complete reading.
+    """
+    samples = [a for a in report.attempts if a.sample is not None and not a.error]
+    if not samples:
+        return
+    header = ["side", "rep", "workload", "size", "rate/s", "unit", "s/update"]
+    header += [label for label, _ in _SUMMARY_PHASES]
+    header += ["calls/upd*", "rows/call*", "idle*"]
+    lines = [header]
+    for attempt in samples:
+        sample = attempt.sample
+        assert sample is not None
+        metrics = sample.metrics
+        updates = metrics.get("measured_updates")
+        line = [attempt.side, str(attempt.repetition), sample.workload, sample.size]
+        line += [f"{sample.rate:.3f}", sample.unit]
+        if isinstance(updates, int | float) and updates > 0:
+            line.append(f"{metrics['seconds_per_update']:.1f}")
+            line += [
+                f"{sample.phases[key] / updates:.1f}" if key in sample.phases else "-"
+                for _, key in _SUMMARY_PHASES
+            ]
+            line.append(f"{metrics['inference_calls_per_update_all_updates']:.0f}")
+            line.append(f"{metrics['mean_rows_per_call_all_updates']:.1f}")
+            line.append(f"{metrics['idle_stream_fraction_all_updates']:.3f}")
+        else:
+            line += ["-"] * (len(header) - len(line))
+        lines.append(line)
+    widths = [max(len(row[i]) for row in lines) for i in range(len(header))]
+    for row in lines:
+        print("  ".join(cell.rjust(width) for cell, width in zip(row, widths)))
+    print("* whole stage, including the warmup update")
+
+
 def describe(report: Report) -> None:
     for attempt in report.attempts:
         sample = attempt.sample
@@ -868,6 +912,7 @@ def describe(report: Report) -> None:
         print(json.dumps(row))
     for comparison in report.comparisons:
         print(comparison.model_dump_json())
+    _print_summary(report)
     print(
         f"{report.status}; elapsed {report.elapsed_seconds:.2f}s; {report.error or 'receipts retained'}"
     )
