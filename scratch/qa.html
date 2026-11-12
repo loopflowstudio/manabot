@@ -136,4 +136,10 @@ decision outside this Task.</li>
 considered and kept for the joint builder Task.</li>
 <li>The zero-count <code>issues</code> message omits the card name (cosmetic).</li>
 </ol>
+<section>
+<h2>2026-11-12: after the training-side pieces left the Task</h2>
+<p>Scenario: a reader follows <code>docs/deck-building.md</code> from the top with the fetched <code>pools-v2</code> corpus. Every Python block, run in order in one process, printed the documented output: <code>[6 0] [26 20] [False&nbsp; True]</code>, <code>[False&nbsp; True] 40</code>, <code>827 95</code>; the self-play block built a <code>UniformDecks</code> of the 827 training human builds named by pool through <code>entry_ids</code>. The PR's "Try it" one-liner printed <code>6 40</code>.</p>
+<p>Fixed: the doc's self-play example used the removed <code>pools</code>/<code>builds</code> fields; it now uses main's <code>entry_ids</code>. "Join games back to builds" and the <code>docs/training.md</code> link are gone with the result rows.</p>
+<p>Not reached: a self-play run on the corpus (the training path is main's, unchanged by this PR).</p>
+</section>
 </body></html>
