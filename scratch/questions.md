@@ -35,3 +35,14 @@ change or new product decision alters the release scope. Existing 23-pass
 release-tooling evidence is reused; no runtime tests were rerun. Source review
 found the workflow tests downloaded wheels before publication, so the plan now
 keeps the separate post-publication PyPI install matrix explicit.
+
+PR publication review, 2026-11-11: `lf sync` completed cleanly; the release
+diff contains metadata, documentation and release-test changes, with no runtime
+source changes. Reused the 23 passing release tests and the macOS 3.12/3.13
+sdist-to-wheel consumer proofs recorded in `scratch/qa.html`; inspected both
+retained build logs in `/tmp/mtg285-qa.ScDu`. Fresh isolated dependency sync
+(`uv sync --locked --extra play --no-install-project`, environment
+`/tmp/mtg285-locked-sync.5kFX43/venv`) installed 38 packages successfully,
+including Torch 2.10.0 and Etude 0.2.15 on CPython 3.13.7. Release tag metadata
+and diff whitespace checks passed. Linux builds, the full five-file inventory
+and PyPI publication remain CI/delivery checks; this step publishes only the PR.
