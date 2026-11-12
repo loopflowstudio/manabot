@@ -132,7 +132,6 @@ def replay_environment(
         ),
         Reward(RewardConfig()),
         seed=int(game["deal_seed"]),
-        auto_reset=False,
     )
     if capture_cards:
         env._engine.enable_card_capture()

@@ -336,12 +336,13 @@ matchup.
 
 ## Quickstart
 
-You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain.
+You need [uv](https://docs.astral.sh/uv/) and a Rust toolchain. Development uses
+CPython 3.13; the library also supports ordinary CPython 3.12.
 
 ```bash
 git clone git@github.com:loopflowstudio/manabot.git
 cd manabot
-uv sync --python 3.12 --extra dev
+uv sync --locked --python 3.13 --extra dev
 uv run --extra play maturin develop --release \
   --manifest-path managym/Cargo.toml --features python
 
@@ -367,9 +368,11 @@ There is also a local browser table (`./scripts/play`, needs Node) for playing
 one game against a checkpoint or stepping through a replay. It is for
 inspecting what a bot does, not a way to play Magic.
 
-Versioned PyPI release preparation, platform support, CPU/CUDA installation
-and maintainer publishing are in [the release guide](docs/development.md#releases).
-[Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/).
+For use in another project, see [installation and dependency choices](docs/development.md#install).
+The release guide also covers supported platforms and CPU/CUDA selection.
+The [0.2.1 release notes](release/v0.2.1/NOTES.md) cover CPython 3.12/3.13
+support and collector API migrations. The historical
+[0.2.0 release](https://pypi.org/project/manabot/0.2.0/) requires CPython 3.12.
 
 ## Experiment data
 

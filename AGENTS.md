@@ -192,13 +192,23 @@ checkpoints or experiment evidence.
   venv or pick the wrong interpreter. Always `uv run <cmd>` (or
   `.venv/bin/<cmd>` when a script must reference the interpreter directly).
   Never emit an un-uv'ed Python command in docs, scripts, or instructions.
-- Python is pinned to 3.12 (PyO3 caps at 3.13; the venv is 3.12). Fresh venvs:
-  `uv venv --python 3.12`.
+- Development uses ordinary CPython 3.13; consumers also support 3.12. Fresh
+  development venvs: `uv venv --python 3.13`. Keep source syntax compatible with
+  3.12 and validate both interpreters in isolated consumer environments. Do not
+  claim free-threaded or newer interpreter support. Preserve frozen experiment
+  interpreter pins and never replace another active checkout's environment.
+  Public Torch requirements split identical Linux/non-Linux minimums: uv 0.9.22
+  otherwise applies group-specific CPU/CUDA indexes across platform branches.
+  Keep those markers aligned with the runtime groups; validate a locked sync,
+  since lock resolution alone can select an unusable platform wheel.
 - After changing Rust under `managym/` (the engine, `state/` or `cards/`), rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
   `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
-  then place the cp312 `.so` from the wheel at
-  `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
+  then place the matching interpreter/platform `.so` from the wheel in
+  `manabot/managym/`, preserving its filename (for example,
+  `_managym.cpython-313-darwin.so` for the macOS development interpreter).
+  Never copy a cp312 extension into a cp313 environment or vice versa.
+  Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
@@ -238,8 +248,14 @@ Use distinct Python test filenames across test directories: the configured
 pytest import mode shares their module namespace, so duplicate basenames fail
 collection even when the tests pass individually.
 
+Native `PlayerConfig::new` creates a fixed/test setup and bypasses submitted-deck
+admission. Admission-rejection fixtures must mark the config as submitted
+(`submit_to_world`); otherwise an invalid deck can reach game construction.
+
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3
-  exposes `PyAgentError` / `PanicException`. Replay compares these through
+  class names are `PyAgentError` / `PanicException`. Catch the former through
+  its public export `managym.AgentError` (there is no `managym.PyAgentError`).
+  Replay compares these through
   `manabot.env.replay.matches_retained_error`, retaining original class names and
   full vector diagnostic payloads in evidence.
 - Frozen experiment scheduling/analysis tests use an explicit compatible-world
@@ -425,6 +441,15 @@ Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana ability, not multiple fixed mana abilities. Verify each
 choice by paying a real cost and checking the remaining mana.
+
+### Etude training records
+
+Training row tables belong under the metric run's `artifacts/`, named by their
+content digest, with `.partial` staging before atomic rename. Etude's tracker
+and launcher courier carry these immutable author artifacts before metric
+references; they are never checkpoints. Resolve a reference through its selected
+metric block's Storage and run prefix, after attempt/update supersession, so
+relocated evidence and resumed runs keep the same meaning.
 
 ### Etude card evaluation
 

@@ -9,6 +9,31 @@ import subprocess
 import pytest
 
 
+@pytest.mark.parametrize("directory", ["managym", "manabot/managym"])
+def test_clean_proof_rejects_existing_native_extension(
+    tmp_path: Path, directory: str
+) -> None:
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    verifier = scripts / "verify-clean-machine"
+    shutil.copyfile(
+        Path(__file__).resolve().parents[2] / "scripts/verify-clean-machine",
+        verifier,
+    )
+    native = tmp_path / directory
+    native.mkdir(parents=True)
+    (native / "_managym.cpython-313-darwin.so").touch()
+
+    result = subprocess.run(
+        ["sh", str(verifier)], capture_output=True, text=True, timeout=5
+    )
+
+    assert result.returncode == 2
+    assert "proof.dirty" in result.stderr
+    assert "native extension exists" in result.stderr
+    assert not (tmp_path / ".cache").exists()
+
+
 @pytest.mark.parametrize("outcome", ["ready", "launch_failure", "timeout"])
 def test_browser_prepares_before_readiness_and_is_reaped(tmp_path, outcome):
     scripts = tmp_path / "scripts"

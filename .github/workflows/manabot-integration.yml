@@ -34,7 +34,7 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@v6
         with:
-          python-version: '3.12'
+          python-version: '3.13'
 
       - name: Cache uv downloads
         uses: actions/cache@v4
@@ -45,10 +45,10 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Install dependencies
-        run: uv sync --python 3.12 --extra dev --extra play
+        run: uv sync --python 3.13 --extra dev --extra play
 
       - name: Build managym extension
-        run: uv run --python 3.12 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+        run: uv run --python 3.13 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
 
       - name: Setup Node for offline report tests
         uses: actions/setup-node@v4
@@ -58,7 +58,7 @@ jobs:
       - name: Integration tests
         if: matrix.group == 'core'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
+          uv run --python 3.13 --extra dev --extra notebook --extra artifacts --extra reports --extra llm pytest --durations=20 tests/env/ tests/agent/ tests/model/ tests/llm/ \
             --ignore=tests/model/test_world.py \
             tests/test_package_boundaries.py \
             tests/semantic/test_text_observation.py tests/semantic/test_decision_contract.py \
@@ -91,7 +91,7 @@ jobs:
       - name: Two-seat and Etude evaluation integration
         if: matrix.group == 'evaluation'
         run: |
-          uv run --python 3.12 --extra dev --extra artifacts --extra evaluation pytest \
+          uv run --python 3.13 --extra dev --extra artifacts --extra evaluation pytest \
             tests/training/test_two_seat_learning.py tests/training/test_baseline_recipe.py \
             tests/training/test_adaptive_sampler.py tests/training/test_adaptive_two_seat.py \
             tests/training/test_etude_evaluation.py tests/training/test_head_to_head.py \
@@ -106,19 +106,20 @@ jobs:
 
       - name: Enum smoke test
         if: matrix.group == 'evaluation'
-        run: uv run --python 3.12 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
+        run: uv run --python 3.13 python -c "import managym; assert int(managym.ZoneEnum.STACK) == 4"
 
       - name: Training smoke test
         if: matrix.group == 'evaluation'
         run: |
-          uv run --python 3.12 manabot train --out .runs/ci-local-smoke
+          uv run --python 3.13 manabot train --out .runs/ci-local-smoke
 
       - name: Long integration tests
         if: matrix.group == 'long'
         run: |
-          uv run --python 3.12 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
+          uv run --python 3.13 --extra dev --extra notebook --extra artifacts --extra reports pytest --durations=20 \
             tests/training/test_experiment_runner.py \
             tests/training/test_monitor_evaluation.py \
             tests/training/test_batch_closure.py tests/training/test_credit_assignment.py \
             tests/training/test_frozen_opponent.py tests/training/test_rl_runtime.py \
+            tests/training/test_outcome_tables.py \
             tests/training/test_recovery.py tests/training/test_elemental_uniform.py

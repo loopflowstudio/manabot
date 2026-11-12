@@ -205,7 +205,7 @@ def test_encode_observation_into_fills_preallocated_buffers_and_validates_contra
     assert raised, "Expected dtype mismatch to raise ValueError or TypeError"
 
 
-def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
+def test_vector_env_buffer_hot_path_matches_compatibility_step_path() -> None:
     rng = np.random.default_rng(1234)
     config = ObservationConfig()
     encoder = ObservationEncoder(config)
@@ -216,13 +216,13 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="passive",
+        opponent_policy="random",
     )
     hot = managym.VectorEnv(
         num_envs=num_envs,
         seed=123,
         skip_trivial=True,
-        opponent_policy="passive",
+        opponent_policy="random",
     )
     buffers = allocate_vector_buffers(num_envs, config)
     hot.set_buffers(buffers)
@@ -265,7 +265,7 @@ def test_vector_env_buffer_hot_path_matches_compatibility_step_path():
         last_compat_step = [(obs, info) for obs, _, _, _, info in compat_step]
 
 
-def test_vector_env_set_buffers_validates_contract():
+def test_vector_env_set_buffers_validates_contract() -> None:
     config = ObservationConfig()
     num_envs = 2
     player_configs = make_player_configs()
@@ -273,7 +273,7 @@ def test_vector_env_set_buffers_validates_contract():
         num_envs=num_envs,
         seed=999,
         skip_trivial=True,
-        opponent_policy="passive",
+        opponent_policy="none",
     )
     good = allocate_vector_buffers(num_envs, config)
 
@@ -307,7 +307,7 @@ def test_vector_env_set_buffers_validates_contract():
         num_envs=num_envs,
         seed=1000,
         skip_trivial=True,
-        opponent_policy="passive",
+        opponent_policy="none",
     )
     with pytest.raises(RuntimeError):
         unconfigured.reset_all_into_buffers(player_configs)

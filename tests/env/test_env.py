@@ -51,11 +51,13 @@ def reward() -> Reward:
 @pytest.fixture
 def env(sample_match, observation_space, reward) -> Env:
     """Create a fresh environment instance for each test."""
-    return Env(sample_match, observation_space, reward, auto_reset=False)
+    return Env(sample_match, observation_space, reward)
 
 
 @pytest.fixture
-def vector_env(sample_match, observation_space, reward) -> VectorEnv:
+def vector_env(
+    sample_match: Match, observation_space: ObservationSpace, reward: Reward
+) -> VectorEnv:
     """Create a vectorized environment for testing."""
     return VectorEnv(
         num_envs=7,
@@ -63,7 +65,7 @@ def vector_env(sample_match, observation_space, reward) -> VectorEnv:
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="passive",
+        opponent_policy="random",
     )
 
 
@@ -186,14 +188,16 @@ class TestEnvironment:
 
         vector_env.close()
 
-    def test_vectorenv_single_agent_mode(self, sample_match, observation_space, reward):
+    def test_vectorenv_single_agent_mode(
+        self, sample_match: Match, observation_space: ObservationSpace, reward: Reward
+    ) -> None:
         vector_env = VectorEnv(
             num_envs=3,
             match=sample_match,
             observation_space=observation_space,
             reward=reward,
             device="cpu",
-            opponent_policy="passive",
+            opponent_policy="random",
         )
 
         obs, _ = vector_env.reset()
@@ -263,8 +267,8 @@ class TestResetSeed:
         assert deal_a != deal_b, "different reset seeds must produce different deals"
 
     def test_reset_seed_reproducible(self, sample_match, observation_space, reward):
-        env_a = Env(sample_match, observation_space, reward, seed=1, auto_reset=False)
-        env_b = Env(sample_match, observation_space, reward, seed=2, auto_reset=False)
+        env_a = Env(sample_match, observation_space, reward, seed=1)
+        env_b = Env(sample_match, observation_space, reward, seed=2)
         env_a.reset(seed=300)
         env_b.reset(seed=300)
         assert self._deal(env_a) == self._deal(env_b), (

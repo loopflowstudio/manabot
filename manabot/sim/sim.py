@@ -451,7 +451,6 @@ def simulate_models(
             match,
             observation_space,
             reward,
-            auto_reset=False,
             enable_profiler=True,
             enable_behavior_tracking=True,
         )

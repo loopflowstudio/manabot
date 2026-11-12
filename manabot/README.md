@@ -71,7 +71,7 @@ catalog. Custom `hero_sideboard` / `villain_sideboard` maps default to empty and
 require positive integer counts. `MatchConfig.decklists` is `"open"` (default:
 both players know each other's main deck and sideboard) or `"closed"`; search
 players cannot play closed matches. `Match.swapped()` moves both lists together;
-`Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
+`Env.reset(options={"match": match})` also replaces the setup used by later resets.
 
 
 Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
@@ -420,8 +420,8 @@ The learned compound-decision decoder has been removed; checkpoints and
 regimes that select it fail validation. See
 [compound decisions](../docs/training.md#compound-decisions-removed).
 
-Self-play update diagnostics live only in the run's Etude metrics;
-TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
+Self-play update diagnostics live in the run's Etude metrics and referenced
+outcome tables; TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
 Optional [public recent-event input](../docs/observation-and-model.md#policy-inputs) uses the existing

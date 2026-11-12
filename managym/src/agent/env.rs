@@ -2,7 +2,7 @@
 use crate::search_state::{identity, SearchStateIdentity};
 use crate::{
     agent::{
-        action::{Action, AgentError},
+        action::AgentError,
         behavior_tracker::BehaviorTracker,
         observation::Observation,
         observation_encoder::{
@@ -23,13 +23,32 @@ use crate::{
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
     search_state::{witness, SearchStateWitness},
-    state::{game_object::PlayerId, player::PlayerConfig},
+    state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
 };
 use rand::Rng;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    collections::BTreeMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
+
+/// Detached authoritative hand for one native seat at the read boundary.
+/// Never attach this to viewer observations, decision captures or policy inputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
+pub struct HandSnapshot {
+    pub player: usize,
+    pub game_id: u64,
+    pub seed: u64,
+    pub revision: u64,
+    pub cards: BTreeMap<String, usize>,
+}
+
+// A live game's lifetime token never enters replay or world hashes.
+// Process-wide allocation distinguishes resets, vector replacements and branches.
+static GAME_GENERATION: AtomicU64 = AtomicU64::new(1);
 
 fn current_agent(game: &Game) -> Result<PlayerId, AgentError> {
     game.action_space()
@@ -115,7 +134,10 @@ pub struct Env {
     capture_exposure: bool,
     retained_exposure: Vec<String>,
     skip_trivial: bool,
+    /// Configured seed for the next reset.
     seed: u64,
+    /// Originating reset seed, independent of pending resets and branch RNG seeds.
+    reset_seed: u64,
     pub profiler: Profiler,
     pub hero_tracker: BehaviorTracker,
     pub villain_tracker: BehaviorTracker,
@@ -203,6 +225,7 @@ impl Env {
             retained_exposure: Vec::new(),
             skip_trivial,
             seed,
+            reset_seed: seed,
             profiler: Profiler::new(enable_profiler, 64),
             hero_tracker: BehaviorTracker::new(enable_behavior_tracking),
             villain_tracker: BehaviorTracker::new(enable_behavior_tracking),
@@ -223,19 +246,12 @@ impl Env {
     }
 
     fn branch_from_game(&self, game: Game) -> Env {
+        // Materialized worlds have no replay prefix. Exact forks restore theirs.
         Env {
             game: Some(game),
-            action_trace: None,
-            capture_cards: false,
-            capture_exposure: false,
-            retained_exposure: Vec::new(),
-            skip_trivial: self.skip_trivial,
-            seed: self.seed,
-            profiler: Profiler::new(false, 64),
-            hero_tracker: BehaviorTracker::new(false),
-            villain_tracker: BehaviorTracker::new(false),
-            possible_world_space_constructions: AtomicU64::new(0),
-            capture_generation: 0,
+            reset_seed: self.reset_seed,
+            capture_generation: GAME_GENERATION.fetch_add(1, Ordering::Relaxed),
+            ..Self::new(self.seed, self.skip_trivial, false, false)
         }
     }
 
@@ -274,7 +290,8 @@ impl Env {
         }
         let events = game.take_observation_events();
         let observation = Observation::new(&game, &events);
-        self.capture_generation += 1;
+        self.capture_generation = GAME_GENERATION.fetch_add(1, Ordering::Relaxed);
+        self.reset_seed = self.seed;
         self.game = Some(game);
         Ok((observation, empty_info_dict()))
     }
@@ -339,7 +356,7 @@ impl Env {
         self.seed = seed;
     }
 
-    /// Seed of the current game, for private collector recovery.
+    /// Configured seed for the next reset.
     pub fn seed(&self) -> u64 {
         self.seed
     }
@@ -934,23 +951,6 @@ impl Env {
         }
     }
 
-    pub fn pass_priority_action_index(&self) -> Result<usize, AgentError> {
-        let game = self.game.as_ref().ok_or_else(|| {
-            AgentError("env.pass_priority_action_index called before reset".to_string())
-        })?;
-        let action_space = game
-            .action_space()
-            .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        if action_space.actions.is_empty() {
-            return Err(AgentError("no valid actions available".to_string()));
-        }
-        Ok(action_space
-            .actions
-            .iter()
-            .position(|action| matches!(action, Action::PassPriority { .. }))
-            .unwrap_or(0))
-    }
-
     /// Independent copy of this env's game for search rollouts.
     ///
     /// Profiling and behavior tracking are disabled on the fork; stepping the
@@ -961,43 +961,14 @@ impl Env {
             .as_ref()
             .ok_or_else(|| AgentError("env.fork called before reset".to_string()))?
             .clone();
-        Ok(Env {
-            game: Some(game),
-            action_trace: self.action_trace.clone(),
-            capture_cards: false,
-            capture_exposure: false,
-            retained_exposure: Vec::new(),
-            skip_trivial: self.skip_trivial,
-            seed: self.seed,
-            profiler: Profiler::new(false, 64),
-            hero_tracker: BehaviorTracker::new(false),
-            villain_tracker: BehaviorTracker::new(false),
-            possible_world_space_constructions: AtomicU64::new(0),
-            capture_generation: 0,
-        })
+        let mut branch = self.branch_from_game(game);
+        branch.action_trace = self.action_trace.clone();
+        Ok(branch)
     }
 
     /// Production search fork: an exact full clone of the match.
     pub fn selected_fork(&self) -> Result<Env, AgentError> {
-        let source = self
-            .game
-            .as_ref()
-            .ok_or_else(|| AgentError("env.selected_fork called before reset".to_string()))?;
-        let game = source.clone();
-        Ok(Env {
-            game: Some(game),
-            action_trace: self.action_trace.clone(),
-            capture_cards: false,
-            capture_exposure: false,
-            retained_exposure: Vec::new(),
-            skip_trivial: self.skip_trivial,
-            seed: self.seed,
-            profiler: Profiler::new(false, 64),
-            hero_tracker: BehaviorTracker::new(false),
-            villain_tracker: BehaviorTracker::new(false),
-            possible_world_space_constructions: AtomicU64::new(0),
-            capture_generation: 0,
-        })
+        self.fork()
     }
 
     pub fn selected_determinize(
@@ -1059,6 +1030,56 @@ impl Env {
             .as_ref()
             .map(|game| game.decision_epoch)
             .ok_or_else(|| AgentError("env.selected_revision called before reset".to_string()))
+    }
+
+    /// Detached authoritative hand contents for a native seat at this read.
+    /// Hidden information, separate from observations, captures and policy inputs.
+    pub fn hand_snapshot(&self, player: usize) -> Result<HandSnapshot, AgentError> {
+        let cards = self.hand_counts(player)?;
+        Ok(HandSnapshot {
+            player,
+            game_id: self.capture_generation,
+            seed: self.reset_seed,
+            revision: self.selected_revision()?,
+            cards,
+        })
+    }
+
+    /// Privileged read of the native seat's complete hand zone,
+    /// without constructing a viewer observation or applying disclosure rules.
+    fn hand_counts(&self, player: usize) -> Result<BTreeMap<String, usize>, AgentError> {
+        let game = self
+            .game
+            .as_ref()
+            .ok_or_else(|| AgentError("env must be reset before reading hand snapshots".into()))?;
+        if player >= game.state.players.len() {
+            return Err(AgentError("hand snapshot player must be 0 or 1".into()));
+        }
+        let mut counts = BTreeMap::new();
+        for card in game
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, PlayerId(player))
+        {
+            *counts
+                .entry(game.state.cards[*card].name.clone())
+                .or_insert(0) += 1;
+        }
+        Ok(counts)
+    }
+
+    #[cfg(test)]
+    pub(super) fn scenario_control_player(&mut self, player: usize, controller: usize) {
+        use crate::{flow::turn::PlayerControl, state::ability::PlayerControlDuration};
+
+        let game = self.game.as_mut().expect("reset fixture");
+        game.state.turn.player_controls.push(PlayerControl {
+            player: PlayerId(player),
+            controller: PlayerId(controller),
+            duration: PlayerControlDuration::NextTurn,
+            active: true,
+        });
+        game.scenario_refresh_priority().unwrap();
     }
 
     /// Kind of the current action space, if any.
@@ -1456,6 +1477,143 @@ impl Env {
             insert_info(&mut behavior, "villain", InfoValue::Map(villain));
         }
         insert_info(info, "behavior", InfoValue::Map(behavior));
+    }
+}
+
+#[cfg(test)]
+mod hand_snapshot_tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
+    use super::Env;
+    use crate::state::player::PlayerConfig;
+
+    fn configs() -> Vec<PlayerConfig> {
+        ["hero", "villain"]
+            .into_iter()
+            .map(|name| {
+                PlayerConfig::new(
+                    name,
+                    BTreeMap::from([("Mountain".into(), 8), ("Gray Ogre".into(), 4)]),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn hand_snapshot_retains_live_seed_until_successful_reset() {
+        let mut env = Env::new(42, true, false, false);
+        env.reset(configs()).unwrap();
+        let original = env.hand_snapshot(1).unwrap();
+        let witness = env.selected_witness().unwrap();
+        env.set_seed(99);
+        assert_eq!(env.hand_snapshot(1).unwrap(), original);
+        assert_eq!(env.selected_witness().unwrap(), witness);
+        let mut invalid = configs();
+        invalid[0] = PlayerConfig::new("invalid", BTreeMap::from([("Not a card".into(), 8)]))
+            .submit_to_world();
+        assert!(env.reset(invalid).is_err());
+        assert_eq!(env.hand_snapshot(1).unwrap(), original);
+
+        env.reset(configs()).unwrap();
+        let reset = env.hand_snapshot(1).unwrap();
+        assert_eq!(reset.seed, 99);
+        assert_ne!(reset.game_id, original.game_id);
+        let mut reference = Env::new(99, true, false, false);
+        reference.reset(configs()).unwrap();
+        assert_eq!(reset.cards, reference.hand_snapshot(1).unwrap().cards);
+        assert_eq!(
+            env.selected_witness().unwrap(),
+            reference.selected_witness().unwrap()
+        );
+    }
+
+    #[test]
+    fn hand_snapshot_forks_have_distinct_lifetimes_without_changing_replay_state() {
+        let mut env = Env::new(42, true, false, false);
+        env.reset(configs()).unwrap();
+        let original = env.hand_snapshot(1).unwrap();
+        let witness = env.selected_witness().unwrap();
+        env.set_seed(99);
+        let mut ids = BTreeSet::from([original.game_id]);
+        for mut branch in [
+            env.fork().unwrap(),
+            env.fork().unwrap(),
+            env.selected_fork().unwrap(),
+            env.selected_fork().unwrap(),
+        ] {
+            let snapshot = branch.hand_snapshot(1).unwrap();
+            assert!(ids.insert(snapshot.game_id));
+            assert_eq!(snapshot.seed, 42);
+            assert_eq!(snapshot.cards, original.cards);
+            assert_eq!(snapshot.revision, original.revision);
+            assert_eq!(branch.selected_witness().unwrap(), witness);
+            assert_eq!(branch.action_trace.as_ref().unwrap().seed, 42);
+            branch.selected_reseed_rollout(123).unwrap();
+            assert_eq!(branch.hand_snapshot(1).unwrap(), snapshot);
+            branch.step(0).unwrap();
+            assert_eq!(branch.hand_snapshot(1).unwrap().game_id, snapshot.game_id);
+            assert_eq!(env.hand_snapshot(1).unwrap(), original);
+            branch.reset(configs()).unwrap();
+            let reset = branch.hand_snapshot(1).unwrap();
+            assert!(ids.insert(reset.game_id));
+            assert_eq!(reset.seed, 99);
+        }
+        assert_eq!(env.selected_witness().unwrap(), witness);
+    }
+
+    #[test]
+    fn hand_snapshot_materializations_keep_reset_seed_and_distinct_lifetimes() {
+        let mut env = Env::new(42, true, false, false);
+        env.reset(configs()).unwrap();
+        let original = env.hand_snapshot(1).unwrap();
+        let witness = env.selected_witness().unwrap();
+        let constraints = serde_json::to_string(&env.hidden_hand_constraints(0).unwrap()).unwrap();
+        let hand = original
+            .cards
+            .iter()
+            .map(|(name, &count)| (name.clone(), count as u32))
+            .collect();
+        let space = env.possible_world_space(0).unwrap();
+        env.set_seed(99);
+        let prepared = env
+            .prepare_possible_world_materializer(0, &space.identity, 2)
+            .unwrap();
+        let mut branches = prepared
+            .materialize_indexes(&env, &[0, 0], &[123, 123], false)
+            .unwrap();
+        for _ in 0..2 {
+            branches.push(
+                env.materialize_possible_world(0, &space.identity, 0, 123, false)
+                    .unwrap(),
+            );
+            branches.push(
+                env.materialize_sampled_hand(0, &constraints, &hand, 456)
+                    .unwrap(),
+            );
+        }
+        assert_eq!(
+            branches[0].selected_witness().unwrap(),
+            branches[1].selected_witness().unwrap()
+        );
+        assert_eq!(
+            branches[0].selected_witness().unwrap(),
+            branches[2].selected_witness().unwrap()
+        );
+        let mut ids = BTreeSet::from([original.game_id]);
+        for mut branch in branches {
+            let snapshot = branch.hand_snapshot(1).unwrap();
+            assert!(ids.insert(snapshot.game_id));
+            assert_eq!(snapshot.seed, 42);
+            assert_eq!(snapshot.cards.values().sum::<usize>(), 7);
+            branch.step(0).unwrap();
+            assert_eq!(branch.hand_snapshot(1).unwrap().game_id, snapshot.game_id);
+            assert_eq!(env.hand_snapshot(1).unwrap(), original);
+        }
+        assert_eq!(env.selected_witness().unwrap(), witness);
+        assert_eq!(
+            env.possible_world_space(0).unwrap().identity,
+            space.identity
+        );
     }
 }
 

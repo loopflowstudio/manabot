@@ -8,8 +8,8 @@ Workflow installation grants no campaign, resource, spending or shipping authori
 | --- | --- | --- | --- |
 | Experiments | Scientific questions spanning model architecture, training regime and card pools; training and evaluation together | `experiment` | One report: each run's commit, run ID and cost, what it showed, and for a finding the verdict on its prediction |
 | Coverage | Faithful cards/mechanics, shared observations/actions/tokens and rules defects | `coverage` | Working behavior, reusable decomposition, measured optimization and integrated batch handoff |
-| Engine performance | Cross-cutting algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-hardware comparison |
-| Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code` | Working maintained systems and their relevant workflow checks |
+| Engine performance | Native engine algorithms, allocation, caches, throughput and latency | `engine-performance` | Behavior-preserving gains on representative workloads with same-machine comparison |
+| Infrastructure | Shared training/evaluation systems, artifacts, interfaces, CI, developer tools and reliability | builtin `code`; `experiment-performance` for training/evaluation speed | Working maintained systems and their relevant workflow checks |
 | Academy | Browser inspection, replay, human interaction and accessibility | builtin `code` | Correct viewer-safe product behavior through its real configured path |
 
 A model comparison belongs to Experiments; checkpoint serialization reliability
@@ -18,6 +18,105 @@ speedup belongs to Engine performance. Coverage optimizes its own implementation
 without waiting for unrelated global optimization. Scientific results do not gate
 native card support. Campaign failures retain their evidence while their fixes
 belong to the appropriate implementation owner.
+
+## Training and evaluation performance
+
+For a slow training update, start the performance workflow from the repository
+checkout with Loopflow installed:
+
+```sh
+lf graph experiment-performance
+```
+
+The workflow measures the update, selects a bottleneck, then loops through
+implementation, compression, refresh, concept review and performance review.
+It retains the publish, demo, delivery and verification boundaries of
+`engine-performance`. Its result is a software change with supported timing
+evidence, or a documented reason to stop when no useful improvement is supported.
+
+Use `experiment-performance` when the question spans collection, policy inference,
+learner work or evaluation matches, including how these costs change with model
+size. Use `engine-performance` for a bottleneck within the native engine, such as
+state copying or search. Coverage continues to compose `engine-optimization`.
+The performance workflow does not change Wave defaults or replace a Task's
+captured graph.
+
+The repository skills `experiment-measure` and `experiment-performance-review`
+own the measurement plan and its review. Once the standing size-ladder benchmark
+and retained baseline ship, measurement uses their documented command as its
+reference; the current per-recipe benchmark below remains usable today.
+
+Start with retained receipts and the **Update time** Perf series. Read collection's
+native stepping, encoding and policy inference beside learner time; retain
+inference calls and rows per call so batching changes remain interpretable.
+Distinguish one seed's progress from aggregate throughput or cost: packing can
+improve the latter while slowing every seed. Compare overlapping post-warmup
+packed samples to matched solo ordinals, keeping both latency and throughput.
+`TrainingRun.host` supplies CPU and quota facts; keep GPU, source, world, input,
+precision, model size and workload identities with each comparison. Read
+evaluation's `performance.json` alongside training to show its share of the
+workload's time. Evaluation clocks can overlap and exclude preparation and billing;
+do not sum them or label elapsed time as rental cost.
+
+For a bounded training reading on an available, authorized machine with the
+[development environment](development.md#environment-and-commands) prepared:
+
+```sh
+mkdir -p .runs/update-baseline
+uv run python scripts/bench_training_update.py --streams 256 --updates 3 \
+  --out .runs/update-baseline/run --json .runs/update-baseline/receipt.json
+```
+
+This prints seconds, decisions and games per update, host facts and phase timings
+in microseconds per decision. It retains checkpoints and per-update metrics under
+`--out`; without that option the run directory is temporary. Keep baseline and
+candidate in separate `--out` and `--json` paths, with matching input capacities
+and matching, explicit `--recipe`, `--seed` and `--device` settings. `--recipe` accepts a
+regime JSON or `module:function`; the device defaults to CPU (`--device cuda`
+selects CUDA). The benchmark pins its in-memory recipe to the current world, so
+it cannot reproduce frozen experiments. Capacity failure requires a compatible
+declared workload, not truncation or edits to a frozen recipe. The default CPU
+reading plays three full updates (about 160,000 decisions); on a laptop expect
+minutes per update and several GB of memory.
+
+The printout omits batching. For the default recipe's both-seat self-play, read
+the receipt's stage: the `calls` of
+`collection_timings["Policy inference and action selection"]` are inference
+calls; inferred rows are its `environment_decisions` (streams × calls −
+`idle_stream_steps`), so rows per call is decisions / calls. Idle steps are
+complete-game streams waiting for the remaining games; they lower rows per call
+without indicating a serving limit.
+For other recipes, inspect learner and opponent inference separately before using
+environment decisions as inferred rows; scripted opponents make decisions without
+model inference, and one-seat self-play records opponent inference separately.
+
+After an interrupted run, read the retained per-update rows: receipt timers can
+cover only the last attempt while counts span attempts. Keep failed attempts and
+missing measurements visible.
+
+Use `--cuda-counts PATH` in a separate diagnostic run for kernel launches and
+synchronizations. It requires real CUDA and changes timing; its whole-run counts
+are not phase-specific counts. `scripts/diagnose_training_transfers.py` provides
+bounded retained-input probes for recording and transfers, not whole-update speed
+evidence. For evaluation, use the predeclared plan and receipt guidance in
+[performance evidence and calibration](evaluation.md#performance-evidence-and-calibration).
+
+Compare baseline and candidate on the same machine with matched workloads and
+behavior digests. A GPU label alone does not identify a comparable host; the
+[training update investigation](../experiments/training-update-time.md) records
+substantial host variation. Never induce artificial load. If required hardware is
+unavailable, record the exact command and missing hardware as a deferred check;
+do not rent automatically, substitute CPU timing for CUDA evidence or claim a gain.
+
+If behavior digests diverge unexpectedly or the workloads do not match, the
+comparison cannot support a speed claim. Revise the comparison plan, repair any
+behavior regression and repeat the affected measurements within existing authority.
+
+Fewer seconds per update does not establish faster learning. Changes to precision,
+policy lag or batch composition need separate learning evidence. This software
+workflow produces no such evidence and grants no campaign, resource or spending
+authority. Scientific comparisons remain in `experiment`; frozen worlds,
+observation versions and recipes remain unchanged.
 
 ## Coverage
 
@@ -135,6 +234,6 @@ uv run python scripts/check_loopflow_workflows.py
 
 This check uses the installed `lf` compiler and catalog. It reports a missing CLI
 or reference as a failure rather than treating missing tooling as an empty catalog.
-`lf graph show coverage --json` and `lf graph show experiment --json` expose the
-compiled nodes for review. Gate owns the affected acceptance suites; setup checks
-never launch a scientific campaign.
+`lf graph show coverage --json`, `lf graph show experiment-performance --json`
+and `lf graph show experiment --json` expose the compiled nodes for review. Gate
+owns the affected acceptance suites; setup checks never launch a scientific campaign.

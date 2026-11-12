@@ -4,19 +4,21 @@ build-backend = "maturin"
 
 [project]
 name = "manabot"
-version = "0.2.0"
+version = "0.2.1"
 description = "The trainable Magic: The Gathering agent for Manabot"
 readme = "README.md"
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12,<3.14"
 dependencies = [
+    # Split markers keep uv group-specific CPU/CUDA indexes disjoint.
+    "torch>=2.10.0 ; sys_platform == 'linux'",
+    "torch>=2.10.0 ; sys_platform != 'linux'",
     "numpy>=1.24.0",
-    "pandas>=2.0.0",
     "nbformat>=5.10.0",
     "gymnasium>=1.0.0",
     "pydantic>=2.12.0",
     "typer>=0.12.5",
     "psutil>=5.9.0",
-    "etude-sdk==0.2.15",
+    "etude-sdk>=0.2.15",
 ]
 
 [project.scripts]
@@ -27,10 +29,9 @@ openrouter = ["httpx>=0.28,<1"]
 llm = [
     "huggingface-hub>=1.3,<2",
     "transformers[chat-template]==5.3.0",
-    "torch==2.10.0",
 ]
 reports = [
-    "etude-sdk[s3]==0.2.15 ; python_version >= '3.12'",
+    "etude-sdk[s3]>=0.2.15",
     "matplotlib>=3.9",
 ]
 artifacts = [
@@ -41,7 +42,7 @@ academy = [
     "uvicorn[standard]>=0.34.0",
 ]
 evaluation = [
-    "etude-sdk[eval]==0.2.15",
+    "etude-sdk[eval]>=0.2.15",
     "matplotlib>=3.9",
 ]
 play = [
@@ -113,10 +114,6 @@ torch = [
 [project.urls]
 Homepage = "https://manabot.gg"
 Repository = "https://github.com/loopflowstudio/manabot"
-
-[tool.manabot.release]
-# Published wheels need Torch; source uv groups select CPU/CUDA separately.
-runtime-dependencies = ["torch==2.10.0"]
 
 [tool.maturin]
 bindings = "pyo3"

@@ -31,7 +31,7 @@ def build_env(num_envs: int, seed: int) -> VectorEnv:
         reward=Reward(RewardConfig()),
         device="cpu",
         seed=seed,
-        opponent_policy="passive",
+        opponent_policy="random",
     )
 
 
