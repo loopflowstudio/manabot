@@ -1,17 +1,19 @@
 //! Limited Edition Alpha.
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec},
+    ability::{Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
-        ManaAbility,
+        ManaAbility, ReplacementEffect,
     },
     mana::{Mana, ManaCost},
+    predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         ancestral_recall(),
+        clone(),
         counterspell(),
         craw_wurm(),
         forest(),
@@ -373,6 +375,27 @@ fn sol_ring() -> CardDefinition {
         types: CardTypes::new([CardType::Artifact]),
         mana_abilities: vec![ManaAbility {
             mana: Mana::parse("CC"),
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn clone() -> CardDefinition {
+    let text_box = "You may have this creature enter as a copy of any creature on the battlefield.";
+    CardDefinition {
+        key: "lea.clone",
+        scryfall_id: "f00d33dd-4eb2-4446-9813-1923d8e2d2f3",
+        name: "Clone".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Shapeshifter".into()],
+        power: Some(0),
+        toughness: Some(0),
+        replacement_effects: vec![ReplacementEffect::EntersAsCopy {
+            scope: Scope::Battlefield,
+            predicate: CardPredicate::creature(),
+            exceptions: vec![],
         }],
         text_box: text_box.into(),
         ..Default::default()

@@ -484,6 +484,18 @@ pub enum ReplacementEffect {
     /// Replace a logical creation under your control, before any token enters
     /// (CR 616.1g). Entry and copy terms belong to every resulting token.
     MultiplyTokens { multiplier: i32 },
+    /// "You may have this creature enter as a copy of [a creature in
+    /// `scope` matching `predicate`]" (CR 707.5, 614.1c): its entering
+    /// controller chooses before the move commits, and the copy's own entry
+    /// replacements then apply (CR 614.12, 616.1c). `exceptions` become part
+    /// of the copiable values ("except it has this card's other abilities",
+    /// CR 707.9b). It leaves the battlefield as its printed card.
+    EntersAsCopy {
+        scope: crate::ability::Scope,
+        predicate: CardPredicate,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        exceptions: Vec<crate::effect::Modification>,
+    },
 }
 
 impl ActivatedAbilityDefinition {
@@ -1059,6 +1071,9 @@ pub struct Card {
     /// The front face's row while the back face is up (CR 712.8): set by
     /// [`Card::turn_back_face_up`], cleared by [`Card::turn_front_face_up`].
     front: Option<(CardDefId, Arc<CardDefinition>)>,
+    /// The printed card while it is a copy it entered as (CR 707.5), restored
+    /// by [`Card::restore_printed`] when it leaves the battlefield.
+    printed: Option<(CardDefId, Arc<CardDefinition>)>,
 }
 
 impl Card {
@@ -1076,6 +1091,48 @@ impl Card {
             copy: None,
             definition,
             front: None,
+            printed: None,
+        }
+    }
+
+    /// Enter as a copy of `source` (CR 707.5): take its copiable values,
+    /// face and copy chain, then `exceptions` (CR 707.9b). The object stays a
+    /// card or token as it was; its printed row is kept for
+    /// [`Card::restore_printed`].
+    pub fn become_copy_of(&mut self, source: &Card, exceptions: &[crate::effect::Modification]) {
+        let token = self.is_token;
+        let printed = self
+            .printed
+            .take()
+            .unwrap_or_else(|| (self.definition_id, Arc::clone(&self.definition)));
+        self.definition_id = source.definition_id;
+        self.registry_key = ObjectId(source.definition_id.0);
+        self.definition = source.copiable_definition();
+        self.front = source.front.clone();
+        if self.is_token != token {
+            self.is_token = token;
+        }
+        for exception in exceptions {
+            exception.apply_copiable(self);
+        }
+        let mut copy = source.copy.clone().unwrap_or(crate::effect::CopyEffect {
+            of: source.definition_id,
+            exceptions: Vec::new(),
+        });
+        copy.exceptions.extend(exceptions.iter().cloned());
+        self.copy = Some(copy);
+        self.printed = Some(printed);
+    }
+
+    /// Show the printed card again after an entry copy (CR 400.7): the object
+    /// leaving the battlefield is no longer a copy.
+    pub fn restore_printed(&mut self) {
+        if let Some((id, definition)) = self.printed.take() {
+            self.definition_id = id;
+            self.registry_key = ObjectId(id.0);
+            self.definition = definition;
+            self.front = None;
+            self.copy = None;
         }
     }
 

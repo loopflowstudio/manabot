@@ -1022,6 +1022,14 @@ pub(crate) fn project_decision(
             }
             out.cards("legends kept", keep);
         }
+        Decision::EnterAsCopy {
+            card, candidates, ..
+        } => {
+            out.card("entering card", *card);
+            for id in candidates {
+                out.target("may copy", Target::Permanent(*id));
+            }
+        }
         Decision::Retarget {
             object,
             slot,

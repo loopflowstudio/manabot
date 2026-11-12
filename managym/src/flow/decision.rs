@@ -400,6 +400,15 @@ pub enum Decision {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
     },
+    /// "You may have this creature enter as a copy of [a creature]" (CR
+    /// 707.5): the entering card's controller chooses one of `candidates`
+    /// or declines before its move commits; the copy's own entry
+    /// replacements then apply (CR 614.12).
+    EnterAsCopy {
+        player: PlayerId,
+        card: CardId,
+        candidates: Vec<PermanentId>,
+    },
     /// Choose a name from the immutable installed vocabulary, one ordinary
     /// decision per level: a scope larger than `NAME_BRANCHING` offers its
     /// balanced child groups, and choosing one narrows `scope` without
@@ -629,6 +638,7 @@ impl Decision {
         match self {
             Decision::Payment(payment) => payment.player,
             Decision::OrderReplacement { player, .. }
+            | Decision::EnterAsCopy { player, .. }
             | Decision::ChoosePaymentX { player, .. }
             | Decision::NameCard { player, .. }
             | Decision::SearchNamed { player, .. }
@@ -710,6 +720,7 @@ impl Decision {
                 ..
             } => std::slice::from_ref(card),
             Decision::OrderReplacement { .. }
+            | Decision::EnterAsCopy { .. }
             | Decision::SelectCards { .. }
             | Decision::DiscardFromRevealedHand { .. }
             | Decision::CastDuringResolution { .. }
@@ -1091,6 +1102,22 @@ impl Game {
                         });
                         return;
                     }
+                    BatchProgress::EntryCopy {
+                        player,
+                        card,
+                        candidates,
+                    } => {
+                        frame.batch = Some(batch);
+                        *self.state.suspended_decision_mut() = Some(SuspendedResolution {
+                            frame,
+                            decision: Decision::EnterAsCopy {
+                                player,
+                                card,
+                                candidates,
+                            },
+                        });
+                        return;
+                    }
                     BatchProgress::Complete { results, followups } => {
                         self.bind_event_results(&mut frame, &batch, &results);
                         // Cards returning as a linked exile ends are the
@@ -1354,6 +1381,23 @@ impl Game {
                     })
                     .collect(),
                 focus: source_focus,
+            },
+            Decision::EnterAsCopy {
+                player,
+                card,
+                candidates,
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: candidates
+                    .iter()
+                    .map(|id| Action::ChooseTarget {
+                        player: *player,
+                        target: Target::Permanent(*id),
+                    })
+                    .chain([Action::Decline { player: *player }])
+                    .collect(),
+                focus: vec![self.state.cards[*card].id],
             },
             Decision::ChoosePaymentX { player, .. } => ActionSpace {
                 player: Some(*player),
@@ -1782,6 +1826,27 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
+            (Decision::EnterAsCopy { candidates, .. }, Action::ChooseTarget { target, .. }) => {
+                let chosen = match target {
+                    Target::Permanent(id) if candidates.contains(id) => *id,
+                    _ => {
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Err(AgentError("illegal creature to copy".into()));
+                    }
+                };
+                let mut batch = suspended.frame.batch.take().expect("retained event batch");
+                self.choose_entry_copy(&mut batch, Some(chosen));
+                suspended.frame.batch = Some(batch);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::EnterAsCopy { .. }, Action::Decline { .. }) => {
+                let mut batch = suspended.frame.batch.take().expect("retained event batch");
+                self.choose_entry_copy(&mut batch, None);
+                suspended.frame.batch = Some(batch);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::OrderReplacement { candidates, .. }, Action::ChooseMode { mode, .. }) => {
                 let Some(candidate) = candidates.get(*mode) else {
                     *self.state.suspended_decision_mut() = Some(suspended);

@@ -199,6 +199,7 @@ impl ReplacementCandidate {
                 additional,
                 ..
             } => format!("Place {multiplier} times the counters, plus {additional}"),
+            ReplacementEffect::EntersAsCopy { .. } => "Enter as a copy".into(),
         }
     }
 }
@@ -210,6 +211,9 @@ pub(crate) struct PendingEvent {
     pub(crate) ordinal: usize,
     pub(crate) sacrifice: Option<(CardId, PlayerId)>,
     pub(crate) applied: Vec<ReplacementId>,
+    /// Its "enter as a copy" choice has been made (or had no candidate).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub(crate) copy_chosen: bool,
 }
 
 /// A logical simultaneous event: its current proposals in replacement order,
@@ -288,6 +292,14 @@ pub(crate) enum BatchProgress {
         player: PlayerId,
         candidates: Vec<ReplacementCandidate>,
     },
+    /// The member at the cursor may enter as a copy of one of `candidates`
+    /// (CR 707.5); its entering controller chooses before any other entry
+    /// replacement applies (CR 616.1c).
+    EntryCopy {
+        player: PlayerId,
+        card: CardId,
+        candidates: Vec<PermanentId>,
+    },
     /// Every member committed. Cards returning as a linked exile ends are
     /// consequences of the committed event: a new simultaneous event the
     /// caller runs next, which never replaces these results.
@@ -346,6 +358,7 @@ impl Game {
             ordinal,
             sacrifice,
             applied: Vec::new(),
+            copy_chosen: false,
         })
     }
 
@@ -382,6 +395,9 @@ impl Game {
         // sacrifice must not erase the source's already-earned tap trigger.
         self.process_game_events();
         while batch.cursor < batch.events.len() {
+            if let Some(choice) = self.entry_copy_choice(&mut batch.events[batch.cursor]) {
+                return choice;
+            }
             let pending = &batch.events[batch.cursor];
             let candidates: Vec<_> = self
                 .collect_replacements(&pending.event)
@@ -661,6 +677,76 @@ impl Game {
         entries
     }
 
+    /// The pending entry's "enter as a copy" question, once: `None` when it
+    /// has none, was answered, or has nothing to copy.
+    fn entry_copy_choice(&self, pending: &mut PendingEvent) -> Option<BatchProgress> {
+        let ProposedEvent::ZoneMove {
+            card,
+            to: ZoneType::Battlefield,
+            entry,
+            ..
+        } = &pending.event
+        else {
+            return None;
+        };
+        if pending.copy_chosen {
+            return None;
+        }
+        let (scope, predicate) = self.state.cards[*card]
+            .replacement_effects
+            .iter()
+            .find_map(|effect| match effect {
+                ReplacementEffect::EntersAsCopy {
+                    scope, predicate, ..
+                } => Some((*scope, predicate)),
+                _ => None,
+            })?;
+        let player = entry.controller.unwrap_or(self.state.cards[*card].owner);
+        let controllers = match scope {
+            crate::state::ability::Scope::YouControl => vec![player],
+            crate::state::ability::Scope::OpponentsControl => vec![PlayerId(1 - player.0)],
+            _ => vec![PlayerId(0), PlayerId(1)],
+        };
+        let candidates: Vec<PermanentId> = controllers
+            .into_iter()
+            .flat_map(|controller| self.battlefield_permanents(controller))
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .collect();
+        let card = *card;
+        if candidates.is_empty() {
+            pending.copy_chosen = true;
+            return None;
+        }
+        Some(BatchProgress::EntryCopy {
+            player,
+            card,
+            candidates,
+        })
+    }
+
+    /// Answer the cursor member's entry-copy question: it becomes a copy of
+    /// `of` (or stays itself) before its other entry replacements are found.
+    pub(crate) fn choose_entry_copy(&mut self, batch: &mut EventBatch, of: Option<PermanentId>) {
+        let pending = &mut batch.events[batch.cursor];
+        pending.copy_chosen = true;
+        let ProposedEvent::ZoneMove { card, .. } = pending.event else {
+            return;
+        };
+        let Some(source) = of.and_then(|id| self.state.permanents[id].as_ref()) else {
+            return;
+        };
+        let source = self.state.cards[source.card].clone();
+        let exceptions = self.state.cards[card]
+            .replacement_effects
+            .iter()
+            .find_map(|effect| match effect {
+                ReplacementEffect::EntersAsCopy { exceptions, .. } => Some(exceptions.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+        self.state.cards[card].become_copy_of(&source, &exceptions);
+    }
+
     pub(crate) fn choose_replacement(
         &self,
         batch: &mut EventBatch,
@@ -705,25 +791,29 @@ impl Game {
 
     /// Commit `batch` and every consequence of it without a retained caller,
     /// returning the root's results.
+    /// An optional entry copy is declined: no caller can ask for it.
     pub(crate) fn complete_immediate_batch(&mut self, mut batch: EventBatch) -> Vec<EventResult> {
-        let BatchProgress::Complete {
-            results,
-            mut followups,
-        } = self.advance_event_batch(&mut batch)
-        else {
-            panic!("event requiring a choice needs a retained caller")
-        };
+        let (results, mut followups) = self.advance_immediate_batch(&mut batch);
         while !followups.is_empty() {
             let mut next = self.event_batch(followups);
-            let BatchProgress::Complete {
-                followups: more, ..
-            } = self.advance_event_batch(&mut next)
-            else {
-                panic!("event requiring a choice needs a retained caller")
-            };
-            followups = more;
+            followups = self.advance_immediate_batch(&mut next).1;
         }
         results
+    }
+
+    fn advance_immediate_batch(
+        &mut self,
+        batch: &mut EventBatch,
+    ) -> (Vec<EventResult>, Vec<ProposedEvent>) {
+        loop {
+            match self.advance_event_batch(batch) {
+                BatchProgress::Complete { results, followups } => return (results, followups),
+                BatchProgress::EntryCopy { .. } => self.choose_entry_copy(batch, None),
+                BatchProgress::Choice { .. } => {
+                    panic!("event requiring a choice needs a retained caller")
+                }
+            }
+        }
     }
 
     fn proposal_is_current(&self, event: &ProposedEvent) -> bool {

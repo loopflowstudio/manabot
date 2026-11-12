@@ -593,8 +593,10 @@ impl Game {
                 }
                 self.state.permanents[permanent_id] = None;
             }
+            // A card that entered as a copy is its printed card again, and
             // CR 712.8a: a double-faced card is front face up outside the
             // battlefield.
+            self.state.cards[card].restore_printed();
             self.state.cards[card].turn_front_face_up();
         }
 

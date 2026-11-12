@@ -206,6 +206,7 @@ _OBLIGATIONS = (
     "order library top",
     "select cards",
     "order replacements",
+    "enter as a copy",
 )
 _TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
 _PLACEMENT_GROUPS = (
