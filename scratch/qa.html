@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>MTG-304 QA: training library pieces</title>
+<style>body{font:15px/1.5 system-ui,sans-serif;max-width:52rem;margin:2rem auto;padding:0 1rem;color:#222}pre{background:#f5f2ea;padding:.7rem;overflow:auto;font-size:13px}h2{margin-top:2rem;border-bottom:1px solid #ddd}.ok{color:#276b2f}.bad{color:#9b2c1f}.warn{color:#8a6100}</style></head><body>
+<h1>MTG-304 QA: using the training library as a loop author</h1>
+<p>Who it is for: someone reading <code>docs/training-loop.md</code> to call our updates, reuse the <code>manabot.rl</code> pieces, or copy the example loop. I drove each snippet the way such a reader would, from the installed checkout environment (<code>uv run</code>). Branch head after QA: <code>1d11f9cec</code>.</p>
+<p class="warn">Machine context: load averages were 209–305 on 16 cores from other work during the whole pass, so wall-clock times here are not meaningful.</p>
+
+<h2>1. Run the guide's one-line command</h2>
+<pre>uv run python -c "from manabot.training.loops.minimal import train; train(3)"</pre>
+<p class="ok">Returns an <code>ActorCritic</code>. The guide's code block is byte-identical to <code>manabot/training/loops/minimal.py</code> (diffed).</p>
+<p class="warn">The guide says the run takes "a few seconds" on a laptop CPU. I measured 17.9 CPU-seconds across 12 Torch threads and 65 s wall time under the load above, so I couldn't confirm the claim. Recheck it on an idle machine.</p>
+
+<h2>2. Every name the guide mentions</h2>
+<p class="ok">All 40 named functions, classes and records import from the module the guide gives, and their signatures match the argument lists it shows (script: <code>.runs/qa/symbols.py</code>). All six doc anchors resolve, and README, <code>manabot/README.md</code>, <code>training.md</code> and <code>learning.md</code> all link to the guide.</p>
+
+<h2>3. Reproducing a recipe's update exactly, as the guide shows</h2>
+<p>I collected a self-play batch with <code>SeatRoutedCollector</code> (2 streams, 16 decisions), then ran <code>update_damped_iteration(learner, batch, move_learning(), iteration=1)</code> and <code>update_iteration(..., Learning(), progress=0.0, rng=...)</code>. I did the same with a <code>categorical_wdl</code> critic.</p>
+<pre>batch (334, 1) 4
+damped keys ['actor_exposures', 'advantage_abs_mean', 'bootstrapped_tail_fraction', ...] 334
+ppo rows 334 167
+outcome probs (250, 1, 3)
+cat damped rows 250</pre>
+<p class="ok">Both updates run and return diagnostic dictionaries. The categorical path produces <code>[T,E,3]</code> outcome probabilities.</p>
+
+<h2>4. Saving and reloading the trained policy (the guide's checkpoint sentence)</h2>
+<p class="ok"><code>save_checkpoint(policy, policy.observation_space, "policy.pt", player_configs=Match().to_rust())</code>, then <code>load_checkpoint</code>: the reloaded state dict is equal to the saved one.</p>
+
+<h2>5. The pieces alone on small tensors, with good and bad input</h2>
+<pre>gae [1.0, 1.0, 1.0] [1.0, 1.0, 1.0]
+cat targets [[0,0,1],...] expected_outcome [1,1,1]
+std [-1.22, 0.0, 1.22]   kl(self)=0   mask top_count 0.5 -> [F,F,T,T]
+empty selected_mean -> tensor(0., grad_fn=...)
+gradient_step(detached) -> NumericalError detached_objective
+gradient_step(nan input) -> NumericalError nonfinite_objective
+shape mismatch gae -> no error [torch.Size([3, 2]), torch.Size([3, 2])]   &lt;-- defect</pre>
+<p class="bad">Found: <code>transition_gae</code> broadcast mismatched inputs without complaint. With rewards <code>[3,2]</code> and values <code>[3,1]</code> it returned <code>[3,2]</code> advantages. That is an easy mistake to make in a hand-written loop (a flattened or unsqueezed critic output), and its sibling <code>categorical_lambda_returns</code> already refuses bad shapes.</p>
+<p class="ok">Fixed in <code>1d11f9cec</code>. <code>transition_gae</code> now raises <code>ValueError</code> naming all four shapes unless rewards, values and ends are the same <code>[T,E]</code> and <code>next_value</code> has <code>E</code> entries. Its docstring now gives the shapes and cites GAE. Directed test: <code>test_transition_gae_refuses_shapes_it_would_broadcast</code>. I checked every caller in <code>manabot/</code>, the tests and reports; all pass <code>[T,E]</code>.</p>
+
+<h2>6. Returning user with code from 0.2.x</h2>
+<p class="warn">Release 0.2.2 published <code>manabot.training.learning.{objectives,learner,damped_policy,returns,health,selection,references}</code>. On this branch, importing any of them raises <code>ModuleNotFoundError</code>, with no warning alias. That is deliberate: Jack Heart said on #474, "i think were being too ambitious withh the deprecations", and the Task was steered to delete the shims. The PR body says so too. Release notes should list the new paths (<code>manabot.training.updates.*</code>, <code>manabot.rl.*</code>).</p>
+
+<h2>Tests run</h2>
+<pre>tests/training/test_learning_pieces.py test_returns.py test_rl_objectives.py test_minimal_loop.py tests/test_package_boundaries.py
+86 passed
+tests/training/test_two_seat_learning.py test_collection.py test_game_errors.py test_credit_assignment.py
+74 passed, 3 failed</pre>
+<p class="bad">These three fail the same way at the pre-QA head <code>e0e99309a</code>, with my change reverted: <code>test_game_errors.py::test_resource_limit_receipt_replays_its_retained_encoding_boundary[ObservationCapacity|AgentError|None]</code>. <code>replay_attempt</code> returns <code>status='binding_mismatch'</code> where <code>'failed'</code> is expected. This branch's diff in that test and in <code>recovery.py</code> is import paths only. The likely cause is the retained fixture's world binding against the merged <code>origin/main</code> or the local native build. That is outside this Task's pieces, and I didn't confirm whether <code>main</code> fails the same way.</p>
+
+<h2>What works now</h2>
+<ul><li>The guide's command, its example loop, its update calls, its checkpoint round trip, and every piece it names, used as documented.</li>
+<li><code>transition_gae</code> refuses shapes it used to broadcast silently.</li></ul>
+<h2>Not reached</h2>
+<ul><li>A fresh wheel install (the library-consumer path in this skill). I skipped it because building both wheels on a machine this loaded wasn't worth it for a change that adds no packaging. CI's release smoke covers it.</li>
+<li>Idle-machine timing of the example loop.</li></ul>
+<h2>Still wrong, worst first</h2>
+<ol><li>The three <code>test_game_errors</code> replay-binding failures, which predate this QA pass. Check them against <code>main</code> before landing.</li>
+<li>Code that imports <code>manabot.training.learning.*</code> from 0.2.x breaks without a warning. This was chosen deliberately, so it needs a release note rather than a fix.</li>
+<li>The "a few seconds" claim for the example loop hasn't been confirmed.</li></ol>
+</body></html>
