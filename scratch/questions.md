@@ -1,5 +1,5 @@
 # Assumptions (reversible)
-- The optional extra is named `mlx`; API names (`convert`, `parity`, `load_mlx_policy`, `MLXLearner`) set in manabot/model/mlx.md.
+- The optional extra is named `mlx`; API names (`convert`, `parity`, `load_mlx_policy`, `MLXLearner`) set in manabot/backends/mlx.md.
 - Prediction numbers in the committed paragraph (1.3x / 1.8x) were written by the agent before any measurement.
 - Gradient-cosine bar clarified before timing: tensors below 1e-6 of the global gradient norm in both frameworks count as zero
   (policy-score bias and attention key biases have analytically zero gradients). Stated in the report and parity docstring.

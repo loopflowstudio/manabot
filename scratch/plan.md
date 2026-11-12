@@ -1,8 +1,9 @@
 # MTG-321 plan notes
 
-Built: manabot/model/mlx/ (prepare, model, checkpoint, learner, parity, convert), mlx extra, boundary test,
-tests/model/test_mlx_port.py (MLX-only; 3 passed on the M2), experiments/mlx_pilot.py (capture/bench/soak/report),
-experiments/mlx_pilot.md (report), manabot/model/mlx.md (guide), docs/training.md link. Data published
+Built (current paths; measured at the earlier manabot/model/mlx/, see Backend layout below): manabot/policy/,
+manabot/backends/{mlx/,parity.py,convert.py,README.md,mlx.md}, mlx extra, boundary test, tests/model/test_mlx_backend.py
+and test_policy_container.py, experiments/mlx_pilot.py (capture/bench/soak/report), experiments/mlx_pilot.md (report),
+docs/training.md link. Data published
 (experiments/data/mlx_pilot, 39 manifest entries).
 
 Result (accepted under the pre-registered rule): whole w160l8 update 755.7 s CPU8 vs 452.1 s MLX = 1.67x;
@@ -17,9 +18,9 @@ Before that steer, early parity development and one smoke run ran on the laptop;
 Single-file conversion (2026-11-12): done as directed below; `convert` returns (path, tensors), one output path;
 two new tests (round-trip, refusal names original revision). M2: 5 passed; local boundary test: 10 passed.
 
-Remaining: delivery only (publish/review/land). Branch is merged with origin/main (0 behind on 2026-11-12), so the
-report's link to experiments/cuda_precision.md resolves.
-Remote state: ~/mlx-pilot/{manabot,venv,capture (12 GB),bench,report} on the M2; owner releases the host.
+Remaining: delivery only (CI on PR #495, review, land; delete scratch/ in the pre-land commit). Branch is 0 behind
+origin/main (2026-11-12). The M2 was handed back in comment d9e4ef75 ("Done with the rented M2 for this pilot");
+the backend-layout parity rerun used it afterwards. ~/mlx-pilot (12 GB capture) is lost when the host is released.
 
 Compress (2026-11-12): one parameter mapping `mlx_parameters` (checkpoint.py) now serves conversion, parity's
 one-step comparison and the GRU test; `require_supported` raises; `attend`/`packed_steps` shared by model and test;
@@ -36,7 +37,7 @@ parity is the gate; MLXLearner measures and never writes). One mismatch, settled
 - **The converted checkpoint lost its provenance** (sidecar `"source"` held a local path, so a world-binding
   refusal said "records no source revision"). Resolved by the single-file conversion above: `hypers`,
   `world_binding`, `architecture`, `source` are JSON in the safetensors metadata (`_METADATA_KEYS`,
-  manabot/model/mlx/checkpoint.py), the torch path under `converted_from`; test
+  manabot/policy/checkpoint.py), the torch path under `converted_from`; test
   `test_a_refused_converted_checkpoint_names_the_original_revision`. No re-measurement; published capture
   metadata stays as written.
 
@@ -71,3 +72,6 @@ Local: boundary + container tests 14 passed; ruff clean.
 Compress after backend layout (2026-11-12): removed unused `arrays.device` and `Dimensions.value` (value head is
 `Linear(hidden, 1)`), folded module-level `dimensions()` into `PolicyCheckpoint.dimensions`, `_METADATA_KEYS`
 private again. Local boundary + container tests: 14 passed; ruff clean. MLX tests not rerun (M2-only, no behavior change).
+
+Published names posted to the Task thread (comment 8a4a16a3) per steers 4288a550/310e6b5f, including the
+metadata-key difference and that policy/buckets.py is not in this branch. MTG-325 follows them.
