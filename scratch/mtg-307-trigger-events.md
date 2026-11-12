@@ -121,7 +121,7 @@ Rust changed since the publish gate only through the `matching` constructor
 (serde-transparent `Box`, no token or digest change). `cargo fmt --check` clean;
 debug nextest `trigger|description|attack|combat_damage|dies|sacrific|observability|token`
 249/249; clippy `--workspace --all-targets` no findings. Later gates
-(aaa6dd564, 9479b26a5): no suite inputs moved, no reruns.
+(aaa6dd564, 9479b26a5, e585c41d7): no suite inputs moved, no reruns.
 
 ## Status (head 38f6311a6)
 
