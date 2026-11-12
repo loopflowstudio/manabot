@@ -10,6 +10,9 @@ and launcher state never reach the developer's home directory.
 
 No test runs for five minutes. When one reaches the limit, the run prints
 every thread's stack and exits with status 1. Collection has the same limit.
+Under pytest-xdist (``-n``) each worker keeps that clock for its own tests: the
+worker that reaches the limit prints its stacks and exits, its test is reported
+as a crash, and the run finishes with status 1.
 """
 
 import faulthandler
@@ -38,6 +41,17 @@ def _start_limit(config: pytest.Config) -> None:
     )
 
 
+def _is_xdist_controller(config: pytest.Config) -> bool:
+    """Whether this process only hands tests to workers and runs none itself.
+
+    Nothing restarts the clock there, so it would end a healthy run at five
+    minutes; every worker starts its own.
+    """
+    return bool(config.getoption("numprocesses", None)) and not hasattr(
+        config, "workerinput"
+    )
+
+
 @pytest.fixture(autouse=True)
 def _etude_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ETUDE_HOME", str(tmp_path / "etude-home"))
@@ -49,7 +63,8 @@ def pytest_configure(config: pytest.Config) -> None:
         "experiment_data(*paths): fetch retained experiment data before the test",
     )
     config.stash[_limit_output] = os.dup(2)
-    _start_limit(config)
+    if not _is_xdist_controller(config):
+        _start_limit(config)
 
 
 def pytest_unconfigure(config: pytest.Config) -> None:

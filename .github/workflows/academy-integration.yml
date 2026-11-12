@@ -12,6 +12,10 @@ jobs:
   academy-integration:
     name: Academy Integration (${{ inputs.runner }})
     runs-on: ${{ inputs.runner }}
+    env:
+      # Install dependencies installs every extra once and leaves managym to
+      # the extension build; a later sync would compile the engine again.
+      UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -29,29 +33,23 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Cache uv downloads
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('pyproject.toml', 'uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
       - name: Install dependencies
-        run: uv sync --python 3.13 --extra dev --extra play
+        run: |
+          uv sync --python 3.13 --no-install-package managym \
+            --extra dev --extra play --extra notebook --extra artifacts --extra reports
 
       - name: Build managym extension
-        run: uv run --python 3.13 --extra play maturin develop --features python --manifest-path managym/Cargo.toml
+        run: uv run maturin develop --features python --manifest-path managym/Cargo.toml
 
       - name: Checkpoint world bindings
-        run: uv run --python 3.13 --extra dev --extra notebook --extra artifacts --extra reports pytest tests/model/test_world.py
+        run: uv run pytest tests/model/test_world.py
 
       - name: Elemental roster admission
-        run: uv run --python 3.13 --extra dev pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
+        run: uv run pytest tests/semantic/test_elemental_world.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q
 
       - name: Elemental local play contracts
         run: |
-          uv run --python 3.13 --extra dev --extra artifacts pytest -q \
+          uv run pytest -q \
             tests/academy/test_elemental_play_launcher.py \
             tests/academy/test_named_search_recovery.py \
             tests/academy/test_schedule_recovery.py \
@@ -59,5 +57,5 @@ jobs:
 
       - name: Frozen-policy search fixtures
         run: |
-          uv run --python 3.13 --extra dev pytest -q \
+          uv run pytest -q \
             tests/sim/test_local_update_sampling.py

@@ -236,7 +236,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
-| Integration | `manabot-integration.yml` (`core`, `evaluation` and `long` groups on separate runners; Perf report proof and training smoke in `evaluation`) |
+| Integration | `manabot-integration.yml` (one runner per group of its matrix, each listing exact test paths; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
@@ -250,6 +250,35 @@ drifted case is written to `target/semantic-conformance/<corpus>/`, which Rust
 Tests uploads on failure; fuzz failures keep exact seeds under
 `target/semantic-conformance/failures/`. Rust Tests runs whenever the fuzzing
 job does.
+
+**Job time.** Every pull-request job finishes within 8 minutes on the
+`ubuntu-latest` runner, measured from job start to job end, so installation and
+the extension build count against it. Read a job's time from the run:
+
+```console
+$ gh run view <run-id> --json jobs \
+    --jq '.jobs[] | select(.conclusion == "success") | "\(((.completedAt | fromdate) - (.startedAt | fromdate)) / 60 | floor) min  \(.name)"' | sort -rn | head -3
+7 min  Integration / Integration (ubuntu-latest, core)
+6 min  Rust Tests
+6 min  Integration / Integration (ubuntu-latest, evaluation)
+```
+
+Each Integration group prints its 20 slowest tests (`pytest --durations=20`) at
+the end of its test step. When a job passes 8 minutes, in order of preference:
+
+1. Make its slowest tests cheaper (a smaller fixture, fewer updates or games,
+   a shared setup) while keeping what they assert.
+2. Cut the shared installation and build time.
+3. Move test files to a faster group, or add a group to the matrix, balanced by
+   the measured times; `tests/infra/test_ci_selection.py` checks that every
+   path a group names exists.
+
+Never skip, deselect or delete a test to fit, and never raise the five-minute
+single-test limit ([TESTING.md](../TESTING.md)). A new test file joins the
+group with the most room; a file listed in no group does not run in CI.
+Engine Budget is the exception: it builds and measures the change and its
+reference on one runner and keeps that shape, whatever it takes. The macOS
+nightly reuses the same groups without this limit.
 
 **Selection.** Detect Changes pipes the NUL-delimited diff (`--no-renames`, so
 both sides of a rename) into `.github/ci/select-tests.sh`. Manual dispatch, an
