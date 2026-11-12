@@ -49,7 +49,7 @@ For the complete bounded physical comparison, run:
 uv run --no-sync python -m experiments.runners.worker_experiment --out "$ETUDE_OUTPUT_DIR/worker-evidence" --expected-gpu "NVIDIA GeForce RTX 5090"
 ```
 
-The [prospective GPU protocol](protocols/gpu-worker-scaling.txt) defines limits,
+The [prospective GPU protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/gpu-worker-scaling.txt) defines limits,
 repeats, parity and hardware economics. It includes ordinary training controls.
 A successful command alone proves neither a strength gain nor a universal hardware
 recommendation. Compare costs using the actual rental and whole-training receipts.
@@ -146,7 +146,7 @@ separate synchronized transfer/forward attribution and a CPU/CUDA trace.
 
 `worker_experiment --serving-ownership` interleaves three complete curves per
 ownership strategy, then runs the separate profile and ordinary training controls.
-See the [prospective protocol](protocols/inference-serving.txt). The shared service
+See the [prospective protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/inference-serving.txt). The shared service
 is currently a benchmark implementation; ordinary TrainingRun uses its collector's
 GPU model directly. An isolated ownership win does not prove a training gain.
 
@@ -222,7 +222,7 @@ one unchanged behavior-policy scope. It preserves original request shapes and
 sampling. Normal learning retains fresh differentiable catalog computation.
 `worker_experiment --serving-preparation` compares this path against ordinary
 tensor inputs, with paired complete TrainingRuns and exact raw/EMA/Adam witnesses.
-See the [prospective preparation protocol](protocols/inference-preparation.txt).
+See the [prospective preparation protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/inference-preparation.txt).
 The candidate passes local forward, gradient, rollout, recovery and whole-training
 parity tests. The GPU comparison below rejects adoption for ordinary training:
 its complete-training speed target and strict learned-state parity gate failed.
@@ -286,7 +286,7 @@ strength or clear the full single-GPU training bottleneck.
 
 ## Ordinary collection attribution (run018)
 
-The [attribution protocol](protocols/collection-attribution.txt) ran ten ordinary
+The [attribution protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/collection-attribution.txt) ran ten ordinary
 TrainingRun cells on an RTX 5090 / Xeon Gold 6530 host with a 13.6-core quota.
 All cells completed. Four controls had no profiler; four Torch profiles observed
 only the second collection, after a real update; two separate cProfile runs
@@ -351,7 +351,7 @@ The provider confirmed deletion; estimated whole rental cost was $0.139.
 
 ## Persistent production producers (run019)
 
-The [producer protocol](protocols/producer-scaling.txt) measured the ordinary
+The [producer protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/producer-scaling.txt) measured the ordinary
 TrainingRun with persistent native CPU shards feeding the same GPU collector.
 It preserved global inference batches, sampling order and reset identities.
 The RTX 5090 host had an AMD EPYC 7543 CPU, a 14.375-core quota, PyTorch2.10/cu128
@@ -418,7 +418,7 @@ remains unchanged, and no additional experiment was launched for this analysis.
 
 ## Direct rollout storage result (run020)
 
-The [prospective storage protocol](protocols/rollout-storage.txt) compared the
+The [prospective storage protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/rollout-storage.txt) compared the
 verbatim frozen collector from a07b3cd3 against direct writes into final rollout
 arrays. Both use prepared inference and the same native implementation. All32cells
 completed: eight deterministic proofs and24ordinary timing cells. Each ordinary
@@ -489,7 +489,7 @@ not separately measured, and no GPU speedup is claimed for the borrowing change.
 Nine Rust debug vector tests and20Python producer/collector/inference tests pass,
 including mixed per-stream setups through masked terminal auto-reset and recovery.
 A matched same-host native comparison remains required.
-The [native borrowing protocol](protocols/native-config-borrowing.txt) specifies
+The [native borrowing protocol](https://github.com/loopflowstudio/manabot/blob/ac601834d/experiments/protocols/native-config-borrowing.txt) specifies
 that comparison. `native_variants` builds both source variants with the same
 release command, and `worker_experiment --native-variants` selects verified native
 bytes before each fresh training process. Per-cell source/build receipts identify

@@ -279,7 +279,7 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
     elif case.family == "target":
         permanents = obs["opponent_permanents"]
         permanents[..., observation_schema.PERMANENT_DEFINITION_INDEX] = 0
-        # Policy input v5 also orders permanents by timestamp (CR 613.7).
+        # The policy input also orders permanents by timestamp (CR 613.7).
         if permanents.shape[-1] == observation_schema.PERMANENT_DIM:
             permanents[..., observation_schema.PERMANENT_TIMESTAMP_INDEX] = 0
     else:

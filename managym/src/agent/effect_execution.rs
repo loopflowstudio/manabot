@@ -3,7 +3,7 @@
 //! One exhaustive walk over the suspended caller chain writes the policy
 //! occurrence: learning tokens carrying rules payloads and scalar progress, with
 //! object identities replaced by slots in an explicit visible-reference table
-//! that v8 relation rows join to the same objects legal actions use. The same
+//! that relation rows join to the same objects legal actions use. The same
 //! walk renders the complete text and plain-language summaries, but only when
 //! a decision context or capture asks for them: every policy observation runs
 //! it without strings. Neither raw game serialization nor storage IDs enter
@@ -18,7 +18,7 @@ use crate::{
     },
     cards::{content_pack::default_content_pack, tokens::TokenWriter},
     flow::{
-        decision::{Decision, EffectFrame, FrameCompletion, SelectionOrigin},
+        decision::{Decision, EffectFrame, FrameCompletion},
         event::GameEvent,
         game::{ActivationSource, Game, Payment},
         proposed_event::{
@@ -846,36 +846,7 @@ pub(crate) fn project_frame(
     if let Some(batch) = &effect.batch {
         out.batch(batch);
     }
-    // Ordinary catalog execution keeps its frozen projection: v1-v7 never
-    // encoded earlier instructions' results (selected, moved, created), so a
-    // later choice in the same program stays admissible. These retained domains
-    // have no predecessor representation and must be admitted explicitly.
-    frame.effect_execution_requires_v8 = effect.batch.is_some()
-        || effect.iteration.is_some()
-        || completion_requires_v8(game, &effect.completion);
     out.finish(frame);
-}
-
-fn completion_requires_v8(game: &Game, completion: &FrameCompletion) -> bool {
-    match completion {
-        FrameCompletion::Paid { .. }
-        | FrameCompletion::Activated { .. }
-        | FrameCompletion::StateBased { .. }
-        | FrameCompletion::CombatNormal => true,
-        FrameCompletion::Event { event, .. } => {
-            // The frozen obligation already names these operation completions.
-            // A different saved event under the same current offers (e.g. a
-            // nested modal choice) is not implied and needs the v8 payload.
-            let decision = game.state.suspended_decision.as_ref().map(|s| &s.decision);
-            !matches!((event, decision),
-                (GameEvent::Scried { player }, Some(Decision::Scry { player: chooser, .. }))
-                | (GameEvent::Surveilled { player }, Some(Decision::Surveil { player: chooser, .. }))
-                | (GameEvent::LibrarySearched { player }, Some(Decision::SelectCards {
-                    player: chooser, origin: SelectionOrigin::Library, ..
-                })) if player == chooser)
-        }
-        _ => false,
-    }
 }
 
 /// Project a suspended decision's retained progress; see [`project_frame`].
@@ -906,9 +877,6 @@ pub(crate) fn project_decision(
             });
             out.effects("after selection", effects);
             out.effects("if none selected", if_declined);
-            // A migrated domain keeps its frozen obligation code across picks:
-            // its predecessor never encoded the picks already made either.
-            frame.effect_execution_requires_v8 = frame.legacy_decision.is_none();
         }
         Decision::OrderReplacement { candidates, .. } => {
             for (index, candidate) in candidates.iter().enumerate() {
@@ -917,7 +885,6 @@ pub(crate) fn project_decision(
                 out.field("replacement", &candidate.effect);
                 out.note(|| candidate.description());
             }
-            frame.effect_execution_requires_v8 = true;
         }
         Decision::Scry {
             looked,

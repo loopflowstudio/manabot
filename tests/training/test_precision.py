@@ -22,11 +22,11 @@ from manabot.training.rollout.collection import SeatRoutedCollector
 
 
 def test_float32_regimes_keep_their_bytes() -> None:
-    # Step 2's frozen D1 regime (protocol freeze receipt, `0366ff8d…1c3e`).
+    # The D1 packing regime omits the input version, so it resolves to v9.
     d1 = TrainingJob.model_validate_json(packing.runs("HEAD", "d1")[0].job.config or "")
     assert (
         canonical_sha256(d1.regime.model_dump(mode="json"))
-        == "0366ff8d8548a0540976b7e3bb26b96f9326b82b250bfa11539cf197bc731c3e"
+        == "5684d15da200eef2c9169b75cce8b54dd643e22a0201a148be80bf2958505b84"
     )
     assert Execution().model_dump()["precision"] == "float32"
 

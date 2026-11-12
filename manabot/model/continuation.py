@@ -1,6 +1,6 @@
 """Stateless current-decision context from current stack/continuation relations.
 
-Rows [B,64,32/33/49] retain frame order, parent links and target clauses. Definition
+Rows [B,64,49] retain frame order, parent links and target clauses. Definition
 IDs join the existing catalog; object indexes gather the current object table.
 Neither identifier is used as a numeric feature. Gradients reach the shared
 object/catalog encoders and this projection; no memory survives a decision.
@@ -47,7 +47,7 @@ class ContinuationEncoder(nn.Module):
             features_rows[..., :5],
             features_rows[..., 7:23],
             features_rows[..., 25:RELATION_VALID_INDEX],
-            # Empty for v2/v3; v4 retains eligibility after the validity column.
+            # Target eligibility and the spell terms follow the validity column.
             features_rows[..., RELATION_VALID_INDEX + 1 :],
         ]
         for column in (6, 24):
