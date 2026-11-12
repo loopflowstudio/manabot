@@ -24,8 +24,9 @@ from manabot.eval.admission import register_checkpoint
 from manabot.eval.evaluate import validate_registered_player
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.facts import FactEncoder
+from manabot.model.facts import FactEncoder, admit_facts
 from manabot.model.shared_effects import SharedEffectEncoder
 from manabot.recipes.local import local_smoke
 from manabot.semantic.text_observation import capture_text_decision, submit_response
@@ -103,7 +104,7 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     assert "exile" in capture_text_decision(env).text.lower()
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16, world=managym.WORLD_SETUP))
-    logits, value = model(values)
+    logits, value = model(admit_observation(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     (
         logits[values["actions_valid"].bool()].square().mean() + value.square().mean()
@@ -116,7 +117,11 @@ def test_layer_input_native_python_text_forward_backward_and_reload(
     save_checkpoint(model, space, path, player_configs=None)
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.encoder.config == config
-    for expected, actual in zip(model(values), restored(values), strict=True):
+    for expected, actual in zip(
+        model(admit_observation(model, values)),
+        restored(admit_observation(restored, values)),
+        strict=True,
+    ):
         torch.testing.assert_close(expected, actual)
 
 
@@ -202,7 +207,7 @@ def test_captured_continuation_program_reaches_native_python_and_policy() -> Non
     assert (reference["facts"][:, 1] == 14).sum() > 0
     values = {key: torch.from_numpy(value)[None] for key, value in reference.items()}
     model = ActorCritic(space, ModelConfig(hidden_dim=16))
-    logits, value = model(values)
+    logits, value = model(admit_observation(model, values))
     assert torch.isfinite(logits).all() and torch.isfinite(value).all()
     value.sum().backward()
     assert model.facts.output.weight.grad is not None
@@ -280,12 +285,12 @@ def test_fact_inference_preserves_sparse_rows_and_fresh_state(
     "column,value",
     [(FACT_VALID_INDEX, 0.5), (FACT_OBJECT_INDEX, 3), (FACT_KIND_INDEX, 99)],
 )
-def test_fact_inference_retains_input_validation(column: int, value: float) -> None:
+def test_fact_admission_rejects_malformed_rows(column: int, value: float) -> None:
     facts = torch.zeros(1, 32, FACT_DIM)
     facts[0, 31, FACT_VALID_INDEX] = 1
     facts[0, 31, column] = value
-    with torch.inference_mode(), pytest.raises(ValueError, match="fact"):
-        FactEncoder(8, 32)(facts, torch.zeros(1, 2, 8))
+    with pytest.raises(ValueError, match="fact"):
+        admit_facts(facts, 32, 2, None)
 
 
 def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() -> None:
@@ -344,10 +349,7 @@ def test_local_programs_preserve_ownership_order_multiplicity_and_gradients() ->
 
 
 @pytest.mark.parametrize("malformed", ["ordinal", "holder", "frame"])
-@pytest.mark.parametrize("grad_enabled", [False, True])
-def test_local_program_rejects_broken_boundaries(
-    malformed: str, grad_enabled: bool
-) -> None:
+def test_local_program_admission_rejects_broken_boundaries(malformed: str) -> None:
     rows = _program_rows(1, 1, (1, 2, 3))
     if malformed == "ordinal":
         rows[1, FACT_VALUE_INDEX + 1] = 3
@@ -355,12 +357,8 @@ def test_local_program_rejects_broken_boundaries(
         rows[1, FACT_OBJECT_INDEX] = 2
     else:
         rows[1, FACT_ID_INDEX + 1] = 2
-    encoder = FactEncoder(8, len(rows))
-    with (
-        torch.set_grad_enabled(grad_enabled),
-        pytest.raises(ValueError, match="fact program"),
-    ):
-        encoder(rows[None], torch.zeros(1, 2, 8))
+    with pytest.raises(ValueError, match="fact program"):
+        admit_facts(rows[None], len(rows), 2, None)
 
 
 def test_shared_program_order_joins_padding_multiplicity_and_numeric_gradients() -> (

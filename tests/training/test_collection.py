@@ -8,6 +8,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.admission import admit_observation
 from manabot.training.rollout.collection import (
     RolloutBatch,
     SeatRoutedCollector,
@@ -174,7 +175,7 @@ def test_collection_probabilities_and_bootstrap_survive_weight_change() -> None:
         for k, v in rows.observation.items()
     }
     with torch.no_grad():
-        logits, values = agent(flat)
+        logits, values = agent(admit_observation(agent, flat))
     np.testing.assert_allclose(
         second.values.flatten(), values.numpy().flatten(), atol=1e-5
     )

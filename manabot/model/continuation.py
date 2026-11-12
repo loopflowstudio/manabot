@@ -11,6 +11,32 @@ from torch import nn
 
 from manabot.env.observation import RELATION_ROWS, RELATION_VALID_INDEX
 
+# One-based object joins of a relation row (0: none).
+_OBJECT_COLUMNS = (6, 24)
+
+
+def admit_relations(rows: torch.Tensor, relation_dim: int, object_count: int) -> None:
+    """Reject malformed relation rows [B,64,relation_dim] before any forward."""
+    if rows.shape[1:] != (RELATION_ROWS, relation_dim):
+        raise ValueError(f"expected [batch, 64, {relation_dim}] relations")
+    valid = rows[..., RELATION_VALID_INDEX]
+    if not ((valid == 0) | (valid == 1)).all():
+        raise ValueError("relation validity must be binary")
+    clean = torch.where(valid.bool().unsqueeze(-1), rows, 0)
+    if not torch.isfinite(clean).all():
+        raise ValueError("relations must be finite")
+    for column in _OBJECT_COLUMNS:
+        indexes = clean[..., column]
+        if not (
+            (indexes == indexes.floor()) & (indexes >= 0) & (indexes <= object_count)
+        ).all():
+            raise ValueError("invalid continuation object reference")
+    ids = rows[..., 1]
+    if not (
+        ((ids == ids.floor()) & (ids >= 1) & (ids <= RELATION_ROWS)) | (valid == 0)
+    ).all():
+        raise ValueError("invalid continuation frame reference")
+
 
 class ContinuationEncoder(nn.Module):
     def __init__(self, width: int, relation_dim: int) -> None:
@@ -27,22 +53,14 @@ class ContinuationEncoder(nn.Module):
         rows: torch.Tensor,
         objects: torch.Tensor,
         definitions: torch.Tensor,
-        *,
-        count: int = RELATION_ROWS,
     ) -> torch.Tensor:
         """Return [B,R,D], zero for padding; shared by pooling and frame joins.
 
-        `count` is the admitted row count: the capacity, or a bucket the
-        caller trimmed the rows to.
+        Rows must be admitted (`admit_relations`); bucketed callers may trim
+        them to fewer than the capacity.
         """
-        if rows.shape[1:] != (count, self.relation_dim):
-            raise ValueError(f"expected [batch, 64, {self.relation_dim}] relations")
         valid = rows[..., RELATION_VALID_INDEX]
-        if not ((valid == 0) | (valid == 1)).all():
-            raise ValueError("relation validity must be binary")
         rows = torch.where(valid.bool().unsqueeze(-1), rows, 0)
-        if not torch.isfinite(rows).all():
-            raise ValueError("relations must be finite")
         # Waiting occurrence order (pending and delayed triggers) is
         # presentation, unlike public stack order. Retain its causal/ability
         # facts without treating frame joins as features.
@@ -56,14 +74,8 @@ class ContinuationEncoder(nn.Module):
             # Target eligibility and the spell terms follow the validity column.
             features_rows[..., RELATION_VALID_INDEX + 1 :],
         ]
-        for column in (6, 24):
+        for column in _OBJECT_COLUMNS:
             indexes = rows[..., column]
-            if not (
-                (indexes == indexes.floor())
-                & (indexes >= 0)
-                & (indexes <= objects.shape[1])
-            ).all():
-                raise ValueError("invalid continuation object reference")
             linked = objects.gather(
                 1,
                 (indexes.long() - 1)
@@ -93,10 +105,6 @@ class ContinuationEncoder(nn.Module):
         """
         ids = rows[..., 1]
         valid = rows[..., RELATION_VALID_INDEX]
-        if not (
-            ((ids == ids.floor()) & (ids >= 1) & (ids <= RELATION_ROWS)) | (valid == 0)
-        ).all():
-            raise ValueError("invalid continuation frame reference")
         indexes = (torch.where(valid.bool(), ids, 1).long() - 1).clamp_min(0)
         pooled = torch.zeros_like(encoded).scatter_add(
             1, indexes.unsqueeze(-1).expand_as(encoded), encoded

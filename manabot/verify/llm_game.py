@@ -29,6 +29,7 @@ from manabot.infra.config import MatchConfig
 from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.session import InferenceSession
 from manabot.model.checkpoint import load_checkpoint
+from manabot.model.inference import admit_on_device
 from manabot.model.world import validate_agent_setup
 from manabot.semantic.text_observation import (
     TextDecision,
@@ -158,10 +159,13 @@ class CheckpointOpponent:
         encoded = self.space.encode(raw)
         encoding_seconds = time.monotonic() - started
         started = time.monotonic()
-        tensors = {
-            name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
-            for name, value in encoded.items()
-        }
+        tensors = admit_on_device(
+            self.agent,
+            {
+                name: torch.as_tensor(value, dtype=torch.float32).unsqueeze(0)
+                for name, value in encoded.items()
+            },
+        )
         with torch.inference_mode():
             action, _, _, _ = self.agent.get_action_and_value(tensors)
         index = int(action.item())
