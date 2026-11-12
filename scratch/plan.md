@@ -60,7 +60,7 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   experiments, two-seat, bucketed shapes/execution, inference, mps, collection:
   all passed (several runs). After compress: boundaries, learner, bucketed
   shapes, inference, admission, learning pieces: 78 passed in 39 s.
-- CPU equivalence, 05c1203e9 vs HEAD (`/tmp/mtg325equiv/run.py`,
+- CPU equivalence, 05c1203e9 vs HEAD (`scratch/equivalence/run.py`,
   `compare.py`; base as a detached worktree with the same `.so`, one thread):
   1,676 tensors bitwise identical, 0 differ. Covers logits, values, a
   log-likelihood + value loss and every parameter gradient for 11 configs
@@ -100,7 +100,7 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 3. Register `"torch": "torch"` in `backends/parity.py` once #495 is on this
    branch (via #474/main), and run parity on a w160l8 capture.
 4. CUDA L4 check (under USD 3) with `bucketed_shapes` and `precision="tf32"`,
-   using `/tmp/mtg325equiv/run.py` (copy into the job) on both commits.
+   using `scratch/equivalence/run.py` on both commits.
    Re-run the CPU comparison after item 1 changes the forward.
 5. After #497 (MTG-319) merges to main: merge main in, move
    `manabot/model/live_tokens.py` into `manabot/backends/torch/` with
