@@ -796,6 +796,7 @@ def replay(
     }
     inputs = _inputs(captures)
     agent = _agent(captures, size, device)
+    receipt["bucketed_shapes"] = getattr(agent, "bucketed_shapes", None)
     receipt["parameters"] = sum(p.numel() for p in agent.parameters())
     receipt["weights"] = _state_digest(agent)
     receipt["inference_rows"] = [len(o["actions_valid"]) for o in inputs["inference"]]
@@ -1086,6 +1087,7 @@ def analyze(out: Path) -> dict[str, Any]:
             k: receipt.get(k)
             for k in (
                 "status",
+                "bucketed_shapes",
                 "parameters",
                 "weights",
                 "inference_peaks",
