@@ -38,6 +38,7 @@ class TinyPolicy(torch.nn.Module):
 def _stub_admission(monkeypatch: pytest.MonkeyPatch) -> None:
     """TinyPolicy tests the learning rule; it reads no policy input to admit."""
     monkeypatch.setattr(learner_module, "admit_observation", lambda agent, obs: obs)
+    monkeypatch.setattr(learner_module, "check_observation", lambda agent, obs: None)
     monkeypatch.setattr(learner_module, "bind_admitted", lambda agent, obs: obs)
     monkeypatch.setattr(
         learner_module, "transfer_admitted", lambda admitted, device: (admitted, 0)
