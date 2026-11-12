@@ -3,7 +3,7 @@ use managym_state::{
         Ability, Effect, ObjectSelector, PlayerSelector, TargetRequirement, TargetSpec,
         TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes},
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     effect::{EffectDuration, Modification},
     mana::ManaCost,
 };
@@ -11,6 +11,7 @@ use managym_state::{
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
         corrupt_court_official(),
+        diaochan_artful_beauty(),
         empty_city_ruse(),
         taunting_challenge(),
     ]
@@ -37,6 +38,39 @@ fn corrupt_court_official() -> CardDefinition {
                 what: ObjectSelector::Target(TargetSpec::Opponent),
                 count: 1,
             }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn diaochan_artful_beauty() -> CardDefinition {
+    let text_box = "{T}: Destroy target creature of your choice, then destroy target creature of an opponent's choice. Activate only during your turn, before attackers are declared.";
+    let destroy = |opponent_chooses: bool| Effect::TargetClause {
+        requirement: TargetRequirement {
+            opponent_chooses,
+            ..TargetRequirement::one(TargetSpec::Creature)
+        },
+        effects: vec![Effect::destroy(ObjectSelector::Target(
+            TargetSpec::Creature,
+        ))],
+    };
+    CardDefinition {
+        key: "ptk.diaochan_artful_beauty",
+        scryfall_id: "6180c476-dadf-4c03-ab1e-639386bd4319",
+        name: "Diaochan, Artful Beauty".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Advisor".into()],
+        power: Some(1),
+        toughness: Some(1),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            own_turn_only: true,
+            before_attackers: true,
+            effects: vec![destroy(false), destroy(true)],
+            ..Default::default()
         }],
         text_box: text_box.into(),
         ..Default::default()

@@ -524,17 +524,36 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// The activation's targeting clause (CR 602.2b, 601.2c); activated
-    /// abilities have at most one.
-    pub fn target_requirement(&self) -> Option<TargetRequirement> {
-        self.target_spec()?;
-        effect_target_requirements(&self.effects).into_iter().next()
+    /// The activation's targeting clauses (CR 602.2b, 601.2c), in order.
+    /// Of several clauses each names a fixed number of targets, so a target's
+    /// position names its clause (`target_clause_indices`).
+    pub fn target_requirements(&self) -> Vec<TargetRequirement> {
+        if self.target_spec().is_none() {
+            return Vec::new();
+        }
+        effect_target_requirements(&self.effects)
     }
 
     /// The activation cannot proceed without choosing a target.
     pub fn requires_target(&self) -> bool {
-        self.target_requirement()
-            .is_some_and(|requirement| requirement.min > 0)
+        self.target_requirements()
+            .iter()
+            .any(|requirement| requirement.min > 0)
+    }
+
+    /// The clause of each of the first `count` chosen targets; empty for a
+    /// single clause, whose targets are all clause 0.
+    pub fn target_clause_indices(&self, count: usize) -> Vec<usize> {
+        let requirements = self.target_requirements();
+        if requirements.len() < 2 {
+            return Vec::new();
+        }
+        requirements
+            .iter()
+            .enumerate()
+            .flat_map(|(index, requirement)| std::iter::repeat_n(index, requirement.max))
+            .take(count)
+            .collect()
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
@@ -636,6 +655,10 @@ pub struct ActivatedAbilityDefinition {
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
+    /// "Activate only ... before attackers are declared": before the turn's
+    /// declare attackers step.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub before_attackers: bool,
     #[serde(skip_serializing_if = "crate::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

@@ -272,9 +272,12 @@ impl Game {
             .attached
             .and_then(|object| self.lookup_current_permanent(object).ok())
             .map(Target::Permanent);
-        let Some(targets) =
-            self.resolution_targets(&ability.targets, &[], &requirements, ability.controller)
-        else {
+        let Some(targets) = self.resolution_targets(
+            &ability.targets,
+            &ability.target_req_indices,
+            &requirements,
+            ability.controller,
+        ) else {
             return;
         };
 

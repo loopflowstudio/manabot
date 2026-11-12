@@ -1194,7 +1194,26 @@ impl Game {
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {
             return Err(AgentError("activation requires sorcery timing".into()));
         }
+        if ability.before_attackers && !self.before_attackers_declared() {
+            return Err(AgentError(
+                "activation requires a time before attackers".into(),
+            ));
+        }
         Ok(())
+    }
+
+    /// Whether this turn's attackers are not yet declared: the beginning
+    /// phase, the first main phase or the beginning of combat.
+    fn before_attackers_declared(&self) -> bool {
+        match self.state.turn.current_phase_kind() {
+            crate::flow::turn::PhaseKind::Beginning
+            | crate::flow::turn::PhaseKind::PrecombatMain => true,
+            crate::flow::turn::PhaseKind::Combat => {
+                self.state.turn.current_step_kind()
+                    == crate::flow::turn::StepKind::BeginningOfCombat
+            }
+            _ => false,
+        }
     }
 
     /// The ability at `ability_index` of `card` when the card is in the
@@ -1259,11 +1278,12 @@ impl Game {
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) -> Result<(), AgentError> {
-        if ability.requires_target()
-            && self
-                .activated_ability_targets(player, source, ability_index, &[])
-                .is_empty()
-        {
+        let requirements = ability.target_requirements();
+        debug_assert!(
+            requirements.len() < 2 || requirements.iter().all(|r| r.min == r.max),
+            "several activation clauses each name a fixed number of targets"
+        );
+        if !self.activation_targets_available(player, source, ability_index) {
             return Err(AgentError("no legal ability targets".into()));
         }
         self.pending_choice = Some(PendingChoice::ActivatedTarget {
@@ -1271,35 +1291,101 @@ impl Game {
             source,
             ability_index,
             chosen: Vec::new(),
+            requirement: 0,
         });
         Ok(())
     }
 
-    /// The targeting clause of the activation in progress.
+    /// Whether every required targeting clause has a legal candidate.
+    pub(crate) fn activation_targets_available(
+        &self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+    ) -> bool {
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return false;
+        };
+        ability
+            .target_requirements()
+            .iter()
+            .enumerate()
+            .all(|(index, requirement)| {
+                requirement.min == 0
+                    || !self
+                        .activated_ability_targets(player, source, ability_index, index, &[])
+                        .is_empty()
+            })
+    }
+
+    /// Targeting clause `requirement` of the activation in progress.
     fn activation_target_requirement(
         &self,
         source: ActivationSource,
         ability_index: usize,
+        requirement: usize,
     ) -> Option<TargetRequirement> {
         self.activation_ability(source, ability_index)?
-            .target_requirement()
+            .target_requirements()
+            .get(requirement)
+            .cloned()
     }
 
-    /// Targets the activation can choose next, given those already `chosen`.
-    /// Under "that share a creature type", a target is offered only with
-    /// the chosen ones and, while the minimum is unmet, a remaining partner.
+    /// Who chooses clause `requirement` of `player`'s activation: they do,
+    /// or their opponent for "of an opponent's choice".
+    pub(crate) fn activation_target_chooser(
+        &self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        requirement: usize,
+    ) -> PlayerId {
+        match self.activation_target_requirement(source, ability_index, requirement) {
+            Some(clause) if clause.opponent_chooses => PlayerId(1 - player.0),
+            _ => player,
+        }
+    }
+
+    /// The targets already chosen for clause `requirement`.
+    fn activation_clause_chosen(
+        &self,
+        source: ActivationSource,
+        ability_index: usize,
+        requirement: usize,
+        chosen: &[Target],
+    ) -> Vec<Target> {
+        let Some(ability) = self.activation_ability(source, ability_index) else {
+            return Vec::new();
+        };
+        let indices = ability.target_clause_indices(chosen.len());
+        chosen
+            .iter()
+            .enumerate()
+            .filter(|(slot, _)| indices.get(*slot).copied().unwrap_or(0) == requirement)
+            .map(|(_, target)| *target)
+            .collect()
+    }
+
+    /// Targets clause `requirement` of `player`'s activation can choose
+    /// next, given those already `chosen` (all clauses). Legality is from
+    /// `player`'s side whoever chooses. Under "that share a creature type",
+    /// a target is offered only with the chosen ones and, while the minimum
+    /// is unmet, a remaining partner.
     pub(crate) fn activated_ability_targets(
         &self,
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
+        requirement: usize,
         chosen: &[Target],
     ) -> Vec<Target> {
-        let Some(requirement) = self.activation_target_requirement(source, ability_index) else {
+        let Some(clause) = self.activation_target_requirement(source, ability_index, requirement)
+        else {
             return Vec::new();
         };
+        let chosen = self.activation_clause_chosen(source, ability_index, requirement, chosen);
         let candidates: Vec<Target> = self
-            .legal_targets_for_spec(&requirement.spec, player)
+            .legal_targets_for_spec(&clause.spec, player)
             .into_iter()
             .filter(|target| {
                 let is_source = match source {
@@ -1311,10 +1397,10 @@ impl Game {
                 !is_source && !chosen.contains(target)
             })
             .collect();
-        if !requirement.shares_creature_type {
+        if !clause.shares_creature_type {
             return candidates;
         }
-        let needs_partner = chosen.len() + 1 < requirement.min;
+        let needs_partner = chosen.len() + 1 < clause.min;
         candidates
             .iter()
             .copied()
@@ -1348,65 +1434,124 @@ impl Game {
         common.is_some_and(|common| !common.is_empty())
     }
 
-    /// Finish choosing activation targets once the clause's minimum is met.
-    pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
+    /// The pending activation targeting and its current chooser.
+    fn pending_activated_target(
+        &self,
+    ) -> Result<
+        (
+            PlayerId,
+            ActivationSource,
+            usize,
+            Vec<Target>,
+            usize,
+            PlayerId,
+        ),
+        AgentError,
+    > {
         let Some(PendingChoice::ActivatedTarget {
-            player: chooser,
+            player,
             source,
             ability_index,
             chosen,
+            requirement,
         }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let requirement = self
-            .activation_target_requirement(source, ability_index)
+        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
+        Ok((player, source, ability_index, chosen, requirement, chooser))
+    }
+
+    /// Finish choosing the current clause's targets once its minimum is met.
+    pub(crate) fn decline_activated_target(&mut self, actor: PlayerId) -> Result<(), AgentError> {
+        let (player, source, ability_index, chosen, requirement, chooser) =
+            self.pending_activated_target()?;
+        let clause = self
+            .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        if chooser != player || chosen.len() < requirement.min {
+        let count = self
+            .activation_clause_chosen(source, ability_index, requirement, &chosen)
+            .len();
+        if chooser != actor || count < clause.min {
             return Err(AgentError("target required".into()));
         }
-        self.begin_activation_payment(player, source, ability_index, chosen, 0)
+        self.next_activation_clause(player, source, ability_index, requirement + 1, chosen)
     }
 
     pub(crate) fn choose_activated_target(
         &mut self,
-        player: PlayerId,
+        actor: PlayerId,
         target: Target,
     ) -> Result<(), AgentError> {
-        let Some(PendingChoice::ActivatedTarget {
-            player: chooser,
-            source,
-            ability_index,
-            mut chosen,
-        }) = self.pending_choice.clone()
-        else {
-            return Err(AgentError("no activated target pending".into()));
-        };
-        if player != chooser
+        let (player, source, ability_index, mut chosen, requirement, chooser) =
+            self.pending_activated_target()?;
+        if actor != chooser
             || !self
-                .activated_ability_targets(player, source, ability_index, &chosen)
+                .activated_ability_targets(player, source, ability_index, requirement, &chosen)
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        let requirement = self
-            .activation_target_requirement(source, ability_index)
+        let clause = self
+            .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
         chosen.push(target);
-        if chosen.len() >= requirement.max
+        let count = self
+            .activation_clause_chosen(source, ability_index, requirement, &chosen)
+            .len();
+        if count >= clause.max
             || self
-                .activated_ability_targets(player, source, ability_index, &chosen)
+                .activated_ability_targets(player, source, ability_index, requirement, &chosen)
                 .is_empty()
         {
-            return self.begin_activation_payment(player, source, ability_index, chosen, 0);
+            return self.next_activation_clause(
+                player,
+                source,
+                ability_index,
+                requirement + 1,
+                chosen,
+            );
         }
         self.pending_choice = Some(PendingChoice::ActivatedTarget {
             player,
             source,
             ability_index,
             chosen,
+            requirement,
         });
         Ok(())
+    }
+
+    /// Move on to clause `requirement`, skipping optional clauses without a
+    /// candidate, or to payment once every clause is chosen.
+    fn next_activation_clause(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        mut requirement: usize,
+        chosen: Vec<Target>,
+    ) -> Result<(), AgentError> {
+        while let Some(clause) =
+            self.activation_target_requirement(source, ability_index, requirement)
+        {
+            if clause.min > 0
+                || !self
+                    .activated_ability_targets(player, source, ability_index, requirement, &chosen)
+                    .is_empty()
+            {
+                self.pending_choice = Some(PendingChoice::ActivatedTarget {
+                    player,
+                    source,
+                    ability_index,
+                    chosen,
+                    requirement,
+                });
+                return Ok(());
+            }
+            requirement += 1;
+        }
+        self.begin_activation_payment(player, source, ability_index, chosen, 0)
     }
 
     pub(crate) fn payment_candidates(
@@ -2110,6 +2255,7 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         Ok((
             ActivatedAbilityOnStack {
+                target_req_indices: ability.target_clause_indices(targets.len()),
                 effects: ability.effects,
                 program,
                 source_transforms,
@@ -2152,6 +2298,7 @@ impl Game {
         let id = self.state.id_gen_mut().next_id();
         Ok((
             ActivatedAbilityOnStack {
+                target_req_indices: ability.target_clause_indices(targets.len()),
                 effects: ability.effects,
                 program: false,
                 source_transforms: 0,

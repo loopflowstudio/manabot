@@ -613,7 +613,7 @@ impl Game {
                     ..Default::default()
                 });
                 frame.source_transforms = ability.source_transforms;
-                &[]
+                &ability.target_req_indices
             }
             StackObject::TriggeredAbility(ability) => {
                 frame.kind = 3;
@@ -700,12 +700,17 @@ impl Game {
                 source,
                 ability_index,
                 chosen,
+                requirement,
                 ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
-                frame.active_clause = Some(0);
-                frame.targets = self.clause_targets(chosen, &[], viewer);
+                frame.active_clause = Some(*requirement);
+                let clauses = self
+                    .activation_ability(*source, *ability_index)
+                    .map(|ability| ability.target_clause_indices(chosen.len()))
+                    .unwrap_or_default();
+                frame.targets = self.clause_targets(chosen, &clauses, viewer);
             }
             PendingChoice::DiscardPayment {
                 source,

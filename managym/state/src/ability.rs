@@ -1335,6 +1335,11 @@ pub struct TargetRequirement {
     /// The targets in this clause have total mana value at most X.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub total_mana_value_x: bool,
+    /// "Target creature of an opponent's choice": the controller's opponent
+    /// chooses this clause's targets as the ability is activated; legality
+    /// is still from the controller's side (CR 115.4).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub opponent_chooses: bool,
 }
 
 impl TargetRequirement {
@@ -1351,6 +1356,7 @@ impl TargetRequirement {
             another: false,
             max_x: false,
             total_mana_value_x: false,
+            opponent_chooses: false,
         }
     }
 

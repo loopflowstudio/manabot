@@ -2,7 +2,7 @@
 
 use crate::support::{
     game::{clear_summoning_sickness, five_color_setup},
-    play::{cast, choose, settle, target_opponent},
+    play::{activate, cast, choose, offers_ability, settle, target_opponent},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -12,6 +12,40 @@ use managym::{
         game_object::{PlayerId, Target},
     },
 };
+
+/// Diaochan's controller chooses the first target and the opponent the
+/// second (here the controller's own creature); both are destroyed. It is
+/// offered only on its controller's turn before attackers are declared.
+#[test]
+fn diaochan_destroys_a_creature_of_each_players_choice() {
+    let mut s = five_color_setup(&["Diaochan, Artful Beauty", "Gray Ogre"]);
+    let diaochan = s.force_permanent_on_battlefield(0, "Diaochan, Artful Beauty");
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_summoning_sickness(&mut s, diaochan);
+    activate(&mut s, diaochan, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert_eq!(
+        s.action_space().player,
+        Some(PlayerId(1)),
+        "the opponent chooses the second target"
+    );
+    assert!(s.choose_target(Target::Permanent(mine)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[mine].is_none());
+    assert!(s.game().state.permanents[theirs].is_none());
+
+    s.game_mut().state.permanents[diaochan]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert!(!offers_ability(&mut s, diaochan, 0), "after attackers");
+}
 
 /// The opponent's whole next turn has no combat phase; the record then ends,
 /// so the turn after it has combat again.

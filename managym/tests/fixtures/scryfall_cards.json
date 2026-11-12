@@ -5731,5 +5731,17 @@
     "colors": [
       "U"
     ]
+  },
+  "Diaochan, Artful Beauty": {
+    "name": "Diaochan, Artful Beauty",
+    "mana_cost": "{3}{R}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Destroy target creature of your choice, then destroy target creature of an opponent's choice. Activate only during your turn, before attackers are declared.",
+    "colors": [
+      "R"
+    ]
   }
 }

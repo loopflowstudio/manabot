@@ -269,10 +269,7 @@ impl Game {
             {
                 let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
-                    || (ability.requires_target()
-                        && self
-                            .activated_ability_targets(player, source, ability_index, &[])
-                            .is_empty())
+                    || !self.activation_targets_available(player, source, ability_index)
                 {
                     continue;
                 }
@@ -377,10 +374,7 @@ impl Game {
                     };
                     let source = ActivationSource::Card(card);
                     if self.check_activation_terms(player, &ability).is_err()
-                        || (ability.requires_target()
-                            && self
-                                .activated_ability_targets(player, source, ability_index, &[])
-                                .is_empty())
+                        || !self.activation_targets_available(player, source, ability_index)
                     {
                         continue;
                     }
@@ -633,23 +627,35 @@ impl Game {
                 source,
                 ability_index,
                 chosen,
+                requirement,
             } => {
+                let chooser =
+                    self.activation_target_chooser(*player, *source, *ability_index, *requirement);
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(*player, *source, *ability_index, chosen)
+                    .activated_ability_targets(
+                        *player,
+                        *source,
+                        *ability_index,
+                        *requirement,
+                        chosen,
+                    )
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
-                        player: *player,
+                        player: chooser,
                         target,
                     })
                     .collect();
-                let requirement = self
-                    .activation_ability(*source, *ability_index)?
-                    .target_requirement()?;
-                if chosen.len() >= requirement.min {
-                    actions.push(Action::Decline { player: *player });
+                let ability = self.activation_ability(*source, *ability_index)?;
+                let clause = ability.target_requirements().get(*requirement)?.clone();
+                let indices = ability.target_clause_indices(chosen.len());
+                let in_clause = (0..chosen.len())
+                    .filter(|slot| indices.get(*slot).copied().unwrap_or(0) == *requirement)
+                    .count();
+                if in_clause >= clause.min {
+                    actions.push(Action::Decline { player: chooser });
                 }
                 Some(ActionSpace {
-                    player: Some(*player),
+                    player: Some(chooser),
                     kind: ActionSpaceKind::ChooseTarget,
                     actions,
                     focus: Vec::new(),
