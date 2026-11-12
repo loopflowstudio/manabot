@@ -43,8 +43,9 @@ from typing import Any, cast
 import numpy as np
 import torch
 
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.rl import selected_mean
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import load_checkpoint
 from manabot.model.policy_distribution import legal_mask
 from manabot.policy.checkpoint import (
     UnsupportedPolicy,
@@ -59,7 +60,6 @@ from manabot.policy.protocol import (
     Settings,
     Targets,
 )
-from manabot.rl.selection import selected_mean
 from manabot.training.updates.damped_policy import damped_policy_loss
 from manabot.training.updates.references import (
     reference_distribution as torch_reference,

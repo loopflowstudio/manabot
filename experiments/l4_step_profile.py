@@ -542,7 +542,7 @@ def infer_once(
 ) -> dict[str, Any]:
     """Collection's preparation and `Policy inference and action selection` block."""
     from manabot.model.policy_distribution import legal_mask, policy_logs
-    from manabot.rl.numerics import require
+    from manabot.backends.torch.rl import require
 
     with torch.profiler.record_function("mtg301/prepare"):
         obs_t = inference.prepare(obs)
@@ -576,9 +576,9 @@ def learn_once(
     from manabot.model.admission import admit_observation
     from manabot.model.inference import transfer_admitted
     from manabot.model.policy_distribution import legal_mask, policy_logs
-    from manabot.rl.losses import reverse_kl
-    from manabot.rl.numerics import float64_operand
-    from manabot.rl.selection import selected_mean
+    from manabot.backends.torch.rl import reverse_kl
+    from manabot.backends.torch.rl import float64_operand
+    from manabot.backends.torch.rl import selected_mean
     from manabot.training.regime import DampedPolicyLearning
     from manabot.training.updates.damped_policy import damped_policy_loss
     from manabot.training.updates.learner import observation_tensors

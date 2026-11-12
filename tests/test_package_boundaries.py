@@ -40,71 +40,6 @@ def test_manabot_never_imports_academy() -> None:
     assert violations == []
 
 
-_FRAMEWORKS = ("torch", "mlx", "jax", "jaxlib", "flax")
-_BACKENDS = REPO_ROOT / "manabot/backends"
-
-
-def _manabot_imports() -> list[tuple[Path, int, str]]:
-    return [
-        (path, line, module)
-        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
-        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-    ]
-
-
-def test_policy_contract_imports_no_array_framework() -> None:
-    policy = REPO_ROOT / "manabot/policy"
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if policy in path.parents
-        and (
-            module.split(".")[0] in _FRAMEWORKS
-            or module == "manabot.backends"
-            or module.startswith("manabot.backends.")
-        )
-    ]
-    assert violations == []
-    # Transitively too: the shared preparation and container load no framework.
-    probe = textwrap.dedent(
-        f"""
-        import sys
-        import manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
-        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
-        assert not loaded, loaded
-        """
-    )
-    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
-
-
-def test_only_the_mlx_backend_imports_mlx() -> None:
-    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
-    # every other module import neither it nor any backend, eagerly or lazily.
-    mlx = _BACKENDS / "mlx"
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
-        or (
-            (module == "manabot.backends" or module.startswith("manabot.backends."))
-            and _BACKENDS not in path.parents
-        )
-    ]
-    assert violations == []
-
-
-def test_backends_never_import_each_other() -> None:
-    violations = [
-        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path, line, module in _manabot_imports()
-        if _BACKENDS in path.parents
-        and path.parent != _BACKENDS
-        and module.startswith("manabot.backends.")
-        and module.split(".")[2] != path.relative_to(_BACKENDS).parts[0]
-    ]
-    assert violations == []
-
-
 class _RefuseAcademy(importlib.abc.MetaPathFinder):
     """Fail any attempt to import academy, as if it were not installed."""
 
@@ -392,12 +327,33 @@ def test_backends_never_import_each_other() -> None:
     assert violations == []
 
 
+def test_only_the_mlx_backend_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module import neither it nor its backend, eagerly or lazily.
+    # Outside `manabot/backends/`, only the torch backend is imported.
+    mlx = _BACKENDS / "mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
+        or (
+            module.startswith("manabot.backends.")
+            and module.split(".")[2] != "torch"
+            and _BACKENDS not in path.parents
+        )
+    ]
+    assert violations == []
+
+
 # Modules outside the torch backend that still import torch. Training,
 # evaluation, search and the model's components move behind a backend in later
 # changes; the list only shrinks, and a module that stops importing torch
 # leaves it.
 _TORCH_NOT_YET_MOVED = frozenset(
     (
+        # The converter and parity check read the PyTorch reference.
+        "manabot/backends/convert.py",
+        "manabot/backends/parity.py",
         "manabot/belief/agent.py",
         "manabot/belief/checkpoint.py",
         "manabot/belief/demo.py",
@@ -432,7 +388,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/model/records.py",
         "manabot/model/semantic_cards.py",
         "manabot/model/shared_effects.py",
-        "manabot/model/token_stream.py",
         "manabot/recipes/device.py",
         "manabot/reports/belief.py",
         "manabot/reports/selection.py",
@@ -551,3 +506,4 @@ def test_generic_learning_pieces_import_without_the_player() -> None:
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+

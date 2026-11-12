@@ -73,7 +73,7 @@ def capture(out: Path) -> None:
     import torch
 
     from experiments.tla_frontier import frozen
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PolicyInference
     from manabot.training.execution import execute_regime
     from manabot.training.regime import TrainingRegime
@@ -257,8 +257,8 @@ class TorchLearner:
         from manabot.model.admission import bind_admitted
         from manabot.model.inference import transfer_admitted
         from manabot.model.policy_distribution import legal_mask
-        from manabot.rl.numerics import float64_operand
-        from manabot.rl.selection import selected_mean
+        from manabot.backends.torch.rl import float64_operand
+        from manabot.backends.torch.rl import selected_mean
         from manabot.training.updates.damped_policy import damped_policy_loss
         from manabot.training.updates.references import reference_distribution
 
@@ -333,8 +333,8 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
     import torch
 
     from manabot.backends.mlx.checkpoint import build
-    from manabot.model.actor_critic import ActorCritic
-    from manabot.model.checkpoint import load_checkpoint
+    from manabot.backends.torch.policy import ActorCritic
+    from manabot.backends.torch.checkpoint import load_checkpoint
 
     agent, space = load_checkpoint(str(capture_dir / "initial.pt"))
     if width != agent.config.hidden_dim:
