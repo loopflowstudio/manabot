@@ -56,6 +56,12 @@ Second pass: `precision_ladder.py` dropped its copies of `training_runs` and the
 matchup builder (schedule 16/32/48/64 → learning_signal's 20/40 + end; report .md updated,
 prediction unchanged). `pytest test_experiments test_precision` → 35 passed.
 
+Third pass: inlined the one-caller `Execution.on_ladder` into
+`TrainingRegime.resolve_precision_ladder`; `precision_ladder.py`'s docstring and budget
+comment now name 256, `mtg324-l4-ab` and `--hours 10.9` (regime unchanged: `arm()` still
+reads `HOURS`). `pytest test_precision test_experiment_files test_regimes test_builders
+test_experiments` → 65 passed.
+
 ## Concept review (2026-11-12)
 Concepts hold: one authoring value (`auto`) that the regime resolves at build time, so
 every record names a real precision and resume never meets a moved threshold. Storing

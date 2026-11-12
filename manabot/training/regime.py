@@ -270,16 +270,6 @@ class Execution(Strict):
             raise ValueError("precision auto is resolved by the regime")
         return self.precision
 
-    def on_ladder(self, hidden_dim: int) -> "Execution":
-        """This execution with `auto` resolved for a model of `hidden_dim`."""
-        if self.precision != "auto":
-            return self
-        resolved = self.model_copy(
-            update={"precision": ladder_precision(self.device, hidden_dim)}
-        )
-        resolved._from_ladder = True
-        return resolved
-
 
 class Stage(Strict):
     id: str = Field(pattern=r"^[a-z][a-z0-9-]*$")
@@ -772,15 +762,16 @@ class TrainingRegime(Strict):
         Stages are copied, never mutated, so a stage instance shared by regimes
         of different widths resolves separately in each.
         """
-        width = self.agent.hidden_dim
-        self.stages = [
-            stage
-            if stage.execution.precision != "auto"
-            else stage.model_copy(
-                update={"execution": stage.execution.on_ladder(width)}
-            )
-            for stage in self.stages
-        ]
+        stages = []
+        for stage in self.stages:
+            execution = stage.execution
+            if execution.precision == "auto":
+                precision = ladder_precision(execution.device, self.agent.hidden_dim)
+                execution = execution.model_copy(update={"precision": precision})
+                execution._from_ladder = True
+                stage = stage.model_copy(update={"execution": execution})
+            stages.append(stage)
+        self.stages = stages
         return self
 
     def authored_dump(self) -> dict[str, object]:

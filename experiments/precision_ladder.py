@@ -1,7 +1,7 @@
 """Does BF16 learn the same as float32 at w384l8? The gate on the precision ladder (MTG-324).
 
 `Execution.precision="auto"` trains a CUDA model of width at least
-`BF16_MIN_HIDDEN_DIM` (384) in BF16. MTG-317 (`experiments/cuda_precision.md`)
+`BF16_MIN_HIDDEN_DIM` (256) in BF16. MTG-317 (`experiments/cuda_precision.md`)
 measured BF16 2–2.7× faster than float32 at w384l8 on an L4, but its 200-step
 replay could not tell same from different learning. This experiment trains the
 frontier recipe twice from the same seeds, once in each precision, and compares
@@ -23,8 +23,8 @@ against the frozen heuristic over 07c490's fifty held-out Elemental pairings
 against each float32 run at the last update both checkpointed.
 
     uv run --with "etude-sdk[s3,eval]==0.2.15" etude launch \\
-        experiments/precision_ladder.py --rent mtg324-l4 --parallel 4 \\
-        --cohort NAME --max-usd 32 --revision COMMIT
+        experiments/precision_ladder.py --rent mtg324-l4-ab --parallel 4 \\
+        --cohort NAME --max-usd 32 --revision COMMIT --hours 10.9
     uv run etude eval experiments/precision_ladder.py --rent cpu32 --source r2://manabot/jobs
     uv run etude report experiments/precision_ladder.py --source r2://manabot/jobs --open
 """
@@ -68,8 +68,10 @@ WIDTH, LAYERS, HEADS = 384, 8, 8
 # 100.6 s solo at a384l8 (experiments/training-update-time.md) and the L4 is
 # slower. Sizes the watchdog only; the damping horizon is `UPDATES` either way.
 FLOAT32_PACE_SECONDS = 150.0
-# 300 × 150 s plus setup and the final export: 12.8 h per run. Etude reserves the
-# window plus setup at the L4's USD 0.60/h ceiling, USD 7.85 per run, 31.40 for four.
+# 300 × 150 s plus setup and the final export: 12.8 h per run, which also sets
+# the regime's wall clock. The scored launch shortened only the job window
+# (`--hours 10.9` at a USD 0.70/h ceiling; experiments/precision_ladder.md § Status),
+# keeping USD 7.85 per run, 31.40 for four.
 HOURS = (UPDATES * FLOAT32_PACE_SECONDS + SETUP_SECONDS + FINALIZATION_SECONDS) / 3600
 USD_PER_RUN = 7.85
 EVALUATION = "precision-ladder-v1"
