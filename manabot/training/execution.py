@@ -1115,7 +1115,8 @@ def _execute_regime(
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
                         opponent_agent, opponent_space = load_checkpoint(
-                            str(opponent_path)
+                            str(opponent_path),
+                            bucketed_shapes=stage.execution.bucketed_shapes,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()

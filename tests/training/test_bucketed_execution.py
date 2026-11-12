@@ -5,14 +5,23 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
+from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.config import MatchConfig, ModelConfig
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.baseline import baseline_test
 from manabot.training import execution
-from manabot.training.regime import Execution, TrainingRegime, TrainSelfPlay
+from manabot.training.regime import (
+    Execution,
+    FrozenOpponent,
+    Learning,
+    TrainingRegime,
+    TrainSelfPlay,
+)
 from manabot.verify.store import VerifyStore
+import managym
 
 
 def _regime(**stage_execution: object) -> dict[str, object]:
@@ -83,3 +92,64 @@ def test_stage_execution_builds_the_trained_policy(
         with pytest.raises(_Built):
             execution.execute_regime(regime, 197, tmp_path / "run", store)
     assert built == [True]
+
+
+def test_frozen_opponent_runs_the_stage_setting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The frozen opponent's collection policy follows the learner's setting."""
+    model = ModelConfig(hidden_dim=8, num_attention_heads=2)
+    space = ObservationSpace()
+    path = tmp_path / "opponent.pt"
+    save_checkpoint(
+        ActorCritic(space, model),
+        space,
+        path,
+        player_configs=Match(MatchConfig()).to_rust(),
+    )
+    regime = TrainingRegime(
+        id="frozen-bucketed",
+        world=managym.WORLD_VERSION,
+        match=MatchConfig(),
+        agent=model,
+        stages=[
+            TrainSelfPlay(
+                id="attack",
+                operation="train_self_play",
+                behavior="frozen",
+                opponent=FrozenOpponent(path=str(path), sha256=file_sha256(path)),
+                batch_closure="exact-quota",
+                streams=2,
+                updates=1,
+                transitions=8,
+                learning=Learning(epochs=1, minibatches=1, retained_fraction=1),
+                execution=Execution(bucketed_shapes=True),
+            )
+        ],
+    )
+    opponents: list[bool] = []
+    learners: list[bool] = []
+
+    def load(
+        checkpoint: str, *, bucketed_shapes: bool = False
+    ) -> tuple[ActorCritic, ObservationSpace]:
+        agent, loaded = load_checkpoint(checkpoint, bucketed_shapes=bucketed_shapes)
+        opponents.append(agent.bucketed_shapes)
+        return agent, loaded
+
+    def build(
+        observation_space: ObservationSpace,
+        config: ModelConfig,
+        *,
+        bucketed_shapes: bool = False,
+    ) -> ActorCritic:
+        learners.append(bucketed_shapes)
+        raise _Built
+
+    monkeypatch.setattr(execution, "load_checkpoint", load)
+    monkeypatch.setattr(execution, "ActorCritic", build)
+    with VerifyStore(tmp_path / "training.sqlite") as store:
+        with pytest.raises(_Built):
+            execution.execute_regime(regime, 41, tmp_path / "run", store)
+    assert opponents == [True]
+    assert learners == [True]

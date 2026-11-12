@@ -164,7 +164,8 @@ from manabot.training.regime import Execution
 execution = Execution(device="cuda", bucketed_shapes=True)
 ```
 
-The stage's collection and learner policies then use bucketed shapes; its
+The stage's collection and learner policies, including a frozen opponent
+(`load_checkpoint(..., bucketed_shapes=True)`), then use bucketed shapes; its
 evaluation and search do not. `uv run manabot train --recipe baseline
 --bucketed-shapes` sets it on the CLI recipes ([run training](training.md#run-training)),
 and code that builds a policy directly passes
