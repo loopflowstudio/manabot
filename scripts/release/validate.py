@@ -69,8 +69,8 @@ def validate(directory: Path, complete: bool) -> None:
     requirements = {r.replace(" ", "").replace('"', "'") for r in bot.requirements}
     if not {
         f"managym=={bot.version}",
-        "torch>=2.10.0;sys_platform=='linux'",
-        "torch>=2.10.0;sys_platform!='linux'",
+        "torch>=2.15.0;sys_platform=='linux'",
+        "torch>=2.15.0;sys_platform!='linux'",
         "etude-sdk>=0.2.15",
     }.issubset(requirements):
         raise ValueError(

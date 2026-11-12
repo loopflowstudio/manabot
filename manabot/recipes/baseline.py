@@ -27,6 +27,7 @@ from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK
 from manabot.recipes.device import accelerator
 from manabot.sim.matchup import selected_match
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -117,9 +118,14 @@ def baseline(
 ) -> TrainingRecipe:
     """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
     selected = accelerator() if device is None else device
+    # Reject unadmitted MPS here: the experiment runner would only report it from
+    # the training child's log.
+    if selected == "mps" and (error := mps_torch_error()) is not None:
+        raise ValueError(error)
     if selected is None or selected == "cpu":
         raise ValueError(
-            "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
+            "baseline requires CUDA or an explicit --device mps; "
+            "use --recipe local for CPU"
         )
     return _baseline(
         steps, seconds=seconds, learning_seats=learning_seats, device=selected
