@@ -48,6 +48,10 @@ evaluation = [
     "etude-sdk[eval]>=0.2.16",
     "matplotlib>=3.9",
 ]
+# Apple Silicon only: the MLX policy and learner port (manabot/model/mlx.md).
+mlx = [
+    "mlx>=0.29 ; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
 play = [
     "maturin>=1.9.3,<2.0",
 ]

@@ -40,6 +40,22 @@ def test_manabot_never_imports_academy() -> None:
     assert violations == []
 
 
+def test_only_the_mlx_port_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module must import neither it nor the port, eagerly or lazily.
+    port = REPO_ROOT / "manabot/model/mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
+        if port not in path.parents
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+        if module.split(".")[0] == "mlx"
+        or module == "manabot.model.mlx"
+        or module.startswith("manabot.model.mlx.")
+    ]
+    assert violations == []
+
+
 class _RefuseAcademy(importlib.abc.MetaPathFinder):
     """Fail any attempt to import academy, as if it were not installed."""
 
