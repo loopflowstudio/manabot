@@ -373,14 +373,8 @@ optional payments, corpus admission, semantic-kernel evidence, clippy.
 
 ## Concept review after the thirteenth pass, 2026-11-12 UTC
 
-Found: `spells_cast` is "seen" in `observability.rs` only through the
-optional `recent_events` rows (off by default, 32 rows, documented as not
-needed for the rules state), so neither v9 nor v10 carries the count that
-Volcanic Torrent's damage and `YouCastNthSpellThisTurn` read. Direction (plan):
-a v10 `player_turn_state` column.
-
-Assumption taken (reversible): v9 adds no refusal for spells cast. A refusal
-would match the thirteenth-pass rule (a visible card reads state v9 lacks) but
-would stop v9 runs over main's TLA cards that already played on v9. The
-alternative, refusing v9 whenever such a card is visible, is one predicate in
-`input_v10_state`.
+Found `spells_cast` reached the policy only through the optional
+`recent_events` rows; fixed as v10 `player_turn_state` column 1 (plan).
+Assumption taken (reversible): v9 adds no refusal for spells cast, since that
+would stop v9 runs over main's TLA cards that already played on v9; the
+alternative is one predicate in `input_v10_state`.

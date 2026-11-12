@@ -167,9 +167,6 @@ buffers (open question on the one-input rule in `scratch/questions.md`).
 
 ## Spells cast this turn in v10 (fourteenth pass, done)
 
-The concept review found `TurnState.spells_cast` (Volcanic Torrent's
-`SpellsCastThisTurn`, `YouCastNthSpellThisTurn`, first-spell `SpellsCostLess`)
-"seen" only through the optional `recent_events` rows. Now
 `PlayerData.spells_cast` (derived from `TurnState.spells_cast`, the one owner)
 is v10 `player_turn_state` column 1 (/ 10), so the row is 2 × 8 (life lost,
 spells cast, six Powerstone-class mana values) in the native scalar/vector and
