@@ -25,38 +25,46 @@
   or using etude like we do". Docs present regime functions as how our
   maintained loops run and are recorded; writing your own is secondary.
 
-## Built
+## Built (commits on this branch)
 
 - `manabot/training/run.py`: `Run` (record, persist/export, clocks, seeds,
   monitoring, failure settlement), `StageScope`, `Model`, `open_run`,
-  `attempt` (lease + resume admission shared by both recipe kinds).
+  `attempt` (lease + resume admission shared by both recipe kinds);
+  `execute(regime, out=, seed=, resume_from=, recovery=, ...)`,
+  `smoke(regime, out=)`, `regime_record`, `load_regime`, `RunResult`.
+  A regime is any module-level function or `functools.partial` of one.
 - `manabot/training/stages.py`: stage bodies extracted from the old
-  `_execute_regime`; `run_saved_regime`; public `self_play`, `import_policy`,
-  `collect_belief`, `train_belief`.
-- `execution.py`: `validate_regime`, `_runtime_identities`, `execute_regime`
-  (attempt → open_run → run_saved_regime). Old 1,360-line body deleted.
-- Records: `RunRecord.regime` optional + `regime_call` (exactly one);
-  `StageRecord.operation` for function-run stages; `recovery_policy`,
-  `stage_operations()`.
-- Saved-regime suites pass after retargeting monkeypatches to `run`/`stages`
-  (17 training modules; one abrupt-exit failure was a mid-run commit moving
-  `source_commit`, not code).
+  `_execute_regime`; `run_saved_regime`, `smoke_form`; public `self_play`,
+  `import_policy`, `collect_belief`, `train_belief`. Function stages build a
+  one-stage `TrainingRegime` context validated by `validate_regime`.
+- `execution.py`: `validate_regime`, `_runtime_identities`, `execute_regime`.
+- Records: `RunRecord.regime` optional + `regime_function`
+  (`RegimeFunctionRecord`: function, arguments, sha, `SourceRevision`,
+  wall_seconds, recovery); `StageRecord.operation` and `.arguments`.
+- CLI `--function/--arguments/--smoke` (smoke also for saved regimes);
+  `TrainingJob.smoke(out)`; `experiments/two_models.py`.
+- `tests/training/test_regime_functions.py`: saved≡function bit-exact
+  (initial_raw/raw/ema), two models end to end, argument checks, smoke,
+  resume at an update boundary bit-exact, saved-regime smoke.
+- Docs rewritten for partials, smoke and the positioning steer.
 
 ## Remaining
 
-1. Function layer per steers: `execute(regime, ...)`, `smoke(regime)`,
-   identity from callable/partial (draft in /tmp/fn_layer.py used RegimeCall —
-   rework); stage records carry resolved stage arguments.
-2. `tests/training/test_regime_functions.py` (written against RegimeCall API;
-   rework to partials): saved≡function equivalence, two models, smoke,
-   resume at an update boundary.
-3. CLI `--function/--arguments/--smoke`; `TrainingJob(regime=callable)`,
-   `TrainingJob.smoke()`; one experiment file as a function (outcome 6).
-4. Docs: rename, partials, positioning; `RunPaused` → `TrainingPaused`.
-5. Gate: training suites, package boundaries, regime serialization tests.
+1. Gate: the whole-suite run stalled at 62% on a busy host (syspolicyd
+   ~180% CPU, load ~8) and was stopped. Module reruns: all pass except
+   test_etude_evaluation (4) and test_head_to_head (2): `No module named
+   'duckdb'`, and test_game_errors (3): fixture replay returns
+   `binding_mismatch`; the diff touches none of env/, game_errors, managym,
+   sim or fixtures. Not yet run to completion here: tests/training modules
+   after test_precision in collection order, test_package_boundaries,
+   tests/model/test_attack_choice, test_shared_effects, test_experiment_files.
+2. `TrainingJob(regime=callable)`: jobs are built around one saved
+   self-play stage (Etude `until=updates=N`, continuations, stop reserve);
+   a function job needs a declared update target. Docs say not yet.
+3. Outcome 6 (an existing Etude experiment file as a function) waits on 2.
+4. Function runs as producers for `import_policy` / learning-state
+   admission; game-error tolerance in function runs.
 
 ## Not in scope / deferred
 
 - Per-game result rows (MTG-282): docs do not promise them.
-- Function runs as producers for `import_policy`/learning-state admission
-  (admission reads `source.regime`); game-error recovery in function runs.

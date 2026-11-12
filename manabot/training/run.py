@@ -472,8 +472,8 @@ class Run:
 
     def metrics(self, values: Mapping[str, float], *, update: int) -> None:
         """Record named metrics of the regime's own at an update coordinate."""
-        if self.current is None:
-            raise ValueError("metrics belong to a stage; record them inside one")
+        if self.current is None or self.current.record.status != "running":
+            raise ValueError("metrics belong to a running stage; use run.stage(name)")
         self.current.record.diagnostics.append(
             {"update": update, **{key: float(value) for key, value in values.items()}}
         )
