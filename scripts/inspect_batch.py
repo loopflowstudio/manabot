@@ -21,7 +21,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.recipes.baseline import baseline_test
-from manabot.training.learning.learner import Learner
+from manabot.training.learning.learner import AdmittedRollout, Learner
 from manabot.training.loops.damped_policy import _targets, update_damped_iteration
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
@@ -52,7 +52,7 @@ def _trajectories(ends: np.ndarray) -> list[range]:
 def _report(
     batch: RolloutBatch, learner: Learner, learning: DampedPolicyLearning, rows: int
 ) -> None:
-    targets = _targets(learner, batch, learning)
+    targets = _targets(learner, AdmittedRollout(learner.agent, batch), learning)
     advantages = targets.advantages.flatten().numpy()
     value_targets = targets.values.flatten().numpy()
     kept = targets.selected.flatten().numpy()

@@ -70,3 +70,11 @@ Steer (Jack Heart, via comment 69b01701): "ok, lets do that. let me review a cle
 ## Docs (write-docs, rebuilt branch)
 
 Changed doc paths: `docs/training-loop.md` (the guide; Play table now lists `AdmittedRollout`, example is `minimal.py` verbatim), `docs/learning.md` (code table), `docs/training.md` (pointer), `README.md` (docs table), `manabot/README.md` (intro, package layout), `manabot/model/training.md`, `AGENTS.md` (deprecated-alias mechanism).
+
+## Per-file check pass (2026-11-12, after merging origin/main 92e476217)
+
+Steer: no pytest run of 5 minutes or longer; run changed files first, name the slow test. Every `tests/training` and `tests/model` file ran alone under a 280 s alarm: none hung; 96 files took 1,233 s in total. Slowest were test_training_throughput 125 s, test_experiment_runner 117 s and test_training_throughput_sizes 81 s, so the earlier 50-minute run was one serial process over the whole set, not a hang. Pieces, loops and boundaries: 125 passed in 19 s.
+- Fixed: `scripts/inspect_batch.py` passed a `RolloutBatch` to `_targets`, which takes an `AdmittedRollout` (broken on main too). test_inspect_batch_script passes.
+- Already on main: test_game_errors `binding_mismatch` (3 failures); test_training_throughput::test_a_packed_seed_digests_as_it_does_solo, because checkpoint `source/etude_run` (added in #464) differs between the solo and packed ETUDE_RUN names and the frozen experiment ignores only `bc/run_id`.
+- Flaky: test_attack_execution::test_selected_world_attack_cohort_replays_all_rungs, whose collector hits its 30 s training wall. It failed once and passed on the rerun, here (68 s) and on main (101 s).
+- Need duckdb, which is not installed here: test_etude_evaluation and test_head_to_head.
