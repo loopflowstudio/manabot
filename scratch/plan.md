@@ -20,11 +20,9 @@ not re-qualified on rented GPUs (say so in the PR).
 
 ## Concept review (2026-11-11): done
 
-`mps_torch_error()` claims only what was measured: Torch {version} is below the
-minimum; Torch 2.10 computed incorrect MPS gradients on learner minibatches.
-The remedy is generic (`uv sync --locked`, or train on CPU) because
-`execute_regime` raises the same text. Committed in 6b64a6bb3; test_mps_training
-+ test_baseline_recipe: 58 passed.
+`mps_torch_error()` claims only what was measured (wording below). The remedy
+is generic (`uv sync --locked`, or train on CPU) because `execute_regime` raises
+the same text. Committed in 6b64a6bb3, wording refined in 86b00b538.
 
 ## Root cause (for the PR description; steer 67f27f5c)
 
