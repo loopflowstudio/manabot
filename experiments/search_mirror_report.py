@@ -299,21 +299,38 @@ def _linear_contrast(
         "normal": nominal.to_json() if nominal else None,
         "cell_stratified_bootstrap": interval.to_json() if interval else None,
         "failure_sensitivity": [v / len(planned) for v in bounds],
-        "interpretation": _contrast_interpretation(len(common), len(planned), interval),
+        "interpretation": _contrast_interpretation(
+            len(common), len(planned), interval, [v / len(planned) for v in bounds]),
     }
 
 
-def _contrast_interpretation(paired_deals: int, planned: int, interval: Estimate | None) -> str:
-    """Describe coverage and interval direction without turning them into acceptance."""
-    if paired_deals < planned:
-        return "Unresolved full-schedule comparison: paired outcomes are missing."
-    if interval is None:
-        return "Unresolved uncertainty: stratified interval unavailable."
+def _direction(interval: Estimate) -> str:
     if interval.low > 0:
         return "Positive exploratory difference; interval above zero."
     if interval.high < 0:
         return "Negative exploratory difference; interval below zero."
     return "Inconclusive direction: interval includes zero; this does not establish equivalence."
+
+
+def _contrast_interpretation(paired_deals: int, planned: int, interval: Estimate | None,
+                             sensitivity: list[float] | None = None) -> str:
+    """Describe coverage and interval direction without turning them into acceptance.
+
+    An incomplete contrast stays unresolved. Its paired-subset direction and
+    whether the 0-1 missing-score bounds share one sign are described, not accepted.
+    """
+    if paired_deals < planned:
+        text = "Unresolved full-schedule comparison: paired outcomes are missing."
+        if interval is not None and paired_deals:
+            text += f" On the {paired_deals} paired deals: {_direction(interval)}"
+        if sensitivity is not None and paired_deals:
+            same_sign = sensitivity[0] > 0 or sensitivity[1] < 0
+            text += (" Both 0-1 failure bounds on the point estimate share one sign." if same_sign
+                     else " The 0-1 failure bounds on the point estimate include zero.")
+        return text
+    if interval is None:
+        return "Unresolved uncertainty: stratified interval unavailable."
+    return _direction(interval)
 
 
 def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow | GameRow]]) -> dict[str, Any]:
@@ -375,12 +392,14 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "planned_games": len(V2_ARMS) * len(games), "valid_games": valid,
         "missing_games": sum(a["coverage"]["missing"] for a in arms.values()),
         "invalid_games": sum(a["coverage"]["invalid"] for a in arms.values()),
-        "execution": remote.get("execution", "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness"),
+        "execution": validation.get("execution") or remote.get(
+            "execution", "not launched" if not remote["v2_directory_exists"] else "retained snapshot; review completeness"),
         "observed_utc": remote["observed_utc"],
         "snapshot_cutoffs": validation.get("snapshot_cutoffs", {}),
         "capacity_reason": receipts["launcher-inventory"].get("status_note") or receipts["launcher-inventory"].get("quote_error") or "no capacity error",
         "arms": arms, "control": _coverage(baselines.get("policy/policy", {}), games),
         "contrasts": [_linear_contrast(c, scores, games) for c in _factorial_contrasts()],
+        "scores": {a.key: {str(d): v for d, v in sorted(scores.get(a.key, {}).items())} for a in V2_ARMS},
         "context_only_arm": "policy/mirror-d20-b0.03-w4",
         "uncertainty": "exploratory; 10000 whole-deal resamples within fixed cells, seed 26901; complete vectors per contrast",
         "health": validation.get("health", "unassessed: no native smoke or games" if not records else "requires execution evidence review"),
@@ -388,7 +407,7 @@ def _extension_report(directory: Path, baselines: dict[str, dict[int, MirrorRow 
         "replay_identity": validation.get("replay_identity", "absent: no game attempts" if not records else "retained attempts are not replay proof"),
         "learning": "inference-only; no new training, checkpoint exports or training callbacks expected",
         "training_card_exposure": None, "generalization": "untested; reused decks, deals and one training seed",
-        "acceptance": "unresolved; missing outcomes establish neither gains nor equivalence",
+        "acceptance": validation.get("acceptance", "unresolved; missing outcomes establish neither gains nor equivalence"),
         "measured_eta_seconds": validation.get("measured_eta_seconds"),
         "timing_note": validation.get("timing_note", "No extension timing retained."),
         "inclusive_worker_hours": validation.get("inclusive_worker_hours"),
@@ -435,6 +454,11 @@ def _batching_section(extension: dict[str, Any]) -> str:
 
 
 def _extension_section(extension: dict[str, Any]) -> str:
+    return "".join(_extension_parts(extension))
+
+
+def _extension_parts(extension: dict[str, Any]) -> tuple[str, str]:
+    """Split the extension into its scientific tables and its execution/provenance appendix."""
     rows = []
     costs = []
     for arm in extension["arms"].values():
@@ -460,10 +484,14 @@ def _extension_section(extension: dict[str, Any]) -> str:
         contrasts.append(f'<tr><td>{escape(c["label"])}</td><td>{c["paired"]}/{c["planned"]}</td>'
                          f'<td>{_interval(c["normal"])}</td><td>{_interval(c["cell_stratified_bootstrap"])}</td>'
                          f'<td>[{100*lo:+.1f}, {100*hi:+.1f}]</td></tr>')
-        if c["paired"] == c["planned"]:
+        # With nothing unrun, every remaining gap is a retained failure; show its
+        # paired subset beside the full-denominator bounds instead of hiding it.
+        if c["paired"] == c["planned"] or (extension["missing_games"] == 0 and c["paired"]):
+            bounds = (f' Failure bounds [{100*lo:+.1f}, {100*hi:+.1f}].'
+                      if c["paired"] < c["planned"] else '')
             complete_findings.append(
                 f'<li>{escape(c["label"])}: <strong>{_interval(c["cell_stratified_bootstrap"])}</strong> '
-                f'points, {c["paired"]} paired deals. {escape(c["interpretation"])}</li>'
+                f'points, {c["paired"]}/{c["planned"]} paired deals.{bounds} {escape(c["interpretation"])}</li>'
             )
     findings_html = (
         '<h3>Completed paired comparisons</h3><ul>' + ''.join(complete_findings) + '</ul>'
@@ -471,7 +499,10 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'Repeated inspection and previously inspected deals make these exploratory, not confirmatory. '
         'These within-deal interventions keep decks, rules and the trained checkpoint fixed; '
         'they measure test-time search effects, not newly learned skill. '
-        'Completed comparisons do not complete the six-cell study or resolve its missing comparisons.</p>'
+        + ('Completed comparisons do not complete the six-cell study or resolve its missing comparisons.</p>'
+           if extension["missing_games"] else
+           'Every scheduled game ran; a retained scored failure stays out of the paired subset and its '
+           'contrasts remain unresolved under the declared rule.</p>')
         if complete_findings else ''
     )
     accounting = extension.get("execution_accounting")
@@ -521,12 +552,8 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'cross that implementation boundary. Fixed-root parity does not '
         'establish full-grid equivalence.</p></details>' if segment_rows else ''
     )
-    return (
-        _batching_section(extension) + '<h2>Extension: oracle versus uniform, 4 / 8 / 16 shuffles</h2>'
-        f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
-        f'{escape(extension["execution"])}.</strong> Per-shard snapshot cutoffs: {escape(snapshot_text)}. '
-        f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'
-        + transition_html +
+    results = (
+        '<details><summary>Every setting and declared comparison (shuffle and hand-sampler study)</summary>'
         '<p class="note">All six cells fix depth 20, α 0.02 and β 0.01 against the raw sampled MTG-183 '
         'checkpoint policy. The opponent has no search, mirror update, greedy or EMA substitution. '
         'Uniform samples physical unseen copies subject to public information; oracle retains the true hand. '
@@ -535,19 +562,30 @@ def _extension_section(extension: dict[str, Any]) -> str:
         '<div class="table-scroll" role="region" aria-label="Extension coverage" tabindex="0">'
         '<table><tr><th>Hands</th><th>Shuffles</th><th>Valid/planned</th><th>Missing</th><th>Invalid</th>'
         '<th>Score %, nominal 95%</th></tr>' + ''.join(rows) + '</table></div>'
-        '<p class="note">Partial snapshots follow the fixed execution order; completed deals need not '
-        'represent the full grid. Sparse nominal intervals cannot establish strength or shuffle effects. '
-        'A one-deal nominal interval is degenerate by convention, not an uncertainty estimate; zero-width '
-        'intervals from a few identical observed differences do not demonstrate equivalence.</p>'
+        + ('<p class="note">Partial snapshots follow the fixed execution order; completed deals need not '
+           'represent the full grid. Sparse nominal intervals cannot establish strength or shuffle effects. '
+           'A one-deal nominal interval is degenerate by convention, not an uncertainty estimate; zero-width '
+           'intervals from a few identical observed differences do not demonstrate equivalence.</p>'
+           if extension["missing_games"] else '')
         + findings_html +
-        '<details><summary>All planned paired contrasts and missing-evidence bounds</summary>'
+        '<h4>All declared contrasts and missing-evidence bounds</h4>'
         '<table><tr><th>Contrast</th><th>Paired/planned</th><th>Nominal 95%, points</th>'
-        '<th>Stratified 95%, points</th><th>Sensitivity, points</th></tr>' + ''.join(contrasts) + '</table></details>'
+        '<th>Stratified 95%, points</th><th>Sensitivity, points</th></tr>' + ''.join(contrasts) + '</table>'
         '<p class="note">Unavailable is not zero. Each contrast pairs all contributing scores on the same deal; '
         'the interaction is (uniform higher − uniform lower) − (oracle higher − oracle lower). '
         'Bootstrap resamples those complete vectors within fixed deck cells, 10,000 times with seed 26901; '
         'an empty cell makes that interval unavailable. Full-denominator sensitivity lets every missing score '
         'range from 0 to 1; these bounds are not confidence intervals. No direction of interaction is assumed.</p>'
+        '</details>'
+    )
+    provenance = (
+        _batching_section(extension) +
+        '<h3>Shuffle and hand-sampler study: execution</h3>'
+        f'<p><strong>{extension["valid_games"]:,}/{extension["planned_games"]:,} valid games; '
+        f'{escape(extension["execution"])}.</strong> Per-shard snapshot cutoffs: {escape(snapshot_text)}. '
+        f'Etude receipt: {escape(extension["capacity_reason"])}.</p>'
+        + transition_html +
+
         '<details><summary>Measured campaign cost for retained outcomes</summary>'
         '<table><tr><th>Hands</th><th>Shuffles</th><th>Search decisions</th>'
         '<th>Mean s/decision</th><th>Median / p95 s/decision</th><th>Mean wall s/game</th>'
@@ -584,13 +622,18 @@ def _extension_section(extension: dict[str, Any]) -> str:
         'Smoke outcomes are separate from the 3,000 planned games and establish no strength result. '
         'Policy-only timing stays in its separate historical table. No new rental spend is recorded. '
         f'{escape(extension["timing_note"])} '
-        'Complete worker CPU time, inclusive monetary cost and a reliable full-grid ETA remain unavailable. '
-        'The shared execution deadline remains November 16, 2026, 18:16:29 UTC. Missing games are neither '
-        'failed games nor evidence of no benefit. Training card '
+        + ('Complete worker CPU time, inclusive monetary cost and a reliable full-grid ETA remain unavailable. '
+           'The shared execution deadline remains November 16, 2026, 18:16:29 UTC. Missing games are neither '
+           'failed games nor evidence of no benefit. '
+           if extension["missing_games"] else
+           'Complete worker CPU time and inclusive monetary cost remain unmeasured. Execution finished before '
+           'the November 16, 2026, 18:16:29 UTC deadline. ') +
+        'Training card '
         'exposure remains absent independently of evaluation coverage; no new learning or generalization is '
         f'established. Acceptance: {escape(extension["acceptance"])}. '
         'Evidence review must retain these limits. This analysis starts no execution.</p>'
     )
+    return results, provenance
 
 
 # ---------------------------------------------------------------------------
@@ -628,6 +671,37 @@ def depth_chart(gains: dict[str, list[tuple[int, Estimate]]]) -> str:
                for d, e in gains[opponent]]
         body += _series(pts, x, y, f"--series-{index + 1}")
     return _svg(body, "gain over the sampled policy by rollout depth")
+
+
+def shuffle_chart(contrasts: list[dict[str, Any]]) -> str:
+    """Extension gain over the sampled policy by shuffle count, one line per hand sampler.
+
+    Points use each arm's paired deals and cell-stratified bootstrap interval;
+    an arm with retained failures is drawn on its paired subset and says so.
+    """
+    worlds = (4, 8, 16)
+    series: dict[str, list[tuple[float, Estimate, str]]] = {}
+    for sampler in ("oracle", "uniform"):
+        for w in worlds:
+            c = next(c for c in contrasts if c["label"] == f"{sampler} {w} minus sampled policy")
+            b = c["cell_stratified_bootstrap"]
+            if b is None:
+                continue
+            e = Estimate(b["n"], b["mean"], b["low"], b["high"])
+            series.setdefault(sampler, []).append((float(w), e, (
+                f"{sampler.capitalize()} hands, {w} shuffles: {e.mean * 100:+.1f} points "
+                f"[{e.low * 100:+.1f}, {e.high * 100:+.1f}], {c['paired']}/{c['planned']} paired deals")))
+    if not series:
+        return ""
+    x = Axis(worlds[0] / 1.5, worlds[-1] * 1.5, log=True)
+    y = _gain_axis([v for pts in series.values() for _, e, _ in pts for v in (e.low, e.high)])
+    body = _frame([(float(w), str(w)) for w in worlds], _ticks(y.low, y.high, 0.05), x, y,
+                  "hidden-information shuffles per move (log scale)", _points)
+    body += _zero(y)
+    # Same encoding as the strength-cost chart: solid is playable, dashed uses the true hand.
+    body += _series(series.get("uniform", []), x, y, "--series-1")
+    body += _dash(_series(series.get("oracle", []), x, y, "--series-1"))
+    return _svg(body, "gain over the sampled policy by shuffle count, oracle and uniform hands")
 
 
 def cost_chart(puct: list[tuple[float, Estimate, str]], mirror: list[tuple[float, Estimate, str, str]],
@@ -692,6 +766,219 @@ def _interval(value: dict[str, float] | None) -> str:
     if value is None:
         return "unavailable"
     return f'{100 * value["mean"]:+.1f} [{100 * value["low"]:+.1f}, {100 * value["high"]:+.1f}]'
+
+
+# ---------------------------------------------------------------------------
+# Questions and answers: the page opens with these, built from the same estimates.
+
+HANDS = {"oracle": "Oracle hands", "uniform": "Uniform hands"}
+
+
+def _pts(e: dict[str, float] | Estimate) -> str:
+    """Points with an interval, e.g. '+12.5 points [+8.1, +17.0]'."""
+    m, lo, hi = (e["mean"], e["low"], e["high"]) if isinstance(e, dict) else (e.mean, e.low, e.high)
+    return f"{100 * m:+.1f} points [{100 * lo:+.1f}, {100 * hi:+.1f}]"
+
+
+def _dash(lines: list[str]) -> list[str]:
+    return [line.replace("<path ", '<path stroke-dasharray="6 4" ', 1) for line in lines]
+
+
+def strength_cost_chart(series: list[tuple[str, str, bool, list[tuple[float, Estimate, str]]]]) -> str:
+    """Gain over the sampled policy against seconds per decision; one line per searcher and hand sampler."""
+    xs = [px for _, _, _, pts in series for px, _, _ in pts]
+    lo, hi = min(xs) / 1.6, max(xs) * 1.6
+    x = Axis(lo, hi, log=True)
+    y = _gain_axis([v for _, _, _, pts in series for _, e, _ in pts for v in (e.low, e.high)])
+    nice = [m * 10.0**e for e in range(-3, 3) for m in (1, 3)]
+    ticks = [(v, f"{v:g} s" if v >= 1 else f"{v * 1000:g} ms") for v in nice if lo <= v <= hi]
+    body = _frame(ticks, _ticks(y.low, y.high, 0.05), x, y, "seconds per searched decision (log scale)", _points)
+    body += _zero(y)
+    for _, color, dashed, pts in series:
+        lines = _series(pts, x, y, color)
+        body += _dash(lines) if dashed else lines
+    return _svg(body, "gain over the sampled policy by seconds per decision, mirror and PUCT")
+
+
+def _answers(extension: dict[str, Any], base: dict[str, dict[int, float]], puct_seconds: dict[str, float],
+             policy_seconds: float, games: list[Game]) -> tuple[dict[str, Any], str, str]:
+    """Answer the study's three questions from the declared v2 contrasts plus PUCT context.
+
+    PUCT points pair each budget with the sampled policy on the same planned deals
+    (nominal intervals, as in the earlier PUCT chart). Mirror-minus-PUCT-1024 rows are
+    common-opponent context with the declared cell-stratified bootstrap, never head-to-head.
+    """
+    contrasts = {c["label"]: c for c in extension["contrasts"]}
+    arms = {(a["setting"]["sampler"], a["setting"]["worlds"]): a for a in extension["arms"].values()}
+    planned = {g.deal for g in games}
+    gain = {(h, w): contrasts[f"{h} {w} minus sampled policy"] for h in HANDS for w in (4, 8, 16)}
+    if any(c["cell_stratified_bootstrap"] is None for c in gain.values()):
+        return {}, "", ""
+    seconds = {k: arms[k]["search_cost"]["seconds"] for k in gain}
+    puct: dict[str, list[tuple[int, float, Estimate]]] = {}
+    for h in HANDS:
+        for sims in BUDGETS:
+            key = f"policy/puct-{sims}-{h}"
+            g = paired(base.get(key, {}), base["policy/policy"], planned)
+            if g is not None and key in puct_seconds:
+                puct.setdefault(h, []).append((sims, puct_seconds[key], g))
+    versus_puct = {}
+    for h in HANDS:
+        control = f"policy/puct-1024-{h}"
+        for w in (4, 8, 16):
+            key = next(k for k, a in extension["arms"].items()
+                       if (a["setting"]["sampler"], a["setting"]["worlds"]) == (h, w))
+            mirror_scores = {d: r for d, r in _arm_scores(extension, key).items()}
+            boot, common = _bootstrap({key: mirror_scores, control: base.get(control, {})}, games, [(key, control)])
+            e = boot.get((key, control))
+            versus_puct[h, w] = {"paired": len(common), "planned": len(planned),
+                                 "cell_stratified_bootstrap": e.to_json() if e else None}
+    data = {
+        "gain_over_sampled": {f"{h}/{w}": c["cell_stratified_bootstrap"] for (h, w), c in gain.items()},
+        "seconds_per_decision": {f"{h}/{w}": v for (h, w), v in seconds.items()},
+        "puct_gain_over_sampled_nominal": {f"{h}/{sims}": {"seconds": sec, **e.to_json()}
+                                           for h, rows in puct.items() for sims, sec, e in rows},
+        "minus_puct_1024_same_hands": {f"{h}/{w}": v for (h, w), v in versus_puct.items()},
+        "policy_seconds_per_decision": policy_seconds,
+        "scope": "exploratory; against the raw sampled MTG-183 policy; PUCT is common-opponent context",
+    }
+
+    g = {k: c["cell_stratified_bootstrap"] for k, c in gain.items()}
+    c = contrasts
+    u16_vs_puct = versus_puct["uniform", 16]["cell_stratified_bootstrap"]
+    puct_u = {sims: (sec, e) for sims, sec, e in puct.get("uniform", [])}
+    span = gain["uniform", 16]["failure_sensitivity"]
+    failure_note = (
+        f' One uniform 16-shuffle game hit the per-decision search deadline and is kept as a failure, so '
+        f'that setting rests on {gain["uniform", 16]["paired"]} of 500 deals. Scoring the failure as a loss or '
+        f'a win gives {100 * span[0]:+.1f} to {100 * span[1]:+.1f} points.'
+        if gain["uniform", 16]["paired"] < gain["uniform", 16]["planned"] else "")
+    interactions = [c[f"uniform minus oracle shuffle gain, {b} minus {a}"]["cell_stratified_bootstrap"]
+                    for a, b in ((4, 8), (8, 16))]
+    ratio = {w: g["uniform", w]["mean"] / g["oracle", w]["mean"] for w in (4, 8, 16)}
+    answer_a = (
+        '<p><strong>Yes, clearly.</strong> With playable uniform hand sampling, mirror search beats the '
+        f'policy\'s own sampled play by {_pts(g["uniform", 4])} at 4 shuffles, {_pts(g["uniform", 8])} at 8 and '
+        f'{_pts(g["uniform", 16])} at 16. With the true opponent hand it reaches {_pts(g["oracle", 16])}. '
+        f'PUCT tree search with 1,024 simulations costs more ({puct_u[1024][0]:.1f} s per decision against '
+        f'{seconds["uniform", 16]:.1f} s) but gains only {_pts(puct_u[1024][1])}. On the '
+        f'{versus_puct["uniform", 16]["paired"]} deals both played, 16-shuffle mirror finishes {_pts(u16_vs_puct)} '
+        f'ahead of it, and even 4-shuffle mirror at {seconds["uniform", 4]:.1f} s finishes '
+        f'{_pts(versus_puct["uniform", 4]["cell_stratified_bootstrap"])} ahead. The two never played each other; '
+        'both were measured against the same opponent.</p>'
+    )
+    answer_b = (
+        '<p><strong>More shuffles help. The second doubling adds less than the first.</strong> Each step '
+        'doubles the cost per decision. '
+        f'With oracle hands, going from 4 to 8 shuffles adds {_pts(c["oracle, 8 minus 4 shuffles"]["cell_stratified_bootstrap"])} '
+        f'and 8 to 16 adds {_pts(c["oracle, 16 minus 8 shuffles"]["cell_stratified_bootstrap"])}. With uniform hands '
+        f'the steps are {_pts(c["uniform, 8 minus 4 shuffles"]["cell_stratified_bootstrap"])} and '
+        f'{_pts(c["uniform, 16 minus 8 shuffles"]["cell_stratified_bootstrap"])}. {_clear_steps(c)} '
+        'Over the whole range, 16 shuffles beat 4 by '
+        f'{100 * (g["oracle", 16]["mean"] - g["oracle", 4]["mean"]):+.1f} points with oracle hands and '
+        f'{100 * (g["uniform", 16]["mean"] - g["uniform", 4]["mean"]):+.1f} with uniform hands.</p>'
+    )
+    answer_c = (
+        f'<p><strong>Most of it: about {100 * ratio[4]:.0f}% at 4 shuffles, falling to {100 * ratio[16]:.0f}% at 16.'
+        '</strong> Knowing the opponent\'s hand is worth '
+        f'{_pts(c["oracle minus uniform, 4 shuffles"]["cell_stratified_bootstrap"])} at 4 shuffles, '
+        f'{_pts(c["oracle minus uniform, 8 shuffles"]["cell_stratified_bootstrap"])} at 8 and '
+        f'{_pts(c["oracle minus uniform, 16 shuffles"]["cell_stratified_bootstrap"])} at 16. In these games the gap '
+        'grows with shuffles. The test of that growth, the difference between the two samplers\' shuffle '
+        'gains, is '
+        f'{_pts(c["uniform minus oracle shuffle gain, 8 minus 4"]["cell_stratified_bootstrap"])} for 4 to 8 and '
+        f'{_pts(c["uniform minus oracle shuffle gain, 16 minus 8"]["cell_stratified_bootstrap"])} for 8 to 16. '
+        + ('Both intervals include zero, so these games do not establish that the samplers scale differently. '
+           if all(e["low"] <= 0 <= e["high"] for e in interactions) else
+           'At least one interval excludes zero; treat that exploratory difference with the limits below. ')
+        + 'Uniform search '
+        'is the version that can actually be played, and most of the oracle gain carries over to it.</p>'
+    )
+
+    strength_series = []
+    for h, color, dashed in (("uniform", "--series-1", False), ("oracle", "--series-1", True)):
+        strength_series.append((f"Mirror, {HANDS[h].lower()}", color, dashed, [
+            (seconds[h, w], Estimate(**{k: g[h, w][k] for k in ("n", "mean", "low", "high")}),
+             f"Mirror, {HANDS[h].lower()}, {w} shuffles: {_pts(g[h, w])}, {seconds[h, w]:.2f} s per decision")
+            for w in (4, 8, 16)]))
+    for h, dashed in (("uniform", False), ("oracle", True)):
+        strength_series.append((f"PUCT, {HANDS[h].lower()}", "--series-2", dashed, [
+            (sec, e, f"PUCT {sims} simulations, {HANDS[h].lower()}: {_pts(e)} (nominal), {sec:.2f} s per decision")
+            for sims, sec, e in puct.get(h, [])]))
+    legend = '<div class="legend">' + "".join(
+        f'<span><i{" class=\"dash\"" if dashed else ""} style="border-color:var({color})"></i>{escape(label)}</span>'
+        for label, color, dashed, _ in strength_series) + "</div>"
+    gap_rows = [(f"{w} shuffles", Estimate(**{k: c[f"oracle minus uniform, {w} shuffles"]["cell_stratified_bootstrap"][k]
+                                              for k in ("n", "mean", "low", "high")})) for w in (4, 8, 16)]
+
+    cost_rows = []
+    for h in ("uniform", "oracle"):
+        for w in (4, 8, 16):
+            arm = arms[h, w]
+            wall = arm["game_wall_seconds"]
+            cost = arm["search_cost"]
+            cost_rows.append(
+                f'<tr><td>{HANDS[h]}, {w} shuffles</td><td>{_pts(g[h, w])}</td>'
+                f'<td>{cost["seconds"]:.2f} (median {cost["seconds_median"]:.2f})</td>'
+                f'<td>{3600 / statistics.fmean(wall):.1f}</td></tr>' if wall else '')
+    html = (
+        '<h2>Questions and answers</h2>'
+        '<h3>1. Does mirror search add strength, and how does it compare with PUCT at similar cost?</h3>' + answer_a
+        + '<div class="row single"><div class="card"><h3>Strength against cost</h3>'
+        '<div class="sub">Gain over the sampled policy, points, against the raw MTG-183 policy. '
+        'Solid lines are playable (uniform hands), dashed lines use the true opponent hand.</div>'
+        + legend + strength_cost_chart(strength_series) + '</div></div>'
+        '<p class="note">Mirror points: 4, 8 and 16 shuffles, depth 20, β 0.01, with cell-stratified 95% intervals. '
+        'PUCT points: 16 to 1,024 simulations from the earlier sweep, nominal 95% intervals, on the same deals. '
+        'Uniform mirror timings come from the faster native encoder, oracle mirror from the original Python '
+        'encoder, and PUCT partly from rented hosts. Read cost as approximate, not as a controlled speed '
+        'comparison.</p>'
+        '<h3>2. How does strength scale with shuffles?</h3>' + answer_b
+        + '<div class="legend"><span><i style="border-color:var(--series-1)"></i>Uniform hands</span>'
+        '<span><i class="dash" style="border-color:var(--series-1)"></i>Oracle hands</span></div>'
+        + '<div class="row single"><div class="card"><h3>Gain over the sampled policy by shuffles</h3>'
+        '<div class="sub">Points; cell-stratified 95% bootstrap</div>'
+        + shuffle_chart(extension["contrasts"]) + '</div></div>'
+        '<h3>3. How much of the oracle gain survives with playable hand sampling?</h3>' + answer_c
+        + '<div class="row single"><div class="card"><h3>Value of knowing the opponent\'s hand</h3>'
+        '<div class="sub">Oracle minus uniform, same deals, points; cell-stratified 95% bootstrap</div>'
+        + gain_chart(gap_rows, "oracle minus uniform") + '</div></div>'
+        '<h3>Cost</h3>'
+        '<div class="table-scroll" role="region" aria-label="Strength and cost" tabindex="0">'
+        '<table><tr><th>Setting</th><th>Gain over sampled policy</th><th>Seconds per decision</th>'
+        '<th>Games per hour, one worker</th></tr>' + ''.join(cost_rows) + '</table></div>'
+        f'<p class="note">The raw policy takes about {1000 * policy_seconds:.1f} ms per decision. A worker is one '
+        'process with one inference thread on a Mac mini running seven at once. Games per hour comes from the mean '
+        'game duration, including the opponent\'s moves. The oracle and uniform rows used different encoders. '
+        'At fixed positions with one implementation the two samplers cost about the same, so most of the '
+        'difference here comes from the encoder, not from hand sampling.</p>'
+    )
+    limits = (
+        '<h2>Limits</h2><p class="note">Oracle hands are a benchmark, not something a real player can do. '
+        'Only uniform hand sampling is playable. Every result uses one frozen policy (MTG-183, one training seed), '
+        'its own ten decks and the same 500 deals, against one opponent: the raw policy. Results may not carry '
+        'over to other policies, decks or opponents. The settings were chosen after looking at earlier results '
+        'on these deals and the intervals are not corrected for multiple comparisons, so treat every estimate '
+        'as exploratory.' + failure_note + ' Under the declared rule, comparisons that include the failed game '
+        'stay formally unresolved, and acceptance is left to evidence review.</p>'
+    )
+    return data, html, limits
+
+
+def _clear_steps(contrasts: dict[str, dict[str, Any]]) -> str:
+    """Name the shuffle steps whose interval excludes zero; the rest are described as unresolved."""
+    steps = [(f"{h} {a}-to-{b}", contrasts[f"{h}, {b} minus {a} shuffles"]["cell_stratified_bootstrap"])
+             for h in HANDS for a, b in ((4, 8), (8, 16))]
+    clear = [name for name, e in steps if e and e["low"] > 0]
+    if not clear:
+        return "No single step clearly exceeds zero."
+    return (f"Only the {' and '.join(clear)} step{'s' if len(clear) > 1 else ''} clearly exceed"
+            f"{'' if len(clear) > 1 else 's'} zero. The other steps' intervals include zero.")
+
+
+def _arm_scores(extension: dict[str, Any], key: str) -> dict[int, float]:
+    """Per-deal scores kept beside the extension for context contrasts."""
+    return {int(d): v for d, v in extension["scores"][key].items()}
 
 
 def _evidence_sections(summary: dict[str, Any]) -> str:
@@ -1102,22 +1389,36 @@ def build(mirror_dir: Path, baselines: Sequence[Path], noise_dir: Path, out: Pat
         "Games ran on one Mac mini, seven workers on one thread each. Oracle hands supply an information "
         "advantage benchmark, not a proven mathematical upper bound on this approximate search with hidden hands.</p>")
 
-    sections.append(_evidence_sections(summary))
-    extension_html = ""
+    evidence_html = _evidence_sections(summary)
+    answers_html = limits_html = results_html = provenance_html = ""
     if extension is not None:
         summary["extension"] = _extension_report(extension, baseline_records)
-        extension_html = _extension_section(summary["extension"])
+        results_html, provenance_html = _extension_parts(summary["extension"])
+        summary["answers"], answers_html, limits_html = _answers(
+            summary["extension"], base, puct_seconds,
+            summary["policy_only_cost"]["policy/policy"]["seconds_per_decision"], games)
 
-    lede = ("Can the magnetic-mirror local update, given the opponent's true hand, add strength on top of "
-            f"MTG-183's policy, and what does it cost next to PUCT? {played:,} of {planned:,} retained games "
-            f"(about {min(len(v) for v in mirror.values())} deals per setting).")
-    banner = ('<div class="banner">Original 8,000-game execution is complete. Eight settings against two opponents were inspected repeatedly. With no '
-              "multiple-comparison correction, a selected setting clearing its interval remains exploratory; playable strength is unresolved.</div>")
+    lede = ("Magnetic-mirror search plays each move by rolling the frozen MTG-183 policy forward from every "
+            "candidate move in several reshuffled copies of the game, then nudging the policy toward the moves "
+            "that did best. This report asks three questions: whether that adds strength, how strength scales "
+            "with the number of shuffles, and how much survives when the search must guess the opponent's hand.")
+    earlier = (
+        '<details><summary><strong>Earlier sweep: depth, step size and rollout noise</strong></summary>'
+        f'<p class="note">The first study tried eight settings with oracle hands, {played:,} games against the raw '
+        'policy and the scripted heuristic. Its rollout-noise screen motivated the β 0.01 follow-up above. Its selected setting and '
+        'comparisons follow.</p>'
+        f'<div class="tiles">{"".join(tiles)}</div>' + "".join(sections).replace("<h2>", "<h3>").replace("</h2>", "</h3>")
+        + '</details>'
+    )
+    appendix = (
+        '<h2>Appendix</h2><details><summary>Execution, provenance and full evidence tables</summary>'
+        + provenance_html + evidence_html.replace("<h2>", "<h3>").replace("</h2>", "</h3>") + '</details>'
+    )
     html = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
             '<meta name="viewport" content="width=device-width, initial-scale=1">'
             f"<title>Mirror search study</title><style>{CSS}{EXTRA_CSS}</style></head><body><main>"
-            f"<h1>Mirror search on MTG-183</h1><p class=\"lede\">{escape(lede)}</p>{banner}"
-            f'<div class="tiles">{"".join(tiles)}</div>' + extension_html + "".join(sections) + "</main></body></html>")
+            f"<h1>Mirror search on MTG-183</h1><p class=\"lede\">{escape(lede)}</p>"
+            + answers_html + results_html + limits_html + earlier + appendix + "</main></body></html>")
     out.mkdir(parents=True, exist_ok=True)
     (out / "report.html").write_text(html)
     summary["games"] = played

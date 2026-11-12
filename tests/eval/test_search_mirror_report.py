@@ -12,6 +12,7 @@ from experiments.search_mirror import ARMS, V2_ARMS, MirrorDecision, MirrorRow
 from experiments.search_mirror_noise import Position, analyze
 from experiments.search_mirror_report import (
     _bootstrap,
+    _clear_steps,
     _costs,
     _coverage,
     _extension_report,
@@ -135,6 +136,10 @@ def test_factorial_interaction_pairs_four_arms_and_retains_missing_slots() -> No
     partial = _linear_contrast(interaction, scores, games)
     assert partial["normal"]["mean"] > 0
     assert "paired outcomes are missing" in partial["interpretation"]
+    # The paired subset's direction is described beside, never instead of, the gap.
+    assert "On the 1 paired deals: Positive exploratory difference" in partial["interpretation"]
+    assert "Both 0-1 failure bounds on the point estimate share one sign" in partial["interpretation"]
+    assert "include zero" in result["interpretation"]
 
 
 def test_extension_snapshot_reports_unmeasured_not_zero(tmp_path: Path) -> None:
@@ -222,3 +227,14 @@ def test_extension_reader_rejects_wrong_worlds_sampler_and_smoke(tmp_path: Path)
         path.write_text(json.dumps(asdict(bad)) + "\n")
         with pytest.raises(ValueError, match="identity mismatch"):
             _outcomes([tmp_path], mirror=True, arms=V2_ARMS)
+
+
+def test_clear_steps_names_only_intervals_above_zero() -> None:
+    def step(low: float) -> dict[str, dict[str, float]]:
+        return {"cell_stratified_bootstrap": {"n": 500, "mean": low + 0.03, "low": low, "high": low + 0.06}}
+
+    contrasts = {f"{h}, {b} minus {a} shuffles": step(-0.01) for h in ("oracle", "uniform")
+                 for a, b in ((4, 8), (8, 16))}
+    assert _clear_steps(contrasts) == "No single step clearly exceeds zero."
+    contrasts["oracle, 8 minus 4 shuffles"] = step(0.03)
+    assert _clear_steps(contrasts).startswith("Only the oracle 4-to-8 step clearly exceeds zero.")

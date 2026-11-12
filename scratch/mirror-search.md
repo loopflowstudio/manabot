@@ -1,5 +1,18 @@
 # Mirror search continuation
 
+## Final analysis — 2026-11-12
+
+Report rebuilt over all 3,000 outcomes; numbers in the v2 protocol's "Final
+analysis" section. Full trace audits of both segments passed (receipts
+`reconciliation/{campaign,uniform-native}-validation-20261112.json`). Jack Heart
+on the earlier page: “This is not readable imo. its a bunch of numbers and
+process logs, not understandable science”. The page now opens with three Q&As,
+one chart each, cost, limits; earlier sweep and provenance are collapsed.
+Rendered and checked in headless Chromium (light/dark/390 px, all details
+open, no overflow). Scripts/logs: `scratch/mirror-final-analysis-20261112/`
+(`render_dev.py` re-renders presentation in 15 s from summary.json; the full
+build takes ~9 min). Next: publish data, commit, then evidence review.
+
 ## Final collection — 2026-11-12
 
 Campaign complete; both segments collected 10:09–10:12 UTC with the existing

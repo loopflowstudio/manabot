@@ -1,5 +1,43 @@
 # Mirror search: more shuffles and uniform versus oracle hands
 
+## Final analysis — 2026-11-12
+
+The owning report (`search-mirror-v1/report.html`, `summary.json`) was rebuilt
+over all 3,000 outcomes with the existing reader and decision rule. Full offline
+trace audits now cover every outcome: original 1,500 oracle games (299,087
+Commands, 141,138 receipts, full rollout algebra, max |Q| 1.15808) and native
+1,500 uniform games (305,007 Commands, 146,394 compact receipts, max |Q|
+1.14319). The one TimeoutError game remains a scored failure. No replay or new execution.
+
+Cell-stratified 95% gains over the sampled policy, against the raw policy:
+
+| Hands | 4 shuffles | 8 shuffles | 16 shuffles |
+|---|---|---|---|
+| Oracle | +13.3 [+8.9, +17.7] | +19.9 [+15.7, +24.3] | +22.7 [+18.4, +27.1] |
+| Uniform | +12.5 [+8.1, +17.0] | +15.7 [+11.4, +20.0] | +17.35 [+13.2, +21.5] (499/500) |
+
+Oracle minus uniform: +0.8 [−3.2, +4.8], +4.2 [+0.2, +8.2], +5.2 [+2.0, +8.4]
+(16: 499 deals). Within-sampler steps: oracle 8−4 +6.6 [+3.0, +10.2], 16−8
++2.8 [−0.4, +6.0]; uniform 8−4 +3.2 [−0.8, +7.2], 16−8 +1.8 [−2.0, +5.4].
+Interactions (uniform step − oracle step): 8−4 −3.4 [−9.0, +2.2], 16−8 −1.0
+[−5.8, +3.8]; both inconclusive. Eleven of fifteen declared contrasts are
+complete; the four involving uniform 16 shuffles stay unresolved under the
+rule, though each paired subset keeps one sign across 0–1 failure bounds.
+
+Common-opponent context, not head-to-head: uniform PUCT-1024 gains +4.5
+[−0.1, +9.1] (nominal) at 4.52 s/decision; uniform mirror minus uniform
+PUCT-1024 is +8.4 [+4.2, +12.7] at 4 shuffles and +13.2 [+9.1, +17.3] at 16
+(478–479 shared deals). Mean search seconds per decision: oracle 2.85 / 5.51 /
+11.13 (Python encoder), uniform 0.92 / 1.85 / 3.53 (native encoder); the cost
+gap is mostly implementation. Native attempt wall 13.1 h for 1,500 games;
+inclusive operational elapsed 56.6 h of 168; $0 rental.
+
+The report now opens with the three questions and plain answers, one chart
+each, cost and limits; provenance moved to a collapsed appendix. Superseded
+receipts are kept as `validation-20261111.json`,
+`launcher-inventory-20261111.json`, `transition/{execution-accounting,summary}-20261111.json`.
+Acceptance remains unresolved for evidence review.
+
 ## Execution complete — final collection 2026-11-12
 
 Etude `mtg269-mirror-v2-uniform-native` / `b9b50aa247df` **succeeded** at
