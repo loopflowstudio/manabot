@@ -103,7 +103,7 @@ None of these change the update; call them when you want the numbers.
 | `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
 | `OptimizerHealth(health, iteration, profiler=None)` | `manabot.training.updates.health` | The player's step recorder. Pass as `gradient_step(..., recorder=observer)` to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
 | `clip_fraction(log_ratio, clip)` | `manabot.training.updates.health` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
-| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). |
+| `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]`: `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
 
 ## Standard methods, kept local
 

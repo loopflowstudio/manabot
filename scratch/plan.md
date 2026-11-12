@@ -58,6 +58,8 @@ Nothing to change. Checked against the old tree (on the rebuilt branch the choic
 
 Third pass (rebuilt branch, after the no-op recorder): nothing to change. `minimal.py` still composes only `rl` pieces, the player's legality and `AdmittedRollout`, `SeatRoutedCollector`; the rule choice stays one branch in `execution.py`; no open product choice.
 
+Fourth pass (after the naming pass and third compress, 4e3127f5a): nothing to change. The guide opens with the update/loop/recipe sentence; no doc still points at `training/learning/`; the remaining `regime` mentions (`manabot.training.regime`, `training.md#regimes-and-stages`) name code MTG-303 renames; `minimal.py` (82 lines) composes only `rl` pieces, the player's legality, `AdmittedRollout` and `SeatRoutedCollector`. No open product choice.
+
 ## Rebuilt on main without MTG-303 (2026-11-12)
 
 Steer (Jack Heart, via comment 69b01701): "ok, lets do that. let me review a clean 304". This Task lands first; MTG-303 stacks on top. Outcome 4 (shrinking the executor) moves to MTG-303.
