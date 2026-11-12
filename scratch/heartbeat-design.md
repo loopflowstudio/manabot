@@ -37,8 +37,13 @@ defined" table in `docs/engine.md` if they appear there, and update its count of
 
 **Encoding (B).** Choose the simplest projection that carries every choice and
 receipt without ambiguity. Reuse the existing `ManaChoice` with a `producer`
-where that is enough. Add v10 state (not a new input version) only where it
-isn't, with parity across native scalar/vector, Python, text and tokens.
+where that is enough. CLAUDE.md allows no encoder or model version branch
+beyond v10's turn-state append, so new pool-class, spend-effect and receipt
+state goes into existing fact rows (open vocabularies are rows), shared by
+v9 and v10 or refused by `managym.input_v10_state` admission. Keep parity
+across native scalar/vector, Python, text and tokens. Do not add the
+proposal's `mana_choices[A,4]` block unless the existing action joins cannot
+carry a choice; if so, stop and ask.
 
 **Timing (C).** Follow the Comprehensive Rules exactly. No pinned CR file is in
 the repository, so cite the current CR in code comments and tests:
