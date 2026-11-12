@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-303 concept review</title>
+<style>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--line:#ddd;--new:#2a6;--old:#a52}
+@media (prefers-color-scheme:dark){:root{--fg:#e8e6e1;--bg:#1b1a18;--mute:#9a968e;--line:#3a3833}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 Georgia,serif}
+main{max-width:46rem;margin:0 auto;padding:2rem 1.2rem}
+header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
+pre{overflow-x:auto;border-left:3px solid var(--line);padding:.6rem .9rem;font:13px/1.45 ui-monospace,Menlo,monospace}
+.old{border-color:var(--old)}.new{border-color:var(--new)}
+.tag{font:12px ui-monospace,monospace;color:var(--mute)}
+h2{font-size:1.15rem;margin-top:2rem}
+</style></head><body><main>
+<header>
+<h1>Regime functions: saved regimes should call the stage functions</h1>
+<p>Task MTG-303 · concept-review step · 2026-11-12</p>
+<p>Built from manabot/training/run.py, manabot/training/stages.py, experiments/two_models.py, manabot/experiment/job.py and scratch/plan.md</p>
+</header>
+
+<p><strong>Decision needed:</strong> none for the next round. The design already settles this: invert the call direction. One Etude question (below) waits until after that.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<p>Actions: write a regime function, bind arguments, smoke it, execute or resume it. Concepts: <code>Run</code>, <code>Model</code>, stage functions, stage records. APIs: <code>execute</code>, <code>smoke</code>, <code>run.model</code>, <code>run.export</code>, <code>self_play</code>, <code>import_policy</code>, <code>collect_belief</code>, <code>train_belief</code>. These hold up.</p>
+
+<h2>Biggest mismatch: which way the calls go</h2>
+<p class="tag">existing</p>
+<pre class="old">run_saved_regime(run, regime)  ──isinstance──▶ _train_self_play(run, scope, regime, …)
+self_play(run, model, …)       ──TrainSelfPlay + one-stage TrainingRegime──▶ _train_self_play(…)</pre>
+<p class="tag">proposed</p>
+<pre class="new">run_saved_regime(run, regime)
+    model = run.model("agent", regime.agent, regime.observation, seed=run.seeds["initialization"])
+    for stage in regime.stages:
+        self_play(run, model, stage=stage.id, decks=…, **settings)   # or import_policy / collect_* / train_belief
+self_play(run, model, …)  ──▶ _train_self_play(run, scope, decks, agent, observation, settings, clock)</pre>
+<p>Records do not change: a saved run still records <code>regime</code> and its digest. <code>_stage_regime</code> is deleted, input digest checks move into the stage functions, and <code>collect_selection</code> becomes public.</p>
+
+<h2>Open questions</h2>
+<ol>
+<li>How should a function job declare its Etude budget? (a) the job passes an <code>updates</code> argument the function must accept; (b) Etude stops function jobs on wall/USD only, and they resume at update boundaries; (c) a smoke run reports the planned updates.</li>
+<li>Should custom <code>run.stage</code> blocks be resumable? (a) no, and we document that; (b) yes, through a scope that says it is already complete so the body can skip.</li>
+</ol>
+</main></body></html>

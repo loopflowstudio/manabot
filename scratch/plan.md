@@ -80,3 +80,66 @@
   training-side result rows out of deck-building foundations"), so nothing
   exists to route through `Run`. Per-update outcome rows go through Etude
   `log_table`; docs do not promise per-game rows.
+
+## Concept review (2026-11-12, headless, against `6700caf3a`)
+
+The interaction holds: a regime is `fn(run, **kwargs)` or a partial; `execute`
+/ `smoke` take it; models are `run.model(...)`; stage functions return typed
+results and replay their records on resume. The biggest mismatch is inside:
+
+**Saved regimes do not call the stage functions.** `run_saved_regime`
+dispatches on stage kind straight to the private bodies (`_train_self_play`,
+`_import_policy`, ...), and public `self_play` / `import_policy` go the other
+way: they build a `TrainSelfPlay` and a one-stage `TrainingRegime`
+(`_stage_regime`) so the same bodies can read schema. So there are two
+callers of each body and the configuration is still the stage interface.
+Outcome 4 asks for the opposite direction ("calls the same stage functions";
+"the old one calls the new one").
+
+### Next implement direction (implied by the design, no product choice)
+
+1. `run_saved_regime(run, regime)` becomes an ordinary regime function: one
+   `run.model("agent", ...)` (or `import_policy` for an `initial` import),
+   then one public stage-function call per saved stage, passing the saved
+   stage's `id` as `stage=`, `seed=run.seeds["initialization"]`, its
+   execution and settings. A saved stage whose `initial` names the previous
+   self-play stage is the same model trained again (live continuation). Add
+   a public `collect_selection` so every saved kind has a function.
+   Records stay as they are: `RunRecord.regime` and its digest still name
+   the saved regime, so receipts and evidence are unchanged.
+2. Stage bodies take what they read (decks, agent, observation, the stage
+   settings record, schedule clock) instead of a `TrainingRegime`; delete
+   `_stage_regime`. Keep `validate_regime` for saved files, and run the
+   per-stage deck/world/curriculum admission it does from the stage
+   function itself. The schedule clock is a stage argument (saved:
+   `run_elapsed_budget` default; function: `iteration_fraction`).
+3. Input-artifact digest checks (`initial`, `policy`, `dataset`) move into
+   the stage functions that read those inputs, so function regimes get them
+   too.
+4. `TrainingJob.smoke` goes through `execute_regime`'s smoke path, so a smoke
+   of a saved job records the saved regime's identity rather than a function
+   record whose argument is the whole regime JSON.
+5. Small: `Model.session: SelfPlaySession | None` (TYPE_CHECKING import)
+   instead of `Any`.
+
+Proof stays the existing bit-exact saved≡function test plus the saved-regime
+recovery and smoke suites; every saved fixture must keep its record digest.
+
+Counterexample to check while doing 1: a saved regime whose second self-play
+stage has `initial` naming an *earlier, non-adjacent* stage (fresh learner
+from those weights, not a continuation). It maps to a new model adopted from
+that stage's export, not to training the same `Model` again.
+
+### Open product choice (does not block 1-5)
+
+- **How a function job declares its Etude budget.** Remote jobs are built on
+  one saved self-play stage with `until=updates=N`, continuations and a stop
+  reserve. A function regime has no single update count. Options: the job
+  passes an `updates` argument the function must accept (a naming
+  convention), Etude stops function jobs on wall/USD only and they resume at
+  update boundaries, or the function returns its planned updates from a
+  smoke run. This decides what `TrainingJob(regime=callable)` and Outcome 6
+  look like; it is an Etude contract question, so it likely belongs in an
+  Etude PR.
+- Known limit, not a choice yet: `run.stage(name)` custom stages refuse
+  resume past them, so a regime that uses one cannot recover after it.
