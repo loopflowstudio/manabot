@@ -1,9 +1,7 @@
 """Active-time endpoints count completed learner work, excluding slow exports."""
 
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Event
 import time
 from typing import ParamSpec, TypeVar
 
@@ -126,21 +124,24 @@ def test_old_recipe_bytes_and_invalid_endpoint() -> None:
         TrainingRegime.model_validate(payload)
 
 
-# Bounds a wait that should never be reached; real training beside other test
-# processes takes a varying share of it, so it is no statement about speed.
-_HANG_SECONDS = 120
-
-
 @pytest.mark.parametrize("admitted", [True, False])
 def test_initial_admission_precedes_collection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, admitted: bool
 ) -> None:
     clock = Clock()
-    waiting = Event()
+    gate = tmp_path / "initial-admission"
+    out = tmp_path / "run"
 
     def admission_sleep(seconds: float) -> None:
-        waiting.set()
-        time.sleep(seconds)
+        # Admission waits only after publishing the initial checkpoint. Release
+        # it here so the test needs neither a supervisor thread nor real sleeps.
+        run = TrainingRun.model_validate_json((out / "run.json").read_text())
+        assert run.updates_through() == 0
+        assert run.stages[0].learner_transitions == 0
+        # A slow admission cannot consume the active training allocation.
+        clock.offset += 100
+        digest = run.stages[0].artifacts["initial_raw"]["sha256"]
+        gate.write_text(digest if admitted else "wrong-checkpoint")
 
     monkeypatch.setattr(clock, "sleep", admission_sleep)
     monkeypatch.setattr(execution, "time", clock)
@@ -152,8 +153,6 @@ def test_initial_admission_precedes_collection(
     monkeypatch.setattr(
         execution, "update_iteration", clock.charge(execution.update_iteration, 10)
     )
-    gate = tmp_path / "initial-admission"
-    out = tmp_path / "run"
 
     def train() -> TrainingRun:
         with VerifyStore(tmp_path / "training.sqlite") as store:
@@ -166,43 +165,18 @@ def test_initial_admission_precedes_collection(
                 initial_admission=gate,
             )
 
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(train)
-        deadline = time.monotonic() + _HANG_SECONDS
-        while time.monotonic() < deadline:
-            if (out / "run.json").exists():
-                run = TrainingRun.model_validate_json((out / "run.json").read_text())
-                if run.stages and "initial_raw" in run.stages[0].artifacts:
-                    break
-            if future.done():
-                future.result()
-            time.sleep(0.05)
-        else:
-            gate.write_text("timeout")
-            pytest.fail("initial checkpoint unavailable")
+    if admitted:
+        run = train()
+        assert run.status == "completed"
+        assert run.stages[0].updates == 2
+    else:
+        with pytest.raises(ValueError, match="admission differs"):
+            train()
+        run = TrainingRun.model_validate_json((out / "run.json").read_text())
         assert run.updates_through() == 0
         assert run.stages[0].learner_transitions == 0
-        assert waiting.wait(timeout=_HANG_SECONDS)
-        # A slow admission cannot consume the active training allocation.
-        clock.offset += 100
-        digest = run.stages[0].artifacts["initial_raw"]["sha256"]
-        gate.write_text(digest if admitted else "wrong-checkpoint")
-        # Subtracting the real clock epoch can round the injected 100-second wait.
-        if admitted:
-            finished = future.result(timeout=_HANG_SECONDS)
-            assert finished.status == "completed"
-            assert finished.stages[0].updates == 2
-            assert finished.stages[0].admission_wait_seconds is not None
-            # The fake clock's 100 s offset can round to just under 100.
-            assert finished.stages[0].admission_wait_seconds >= 100 - 1e-6
-        else:
-            with pytest.raises(ValueError, match="admission differs"):
-                future.result(timeout=_HANG_SECONDS)
-            failed = TrainingRun.model_validate_json((out / "run.json").read_text())
-            assert failed.updates_through() == 0
-            assert failed.stages[0].learner_transitions == 0
-            assert failed.stages[0].admission_wait_seconds is not None
-            # The fake clock's 100 s offset can round to just under 100.
-            assert failed.stages[0].admission_wait_seconds >= 100 - 1e-6
-            # Failure accounting does not charge the same wait a second time.
-            assert failed.stages[0].diagnostic_seconds < 10
+        # Failure accounting does not charge the same wait a second time.
+        assert run.stages[0].diagnostic_seconds < 10
+    assert run.stages[0].admission_wait_seconds is not None
+    # The fake clock's 100 s offset can round to just under 100.
+    assert run.stages[0].admission_wait_seconds >= 100 - 1e-6

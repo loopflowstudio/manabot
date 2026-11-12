@@ -12,16 +12,15 @@ jobs:
   integration:
     name: Integration (${{ inputs.runner }}, ${{ matrix.group }})
     runs-on: ${{ inputs.runner }}
-    # Each group runs on its own runner and finishes within 8 minutes, install
-    # and extension build included (docs/development.md, Job time). A group
-    # lists exact paths, so a test file named in no group does not run here.
+    # Balance groups for an 8-minute job budget, including install and build
+    # (docs/development.md, Job time). Include new tests by file or directory.
     strategy:
       fail-fast: false
       matrix:
         group: [model, training, recovery, experiment, evaluation, evaluation-long]
     env:
-      # Install dependencies installs every extra once and leaves managym to
-      # the extension build; a later sync would compile the engine again.
+      # Sync dependencies once, then build managym below. Later syncs would
+      # rebuild the engine.
       UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v4

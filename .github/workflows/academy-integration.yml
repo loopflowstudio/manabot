@@ -13,8 +13,8 @@ jobs:
     name: Academy Integration (${{ inputs.runner }})
     runs-on: ${{ inputs.runner }}
     env:
-      # Install dependencies installs every extra once and leaves managym to
-      # the extension build; a later sync would compile the engine again.
+      # Sync dependencies once, then build managym below. Later syncs would
+      # rebuild the engine.
       UV_NO_SYNC: '1'
     steps:
       - uses: actions/checkout@v4

@@ -131,7 +131,7 @@ public encoder boundary, before the retained action list reaches row encoding.
 
 **Local-update search.** Run `tests/sim/test_local_update.py`,
 `tests/sim/test_local_update_sampling.py` and
-`tests/sim/test_search_command_evidence.py` together. The core integration job
+`tests/sim/test_search_command_evidence.py` together. The model integration group
 includes all three: collection alone cannot check receipt replay, terminal
 frontiers, deadlines or atomic Command rejection. When games are restricted to
 a remote host, defer the game-based cases to that job explicitly.
@@ -236,7 +236,7 @@ PR revision cancels its obsolete run; main and manual runs do not cancel.
 |---|---|
 | Rust Tests | debug `cargo nextest run --profile ci` in `managym/`, including `semantic_conformance_tests`; JUnit timings uploaded |
 | Python Unit Tests | `tests/infra/`, clean-machine verifier, `deploy/play/tests/`, website |
-| Integration | `manabot-integration.yml` (one runner per group of its matrix, each listing exact test paths; Perf report proof and training smoke in `evaluation`) |
+| Integration | `manabot-integration.yml` (one runner per matrix group; Perf report proof and training smoke in `evaluation`) |
 | Academy Integration | `academy-integration.yml` (world bindings, Elemental admission and play) |
 | Protocol v1 Conformance | Rust, Python and TypeScript experience protocol; launcher contracts |
 | Semantic Kernel Conformance | bounded valid-action fuzzing only, over `semantic-kernel-w17-v2` |
@@ -251,8 +251,8 @@ Tests uploads on failure; fuzz failures keep exact seeds under
 `target/semantic-conformance/failures/`. Rust Tests runs whenever the fuzzing
 job does.
 
-**Job time.** Every pull-request job finishes within 8 minutes on the
-`ubuntu-latest` runner, measured from job start to job end, so installation and
+**Job time.** Pull-request jobs have an 8-minute budget on the ordinary
+Ubuntu runner, measured from job start to job end, so installation and
 the extension build count against it. Read a job's time from the run:
 
 ```console
@@ -280,8 +280,9 @@ When a job passes 8 minutes, in order of preference:
    path a group names exists.
 
 Never skip, deselect or delete a test to fit, and never raise the five-minute
-single-test limit ([TESTING.md](../TESTING.md)). A new test file joins the
-group with the most room; a file listed in no group does not run in CI.
+single-test limit ([TESTING.md](../TESTING.md)). Groups select directories,
+files and individual tests. If a new file is not covered by a directory
+selection, add it to the group with the most room.
 Engine Budget is the exception: it builds and measures the change and its
 reference on one runner and keeps that shape, whatever it takes. The macOS
 nightly reuses the same groups without this limit.
