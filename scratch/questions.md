@@ -8,6 +8,7 @@
   `runtime_fingerprints` (`model_dump()`), which `manabot.eval.match` already
   checks against; previously `model_dump(mode="json")`.
 - Compress run: `tests/eval/test_experiment_files.py::test_a_tracked_self_play_run_draws_every_named_metric`
-  failed with `TimeoutError: training resource wall deadline exceeded`
-  (`manabot/training/execution.py:860`) during a 32-minute local batch; it
-  trains self-play and never registers a checkpoint. Gate/CI should rerun it.
+  hit `TimeoutError: training resource wall deadline exceeded` inside a
+  32-minute local batch. At gate it passed alone in 3.4 s, and the whole module
+  passed in 7.6 s: the wall deadline was exceeded under concurrent local load,
+  not by this change (it registers no checkpoint).

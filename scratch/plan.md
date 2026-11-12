@@ -21,8 +21,14 @@ and `attack_execution.py` take ABI hashes from the training run's
 space; `card_evaluation.py` registers code players only. None needed a change.
 `elemental_long_eval.py` stays frozen (see questions.md).
 
-Remains: CI (rerun of the timed-out self-play test noted in questions.md),
-then a GPU evaluation pass that admits a frontier checkpoint, run by MTG-267.
+Gate checks (2026-11-12):
+- `ruff check` / `ruff format --check` on the 5 changed Python files: clean.
+- pytest batched_eval, learning_signal, local_evaluation, layer_input, monitor_evaluation: 86 passed, 1 skipped (14 min).
+- pytest tests/eval/test_experiment_files.py: 4 passed (includes the earlier timeout).
+- scripts/check_loopflow_workflows.py: valid.
+No type checker runs in CI.
+
+Remains: CI, then a GPU evaluation pass that admits a frontier checkpoint, run by MTG-267.
 
 Concept review: one concept, one owner. A checkpoint registration's ABI
 hashes are the checkpoint's input contract, set only by `register_checkpoint`
