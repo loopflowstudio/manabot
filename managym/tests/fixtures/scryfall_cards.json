@@ -5743,5 +5743,17 @@
     "colors": [
       "R"
     ]
+  },
+  "Teferi's Protection": {
+    "name": "Teferi's Protection",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Until your next turn, your life total can't change and you gain protection from everything. All permanents you control phase out. (While they're phased out, they're treated as though they don't exist. They phase in before you untap during your untap step.)\nExile Teferi's Protection.",
+    "colors": [
+      "W"
+    ]
   }
 }

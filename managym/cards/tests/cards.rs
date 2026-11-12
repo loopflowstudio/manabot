@@ -16,6 +16,8 @@ mod afr;
 mod blb;
 #[path = "cards/bng.rs"]
 mod bng;
+#[path = "cards/c17.rs"]
+mod c17;
 #[path = "cards/c19.rs"]
 mod c19;
 #[path = "cards/cmr.rs"]

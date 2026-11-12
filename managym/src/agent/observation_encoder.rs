@@ -1275,6 +1275,7 @@ fn copy_exception_facts(object: i32, effect: &ContinuousEffectData, out: &mut Ve
     let duration = match effect.duration.as_str() {
         "EndOfTurn" => 1.0,
         "WhileYouControlSource" => 3.0,
+        "UntilYourNextTurn" => 4.0,
         _ => 2.0,
     };
     let values = [

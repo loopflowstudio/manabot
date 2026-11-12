@@ -336,6 +336,20 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::SkipsCombatPhasesNextTurn",
             Seen::Via("its shared-effect row"),
         ),
+        Modification::LifeTotalCantChange => (
+            "Modification::LifeTotalCantChange",
+            Seen::Via("its shared-effect row; the action tensor omits life payments"),
+        ),
+        Modification::ProtectionFromEverything => (
+            "Modification::ProtectionFromEverything",
+            Seen::Via("its shared-effect row; the action tensor omits targets naming the player"),
+        ),
+        Modification::PhasedOut => (
+            "Modification::PhasedOut",
+            Seen::Via(
+                "its shared-effect row on the permanent's kept row; the action tensor omits it",
+            ),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -401,6 +415,9 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         (true, Modification::NoMaximumHandSize),
         (true, Modification::NextCreatureCastFlash),
         (true, Modification::SkipsCombatPhasesNextTurn),
+        (true, Modification::LifeTotalCantChange),
+        (true, Modification::ProtectionFromEverything),
+        permanent(Modification::PhasedOut),
         permanent(Modification::ControlChanged {
             previous: PlayerId(1),
         }),
@@ -409,7 +426,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 32;
+const MODIFICATION_VARIANTS: usize = 35;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -417,6 +434,7 @@ fn duration_code(duration: EffectDuration) -> f32 {
         EffectDuration::EndOfTurn => 1.0,
         EffectDuration::Indefinite => 2.0,
         EffectDuration::WhileYouControlSource => 3.0,
+        EffectDuration::UntilYourNextTurn => 4.0,
     }
 }
 
@@ -1911,7 +1929,11 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
             "{name}"
         );
     }
-    for duration in [EffectDuration::EndOfTurn, EffectDuration::Indefinite] {
+    for duration in [
+        EffectDuration::EndOfTurn,
+        EffectDuration::Indefinite,
+        EffectDuration::UntilYourNextTurn,
+    ] {
         let effect = Effect::ApplyContinuous {
             affected: ObjectSelector::This,
             modification: Modification::CantBeBlocked,

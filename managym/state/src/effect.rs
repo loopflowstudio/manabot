@@ -111,6 +111,20 @@ pub enum Modification<N = i32> {
     /// turn, additional ones included (CR 500.11). It ends in the cleanup step
     /// of a turn that player takes.
     SkipsCombatPhasesNextTurn,
+    /// Rules effect on a player: their life total can't change (CR 119.7):
+    /// life gain, life loss and damage leave it alone, and they can pay no
+    /// life other than 0 (CR 119.8).
+    LifeTotalCantChange,
+    /// Rules effect on a player: protection from everything (CR 702.16j).
+    /// Nothing can target them, and all damage to them is prevented.
+    ProtectionFromEverything,
+    /// Rules effect: the permanent is phased out (CR 702.26). It stays on
+    /// the battlefield with its counters and attachments, but the game
+    /// treats it as though it doesn't exist; `Game::is_phased_out` is the
+    /// one reader. It phases in, ending the record, during its controller's
+    /// untap step before they untap (CR 702.26a); a permanent phased out
+    /// indirectly with the one it is attached to phases in with it.
+    PhasedOut,
     /// Layer 2 (CR 613.1b): the record's controller controls the object;
     /// when the record ends with the object still theirs, control returns
     /// to `previous`. Only resolutions create it (`Effect::GainControl`).
@@ -173,6 +187,9 @@ impl<N> Modification<N> {
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
             Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::SkipsCombatPhasesNextTurn => Modification::SkipsCombatPhasesNextTurn,
+            Self::LifeTotalCantChange => Modification::LifeTotalCantChange,
+            Self::ProtectionFromEverything => Modification::ProtectionFromEverything,
+            Self::PhasedOut => Modification::PhasedOut,
             Self::ControlChanged { previous } => Modification::ControlChanged {
                 previous: *previous,
             },
@@ -234,6 +251,9 @@ impl Modification {
             | Self::NoMaximumHandSize
             | Self::NextCreatureCastFlash
             | Self::SkipsCombatPhasesNextTurn
+            | Self::LifeTotalCantChange
+            | Self::ProtectionFromEverything
+            | Self::PhasedOut
             | Self::ControlChanged { .. }
             | Self::ModeChosen { .. }
             | Self::HasAbilitiesOfSource => return false,
@@ -265,6 +285,9 @@ pub enum EffectDuration {
     /// "For as long as you control [this]": ends once the effect's
     /// controller no longer controls its exact source object (CR 611.2b).
     WhileYouControlSource,
+    /// "Until your next turn": ends as the record controller's next turn
+    /// begins, before that turn's untap step phases anything in (CR 502.1).
+    UntilYourNextTurn,
 }
 
 /// Whom a continuous effect record affects.
@@ -316,6 +339,9 @@ pub struct EffectRecords {
     by_object: BTreeMap<ObjectRef, Vec<usize>>,
     /// Indices into `records` by affected player, ascending.
     by_player: [Vec<usize>; 2],
+    /// How many records are `PhasedOut`, so battlefield readers skip the
+    /// per-object lookup while nothing is phased out.
+    phased_out: usize,
 }
 
 impl EffectRecords {
@@ -325,6 +351,7 @@ impl EffectRecords {
             Affected::Object(object) => self.by_object.entry(object).or_default().push(index),
             Affected::Player(player) => self.by_player[player.0].push(index),
         }
+        self.phased_out += usize::from(record.modification == Modification::PhasedOut);
         self.records.push(record);
     }
 
@@ -363,11 +390,18 @@ impl EffectRecords {
         self.records.is_empty()
     }
 
+    /// Whether any record phases a permanent out.
+    #[inline]
+    pub fn any_phased_out(&self) -> bool {
+        self.phased_out > 0
+    }
+
     /// Keep the records `keep` accepts, in order, and rebuild the index.
     pub fn retain(&mut self, mut keep: impl FnMut(&ContinuousEffect) -> bool) {
         let records = std::mem::take(&mut self.records);
         self.by_object.clear();
         self.by_player = Default::default();
+        self.phased_out = 0;
         self.extend(records.into_iter().filter(|record| keep(record)));
     }
 }

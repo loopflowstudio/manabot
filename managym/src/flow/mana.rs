@@ -730,7 +730,7 @@ impl Game {
                 }
             })
             .collect();
-        let mut life = self.state.players[player.0].life.max(0) as u32;
+        let mut life = self.payable_life(player).max(0) as u32;
         if let Some(
             PendingChoice::ManaPayment { payment, .. }
             | PendingChoice::SacrificePayment { payment, .. },

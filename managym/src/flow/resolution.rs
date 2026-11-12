@@ -616,8 +616,11 @@ impl Game {
                 modification,
                 duration,
             } => {
-                let affected = self.resolve_affected(affected, frame);
+                let mut affected = self.resolve_affected(affected, frame);
                 let modification = modification.resolve(|value| self.effect_value(value, frame));
+                if modification == Modification::PhasedOut {
+                    affected = self.phase_out_set(affected);
+                }
                 // "For as long as you control [this]" with this gone or
                 // already someone else's lasts no time at all.
                 let source_object = frame.source_ref.filter(|source| {
@@ -2282,10 +2285,14 @@ impl Game {
                 // CR 702.11b applies regardless of target wording. Recheck live
                 // presence and hexproof at selection and resolution (608.2b).
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
+                    && !self.is_phased_out(id)
                     && (permanent.controller == controller
                         || !self.characteristics(id).keywords.has(Keyword::Hexproof))
                     && self.permanent_matches_spec(id, spec, controller)
             }
+            // Protection from everything: no spell or ability can target
+            // the player, theirs included (CR 702.16b, 702.16j).
+            Target::Player(player) if self.has_protection_from_everything(player) => false,
             Target::Player(player) => match spec {
                 TargetSpec::Player | TargetSpec::AnyTarget => true,
                 TargetSpec::Opponent => player != controller,

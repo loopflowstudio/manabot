@@ -158,7 +158,20 @@ impl Game {
     }
 
     /// Borrowed traversal for readers; mutation paths use the owned snapshot.
+    /// Phased-out permanents are treated as though they don't exist
+    /// (CR 702.26b), so every rules reader skips them here.
     pub(crate) fn iter_battlefield_permanents(
+        &self,
+        player: PlayerId,
+    ) -> impl Iterator<Item = PermanentId> + '_ {
+        self.iter_battlefield_including_phased_out(player)
+            .filter(|&id| !self.is_phased_out(id))
+    }
+
+    /// Every permanent in `player`'s battlefield zone, phased out or not:
+    /// the observation's rows, which show phased-out permanents with their
+    /// record (they are public, CR 702.26b).
+    pub(crate) fn iter_battlefield_including_phased_out(
         &self,
         player: PlayerId,
     ) -> impl Iterator<Item = PermanentId> + '_ {

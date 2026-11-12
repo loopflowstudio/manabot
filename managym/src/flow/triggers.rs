@@ -1504,7 +1504,11 @@ impl Game {
 
     fn build_trigger_index(&self) -> TriggerIndex {
         let mut sources: Vec<TriggerSourceEntry> = self
-            .layer_views((0..self.state.permanents.len()).map(PermanentId))
+            .layer_views(
+                (0..self.state.permanents.len())
+                    .map(PermanentId)
+                    .filter(|&id| !self.is_phased_out(id)),
+            )
             .map(|(id, view)| {
                 let permanent = self.state.permanents[id].as_ref().unwrap();
                 TriggerSourceEntry {

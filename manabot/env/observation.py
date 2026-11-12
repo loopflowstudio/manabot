@@ -581,6 +581,8 @@ class ObservationEncoder:
                     duration = 1.0
                 case "WhileYouControlSource":
                     duration = 3.0
+                case "UntilYourNextTurn":
+                    duration = 4.0
                 case _:
                     duration = 2.0
             provenance = (duration, effect.timestamp, effect.source_registry_key)

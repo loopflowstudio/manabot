@@ -465,7 +465,7 @@ pub struct ContinuousEffectData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
     /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
-    /// `WhileYouControlSource`).
+    /// `WhileYouControlSource`, `UntilYourNextTurn`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -527,7 +527,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 32] = [
+pub const MODIFICATION_NAMES: [&str; 35] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -557,6 +557,9 @@ pub const MODIFICATION_NAMES: [&str; 32] = [
     "NoMaximumHandSize",
     "NextCreatureCastFlash",
     "SkipsCombatPhasesNextTurn",
+    "LifeTotalCantChange",
+    "ProtectionFromEverything",
+    "PhasedOut",
     "ControlChanged",
     "ModeChosen",
     "HasAbilitiesOfSource",
@@ -663,6 +666,9 @@ impl ContinuousEffectData {
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
             Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::SkipsCombatPhasesNextTurn => "SkipsCombatPhasesNextTurn",
+            Modification::LifeTotalCantChange => "LifeTotalCantChange",
+            Modification::ProtectionFromEverything => "ProtectionFromEverything",
+            Modification::PhasedOut => "PhasedOut",
             Modification::ControlChanged { previous } => {
                 data.amount = Some(previous.0 as i32);
                 "ControlChanged"
@@ -1295,7 +1301,7 @@ impl Observation {
     fn populate_permanents(&mut self, game: &Game, agent_player: PlayerId) {
         let ids = [agent_player, PlayerId((agent_player.0 + 1) % 2)]
             .into_iter()
-            .flat_map(|player| game.iter_battlefield_permanents(player));
+            .flat_map(|player| game.iter_battlefield_including_phased_out(player));
         for (perm_id, characteristics) in game.characteristics_many(ids) {
             let permanent = game.state.permanents[perm_id].as_ref().unwrap();
             self.add_permanent(game, perm_id, permanent, &characteristics);

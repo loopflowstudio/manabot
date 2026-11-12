@@ -419,7 +419,7 @@ impl Game {
         if !cast.kicked
             && self.state.cards[card]
                 .life_alternative()
-                .is_some_and(|life| self.state.players[player.0].life < life as i32)
+                .is_some_and(|life| self.payable_life(player) < life as i32)
         {
             return false;
         }
@@ -1199,7 +1199,7 @@ impl Game {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
-        if self.state.players[player.0].life < ability.life_cost as i32 {
+        if ability.life_cost > 0 && self.payable_life(player) < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {

@@ -947,6 +947,7 @@ pub(super) fn continuous_description(
         EffectDuration::EndOfTurn => " until end of turn",
         EffectDuration::Indefinite => "",
         EffectDuration::WhileYouControlSource => " for as long as you control this",
+        EffectDuration::UntilYourNextTurn => " until your next turn",
     };
     let amount = |value: &EffectValue| match value {
         EffectValue::Fixed(n) => format!("{n:+}"),
@@ -1085,6 +1086,13 @@ pub(super) fn continuous_description(
         Modification::SkipsCombatPhasesNextTurn => {
             format!("{subject}: skip all combat phases of the next turn")
         }
+        Modification::LifeTotalCantChange => {
+            format!("{subject}: life total can't change{until}")
+        }
+        Modification::ProtectionFromEverything => {
+            format!("{subject}: protection from everything{until}")
+        }
+        Modification::PhasedOut => format!("{subject} phase out{until}"),
         Modification::ControlChanged { .. } => {
             format!("You control {}{until}", subject.to_lowercase())
         }

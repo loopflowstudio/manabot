@@ -300,7 +300,11 @@ impl Game {
         match step {
             StepKind::Untap => {
                 // CR 502.2 — Active player untaps permanents they control.
+                // "Until your next turn" ends as the turn begins, and their
+                // phased-out permanents phase in first (CR 502.1).
                 let active = self.active_player();
+                self.end_until_your_next_turn_effects(active);
+                self.phase_in(active);
                 self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);

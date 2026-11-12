@@ -185,6 +185,7 @@ pub fn encode(
             "EndOfTurn" => 1.0,
             "Indefinite" => 2.0,
             "WhileYouControlSource" if record.source.is_some() => 3.0,
+            "UntilYourNextTurn" => 4.0,
             _ => {
                 return Err(Error::InvalidShared(
                     "invalid shared effect duration/source",

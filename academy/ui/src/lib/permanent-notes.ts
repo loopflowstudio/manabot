@@ -5,7 +5,8 @@ import type { ContinuousEffect, CopyEffect, PermanentState } from './types';
 // (`manabot/semantic/text_observation.py`, `effect_phrase`).
 export function effectNote(effect: ContinuousEffect): string {
   const until = effect.duration === 'EndOfTurn' ? 'until end of turn: '
-    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: " : '';
+    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: "
+    : effect.duration === 'UntilYourNextTurn' ? "until its controller's next turn: " : '';
   return `${until}${modificationPhrase(effect)}${effect.source ? ` (${effect.source})` : ''}`;
 }
 
@@ -57,6 +58,12 @@ function modificationPhrase(effect: ContinuousEffect): string {
       return 'the next creature card cast can be cast as though it had flash';
     case 'SkipsCombatPhasesNextTurn':
       return 'skips all combat phases of their next turn';
+    case 'LifeTotalCantChange':
+      return "life total can't change";
+    case 'ProtectionFromEverything':
+      return 'protection from everything';
+    case 'PhasedOut':
+      return "phased out (treated as though it doesn't exist)";
     case 'ControlChanged':
       return `control changed from seat ${(effect.amount ?? 0) + 1}`;
     case 'ModeChosen':

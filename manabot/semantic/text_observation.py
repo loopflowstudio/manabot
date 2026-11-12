@@ -372,6 +372,9 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
             "the next creature card cast can be cast as though it had flash"
         ),
         "SkipsCombatPhasesNextTurn": "skips all combat phases of their next turn",
+        "LifeTotalCantChange": "life total can't change",
+        "ProtectionFromEverything": "protection from everything",
+        "PhasedOut": "phased out (treated as though it doesn't exist)",
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (
@@ -946,6 +949,7 @@ class _Renderer:
         until = {
             "EndOfTurn": "until end of turn: ",
             "WhileYouControlSource": "while its source's controller controls it: ",
+            "UntilYourNextTurn": "until its controller's next turn: ",
         }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"
