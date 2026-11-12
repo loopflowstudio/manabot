@@ -71,3 +71,7 @@ Keep this branch’s benchmark decisions; main’s unrelated MTG-285 release not
 remain at `668555c095c61709191ee7c4c59ad767b6903317:scratch/questions.md`.
 Combine both Infrastructure memory additions, retaining their separate historical
 coverage records. Neither release notes nor historical coverage select new work.
+
+Sync onto `4842222e3f461324ff2c46937466e97761ce72e3` deletes this file on
+main. Retain it here because the active benchmark plan still references these
+branch-specific decisions and evidence; keep main's release and licensing changes.
