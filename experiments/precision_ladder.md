@@ -53,9 +53,24 @@ USD 7.80 for four, plus USD 1.50 for one CPU evaluation pass. A float32 run
 slower than assumed stops at its watchdog with its exports; the comparison then
 uses the last update every run reached.
 
+## Length and its limits
+
+The comparison is 64 updates per run, the length the USD 8 budget covers.
+Longer runs (about 300 updates, about USD 30) need a person to approve the
+amount, and none was approved before launch. Limits that follow:
+
+- 64 updates is early training. Both arms may still be near their starting
+  strength, so a matched score shows BF16 does not break early learning, not
+  that the two arms reach the same strength at frontier length.
+- Effects that accumulate slowly, such as BF16 rounding in optimizer state or
+  value-head drift, may not separate within 64 updates.
+- Two seeds per arm give a narrow float32 band; a band from two points can
+  miss real spread, in either direction.
+
 ## Status
 
-Not launched. It waits for the L4 queue to clear (MTG-318 and MTG-319).
+Queued 2026-11-12 on this Task's own on-demand `mtg324-l4` (cohort
+`mtg324-precision-ab`, `--max-usd 10`).
 
 ## Answer
 
