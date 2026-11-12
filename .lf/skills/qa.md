@@ -159,3 +159,15 @@ publish, land or choose the next Graph step from here.
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
   ignores SIGINT, so `pkill -INT` appears to hang.
+- Experiment reports and figures: arrive as a new reader with
+  `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
+  manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
+  <paths>`. In zsh, pass a path list as an array (`"${P[@]}"`), since zsh does
+  not word-split `$P`. Fetch only the files the figure code reads; whole
+  evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
+  figure that changes bytes on every redraw also changes its manifest entry.
+  Render SVGs with `rsvg-convert -z 2 -b white` and look at them. The L4 profile
+  (`experiments/l4_step_profile.py`) has a CPU smoke job,
+  `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
+  experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
+  minutes and 2.2 GB and runs every stage as a real child process.
