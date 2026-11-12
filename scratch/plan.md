@@ -67,8 +67,13 @@ Concepts hold: one authoring value (`auto`) that the regime resolves at build ti
 every record names a real precision and resume never meets a moved threshold. Storing
 `auto` and resolving at run time was the alternative; it would let a later threshold
 change silently retrain saved regimes, so it stays rejected.
-Direction for remaining step 2 (no code now): the 64-update length rests on an assumed
-~150 s/update. The w256 step run measures float32 update time on the L4; before launching
-the A/B, set its length to the most updates (up to 300) that keep both arms × both seeds
-plus eval under the USD 10 cap, and edit the pre-registered paragraph in
-`experiments/precision_ladder.md` to match before any scored run.
+
+## Upstream (realign 2026-11-12)
+Main merged MTG-319 live-token attention (439379869, merged here at 454a73dda): opt-in
+`Execution.live_tokens`, 1.91x learner step over bucketed shapes at w384l8 in float32.
+It changes nothing here: the threshold and the A/B both run without it. BF16 combined with
+live tokens (jagged SDPA under autocast) is unmeasured; a later default for live tokens
+should re-check the BF16 speedup and threshold, not this Task.
+A/B status at 20:00 UTC: all four runs `running` on their machines (bf16 s32401 at
+update 1, others at 0, ~USD 0.35 so far); the controller's last loop is 2026-11-11, which
+is fine for booted pods.
