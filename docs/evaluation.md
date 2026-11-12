@@ -249,6 +249,19 @@ failure classification and the Command journal, retaining each Command before
 native execution. CPU and CUDA share one serial service with one Torch thread;
 CPU-specific engine work waits for a calibration showing it saturated.
 
+**Checkpoint identity.** A checkpoint registration's observation and action
+ABI hashes describe the checkpoint's own `ObservationSpace`, not the fresh
+defaults for its matchup; a checkpoint trained under older or non-default
+observation settings keeps its own hashes. Build registrations with
+`manabot.eval.admission.register_checkpoint`, which loads the bytes once and
+takes the world and both ABI hashes from that space, rather than calling
+`runtime_fingerprints` without one. Scalar play never compares these hashes,
+but the serving child does when it first loads a checkpoint: a registration
+whose hashes disagree with the loaded space has its matches refused before
+play with an `InferenceFailure` naming `checkpoint observation ABI drift` (or
+`action/world ABI drift`). The fix is to re-register from the checkpoint; a passing CPU run
+does not show its registration is right.
+
 Children start through `manabot.sim.child`, never `multiprocessing` spawn.
 Only search players (flat-MC, PUCT, local update) load Torch in a game child;
 replay children never do. `manabot.sim.threads` starts children single-threaded
