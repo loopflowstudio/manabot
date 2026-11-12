@@ -62,3 +62,8 @@
   ship this PR as it stands; Remaining 1 and 2 go to a separate Task stacked
   on MTG-325, MTG-333 (filed from Jack's session; this session's duplicate MTG-332 abandoned, its notes copied to MTG-333). The $10
   speed check still runs here before gate.
+- Split steer 0152f1d6 asks for the moved torch path "behind deprecation
+  aliases"; earlier steer 8332334d (Jack Heart: "if theyre not explicitly
+  calling someting, we dont need to worry about maintaining it") removed them
+  and #474 deleted its own. #503 adds none and names this in its body;
+  adding four alias modules is a small reversible change if wanted.

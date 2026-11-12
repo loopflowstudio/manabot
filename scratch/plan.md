@@ -486,3 +486,23 @@ leaves it open. Items 1 and 2 above are needed on either answer.
   first launch was refused (no machines, no cost).
 - Scope settled (steer bc2e6bd3): ship as is; Remaining 1 and 2 are MTG-333
   (named in the PR body). Remaining for this PR: the speed result, then gate.
+
+## Split (steer 0152f1d6, 2026-11-12)
+
+Jack Heart: "PR #501 is at 21,600 added lines as a draft. That is past review
+size; apply the split the brief allows now". Measured: 17,312 of #501's added
+lines were `scratch/` (two generated `base.patch` files, equivalence JSON);
+the code diff against #474 was 4,332 / 2,500.
+- PR A = #503 (branch `jack/mtg-325-torch-backend`, worktree
+  `../manabot.mtg-325-a`, base main a343904ee): e0ad728a0 (the commit before
+  the updates took the backend) merged with #474's tip and main. Updates are
+  #474's with backend import paths; `manabot.rl` changes from #474 ported
+  into `backends/torch/rl.py`; boundary test from this branch minus the
+  written-once parts. 2,137 / 1,415 lines plus the harness scripts.
+  CPU `run.py` A vs this branch: 3,248 tensors, 0 differ. Pytest: 269 + 47
+  passed.
+- PR B = #501 (this branch), merged A with `-s ours` (its tree already holds
+  A): 64 files, 2,344 / 1,234 against A. Generated scratch files untracked
+  (kept on disk).
+- No deprecation aliases in A despite the steer's wording: steer 8332334d
+  removed them; noted as an open point in #503's body.
