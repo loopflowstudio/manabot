@@ -214,6 +214,13 @@ hashed allocation settings; its records stay readable as `EvalComputeV1` /
 [bucketed padding](observation-and-model.md#bucketed-padding) and
 [live-token attention](observation-and-model.md#live-token-attention):
 `EvalAllocation.bucketed_shapes` and `live_tokens`, both off by default.
+
+```python
+from manabot.sim.execution import EvalAllocation
+
+allocation = EvalAllocation(device="cuda", bucketed_shapes=True, live_tokens=True)
+```
+
 `live_tokens=True` requires `device="cuda"` (`live tokens require CUDA`). They
 are off because served batches are small: in one w384l8 pass on an L4, at about
 nine rows per forward, the padded forward took 23.7 ms against 27.3 ms with

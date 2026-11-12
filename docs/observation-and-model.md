@@ -50,7 +50,7 @@ validation of its own
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
-   [Live-token attention](#live-token-attention-profiling) attends over valid
+   [Live-token attention](#live-token-attention) attends over valid
    objects only; it replaced the pooled token stream
    ([token-stream report](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
@@ -135,7 +135,7 @@ of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
 padded path the network still processes every slot, and skips lookups for an
 axis that is empty in the batch, so tensor shapes change from batch to batch.
 
-Bucketed padding, the default on CUDA, avoids most of that. After an
+Bucketed padding, the default for CUDA training, avoids most of that. After an
 observation is admitted, the network trims each variable axis (facts, effect
 headers, details and members, relations, actions, events, cards, permanents,
 known hands and decklists) to a bucket: the next power of two at or
@@ -180,8 +180,8 @@ resolves off omits both fields, so CPU and MPS regimes keep their hashes. A
 saved regime or `run.json` that omits them reads as off, the layout it trained
 in. Fresh stages default to `auto`; JSON may also request it explicitly.
 Builders that rebuild a regime (`with_capacity`, `with_agent`) resolve `auto`
-again; a value written
-explicitly, including an edit after resolution, is kept as written.
+again; a value written explicitly, including an edit after resolution, is kept
+as written.
 To compare the paths on CUDA, write
 `Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
 `--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
@@ -217,8 +217,8 @@ padded path.
 Bucketed padding still attends over every slot in a bucket, and most of those
 slots are empty: a batch whose largest board holds 9 permanents pads every
 observation to 16 permanent slots, including those with two. Live-token
-attention, on by default on CUDA, computes object attention and the per-object
-layers only for valid objects, so cost follows what the board holds
+attention, on by default for CUDA training, computes object attention and the
+per-object layers only for valid objects, so cost follows what the board holds
 rather than what the bucket allows.
 
 The forward packs the valid objects of every observation in the batch into one
@@ -240,9 +240,10 @@ jagged nested tensors. On CUDA that runs the fused variable-length kernels; on
 CPU it falls back to one attention call per observation, which is correct but
 slow: at w160l8 a 256-row collection forward took about 0.86 s against 0.46 s
 padded on a laptop CPU
-([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses live tokens only on CUDA: `auto` resolves off
-elsewhere, and an explicit `live_tokens=True` on CPU or MPS fails validation
-(`live tokens require CUDA`), as a reduced precision does.
+([measurement](../experiments/eval_forward_layout.md)). A stage therefore uses
+live tokens only on CUDA: `auto` resolves off elsewhere, and an explicit
+`live_tokens=True` on CPU or MPS fails validation (`live tokens require CUDA`),
+as a reduced precision does.
 
 Packing needs one host read per forward, the batch's total number of valid
 objects, to size the packed sequence. Collection measures it on the host while
@@ -257,9 +258,8 @@ may be on without the other. Code that builds a policy directly passes
 which allow it on any device so CPU tests can compare the layouts. Like
 bucketed shapes, it changes no model, checkpoint or input contract. Action
 probabilities, values, losses and gradients agree with the padded path to
-within 1e-5 on CPU; on CUDA
-they differ only by accumulation order, as bucketed shapes do. On an L4,
-live tokens over buckets make a learner step 1.45× faster than bucketed shapes
+within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
+shapes do. On an L4, live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms
 ([live-token attention](../experiments/live_token_attention.md)).
 

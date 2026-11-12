@@ -33,7 +33,7 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 `--recipe local` (`manabot.recipes.local`) is a two-update production-path
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
-with initial and endpoint evaluation. `--steps`, `--seconds` and
+with initial and endpoint evaluation. `--steps`, `--seconds`,
 `--learning-seats`, `--device cpu|mps|cuda` and `--padded-shapes` apply only
 to these recipes; a regime sets the same choices in its stages' `Execution`.
 Without `--device`, both select CUDA when available; Apple MPS is used only

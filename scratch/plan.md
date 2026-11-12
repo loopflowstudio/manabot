@@ -4,6 +4,8 @@ Docs written for the intended behavior (read these before implementing):
 - docs/observation-and-model.md — "Bucketed padding" and "Live-token attention"
 - docs/training.md — Run training (`--padded-shapes`), Stage operations (`auto`)
 - docs/evaluation.md — Shared inference, "Forward layout"
+  (docs pass 2: training-only default wording, `EvalAllocation` example,
+  fixed `#live-token-attention` anchor; no behavior change described)
 
 Built (implement pass 1):
 - `Execution.bucketed_shapes`/`live_tokens`: `bool | "auto"` (default auto),
