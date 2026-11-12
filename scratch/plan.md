@@ -58,22 +58,27 @@
 
 ## Remaining
 
-1. Gate (module by module; whole-suite run stalled on a busy host): every
-   module in tests/training, test_package_boundaries, test_experiment_files,
-   test_attack_choice and test_shared_effects passes except failures outside
-   this diff: test_etude_evaluation (4) and test_head_to_head (2)
-   `No module named 'duckdb'`; test_game_errors (3) fixture replay
-   `binding_mismatch` (diff touches no env/, game_errors, managym, sim or
-   fixtures); test_training_throughput::test_a_packed_seed_digests_as_it_does_solo
+Outcomes 1-5 and 7 are met (Outcome 4 since `eeca3f374`/`dcd13b7c9`: one
+caller per stage body). Outcome 6 waits on the open Etude choice below.
+
+1. Gate (module by module; a whole-suite run stalled on a busy host). Known
+   failures outside this diff, to re-run on a quiet host before landing:
+   test_etude_evaluation (4) and test_head_to_head (2) `No module named
+   'duckdb'`; test_game_errors (3) fixture replay `binding_mismatch` (diff
+   touches no env/, game_errors, managym, sim or fixtures);
+   test_training_throughput::test_a_packed_seed_digests_as_it_does_solo
    (checkpoint `source/etude_run`, added in #464, is not in the packing
-   digest's volatile list). Re-run these on a quiet host before landing, plus
-   test_bucketed_execution and the regime suites after the main merge.
+   digest's volatile list).
 2. `TrainingJob(regime=callable)`: jobs are built around one saved
    self-play stage (Etude `until=updates=N`, continuations, stop reserve);
-   a function job needs a declared update target. Docs say not yet.
+   a function job needs a declared update target. Docs say not yet. Waits
+   on the open Etude choice below.
 3. Outcome 6 (an existing Etude experiment file as a function) waits on 2.
-4. Function runs as producers for `import_policy` / learning-state
-   admission; game-error tolerance in function runs.
+4. Function runs as producers: `admit_policy` and `admit_learning_state`
+   read `source.regime` and refuse a function-run producer by name
+   ("regime-function run", `test_a_regime_function_producer_is_refused_by_name`).
+   Admitting them needs a producer contract over stage records instead of
+   the saved regime. Game-error tolerance in function runs is unbuilt.
 
 ## Not in scope / deferred
 

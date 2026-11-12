@@ -193,6 +193,10 @@ def admit_learning_state(
         spec.source_run, out / f"{stage.id}-parent-run.json"
     )
     serialized = json.loads(Path(receipt["path"]).read_bytes())
+    if isinstance(serialized, dict) and "regime_function" in serialized:
+        raise ValueError(
+            "learning-state producer is a regime-function run; only saved-regime runs are admitted"
+        )
     if not isinstance(serialized, dict) or serialized.get(
         "regime_digest"
     ) != canonical_sha256(serialized.get("regime")):

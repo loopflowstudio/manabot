@@ -315,3 +315,18 @@ def test_nested_producer_cost_cannot_be_lost(tmp_path: Path) -> None:
     assert run.status == "failed"
     assert "nested published producer costs" in (run.error or "")
     assert run.stages[0].producer_cost is None
+
+
+def test_a_regime_function_producer_is_refused_by_name(tmp_path: Path) -> None:
+    recipe = published_fixture(tmp_path)
+    stage = recipe.stages[0]
+    assert isinstance(stage, ImportPolicy)
+    export = Path(stage.source_run["path"])
+    serialized = json.loads(export.read_text())
+    # A function run records `regime_function` in place of `regime`.
+    serialized["regime_function"] = {"function": "experiments.two_models:regime"}
+    atomic_json(export, serialized)
+    stage.source_run = reference(export)
+    with VerifyStore(tmp_path / "store.sqlite") as store:
+        with pytest.raises(ValueError, match="regime-function run"):
+            execute_regime(recipe, 112, tmp_path / "run", store)

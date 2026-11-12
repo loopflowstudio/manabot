@@ -97,6 +97,10 @@ def admit_policy(
         name = stage.id
     receipt = copy_verified_artifact(stage.source_run, out / f"{name}-source-run.json")
     serialized = json.loads(Path(receipt["path"]).read_bytes())
+    if isinstance(serialized, dict) and "regime_function" in serialized:
+        raise ValueError(
+            "published producer is a regime-function run; only saved-regime runs are admitted"
+        )
     if not isinstance(serialized, dict) or serialized.get(
         "regime_digest"
     ) != canonical_sha256(serialized.get("regime")):
