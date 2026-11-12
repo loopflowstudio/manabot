@@ -41,87 +41,44 @@ impl Ability {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerCondition {
     /// The entering source must have been cast, rather than created or returned.
-    WasCast {
-        condition: Box<TriggerCondition>,
-    },
-    Sacrificed {
-        predicate: CardPredicate,
-        controller_only: bool,
-        /// "another permanent": the exact source object's own sacrifice
-        /// does not trigger it.
-        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
-        another: bool,
-    },
+    WasCast { condition: Box<TriggerCondition> },
+    /// "Whenever [subject] is sacrificed" (CR 701.21): once per sacrificed
+    /// permanent, matched as it last existed on the battlefield.
+    Sacrificed { subject: TriggerSubject },
     /// Wrap the whole condition, including ActiveIf. The limit is recorded
     /// when the event fires, once per exact source incarnation and turn.
-    OnceEachTurn {
-        condition: Box<TriggerCondition>,
-    },
-    YouCastSpell {
-        predicate: CardPredicate,
-    },
+    OnceEachTurn { condition: Box<TriggerCondition> },
     /// "When [this] has no [kind] counters on it": a state trigger (CR 603.8)
     /// of a battlefield source. It triggers whenever the state holds and
     /// not again while its last occurrence waits or is on the stack.
-    NoCounters {
-        kind: CounterKind,
-    },
+    NoCounters { kind: CounterKind },
     /// "When you cast this spell" (CR 603.2): functions while the source is
     /// a spell on the stack, and its caster controls the trigger.
     YouCastThis,
     /// The inner condition only while the source permanent is attacking
     /// ("whenever you cast a spell while Fire Lord Azula is attacking").
-    WhileSourceAttacking {
-        condition: Box<TriggerCondition>,
-    },
-    /// "Whenever you cast your Nth spell each turn" (CR 603.2): the spell is
-    /// the Nth its controller cast this turn.
-    YouCastNthSpellThisTurn {
-        n: u32,
-    },
-    /// "Whenever a player casts a [predicate] spell": any player, including
-    /// you. The caster is the trigger context ("they").
-    PlayerCastsSpell {
-        predicate: CardPredicate,
-    },
-    OpponentCastsSpell {
-        predicate: CardPredicate,
-    },
+    WhileSourceAttacking { condition: Box<TriggerCondition> },
     /// "Whenever a player casts a [predicate] spell that targets only this
     /// [permanent]": every target of the spell is this permanent. The spell
     /// is the context and its caster "that player".
-    SpellTargetsOnlyThis {
-        predicate: CardPredicate,
-    },
-    /// Each creature dealing combat damage to this ability's controller.
-    CreatureDealsCombatDamageToYou,
+    SpellTargetsOnlyThis { predicate: CardPredicate },
     /// "When [subject] enters the battlefield."
-    EntersTheBattlefield {
-        subject: TriggerSubject,
-    },
+    EntersTheBattlefield { subject: TriggerSubject },
     /// "When [subject] dies." — battlefield to graveyard (CR 700.4).
-    Dies {
-        subject: TriggerSubject,
-    },
+    Dies { subject: TriggerSubject },
     /// "When [subject] leaves the battlefield": to any other zone, looking
     /// back in time (CR 603.10a).
-    LeavesTheBattlefield {
-        subject: TriggerSubject,
-    },
-    /// "Whenever [subject] attacks." Fires after the declare-attackers
-    /// turn-based action (CR 508.1); a subject of `AnotherYouControl` /
-    /// `AnyYouControl` fires once per combat ("whenever one or more ...
-    /// attack"), not once per attacker.
+    LeavesTheBattlefield { subject: TriggerSubject },
+    /// "Whenever [subject] attacks" (CR 508.1, after the declare-attackers
+    /// turn-based action). `per` says whether it triggers once for each
+    /// matching attacker or once per combat ("whenever you attack", "one or
+    /// more ... attack"); `attackers` limits how many creatures were
+    /// declared in all ("attacks alone", "and at least one other creature
+    /// attack"). A lone matching attacker is the trigger's context.
     Attacks {
         subject: TriggerSubject,
-    },
-    /// "Whenever [this] and at least one other creature attack": the source
-    /// is among two or more declared attackers.
-    AttacksWithAnother,
-    /// "Whenever [subject] attacks alone": exactly one creature was
-    /// declared as an attacker (CR 506.5). The attacker is the context.
-    AttacksAlone {
-        subject: TriggerSubject,
+        per: Per,
+        attackers: AttackSize,
     },
     /// The inner cast or entry trigger only for an object that came from
     /// `zone` ("whenever you cast a spell from exile", "whenever a permanent
@@ -130,90 +87,73 @@ pub enum TriggerCondition {
         zone: ZoneType,
         condition: Box<TriggerCondition>,
     },
-    /// "Whenever an opponent searches their library" (CR 701.23), even when
-    /// the search finds nothing.
-    OpponentSearchesLibrary,
-    /// "Whenever a card is put into an opponent's graveyard from anywhere"
-    /// (Bloodchief Ascension): once per card, never a token; "that player"
-    /// is the graveyard's owner.
-    CardPutIntoOpponentsGraveyard,
-    /// "Whenever [subject] deals combat damage to a player": once for each
-    /// creature that does (`AnyYouControl`: "a creature you control").
-    CreatureDealsCombatDamageToPlayer {
-        subject: TriggerSubject,
-    },
-    /// "Whenever one or more [predicate] you control deal combat damage to a
-    /// player": once per combat damage step.
-    OneOrMoreDealCombatDamageToPlayer {
-        predicate: CardPredicate,
-    },
     /// "Whenever [subject] becomes tapped."
-    BecomesTapped {
-        subject: TriggerSubject,
-    },
+    BecomesTapped { subject: TriggerSubject },
     /// "Whenever [subject] is tapped for mana."
-    TappedForMana {
-        subject: TriggerSubject,
-    },
+    TappedForMana { subject: TriggerSubject },
     /// "Whenever [subject] becomes the target of a spell or ability an
     /// opponent controls." (Ward, CR 702.21.) The triggering spell or ability
     /// is threaded to the ability's effects as the trigger context target.
-    BecomesTargeted {
-        subject: TriggerSubject,
-    },
-    /// "At the beginning of your upkeep."
-    BeginningOfYourUpkeep,
-    /// "At the beginning of each upkeep."
-    BeginningOfEachUpkeep,
-    /// "At the beginning of each player's draw step": the active player is
-    /// "that player" (`PlayerSelector::TriggeringPlayer`).
-    BeginningOfEachDrawStep,
-    /// "At the beginning of each [player's] end step": the active player is
-    /// "that player".
-    BeginningOfEachEndStep,
-    /// "Whenever you waterbend, earthbend, firebend, or airbend": once per
-    /// bending instruction or waterbend payment.
-    YouBend,
-    BeginningOfYourCombat,
-    BeginningOfYourEndStep,
+    BecomesTargeted { subject: TriggerSubject },
     /// "Whenever a creature you control attacking causes a triggered ability
     /// of that creature to trigger": that ability, once on the stack, is the
     /// trigger's context.
     YourAttackingCreatureTriggers,
-    /// "At the beginning of your first main phase" (the precombat main).
-    BeginningOfYourFirstMainPhase,
     /// A Saga's chapter ability (CR 714.2b): triggers as lore counters put
     /// on this Saga bring their number from below `chapter` to at least it.
     /// Abilities printed "I, II" are one ability per chapter.
-    Chapter {
-        chapter: u8,
-    },
-    /// "Whenever you draw your Nth card each turn." The per-player draw
-    /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
-    YouDrawNthCardThisTurn {
-        n: u32,
-    },
-    /// "Whenever you put one or more [kind] counters on a creature": once
-    /// per creature an instruction you control puts them on. The trigger's
-    /// X is how many were put ("that much").
-    YouPutCountersOnCreature {
+    Chapter { chapter: u8 },
+    /// "Whenever [who] puts one or more [kind] counters on a [on]
+    /// permanent": once per permanent an instruction that player controls
+    /// puts them on. The trigger's X is how many were put ("that much").
+    PutsCounters {
+        who: Actor,
         kind: CounterKind,
+        on: CardPredicate,
     },
-    /// "Whenever you scry" (CR 701.22): once per scry instruction with a
-    /// count above zero.
-    YouScry,
-    /// "Whenever you scry or surveil": after that keyword operation completes.
-    YouScryOrSurveil,
-    /// "Whenever an opponent draws their Nth card each turn."
-    OpponentDrawsNthCardThisTurn {
-        n: u32,
+    /// "Whenever [who] casts a [predicate] spell" (CR 601.2i); with `nth`,
+    /// only the spell that is the Nth its caster cast this turn ("whenever
+    /// you cast your second spell each turn"). The caster is "that player".
+    Casts {
+        who: Actor,
+        predicate: CardPredicate,
+        nth: Option<u32>,
+    },
+    /// "Whenever [who] draws a card"; with `nth`, only that player's Nth
+    /// draw this turn (see `PlayerTurnHistory::cards_drawn`). The drawer is
+    /// "that player".
+    Draws { who: Actor, nth: Option<u32> },
+    /// "At the beginning of [whose] [step]": `whose` is asked of the active
+    /// player, who is "that player".
+    BeginningOf { step: TurnStep, whose: Actor },
+    /// "Whenever [who] [does one of these keyword actions]": once per
+    /// search (even one that finds nothing, CR 701.23), scry with a count
+    /// above zero (CR 701.22), completed surveil (CR 701.25), bending
+    /// instruction or waterbend payment. The performer is "that player".
+    Performs {
+        who: Actor,
+        any_of: Vec<KeywordAction>,
+    },
+    /// "Whenever a [predicate] card is put into [whose] graveyard from
+    /// anywhere" (Bloodchief Ascension): once per card, never a token
+    /// (tokens are not cards); the graveyard's owner is "that player".
+    PutIntoGraveyard {
+        whose: Actor,
+        predicate: CardPredicate,
+    },
+    /// "Whenever [subject] deals combat damage to [to]" (CR 510.2), with
+    /// prevented damage excluded. `per` says whether it triggers once for
+    /// each creature that does or once per combat damage step ("one or
+    /// more").
+    DealsCombatDamage {
+        subject: TriggerSubject,
+        to: Actor,
+        per: Per,
     },
     /// The inner condition, for an ability that functions only while its
     /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
     /// the ability's source is that graveyard object.
-    InGraveyard {
-        condition: Box<TriggerCondition>,
-    },
+    InGraveyard { condition: Box<TriggerCondition> },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller: a conditionally granted triggered ability
     /// ("has firebending 2 as long as there's a Lesson card in your
@@ -333,6 +273,31 @@ pub enum Condition {
     TargetControlledByYou,
 }
 
+impl TriggerCondition {
+    /// "Whenever [who] casts a [predicate] spell", any spell of the turn.
+    pub fn casts(who: Actor, predicate: CardPredicate) -> Self {
+        TriggerCondition::Casts {
+            who,
+            predicate,
+            nth: None,
+        }
+    }
+
+    /// "At the beginning of [whose] [step]".
+    pub fn beginning_of(step: TurnStep, whose: Actor) -> Self {
+        TriggerCondition::BeginningOf { step, whose }
+    }
+
+    /// "Whenever [subject] attacks", whatever else attacks with it.
+    pub fn attacks(subject: TriggerSubject, per: Per) -> Self {
+        TriggerCondition::Attacks {
+            subject,
+            per,
+            attackers: AttackSize::Any,
+        }
+    }
+}
+
 impl Condition {
     /// Whether answering reads the asking ability's source permanent or the
     /// permanent that triggered it, so the condition is meaningful only in
@@ -394,19 +359,126 @@ impl Condition {
     }
 }
 
+/// The player who performs a trigger's event, relative to the ability's
+/// controller ("you"). Resolution-time players are `PlayerSelector`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Actor {
+    You,
+    Opponent,
+    AnyPlayer,
+}
+
+impl Actor {
+    /// Whether `player` is this actor for an ability controlled by `you`.
+    pub fn includes(self, you: PlayerId, player: PlayerId) -> bool {
+        match self {
+            Actor::You => player == you,
+            Actor::Opponent => player != you,
+            Actor::AnyPlayer => true,
+        }
+    }
+}
+
+/// A step whose beginning triggers abilities (CR 503.1a, 504.2, 505.4,
+/// 507.1, 513.1). `FirstMain` is the precombat main phase; `Combat` is the
+/// beginning of combat step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum TurnStep {
+    Upkeep,
+    Draw,
+    FirstMain,
+    Combat,
+    End,
+}
+
+/// A keyword action a `TriggerCondition::Performs` event watches.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum KeywordAction {
+    /// Searching one's library (CR 701.23).
+    Search,
+    Scry,
+    Surveil,
+    Waterbend,
+    Earthbend,
+    Firebend,
+    Airbend,
+}
+
+impl KeywordAction {
+    /// "waterbend, earthbend, firebend, or airbend".
+    pub const BENDING: [KeywordAction; 4] = [
+        KeywordAction::Waterbend,
+        KeywordAction::Earthbend,
+        KeywordAction::Firebend,
+        KeywordAction::Airbend,
+    ];
+}
+
+/// How often an event over several objects at once triggers: once for each
+/// matching object, or once for the batch ("one or more").
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Per {
+    Object,
+    Batch,
+}
+
+/// How many creatures in all an `Attacks` trigger requires to have been
+/// declared as attackers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AttackSize {
+    Any,
+    /// Exactly one (CR 506.5).
+    Alone,
+    /// Two or more, the subject among them.
+    WithAnother,
+}
+
 /// Which game objects an event-based trigger condition watches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TriggerSubject {
     /// The permanent this ability is on.
     This,
-    /// "another [predicate] you control"
-    AnotherYouControl(CardPredicate),
-    /// "this or another [predicate] you control"
-    AnyYouControl(CardPredicate),
     /// "enchanted creature": the object the source Aura is attached to.
     EnchantedCreature,
+    /// "a/another [predicate] [controlled_by controls]": an object whose
+    /// controller is `controlled_by`, relative to the ability's controller.
+    /// `another` excludes the source itself (CR 109.4).
+    Matching {
+        controlled_by: Actor,
+        predicate: Box<CardPredicate>,
+        another: bool,
+    },
+}
+
+impl TriggerSubject {
+    /// "a/another [predicate] [controlled_by controls]".
+    pub fn matching(controlled_by: Actor, predicate: CardPredicate, another: bool) -> Self {
+        Self::Matching {
+            controlled_by,
+            predicate: Box::new(predicate),
+            another,
+        }
+    }
+
+    /// "a [predicate] you control", this included.
+    pub fn you_control(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::You, predicate, false)
+    }
+
+    /// "another [predicate] you control".
+    pub fn another_you_control(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::You, predicate, true)
+    }
+
+    /// "a [predicate]", whoever controls it, this included.
+    pub fn any(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::AnyPlayer, predicate, false)
+    }
+
     /// "another [predicate]", whoever controls it.
-    Another(CardPredicate),
+    pub fn another(predicate: CardPredicate) -> Self {
+        Self::matching(Actor::AnyPlayer, predicate, true)
+    }
 }
 
 /// The players an effect affects, relative to its controller.

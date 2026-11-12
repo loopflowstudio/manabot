@@ -1,8 +1,8 @@
 //! The Hobbit cards, expressed in the engine's shared rules vocabulary.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, TargetRequirement, TargetSpec,
-        TriggerCondition,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, TargetRequirement,
+        TargetSpec, TriggerCondition, TurnStep,
     },
     card::{
         CardDefinition, CardType, CardTypes, Keyword, Keywords, LayerValue, StaticAbility,
@@ -41,7 +41,7 @@ fn beorn_the_fierce() -> CardDefinition {
             }],
         })],
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourCombat,
+            condition: TriggerCondition::beginning_of(TurnStep::Combat, Actor::You),
             intervening_if: None,
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),

@@ -1,8 +1,8 @@
 //! Shadows over Innistrad.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
-        TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
@@ -30,7 +30,7 @@ fn tireless_tracker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Land),
                         ..Default::default()
                     }),
@@ -40,12 +40,10 @@ fn tireless_tracker() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
-                    predicate: CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         subtype: Some("Clue".into()),
                         ..Default::default()
-                    },
-                    controller_only: true,
-                    another: false,
+                    }),
                 },
                 effects: vec![Effect::put_counters(
                     ObjectSelector::This,
@@ -73,7 +71,7 @@ fn fevered_visions() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOfEachEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::AnyPlayer),
             effects: vec![
                 that_player(vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),

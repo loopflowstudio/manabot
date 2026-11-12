@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "976e5d15c41a5a18971a95bcc383a0bf9053951ee6acf9308fbe8c1b4a7eabe4",
+    "authority_receipt_sha256": "d6616852ae49aec263baf2443646ee28e0e9b3f2adebe57194f1f866981f60aa",
     "command_tape_sha256": "d51b89480aa6c6ad4d11f47b7d2cbc7186801af836b6c73cd275030601851387",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "976e5d15c41a5a18971a95bcc383a0bf9053951ee6acf9308fbe8c1b4a7eabe4"
+          "sha256": "d6616852ae49aec263baf2443646ee28e0e9b3f2adebe57194f1f866981f60aa"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "e8527f23448db3fc152b809c9432372a1f9c6bae41a8a3e7fa035df2e4f9549b"
+          "sha256": "75db04beb778d4d3409c0682a20aa7691ce4db047ee243e352d9b57fa0eec42d"
         },
         {
           "path": "academy/server.py",
@@ -128,7 +128,7 @@
           "sha256": "fe7203833b223d1efa2024782cb8ff2a666e981f12c402b9e54a1acfea49db9a"
         }
       ],
-      "sha256": "c376ad5aca4e9b79539716b32101f419661129736b7aa95d6da6e34e4f5cb838"
+      "sha256": "e1be171aa7ff83ae431b44ccb7cddfe32af97324b3e924d66bc47635d020e811"
     },
     "seed": 0,
     "semantic_decision_version": 8

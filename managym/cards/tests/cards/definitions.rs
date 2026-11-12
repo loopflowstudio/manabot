@@ -8,7 +8,7 @@
 //! condition or an `ActiveIf`.
 
 use managym::state::{
-    ability::{Ability, Condition, Effect, TriggerCondition},
+    ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
     card::{CardDefinition, CardType, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -121,7 +121,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     let intervening = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::TargetDealtDamageThisTurn),
             effects: vec![Effect::discard()],
         }],
@@ -134,7 +134,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
                 active_if: Condition::Kicked,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
             },
             intervening_if: None,
             effects: vec![Effect::discard()],
@@ -146,7 +146,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
     let source_intervening = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::SourceTapped),
             effects: vec![Effect::discard()],
         }],
@@ -159,7 +159,7 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::ActiveIf {
                 active_if: Condition::SourceTapped,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
             },
             intervening_if: None,
             effects: vec![Effect::discard()],

@@ -39,7 +39,7 @@ fn bastion_of_remembrance() -> CardDefinition {
             Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Dies {
-                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    subject: TriggerSubject::you_control(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     }),

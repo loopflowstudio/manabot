@@ -75,6 +75,12 @@ publish, land or choose the next Graph step from here.
   for the `ACADEMY_PLAY_READY` line (it names Python, native ABI and module
   path), open the frontend URL, press New Game, play a land and Pass Turn.
   Stop with SIGINT to the `scripts/play.py` process; it stops both servers.
+  Without a connected browser, run a Node Playwright script from `academy/ui`
+  (its `playwright` package and cached Chromium resolve there; delete the
+  script afterwards). Click only `[data-testid=action-panel] button` offers:
+  other buttons open the deck picker or start a New Game. Triggered abilities
+  appear under "Stack · top first" as `Card — <trigger>: <effects> ·
+  triggered ability · Seat N`; read that text while the stack is non-empty.
 - First-time clone: copy tracked plus untracked non-ignored files
   (`git ls-files -co --exclude-standard`) to an empty `/tmp` directory and run
   `ACADEMY_CLEAN_API_PORT=… ACADEMY_CLEAN_FRONTEND_PORT=… ./scripts/verify-clean-machine`

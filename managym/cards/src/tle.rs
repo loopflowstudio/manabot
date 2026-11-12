@@ -1,8 +1,8 @@
 //! Avatar: The Last Airbender Eternal.
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, Scope, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -67,17 +67,22 @@ fn the_cabbage_merchant() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::OpponentCastsSpell {
-                    predicate: CardPredicate {
+                condition: TriggerCondition::casts(
+                    Actor::Opponent,
+                    CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
-                },
+                ),
                 effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::CreatureDealsCombatDamageToYou,
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::any(CardPredicate::creature()),
+                    to: Actor::You,
+                    per: Per::Object,
+                },
                 effects: vec![Effect::Sacrifice {
                     optional: false,
                     what: ObjectSelector::chosen(CardPredicate {
@@ -572,9 +577,7 @@ fn iroh_firebending_instructor() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
+            condition: TriggerCondition::attacks(TriggerSubject::This, Per::Object),
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::each(
                     Scope::Battlefield,

@@ -1,8 +1,8 @@
 //! Core Set 2020.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TargetRequirement,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords},
     effect::EffectDuration,
@@ -66,7 +66,7 @@ fn agent_of_treachery() -> CardDefinition {
             },
             Ability::Triggered {
                 intervening_if: Some(Condition::ControlsUnownedAtLeast { count: 3 }),
-                condition: TriggerCondition::BeginningOfYourEndStep,
+                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
                 effects: vec![Effect::DrawCards {
                     count: EffectValue::Fixed(3),
                 }],

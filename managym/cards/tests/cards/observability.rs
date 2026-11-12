@@ -59,10 +59,10 @@ use managym::{
     cards::tokens::{catalog_tokens, definition_tokens, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd,
-            Effect, EffectValue, Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector,
-            PaymentCost, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject,
+            Ability, Actor, AttackSize, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+            DistinctSearchEnd, Effect, EffectValue, Except, KeywordAction, LinkedChooser,
+            LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, Per, PlayWindow, PlayerSelector,
+            Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -402,7 +402,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::AddColors([Color::Blue].into_iter().collect())),
         permanent(Modification::GrantActivated(Box::default())),
         permanent(Modification::GrantTriggered(Box::new(Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourUpkeep,
+            condition: TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
             intervening_if: None,
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
@@ -1035,66 +1035,31 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::WasCast { .. } => "TriggerCondition::WasCast",
         TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
-        TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
         TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
         TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
-        TriggerCondition::CreatureDealsCombatDamageToYou => {
-            "TriggerCondition::CreatureDealsCombatDamageToYou"
-        }
-        TriggerCondition::OpponentCastsSpell { .. } => "TriggerCondition::OpponentCastsSpell",
         TriggerCondition::SpellTargetsOnlyThis { .. } => "TriggerCondition::SpellTargetsOnlyThis",
-        TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
-        TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
-        TriggerCondition::OpponentSearchesLibrary => "TriggerCondition::OpponentSearchesLibrary",
-        TriggerCondition::CardPutIntoOpponentsGraveyard => {
-            "TriggerCondition::CardPutIntoOpponentsGraveyard"
-        }
-        TriggerCondition::CreatureDealsCombatDamageToPlayer { .. } => {
-            "TriggerCondition::CreatureDealsCombatDamageToPlayer"
-        }
-        TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
-            "TriggerCondition::OneOrMoreDealCombatDamageToPlayer"
-        }
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
         TriggerCondition::BecomesTapped { .. } => "TriggerCondition::BecomesTapped",
         TriggerCondition::TappedForMana { .. } => "TriggerCondition::TappedForMana",
         TriggerCondition::BecomesTargeted { .. } => "TriggerCondition::BecomesTargeted",
-        TriggerCondition::BeginningOfYourUpkeep => "TriggerCondition::BeginningOfYourUpkeep",
-        TriggerCondition::BeginningOfYourCombat => "TriggerCondition::BeginningOfYourCombat",
-        TriggerCondition::YouDrawNthCardThisTurn { .. } => {
-            "TriggerCondition::YouDrawNthCardThisTurn"
-        }
-        TriggerCondition::OpponentDrawsNthCardThisTurn { .. } => {
-            "TriggerCondition::OpponentDrawsNthCardThisTurn"
-        }
-        TriggerCondition::YouPutCountersOnCreature { .. } => {
-            "TriggerCondition::YouPutCountersOnCreature"
-        }
-        TriggerCondition::YouScry => "TriggerCondition::YouScry",
-        TriggerCondition::YouScryOrSurveil => "TriggerCondition::YouScryOrSurveil",
+        TriggerCondition::PutsCounters { .. } => "TriggerCondition::PutsCounters",
         TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
-        TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
-        TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
         TriggerCondition::InGraveyard { .. } => "TriggerCondition::InGraveyard",
-        TriggerCondition::BeginningOfYourFirstMainPhase => {
-            "TriggerCondition::BeginningOfYourFirstMainPhase"
-        }
         TriggerCondition::YourAttackingCreatureTriggers => {
             "TriggerCondition::YourAttackingCreatureTriggers"
         }
         TriggerCondition::Chapter { .. } => "TriggerCondition::Chapter",
+        TriggerCondition::Casts { .. } => "TriggerCondition::Casts",
+        TriggerCondition::Draws { .. } => "TriggerCondition::Draws",
+        TriggerCondition::BeginningOf { .. } => "TriggerCondition::BeginningOf",
+        TriggerCondition::Performs { .. } => "TriggerCondition::Performs",
+        TriggerCondition::PutIntoGraveyard { .. } => "TriggerCondition::PutIntoGraveyard",
+        TriggerCondition::DealsCombatDamage { .. } => "TriggerCondition::DealsCombatDamage",
         TriggerCondition::WhileSourceAttacking { .. } => "TriggerCondition::WhileSourceAttacking",
-        TriggerCondition::BeginningOfEachUpkeep => "TriggerCondition::BeginningOfEachUpkeep",
-        TriggerCondition::BeginningOfEachDrawStep => "TriggerCondition::BeginningOfEachDrawStep",
-        TriggerCondition::BeginningOfEachEndStep => "TriggerCondition::BeginningOfEachEndStep",
-        TriggerCondition::YouBend => "TriggerCondition::YouBend",
-        TriggerCondition::YouCastNthSpellThisTurn { .. } => {
-            "TriggerCondition::YouCastNthSpellThisTurn"
-        }
     }
 }
 
@@ -1105,32 +1070,46 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::WasCast {
             condition: enters(),
         },
-        TriggerCondition::Sacrificed {
+        TriggerCondition::Casts {
+            who: Actor::Opponent,
             predicate: CardPredicate::creature(),
-            controller_only: true,
-            another: true,
+            nth: Some(2),
+        },
+        TriggerCondition::Draws {
+            who: Actor::AnyPlayer,
+            nth: None,
+        },
+        TriggerCondition::beginning_of(TurnStep::Upkeep, Actor::You),
+        TriggerCondition::Performs {
+            who: Actor::Opponent,
+            any_of: vec![KeywordAction::Search],
+        },
+        TriggerCondition::PutIntoGraveyard {
+            whose: Actor::Opponent,
+            predicate: CardPredicate::default(),
+        },
+        TriggerCondition::DealsCombatDamage {
+            subject: TriggerSubject::any(CardPredicate::creature()),
+            to: Actor::You,
+            per: Per::Batch,
+        },
+        TriggerCondition::Sacrificed {
+            subject: TriggerSubject::another_you_control(CardPredicate::creature()),
         },
         TriggerCondition::OnceEachTurn {
             condition: enters(),
         },
-        TriggerCondition::YouCastSpell {
-            predicate: CardPredicate::default(),
-        },
         TriggerCondition::EntersTheBattlefield { subject: this() },
         TriggerCondition::Dies { subject: this() },
-        TriggerCondition::Attacks { subject: this() },
+        TriggerCondition::attacks(this(), Per::Object),
         TriggerCondition::BecomesTapped { subject: this() },
         TriggerCondition::TappedForMana { subject: this() },
         TriggerCondition::BecomesTargeted { subject: this() },
-        TriggerCondition::BeginningOfYourUpkeep,
-        TriggerCondition::BeginningOfYourCombat,
-        TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
-        TriggerCondition::OpponentDrawsNthCardThisTurn { n: 2 },
-        TriggerCondition::YouPutCountersOnCreature {
+        TriggerCondition::PutsCounters {
+            who: Actor::You,
             kind: CounterKind::PlusOnePlusOne,
+            on: CardPredicate::creature(),
         },
-        TriggerCondition::YouScry,
-        TriggerCondition::YouScryOrSurveil,
         TriggerCondition::LeavesTheBattlefield {
             subject: TriggerSubject::This,
         },
@@ -1138,55 +1117,30 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             active_if: Condition::YourTurn,
             condition: enters(),
         },
-        TriggerCondition::AttacksAlone {
-            subject: TriggerSubject::AnyYouControl(CardPredicate {
-                card_type: Some(CardType::Creature),
-                ..Default::default()
-            }),
-        },
-        TriggerCondition::BeginningOfYourEndStep,
-        TriggerCondition::PlayerCastsSpell {
-            predicate: CardPredicate::creature(),
-        },
-        TriggerCondition::OpponentCastsSpell {
-            predicate: CardPredicate::creature(),
-        },
         TriggerCondition::SpellTargetsOnlyThis {
             predicate: CardPredicate::creature(),
         },
-        TriggerCondition::CreatureDealsCombatDamageToYou,
-        TriggerCondition::AttacksWithAnother,
-        TriggerCondition::OpponentSearchesLibrary,
-        TriggerCondition::CardPutIntoOpponentsGraveyard,
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),
         },
-        TriggerCondition::CreatureDealsCombatDamageToPlayer {
-            subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
-        },
-        TriggerCondition::OneOrMoreDealCombatDamageToPlayer {
-            predicate: CardPredicate::creature(),
-        },
         TriggerCondition::InGraveyard {
-            condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
+            condition: Box::new(TriggerCondition::Draws {
+                who: Actor::You,
+                nth: Some(2),
+            }),
         },
-        TriggerCondition::BeginningOfYourFirstMainPhase,
         TriggerCondition::YourAttackingCreatureTriggers,
         TriggerCondition::Chapter { chapter: 2 },
-        TriggerCondition::YouCastNthSpellThisTurn { n: 2 },
-        TriggerCondition::BeginningOfEachUpkeep,
-        TriggerCondition::BeginningOfEachDrawStep,
-        TriggerCondition::BeginningOfEachEndStep,
         TriggerCondition::YouCastThis,
         TriggerCondition::NoCounters {
             kind: CounterKind::Ice,
         },
-        TriggerCondition::YouBend,
         TriggerCondition::WhileSourceAttacking {
-            condition: Box::new(TriggerCondition::YouCastSpell {
-                predicate: CardPredicate::default(),
-            }),
+            condition: Box::new(TriggerCondition::casts(
+                Actor::You,
+                CardPredicate::default(),
+            )),
         },
     ]
 }
@@ -1745,7 +1699,10 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::TriggeredGrant(StaticTriggeredGrant {
             scope: StaticScope::This,
             ability: Box::new(Ability::Triggered {
-                condition: TriggerCondition::YouScry,
+                condition: TriggerCondition::Performs {
+                    who: Actor::You,
+                    any_of: vec![KeywordAction::Scry],
+                },
                 intervening_if: None,
                 effects: vec![Effect::discard()],
             }),
@@ -1881,6 +1838,118 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
     }
 }
 
+/// Every trigger actor, step, keyword action and batching choice is a
+/// parameter of one event and reaches the learning tokens.
+#[test]
+fn every_trigger_event_parameter_reaches_the_learning_tokens() {
+    let steps = [
+        TurnStep::Upkeep,
+        TurnStep::Draw,
+        TurnStep::FirstMain,
+        TurnStep::Combat,
+        TurnStep::End,
+    ];
+    let mut actions = vec![
+        KeywordAction::Search,
+        KeywordAction::Scry,
+        KeywordAction::Surveil,
+    ];
+    actions.extend(KeywordAction::BENDING);
+    let mut conditions = Vec::new();
+    let mut expected = Vec::new();
+    for who in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
+        conditions.push(TriggerCondition::Draws { who, nth: None });
+        expected.push(format!("Actor::{who:?}"));
+    }
+    for step in steps {
+        conditions.push(TriggerCondition::BeginningOf {
+            step,
+            whose: Actor::You,
+        });
+        expected.push(format!("TurnStep::{step:?}"));
+    }
+    conditions.push(TriggerCondition::Performs {
+        who: Actor::You,
+        any_of: actions.clone(),
+    });
+    expected.extend(
+        actions
+            .iter()
+            .map(|action| format!("KeywordAction::{action:?}")),
+    );
+    for per in [Per::Object, Per::Batch] {
+        conditions.push(TriggerCondition::DealsCombatDamage {
+            subject: TriggerSubject::This,
+            to: Actor::AnyPlayer,
+            per,
+        });
+        expected.push(format!("Per::{per:?}"));
+    }
+    for attackers in [AttackSize::Any, AttackSize::Alone, AttackSize::WithAnother] {
+        conditions.push(TriggerCondition::Attacks {
+            subject: TriggerSubject::you_control(CardPredicate::creature()),
+            per: Per::Batch,
+            attackers,
+        });
+        expected.push(format!("AttackSize::{attackers:?}"));
+    }
+    let definition = CardDefinition {
+        name: "Witness".into(),
+        abilities: conditions
+            .into_iter()
+            .map(|condition| Ability::Triggered {
+                intervening_if: None,
+                condition,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+            })
+            .collect(),
+        ..Default::default()
+    };
+    let tokens = tokens_of(&definition);
+    for name in expected {
+        assert!(
+            tokens.contains(&(TokenKind::Variant, name_value(&name))),
+            "{name}"
+        );
+    }
+
+    // An object actor's controller and "another" are parameters of one
+    // subject: each combination is its own token stream.
+    let mut subjects: Vec<Vec<(TokenKind, i32)>> = Vec::new();
+    for controlled_by in [Actor::You, Actor::Opponent, Actor::AnyPlayer] {
+        for another in [false, true] {
+            let tokens = tokens_of(&CardDefinition {
+                name: "Witness".into(),
+                abilities: vec![Ability::Triggered {
+                    intervening_if: None,
+                    condition: TriggerCondition::Dies {
+                        subject: TriggerSubject::matching(
+                            controlled_by,
+                            CardPredicate::creature(),
+                            another,
+                        ),
+                    },
+                    effects: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                }],
+                ..Default::default()
+            });
+            assert!(
+                tokens.contains(&(
+                    TokenKind::Variant,
+                    name_value(&format!("Actor::{controlled_by:?}"))
+                )),
+                "{controlled_by:?}"
+            );
+            assert!(!subjects.contains(&tokens), "{controlled_by:?} {another}");
+            subjects.push(tokens);
+        }
+    }
+}
+
 #[test]
 fn every_condition_reaches_the_learning_tokens() {
     let witnesses = condition_witnesses();
@@ -1902,7 +1971,7 @@ fn an_intervening_if_reaches_the_learning_tokens() {
     let definition = CardDefinition {
         name: "Witness".into(),
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::BeginningOfYourEndStep,
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
             intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::discard()],
         }],

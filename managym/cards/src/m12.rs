@@ -72,7 +72,7 @@ fn warstorm_surge() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                subject: TriggerSubject::another_you_control(CardPredicate::creature()),
             },
             // The creature is the source of the damage, not this enchantment.
             effects: vec![Effect::DealDamage {

@@ -16,7 +16,7 @@
   "manifest": {
     "world_version": "w17",
     "schema_version": 1,
-    "content_digest": "f90667d4ba68254bded0754b38526b480b058026cacf52067361f7e982db62d1",
+    "content_digest": "4ffe1fcdc5d614da36ce3be2c1cba1178ebfd35e4c9a00b031e309c6852007e8",
     "definitions": [
       {
         "card_def_id": 0,
@@ -1862,112 +1862,112 @@
   },
   "prefix": [
     {
-      "before_digest": "dda917a92e20cef0d07935bfc1f21ef762e7dfb473f5ced8d8ac9a6f6cf29352",
+      "before_digest": "e059281b6ce965d1ccd28411ce7c5984d1093cb72bc6343ee5f61f02751a18d0",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "4ec5234fd68411c8f655f3c84bcbba8c4f27b00d2b6a4f064be0b975ccd5bd26",
+      "before_digest": "4441ba7e6a42d71d0ae46378887fa5a03a93f80a6e7aacc1aa943c564baa2f82",
       "offer_id": 0,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "4e0ef20b9907f9b6a396ed20a94dac1b6de8b1d46fc800f4072c39553fce7d48",
+      "before_digest": "2ab5287d7889aa986528706f812cee7863b227f8979f4fe631bb878939b17e6c",
       "offer_id": 3,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "bea938489724c75b2af6322f8a6e5f7b90406538b4b85c43804f4b22ddbb6109",
+      "before_digest": "0b9870e0d7c516a0c0523d80d3bf714c5e68690c7f20fb78a8d04d2768587ea3",
       "offer_id": 1,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "4c8239fae6fc22dfa46333db4254a61d5c017e59d197e2f383778b6bfce8a319",
+      "before_digest": "27d8ca23314567c5678c7b5ccd8bebb9d0e15932c274d785ce6494395cedc247",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "fdb9eaa3e5a056ce7cfda22a444b747b02641eb20173b7fd0500f070dd07d67a",
+      "before_digest": "339089e0980f00083d48d6783914fa18b5a8751ba517d821cc5d70ef52f3186c",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "313934eb6b7556334a103cc3904d4dfb46b43700b416bc44917c52b38b1dab7c",
+      "before_digest": "dcd0d4ab13b0a472816e2221c073034b317ce3f380e8d3da9e238c44bd398661",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "46ac5f59e74e8e584330f4cd678c6409cf363c45efa436c6a74a57c63d732c22",
+      "before_digest": "5e4f25c64f04eeb0aeee67f28135d8015defd38c7af7c5930d5f1bf501c6b765",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2f23b2c927c3855b6e40ac28bfe851e97399e50184fbc9183e3bc8ed77cabced",
+      "before_digest": "2888504fadf7bbe92ca69b3e41e40fd3587f74f35887c8530538d80b87dfd89c",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "dbdcc886b36b885e81829af4bf66955d361ce8643e90f264eacc2fa8dfa47dc9",
+      "before_digest": "a3f6a7f1d7ff0b5553f51d0e010b560449c47d310df2e0848244b247c0ab6546",
       "offer_id": 3,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "f4b0dfcf89c5b144da7228c9e6f9bd76cb913ac525fd4b45912483376aad861c",
+      "before_digest": "0bc32ef06a75ae82d04f69e2b07b561ec62de693ec19929e7343d2c22d106575",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2f9175c49544191dbcc20cba761464c618c26ba8ad15920084402505c6417595",
+      "before_digest": "6721071ec13a2c4d83e4d0b4955870527d50d52fed595adec01f6f13f452e355",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "76ec99091ca79ee82a78ab0887d345afecf9f85a6d7545d5846f7712cd050ba9",
+      "before_digest": "e3b5ea9232be690561de8185ca9383d264343785a6cfce4912c68f0e0e76ba53",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "cd87a513034b05681d645ea8260ab5e48a8e629304c11a8937802f6ad82259e8",
+      "before_digest": "617ab3656f32982a1c0364c0fb3ff1b0d9ed8c72a4082937b4096d76d3204b02",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2b57a52aac9beec6f92b7c91de6312e4076c98cb933002fc9584c29f6ed28d48",
+      "before_digest": "a39c277db5c63061fa159ec92cfc9e7d87109432cd0d0a82063996aac3a56910",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "f89518bd9a286601407a8785e91bcefb43219be1aa2d1646be0860713b22dfa8",
+      "before_digest": "29087539a48b5f867231d346d3e9db09af12083a279db4980785aca23b2e03e8",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "64fe70ac22c79a42e12f2bef29c5d341de0c5ebe1fa71b41fb0f276e1f6de2a4",
+      "before_digest": "d8037ed4717363d9cc0743971a20efb28751791ae6ca05298cb3ae4de1774bfc",
       "offer_id": 4,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "67e1846f98cfa6ec32bf45e6653169d1513a17082d6eba90dd3d82779aa89e17",
+      "before_digest": "721b109a901cd073b9334d66db0dbcad196907676120ccb11ee08fc9de5f8a1e",
       "offer_id": 3,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "c09f4be6cc1a14e38901e85ac9ab1e1f12b4f2c0503bf8f1a1a242b24fd50da8",
+      "before_digest": "af66b7aa5d9d9e026bf49c50324f9fb05f49d276c5fc248b78edd77abd722754",
       "offer_id": 0,
       "label": "Cast Deadly Dispute"
     },
     {
-      "before_digest": "61ae0187c92405a55c28932cfd7e18ee24f6612b81e177b7747831bc0464da90",
+      "before_digest": "b9037b9dedf94757a6f59806f82c530c9956d35f0f4f6290f93a8f931019e3b9",
       "offer_id": 0,
       "label": "Sacrifice Callous Inspector"
     },
     {
-      "before_digest": "f8a96d22631cc55d18092f83a9114daa4fc318aeb55c914e6dfba29e3f29ab11",
+      "before_digest": "68a80b681ef54a7ed55887c24793e81ef96de1c5269d028dae946baba4b9c285",
       "offer_id": 1,
       "label": "Pass priority"
     }
   ],
-  "decision_digest": "b1624d94c0bfb1aa1e287fb3c4ee81333b54410a1d42242921fe044e242c3659",
+  "decision_digest": "176db8e4a61d56bdd69bd776487dc4f8136f8e2b55b060f69a492c05f3ce786c",
   "decision_revision": 30,
   "decision_kind": "PRIORITY"
 }
