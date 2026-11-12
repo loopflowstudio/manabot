@@ -3,6 +3,11 @@ Shared viewer-observation encoder, legal-action policy and scalar or WDL critic.
 
 ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
+
+Object attention runs over the fixed object tables, or, with
+`ModelConfig.token_stream="pooled"`, over one packed token sequence of valid
+objects, continuation relations and legal actions (`manabot.model.token_stream`).
+Both share every embedding and join before attention and the critic after it.
 """
 
 from dataclasses import dataclass
@@ -17,6 +22,7 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
+    RELATION_ROWS,
     RELATION_VALID_INDEX,
     ObservationSpace,
 )
@@ -34,6 +40,16 @@ from manabot.model.semantic_cards import (
     admit_definition_ids,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
+from manabot.model.token_stream import (
+    ACTION,
+    CARD,
+    PERMANENT,
+    PLAYER,
+    RELATION,
+    TOKEN_TYPES,
+    pack,
+    unpack,
+)
 import managym
 
 
@@ -48,6 +64,8 @@ class EmbeddedObservation:
     frame_context: torch.Tensor
     # Raw executable programs; object inputs separately add public name identity.
     programs: torch.Tensor | None
+    # Encoded continuation relation rows [B,64,D], zero for padding.
+    relations: torch.Tensor
 
 
 class ActorCritic(nn.Module):
@@ -288,6 +306,26 @@ class ActorCritic(nn.Module):
             else None
         )
 
+        # The pooled stream's type embedding and its per-coordinate type ids
+        # over [objects, relations, actions]. Built last and only for that
+        # stream, so table models keep their parameters and draws.
+        self.token_types: nn.Embedding | None = None
+        if config.token_stream == "pooled":
+            self.token_types = nn.Embedding(TOKEN_TYPES, embed_dim)
+            nn.init.normal_(self.token_types.weight, std=embed_dim**-0.5)
+            segments = (
+                (PLAYER, 2),
+                (CARD, 2 * enc.cards_per_player),
+                (PERMANENT, 2 * enc.perms_per_player),
+                (RELATION, RELATION_ROWS),
+                (ACTION, enc.max_actions),
+            )
+            self.register_buffer(
+                "_token_type_ids",
+                torch.cat([torch.full((count,), kind) for kind, count in segments]),
+                persistent=False,
+            )
+
         # When True, forward() stashes legal logits at original coordinates on
         # self.last_raw_logits for offline diagnosis. Off by default: the
         # detach/cpu copy is measurable in the inference hot path.
@@ -321,21 +359,26 @@ class ActorCritic(nn.Module):
         A distributional head alone does not select a categorical loss.
         """
         state = self._gather_object_embeddings(obs)
-
-        encoded = self._attend_objects(
-            state.objects,
-            state.is_agent,
-            state.validity,
-            objects_checked=isinstance(obs, PreparedObservation)
-            and obs.objects_checked,
-        )
-        # The optional trailing token is a critic input, never an action focus.
-        post_attention_objects = encoded[:, : state.validity.shape[1]]
-
         batches, slots = legal_mask(obs["actions_valid"]).nonzero(as_tuple=True)
-        informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, state, batches, slots
-        )
+
+        if self.token_types is None:
+            encoded = self._attend_objects(
+                state.objects,
+                state.is_agent,
+                state.validity,
+                objects_checked=isinstance(obs, PreparedObservation)
+                and obs.objects_checked,
+            )
+            # The optional trailing token is a critic input, never an action focus.
+            post_attention_objects = encoded[:, : state.validity.shape[1]]
+            informed_actions = self._gather_informed_actions(
+                obs, post_attention_objects, state, batches, slots
+            )
+        else:
+            post_attention_objects, informed_actions = self._attend_pooled(
+                obs, state, batches, slots
+            )
+            encoded = post_attention_objects
         if self.policy_film is not None:
             valid = state.validity.unsqueeze(-1)
             pooled = (post_attention_objects * valid).sum(1) / valid.sum(1).clamp_min(1)
@@ -438,6 +481,58 @@ class ActorCritic(nn.Module):
         # Indexing avoids constructing temporary Sequential modules per decision.
         return self.value_head[5](self.value_head[4](self.value_head[3](projected)))
 
+    def _attend_pooled(
+        self,
+        obs: dict[str, torch.Tensor],
+        state: EmbeddedObservation,
+        batches: torch.Tensor,
+        slots: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Attend over one packed stream; return objects [B,N,D] and actions [K,D].
+
+        Action tokens join their focus objects' pre-attention embeddings, so the
+        pointer reaches attention as content; logits read the attended action
+        token. Relations and actions count as the acting viewer's for the
+        ownership perspective; their type embedding distinguishes them.
+        """
+        assert self.token_types is not None
+        actions = self._embed_actions(obs, state, batches, slots)
+        objects = state.objects
+        batch, object_slots, width = objects.shape
+        action_tokens = objects.new_zeros(
+            (batch, obs["actions_valid"].shape[1], width)
+        ).index_put(
+            (batches, slots),
+            self.action_layer(
+                torch.cat(
+                    (actions, self._focused(obs, objects, batches, slots)), dim=-1
+                )
+            ).to(objects.dtype),
+        )
+        tokens = torch.cat((objects, state.relations, action_tokens), dim=1)
+        tokens = tokens + self.token_types(self._token_type_ids).to(tokens.dtype)
+        legal = legal_mask(obs["actions_valid"])
+        valid = torch.cat(
+            (
+                state.validity != 0,
+                obs["relations"][..., RELATION_VALID_INDEX] == 1,
+                legal,
+            ),
+            dim=1,
+        )
+        is_agent = torch.cat(
+            (state.is_agent, torch.ones_like(valid[:, object_slots:])), dim=1
+        )
+        packed, packed_valid, order = pack(tokens, valid)
+        packed_agent = is_agent.gather(1, order)
+        padding = ~packed_valid
+        packed = self.attention(packed, packed_agent, key_padding_mask=padding)
+        for layer in self.extra_attention:
+            packed = layer(packed, packed_agent, padding)
+        encoded = unpack(packed, order, tokens.shape[1])
+        actions_start = object_slots + state.relations.shape[1]
+        return encoded[:, :object_slots], encoded[:, actions_start:][batches, slots]
+
     def _gather_informed_actions(
         self,
         obs: dict[str, torch.Tensor],
@@ -446,10 +541,24 @@ class ActorCritic(nn.Module):
         batches: torch.Tensor,
         slots: torch.Tensor,
     ) -> torch.Tensor:
-        """Embed selected legal rows [K,D], preserving their original joins.
+        """Table models' action features [K,D]: joined rows and their
+        post-attention focus objects."""
+        actions = self._embed_actions(obs, state, batches, slots)
+        focused = self._focused(obs, post_attention_objects, batches, slots)
+        return self.action_layer(torch.cat((actions, focused), dim=-1))
 
-        Coordinates select actions, continuation frames and focus objects from
-        the same observation row.
+    def _embed_actions(
+        self,
+        obs: dict[str, torch.Tensor],
+        state: EmbeddedObservation,
+        batches: torch.Tensor,
+        slots: torch.Tensor,
+    ) -> torch.Tensor:
+        """Embed selected legal rows [K,D] with their continuation, name and
+        shared-context joins; focus objects join separately.
+
+        Coordinates select actions and continuation frames from the same
+        observation row.
         """
         action_rows = obs["actions"][batches, slots]
         actions = self.action_embedding(action_rows[..., :-2])
@@ -473,17 +582,23 @@ class ActorCritic(nn.Module):
             actions = actions + self.semantic_cards.embed_definitions(
                 candidates[..., 1], state.programs
             )
-        actions = actions + state.shared_context[batches]
+        return actions + state.shared_context[batches]
+
+    def _focused(
+        self,
+        obs: dict[str, torch.Tensor],
+        objects: torch.Tensor,
+        batches: torch.Tensor,
+        slots: torch.Tensor,
+    ) -> torch.Tensor:
+        """Each selected action's focus objects from `objects` [B,N,D], [K,F*D]."""
         focus = obs["action_focus"][batches, slots]
         if not (
-            (focus == focus.floor())
-            & (focus >= -1)
-            & (focus < post_attention_objects.shape[1])
+            (focus == focus.floor()) & (focus >= -1) & (focus < objects.shape[1])
         ).all():
             raise ValueError("invalid action focus reference")
-        focused = post_attention_objects[batches[:, None], focus.clamp_min(0).long()]
-        focused = focused * (focus != -1).unsqueeze(-1)
-        return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
+        focused = objects[batches[:, None], focus.clamp_min(0).long()]
+        return (focused * (focus != -1).unsqueeze(-1)).flatten(1)
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
@@ -639,7 +754,13 @@ class ActorCritic(nn.Module):
 
         validity = torch.cat(validity_parts, dim=1)
         return EmbeddedObservation(
-            objects, is_agent, validity, shared_context, frame_context, programs
+            objects,
+            is_agent,
+            validity,
+            shared_context,
+            frame_context,
+            programs,
+            encoded_relations,
         )
 
     def _join_permanent_links(
