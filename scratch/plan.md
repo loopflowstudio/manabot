@@ -34,8 +34,9 @@
 
 ## Checks
 
-- `tests/model`: 310 passed, 4 skipped. `test_live_tokens.py` +
-  `test_bucketed_execution.py`: 13 passed. `test_experiment_data_untracked.py`: 1 passed.
+- `tests/model`: 310 passed, 4 skipped. `tests/model/test_live_tokens.py`,
+  `tests/training/test_bucketed_execution.py`, `tests/model/test_bucketed_shapes.py`:
+  22 passed (after the `live_token_count` rename). `test_experiment_data_untracked.py`: 1 passed.
 - Training suite run locally hit the 1 h limit at ~415/772 under load from another
   worktree. Failures outside this diff's files: `test_game_errors` resource_limit replay
   x3 (`binding_mismatch`), `test_inspect_batch_script` (`RolloutBatch` has no `batch`),
