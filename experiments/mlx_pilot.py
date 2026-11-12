@@ -76,9 +76,9 @@ def capture(out: Path) -> None:
     from manabot.model.actor_critic import ActorCritic
     from manabot.model.inference import PolicyInference
     from manabot.training.execution import execute_regime
-    from manabot.training.learning.health import OptimizerHealth
     from manabot.training.regime import TrainingRegime
     from manabot.training.rollout.collection import SeatRoutedCollector
+    from manabot.training.updates.health import OptimizerHealth
     from manabot.verify.store import VerifyStore
 
     out.mkdir(parents=True, exist_ok=False)
@@ -237,7 +237,7 @@ class TorchLearner:
     def __init__(self, agent: Any, device: str) -> None:
         import torch
 
-        from manabot.training.learning.health import OptimizerHealth
+        from manabot.training.updates.health import OptimizerHealth
 
         self.torch = torch
         self.device = torch.device(device)
@@ -256,11 +256,11 @@ class TorchLearner:
         torch = self.torch
         from manabot.model.admission import bind_admitted
         from manabot.model.inference import transfer_admitted
-        from manabot.model.numerics import float64_operand
         from manabot.model.policy_distribution import legal_mask
-        from manabot.training.learning.damped_policy import damped_policy_loss
-        from manabot.training.learning.references import reference_distribution
-        from manabot.training.learning.selection import selected_mean
+        from manabot.rl.numerics import float64_operand
+        from manabot.rl.selection import selected_mean
+        from manabot.training.updates.damped_policy import damped_policy_loss
+        from manabot.training.updates.references import reference_distribution
 
         device = self.device
         admitted, _ = transfer_admitted(

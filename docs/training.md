@@ -7,6 +7,10 @@ mean, and how interrupted or failed work is recovered. Comparisons are declared
 in [experiments.md](experiments.md); metric definitions live in
 [experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
 [evaluation.md](evaluation.md).
+An update learns from one collected batch, a loop keeps playing and updating
+until it is done, and a recipe is our loops with our settings;
+[training loops](training-loop.md) lists the updates, their pieces and a loop
+to copy.
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
