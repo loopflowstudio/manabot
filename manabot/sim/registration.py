@@ -138,7 +138,7 @@ class PlayerRegistration(StrictModel):
                     SamplerArtifact,
                 )
 
-                config = LocalSearchConfig.model_validate(
+                config = LocalSearchConfig.from_recorded(
                     self.player_spec.get("config", {})
                 )
                 required = {
