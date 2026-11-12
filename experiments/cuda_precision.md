@@ -193,6 +193,29 @@ learn worse.
 
 $0.45 (launcher, run `f71ee505f7cc`), under the USD 3 cap.
 
+## w256l8 step run (MTG-324, 2026-11-12)
+
+The same measurement at one more width, w256l8 (8 heads), to find where BF16
+starts paying (`runs(..., sizes="w256l8")`). The rule and the question are
+unchanged. Etude run `f30d26f9bc7a` at `35764ee13`, on-demand `mtg324-l4-step`,
+NVIDIA L4, Torch 2.15.0+cu132, $0.29 (launcher). Two earlier attempts lost
+their pods before start (no controller loop; a PyPI download timeout) at about
+$0.02 each.
+
+| Bucketed, ms (median) | float32 | tf32 | bf16 | bf16 speedup |
+|---|---:|---:|---:|---:|
+| Learner step | 238.7 | 201.9 | 143.7 | 1.66× |
+| Large collection call (≥ 64 rows) | 258.2 | 215.1 | 153.7 | 1.68× |
+
+Padded: bf16 learner 275 ms against float32's 537 (1.95×). At fixed weights
+bf16's gradient cosine is ≥ 0.9995 and its loss within 0.37 %. The rule's
+verdict is TF32 accepted (1.18× minimum bucketed speedup) and BF16 unresolved
+(bucketed policy-loss deviation 1.46× the float32 reference, the same
+noise-bound comparison as above). BF16 clears the 1.10× speed bar at w256l8, so
+the ladder's threshold is 256 (`BF16_MIN_HIDDEN_DIM`). The capture update on
+this host took 352 s (264 s collection) against 197 s in the first run, so
+whole-update time varies by host. Evidence: `experiments/data/cuda_precision/w256l8/`.
+
 ## Limits
 
 - One L4, one capture update, and one seed for each reference arm. A

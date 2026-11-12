@@ -215,9 +215,9 @@ Precision = Literal["float32", "tf32", "bf16"]
 Device = Literal["cpu", "mps", "cuda"]
 
 # The precision ladder `auto` resolves to. On an L4 with bucketed shapes, BF16 is
-# slower than float32 at hidden_dim 160 and 2-2.7x faster at 384
-# (experiments/cuda_precision.md); depth, bucketing and GPU model do not move it.
-BF16_MIN_HIDDEN_DIM = 384
+# slower than float32 at hidden_dim 160, 1.66x faster at 256 and 2-2.7x faster at
+# 384 (experiments/cuda_precision.md); depth, bucketing and GPU model do not move it.
+BF16_MIN_HIDDEN_DIM = 256
 
 
 def ladder_precision(device: Device, hidden_dim: int) -> Precision:

@@ -517,7 +517,7 @@ NVIDIA L4 on 2026-10-08; neither is full training throughput.
 
 A stage's `Execution.precision` defaults to `auto`, a ladder by model width:
 on CUDA, a model whose `ModelConfig.hidden_dim` is at least
-`BF16_MIN_HIDDEN_DIM` (384, in `manabot.training.regime`) trains in `bf16`;
+`BF16_MIN_HIDDEN_DIM` (256, in `manabot.training.regime`) trains in `bf16`;
 narrower models, and every stage off CUDA, train in `float32`. The regime
 resolves `auto` when it is built and stores the result, so the regime, its
 `run.json` and its stage records name the precision a run actually used:
@@ -556,16 +556,17 @@ and search run on CPU in float32. Precision changes no `ModelConfig` field,
 checkpoint or world binding: a checkpoint trained in any precision loads and
 runs in any other.
 
-The threshold is the narrowest width at which BF16 was measured faster than
-float32 and learned the same. On an L4 with bucketed shapes, BF16 is slower than
-float32 at w160l8 (autocast's casts cost more than the small matmuls save) and
-2–2.7× faster at w384l8
-([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)). In a
+The threshold is the narrowest measured width at which BF16 is faster than
+float32. On an L4 with bucketed shapes, BF16 is slower than float32 at w160l8
+(autocast's casts cost more than the small matmuls save), 1.66× faster in the
+learner step and large collection calls at w256l8, and 2–2.7× faster at w384l8
+([`experiments/cuda_precision.md`](../experiments/cuda_precision.md)); at fixed
+weights its gradients and losses match float32's at both widths. In a
 learning comparison at w384l8, BF16 and float32 from the same seeds reached
 the same strength against the heuristic at matched updates, with policy
 and value loss, clip fraction and approximate KL inside float32's seed band
 ([`experiments/precision_ladder.md`](../experiments/precision_ladder.md)). TF32
-is 1.1× faster at w160l8 and 1.3–1.5× at w384l8 but has had no learning
+is 1.1× faster at w160l8, 1.2× at w256l8 and 1.3–1.5× at w384l8 but has had no learning
 comparison, so the ladder never selects it.
 
 Before training a reduced precision on another GPU, run the

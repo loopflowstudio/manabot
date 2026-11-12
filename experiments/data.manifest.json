@@ -2686,6 +2686,18 @@
    "sha256": "39a7f62153baeea05fe534ed8c551969994548eee770c18e4572e4d790111d4f",
    "bytes": 1493544
   },
+  "experiments/data/cuda_precision/w256l8/regime.json": {
+   "sha256": "dd4f468166dc1f5a7dd93e5e4f48c43c26b0fd8b3c8109ce1b875b8dd863d9e2",
+   "bytes": 156119
+  },
+  "experiments/data/cuda_precision/w256l8/summary.json": {
+   "sha256": "e2867e30e30147ccd9b1b6d9a4b6668a51726a5171947de127a679f1524fecb0",
+   "bytes": 11381
+  },
+  "experiments/data/cuda_precision/w256l8/trajectories.json": {
+   "sha256": "34cb6aaac089fea5252628632c9afe86cabd14baacea6a126a032fbb6ce0d5f3",
+   "bytes": 746776
+  },
   "experiments/data/current-baseline-calibration-3.json": {
    "sha256": "67a3b4cb2a3ee1c010dd2b78518f12efa6e047da87c387c268fb94b307011121",
    "bytes": 5690

@@ -2,9 +2,9 @@
 
 ## Question and prediction (committed before any scored run)
 
-`Execution.precision="auto"` trains a CUDA model at width 384 or above in BF16
-(`BF16_MIN_HIDDEN_DIM`). MTG-317 measured BF16 2–2.7× faster than float32 at
-w384l8 on an L4 ([`cuda_precision.md`](cuda_precision.md)), but its replay could
+`Execution.precision="auto"` trains a CUDA model at width 256 or above in BF16
+(`BF16_MIN_HIDDEN_DIM`). MTG-317 and its w256l8 step run measured BF16 1.66×
+faster than float32 at w256l8 and 2–2.7× at w384l8 on an L4 ([`cuda_precision.md`](cuda_precision.md)), but its replay could
 not tell same from different learning. **Question:** trained from the same two
 seeds on the frontier recipe at w384l8, does BF16 reach the same strength and
 follow the same learning trajectory as float32 at matched updates?
@@ -20,7 +20,7 @@ heuristic at *M*, if BF16 scores under 0.42 in the
 head-to-heads, if any of those four trajectory means falls outside the widened
 float32 range, or if any BF16 numerical counter is nonzero. A result inside
 neither the prediction nor the refutation is **unresolved**. **Decision:** if the
-prediction holds, the ladder stays at 384; if it is refuted or unresolved,
+prediction holds, the ladder stays at 256; if it is refuted or unresolved,
 `ladder_precision` returns float32 everywhere. **Cost cap:** USD 34 for the
 experiment (training launched with `--max-usd 32`, evaluation capped at USD 2),
 within the Task's USD 35 cap and the approved budget of about USD 30.
@@ -68,6 +68,8 @@ was rented, once the larger budget was approved; it produced no data. Limits:
 - The watchdog, not the schedule, may set the length. If float32 runs slower
   than 150 s per update, its runs stop early and *M* falls below 300; the
   answer states *M*.
+- The A/B trains at w384l8 only. The ladder applies BF16 from 256, where the
+  speed and fixed-weight numerics were measured but learning was not.
 - Two seeds per arm give a narrow float32 band; a band from two points can
   miss real spread, in either direction.
 - 300 updates is still short of frontier length; slow-accumulating BF16
