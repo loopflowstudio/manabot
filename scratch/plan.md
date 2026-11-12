@@ -158,6 +158,8 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   identical canonical JSON under the new code; `test_capacity.py` pins the
   stored-vs-recomputed bytes.
 - `backends/README.md`: the five files are a minimum; private modules allowed.
+  Compress pass: `model/agent.md` names `ActorCritic.architecture_receipt()`
+  instead of the old `architecture_receipt(agent)`; nothing else to cut.
 - Alias cut (steer 8332334d, quoting Jack Heart: "i think were being too
   ambitious withh the deprecations"; "if theyre not explicitly calling
   someting, we dont need to worry about maintaining it"): deleted

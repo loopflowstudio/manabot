@@ -236,7 +236,8 @@ Explicit `include_ataraxos=True` adds 384/8 with feedforward width 1,536;
 [the scale probe](../../docs/experiments.md#freeze-step-targets)
 measures that model without changing the scientific cohort.
 
-`manabot.model.architecture.architecture_receipt(agent)` derives a versioned
+`ActorCritic.architecture_receipt()` passes its named parameter sizes to
+`manabot.model.architecture.architecture_receipt`, which derives a versioned
 identity and total/trainable counts by the actual top-level parameter owner.
 It counts shared parameters once and excludes buffers. The receipt consumes no
 RNG and does not change initialization, weights or forward equations. Counts
