@@ -1,0 +1,56 @@
+<!doctype html><meta charset="utf-8"><title>MTG-321 QA — MLX port</title>
+<style>body{font:15px/1.5 system-ui;max-width:860px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.7em;overflow:auto;font-size:12.5px}h2{border-bottom:1px solid #ccc}</style>
+<h1>QA: MLX policy and learner port (MTG-321)</h1>
+<p>Run 2026-11-12 on the rented M2 (macOS 26.7, mlx 0.32.4, torch 2.15), with the branch's current <code>manabot/</code> synced over. No MLX or torch ran on the laptop; it only fetched the published data and ran ruff, the lock check and the workflow check.</p>
+
+<h2>1. Convert a real w160l8 checkpoint (main path)</h2>
+<pre>$ python -m manabot.model.mlx.convert /tmp/qa/w160.pt
+read   /tmp/qa/w160.pt  (180 tensors)
+wrote  /tmp/qa/w160.mlx.safetensors        (1.1 s; 25.7 MB beside a 25.8 MB .pt)</pre>
+<p>This matches the guide's transcript. It writes one file and no sidecar.</p>
+
+<h2>2. Load it as the guide shows and play live games</h2>
+<p>The checkpoint was loaded with the guide's snippet: <code>load_mlx_policy</code>, <code>cache_programs()</code>, then <code>policy(policy.prepare(obs, inference=True))</code>. The MLX policy chose argmax actions in 8 live <code>VectorEnv</code> games (<code>MatchConfig(world=WORLD_SETUP)</code>) for 400 steps. Torch <code>PolicyInference</code> scored every same admitted observation.</p>
+<pre>steps 400 x 8 games  finished 9  argmax disagreements 30
+max |Δ| logits 7.92e-09  values 6.85e-07  MLX ms/call 10.7</pre>
+<p>Every argmax disagreement was an exact tie: the script asserted that disagreements ≤ rows whose top two torch logits differ by less than 1e-6, which is expected from untrained initial weights. No illegal action was chosen.</p>
+<p><b>Confusing:</b> the first run reported a value gap of 0.84. The cause was broadcasting in my own comparison: MLX returns values <code>[B,1]</code>, torch inference <code>[B]</code>. The model is correct. The guide now states both shapes.</p>
+
+<h2>3. Returning reader: re-run parity on the published subset</h2>
+<p><code>manabot.data fetch experiments/data/mlx_pilot/capture</code> verified all 29 files against the manifest. They were then copied to the M2.</p>
+<pre>$ python -m manabot.model.mlx.parity /tmp/qa/published/initial.pt --capture /tmp/qa/published --json /tmp/qa/parity.json
+minibatch   0  B  46  logits 5.8e-09  values 2.4e-07  loss 1.4e-07  min cosine 1.000000 (...)
+...
+forward logits      max |Δ| 7.7e-09 (tol 1e-4)  ok
+forward values      max |Δ| 3.1e-07 (tol 1e-4)  ok
+collection logits   max |Δ| 6.5e-09 (tol 1e-4)  ok
+collection values   max |Δ| 3.6e-07 (tol 1e-4)  ok
+learner loss        rel Δ 0.0000% (tol 0.1%)  ok
+gradient action_layer.projection.layers.0.weight min cosine 0.999940 over 201 tensors (tol 0.999)  ok
+one step            params max |Δ| 9.4e-05, update min cosine 0.944017 (informative)
+parity: pass        (50 s wall)</pre>
+<p>These numbers agree with the report and the guide.</p>
+
+<h2>4. Wrong input</h2>
+<p>A user's first checkpoint is usually a <code>manabot train --recipe local</code> run (7 s on the M2). Converting it, giving a missing path, or giving a missing capture each printed a full Python traceback. The real reason was only on the last line.</p>
+<p><b>Fixed:</b> <code>convert</code> and <code>parity</code> now report a refused checkpoint (<code>UnsupportedForMLX</code>) or a missing file as a one-line argparse error and exit 2. Parity keeps exit 1 for "the models disagree".</p>
+<pre>convert.py: error: the MLX port does not support policy_film           exit=2
+convert.py: error: [Errno 2] No such file or directory: '/tmp/qa/nope.pt'  exit=2
+parity.py: error: [Errno 2] No such file or directory: '/tmp/qa/nothing/minibatches.json'  exit=2
+parity.py: error: the MLX port does not support policy_film            exit=2</pre>
+<p>The guide now says that <code>local</code> recipe checkpoints use FiLM and are refused, so its <code>.runs/example</code> example doesn't suggest that any checkpoint converts. Passing a <code>.pt</code> to <code>load_mlx_policy</code> raises MLX's own <code>Unknown file format pt</code>, which is clear enough; left as is.</p>
+
+<h2>5. Package checks</h2>
+<ul><li><code>tests/model/test_mlx_port.py</code> on the M2: 5 passed, after the CLI change.</li>
+<li><code>tests/test_package_boundaries.py</code> on the M2: 10 passed.</li>
+<li><code>uv lock --check</code>: the lock is current, with mlx 0.32.4 locked for the extra.</li>
+<li><code>ruff</code> is clean, and <code>check_loopflow_workflows.py</code> is valid after the QA skill note.</li></ul>
+
+<h2>Outcome</h2>
+<p><b>Works:</b> convert, load, live inference that agrees with torch, the parity gate on the published evidence, refusals for unsupported checkpoints, and the boundary.</p>
+<p><b>Not reached:</b> <code>uv sync --extra mlx</code> from a fresh clone on Apple Silicon. The M2 has no uv, and its venv came from requirement files; only the lock resolution was checked. Long games with a trained w160l8 checkpoint were not run: none exists, since the pilot captured only the initial checkpoint.</p>
+<p><b>Still rough (not changed, design-level):</b></p>
+<ol>
+<li>Using the MLX policy still needs the torch agent, because admission (<code>admit_observation</code>) takes an <code>ActorCritic</code>. A torch-free MLX consumer is not possible yet. This is acceptable for a pilot whose training stays in torch.</li>
+<li>Values come back as <code>[B,1]</code> where torch returns <code>[B]</code>. This is now documented. Changing it would touch the measured learner and parity code.</li>
+</ol>

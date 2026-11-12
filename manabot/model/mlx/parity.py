@@ -21,7 +21,8 @@ Collection calls compare inference logits and values with the same 1e-4 bar.
 The first minibatch also takes one clipped Adam step in both frameworks and
 reports how far the parameters then differ; that comparison is informative and
 not part of the bar. The command prints one line per check, writes `--json`
-when given, and exits 1 naming the worst component if any check fails.
+when given, and exits 1 naming the worst component if any check fails; it
+exits 2 when the checkpoint or capture is missing or the checkpoint is refused.
 """
 
 import argparse
@@ -39,7 +40,13 @@ import torch
 
 from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.mlx.checkpoint import GRUS, build, mlx_parameters, torch_to_mlx
+from manabot.model.mlx.checkpoint import (
+    GRUS,
+    UnsupportedForMLX,
+    build,
+    mlx_parameters,
+    torch_to_mlx,
+)
 from manabot.model.mlx.learner import MLXLearner, Settings, Targets, damped_loss
 from manabot.model.mlx.prepare import reference_distribution
 from manabot.model.policy_distribution import legal_mask
@@ -395,7 +402,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--collection", type=int, default=8)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
-    report = check(args.checkpoint, args.capture, args.minibatches, args.collection)
+    try:
+        report = check(args.checkpoint, args.capture, args.minibatches, args.collection)
+    except (FileNotFoundError, UnsupportedForMLX) as error:
+        parser.error(str(error))  # exits 2; 1 means the models disagree
     _print(report)
     failures = report.failures()
     if args.json is not None:

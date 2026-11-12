@@ -32,7 +32,8 @@ admitted as for the PyTorch policy; `prepare` does every integer lookup
 shared-effect routes) on the host, so the MLX graph holds only gathers,
 scatters and arithmetic. `inference=True` drops the object and fact columns no
 row uses, exactly as PyTorch CPU inference does. Outputs are MLX arrays:
-logits `[B,A]` (-1e8 off the legal support) and values `[B,1]`.
+logits `[B,A]` (-1e8 off the legal support) and values `[B,1]`, where the
+PyTorch policy returns values `[B]`; reshape before comparing the two.
 
 ## Install
 
@@ -61,7 +62,8 @@ It covers what the w160l8 regime uses: a catalog world with catalog record
 ids, table attention, a masked-mean scalar critic and policy input v9. A
 checkpoint that enables anything else (belief inputs, policy history, the
 pooled token stream, another critic, FiLM, input v10) is refused at conversion
-with the unsupported field named, rather than run partially.
+with the unsupported field named, rather than run partially. Checkpoints
+of the `local` recipe use FiLM and are refused.
 
 Two departures from the PyTorch forward are exact up to float rounding. The
 catalog GRU always encodes every definition, where PyTorch learning encodes
@@ -124,8 +126,9 @@ similarity). Tolerances are fixed: logits and values within 1e-4, loss within
 below 1e-6 of the global norm in both frameworks counts as zero: the
 policy-score bias and every attention key bias have analytically zero
 gradients (softmax ignores a shift shared by all its inputs), so both sides
-hold rounding noise. The check exits non-zero naming the worst component when
-any comparison fails; a timing taken from a model that fails it is not
+hold rounding noise. The check exits 1 naming the worst component when any
+comparison fails, and 2 when the checkpoint or capture cannot be read or the
+checkpoint is refused; a timing taken from a model that fails it is not
 reported.
 
 ## Learner step

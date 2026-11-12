@@ -9,14 +9,17 @@ Writes `<stem>.mlx.safetensors` beside the checkpoint
 import argparse
 from pathlib import Path
 
-from manabot.model.mlx.checkpoint import convert
+from manabot.model.mlx.checkpoint import UnsupportedForMLX, convert
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("checkpoint", type=Path)
     args = parser.parse_args(argv)
-    target, tensors = convert(args.checkpoint)
+    try:
+        target, tensors = convert(args.checkpoint)
+    except (FileNotFoundError, UnsupportedForMLX) as error:
+        parser.error(str(error))
     print(f"read   {args.checkpoint}  ({tensors} tensors)")
     print(f"wrote  {target}")
 
