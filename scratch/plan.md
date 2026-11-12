@@ -32,3 +32,10 @@ tests/training/test_bucketed_execution, tests/eval/test_experiment_files — 76 
 No code cuts left: no `token_stream`/pooled-stream references remain outside
 the refusal validator, its message and test; `encoded_relations` still feeds
 `shared_context`/`frame_context`; ruff clean on touched files.
+
+## Concept review (2026-11-12)
+
+No change. One attention layout means no `token_stream` concept: removing the
+field and refusing a saved non-`tables` value by name (as compound decisions
+are) meets the brief's load/refuse requirement more plainly than a one-value
+literal. No open product choice.
