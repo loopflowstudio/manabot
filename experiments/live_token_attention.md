@@ -28,4 +28,102 @@ and value-token critics, and that collection packs with its host-measured count.
 
 ## Results
 
-Not yet run.
+**Answer.** Yes. At w384l8 on an L4, live tokens over bucketed shapes take the
+median learner step from 386 ms to 202 ms, 1.91× faster, which clears the 1.5×
+bar. The prediction (about 1.3×) is refuted. Outputs match the padded path as
+closely as bucketed shapes already do: losses within 9e-8, logits within 4e-8
+and gradients within 2.5e-5 (cosine ≥ 0.999999999). Live tokens should be built
+out as the layout for larger models.
+
+### Learner step and collection forward
+
+The same retained minibatches and collection observations were run through each
+layout, two passes each. A baseline repeat at w160l8 lands within 0.5% of the
+first baseline run, so differences of a few percent are noise.
+
+| Layout, w384l8 (31.5M parameters) | Learner step (median) | Learner pass | Collection pass | Learner peak memory |
+|---|---:|---:|---:|---:|
+| Padded (default) | 882 ms | 18.0 s | 20.4 s | 12.8 GB |
+| Bucketed shapes | 386 ms | 7.7 s | 8.0 s | 5.4 GB |
+| Live tokens, full tables | 254 ms | 5.2 s | 4.8 s | 3.1 GB |
+| **Live tokens over buckets** | **202 ms** | **4.1 s** | **4.6 s** | **3.0 GB** |
+
+| Layout, w160l8 (5.8M parameters) | Learner step (median) | Learner pass | Collection pass | Learner peak memory |
+|---|---:|---:|---:|---:|
+| Padded (default) | 387 ms | 7.8 s | 9.2 s | 5.3 GB |
+| Bucketed shapes | 165 ms | 3.3 s | 4.0 s | 2.2 GB |
+| Live tokens, full tables | 143 ms | 2.9 s | 2.4 s | 1.2 GB |
+| **Live tokens over buckets** | **114 ms** | **2.3 s** | **2.9 s** | **1.1 GB** |
+
+Against bucketed shapes, live tokens over buckets are 1.91× faster per learner
+step at w384l8 and 1.45× at w160l8, so the gain grows with model width, as it
+should when attention dominates. Collection passes are 1.75× and 1.37× faster.
+Against the padded default the combined layout is 4.4× (w384l8) and 3.4×
+(w160l8) per learner step, with a quarter of the learner memory. Kernel launches
+per learner step barely change (7,241 against 7,363 for bucketed shapes at
+w384l8), so the saving is less work per kernel, not fewer kernels.
+
+At w160l8, live tokens over the full tables give a faster collection pass than
+over buckets (2.4 s against 2.9 s), although the learner step is slower. Bucket
+trimming costs something on small collection calls that live packing already
+covers. This pilot did not separate that cost.
+
+### Numerics
+
+At fixed weights (w160l8 in-situ initialization, CUDA, four learner minibatches
+and eight collection observations), each layout was compared with the padded
+path:
+
+| Layout | Collection logits | Values | Losses | Gradients (max abs) | Gradient cosine |
+|---|---:|---:|---:|---:|---:|
+| Bucketed shapes | 8e-9 | 3e-7 | 7e-8 | 2.5e-5 | ≥ 0.9999999989 |
+| Live tokens, full tables | 7e-9 | 5e-7 | 2e-8 | 8.9e-6 | ≥ 0.9999999994 |
+| Live tokens over buckets | 7e-9 | 6e-7 | 9e-8 | 2.5e-5 | ≥ 0.9999999989 |
+
+The gradient differences are atomic-accumulation order on CUDA, the same size
+bucketed shapes already show, and live tokens add none of their own. As in
+MTG-301, `compare`'s CPU-tuned gradient tolerance reports `ok: false` for every
+CUDA layout, bucketed shapes included. Numerics were taken at w160l8 only.
+
+### Cost
+
+USD 0.24 (launcher), one L4 for 17 minutes of job time, under the USD 3 cap.
+
+### Limits
+
+- One rented L4, one in-situ update, two replay passes per arm. Timings are of
+  retained inputs replayed in separate processes, not of a whole training run.
+- Packing reads the live-object count on the host once per learning forward.
+  It is included in the learner step above. Collection takes the count from
+  host preparation.
+- The CPU path is correct but slow (per-observation attention), so the layout
+  is for CUDA.
+
+## Decision
+
+Build out live tokens. The pilot passes its pre-registered rule: the
+bucketed-live learner step is 0.52 of bucketed's at w384l8, below the 0.67 bar,
+with outputs equal within float tolerance.
+
+<details><summary>Appendix: run and evidence</summary>
+
+- Etude run `308602b435fe` (`mtg319-live-token-attention-live`), source
+  `53cf1357d` on this branch (main `4c9ba1957` plus this change), machine
+  `mtg319-l4-161dd1d181d2`: NVIDIA L4, AMD EPYC 9254 (48 CPUs), torch
+  2.15.0+cu132, CUDA 13.2. Launched 16:45 UTC on 2026-11-12, succeeded, job
+  1,037 s. The machine was terminated by hand after the run ended, since its
+  window ran to 19:01 UTC.
+- Dated line, 2026-11-12: the planned `l4-etude` on-demand was held by another
+  Task's run from 15:51 UTC, and RunPod had no L4 stock until 16:45. The job ran
+  on `mtg319-l4`, an on-demand with `l4-etude`'s template (L4, 6 vCPUs, 48 GB,
+  50 GB disk, same image, ≤ USD 0.60/hour). The question is unchanged.
+- Medians are over the 40 timed learner steps (20 minibatches × 2 passes) in
+  each arm's `receipt.json`. Passes are `summary.json`'s
+  `learner_total_s_per_pass` / `inference_total_s_per_pass`, averaged over two
+  passes.
+- Evidence is under `experiments/data/live_token_attention/` (manifest entries
+  in `experiments/data.manifest.json`): `summary.json`, `job.json`,
+  `gpu-samples.csv`, `insitu/`, `replay/<arm>-<size>/`, `numerics/`, `logs/`,
+  `inputs/`.
+
+</details>

@@ -51,14 +51,25 @@
   `LAYOUTS`); test reads `OBJECT_VALIDITY_KEYS`; doc serialization paragraph trimmed.
   `test_live_tokens.py`: 5 passed. Merged main `4c9ba1957` (no conflict with this diff).
 
+- 16:33 UTC: l4-etude still 1/1 held (run f71ee505f7cc, MTG-317). Added task on-demand
+  `mtg319-l4` (l4-etude's template: L4, 6 vCPU, 48 GB, 50 GB disk, same image, <= $0.60/h);
+  it reads "none available, 0 of 1 in use", so RunPod L4 stock is out, not just the slot.
+  `etude launch ... --rent mtg319-l4 --revision 53cf1357d` refused (no machines, no run
+  started). `--max-usd` on a single-run launch needs `--cohort`; the Job's own `max_usd`
+  ($3) is the cap. The shared controller's last loop was 2026-11-11, so `etude queue`
+  would never start; a bounded poll (10 min, until 18:30 UTC) launches on first stock.
+- 16:45 UTC: stock appeared; launched run `308602b435fe` (mtg319-live-token-attention-live)
+  on machine `mtg319-l4-161dd1d181d2`, source 53cf1357d. `etude wait 308602b435fe` drives it.
+
+- Run succeeded (USD 0.24 launcher, job 1,037 s); machine terminated by hand after
+  (window ran to 19:01). w384l8 learner step median: bucketed 386 ms, bucketed-live
+  202 ms (1.91x, bar 1.5x: PASS); numerics equal to bucketed's CUDA tolerance. Report,
+  README index, docs claim updated; data published (75 manifest entries).
+- `tests/infra/test_experiment_data_untracked.py`: 1 passed. `tests/model`: 310 passed, 4 skipped.
+
 ## Remaining
 
-- L4 run (<= USD 3; `--rent l4-etude` once a slot is free, revision = branch head
-  `1987cc259` or later). Last observed slot state is the 16:28 UTC poll above.
-- Report Results/Decision in `experiments/live_token_attention.md`, reader-first per
-  main's `.lf/skills/experiment-report.md` step 5 (`4c9ba1957`): plain answer (speedup at
-  w384l8 vs the 1.5x bar, numerics equal or not) before any table, step time in ms,
-  cost once, run IDs and receipts in a closing appendix. Then an `experiments/README.md`
-  index line.
-- Gate suites (model, training, `tests/infra/test_experiment_data_untracked.py` if the
-  run's data lands under `experiments/data/`).
+- Training suite result (running). Then commit; delivery belongs to later steps.
+- Proposed memory note: `etude launch --max-usd` on a single run needs `--cohort`; the
+  Job's own `max_usd` caps it. `etude wait RUN` leaves the rented machine up to its
+  window end after success, so terminate it.

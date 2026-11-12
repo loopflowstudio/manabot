@@ -240,11 +240,12 @@ search do not. Code that builds a policy directly passes
 serialized only when set. The setting changes how a forward is computed, not the model: no `ModelConfig`
 field, checkpoint, world binding or policy input changes, and a checkpoint
 trained with it loads and runs without it. Action probabilities, values,
-losses and gradients agree with the padded path to within 1e-5. It is rejected
+losses and gradients agree with the padded path to within 1e-5 on CPU; on CUDA
+they differ only by accumulation order, as bucketed shapes do. It is rejected
 with `token_stream="pooled"`, which already packs its own sequence, at regime
-validation and when constructing the policy. The measured cost against the
-default path and bucketed padding is in
-[live-token attention](../experiments/live_token_attention.md).
+validation and when constructing the policy. On an L4 at w384l8, live tokens over
+buckets take a learner step from 386 ms (bucketed shapes) to 202 ms
+([live-token attention](../experiments/live_token_attention.md)).
 
 ## Policy inputs
 
