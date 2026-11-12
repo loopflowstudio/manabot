@@ -1,11 +1,14 @@
 """Portable ActorCritic checkpoints: exact weights, world and input admission.
 
 save_checkpoint records the model architecture, observation configuration and
-explicit native matchup. load_checkpoint verifies bindings before loading weights
-and returns an eval-mode model. Optimizer/collector recovery belongs to training.
-Historical serialized keys remain unchanged; these are not training snapshots.
+explicit native matchup in a PyTorch `.pt` file. load_checkpoint reads either
+that file or the shared container (`manabot.policy.checkpoint`), choosing by
+the file's bytes, verifies bindings before loading weights and returns an
+eval-mode model. Optimizer/collector recovery belongs to training. Historical
+serialized keys remain unchanged; these are not training snapshots.
 """
 
+import json
 import os
 from pathlib import Path
 import tempfile
@@ -37,6 +40,7 @@ from manabot.model.world import (
     validate_checkpoint_world,
     validate_policy_input,
 )
+from manabot.policy.checkpoint import canonical_name, read_container
 import managym
 
 if TYPE_CHECKING:
@@ -136,13 +140,21 @@ def load_checkpoint(
 ):
     """Load saved configuration and validate world/schema; verify S3 bytes before loading.
 
-    Raises `UnsupportedPolicyInput` for a checkpoint of another policy input.
-    `bucketed_shapes` selects the forward's padding path (see `ActorCritic`);
-    it is an execution choice, not a checkpoint field.
+    A PyTorch `.pt` file (a zip archive) loads as written; any other file is
+    read as the shared container, which raises `NotAContainer` if it is not
+    one and `UnsupportedPolicy` for a configuration the container does not
+    carry. Raises `UnsupportedPolicyInput` for a checkpoint of another policy
+    input. `bucketed_shapes` selects the forward's padding path (see
+    `ActorCritic`); it is an execution choice, not a checkpoint field.
     """
 
     if isinstance(path, StoredArtifact):
         path = str(materialize_artifact(path))
+    if not _is_torch_file(Path(path)):
+        agent, obs_space = _load_container(Path(path), bucketed_shapes)
+        if include_belief_binding:
+            return agent, obs_space, None
+        return agent, obs_space
 
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     config = checkpoint["hypers"]
@@ -172,6 +184,47 @@ def load_checkpoint(
     if include_belief_binding:
         return agent, obs_space, binding
     return agent, obs_space
+
+
+def _is_torch_file(path: Path) -> bool:
+    """`torch.save` writes a zip archive; the container starts with its
+    8-byte header length."""
+    with path.open("rb") as file:
+        return file.read(4) == b"PK\x03\x04"
+
+
+def _load_container(
+    path: Path, bucketed_shapes: bool
+) -> tuple[ActorCritic, ObservationSpace]:
+    """An eval-mode policy from a container. `read_container` has validated
+    the world binding and refused unsupported configurations, so no belief
+    binding or `bc` value semantic applies."""
+    container = read_container(path)
+    record = {
+        key: json.loads(container.metadata[key])
+        for key in ("world_binding", "source", "architecture")
+    }
+    agent = ActorCritic(
+        container.space, container.model, bucketed_shapes=bucketed_shapes
+    )
+    world_binding = validate_checkpoint_world(record, container.space)
+    validate_policy_input(agent, world_binding)
+    agent.world_binding = world_binding
+    if record["architecture"] is not None:
+        validate_architecture_receipt(agent, record["architecture"])
+    torch_names = {canonical_name(name): name for name in agent.state_dict()}
+    arrays = {**container.parameters, **container.buffers}
+    unknown = sorted(set(arrays) - set(torch_names))
+    if unknown:
+        raise KeyError(f"container tensors with no policy parameter: {unknown}")
+    agent.load_state_dict(
+        {
+            torch_names[name]: torch.from_numpy(value.copy())
+            for name, value in arrays.items()
+        }
+    )
+    agent.eval()
+    return agent, container.space
 
 
 def save_checkpoint(

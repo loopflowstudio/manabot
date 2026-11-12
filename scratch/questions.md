@@ -23,6 +23,9 @@
   value, historical_mean, attention off) and the `.pt` extras? Assumed: this
   Task, after PR #495 lands, editing those files in place. Until then the
   torch forward keeps its inline lookups.
-- Does `save_checkpoint` switch to writing `.safetensors` in this PR (docs say
-  so) or keep `.pt` until Etude staging and recipes are checked against the
-  container? Docs assume the switch; code still writes `.pt`.
+- `save_checkpoint` keeps writing `.pt` until the container carries every
+  configuration and the `.pt` extras (belief binding, `bc` value semantic);
+  `load_checkpoint` reads both, choosing by the zip magic (`PK\x03\x04`).
+  Docs (`training-loop.md`, `manabot/README.md`, `backends/README.md`) now say
+  so. Extensions requested on MTG-321 (steer 8d8dc862, 2026-11-12); assumed
+  this Task edits `prepare.py`/`checkpoint.py` in place after #495 lands.

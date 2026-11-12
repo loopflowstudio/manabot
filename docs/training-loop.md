@@ -267,12 +267,14 @@ uv run python -c "from manabot.training.loops.minimal import train; train(3)"
 
 Three iterations take a few seconds on a laptop CPU and return a policy;
 they teach it almost nothing. Keep a run with `save_checkpoint(policy,
-policy.observation_space, "policy.safetensors", player_configs=Match().to_rust())`
+policy.observation_space, "policy.pt", player_configs=Match().to_rust())`
 from `manabot.backends.torch.checkpoint`, which binds it to the decks it
 played, as a recipe's checkpoints are bound to their setups;
-`load_checkpoint("policy.safetensors")` returns the policy and its observation
-space. The file is the [shared container](../manabot/policy/README.md#the-checkpoint-container),
-so any backend can load it. `tests/training/test_minimal_loop.py`
+`load_checkpoint("policy.pt")` returns the policy and its observation
+space. `load_checkpoint` also reads the
+[shared container](../manabot/policy/README.md#the-checkpoint-container) that
+other backends load; `python -m manabot.backends.convert` writes one from a
+`.pt` file. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,
 then saves and reloads its checkpoint.
 

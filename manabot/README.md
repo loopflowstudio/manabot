@@ -641,8 +641,9 @@ with those packages blocked.
   `backends/torch/` is the reference and `backends/parity.py` checks the others
   against it ([backends](backends/README.md)).
   `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
-  files; `load_checkpoint` still reads `.pt` checkpoints, whose serialized
-  historical keys remain unchanged.
+  files: `save_checkpoint` writes a `.pt` file, whose serialized historical
+  keys remain unchanged, and `load_checkpoint` reads either that or the shared
+  container.
 - `model/`: the torch model's components, observation admission and
   inference preparation, architecture receipts and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,

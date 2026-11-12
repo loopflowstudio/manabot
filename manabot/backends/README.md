@@ -53,6 +53,11 @@ agent, obs_space = load_checkpoint(".runs/example/checkpoint.pt")
 learner = Learner(agent, "cpu", minibatch_rows=64)
 ```
 
+`load_checkpoint` reads a `.pt` file or a container, telling them apart by
+their first bytes; `save_checkpoint` writes `.pt` until the container carries
+every configuration the torch policy runs (belief inputs, history, FiLM and
+the rest refused below).
+
 `rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
 runtime, so another role reuses them unchanged. The same names in
 `manabot.model.actor_critic`, `manabot.model.checkpoint` and
