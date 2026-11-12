@@ -117,6 +117,8 @@ with limitations, inventories and rental accounting once execution is possible).
 
 - Implement pass 2026-11-12: no new Task comment or budget choice; RunPod lists
   only `etude-8a95fe6d04e9` (not an MTG-281 rental, untouched). No code change.
+- Realign 2026-11-12: still no Task comment beyond the claim; main has no
+  commits past the branch base. Plan, code and report agree; nothing changed.
 
 ## Docs
 
