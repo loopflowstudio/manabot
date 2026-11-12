@@ -1,9 +1,12 @@
 """Capture policy outputs, gradients and trained weights for one checkout.
 
 Usage: python run.py OUT.pt  (with PYTHONPATH pointing at the checkout)
+EQUIV_DEVICE=cuda runs the forward/backward configs on CUDA with TF32 matmul
+and cuDNN allowed (`precision="tf32"`'s switches); `minimal.train` stays CPU.
 Imports only names that resolve at both 05c1203e9 and MTG-325 HEAD.
 """
 
+import os
 import sys
 import warnings
 
@@ -12,6 +15,10 @@ import torch
 
 warnings.simplefilter("ignore", DeprecationWarning)
 torch.set_num_threads(1)
+DEVICE = torch.device(os.environ.get("EQUIV_DEVICE", "cpu"))
+if DEVICE.type == "cuda":
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
 import manabot  # noqa: E402
 from manabot.env.match import Match  # noqa: E402
@@ -57,8 +64,76 @@ def observations(space: ObservationSpace, count: int) -> dict[str, torch.Tensor]
     return {k: torch.from_numpy(np.stack([r[k] for r in rows])) for k in rows[0]}
 
 
+def belief_batch(count: int) -> tuple[ObservationSpace, ModelConfig, dict[str, torch.Tensor]]:
+    """Real belief rows: the demo match's generated belief and its Bolt
+    conditionings, paired cyclically with that match's own observations."""
+    from manabot.belief import demo
+    from manabot.belief.encoding import encode_belief
+    from manabot.belief.runtime import ManabotPlayer
+    from manabot.belief.state import condition_belief
+    from managym.possible_worlds import WorldQuery
+
+    env, observation = demo._runtime_env()
+    viewer = int(env.last_raw_obs.agent.player_index)
+    schema, policy_value = demo._schema_and_agent(env._engine, viewer)
+    player = ManabotPlayer(policy_value, belief_schema=schema)
+    player.start_game(env, viewer)
+    player.act(env, observation)
+    generated = player.last_step.belief_update.belief
+    beliefs = [
+        generated,
+        condition_belief(generated, WorldQuery.has("Lightning Bolt")),
+        condition_belief(generated, WorldQuery.lacks("Lightning Bolt")),
+    ]
+    views = [
+        encode_belief(b, schema).to_torch_observation(batch_size=1, device="cpu")
+        for b in beliefs
+    ]
+    rng = np.random.default_rng(7)
+    rows: list[dict[str, np.ndarray]] = []
+    while len(rows) < count:
+        if rng.random() < 0.5:
+            rows.append(observation)
+        actions = int(np.asarray(observation["actions_valid"]).sum())
+        observation, _, terminated, truncated, _ = env.step(int(rng.integers(actions)))
+        if terminated or truncated:
+            observation, _ = env.reset(seed=int(rng.integers(1 << 30)))
+    batch = {k: torch.from_numpy(np.stack([np.asarray(r[k]) for r in rows])) for k in rows[0]}
+    for key in views[0]:
+        batch[key] = torch.cat([views[i % 3][key] for i in range(count)]).contiguous()
+    config = ModelConfig(
+        hidden_dim=16,
+        belief_count_buckets=schema.count_buckets,
+        belief_card_vocab_size=1 + max(row.card_def_id for row in schema.rows),
+    )
+    return env.observation_space, config, batch
+
+
+def forward_backward(out, key, model, batch) -> None:
+    model.to(DEVICE)
+    batch = {k: v.to(DEVICE) for k, v in batch.items()}
+    obs = admit_observation(model, batch)
+    logits, values = model(obs)
+    logs = policy_logs(logits, legal_mask(obs["actions_valid"]))
+    chosen = legal_mask(obs["actions_valid"]).float().argmax(-1)
+    loss = -logs.gather(-1, chosen[:, None]).mean() + values.float().square().mean()
+    loss.backward()
+    out[f"{key}/logits"] = logits.detach().cpu()
+    out[f"{key}/values"] = values.detach().cpu()
+    out[f"{key}/loss"] = loss.detach().cpu()
+    for pname, p in model.named_parameters():
+        if p.grad is not None:
+            out[f"{key}/grad/{pname}"] = p.grad.detach().cpu().clone()
+
+
 def capture() -> dict[str, torch.Tensor]:
     out: dict[str, torch.Tensor] = {}
+    space, config, batch = belief_batch(24)
+    for bucketed in (False, True):
+        torch.manual_seed(0)
+        model = ActorCritic(space, config, bucketed_shapes=bucketed)
+        model.train()
+        forward_backward(out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch)
     spaces = {
         9: ObservationConfig(),
         10: ObservationConfig(policy_input_version=10),
@@ -75,18 +150,7 @@ def capture() -> dict[str, torch.Tensor]:
                 torch.manual_seed(0)
                 model = ActorCritic(space, config, bucketed_shapes=bucketed)
                 model.train()
-                obs = admit_observation(model, batch)
-                logits, values = model(obs)
-                logs = policy_logs(logits, legal_mask(obs["actions_valid"]))
-                chosen = legal_mask(obs["actions_valid"]).float().argmax(-1)
-                loss = -logs.gather(-1, chosen[:, None]).mean() + values.float().square().mean()
-                loss.backward()
-                out[f"{key}/logits"] = logits.detach()
-                out[f"{key}/values"] = values.detach()
-                out[f"{key}/loss"] = loss.detach()
-                for pname, p in model.named_parameters():
-                    if p.grad is not None:
-                        out[f"{key}/grad/{pname}"] = p.grad.detach().clone()
+                forward_backward(out, key, model, batch)
     for name, config in {
         "masked_mean": ModelConfig(hidden_dim=16, value_aggregation="masked_mean"),
         "default": ModelConfig(hidden_dim=16),

@@ -22,7 +22,13 @@ for key in base:
     )
     if not same:
         differ.append((key, float((a.double() - b.double()).abs().max())))
+worst: dict[str, float] = {}
+for key, delta in differ:
+    if isinstance(delta, float):
+        kind = "train" if key.startswith("train/") else key.split("/")[2]
+        worst[kind] = max(worst.get(kind, 0.0), delta)
 print("tensors", len(base), dict(kinds))
+print("max abs diff by kind", worst)
 print("differing", len(differ))
-for key, delta in differ[:40]:
+for key, delta in sorted(differ, key=lambda d: -d[1] if isinstance(d[1], float) else 0)[:15]:
     print(" ", key, delta)
