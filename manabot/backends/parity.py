@@ -67,7 +67,7 @@ ZERO_GRADIENT = 1e-6  # of the global gradient norm
 
 # Backend name -> the framework it needs; each provides
 # `manabot.backends.<name>.checkpoint.BACKEND`.
-BACKENDS = {"mlx": "mlx"}
+BACKENDS = {"torch": "torch", "mlx": "mlx"}
 
 
 def installed_backends() -> list[str]:
