@@ -63,6 +63,9 @@ consumer: `BecomesTargeted` (Ward's "an opponent controls", CR 702.21),
 more" trigger in the card sets is an `Attacks`, `DealsCombatDamage` or
 `PutsCounters` field, so `Per` needs no other home yet.
 
+Concept review 4 (head eeb9af27e): no change. Since review 3 only the
+`TriggerSubject::matching` constructor (same model) and a base merge landed.
+
 ## Checks
 
 - `cargo nextest run --workspace --profile ci` (debug): 1163/1164 pass;
