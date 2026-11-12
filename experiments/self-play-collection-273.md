@@ -379,8 +379,7 @@ maintained reader now binds the final path component to the SDK capture ID,
 while retaining scientific-run/source/recipe checks, and admits `cuda:0` as the
 single requested CUDA device. `reader-erratum.json` binds the old and corrected
 reader bytes. No estimator, endpoint, threshold or scientific source changed.
-Five focused tests passed, and the real baseline now passes identity validation
-while correctly reporting its incomplete target. Broader checks remain with gate.
+The real baseline passes identity validation and reports its incomplete target.
 
 ### Frozen paired analysis
 
