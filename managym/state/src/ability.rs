@@ -445,7 +445,7 @@ pub enum TriggerSubject {
     /// `another` excludes the source itself (CR 109.4).
     Matching {
         controlled_by: Actor,
-        predicate: CardPredicate,
+        predicate: Box<CardPredicate>,
         another: bool,
     },
 }
@@ -455,7 +455,7 @@ impl TriggerSubject {
     pub fn you_control(predicate: CardPredicate) -> Self {
         Self::Matching {
             controlled_by: Actor::You,
-            predicate,
+            predicate: Box::new(predicate),
             another: false,
         }
     }
@@ -464,7 +464,7 @@ impl TriggerSubject {
     pub fn another_you_control(predicate: CardPredicate) -> Self {
         Self::Matching {
             controlled_by: Actor::You,
-            predicate,
+            predicate: Box::new(predicate),
             another: true,
         }
     }
@@ -473,7 +473,7 @@ impl TriggerSubject {
     pub fn any(predicate: CardPredicate) -> Self {
         Self::Matching {
             controlled_by: Actor::AnyPlayer,
-            predicate,
+            predicate: Box::new(predicate),
             another: false,
         }
     }
@@ -482,7 +482,7 @@ impl TriggerSubject {
     pub fn another(predicate: CardPredicate) -> Self {
         Self::Matching {
             controlled_by: Actor::AnyPlayer,
-            predicate,
+            predicate: Box::new(predicate),
             another: true,
         }
     }

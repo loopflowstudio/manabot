@@ -1927,7 +1927,7 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
                     condition: TriggerCondition::Dies {
                         subject: TriggerSubject::Matching {
                             controlled_by,
-                            predicate: CardPredicate::creature(),
+                            predicate: Box::new(CardPredicate::creature()),
                             another,
                         },
                     },

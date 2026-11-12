@@ -1318,7 +1318,7 @@ mod tests {
                 TriggerCondition::Dies {
                     subject: TriggerSubject::Matching {
                         controlled_by: Actor::Opponent,
-                        predicate: CardPredicate::creature(),
+                        predicate: Box::new(CardPredicate::creature()),
                         another: false,
                     },
                 },
