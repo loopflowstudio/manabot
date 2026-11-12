@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>MTG-289 QA</title>
+<body style="font-family:system-ui;max-width:46rem;margin:2rem auto;line-height:1.5">
+<h1>MTG-289 QA: nothing to exercise</h1>
+<p>The Task is <code>abandoned</code> (from <code>lf task status MTG-289 --json</code> on 2026-11-11; no PR, no Wave). Its steer, word for word:</p>
+<blockquote>Filed in error 2026-11-11: MTG-272 (PR #458, merged 2026-11-11 23:46 UTC) already added <code>Env.hand_snapshot(player)</code> and <code>VectorEnv.hand_snapshots(players)</code>. …</blockquote>
+<h2>Scenarios</h2>
+<ul>
+<li><b>Product diff against the checkout base.</b> <code>git diff --stat 668555c09 -- . ':(exclude)scratch'</code> printed nothing, so no product, test or doc file differs from the base. No user-facing behaviour changed, so there was nothing for a user to try.</li>
+<li><b>Supported path still declared.</b> <code>manabot/managym/__init__.pyi</code> still declares <code>hand_snapshot</code> (line 133) and <code>hand_snapshots</code> (line 294). No <code>hidden_zone</code> declaration remains.</li>
+</ul>
+<h2>Not reached</h2>
+<p>I didn't run the hand snapshot API in this worktree. It has no built <code>_managym</code> extension, and that API came from MTG-272 rather than from this Task. Building the extension just to retest it would cost compute and wouldn't test anything this Task changed.</p>
+<h2>Still wrong</h2>
+<p>Nothing for this Task. Library contents, both seats in one call, and definition-indexed buffers are still not built. They wait for a consumer to ask for them.</p>
+</body></html>
