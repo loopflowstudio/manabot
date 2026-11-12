@@ -40,6 +40,13 @@ identifiers stay unchanged.
 The shared Etude experiment services retain their names. "Sepia Etude" remains
 the name of the visual language.
 
+Name a thing for what it is where it is produced, not for how one consumer
+uses it. managym produces observations, encodings and card tokens for any
+consumer, so its API says `catalog_tokens` and `record_vocabulary`; manabot may
+name the same value by its use. Rename a published name with a deprecated alias
+that warns and states its removal release; serialized configuration keys,
+checkpoint fields and frozen evidence keep their spelling.
+
 Code dependencies flow Academy → manabot → the engine in `managym`.
 PyPI distributes the engine as `managym` and training as `manabot`, released
 together at the same version. Release builds use `scripts/release/prepare.py`
@@ -344,7 +351,7 @@ evidence to hide a regression. A new mechanic still needs behavior, learning
 tokens and every shared observation path; non-evergreen kinds use fact rows.
 
 Learning tokens derive from the same definitions (`cards/tokens.rs`,
-`managym.learning_catalog`), so a new variant reaches the policy without a
+`managym.catalog_tokens`), so a new variant reaches the policy without a
 vocabulary edit. Every mechanic must be observable in both the observation
 tensor and the tokens: extend the exhaustive guards in
 `managym/cards/tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,

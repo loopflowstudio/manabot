@@ -43,7 +43,7 @@ are in the [README](../README.md#contracts-the-code-enforces).
 Each card is a function in the file of its first printing's set under
 `cards/src/`, returning the engine's own `CardDefinition` in its rules types
 (`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
-the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
+the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
 support check (defined non-token cards, excluding rules fixtures) and the set
 filter. Known rules bugs are tracked as Tasks without revoking playability. Keep
