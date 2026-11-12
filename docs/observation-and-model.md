@@ -50,11 +50,9 @@ validation of its own
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
-   With `token_stream="pooled"` (an experimental option, off by default), one
-   attention sequence holds each observation's valid objects, continuation
-   relations and legal actions, padded per batch to a 32-token bucket; action
-   tokens carry their focus objects in and their attended output is scored
-   ([comparison](../experiments/token_stream.md)).
+   [Live-token attention](#live-token-attention-profiling) attends over valid
+   objects only; it replaced the pooled token stream
+   ([token-stream report](../experiments/token_stream.md)).
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
@@ -180,8 +178,6 @@ and code that builds a policy directly passes
 serialized regime, so existing regime hashes are unchanged; a stage that sets
 it records `"bucketed_shapes": true` in the regime in `run.json`. To compare
 the two paths, run the same regime once with each setting.
-`token_stream="pooled"` does not support bucketed shapes, and a regime
-combining them fails validation.
 
 The setting changes how a forward is computed, not the model. It changes no
 `ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
@@ -239,12 +235,11 @@ search do not. Code that builds a policy directly passes
 `ActorCritic(..., live_tokens=True)`. Like `bucketed_shapes`, the field is
 serialized only when set. The setting changes how a forward is computed, not
 the model: no `ModelConfig` field, checkpoint, world binding or policy input
-changes, and a checkpoint trained with it loads and runs without it. Action probabilities, values,
-losses and gradients agree with the padded path to within 1e-5 on CPU; on CUDA
-they differ only by accumulation order, as bucketed shapes do. It is rejected
-with `token_stream="pooled"`, which already packs its own sequence, at regime
-validation and when constructing the policy. On an L4 at w384l8, live tokens over
-buckets take a learner step from 386 ms (bucketed shapes) to 202 ms
+changes, and a checkpoint trained with it loads and runs without it. Action
+probabilities, values, losses and gradients agree with the padded path to
+within 1e-5 on CPU; on CUDA they differ only by accumulation order, as bucketed
+shapes do. On an L4 at w384l8, live tokens over buckets take a learner step
+from 386 ms (bucketed shapes) to 202 ms
 ([live-token attention](../experiments/live_token_attention.md)).
 
 ## Policy inputs

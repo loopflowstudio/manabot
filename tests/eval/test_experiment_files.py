@@ -63,7 +63,6 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "tla_frontier",
         "tla_frontier_calibration",
         "tla_frontier_vocabulary",
-        "token_stream",
         "two_seat",
         "value_readout_252",
     }
