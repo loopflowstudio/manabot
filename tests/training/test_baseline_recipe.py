@@ -155,7 +155,11 @@ def test_cpu_baseline_differs_only_in_device(
         accelerated.regime.model_dump(),
     )
     assert cpu_data["stages"][0]["execution"].pop("device") == "cpu"
-    assert accelerated_data["stages"][0]["execution"].pop("device") == device
+    accelerated_execution = accelerated_data["stages"][0]["execution"]
+    assert accelerated_execution.pop("device") == device
+    on_cuda = device == "cuda"
+    assert accelerated_execution.pop("bucketed_shapes", False) is on_cuda
+    assert accelerated_execution.pop("live_tokens", False) is on_cuda
     assert cpu_data == accelerated_data
     assert cpu.model_dump(exclude={"regime"}) == accelerated.model_dump(
         exclude={"regime"}
