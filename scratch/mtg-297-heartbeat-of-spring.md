@@ -1,9 +1,9 @@
-# MTG-297: Heartbeat of Spring
+# MTG-297: Heartbeat of Spring, Animal Attendant, Toph, Uncle's Musings
 
 Design: `scratch/tle-production-design.md` with the review decisions in
 `scratch/heartbeat-design.md`.
 
-## Scope in this PR: the production half
+## Scope
 
 Steer 41eb2776 (2026-11-12): "Do the production half now. Build spending
 (pool classes, receipts, Animal Attendant, Toph, Uncle's Musings) on MTG-242's
@@ -11,78 +11,83 @@ ManaRestriction/SpendingContext and proposed restricted-mana fact row; don't
 rewrite pool storage in parallel. If spending must wait for MTG-242 to reach
 main, finish production and stop there."
 
-MTG-242 is PR #496 (open, not merged, last updated 2026-11-12); it touches
-`state/mana.rs`, `flow/mana.rs`, `agent/continuation.rs`, `cards/src/tla.rs`
-and `observability.rs`, so expect conflicts there. This PR stops after
-production. Animal Attendant, Toph, Greatest Earthbender and Uncle's Musings
-stay undefined; their Scryfall ids are recorded below for the spending Task.
+MTG-242 (PR #496) merged 2026-11-12T21:37Z; main is merged into this branch
+(824753626) and the spending half is built on its types.
 
-## Built
+## Built: production
 
 - `TriggeredManaAbility { who: Actor, predicate, output }`,
   `TriggeredManaOutput::{Fixed(Mana), OneProducedType}` (`state/card.rs`).
   Badgermole Cub is `who: You, Fixed(G)`; Heartbeat of Spring
   (`cards/src/chk.rs`) is `who: AnyPlayer`, land, `OneProducedType`.
-- Tapping no longer fires bonuses (`flow/zones.rs::tap_permanent`). Deleted
-  `tap_mana_bonus`, `tap_mana_bonus_from`, `tap_bonus_sources`,
-  `fire_triggered_mana_abilities`.
-- `flow/mana.rs`: `mana_triggers` (both battlefields, with each source).
-  Tapping records `TappedForMana` (the trigger predicates the tapped
-  permanent matched, its LKI if the ability sacrifices it); trigger sources
-  are read from the board when the output is produced
-  (`production_bonuses`, CR 106.12a), after sacrifice costs and suffixes.
-  `resolve_mana_bonuses` resolves them after the output enters the pool; a
-  choice among several produced types suspends as a `ManaChoice`.
-- `Decision::ManaChoice.production: ManaProduction`: `Output { source,
-  tapped }` for the ability's output, `Bonus { source, tapped, produced,
-  pending }` for a triggered mana ability's type, with `PendingManaBonus`
-  (output plus source `ObjectRef`). The kind-6 obligation frame projects the
-  source (`frame.source`) and, for a bonus, the tapped permanent
-  (`frame.context`); `decision_context.rs` gives the bonus its own
-  instruction. Henge/Citadel suffixes still run before the output choice.
-- Planner: activation outputs and fixed sources fold in every bonus
-  combination (`production_alternatives`); `mana_choice_completes_payment`
-  adds the pending bonuses as an Output obligation. A fixed source whose bonus
-  would need a type choice is left out of automatic production; no current
-  fixed source produces two types.
-- Decision B's `producer` became `ManaProduction`; the bonus choice is offered as ordinary `ManaChoice`
-  actions, so no new action block. `TriggeredManaOutput` variants and the
-  tapping `Actor` are guarded into the learning tokens
-  (`observability.rs::every_triggered_mana_output_and_actor_reaches_the_learning_tokens`).
-- `docs/engine.md`: Heartbeat row removed, 59 of 61, corpus count updated.
+- Tapping no longer fires bonuses. `flow/mana.rs`: tapping records
+  `TappedForMana`; trigger sources are read from the board when the output is
+  produced (`production_bonuses`, CR 106.12a) and resolved after it
+  (`resolve_mana_bonuses`); a choice among produced types suspends as a
+  `ManaChoice` whose `ManaProduction` names its source and the tapped
+  permanent. Deleted `tap_mana_bonus`, `tap_mana_bonus_from`,
+  `tap_bonus_sources`, `fire_triggered_mana_abilities`.
+- Planner folds every bonus combination into the output alternatives.
+
+## Built: spending
+
+- `state/mana.rs`: the pool's class key is `ManaClass { restriction, effect }`
+  (was the restriction alone); `Mana.classes` replaces `Mana.restricted`.
+  `SpendEffect::CreatureEntersWithPlusOneCounter { without_subtype }` is
+  Animal Attendant's rider. Combat and regular pools stay distinct.
+- `Mana::pay` and `Game::spend_mana` return `ManaSpent { amounts,
+  entry_counters }`. Automatic order within a color: restricted classes and
+  classes whose effect applies, then ordinary mana, then classes whose effect
+  would be wasted.
+- The receipt travels `commit_payment` → `FrameCompletion::Paid.spent` →
+  `SpellOnStack.spent` → the resolution frame (`EffectFrame.spent`) → the
+  entering permanent (`Permanent.cast_spent`) → its own entering trigger
+  (`PendingTrigger.spent`, `TriggeredAbilityOnStack.spent`). A permanent
+  spell's `entry_counters` become +1/+1 counters in its `ZoneEntry`.
+- `EffectValue::ManaSpentToCast` (Toph) and `ColorsSpentToCast` (converge).
+- Cards in `cards/src/tle.rs`: Animal Attendant, Toph, Greatest Earthbender,
+  Uncle's Musings; Scryfall fixture entries added for these and Heartbeat.
+  `scripts/refresh_card_fixture.py` currently drops the double-faced cards
+  already in the fixture, so only the four new entries were added.
+- Observation, with no new buffer, column or fact kind:
+  - `PlayerData.mana` counts unrestricted class mana;
+    `PlayerData.spend_effect_mana` (description, amounts, token program) is
+    an `EffectProgram` (kind 11) on the player under the id `PooledMana`,
+    native and Python in parity; the text observation names the rider.
+  - The receipt is an execution occurrence (`mana spent`) of the stack frame
+    or resolution frame, only when a rule reads it
+    (`effect_execution::receipt_matters`: the definition mentions the
+    spent-mana values, or a spend effect applied).
+  - Vocabulary: `PooledMana`, `ManaSpent`, `amounts`, `entry_counters`,
+    `mana spent` registered in `record_vocabulary.rs`/`EXECUTION_TEXT`.
 
 ## Remaining
 
-- Spending half (pool classes, receipts, Animal Attendant, Toph, Uncle's
-  Musings): waits on PR #496 reaching main (see heartbeat-design.md). The
-  Task outcome names all four cards, so this PR alone does not complete it;
-  spending is either a later PR in this Task or a linked Task, which is the
-  caller's decision.
-- Rebase onto main after #496 merges if this PR is still open.
+- **Spending choices.** The design replaces automatic first-remainder payment
+  with a choice whenever receipts or remaining pools differ. Not built:
+  payment is still automatic (`Mana::payment_remainders`, the planner's fixed
+  sources). Consequences today: converge counts whatever colors automatic
+  tapping and the colorless-first generic order spend, and a player cannot
+  hold Attendant mana back from a qualifying creature. This is the design's
+  second spending deletion ("unconditional first-remainder selection") and a
+  new decision surface (action offers, Academy, replay); it is the next
+  implement direction or its own Task.
+- Witnesses still to write: a countered then reanimated creature gets no
+  counter or X; mana spent on a filter's own cost is not in the outer
+  receipt; combat-pool Attendant mana.
+- Academy's player view shows Attendant mana as ordinary mana without its
+  rider (`experience.rs` has no spend-effect field).
 
-## Spending cards (for the follow-up)
+## For the PR description
 
-- Animal Attendant: tle 128, `a3e6ff4d-bf7d-488f-a02f-f40e7f8761ca`, {1}{G}
-  Creature — Human Citizen 2/2.
-- Toph, Greatest Earthbender: tle 70, `b15acc09-dd32-4e93-a788-7c0ae965a0c8`,
-  {2}{R}{G} Legendary Creature — Human Warrior Ally 3/3.
-- Uncle's Musings: tle 73, `55724dab-93c8-4a7f-89c2-13e94820635b`, {2}{G}{G}
-  Sorcery.
+- CR over design: bonuses trigger when the mana ability produces mana
+  (CR 106.12a), sources read at production; the design's proposed v10
+  `mana_choices[A,4]` block and fact kinds after 14 were not needed.
+- Spending choices are not in this change (above).
 
 ## Checks
 
-- Concept-review iteration: cards 694 passed (debug), incl. the new
-  sacrificed-Heartbeat and source-naming witnesses; rules_tests 169,
-  search_state_contract 6, content_pack 3, engine lib 197 passed; clippy
-  clean; rebuilt extension: Python observation/parity/continuation/text/
-  decision-surface 164 and Academy fixture tests 11 passed after
-  `scripts/refresh_academy_fixtures.py` (content digest moved with Heartbeat's
-  registration).
-
-- `cargo test --manifest-path managym/cards/Cargo.toml --test cards`: 691 passed;
-  the added token guard passes (debug).
-- `rules_tests`, `content_pack_tests`, `search_state_contract`: passed.
-- Corpus: first 1,000 MTG-213 trophy decks re-admitted from source with the
-  rebuilt extension: 998 admit (Heartbeat decks 173, 925, 932 included); the
-  two failures are Lita.
-- Clippy (workspace, tests) clean.
+- Production half (before the merge): cards 694, rules_tests 169, engine lib
+  197 passed in debug; corpus first 1,000 decks 998 admit (the two failures
+  list Lita).
+- After the merge and spending: see the last line below.

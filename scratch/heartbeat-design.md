@@ -121,5 +121,5 @@ built (see `mtg-297-heartbeat-of-spring.md`).
    without the browser inventing it. Keep scalar/vector, Python, text and
    token parity; it adds no buffer or fact kind.
 
-The spending half is unchanged: it waits for MTG-242 (PR #496) per the
-2026-11-12 steer quoted in `mtg-297-heartbeat-of-spring.md`.
+PR #496 merged on 2026-11-12; the spending half is built on it, except the
+spending choices (see `mtg-297-heartbeat-of-spring.md`, Remaining).

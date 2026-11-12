@@ -23,7 +23,7 @@ use managym::{
     state::{
         card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
-        mana::{ManaClass, ManaSpent, SpendEffect},
+        mana::{Mana, ManaClass, ManaSpent, SpendEffect},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -746,4 +746,47 @@ fn animal_attendant_mana_is_kept_when_ordinary_mana_pays_a_human() {
     let pool = &s.game().state.players[0].mana_pool;
     assert_eq!(pool.class_of(&attendant_class()), [0, 0, 0, 0, 1, 0]);
     assert_eq!(pool.mana, [0; 6]);
+}
+
+/// The counter belongs to the spell that was cast: the same card returning
+/// to the battlefield later, without being cast, enters with none.
+#[test]
+fn animal_attendant_counter_does_not_follow_the_card_to_a_later_entry() {
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    attendant_mana(&mut s, "1W", 1);
+    let sheep = cast_owned(&mut s, "Koala-Sheep");
+    settle(&mut s);
+    let permanent = s.game().state.card_to_permanent[sheep].unwrap();
+    assert_eq!(counters(&s, permanent), 1);
+
+    s.game_mut().move_card(sheep, ZoneType::Graveyard);
+    s.game_mut().move_card(sheep, ZoneType::Battlefield);
+    let returned = s.game().state.card_to_permanent[sheep].unwrap();
+    assert_eq!(counters(&s, returned), 0);
+    assert!(s.game().state.permanents[returned]
+        .as_ref()
+        .unwrap()
+        .cast_spent
+        .is_empty());
+}
+
+/// Until-end-of-combat mana keeps its class: Attendant mana in the combat
+/// pool pays first within its class and still adds its counter.
+#[test]
+fn animal_attendant_mana_in_the_combat_pool_keeps_its_spend_effect() {
+    let mut s = five_color_unfunded_setup(&["Animal Attendant", "Koala-Sheep"]);
+    only_pool(&mut s, "1W");
+    s.game_mut().state.players[0].combat_mana_pool =
+        Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]);
+    s.game_mut().state.players[0]
+        .mana_pool
+        .add(&Mana::of_class(attendant_class(), [0, 0, 0, 0, 1, 0]));
+    let sheep = cast_owned(&mut s, "Koala-Sheep");
+    assert_eq!(spell_spent(&s, sheep).entry_counters, 1);
+    let player = &s.game().state.players[0];
+    assert_eq!(player.combat_mana_pool.total(), 0);
+    assert_eq!(
+        player.mana_pool.class_of(&attendant_class()),
+        [0, 0, 0, 0, 1, 0]
+    );
 }

@@ -17,3 +17,13 @@
 - Mana abilities do not support `ActivatedAbilityDefinition.sacrifice`
   (sacrifice-another) costs, so the witness sacrifices Heartbeat through the
   ability's non-mana instructions, which run before the output is produced.
+- The spend-effect pool program and the cast receipt reuse fact kind 11 and
+  the kind-14 execution occurrence rather than new fact kinds: a new kind
+  grows the model's kind embedding in three implementations (torch, the
+  numpy routes, MLX) for no added meaning. (Simpler choice taken.)
+- The receipt is projected only when a rule reads it, so ordinary spells add
+  no rows. A card that reads another object's spent mana would need the
+  receipt projected for that object too; none exists.
+- Automatic spending order for mana with a spend effect: before ordinary
+  mana when the effect applies to the spell being cast, after it otherwise.
+  This stands in for the design's spending choice until that is built.
