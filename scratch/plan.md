@@ -74,11 +74,3 @@ Concept review (2026-11-12): the concepts hold. One runtime switch, one owner
 state. Object trimming silently off under `historical_mean`/belief rows is a
 correctness guard, not a user choice. Remaining packed paths (300/300 full
 signatures) are the stated follow-up for the L4 profile, not a design gap.
-
-Next implement direction: Etude jobs carry the switch. The installed SDK's
-`etude.launch.records.Job.environment` (tuple of `Variable(name, value)`, set
-in the job's process, part of the job's identity) is how an L4 job enables it.
-Add one sentence to the docs section saying so beside the shell example, so
-MTG-301 has the A/B recipe; no code change. Optionally trim that docs section
-toward the facts a user needs (what it does, how to enable, what it does not
-change); the capture numbers live in this plan.
