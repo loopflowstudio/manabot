@@ -25,3 +25,16 @@ minimum; Torch 2.10 computed incorrect MPS gradients on learner minibatches.
 The remedy is generic (`uv sync --locked`, or train on CPU) because
 `execute_regime` raises the same text. Committed in 6b64a6bb3; test_mps_training
 + test_baseline_recipe: 58 passed.
+
+## Root cause (for the PR description; steer 67f27f5c)
+
+On an Apple M2 (macOS 26.7) the MPS weight gradient of `F.linear` with a large
+reduced dimension (`[160, 44550]^T @ [44550, 160]`, float32, seeded random
+tensors, no manabot code) is wrong on Torch 2.10, 2.11, 2.12 and 2.13 (0/5
+fresh-process repetitions pass, relative L2 error 2.25) and correct on 2.14 and
+2.15 (5/5, relative error 5e-7). In manabot it shows up as wrong or nonfinite
+gradients in the w160l8 attention output projection on real learner
+minibatches. An M4 Max does not reproduce it. 2.14 would suffice; 2.15 stays
+the pin. Recorded in the `manabot/training/mps.py` docstring; the error now
+says "Torch 2.10–2.13 compute incorrect MPS linear-layer weight gradients on
+Apple M2". test_mps_training + test_baseline_recipe: 58 passed.
