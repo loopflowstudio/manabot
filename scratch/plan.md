@@ -354,6 +354,25 @@ Checks:
 Remaining for this PR: gate; delete `scratch/` before landing. Items 1 and
 2 and the item 4 rerun belong to the stacked follow-up.
 
+## Pass of 21:45Z 2026-11-12: main and #474 merged again
+
+- Main adf601acb (#499's squash) merged cleanly.
+- #474 moved to e0e99309a and is merged. Its 64dff0c5f repoints the MLX
+  backend, parity, `mlx_pilot.py` and `prepare.py` at `manabot.rl` and
+  `manabot.training.updates`; those seven files keep this branch's side.
+  Its 73eb69848 edits `model/policy_distribution.py` and `rl/selection.py`,
+  both deleted here: `backends/torch/rl.py` already imports `require`
+  plainly and now takes the `selection_mask` change (it calls
+  `selected_rows(..., kind=kind)`). Its guide test
+  (`test_guide_shows_the_loop_as_written`) passes against this branch's
+  `minimal.py` and `docs/training-loop.md`.
+- Check: minimal loop, boundaries, container support, learning pieces, update
+  backends, mlx backend, returns, experiment files: 80 passed.
+  `scratch/equivalence/updates.py` against `after.json`: identical except the
+  known 1-ulp `value_scale` std per damped configuration.
+- Item 1 not started in this pass; the stacked follow-up still needs a
+  person's yes (questions.md).
+
 ## Docs (write-docs pass, 2026-11-12)
 
 The docs that ship with this change: `manabot/backends/README.md` (contract,
