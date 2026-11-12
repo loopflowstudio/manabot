@@ -10,8 +10,7 @@
 use managym::state::{
     ability::{Ability, Actor, Condition, Effect, TriggerCondition, TurnStep},
     card::{
-        CardDefinition, CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope,
-        StaticTypeGrant,
+        CardType, PrintedCharacteristics, StaticAbility, StaticPtBuff, StaticScope, StaticTypeGrant,
     },
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -115,81 +114,66 @@ fn resolution_only_conditions_appear_only_in_effect_if() {
 
 #[test]
 fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
-    let allowed = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            spell_effects: vec![Effect::If {
-                condition: Condition::AnyOf(vec![
-                    Condition::Kicked,
-                    Condition::TargetMatches(CardPredicate::creature()),
-                ]),
-                then: vec![Effect::discard()],
-                otherwise: vec![],
-            }],
-            ..Default::default()
-        },
+    let allowed = PrintedCharacteristics {
+        name: "Witness".into(),
+        spell_effects: vec![Effect::If {
+            condition: Condition::AnyOf(vec![
+                Condition::Kicked,
+                Condition::TargetMatches(CardPredicate::creature()),
+            ]),
+            then: vec![Effect::discard()],
+            otherwise: vec![],
+        }],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&allowed).is_empty());
 
-    let intervening = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
-                intervening_if: Some(Condition::TargetDealtDamageThisTurn),
-                effects: vec![Effect::discard()],
-            }],
-            ..Default::default()
-        },
+    let intervening = PrintedCharacteristics {
+        name: "Witness".into(),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+            intervening_if: Some(Condition::TargetDealtDamageThisTurn),
+            effects: vec![Effect::discard()],
+        }],
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&intervening).len(), 1);
 
-    let active = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::ActiveIf {
-                    active_if: Condition::Kicked,
-                    condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
-                },
-                intervening_if: None,
-                effects: vec![Effect::discard()],
-            }],
-            ..Default::default()
-        },
+    let active = PrintedCharacteristics {
+        name: "Witness".into(),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActiveIf {
+                active_if: Condition::Kicked,
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
+            },
+            intervening_if: None,
+            effects: vec![Effect::discard()],
+        }],
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&active).len(), 1);
 
-    let source_intervening = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
-                intervening_if: Some(Condition::SourceTapped),
-                effects: vec![Effect::discard()],
-            }],
-            ..Default::default()
-        },
+    let source_intervening = PrintedCharacteristics {
+        name: "Witness".into(),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::beginning_of(TurnStep::End, Actor::You),
+            intervening_if: Some(Condition::SourceTapped),
+            effects: vec![Effect::discard()],
+        }],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_intervening).is_empty());
 
-    let source_active = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            abilities: vec![Ability::Triggered {
-                condition: TriggerCondition::ActiveIf {
-                    active_if: Condition::SourceTapped,
-                    condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
-                },
-                intervening_if: None,
-                effects: vec![Effect::discard()],
-            }],
-            ..Default::default()
-        },
+    let source_active = PrintedCharacteristics {
+        name: "Witness".into(),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActiveIf {
+                active_if: Condition::SourceTapped,
+                condition: Box::new(TriggerCondition::beginning_of(TurnStep::End, Actor::You)),
+            },
+            intervening_if: None,
+            effects: vec![Effect::discard()],
+        }],
         ..Default::default()
     };
     assert_eq!(misplaced_resolution_conditions(&source_active).len(), 1);
@@ -198,46 +182,37 @@ fn the_check_rejects_a_resolution_only_intervening_if_and_active_if() {
         kind: CounterKind::Fire,
         count: 3,
     };
-    let source_type_grant = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
-                scope: StaticScope::This,
-                types: vec![CardType::Creature],
-                subtypes: Vec::new(),
-                condition: Some(fire.clone()),
-            })],
-            ..Default::default()
-        },
+    let source_type_grant = PrintedCharacteristics {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::TypeGrant(StaticTypeGrant {
+            scope: StaticScope::This,
+            types: vec![CardType::Creature],
+            subtypes: Vec::new(),
+            condition: Some(fire.clone()),
+        })],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_type_grant).is_empty());
 
     // Beastmaster Ascension: layers ask a buff's condition of its source.
-    let source_buff = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            statics: vec![StaticAbility::PtBuff(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(fire.clone()),
-                power: 1,
-                toughness: 1,
-                per_creature_type_max: None,
-                per_color_among: None,
-                per_graveyard_matching: None,
-            })],
-            ..Default::default()
-        },
+    let source_buff = PrintedCharacteristics {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::This,
+            condition: Some(fire.clone()),
+            power: 1,
+            toughness: 1,
+            per_creature_type_max: None,
+            per_color_among: None,
+            per_graveyard_matching: None,
+        })],
         ..Default::default()
     };
     assert!(misplaced_resolution_conditions(&source_buff).is_empty());
 
-    let source_unblockable = CardDefinition {
-        printed: PrintedCharacteristics {
-            name: "Witness".into(),
-            statics: vec![StaticAbility::CantBeBlockedIf(fire)],
-            ..Default::default()
-        },
+    let source_unblockable = PrintedCharacteristics {
+        name: "Witness".into(),
+        statics: vec![StaticAbility::CantBeBlockedIf(fire)],
         ..Default::default()
     };
     assert_eq!(
