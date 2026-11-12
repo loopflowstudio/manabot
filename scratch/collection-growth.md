@@ -112,6 +112,9 @@ with limitations, inventories and rental accounting once execution is possible).
   comment beyond the "c" decision; main since gained only unrelated #470 (Torch 2.15). The latest
   RunPod list was empty (earlier passes saw only `etude-8a95fe6d04e9`, not an MTG-281
   rental, untouched). No code or doc change.
+- Concept review 2026-11-12 (Graph, no person): the closed-inconclusive design
+  implies no concept, API or code change; main's #472 (Apple Silicon CPU default)
+  does not touch the pinned CUDA arms. Nothing to change, no open choice.
 - Compress 2026-11-12: `report_collection_growth.py` shares one phase/RSS series
   helper; regenerated `summary.json`, `phases.png`, `growth.png` byte-identical.
   Frozen comparison reader (`e9adf766…`, bound by `reader-erratum.json`) untouched.
