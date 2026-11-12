@@ -116,8 +116,8 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
 None of the six can be implemented on this branch until one of these is
 settled: the token-identity choices (a)/(b) below; whether turn history and the
-Powerstone restriction get new v9 fact kinds (which make w17 checkpoints
-refuse, `manabot/model/facts.py` `FACT_KINDS`) or wait for a world freeze; and
+Powerstone restriction get new v9 observation state (a new fact
+kind makes w17 checkpoints refuse, `manabot/model/facts.py` `FACT_KINDS`) or wait for a world freeze; and
 the production review. Until then the remaining work is the gate checks below.
 
 Known deviation in a defined card: activated abilities never offer their own
