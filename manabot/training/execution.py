@@ -1132,7 +1132,11 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(
+                        space,
+                        regime.agent,
+                        bucketed_shapes=stage.execution.bucketed_shapes,
+                    ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
                         copied = out / f"{stage.id}-initialization-source.pt"

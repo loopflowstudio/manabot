@@ -1,15 +1,15 @@
 """Opt-in bucketed padding: trim an admitted batch's variable axes to fixed buckets.
 
 Every observation buffer arrives padded to its declared capacity, yet real
-batches use little of it. With `MANABOT_BUCKETED_SHAPES=1`, `ActorCritic`
-trims each variable axis to a bucket: the next power of two at or above the
-batch's need, at least `MIN_BUCKET` and at most the declared capacity. A forward
-then takes one of a few shapes per axis. The setting is runtime only: it changes
-no `ModelConfig` field, parameter, buffer, checkpoint or policy input.
+batches use little of it. With `ActorCritic(..., bucketed_shapes=True)`, set
+by a training stage's `Execution.bucketed_shapes`, the policy trims each
+variable axis to a bucket: the next power of two at or above the batch's need,
+at least `MIN_BUCKET` and at most the declared capacity. A forward then takes
+one of a few shapes per axis. The setting changes no `ModelConfig` field,
+parameter, buffer, checkpoint or policy input.
 
 Principal entry points:
 
-- `bucketed_shapes_enabled` reads the switch (once, at `ActorCritic` construction).
 - `bucket_sizes` measures one batch with a single host read.
 - `trim_observation` slices every axis to its bucket and rewrites object
   references into the trimmed object coordinates.
@@ -27,14 +27,12 @@ average includes padding, and not with belief rows, which follow the objects.
 """
 
 from dataclasses import dataclass
-import os
 
 import torch
 
 from manabot.env.observation import ObservationEncoder
 from managym import observation_layout
 
-BUCKETED_SHAPES_ENV = "MANABOT_BUCKETED_SHAPES"
 MIN_BUCKET = 8
 
 # Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
@@ -104,16 +102,6 @@ _DETAIL_SPAN = (_column("effects", "detail_offset"), _column("effects", "detail_
 _MEMBER_SPAN = (_column("effects", "member_offset"), _column("effects", "member_count"))
 _RELATION_FRAME = _column("relations", "frame")
 _ACTION_CONTINUATION = _column("actions", "continuation")
-
-
-def bucketed_shapes_enabled() -> bool:
-    """Read `MANABOT_BUCKETED_SHAPES`: unset, empty or `0` is off, `1` is on."""
-    value = os.environ.get(BUCKETED_SHAPES_ENV, "").strip()
-    if value in ("", "0"):
-        return False
-    if value == "1":
-        return True
-    raise ValueError(f"{BUCKETED_SHAPES_ENV} must be 0 or 1, not {value!r}")
 
 
 def bucket(need: int, capacity: int) -> int:
