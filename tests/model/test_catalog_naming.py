@@ -2,8 +2,8 @@
 
 Naming is a sequence of ordinary native decisions: prompts over more than
 `managym.NAME_BRANCHING` names offer balanced groups of sorted names, and only
-the final name choice commits. Policy input v9 encodes group spans and names
-at ordinary action capacity; earlier inputs see anonymous modal choices.
+the final name choice commits. The policy input encodes group spans and names
+at ordinary action capacity.
 """
 
 from dataclasses import dataclass
@@ -17,8 +17,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM_V9, ObservationSpace
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.env.observation import ACTION_MODE_INDEX, NAME_DIM, ObservationSpace
+from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
@@ -91,10 +91,6 @@ def _tensor(values: dict[str, np.ndarray]) -> dict[str, torch.Tensor]:
     return {key: torch.from_numpy(value)[None] for key, value in values.items()}
 
 
-def _v9() -> ObservationSpace:
-    return ObservationSpace(ObservationConfig(policy_input_version=9))
-
-
 def _offer_toward(env: managym.Env, name: str) -> tuple[int, bool]:
     """The published group containing `name`, or its leaf offer, from labels."""
     actions = env.observation_for_player(env.current_agent_index()).action_space
@@ -133,7 +129,7 @@ def _command(frame: dict, offer: int, tag: str) -> str:
 def _assert_scalar_parity(env: managym.Env, space: ObservationSpace) -> dict:
     raw = env.observation_for_player(env.current_agent_index())
     reference = space.encode(raw)
-    native = env.encode_observation(raw, policy_input_version=9)
+    native = env.encode_observation(raw)
     into = space.encoder.allocate()
     env.encode_observation_into(raw, into)
     for key in reference:
@@ -142,13 +138,13 @@ def _assert_scalar_parity(env: managym.Env, space: ObservationSpace) -> dict:
     return reference
 
 
-def test_catalog_naming_v9_groups_then_names_with_scalar_parity_and_private_text(
+def test_catalog_naming_groups_then_names_with_scalar_parity_and_private_text(
     naming_root: managym.Env,
 ) -> None:
-    space = _v9()
+    space = ObservationSpace()
     catalog = managym.naming_catalog()
     # Ordinary capacity, independent of the vocabulary.
-    assert space.shapes["name_candidates"] == (512, NAME_DIM_V9)
+    assert space.shapes["name_candidates"] == (512, NAME_DIM)
     raw = naming_root.observation_for_player(naming_root.current_agent_index())
     reference = _assert_scalar_parity(naming_root, space)
     groups = [action.name_group for action in raw.action_space.actions]
@@ -169,14 +165,6 @@ def test_catalog_naming_v9_groups_then_names_with_scalar_parity_and_private_text
     text = capture_text_decision(naming_root).text
     assert f"Names {catalog[0].name} through" in text
     assert not naming_root.observation_for_player(1).action_space.actions
-    # Inputs without name identity see anonymous modal choices.
-    for version in (6, 7, 8):
-        legacy = naming_root.encode_observation(raw, policy_input_version=version)
-        assert "name_candidates" not in legacy
-        np.testing.assert_array_equal(
-            legacy["actions"][: len(groups), ACTION_MODE_INDEX],
-            np.arange(1, len(groups) + 1),
-        )
 
     leaf = naming_root.clone_env()
     path = _name_path(leaf, "Fire Lord Sozin")
@@ -197,8 +185,6 @@ def test_catalog_naming_v9_groups_then_names_with_scalar_parity_and_private_text
         ]
     text = capture_text_decision(leaf).text
     assert "Fire Lord Sozin" in text
-    assert ObservationConfig.from_checkpoint({}).policy_input_version == 1
-    assert "max_facts" not in ObservationConfig.from_checkpoint({}).model_dump()
 
 
 def _supervised_step(
@@ -233,7 +219,7 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     definition_free = next(c.name for c in catalog if c.definition is None)
     assert managym.unsupported_cards([definition_free]) == [definition_free]
     monkeypatch.setattr(managym, "naming_catalog", lambda: catalog)
-    space = _v9()
+    space = ObservationSpace()
     assert space.shapes["actions"][0] == 512
     values = _assert_scalar_parity(root, space)
     raw = root.observation_for_player(0)
@@ -244,7 +230,6 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     logits, _ = model(tensors)
     assert logits.shape == (1, 512)
     assert (logits.softmax(-1)[0, : len(groups)] > 0).all()
-    assert model.name_candidates is not None
     embedded = model.name_candidates(tensors["name_candidates"])
     assert embedded[0, : len(groups)].unique(dim=0).shape[0] == len(groups)
     # One group contains names on both sides of 512; its preference trains every
@@ -384,16 +369,14 @@ def test_catalog_naming_large_support_learns_and_rejects_wrong_binding(
     world = deck_world(space)
     assert world["naming_representation"] == "public-groups-v1"
     assert world["naming_branching"] == managym.NAME_BRANCHING
-    assert "naming_vocabulary" not in deck_world(
-        ObservationSpace(ObservationConfig(policy_input_version=7))
-    )
+    assert "naming_vocabulary" in world
 
 
 def test_catalog_naming_programs_affect_scores(
     naming_root: managym.Env,
 ) -> None:
     torch.set_num_threads(1)
-    space = _v9()
+    space = ObservationSpace()
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     )
@@ -401,7 +384,6 @@ def test_catalog_naming_programs_affect_scores(
     _name_path(leaf, "Fire Lord Sozin")
     raw = leaf.observation_for_player(0)
     tensors = _tensor(space.encode(raw))
-    assert model.name_candidates is not None
     with torch.no_grad():
         model.name_candidates.embedding.weight.zero_()
     logits, _ = model(tensors)
@@ -426,7 +408,7 @@ def test_naming_checkpoint_admits_exact_vocabulary_before_loading_weights(
     monkeypatch: pytest.MonkeyPatch,
     change: str,
 ) -> None:
-    space = _v9()
+    space = ObservationSpace()
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
     ).eval()
@@ -471,7 +453,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
     if not naming:
         # The following private search has no naming candidates.
         env.step(_offer_toward(env, "Gray Ogre")[0])
-    space = _v9()
+    space = ObservationSpace()
     tensors = _tensor(space.encode(env.observation_for_player(0)))
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, attention_on=False, world=managym.WORLD_SETUP)
@@ -513,7 +495,7 @@ def test_naming_shares_program_encoding_and_preserves_padded_action_order(
 def test_catalog_naming_vector_buffers_match_scalar_and_clear_after_choice(
     naming_trace: NamingTrace,
 ) -> None:
-    space = _v9()
+    space = ObservationSpace()
     vector = managym.VectorEnv(1, seed=165)
     scalar = managym.Env(seed=165)
     buffers = space.encoder.allocate(1)
@@ -561,7 +543,7 @@ def _mixed_naming_batch(
     naming_root: managym.Env,
 ) -> tuple[ObservationSpace, dict[str, torch.Tensor]]:
     """Group prompt, name prompt, private search and an ordinary decision."""
-    space = _v9()
+    space = ObservationSpace()
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
     search = leaf.clone_env()
@@ -676,7 +658,7 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     """
     torch.set_num_threads(1)
     torch.manual_seed(243)
-    space = _v9()
+    space = ObservationSpace()
     leaf = naming_root.clone_env()
     _name_path(leaf, "Gray Ogre")
     offers = leaf.observation_for_player(0).action_space.actions
@@ -718,7 +700,6 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     assert model.policy_film is not None
     with torch.no_grad():
         model.policy_film.weight.normal_(0, 0.5)
-    assert model.name_candidates is not None
     with patch.object(
         model.name_candidates,
         "public_definitions",
@@ -755,7 +736,6 @@ def test_equal_rule_names_learn_opposite_public_preferences(
     # Gradients also reach both public identity and executable program inputs.
     loss = torch.nn.functional.cross_entropy(before[:, choices], torch.arange(2))
     loss.backward()
-    assert model.name_candidates is not None
     assert model.name_candidates.embedding.weight.grad is not None
     assert model.name_candidates.embedding.weight.grad.abs().sum() > 0
     assert encoder.token_embedding.weight.grad is not None

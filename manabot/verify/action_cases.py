@@ -279,7 +279,7 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
     elif case.family == "target":
         permanents = obs["opponent_permanents"]
         permanents[..., observation_schema.PERMANENT_DEFINITION_INDEX] = 0
-        # Policy input v5 also orders permanents by timestamp (CR 613.7).
+        # The policy input also orders permanents by timestamp (CR 613.7).
         if permanents.shape[-1] == observation_schema.PERMANENT_DIM:
             permanents[..., observation_schema.PERMANENT_TIMESTAMP_INDEX] = 0
     else:
@@ -300,12 +300,16 @@ def reorder_offers(
 def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     """Reverse object slots with their identity joins, masks and focus references."""
     result = {k: v.clone() for k, v in obs.items()}
+    keys = ("agent_cards", "opponent_cards", "agent_permanents", "opponent_permanents")
+    # Permanent links use one-based object references; zero and players stay fixed.
+    references = torch.arange(
+        3 + sum(obs[key].shape[1] for key in keys), device=obs[keys[0]].device
+    )
     offset = 2  # The two player rows precede cards and permanents.
-    for index, key in enumerate(
-        ("agent_cards", "opponent_cards", "agent_permanents", "opponent_permanents")
-    ):
+    for index, key in enumerate(keys):
         count = obs[key].shape[1]
         order = torch.arange(count - 1, -1, -1)
+        references[offset + 1 : offset + count + 1] = offset + 1 + order
         result[key] = obs[key][:, order]
         result[key + "_valid"] = obs[key + "_valid"][:, order]
         if index < 2:
@@ -334,6 +338,11 @@ def reorder_objects(obs: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
                         2 * offset + count + 1 - refs[mask]
                     )
         offset += count
+    # Remap after moving all source rows: links can cross either owner's slots.
+    for key in ("agent_permanents", "opponent_permanents"):
+        if result[key].shape[-1] == observation_schema.PERMANENT_DIM:
+            for column in observation_schema.PERMANENT_LINK_INDEXES:
+                result[key][..., column] = references[result[key][..., column].long()]
     return result
 
 

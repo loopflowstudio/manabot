@@ -352,12 +352,7 @@ def capture_materialized_world_supervision(
         raise BeliefError(
             "supervision authority observation does not match the world space"
         )
-    authority_view = engine.observation_for_player(world_space.opponent)
-    true_hand: dict[str, int] = {}
-    for card in authority_view.agent_cards:
-        if int(card.zone) == HAND_ZONE_ID:
-            name = str(card.name)
-            true_hand[name] = true_hand.get(name, 0) + 1
+    true_hand = engine.hand_snapshot(world_space.opponent).cards
     if sum(true_hand.values()) != world_space.hand_size:
         raise BeliefError(
             "materialized hand does not match the public hidden-hand size"

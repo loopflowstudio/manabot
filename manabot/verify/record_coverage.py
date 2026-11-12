@@ -2,7 +2,7 @@
 
 Catalog models (`ModelConfig.record_vocabulary="catalog"`) embed fact and
 effect ids through the card encoder's exact vocabulary and reject an id outside
-it. That vocabulary is native `learning_record_names`, a list maintained beside
+it. That vocabulary is native `record_vocabulary`, a list maintained beside
 the encoders, so an encoder that starts hashing a new name without listing it
 would stop training mid-run. This sweep plays seeded random games whose decks
 together hold every eligible world card, encodes each decision at policy input
@@ -87,7 +87,7 @@ def coverage_sweep(
     """Play `games` seeded random games and embed every decision through a
     catalog policy; raises `ValueError` naming the game on an unknown id."""
     torch.manual_seed(seed)
-    space = ObservationSpace(ObservationConfig(policy_input_version=9))
+    space = ObservationSpace(ObservationConfig())
     model = ActorCritic(
         space,
         ModelConfig(hidden_dim=8, num_attention_heads=2, world=managym.WORLD_SETUP),

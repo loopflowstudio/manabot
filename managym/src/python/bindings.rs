@@ -14,6 +14,7 @@ use std::{
 
 #[cfg(feature = "python")]
 use pyo3::{
+    buffer::PyBuffer,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::{PyDict, PyList, PyModule},
@@ -27,7 +28,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
-        env::{Env, PreparedPossibleWorldMaterializer},
+        env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
@@ -55,6 +56,17 @@ use crate::{
 };
 
 #[cfg(feature = "python")]
+#[pymethods]
+impl HandSnapshot {
+    fn __repr__(&self) -> String {
+        format!(
+            "HandSnapshot(player={}, game_id={}, seed={}, revision={}, cards={:?})",
+            self.player, self.game_id, self.seed, self.revision, self.cards
+        )
+    }
+}
+
+#[cfg(feature = "python")]
 pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
 
 #[cfg(feature = "python")]
@@ -69,13 +81,13 @@ fn to_numpy_array_f32(
     data: &[f32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("float32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    // Bulk-copy exact f32 bits into Python-owned storage; no scalar boxing.
+    PyBuffer::<f32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -85,13 +97,12 @@ fn to_numpy_array_i32(
     data: &[i32],
     shape: &[usize],
 ) -> PyResult<PyObject> {
-    let array_fn = np.getattr("array")?;
+    let array_fn = np.getattr("empty")?;
     let kwargs = PyDict::new_bound(py);
     kwargs.set_item("dtype", np.getattr("int32")?)?;
-    let list = PyList::new_bound(py, data.iter().copied());
-    let array = array_fn.call((list,), Some(&kwargs))?;
-    let reshaped = array.call_method1("reshape", (shape.to_vec(),))?;
-    Ok(reshaped.unbind())
+    let array = array_fn.call((shape.to_vec(),), Some(&kwargs))?;
+    PyBuffer::<i32>::get_bound(&array)?.copy_from_slice(py, data)?;
+    Ok(array.unbind())
 }
 
 #[cfg(feature = "python")]
@@ -102,77 +113,79 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
-    if config.policy_input_version >= 9 {
-        dict.set_item(
-            "name_candidates",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.name_candidates,
-                &[config.max_actions, config.name_dim()],
-            )?,
-        )?;
+    dict.set_item(
+        "name_candidates",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.name_candidates,
+            &[
+                config.max_actions,
+                crate::agent::observation_encoder::NAME_DIM,
+            ],
+        )?,
+    )?;
+    for (name, values, shape) in [
+        (
+            "effects",
+            &encoded.effects,
+            [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
+        ),
+        (
+            "effect_details",
+            &encoded.effect_details,
+            [shared_effects::DETAIL_ROWS, shared_effects::DETAIL_DIM],
+        ),
+        (
+            "effect_members",
+            &encoded.effect_members,
+            [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
+        ),
+    ] {
+        dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
     }
-    if config.policy_input_version >= 7 {
-        for (name, values, shape) in [
-            (
-                "effects",
-                &encoded.effects,
-                [shared_effects::EFFECT_ROWS, shared_effects::EFFECT_DIM],
-            ),
-            (
-                "effect_details",
-                &encoded.effect_details,
-                [
-                    shared_effects::detail_rows(config.policy_input_version),
-                    shared_effects::DETAIL_DIM,
-                ],
-            ),
-            (
-                "effect_members",
-                &encoded.effect_members,
-                [shared_effects::MEMBER_ROWS, shared_effects::MEMBER_DIM],
-            ),
-        ] {
-            dict.set_item(name, to_numpy_array_f32(py, &np, values, &shape)?)?;
-        }
-    }
-    if config.policy_input_version >= 5 {
-        dict.set_item(
-            "facts",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.facts,
-                &[
-                    config.fact_rows(),
-                    crate::agent::observation_encoder::FACT_DIM,
-                ],
-            )?,
-        )?;
-    }
-    if config.policy_input_version >= 2 {
-        dict.set_item(
-            "relations",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.relations,
-                &[
-                    crate::agent::continuation::RELATION_ROWS,
-                    config.relation_dim(),
-                ],
-            )?,
-        )?;
-    }
+    dict.set_item(
+        "facts",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.facts,
+            &[
+                config.max_facts,
+                crate::agent::observation_encoder::FACT_DIM,
+            ],
+        )?,
+    )?;
+    dict.set_item(
+        "relations",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.relations,
+            &[
+                crate::agent::continuation::RELATION_ROWS,
+                crate::agent::continuation::RELATION_DIM,
+            ],
+        )?,
+    )?;
 
     dict.set_item(
         "agent_player",
-        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, config.player_dim()])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.agent_player,
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
+        )?,
     )?;
     dict.set_item(
         "opponent_player",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, config.player_dim()])?,
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.opponent_player,
+            &[1, crate::agent::observation_encoder::PLAYER_DIM],
+        )?,
     )?;
     dict.set_item(
         "agent_cards",
@@ -180,7 +193,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_cards,
-            &[config.max_cards_per_player, config.card_dim()],
+            &[
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -189,7 +205,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_cards,
-            &[config.max_cards_per_player, config.card_dim()],
+            &[
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::CARD_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -198,7 +217,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
+            &[
+                config.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -207,7 +229,10 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, config.permanent_dim()],
+            &[
+                config.max_permanents_per_player,
+                crate::agent::observation_encoder::PERMANENT_DIM,
+            ],
         )?,
     )?;
     dict.set_item(
@@ -304,21 +329,19 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
-    if config.policy_input_version >= 5 {
-        dict.set_item(
-            "decklists",
-            to_numpy_array_f32(
-                py,
-                &np,
-                &encoded.decklists,
-                &[
-                    2,
-                    config.max_cards_per_player,
-                    crate::agent::observation_encoder::DECKLIST_DIM,
-                ],
-            )?,
-        )?;
-    }
+    dict.set_item(
+        "decklists",
+        to_numpy_array_f32(
+            py,
+            &np,
+            &encoded.decklists,
+            &[
+                2,
+                config.max_cards_per_player,
+                crate::agent::observation_encoder::DECKLIST_DIM,
+            ],
+        )?,
+    )?;
 
     Ok(dict)
 }
@@ -2972,6 +2995,19 @@ impl PyStructuredOfferSet {
 #[cfg(feature = "python")]
 #[pymethods]
 impl PySelectedBranchRuntime {
+    #[cfg(feature = "benchmark")]
+    #[staticmethod]
+    fn start_benchmark() {
+        crate::benchmark_search::start();
+    }
+
+    #[cfg(feature = "benchmark")]
+    #[staticmethod]
+    fn finish_benchmark_json() -> PyResult<String> {
+        serde_json::to_string(&crate::benchmark_search::finish())
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
     #[new]
     #[pyo3(signature = (match_id, audit=false))]
     fn new(match_id: String, audit: bool) -> PyResult<Self> {
@@ -3075,13 +3111,19 @@ impl PySelectedBranchRuntime {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
 
-        let require_witness = runtime.audit
+        let require_identity = runtime.audit
             || overrides.authority_hash.is_some()
             || overrides.legal_surface_hash.is_some();
-        let current_witness = require_witness
-            .then(|| env.selected_witness())
+        #[cfg(feature = "benchmark")]
+        let identity_timer = crate::benchmark_search::Timer::new("witness_construction");
+        let current_identity = require_identity
+            .then(|| env.selected_identity())
             .transpose()
             .map_err(map_agent_err)?;
+        #[cfg(feature = "benchmark")]
+        drop(identity_timer);
+        #[cfg(feature = "benchmark")]
+        let validation_timer = crate::benchmark_search::Timer::new("command_validation");
         let current_revision = env.selected_revision().map_err(map_agent_err)?;
         let current_offers = env.structured_search_offers().map_err(map_agent_err)?;
         let current_offer = current_offers
@@ -3099,14 +3141,14 @@ impl PySelectedBranchRuntime {
         let expected_prompt_id = overrides.prompt_id.unwrap_or(current_revision);
         let expected_revision = overrides.expected_revision.unwrap_or(current_revision);
         let expected_authority_hash = overrides.authority_hash.as_deref().or_else(|| {
-            current_witness
+            current_identity
                 .as_ref()
-                .map(|witness| witness.authority.hash.as_str())
+                .map(|identity| identity.authority.hash.as_str())
         });
         let expected_legal_hash = overrides.legal_surface_hash.as_deref().or_else(|| {
-            current_witness
+            current_identity
                 .as_ref()
-                .map(|witness| witness.legal_surface.hash.as_str())
+                .map(|identity| identity.legal_surface.hash.as_str())
         });
 
         if current_offer.id.0 != expected_offer_id {
@@ -3119,20 +3161,22 @@ impl PySelectedBranchRuntime {
             return Err(PyAgentError::new_err("revision precondition mismatch"));
         }
         if expected_authority_hash.is_some_and(|expected| {
-            current_witness
+            current_identity
                 .as_ref()
-                .is_none_or(|witness| witness.authority.hash != expected)
+                .is_none_or(|identity| identity.authority.hash != expected)
         }) {
             return Err(PyAgentError::new_err("authority precondition mismatch"));
         }
         if expected_legal_hash.is_some_and(|expected| {
-            current_witness
+            current_identity
                 .as_ref()
-                .is_none_or(|witness| witness.legal_surface.hash != expected)
+                .is_none_or(|identity| identity.legal_surface.hash != expected)
         }) {
             return Err(PyAgentError::new_err("legal-surface precondition mismatch"));
         }
 
+        // All caller preconditions are checked above while both locks are held.
+        // Construct the retained Command from those validated values.
         let command_id = format!("search.{}.{}", runtime.match_id, runtime.next_command_id);
         let command = ExperienceCommand {
             command_id: CommandId(command_id),
@@ -3142,27 +3186,12 @@ impl PySelectedBranchRuntime {
             offer_id: ExperienceOfferId(expected_offer_id),
             answers: Vec::new(),
         };
-        if command.match_id.0 != runtime.match_id {
-            return Err(PyAgentError::new_err("match ID precondition mismatch"));
-        }
-        if command.expected_revision.0 != current_revision {
-            return Err(PyAgentError::new_err("revision precondition mismatch"));
-        }
-        if command.prompt_id.0 != current_revision {
-            return Err(PyAgentError::new_err("prompt ID precondition mismatch"));
-        }
-        if command.offer_id.0 != current_offer.id.0 {
-            return Err(PyAgentError::new_err("offer ID precondition mismatch"));
-        }
-        if !command.answers.is_empty() {
-            return Err(PyAgentError::new_err(
-                "search policy Command unexpectedly contains answers",
-            ));
-        }
         let submission = OfferSubmission {
             offer_id: StructuredOfferId(command.offer_id.0),
             answers: Vec::new(),
         };
+        #[cfg(feature = "benchmark")]
+        drop(validation_timer);
         let (observation, reward, terminated, truncated, info, native_actions) = env
             .step_structured(&current_offers, &submission)
             .map_err(map_agent_err)?;
@@ -3177,6 +3206,8 @@ impl PySelectedBranchRuntime {
             Value::Null
         };
 
+        #[cfg(feature = "benchmark")]
+        let audit_timer = crate::benchmark_search::Timer::new("audit_record");
         let apply_sequence = runtime.next_apply_sequence;
         let site_sequence = runtime.applies.increment(site);
         runtime.next_apply_sequence += 1;
@@ -3206,6 +3237,12 @@ impl PySelectedBranchRuntime {
             runtime.tape_mut(site).push(record.clone());
         }
 
+        let record_json = serde_json::to_string(&record)
+            .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
+        #[cfg(feature = "benchmark")]
+        drop(audit_timer);
+        #[cfg(feature = "benchmark")]
+        let _conversion = crate::benchmark_search::Timer::new("returned_python_conversion");
         let py_info = info_dict_to_pydict(py, &info);
         Ok((
             PyObservation::from(observation),
@@ -3213,8 +3250,7 @@ impl PySelectedBranchRuntime {
             terminated,
             truncated,
             py_info.into_any().unbind(),
-            serde_json::to_string(&record)
-                .map_err(|error| PyRuntimeError::new_err(error.to_string()))?,
+            record_json,
         ))
     }
 
@@ -3600,6 +3636,15 @@ impl PyEnv {
         Ok(env.current_agent_index())
     }
 
+    /// Detached authoritative hand contents, including hidden information.
+    fn hand_snapshot(&self, player: usize) -> PyResult<HandSnapshot> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.hand_snapshot(player).map_err(map_agent_err)
+    }
+
     /// Return a fixed-viewer projection even when another player now acts.
     fn observation_for_player(&self, player_index: usize) -> PyResult<PyObservation> {
         let env = self
@@ -3737,8 +3782,21 @@ impl PyEnv {
             .lock()
             .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
         let observation = env.semantic_observation(viewer).map_err(map_agent_err)?;
+        #[cfg(feature = "benchmark")]
+        let _serialization =
+            crate::benchmark_search::Timer::new("semantic/composite_serialization");
         serde_json::to_string(&observation)
             .map_err(|error| PyRuntimeError::new_err(error.to_string()))
+    }
+
+    /// Exact semantic viewer-state SHA-256, rebuilt under the Env lock.
+    fn semantic_viewer_state_hash(&self, viewer: usize) -> PyResult<String> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.semantic_viewer_state_hash(viewer)
+            .map_err(map_agent_err)
     }
 
     /// Viewer-safe hand-count constraints; never enumerates possible worlds.
@@ -4201,30 +4259,21 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=6, max_facts=None))]
+    #[pyo3(signature = (obs, max_facts=None))]
     fn encode_observation(
         &self,
         py: Python<'_>,
         obs: PyObservation,
-        policy_input_version: u8,
         max_facts: Option<usize>,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=9) {
-            return Err(PyValueError::new_err("unsupported policy input version"));
-        }
-        if max_facts == Some(0) || (policy_input_version < 6 && max_facts.is_some()) {
+        if max_facts == Some(0) {
             return Err(PyValueError::new_err(
-                "max_facts requires v6 and a positive capacity",
+                "max_facts requires a positive capacity",
             ));
         }
         let config = ObservationEncoderConfig {
-            policy_input_version,
-            max_facts: max_facts.unwrap_or(if policy_input_version == 7 {
-                crate::agent::observation_encoder::V5_FACT_ROWS
-            } else {
-                ObservationEncoderConfig::default().max_facts
-            }),
+            max_facts: max_facts.unwrap_or(ObservationEncoderConfig::default().max_facts),
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -4241,12 +4290,22 @@ impl PyEnv {
         out: Bound<'_, PyDict>,
         action_overflow: &str,
     ) -> PyResult<()> {
+        #[cfg(feature = "benchmark")]
+        let conversion_timer = crate::benchmark_search::Timer::new("encoding/python_conversion");
         let rust_obs = Observation::from(obs);
+        #[cfg(feature = "benchmark")]
+        drop(conversion_timer);
+        #[cfg(feature = "benchmark")]
+        let config_timer = crate::benchmark_search::Timer::new("encoding/buffer_config");
         let mut config = crate::python::vector_env_bindings::input_buffer_config(&out)?;
         config.action_overflow = action_overflow.parse().map_err(PyValueError::new_err)?;
+        #[cfg(feature = "benchmark")]
+        drop(config_timer);
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
             .map_err(|err| PyValueError::new_err(err.to_string()))?;
 
+        #[cfg(feature = "benchmark")]
+        let _copy_timer = crate::benchmark_search::Timer::new("encoding/buffer_copy");
         fill_encoded_into_existing_buffers(py, &out, encoded, &config)
     }
 }
@@ -4316,9 +4375,9 @@ fn naming_catalog() -> Vec<crate::cards::names::NameCandidate> {
 /// encode.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_catalog(py: Python<'_>) -> PyResult<PyObject> {
+fn catalog_tokens(py: Python<'_>) -> PyResult<PyObject> {
     let content = crate::cards::content_pack::default_content_pack();
-    let catalog = crate::cards::tokens::learning_catalog(content)
+    let catalog = crate::cards::tokens::catalog_tokens(content)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("content_digest", content.content_digest())?;
@@ -4365,7 +4424,7 @@ fn card_definitions_json() -> PyResult<String> {
 /// (`"Effect::DealDamage"`, a field, or a printed category such as `"Ally"`).
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_token_value(name: &str) -> i32 {
+fn catalog_token_value(name: &str) -> i32 {
     crate::cards::tokens::name_value(name)
 }
 
@@ -4377,7 +4436,7 @@ type RecordNameRow = (&'static str, String, i32, Option<u16>, Option<i32>);
 /// learning token card text uses for the same concept, or `None`.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn learning_record_names() -> Vec<RecordNameRow> {
+fn record_vocabulary() -> Vec<RecordNameRow> {
     crate::agent::record_vocabulary::record_names()
         .into_iter()
         .map(|name| {
@@ -4564,13 +4623,6 @@ fn authored_deck_keys(setup: &str) -> PyResult<Vec<String>> {
         .collect())
 }
 
-#[cfg(feature = "python")]
-#[pyfunction]
-fn validate_policy_input(obs: &PyObservation, version: u8) -> PyResult<()> {
-    crate::agent::observation_encoder::validate_policy_input(&obs.clone().into(), version)
-        .map_err(|error| PyValueError::new_err(error.to_string()))
-}
-
 #[pymodule]
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
@@ -4602,12 +4654,13 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(world_identity, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(naming_catalog, m)?)?;
     m.add_class::<crate::cards::names::NameCandidate>()?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
-    m.add_function(wrap_pyfunction!(learning_record_names, m)?)?;
+    m.add_function(wrap_pyfunction!(catalog_token_value, m)?)?;
+    m.add_function(wrap_pyfunction!(record_vocabulary, m)?)?;
+    crate::python::layout_bindings::register(m)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
@@ -4630,7 +4683,6 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
     m.add_class::<PySharedEffect>()?;
-    m.add_function(wrap_pyfunction!(validate_policy_input, m)?)?;
     m.add_class::<crate::agent::shared_effects::EffectObject>()?;
     m.add_class::<crate::agent::shared_effects::EffectMembership>()?;
     m.add_class::<PyCopyEffect>()?;
@@ -4645,6 +4697,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<HandSnapshot>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())
 }

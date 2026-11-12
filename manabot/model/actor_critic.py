@@ -13,8 +13,6 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env.observation import (
-    FACT_KINDS,
-    FACT_KINDS_V8,
     FACT_SOURCE_INDEX,
     FACT_VALID_INDEX,
     PERMANENT_DEFINITION_INDEX,
@@ -36,7 +34,6 @@ from manabot.model.semantic_cards import (
     admit_definition_ids,
 )
 from manabot.model.shared_effects import SharedEffectEncoder
-from manabot.model.state_records import SharedFactEncoder, TypedContinuationEncoder
 import managym
 
 
@@ -47,8 +44,8 @@ class EmbeddedObservation:
     objects: torch.Tensor
     is_agent: torch.Tensor
     validity: torch.Tensor
-    shared_context: torch.Tensor | None
-    frame_context: torch.Tensor | None
+    shared_context: torch.Tensor
+    frame_context: torch.Tensor
     # Raw executable programs; object inputs separately add public name identity.
     programs: torch.Tensor | None
 
@@ -80,14 +77,6 @@ class ActorCritic(nn.Module):
 
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
-        if config.state_encoder != "rows" and enc.config.policy_input_version not in (
-            5,
-            7,
-            8,
-        ):
-            raise ValueError(
-                "typed state experiment requires policy input v5, v7 or v8"
-            )
         if config.recent_events and (
             config.world is None or enc.config.policy_history_version != 1
         ):
@@ -98,9 +87,9 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Definition IDs and v5 permanent links are categorical joins, never
+        # Definition IDs and permanent links are categorical joins, never
         # numeric permanent features.
-        self._link_columns = PERMANENT_LINK_INDEXES if enc.shows_everything else ()
+        self._link_columns = PERMANENT_LINK_INDEXES
         join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
         self._numeric_permanent_columns = [
             column for column in range(enc.permanent_dim) if column not in join_columns
@@ -116,8 +105,8 @@ class ActorCritic(nn.Module):
             self.semantic_cards = SemanticCardEncoder(
                 config.world,
                 embed_dim,
-                decklists=enc.config.policy_input_version >= 5,
-                records=config.catalog_records(enc.config.policy_input_version),
+                decklists=True,
+                records=config.catalog_records(),
             )
         else:
             # Generic worlds still distinguish card definitions. The content
@@ -252,19 +241,9 @@ class ActorCritic(nn.Module):
             nn.init.zeros_(self.policy_film.weight)
             nn.init.zeros_(self.policy_film.bias)
 
-        self.continuation: ContinuationEncoder | TypedContinuationEncoder | None
-        if config.state_encoder != "rows":
-            self.continuation = TypedContinuationEncoder(
-                embed_dim, config.state_encoder, version=enc.config.policy_input_version
-            )
-        else:
-            self.continuation = (
-                ContinuationEncoder(embed_dim, enc.relation_dim)
-                if enc.config.policy_input_version >= 2
-                else None
-            )
+        self.continuation = ContinuationEncoder(embed_dim, enc.relation_dim)
 
-        # Policy input v5 links permanents to other objects: an Aura or
+        # The policy input links permanents to other objects: an Aura or
         # Equipment to its host, a blocker to the attacker it blocks. Each
         # link exchanges pre-attention embeddings both ways: the linked
         # permanent reads its target and the target reads (summed) linked
@@ -280,52 +259,32 @@ class ActorCritic(nn.Module):
                 nn.init.zeros_(layer.weight)
                 nn.init.zeros_(layer.bias)
                 layers.append(layer)
-        # Policy input v5 fact rows (counter kinds, added subtypes, set
-        # characteristics, spent abilities, continuous-effect records) join
-        # their objects. Built last so earlier parameters keep their draws.
+        # Fact rows (counter kinds, added subtypes, set characteristics, spent
+        # abilities, programs) and shared continuous-effect records join their
+        # objects. Built after the links so earlier parameters keep their draws.
         # Catalog ids share the card encoder's token and definition rows.
         record_vocabulary: RecordVocabulary = (
-            "catalog"
-            if config.catalog_records(enc.config.policy_input_version)
-            else "hashed"
+            "catalog" if config.catalog_records() else "hashed"
         )
-        self.facts: FactEncoder | SharedFactEncoder | None
-        if config.state_encoder != "rows" and enc.config.policy_input_version == 5:
-            self.facts = SharedFactEncoder(embed_dim, config.state_encoder)
-        else:
-            self.facts = (
-                FactEncoder(
-                    embed_dim,
-                    enc.config.fact_rows,
-                    kinds=FACT_KINDS_V8
-                    if enc.config.policy_input_version >= 8
-                    else FACT_KINDS,
-                    vocabulary=record_vocabulary,
-                )
-                if enc.shows_everything
-                else None
-            )
-
-        self.shared_effects = (
-            SharedEffectEncoder(
-                embed_dim,
-                "typed_gru" if config.state_encoder == "typed_gru" else "typed_pool",
-                version=enc.config.policy_input_version,
-                vocabulary=record_vocabulary,
-            )
-            if enc.config.policy_input_version >= 7
-            else None
+        self.facts = FactEncoder(
+            embed_dim, enc.config.max_facts, vocabulary=record_vocabulary
+        )
+        self.shared_effects = SharedEffectEncoder(
+            embed_dim, vocabulary=record_vocabulary
+        )
+        self.name_candidates = NameCandidateEncoder(
+            managym.naming_catalog(),
+            embed_dim,
+            self.semantic_cards.definition_rows
+            if self.semantic_cards is not None
+            else None,
         )
 
-        self.name_candidates = (
-            NameCandidateEncoder(
-                managym.naming_catalog(),
-                embed_dim,
-                self.semantic_cards.definition_rows
-                if self.semantic_cards is not None
-                else None,
-            )
-            if enc.config.policy_input_version >= 9
+        # Built last: every other parameter keeps the masked-mean arm's draws
+        # under the same seed, so the two readouts start from one shared model.
+        self.value_readout = (
+            AttentionReadout(embed_dim, config.num_attention_heads)
+            if config.value_aggregation == "attention_readout"
             else None
         )
 
@@ -408,6 +367,25 @@ class ActorCritic(nn.Module):
             and (validity.sum(1) == 0).any()
         ):
             raise ValueError("value aggregation requires a valid object")
+        original_slots = objects.shape[1]
+        columns = None
+        if (
+            self.config.attention_on
+            and objects.device.type == "cpu"
+            and not torch.is_grad_enabled()
+        ):
+            # Padding is never an attention key and every layer zeros its query
+            # output. Omit columns unused by the entire inference batch, then
+            # restore the original coordinates for focus joins and historical
+            # mean pooling (whose denominator includes padding). Learning keeps
+            # fixed shapes and its existing autograd path; device inference
+            # avoids a host synchronization to discover the compact shape.
+            used = (validity != 0).any(0).nonzero().flatten()
+            if 0 < used.numel() < original_slots:
+                columns = used
+                objects = objects.index_select(1, columns)
+                is_agent = is_agent.index_select(1, columns)
+                validity = validity.index_select(1, columns)
         key_padding_mask = validity == 0
         if self.value_token is not None:
             objects = torch.cat(
@@ -422,16 +400,37 @@ class ActorCritic(nn.Module):
             )
             for layer in self.extra_attention:
                 objects = layer(objects, is_agent, key_padding_mask)
+        if columns is not None:
+            # Restore the optional neutral value token in the same scatter,
+            # at the slot immediately after the original object coordinates.
+            if self.value_token is not None:
+                columns = torch.cat((columns, columns.new_tensor([original_slots])))
+                original_slots += 1
+            objects = objects.new_zeros(
+                (objects.shape[0], original_slots, objects.shape[2])
+            ).index_copy(1, columns, objects)
         return objects
 
     def _value_from_objects(
         self, objects: torch.Tensor, validity: torch.Tensor
     ) -> torch.Tensor:
-        """Read the critic while preserving historical value_head parameter names."""
+        """Summarize final objects [B,N(+1),D] and apply the critic MLP.
+
+        historical_mean averages every slot, padding included. masked_mean
+        averages valid objects after the per-object projection, so N similar
+        permanents carry N shares of the summary. value_token reads the
+        trailing token that attended alongside the objects (and so also changed
+        their actor-facing outputs). attention_readout pools the final valid
+        objects with one learned query after attention; the actor never reads
+        it, though critic gradients still reach the shared encoder. All
+        variants share value_head's parameter names and MLP.
+        """
         if self.config.value_aggregation == "historical_mean":
             return self.value_head(objects)
         if self.value_token is not None:
             objects = objects[:, -1]
+        elif self.value_readout is not None:
+            objects = self.value_readout(objects, validity == 0)
         projected = self.value_head[1](self.value_head[0](objects))
         if self.config.value_aggregation == "masked_mean":
             projected = projected.masked_fill((validity == 0).unsqueeze(-1), 0)
@@ -457,29 +456,24 @@ class ActorCritic(nn.Module):
         indexes = action_rows[..., -2]
         if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
             raise ValueError("invalid action continuation reference")
-        if state.frame_context is not None:
-            rows = obs["relations"]
-            # Select the two join columns before gathering legal action rows;
-            # duplicating complete relation payloads would undo the saving.
-            present = (
-                (indexes[:, None] == rows[..., 1][batches])
-                & (rows[..., RELATION_VALID_INDEX][batches] == 1)
-            ).any(-1)
-            if ((indexes != 0) & ~present).any():
-                raise ValueError("action continuation reference has no frame")
-            linked = state.frame_context[batches, (indexes.long() - 1).clamp_min(0)]
-            actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
-        elif (indexes != 0).any():
-            raise ValueError("trigger ordering requires continuation policy input")
-        if self.name_candidates is not None:
-            candidates = obs["name_candidates"][batches, slots]
-            actions = actions + self.name_candidates(candidates)
-            if self.semantic_cards is not None and state.programs is not None:
-                actions = actions + self.semantic_cards.embed_definitions(
-                    candidates[..., 1], state.programs
-                )
-        if state.shared_context is not None:
-            actions = actions + state.shared_context[batches]
+        rows = obs["relations"]
+        # Select the two join columns before gathering legal action rows;
+        # duplicating complete relation payloads would undo the saving.
+        present = (
+            (indexes[:, None] == rows[..., 1][batches])
+            & (rows[..., RELATION_VALID_INDEX][batches] == 1)
+        ).any(-1)
+        if ((indexes != 0) & ~present).any():
+            raise ValueError("action continuation reference has no frame")
+        linked = state.frame_context[batches, (indexes.long() - 1).clamp_min(0)]
+        actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
+        candidates = obs["name_candidates"][batches, slots]
+        actions = actions + self.name_candidates(candidates)
+        if self.semantic_cards is not None and state.programs is not None:
+            actions = actions + self.semantic_cards.embed_definitions(
+                candidates[..., 1], state.programs
+            )
+        actions = actions + state.shared_context[batches]
         focus = obs["action_focus"][batches, slots]
         if not (
             (focus == focus.floor())
@@ -527,11 +521,7 @@ class ActorCritic(nn.Module):
             else:
                 programs = self.semantic_cards.definitions()
             assert programs is not None
-            definitions = (
-                self.name_candidates.public_definitions(programs)
-                if self.name_candidates is not None
-                else programs
-            )
+            definitions = self.name_candidates.public_definitions(programs)
             cards, known = self.semantic_cards(obs, definitions, references)
             enc_agent_cards = enc_agent_cards + cards[:, 0]
             enc_opp_cards = enc_opp_cards + cards[:, 1]
@@ -594,61 +584,44 @@ class ActorCritic(nn.Module):
                 )
             )
 
-        objects = torch.cat(object_parts, dim=1)
-        if self._link_columns:
-            objects = self._join_permanent_links(obs, objects)
+        objects = self._join_permanent_links(obs, torch.cat(object_parts, dim=1))
         # Catalog fact and effect ids read the card encoder's rows.
         catalog = None
         if self.semantic_cards is not None and self.semantic_cards.records:
             assert definitions is not None
             catalog = RecordEmbeddings(self.semantic_cards, definitions)
-        if isinstance(self.facts, FactEncoder):
-            objects = self.facts(obs["facts"], objects, catalog)
-        elif self.facts is not None:
-            objects = self.facts(obs["facts"], objects)
-        if self.shared_effects is not None:
-            objects = self.shared_effects(
-                obs["effects"],
-                obs["effect_details"],
-                obs["effect_members"],
-                objects,
-                catalog,
-            )
+        objects = self.facts(obs["facts"], objects, catalog)
+        objects = self.shared_effects(
+            obs["effects"],
+            obs["effect_details"],
+            obs["effect_members"],
+            objects,
+            catalog,
+        )
         # History and current continuation both inform objects and focus-free actions.
-        shared_context = None
-        frame_context = None
+        rows = obs["relations"]
+        ids = rows[..., [5, 23]]
+        relation_definitions = (
+            self.semantic_cards.embed_definitions(ids, definitions)
+            if self.semantic_cards is not None and definitions is not None
+            else self._generic_definitions(ids)
+        )
+        encoded_relations = self.continuation.encode_rows(
+            rows, objects, relation_definitions
+        )
+        shared_context = encoded_relations.sum(1) / rows[..., RELATION_VALID_INDEX].sum(
+            1, keepdim=True
+        ).clamp_min(1)
+        frame_context = self.continuation.frame_context(rows, encoded_relations)
         if self.recent_events is not None:
             assert self.semantic_cards is not None and definitions is not None
-            shared_context = self.recent_events(
-                obs, objects, definitions, self.semantic_cards.definition_rows
-            )
-        if self.continuation is not None:
-            rows = obs["relations"]
-            ids = rows[..., [5, 23]]
-            relation_definitions = (
-                self.semantic_cards.embed_definitions(ids, definitions)
-                if self.semantic_cards is not None and definitions is not None
-                else self._generic_definitions(ids)
-            )
-            if isinstance(self.continuation, TypedContinuationEncoder):
-                continuation, frame_context = self.continuation(
-                    rows, objects, relation_definitions
-                )
-            else:
-                encoded_relations = self.continuation.encode_rows(
-                    rows, objects, relation_definitions
-                )
-                continuation = encoded_relations.sum(1) / rows[
-                    ..., RELATION_VALID_INDEX
-                ].sum(1, keepdim=True).clamp_min(1)
-                frame_context = self.continuation.frame_context(rows, encoded_relations)
             shared_context = (
-                continuation
-                if shared_context is None
-                else shared_context + continuation
+                self.recent_events(
+                    obs, objects, definitions, self.semantic_cards.definition_rows
+                )
+                + shared_context
             )
-        if shared_context is not None:
-            objects = objects + shared_context.unsqueeze(1)
+        objects = objects + shared_context.unsqueeze(1)
 
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
@@ -733,22 +706,16 @@ class ActorCritic(nn.Module):
         ):
             # Malformed history is rejected by RecentEventEncoder itself.
             ids.extend(events[..., column][valid == 1] for column in (2, 7))
-        if self.continuation is not None:
-            ids.append(obs["relations"][..., [5, 23]])
+        ids.append(obs["relations"][..., [5, 23]])
         if self.semantic_cards.records:
             # Catalog fact and effect sources read their definitions' rows.
-            if self.facts is not None:
-                facts = obs["facts"]
-                ids.append(
-                    facts[..., FACT_SOURCE_INDEX][facts[..., FACT_VALID_INDEX] == 1]
-                )
-            if self.shared_effects is not None:
-                effects = obs["effects"]
-                ids.append(effects[..., 11][effects[..., 17] == 1])
-        if self.name_candidates is not None:
-            # Names share the same program table as objects. Only legal naming
-            # rows widen the learner's support to the complete naming catalog.
-            ids.append(obs["name_candidates"][..., 1][obs["actions_valid"].bool()])
+            facts = obs["facts"]
+            ids.append(facts[..., FACT_SOURCE_INDEX][facts[..., FACT_VALID_INDEX] == 1])
+            effects = obs["effects"]
+            ids.append(effects[..., 11][effects[..., 17] == 1])
+        # Names share the same program table as objects. Only legal naming
+        # rows widen the learner's support to the complete naming catalog.
+        ids.append(obs["name_candidates"][..., 1][obs["actions_valid"].bool()])
         return self.semantic_cards.referenced_rows(ids)
 
     def _generic_definitions(
@@ -859,6 +826,38 @@ class MeanPoolingLayer(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return x.mean(dim=self.dim)
+
+
+class AttentionReadout(nn.Module):
+    """One learned query cross-attending over final objects [B,N,D] -> [B,D].
+
+    A Set Transformer pooling-by-attention seed (Lee et al., 2019, PMA with one
+    seed and no feedforward block). Each copy of an object receives its own
+    softmax weight, so, as in a mean, copies share in proportion to their count;
+    unlike a mean, the learned query can weight informative objects above the
+    rest. Duplicating every object leaves the output unchanged. Cost is one O(N)
+    query per observation, outside the object-attention path.
+    """
+
+    def __init__(self, embedding_dim: int, num_heads: int) -> None:
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(1, 1, embedding_dim) / embedding_dim**0.5)
+        self.mha = nn.MultiheadAttention(
+            embedding_dim, num_heads=num_heads, batch_first=True
+        )
+
+    def forward(
+        self, objects: torch.Tensor, key_padding_mask: torch.Tensor
+    ) -> torch.Tensor:
+        query = self.query.expand(objects.shape[0], -1, -1)
+        pooled, _ = self.mha(
+            query,
+            objects,
+            objects,
+            key_padding_mask=key_padding_mask,
+            need_weights=False,
+        )
+        return pooled.squeeze(1)
 
 
 class ProjectionLayer(nn.Module):

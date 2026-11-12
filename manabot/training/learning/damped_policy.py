@@ -15,6 +15,7 @@ from torch.nn import functional as F
 
 from manabot.env.observation import ACTION_TYPE_DIM
 from manabot.model.actor_critic import ActorCritic
+from manabot.model.numerics import float64_operand
 from manabot.model.policy_distribution import (
     NumericalError,
     check_logs,
@@ -34,6 +35,7 @@ from manabot.training.learning.selection import (
     selected_mean,
     selection_diagnostics,
     selection_mask,
+    value_scale,
 )
 from manabot.training.regime import DampedPolicyLearning
 from manabot.training.rollout.collection import RolloutBatch
@@ -56,6 +58,7 @@ def damped_policy_loss(
     Ratios use the actual action likelihood at collection, even after earlier
     minibatches change the learner. The reverse KLs sum all legal actions.
     This is per-action reuse correction, not trajectory importance weighting.
+    MPS combines these terms on the host to retain float64 surrogate range.
     """
     valid = valid.bool()
     if logits.ndim != 2 or logits.shape != valid.shape:
@@ -84,8 +87,8 @@ def damped_policy_loss(
     surrogate = clipped_surrogate(ratio_logs, advantages, clip)
     return (
         surrogate
-        + collection_kl * reverse_kl(logs, behavior_logs, valid)
-        + tau * reverse_kl(logs, reference_logs, valid)
+        + collection_kl * float64_operand(reverse_kl(logs, behavior_logs, valid))
+        + tau * float64_operand(reverse_kl(logs, reference_logs, valid))
     )
 
 
@@ -286,12 +289,21 @@ def update_damped_iteration(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
             device=device,
         )
+        predictions = torch.as_tensor(batch.values, device=device)
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
-            expected_targets - torch.as_tensor(batch.values, device=device),
+            expected_targets - predictions,
             targets.selected,
             torch.as_tensor(batch.dones, device=device),
             chosen_types,
+        )
+        diagnostics["value_scale"] = value_scale(
+            predictions,
+            expected_targets,
+            targets.advantages,
+            kind=learning.filter_kind,
+            quantile=learning.advantage_quantile,
+            minimum=learning.min_advantage,
         )
     diagnostics["actor_exposures"] = 0
     diagnostics["critic_exposures"] = 0
@@ -361,7 +373,7 @@ def update_damped_iteration(
                         .square()
                         .mean()
                     )
-                loss = policy_loss + value_loss
+                loss = policy_loss + float64_operand(value_loss)
 
                 def _failure_tensors() -> dict[str, torch.Tensor]:
                     return {
@@ -417,7 +429,10 @@ def update_damped_iteration(
                         .squeeze(-1)
                     )
                     health["clip_fraction"] = float(
-                        ((ratio_logs.double().exp() - 1).abs() > learning.clip)
+                        (
+                            (float64_operand(ratio_logs).double().exp() - 1).abs()
+                            > learning.clip
+                        )
                         .float()
                         .mean()
                     )

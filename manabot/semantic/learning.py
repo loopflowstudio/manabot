@@ -1,7 +1,7 @@
 """Viewer-safe projection of card rules for learning.
 
 The rules engine remains authoritative and is also the only source of card
-programs: ``managym.learning_catalog`` walks each catalog definition (the same
+programs: ``managym.catalog_tokens`` walks each catalog definition (the same
 ``CardDefinition`` the engine runs) into typed tokens. This module binds that
 catalog to a ContentPack manifest of the world's one catalog and maps only
 already-viewer-safe Observation objects into it. Rows are ``CardDefId`` values.
@@ -77,7 +77,7 @@ def token_value(name: str) -> int:
     """The engine's stable token value for a Rust name or printed category."""
     import managym  # Native only on this path.
 
-    return int(managym.learning_token_value(name))
+    return int(managym.catalog_token_value(name))
 
 
 class SemanticProjectionError(ValueError):
@@ -242,7 +242,7 @@ class SemanticCatalog:
 
     @classmethod
     def from_native(cls, raw: Mapping[str, Any]) -> "SemanticCatalog":
-        """Read the arrays ``managym.learning_catalog`` returns."""
+        """Read the arrays ``managym.catalog_tokens`` returns."""
 
         def array(name: str, dtype: type) -> np.ndarray:
             value = np.asarray(_sequence(raw.get(name), name), dtype=dtype)
@@ -415,7 +415,7 @@ class BoundSemanticPack:
                 f"authored content pack {manifest['pack_key']!r} is retired"
             )
         schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
-        raw = _mapping(managym.learning_catalog(), "learning_catalog")
+        raw = _mapping(managym.catalog_tokens(), "catalog_tokens")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"
         )
@@ -427,9 +427,9 @@ class BoundSemanticPack:
         catalog = SemanticCatalog.from_native(raw)
 
         row_by_name = {
-            _string(name, "learning_catalog.registry_names[]"): row
+            _string(name, "catalog_tokens.registry_names[]"): row
             for row, name in enumerate(
-                _sequence(raw.get("registry_names"), "learning_catalog.registry_names")
+                _sequence(raw.get("registry_names"), "catalog_tokens.registry_names")
             )
         }
         rows_by_id: dict[int, int] = {}

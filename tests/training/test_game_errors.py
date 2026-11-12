@@ -179,7 +179,6 @@ def test_resource_limit_receipt_replays_its_retained_encoding_boundary(
         error="observation capacity exceeded: agent_permanents 41 > 40",
         frame_json=game.frame,
         observation=ObservationConfig(
-            policy_input_version=7,
             max_cards_per_player=128,
             max_permanents_per_player=40,
             max_actions=64,
@@ -320,14 +319,14 @@ def test_exact_quota_keeps_learned_rows_and_refills_after_a_capacity_failure(
 
     # Stream 1 learns from seat 1: its game pauses at its second decision.
     first = collector.collect(model, 1)
-    assert first.obs["agent_player"][0, 1, 0, 0] == 11
+    assert first.observations().observation["agent_player"][0, 1, 0, 0] == 11
     assert not first.next_done[1] and ledger.state.crashed == 0
 
     # That decision overflows. The learned row stays learned, the pending one goes
     # and the replacement game fills the quota.
     second = collector.collect(model, 1)
     assert second.actions.shape == (1, 2)
-    assert second.obs["agent_player"][0, 1, 0, 0] == 111
+    assert second.observations().observation["agent_player"][0, 1, 0, 0] == 111
     assert not second.dones[0, 1]
     failure = GameAttempt.model_validate(
         json.loads(ledger.path.read_text().splitlines()[-1])["attempt"]

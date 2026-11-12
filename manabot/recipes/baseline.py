@@ -25,7 +25,9 @@ from manabot.experiment.execution import (
 from manabot.experiment.runner import run_experiment
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.recipes.builders import PACK
+from manabot.recipes.device import accelerator
 from manabot.sim.matchup import selected_match
+from manabot.training.mps import mps_torch_error
 from manabot.training.regime import (
     DampedPolicyLearning,
     Execution,
@@ -79,12 +81,75 @@ class TrainingRecipe(Strict):
             ),
         )
 
+    def run(self, *, seed: int = 197, out: Path | None = None) -> ExperimentRun:
+        """Train, export and evaluate with one reserved CPU evaluator thread."""
+        destination = out or Path(".runs") / (
+            "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        )
+        hardware = HardwareInventory(
+            resources=(
+                Hardware(
+                    name="baseline-cpu",
+                    host=socket.gethostname(),
+                    cpu_threads=2,
+                ),
+            )
+        )
+        try:
+            result = run_experiment(self.experiment(seed), hardware, destination)
+        except Exception:
+            if (destination / "experiment.json").exists():
+                report_baseline(destination)
+            raise
+        report = report_baseline(destination)
+        if report.software != "passed" and result.status == "completed":
+            raise RuntimeError(
+                f"baseline inspection failed: {report.error}; see {destination}"
+            )
+        return result
+
 
 def baseline(
     steps: int = BASELINE_STEPS,
     *,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
+) -> TrainingRecipe:
+    """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
+    selected = accelerator() if device is None else device
+    # Reject unadmitted MPS here: the experiment runner would only report it from
+    # the training child's log.
+    if selected == "mps" and (error := mps_torch_error()) is not None:
+        raise ValueError(error)
+    if selected is None or selected == "cpu":
+        raise ValueError(
+            "baseline requires CUDA or an explicit --device mps; "
+            "use --recipe local for CPU"
+        )
+    return _baseline(
+        steps, seconds=seconds, learning_seats=learning_seats, device=selected
+    )
+
+
+def baseline_test(
+    steps: int = BASELINE_STEPS,
+    *,
+    seconds: float | None = None,
+    learning_seats: Literal["one", "both"] = "both",
+) -> TrainingRecipe:
+    """The baseline on CPU for tests and diagnostics without accelerator hardware."""
+    return _baseline(
+        steps, seconds=seconds, learning_seats=learning_seats, device="cpu"
+    )
+
+
+def _baseline(
+    steps: int,
+    *,
+    seconds: float | None,
+    learning_seats: Literal["one", "both"],
+    device: Literal["cpu", "mps", "cuda"],
 ) -> TrainingRecipe:
     """Resolve horizon-scaled Ataraxos self-play on the current authored world.
 
@@ -130,7 +195,9 @@ def baseline(
                     learning=DampedPolicyLearning(
                         gradient="damped_policy", iteration_schedule=schedule
                     ),
-                    execution=Execution(wall_seconds=allowance * 0.85, threads=1),
+                    execution=Execution(
+                        wall_seconds=allowance * 0.85, threads=1, device=device
+                    ),
                 )
             ],
             wall_seconds=allowance * 0.85,
@@ -146,30 +213,10 @@ def run_baseline(
     out: Path | None = None,
     seconds: float | None = None,
     learning_seats: Literal["one", "both"] = "both",
+    device: Literal["cpu", "mps", "cuda"] | None = None,
 ) -> ExperimentRun:
     """Train, export and evaluate; retain every failure without automatic retry."""
-    plan = baseline(steps, seconds=seconds, learning_seats=learning_seats)
-    destination = out or Path(".runs") / (
-        "baseline-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    plan = baseline(
+        steps, seconds=seconds, learning_seats=learning_seats, device=device
     )
-    hardware = HardwareInventory(
-        resources=(
-            Hardware(
-                name="baseline-cpu",
-                host=socket.gethostname(),
-                cpu_threads=2,
-            ),
-        )
-    )
-    try:
-        result = run_experiment(plan.experiment(seed), hardware, destination)
-    except Exception:
-        if (destination / "experiment.json").exists():
-            report_baseline(destination)
-        raise
-    report = report_baseline(destination)
-    if report.software != "passed" and result.status == "completed":
-        raise RuntimeError(
-            f"baseline inspection failed: {report.error}; see {destination}"
-        )
-    return result
+    return plan.run(seed=seed, out=out)

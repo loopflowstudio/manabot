@@ -5,8 +5,7 @@ once, decides what is legal at every point, shows each seat only what that seat
 may see, and can copy, replay or re-deal a game exactly. It never chooses among
 a learner's legal actions. Forced single actions are played automatically, and
 every other choice comes from outside, whether from a policy, a search player,
-a script or a person; a native scripted opponent (`passive`, `random`) is an
-explicit opt-in.
+a script or a person; a native random opponent is an explicit opt-in.
 
 This guide is for anyone who needs to trust what the engine guarantees.
 Building and testing it is in [managym/README.md](../managym/README.md); the
@@ -16,6 +15,8 @@ cross-package contract is in the
 - [One decision](#one-decision)
 - [Forks, replay and determinization](#forks-replay-and-determinization)
 - [Batched games](#batched-games)
+- [Hand snapshots](#hand-snapshots)
+- [Encoded observations](#encoded-observations)
 - [Cards as programs](#cards-as-programs)
 - [Worlds](#worlds)
 - [What we know](#what-we-know)
@@ -123,6 +124,9 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
 - The same observation feeds the policy tensor, the LLM text and Academy. A
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
+
+Consumers read the encoded arrays by name; see
+[encoded observations](#encoded-observations).
 
 ### Executing an action
 
@@ -238,12 +242,260 @@ is scored and reset in place. By default an observation that exceeds its
 declared capacity is an error; the `first-legal` action-overflow policy and
 isolated capacity recovery are explicit opt-ins.
 
+`opponent_policy="none"` (the default) surfaces both seats' decisions to the
+caller. `opponent_policy="random"` plays the opponent's decisions natively and
+returns seat 0's next decision. These are the only built-in vector policies;
+`"passive"` is removed and raises an unsupported-policy `ValueError`, including
+through CapturedVector and Torch. Retained failure evidence keeps its original
+policy name, but replaying a passive-policy receipt requires its original source.
+
 Collection was 75–83% of active time across the profiled training runs
 ([training time](../experiments/training-time.md)), so engine and inference
 throughput are the cost levers. CI keeps an
 [engine performance budget](development.md#engine-performance-budget): a
 change more than 10% slower than the reference, or one that moves the
 search/decision digest, fails.
+
+### Choosing a Python API
+
+The [scalar/batch API audit](python-api-audit.md) records the capability
+comparison, source evidence and independent follow-ups.
+
+Install the native API as the [engine-only `managym` distribution](engine-python.md)
+and use `import managym`. Installing `manabot` adds training and keeps
+`from manabot import managym` as a compatibility alias to the same engine.
+The Torch wrapper and the capture wrapper are separate Python classes:
+
+| Need | API |
+|---|---|
+| One game, explicit reset, readable observations | `managym.Env` |
+| A fixed viewer's observation | `Env.observation_for_player(player_index)` |
+| Revision-bound Commands, decision captures, forks and possible worlds | Scalar `Env`; these are not general `VectorEnv` operations |
+| Batched readable observations and automatic reset | `managym.VectorEnv.reset_all` / `step` |
+| Caller-owned NumPy buffers, per-slot setups and partial stepping | Native `VectorEnv` buffer methods |
+| Private failure replay inputs around buffered execution | `manabot.env.failures.CapturedVector` |
+| Torch observation/reward tensors on a selected device | `manabot.env.vector_env.VectorEnv` |
+
+Scalar native `Env.step` returns the terminal state and leaves resetting to the
+caller. Native vector steps reset finished slots before returning: reward and
+`terminated` / `truncated` describe the completed game, while its returned
+observation describes the replacement game. The Torch wrapper keeps this
+behavior. Its observation tensors are reused; clone anything retained across
+steps. The Gymnasium wrapper `manabot.env.env.Env` never resets on its own:
+a terminal `step` returns the terminal observation and true done flags, and the
+caller calls `reset`. Its former `auto_reset` argument is removed; passing it
+raises `TypeError`, and step info no longer carries `true_terminated` /
+`true_truncated`. Vector autoreset is the only automatic-reset contract.
+
+Torch `VectorEnv.reset(seed=s)` restarts slot `i` at seed `s + i` for any
+explicit seed, including the current one, so equal seeds reproduce deals.
+`reset()` without a seed continues native seed succession. Its
+`current_agent_indices()` names each slot's chooser.
+
+`CapturedVector` delegates only native reads (seeds, generations, choosers,
+frames, setups, diagnostics). Readable `reset_all` / `step` and other native
+mutators raise `AttributeError`; use its `reset_*_into_buffers` and
+`step_*_into_buffers` methods, which keep replay prefixes aligned. It starts a
+new prefix whenever the native game generation changes, so a same-seed reset
+or a replacement at the saturated maximum seed never extends the old game.
+
+Native buffered stepping and `CapturedVector.step_into_buffers` accept an
+`active` boolean per slot. Inactive games and observation rows stay unchanged;
+the Python buffer bindings clear their rewards and done flags to zero/false.
+Apply the same mask when collecting transitions. The Torch wrapper's `step`
+advances every slot and does not accept an active mask.
+
+Strict batch errors can occur after other slots have advanced. Do not retry
+the same batch assuming nothing changed. `CapturedVector` retains private
+pre-call replay inputs; explicit `step_isolated_into_buffers` instead reports
+individual game failures for replacement. Buffer-integrity failures remain
+fatal, and capacity recovery requires its separate opt-in. See
+[game failures](training.md#game-failures).
+
+### Hand snapshots
+
+Read authoritative hand contents for explicit native seats at the current
+read boundary in scalar or batched games. This is an opt-in hidden-information API:
+
+```python
+from manabot import managym
+from manabot.env.match import Match
+
+games = managym.VectorEnv(num_envs=2, seed=42, opponent_policy="none")
+observations = games.reset_all(Match().to_rust())
+snapshots = games.hand_snapshots([1, 0])
+
+for slot, snapshot in enumerate(snapshots):
+    print(slot, snapshot.player, snapshot.cards)
+    # snapshot.cards is a name-count mapping, e.g. {"Mountain": 2, ...}.
+
+game = managym.Env(seed=42)
+game.reset(Match().to_rust())
+hand = game.hand_snapshot(1)  # The same HandSnapshot contract for one game.
+print(hand.player, hand.cards)
+
+# These snapshots remain unchanged when the games advance.
+```
+
+`hand_snapshots(players: list[int])` returns one `HandSnapshot` per slot, in slot
+order; the list index is the slot. Supply exactly one native seat (`0` or `1`)
+per slot: `[1, 0]` reads seat 1 in slot 0 and seat 0 in slot 1. There is no implicit opponent. Seats are not
+remapped under player-control effects: `current_agent_indices()` names the
+chooser, which can differ from the turn or rules-decision owner.
+
+Scalar `Env.hand_snapshot(player: int)` returns the same `HandSnapshot` record
+for one native seat. The Gym `manabot.env.env.Env` wrapper exposes it directly.
+
+Each snapshot contains:
+
+| Field | Meaning |
+|---|---|
+| `player: int` | Requested native seat, unchanged by control effects |
+| `game_id: int` | Opaque game generation; fresh for every reset, replacement, fork or materialized world, including identical deals |
+| `seed: int` | The originating native reset seed; unchanged by scheduling a reset or reseeding a branch's RNG |
+| `revision: int` | The current game's decision revision at the read |
+| `cards: dict[str, int]` | Complete hand, by card name with positive counts; `{}` means an empty hand |
+
+Save your collection/run identity with `(game_id, revision, player)` and, for
+batches, the list index identifying the slot.
+Game IDs are allocated process-wide, including across Torch native-vector
+rebuilds; they are not portable replay identifiers, consecutive counters or
+reproducible values. A seed alone cannot distinguish repeated resets to the same
+deal. For replay, retain the match configuration and runtime identity separately.
+
+`set_seed(s)` schedules the next reset; existing snapshots and subsequent reads
+of the live game retain its original reset seed until reset succeeds. Forks and
+materialized worlds inherit that originating reset seed and receive distinct
+game IDs. The seed passed to possible-world materialization controls that
+branch's randomness; it does not replace the snapshot's reset seed. Capture
+origin and stale checks still apply independently of these snapshot fields.
+
+Both methods synchronously read authoritative hand zones, with one native call
+for the whole batch, without stepping, resetting, consuming randomness or
+building viewer observations. Counts are detached snapshots; dictionary edits cannot affect the
+game or retained snapshot. `CapturedVector` and Torch `VectorEnv` expose the same
+method and CPU records. Ordinary reset/step calls do not collect snapshots.
+
+Read before stepping to capture the current hands; copy reused observation
+buffers too if retaining both. After a successful step, snapshots describe the
+returned game states. Scalar games retain their terminal hands until explicit
+reset. Vector done slots describe replacement games; terminal hands are not
+retained by vectors. Partial stepping leaves inactive games unchanged, but
+snapshots still include every slot: apply the same active mask when selecting results.
+
+A wrong-length seat list, a seat outside `0..1` or reading before reset raises
+an error. After a failed step, discard that call's results and recover or reset
+before reading further snapshots. An empty hand never denotes a failure;
+observation capacities never truncate snapshots.
+
+Snapshots contain hidden information, including with closed decklists. They
+remain separate from policy inputs, viewer-safe observations, shared decision
+captures and viewer trace exports. Public `known_hand` counts describe only
+revealed knowledge. Reading snapshots does not change deck disclosure or what a
+player may observe, and requires no policy-input version or checkpoint migration.
+
+## Encoded observations
+
+The native encoder turns an observation into NumPy arrays, one layout per
+engine release. manabot reads the same arrays as its policy input
+(`ObservationConfig.policy_input_version`, v9); how its network reads them is in
+[observations and the policy network](observation-and-model.md#policy-inputs).
+
+### Reading arrays by name
+
+To read a permanent's card definition without hard-coding column 24, ask the
+native API for the layout:
+
+```python
+import managym
+
+layout = managym.observation_layout()
+definition = layout["agent_permanents"]["columns"]["definition"]
+print(definition["index"], definition["kind"])
+# 24 id
+print(definition["encoding"])
+# CardDefId + 1; 0 means absent
+```
+
+The scalar encoder writes the arrays the layout describes. This example starts
+a game with fixed decks and reads only valid permanent rows (the first
+decision can have none):
+
+```python
+game = managym.Env(seed=42)
+observation, info = game.reset([
+    managym.PlayerConfig("Alice", {"Mountain": 40, "Lightning Bolt": 20}),
+    managym.PlayerConfig("Bob", {"Forest": 40, "Llanowar Elves": 20}),
+])
+arrays = game.encode_observation(observation)
+valid = arrays["agent_permanents_valid"].astype(bool)
+references = arrays["agent_permanents"][valid, definition["index"]]
+definition_ids = [int(reference) - 1 for reference in references if reference != 0]
+```
+
+These are definition IDs for catalog joins, not object identities or numeric
+features. Do not log-scale them or infer similarity from their magnitude.
+Retain the installed world's content identity with saved arrays and catalog
+references.
+
+`observation_layout(*, policy_history=False)` returns a mapping keyed by the
+encoder's array names. Each array describes its `axes`, `shape` and stored
+`dtype`; a `None` extent in `shape` is a caller-selected capacity, not a
+default. The seat axis is viewer-relative (agent first, opponent second).
+Feature arrays have a `columns` mapping keyed by column name. Each column gives
+its zero-based `index`, `kind`, `encoding` and `range`. Kinds distinguish
+identities and references, categorical codes, flags, counts, numeric values and
+ranks. The encoding explains scaling, join targets, index bases and absence
+sentinels; the range describes stored values, including when no fixed bound
+exists. A `tagged` kind needs its row-kind description before preprocessing.
+Tagged fact, relation and effect rows describe meanings conditional on their
+row kind in `row_kinds` (integer codes mapped to descriptions). Masks and
+scalar-valued arrays have empty `columns` and describe their `element` meaning
+without inventing a feature axis. Shared headers own the detail/member slices;
+unused rows are zero. `policy_history=True` describes the 12-column public
+history rows of `events` instead of the 7-column raw events; public history is
+bounded to 32 rows, even though its allocated event capacity is selected
+separately.
+
+Read the stored encoding before adding preprocessing: permanent damage, power
+and toughness are already divided by 10, flags are 0 or 1, and IDs stay exact.
+Fact timestamp ranks are stored as ranks; the built-in model divides them by
+128, independently of fact capacity. The layout describes the array values,
+not a blanket normalization to apply to every column.
+
+The layout comes from the column table the native encoder writes through, so
+it cannot drift from the arrays. Reading it starts no game and imports no
+Torch. Row capacities are a separate allocation choice: use
+`ObservationSpace.shapes` when allocating caller-owned buffers, and retain all
+its keys. Capacity errors need larger buffers and a compatible model; state is
+never truncated.
+
+A later engine release can change the layout. Save the package version and
+world identity with collected arrays, and look columns up by name rather than
+by position.
+
+### Card definition IDs
+
+A `CardDefId` is the definition's position in the installed catalog, sorted by
+definition key. Adding a card renumbers every definition after it, so IDs are
+stable only within one installed build. Do not key a saved embedding table or
+dataset by raw IDs. Join each ID to a stable identity for the installed build:
+`managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
+`registry_name`, definition `key` and `scryfall_id` (back faces have a name but
+no key). For card features rather than identities, `managym.catalog_tokens()`
+gives each definition's tokenized rules text, rows by `CardDefId`, so the
+tokens describe cards a model has not seen.
+
+### Deprecated names
+
+Engine names describe what managym produces. These earlier spellings, named for
+manabot's use, still work with a `DeprecationWarning` and are removed in 0.3.0:
+
+| Deprecated | Use |
+|---|---|
+| `managym.learning_catalog()` / `LearningCatalog` | `managym.catalog_tokens()` / `CatalogTokens` |
+| `managym.learning_token_value(name)` | `managym.catalog_token_value(name)` |
+| `managym.learning_record_names()` | `managym.record_vocabulary()` |
 
 ## Cards as programs
 

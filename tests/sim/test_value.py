@@ -32,7 +32,7 @@ def make_env(seed: int = 3) -> tuple[Env, dict]:
             villain_deck=dict(INTERACTIVE_DECK),
         )
     )
-    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed, auto_reset=False)
+    env = Env(match, obs_space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
     return env, obs
 

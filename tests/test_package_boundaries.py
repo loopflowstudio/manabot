@@ -79,16 +79,48 @@ def test_manabot_entry_points_import_without_academy() -> None:
     )
 
 
-def test_managym_legacy_import_is_the_bundled_engine() -> None:
-    from managym.decision import Command as LegacyCommand
+def test_manabot_compatibility_import_is_the_separate_engine() -> None:
+    from manabot import managym as compatibility
+    from manabot.managym.decision import Command as CompatibilityCommand
+    import managym
+    from managym.decision import Command
 
-    from manabot import managym as engine
-    from manabot.managym.decision import Command
-    import managym as legacy
+    assert compatibility is managym
+    assert CompatibilityCommand is Command
+    assert Path(managym._managym.__file__).parent == REPO_ROOT / "managym"
 
-    assert legacy is engine
-    assert LegacyCommand is Command
-    assert Path(engine._managym.__file__).parent == REPO_ROOT / "manabot/managym"
+
+def test_engine_compatibility_import_diagnoses_incomplete_upgrade(
+    tmp_path: Path,
+) -> None:
+    # pip can remove the old wheel's shared __init__.py after installing the
+    # new engine. Reproduce that namespace package without installed packages.
+    for relative in ("manabot/__init__.py", "manabot/managym/__init__.py"):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text((REPO_ROOT / relative).read_text())
+    (tmp_path / "managym").mkdir()
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        sys.path.insert(0, {str(tmp_path)!r})
+        import manabot
+        assert 'managym' not in sys.modules
+        try:
+            from manabot import managym
+        except ImportError as error:
+            assert 'managym is missing its package files' in str(error), error
+            assert 'uv pip install --reinstall-package managym' in str(error), error
+        else:
+            raise AssertionError('Incomplete engine installation was accepted')
+        """
+    )
+    subprocess.run(
+        [sys.executable, "-I", "-S", "-c", probe],
+        cwd=tmp_path,
+        check=True,
+        timeout=30,
+    )
 
 
 class _RefuseTraining(importlib.abc.MetaPathFinder):
@@ -215,3 +247,32 @@ def test_evaluation_child_modules_import_without_torch() -> None:
 def test_retired_arena_package_is_absent() -> None:
     assert importlib.util.find_spec("manabot.arena") is None
     assert not (REPO_ROOT / "manabot" / "arena").exists()
+
+
+class _RefuseEngineClients(_RefuseAcademy):
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        if fullname.split(".")[0] in {"manabot", "torch", "gymnasium", "etude"}:
+            raise ImportError(fullname)
+        return super().find_spec(fullname, path, target)
+
+
+def test_engine_imports_without_training_or_academy() -> None:
+    probe = textwrap.dedent(
+        """
+        import importlib
+        import pkgutil
+        import sys
+        from tests.test_package_boundaries import _RefuseEngineClients
+        sys.meta_path.insert(0, _RefuseEngineClients())
+        import managym
+        for module in pkgutil.iter_modules(managym.__path__, 'managym.'):
+            importlib.import_module(module.name)
+        assert 'manabot' not in sys.modules
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

@@ -2,7 +2,7 @@
 
 `SemanticCardEncoder` owns the one token vocabulary of card text. With
 `records`, it also owns the exact vocabulary of fact and shared-effect ids
-(`RecordNamespace` keys): every name native `learning_record_names` lists reads
+(`RecordNamespace` keys): every name native `record_vocabulary` lists reads
 the row of the card token for the same concept, or a row appended after the
 card tokens when no card text contains it. Nothing is hashed; an id outside
 the vocabulary fails loudly.
@@ -14,6 +14,7 @@ from enum import IntEnum
 import torch
 from torch import nn
 
+from manabot.model.numerics import embedding_rows
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -60,7 +61,7 @@ def _record_tables(vocabulary: dict[tuple[int, int], int]) -> _RecordTables:
         size += 1
         return size - 1
 
-    for space, name, value, kind, token in managym.learning_record_names():
+    for space, name, value, kind, token in managym.record_vocabulary():
         key = (int(RecordNamespace[space.upper()]), value)
         if key in names:
             raise ValueError(f"record name {name!r} shares an id with another")
@@ -150,7 +151,7 @@ class SemanticCardEncoder(nn.Module):
         *,
         records: bool = False,
     ) -> None:
-        """`decklists` (policy input v5) adds a projection of the pooled
+        """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
         fact and shared-effect id vocabulary (see the module docstring)."""
         super().__init__()
@@ -252,7 +253,7 @@ class SemanticCardEncoder(nn.Module):
             record_key(torch.as_tensor(namespace), words).reshape(-1),
             "policy received an id outside the record vocabulary",
         )
-        return self.token_embedding(rows).reshape(
+        return embedding_rows(self.token_embedding, rows).reshape(
             *words.shape, self.token_embedding.embedding_dim
         )
 
@@ -270,7 +271,7 @@ class SemanticCardEncoder(nn.Module):
             record_key(kinds[~number], words[~number]),
             "policy received a program token outside the vocabulary",
         )
-        return self.token_embedding(rows)
+        return embedding_rows(self.token_embedding, rows)
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return admit_definition_ids(

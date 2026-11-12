@@ -44,6 +44,8 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.mps import mps_torch_error
+from manabot.training.outcome_tables import OUTCOME_TABLE_METRIC, write_outcomes
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
     MonitoringCheckpoint,
@@ -125,6 +127,16 @@ def cuda_peak_metrics(device: str) -> dict[str, int]:
     return {
         "memory/peak_allocated_cuda_bytes": torch.cuda.max_memory_allocated(),
         "memory/peak_reserved_cuda_bytes": torch.cuda.max_memory_reserved(),
+    }
+
+
+def mps_memory_metrics(device: str) -> dict[str, int]:
+    """Current MPS tensor/driver bytes, not peaks or additive memory totals."""
+    if device != "mps":
+        return {}
+    return {
+        "memory/allocated_mps_bytes": torch.mps.current_allocated_memory(),
+        "memory/driver_allocated_mps_bytes": torch.mps.driver_allocated_memory(),
     }
 
 
@@ -252,6 +264,11 @@ def _runtime_identities(
             "capability": list(torch.cuda.get_device_capability(0)),
             "runtime": torch.version.cuda,
         }
+    if any(stage.execution.device == "mps" for stage in regime.stages):
+        if not torch.backends.mps.is_available():
+            raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
+        if (error := mps_torch_error()) is not None:
+            raise ValueError(error)
     return identities
 
 
@@ -686,8 +703,10 @@ def _execute_regime(
             os.replace(target.with_suffix(".tmp"), target)
             # Admission constructs a fresh model. Its initialization must not
             # consume the learner's action-sampling RNG stream.
+            export_device = next(model.parameters()).device.type
             with torch.random.fork_rng(
-                devices=[0] if next(model.parameters()).is_cuda else []
+                devices=[0] if export_device in {"cuda", "mps"} else [],
+                device_type="mps" if export_device == "mps" else "cuda",
             ):
                 load_checkpoint(str(target))
             receipt.artifact = artifact(target)
@@ -793,14 +812,21 @@ def _execute_regime(
             torch.set_num_threads(stage.execution.threads)
             apply_matmul_precision(stage.execution.precision)
             cuda = stage.execution.device == "cuda"
+            mps = stage.execution.device == "mps"
             if cuda and not torch.cuda.is_available():
                 raise ValueError(
                     "CUDA requested but unavailable; CPU fallback is forbidden"
+                )
+            if mps and not torch.backends.mps.is_available():
+                raise ValueError(
+                    "MPS requested but unavailable; CPU fallback is forbidden"
                 )
 
             def synchronize() -> None:
                 if cuda:
                     torch.cuda.synchronize()
+                elif mps:
+                    torch.mps.synchronize()
 
             synchronize()
             if not restoring_completed:
@@ -1184,8 +1210,10 @@ def _execute_regime(
                         # New self-play monitoring must preserve initialization and
                         # action-sampling streams compared with monitoring disabled.
                         if stage.opponent is None:
+                            export_device = next(agent.parameters()).device.type
                             with torch.random.fork_rng(
-                                devices=[0] if next(agent.parameters()).is_cuda else []
+                                devices=[0] if export_device in {"cuda", "mps"} else [],
+                                device_type="mps" if export_device == "mps" else "cuda",
                             ):
                                 load_checkpoint(str(target))
                         else:
@@ -1476,9 +1504,10 @@ def _execute_regime(
                         record.learning_timings = _phase_timings(
                             learner.profiler, "Learning"
                         )
+                    outcome_metrics: dict[str, str] = {}
                     if collector.opponent_mode == "self":
-                        diagnostic["self_play_outcomes"] = (
-                            collector.stats.self_play.drain()
+                        outcome_metrics[OUTCOME_TABLE_METRIC] = write_outcomes(
+                            experiment.run.files.root, collector.stats.self_play.drain()
                         )
                     record.updates += 1
                     record.optimizer_exposures += diagnostic["optimizer_exposures"]
@@ -1501,8 +1530,10 @@ def _execute_regime(
                     # Etude holds update rows; the record keeps only counters.
                     experiment.log_update(
                         metric_row(diagnostic)
+                        | outcome_metrics
                         | time_since(timed, spent)
-                        | cuda_peak_metrics(stage.execution.device),
+                        | cuda_peak_metrics(stage.execution.device)
+                        | mps_memory_metrics(stage.execution.device),
                         updates=int(diagnostic["coordinates"]["updates"]),
                         transitions=int(
                             diagnostic["coordinates"]["learner_transitions"]

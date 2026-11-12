@@ -122,7 +122,7 @@ def test_research_checkpoint_binds_common_catalog(
     payload = {
         "model_state_dict": agent.state_dict(),
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(Match(roster.match()).to_rust(), space),
@@ -134,4 +134,4 @@ def test_research_checkpoint_binds_common_catalog(
     for name, tensor in agent.state_dict().items():
         assert torch.equal(tensor, loaded.state_dict()[name])
     catalog = bind_policy_catalog(key).catalog
-    assert managym.learning_token_value("Giant") in set(catalog.token_value.tolist())
+    assert managym.catalog_token_value("Giant") in set(catalog.token_value.tolist())

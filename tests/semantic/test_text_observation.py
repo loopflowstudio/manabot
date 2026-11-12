@@ -267,11 +267,10 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
 @pytest.mark.parametrize(
     "config",
     [
-        ObservationConfig(policy_input_version=5),
-        ObservationConfig(policy_input_version=6, max_facts=256),
+        ObservationConfig(max_facts=256),
         ObservationConfig(),
     ],
-    ids=["v5", "v6-pilot", "current-default"],
+    ids=["256-facts", "default"],
 )
 def test_once_each_turn_use_reaches_text_and_both_encoders(
     config: ObservationConfig,
@@ -301,11 +300,7 @@ def test_once_each_turn_use_reaches_text_and_both_encoders(
         if permanent.once_each_turn_used
     )
     assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
-    native = env.encode_observation(
-        observation,
-        policy_input_version=config.policy_input_version,
-        max_facts=config.max_facts,
-    )
+    native = env.encode_observation(observation, max_facts=config.max_facts)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
 
@@ -1186,10 +1181,8 @@ def _assert_native_observation_parity(
     # Read the native observation: captured viewer JSON omits continuation frames.
     viewer = DecisionInput.model_validate_json(decision.capture_json).observation.viewer
     observation = env.observation_for_player(viewer)
-    encoded = ObservationSpace(ObservationConfig(policy_input_version=5)).encode(
-        observation
-    )
-    native = env.encode_observation(observation, policy_input_version=5)
+    encoded = ObservationSpace(ObservationConfig()).encode(observation)
+    native = env.encode_observation(observation)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
     return observation

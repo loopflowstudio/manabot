@@ -1,18 +1,10 @@
-- step: {name: experiment-design, id: experiment-design}
-- loop: experiment-design
-  interactive: experiment-design-review
+- experiment-design
 - xor:
-    router: experiment-route
+    router: experiment-tier
     paths:
-      software:
-        graph: experiment-software
-        description: Accepted protocol needs software changes before final freeze
-      ready:
-        description: Existing admitted software can execute the protocol
-- step: {name: experiment-freeze, id: experiment-freeze}
-- loop: experiment-freeze
-  interactive: experiment-execution-review
-- step: {name: pool-validation, id: experiment-execute}
-- experiment-analysis
-- loop: experiment-execute
-  interactive: experiment-evidence-review
+      exploratory:
+        graph: experiment-exploratory
+        description: No result will be cited as a finding; the report ends the experiment
+      finding:
+        graph: experiment-finding
+        description: A result will be cited as a finding, which a person reviews against its prediction

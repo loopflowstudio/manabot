@@ -4,11 +4,11 @@ Membership is an explicit join, never learned from object IDs. We retain the
 existing unnormalized fact-sum convention: repeated memberships contribute
 repeatedly. A mean would erase multiplicity. This learned sum is compression,
 not an injective semantic representation; tensor transport retains the records.
-V8 adds ordered program tokens; v7 retains its original reducer and embeddings.
+Details carry ordered program tokens, reduced by a GRU per record.
 
-`hashed` ids (every frozen model) hash modifications, details and sources into
-4096 learned rows each; `catalog` ids (v8 onward) read the card encoder's
-token rows and its row for the source definition, as fact rows do.
+`hashed` ids hash modifications, details and sources into 4096 learned rows
+each; `catalog` ids read the card encoder's token rows and its row for the
+source definition, as fact rows do.
 """
 
 import torch
@@ -16,16 +16,16 @@ from torch import nn
 
 from manabot.env.shared_effects import (
     DETAIL_DIM,
+    DETAIL_ROWS,
     EFFECT_DIM,
     EFFECT_ROWS,
     MEMBER_DIM,
     MEMBER_ROWS,
-    shared_effect_shapes,
 )
 from manabot.model.facts import RecordVocabulary
+from manabot.model.numerics import embedding_rows
 from manabot.model.records import (
     RecordReducer,
-    RecordReduction,
     join_record_rows,
     masked_record_rows,
     program_number,
@@ -38,27 +38,21 @@ class SharedEffectEncoder(nn.Module):
     def __init__(
         self,
         width: int,
-        reduction: RecordReduction = "typed_pool",
         *,
-        version: int = 7,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
         super().__init__()
-        if vocabulary == "catalog" and version < 8:
-            raise ValueError("catalog effect ids require policy input v8")
         self.vocabulary = vocabulary
         if vocabulary == "hashed":
             self.modification = nn.Embedding(4096, width)
             self.detail = nn.Embedding(4096, width)
-        self.version = version
-        self.detail_rows = shared_effect_shapes(version)["effect_details"][0]
-        self.detail_kind = nn.Embedding(20 if version >= 8 else 4, width)
-        if version >= 8:
-            self.detail_number = nn.Linear(1, width)
+        self.detail_rows = DETAIL_ROWS
+        self.detail_kind = nn.Embedding(20, width)
+        self.detail_number = nn.Linear(1, width)
         if vocabulary == "hashed":
             self.source = nn.Embedding(4096, width)
         self.header = nn.Linear(8 + 2 * width, width)
-        self.reducer = RecordReducer(width, "typed_gru" if version >= 8 else reduction)
+        self.reducer = RecordReducer(width)
 
     def forward(
         self,
@@ -135,9 +129,7 @@ class SharedEffectEncoder(nn.Module):
             member_records.extend([i] * targets)
         # Validate all live details/members together, ignoring poisoned padding.
         detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
-        kinds = record_indexes(
-            detail_host[:, 0], 19 if self.version >= 8 else 3, "effect detail kind"
-        )
+        kinds = record_indexes(detail_host[:, 0], 19, "effect detail kind")
         ids = record_indexes(detail_host[:, 1:], 65535, "effect detail half")
         if ((kinds == 0) | ((kinds > 3) & (kinds < 11))).any():
             raise ValueError("live effect detail has no kind")
@@ -174,7 +166,7 @@ class SharedEffectEncoder(nn.Module):
         unsigned = ((ids[:, 0] << 16) | ids[:, 1]).to(device)
         kinds = kinds.to(device)
         if catalog is None:
-            detail = self.detail(unsigned % 4096)
+            detail = embedding_rows(self.detail, unsigned % 4096)
         else:
             # Kinds 1-3 name a keyword, subtype or color; 11-19 carry
             # a learning token of kind 1-9.
@@ -182,17 +174,14 @@ class SharedEffectEncoder(nn.Module):
             detail = mod.new_zeros((len(kinds), mod.shape[-1]))
             detail[~program] = catalog.names(RecordNamespace.TOKEN, unsigned[~program])
             detail[program] = catalog.tokens(kinds[program] - 10, unsigned[program])
-        detail_tokens = detail + self.detail_kind(kinds)
-        if self.version >= 8:
-            # Integer/boolean tokens retain signed numeric meaning;
-            # the GRU retains the ordered shared program structure.
-            signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
-            is_number = ((kinds == 14) | (kinds == 15)).unsqueeze(-1).to(device)
-            detail_tokens = detail_tokens + self.detail_number(
-                program_number(signed.to(device=device, dtype=objects.dtype)).unsqueeze(
-                    -1
-                )
-            ).masked_fill(~is_number, 0)
+        detail_tokens = detail + embedding_rows(self.detail_kind, kinds)
+        # Integer/boolean tokens retain signed numeric meaning;
+        # the GRU retains the ordered shared program structure.
+        signed = torch.where(unsigned >= 2**31, unsigned - 2**32, unsigned)
+        is_number = ((kinds == 14) | (kinds == 15)).unsqueeze(-1).to(device)
+        detail_tokens = detail_tokens + self.detail_number(
+            program_number(signed.to(device=device, dtype=objects.dtype)).unsqueeze(-1)
+        ).masked_fill(~is_number, 0)
         tokens = torch.cat(
             (
                 torch.stack((mod, sources, torch.tanh(header)), 1).flatten(0, 1),

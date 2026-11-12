@@ -3,6 +3,8 @@ pub mod agent;
 pub mod benchmark_allocations;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_layers;
+#[cfg(feature = "benchmark")]
+pub mod benchmark_search;
 pub mod canonical_replay;
 pub mod cards;
 pub mod conformance;
@@ -11,6 +13,7 @@ pub mod decision_capture;
 mod decision_context;
 pub mod experience;
 pub mod flow;
+pub mod format;
 pub mod infra;
 pub mod match_fixtures;
 pub mod possible_worlds;

@@ -4,6 +4,8 @@
 use crate::state::ability::LibraryEnd;
 use std::collections::BTreeMap;
 
+use sha2::{Digest, Sha256};
+
 use crate::{
     agent::action::Action,
     decision::Command,
@@ -553,7 +555,6 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
     let mut evidence = Vec::new();
     for controller in [PlayerId(0), PlayerId(1)] {
         let mut observations = Vec::new();
-        let mut encodings = Vec::new();
         for legal in [true, false] {
             let (mut game, first, second) = fixture(controller);
             stack(
@@ -615,25 +616,8 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             let native = encode(&obs, &ObservationEncoderConfig::default())
                 .unwrap()
                 .relations;
-            let legacy = encode(
-                &obs,
-                &ObservationEncoderConfig {
-                    policy_input_version: 2,
-                    ..Default::default()
-                },
-            )
-            .unwrap()
-            .relations;
-            for (row, old) in native
-                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
-                .0
-                .iter()
-                .zip(legacy.as_chunks::<32>().0)
-            {
-                assert_eq!(&row[..32], old);
-            }
             let target_rows = native
-                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
+                .as_chunks::<{ crate::agent::continuation::RELATION_DIM }>()
                 .0
                 .iter()
                 .filter(|r| r[0] == 2.0 && r[3] == 5.0)
@@ -644,10 +628,8 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             evidence
                 .push(serde_json::json!({"legal": legal, "capture": capture, "relations": native}));
             observations.push(obs.to_json());
-            encodings.push(legacy);
         }
         assert_eq!(observations[0], observations[1]);
-        assert_eq!(encodings[0], encodings[1]);
     }
     if let Ok(path) = std::env::var("RESOLUTION_ELIGIBILITY_EVIDENCE") {
         std::fs::write(path, serde_json::to_string_pretty(&evidence).unwrap()).unwrap();
@@ -3263,6 +3245,23 @@ fn hidden_selection_public_entry_is_pinned_through_both_samplers() {
                 .any(|card| card.id == root.state.cards[entering].id.0 as i32 && card.zone == zone),
             "a precommit entrant is public during replacement choices"
         );
+        let before = crate::search_state::witness(&root);
+        for perspective in [player, viewer] {
+            let bytes = Observation::for_player(&root, perspective).to_json();
+            let expected = format!("{:x}", Sha256::digest(bytes.as_bytes()));
+            assert_eq!(
+                root.semantic_viewer_state_hash(perspective).unwrap(),
+                expected
+            );
+            assert_eq!(
+                root.semantic_observation(perspective)
+                    .unwrap()
+                    .identity
+                    .viewer_state_hash,
+                expected
+            );
+        }
+        assert_eq!(crate::search_state::witness(&root), before);
         let space = PossibleWorldSpace::for_viewer(&root, viewer);
         let materialized = space
             .materialize_index(&root, 0, 31, MaterializeMode::RefreshOpponentCommitment)
@@ -3469,7 +3468,6 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
         let obs = Observation::for_player(game, player);
         let config = ObservationEncoderConfig {
-            policy_input_version: 8,
             max_facts: 4096,
             ..Default::default()
         };
@@ -3622,41 +3620,6 @@ fn hidden_selection_library_inspections_preserve_known_prefixes_and_refresh_unkn
 /// Equal current choices can retain different work. These are constructed
 /// positions, serialized for the stateless Python encoder/model witness below.
 #[test]
-fn frozen_operation_obligations_admit_their_implied_completion_events() {
-    use crate::agent::observation::Observation;
-    use crate::agent::observation_encoder::{encode, ObservationEncoderConfig};
-    use crate::flow::decision::EffectFrame;
-    for effect in [
-        Effect::Scry { count: 1 },
-        Effect::Surveil { count: 1 },
-        Effect::SelectCards {
-            from: ObjectSelector::Zone(ZoneType::Library),
-            predicate: CardPredicate::basic_land(),
-            min: 0,
-            max: EffectValue::Fixed(1),
-            effects: vec![Effect::return_to_hand(ObjectSelector::Selected)],
-            if_declined: vec![],
-        },
-    ] {
-        let player = PlayerId(0);
-        let (mut game, _, _) = fixture(player);
-        game.run_frame(EffectFrame::new(player, vec![effect]));
-        game.publish_action_space(game.suspended_decision_action_space().unwrap());
-        let observation = Observation::for_player(&game, player);
-        for version in 1..=8 {
-            encode(
-                &observation,
-                &ObservationEncoderConfig {
-                    policy_input_version: version,
-                    ..Default::default()
-                },
-            )
-            .unwrap();
-        }
-    }
-}
-
-#[test]
 fn effect_execution_inputs_separate_results_iteration_and_completion() {
     use crate::agent::observation::Observation;
     use crate::agent::observation_encoder::{
@@ -3774,10 +3737,7 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
             });
             game.publish_action_space(game.suspended_decision_action_space().unwrap());
             let obs = Observation::for_player(&game, player);
-            let config = ObservationEncoderConfig {
-                policy_input_version: 8,
-                ..Default::default()
-            };
+            let config = ObservationEncoderConfig::default();
             let input = encode(&obs, &config).unwrap();
             let used = input
                 .facts
@@ -3803,23 +3763,6 @@ fn effect_execution_inputs_separate_results_iteration_and_completion() {
                 ),
                 Err(ObservationEncodeError::Capacity { field: "facts", .. })
             ));
-            // Earlier instructions' results were never part of v1-v7, so a
-            // later choice after them stays admissible there; the novel
-            // domains (iteration, batches, completions) require v8.
-            for version in 1..8 {
-                let frozen = encode(
-                    &obs,
-                    &ObservationEncoderConfig {
-                        policy_input_version: version,
-                        ..config
-                    },
-                );
-                let rejected = matches!(
-                    frozen,
-                    Err(ObservationEncodeError::UnsupportedEffectExecutionInput(_))
-                );
-                assert_eq!(rejected, case != "selected", "v{version}: {case}");
-            }
             let capture = game.capture_decision(player, 0).unwrap();
             evidence.push(serde_json::json!({"case":case,"choice":choice,"capture":capture,
                 "facts": &input.facts[..used * 12], "relations": &input.relations[..relations * 49]}));
