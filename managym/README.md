@@ -311,7 +311,7 @@ layout, checkpoint admission and measurement commands are documented in
 The presentation context and text capture derive from the same typed frames;
 portable schema-8 viewer JSON is validated by the native observation types.
 
-`Game::card_power` reads contextual power in every zone: the layered view on
+`Game::object_power` reads contextual power in every zone: the layered view on
 the battlefield, and characteristic-defining abilities with the spell's
 controller or card's owner elsewhere (including outside the game). Zone
 filters use `card_matches_predicate`; printed-only matching belongs to

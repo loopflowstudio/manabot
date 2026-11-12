@@ -1139,7 +1139,7 @@ impl Game {
                     else {
                         continue;
                     };
-                    let matches_card = match event {
+                    let matches_object = match event {
                         ProposedEvent::CounterChange { target, .. } => self
                             .lookup_current_permanent(*target)
                             .is_ok_and(|id| self.permanent_matches_predicate(id, predicate)),
@@ -1166,7 +1166,7 @@ impl Game {
                             ProposedEvent::ZoneMove { .. } => true,
                             _ => false,
                         };
-                    if matches_card && matches_kind && matches_cause {
+                    if matches_object && matches_kind && matches_cause {
                         candidates.push(ReplacementCandidate {
                             identity: ReplacementId {
                                 source: self.permanent_object_ref(id).expect("battlefield"),

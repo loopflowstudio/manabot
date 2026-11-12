@@ -25,7 +25,8 @@ pub struct ZoneManager {
     stack: [Vec<ObjectId>; 2],
     exile: [Vec<ObjectId>; 2],
     command: [Vec<ObjectId>; 2],
-    card_zones: Vec<Option<ZoneType>>,
+    #[serde(rename = "card_zones")]
+    object_zones: Vec<Option<ZoneType>>,
 }
 
 impl Default for ZoneManager {
@@ -38,7 +39,7 @@ impl Default for ZoneManager {
             stack: array::from_fn(|_| Vec::new()),
             exile: array::from_fn(|_| Vec::new()),
             command: array::from_fn(|_| Vec::new()),
-            card_zones: Vec::new(),
+            object_zones: Vec::new(),
         }
     }
 }
@@ -52,13 +53,13 @@ impl ZoneManager {
     }
 
     fn ensure_slot(&mut self, object: ObjectId) {
-        if self.card_zones.len() <= object.0 {
-            self.card_zones.resize(object.0 + 1, None);
+        if self.object_zones.len() <= object.0 {
+            self.object_zones.resize(object.0 + 1, None);
         }
     }
 
     pub fn zone_of(&self, object: ObjectId) -> Option<ZoneType> {
-        self.card_zones.get(object.0).copied().flatten()
+        self.object_zones.get(object.0).copied().flatten()
     }
 
     fn remove_object_in_place(objects: &mut Vec<ObjectId>, object: ObjectId) {
@@ -96,13 +97,13 @@ impl ZoneManager {
         }
     }
 
-    /// Remove a card from all zones entirely (CR 704.5d — tokens cease to
-    /// exist). The card object remains in `GameState::objects` but is no
+    /// Remove an object from all zones entirely (CR 704.5d — tokens cease to
+    /// exist). The object remains in `GameState::objects` but is no
     /// longer in any zone.
-    pub fn remove_card(&mut self, object: ObjectId) {
+    pub fn remove_object(&mut self, object: ObjectId) {
         if let Some(zone) = self.zone_of(object) {
             self.remove_from_zone(object, zone);
-            self.card_zones[object.0] = None;
+            self.object_zones[object.0] = None;
         }
     }
 
@@ -116,7 +117,7 @@ impl ZoneManager {
             self.remove_from_zone(object, old_zone);
         }
         self.insert_to_zone(object, holder, to_zone);
-        self.card_zones[object.0] = Some(to_zone);
+        self.object_zones[object.0] = Some(to_zone);
     }
 
     pub fn top(&self, zone: ZoneType, player: PlayerId) -> Option<ObjectId> {
@@ -193,12 +194,12 @@ impl ZoneManager {
             *slot = new;
         }
         self.ensure_slot(new);
-        self.card_zones[new.0] = Some(ZoneType::Exile);
-        self.card_zones[old.0] = None;
+        self.object_zones[new.0] = Some(ZoneType::Exile);
+        self.object_zones[old.0] = None;
     }
 
     /// Reassign `player`'s hand and library to exactly `new_hand` and
-    /// `new_library`, updating `card_zones` for every card. Used by exact
+    /// `new_library`, updating `object_zones` for every object. Used by exact
     /// possible-world materialization: the caller chooses which physical
     /// cards land in which hidden zone, so the resulting branch is a valid
     /// authoritative state rather than a uniform sample. The union of
@@ -212,11 +213,11 @@ impl ZoneManager {
         let idx = player.0;
         for &object in &new_hand {
             self.ensure_slot(object);
-            self.card_zones[object.0] = Some(ZoneType::Hand);
+            self.object_zones[object.0] = Some(ZoneType::Hand);
         }
         for &object in &new_library {
             self.ensure_slot(object);
-            self.card_zones[object.0] = Some(ZoneType::Library);
+            self.object_zones[object.0] = Some(ZoneType::Library);
         }
         self.hand[idx] = new_hand;
         self.library[idx] = new_library;

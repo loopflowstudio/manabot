@@ -412,10 +412,10 @@ impl Game {
             None,
         )
     }
-    /// Power in the card's current zone (CR 604.3). On the stack "you"
+    /// Power in the object's current zone (CR 604.3). On the stack "you"
     /// means the spell's controller; elsewhere off the battlefield it means
     /// the owner (CR 109.5), including owned outside-game copies.
-    pub fn card_power(&self, object_id: ObjectId) -> i32 {
+    pub fn object_power(&self, object_id: ObjectId) -> i32 {
         if let Some(permanent) = self.state.object_to_permanent[object_id] {
             return self.characteristics(permanent).power;
         }
@@ -454,11 +454,11 @@ impl Game {
             return self.permanent_matches_predicate(permanent, predicate);
         }
         let power = if predicate.reads_power() {
-            self.card_power(object_id)
+            self.object_power(object_id)
         } else {
             0
         };
-        predicate.matches_card_with_power(&self.state.objects[object_id], power)
+        predicate.matches_object_with_power(&self.state.objects[object_id], power)
     }
 
     fn cda_power(&self, cda: &PowerCda, controller: PlayerId) -> i32 {

@@ -277,7 +277,7 @@ impl Game {
             self.move_object(object_id, ZoneType::Exile);
             return;
         };
-        let mana_value = self.card_mana_value(object_id);
+        let mana_value = self.object_mana_value(object_id);
         self.exile_with_play_grant(object_id, |object| {
             let base = ExileCastGrant {
                 source: Some(source),

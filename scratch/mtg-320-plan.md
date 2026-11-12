@@ -63,3 +63,10 @@ authority per fact: `kind` for runtime questions, the row's `is_token` only for 
 frozen wire/hash bytes. Emblem and copy-of-a-card stay "none yet". Keeping the record named `Card` is
 a naming refactor, not a product choice; it stays as recorded in questions.md. The only outstanding
 work is the main sync above (two readers to move to `is_card()`/kind), already written as direction.
+
+Compress after rename (2026-11-12): renamed object-level functions still named for cards to the
+naming rule: `ZoneManager::remove_card`/`card_zones` -> `remove_object`/`object_zones` (serde keeps
+`card_zones`), `CardPredicate::matches_card[_with_power]` -> `matches_object[_with_power]`,
+`Game::card_power` -> `object_power`, `card_mana_value` -> `object_mana_value`. Functions over
+libraries, hands and "card" text (`draw_cards`, `exile_top_cards_to_play`, `unseen_cards`, ...) keep
+`card`. `cargo build --tests --workspace` ok; nextest sba/704/predicate/power filter 48 passed.

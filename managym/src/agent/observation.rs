@@ -1481,7 +1481,7 @@ impl Observation {
                 }
             }
             _ => CardData {
-                power: game.card_power(object_id),
+                power: game.object_power(object_id),
                 ..printed
             },
         }

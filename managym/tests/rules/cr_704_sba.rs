@@ -48,7 +48,7 @@ fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
         .zone_objects(ZoneType::Library, PlayerId(0))
         .to_vec();
     for object in library {
-        s.game_mut().state.zones.remove_card(object);
+        s.game_mut().state.zones.remove_object(object);
     }
     s.game_mut().state.permanents[swarm]
         .as_mut()

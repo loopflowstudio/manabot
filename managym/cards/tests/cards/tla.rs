@@ -14999,7 +14999,7 @@ fn foggy_swamp_visions_waits_for_its_controllers_next_end_step() {
 fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     let mut s = five_color_setup(&["Suki, Kyoshi Warrior", "Gray Ogre"]);
     let suki = library_card(&s, 0, "Suki, Kyoshi Warrior");
-    assert_eq!(s.game().card_power(suki), 0);
+    assert_eq!(s.game().object_power(suki), 0);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -15013,7 +15013,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
             .state
             .zones
             .move_object(suki, PlayerId(0), zone);
-        assert_eq!(s.game().card_power(suki), 2, "{zone:?}");
+        assert_eq!(s.game().object_power(suki), 2, "{zone:?}");
         if zone != ZoneType::Library {
             let obs = Observation::for_player(s.game(), PlayerId(0));
             let row = obs
@@ -15029,7 +15029,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         .zones
         .move_object(suki, PlayerId(0), ZoneType::Hand);
     cast_card(&mut s, suki);
-    assert_eq!(s.game().card_power(suki), 2);
+    assert_eq!(s.game().object_power(suki), 2);
     // A control-changing effect changes the spell's "you", not its owner.
     if let managym::state::stack_object::StackObject::Spell(spell) =
         s.game_mut().state.stack_objects.last_mut().unwrap()
@@ -15038,7 +15038,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
     } else {
         panic!("Suki spell expected");
     }
-    assert_eq!(s.game().card_power(suki), 1);
+    assert_eq!(s.game().object_power(suki), 1);
 
     let outside = Scenario::with_sideboards(
         deck(&[("Plains", 40)]),
@@ -15048,7 +15048,7 @@ fn suki_cda_power_applies_in_hand_library_graveyard_exile_stack_and_outside() {
         239,
     );
     let object = outside.game().state.players[0].sideboard[0];
-    assert_eq!(outside.game().card_power(object), 0);
+    assert_eq!(outside.game().object_power(object), 0);
 }
 
 #[test]
@@ -15121,14 +15121,14 @@ fn suki_loses_its_cda_with_its_abilities_and_recovers_it_after_returning_to_hand
     let suki = s.force_permanent_on_battlefield(0, "Suki, Kyoshi Warrior");
     let object = card_of(&s, suki);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
-    assert_eq!(s.game().card_power(object), 2);
+    assert_eq!(s.game().object_power(object), 2);
     until_end_of_turn(&mut s, suki, Modification::LoseAllAbilities);
-    assert_eq!(s.game().card_power(object), 0);
+    assert_eq!(s.game().object_power(object), 0);
     cast(&mut s, "Boomerang Basics");
     assert!(s.choose_target(Target::Permanent(suki)));
     settle(&mut s);
     assert_eq!(zone_of(&s, object), Some(ZoneType::Hand));
-    assert_eq!(s.game().card_power(object), 1);
+    assert_eq!(s.game().object_power(object), 1);
 }
 
 fn bloodbending_setup(caster: usize, paid: bool) -> Scenario {

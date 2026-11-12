@@ -1216,7 +1216,7 @@ impl Game {
                     offer: ResolutionCastOffer::Exiled { object: object_id },
                     spends: None,
                 };
-                if i32::from(self.card_mana_value(object_id)) < limit
+                if i32::from(self.object_mana_value(object_id)) < limit
                     && !self.resolution_cast_candidates(&decision).is_empty()
                 {
                     return Some(decision);
@@ -1241,7 +1241,7 @@ impl Game {
                 let player = frame.controller;
                 let below = frame
                     .source
-                    .map_or(0, |object_id| self.card_mana_value(object_id));
+                    .map_or(0, |object_id| self.object_mana_value(object_id));
                 let mut exiled = Vec::new();
                 let mut hit = None;
                 while let Some(&top) = self
@@ -1252,7 +1252,8 @@ impl Game {
                 {
                     self.move_object(top, ZoneType::Exile);
                     exiled.push(top);
-                    if !self.state.objects[top].types.is_land() && self.card_mana_value(top) < below
+                    if !self.state.objects[top].types.is_land()
+                        && self.object_mana_value(top) < below
                     {
                         hit = Some(top);
                         break;
@@ -1683,7 +1684,7 @@ impl Game {
                     .map(|link| link.exiled_object)
                     .filter(|object_id| {
                         self.state.zones.zone_of(*object_id) == Some(ZoneType::Exile)
-                            && predicate.matches_card(&self.state.objects[*object_id])
+                            && predicate.matches_object(&self.state.objects[*object_id])
                     })
                     .map(|object_id| {
                         vec![Effect::HaveAbilitiesOf {
@@ -2327,7 +2328,7 @@ impl Game {
                             self.object_matches_predicate(object_id, predicate)
                         }
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
-                            self.card_mana_value(object_id) >= *min_mana_value
+                            self.object_mana_value(object_id) >= *min_mana_value
                         }
                         TargetSpec::SpellOrAbilityWithSingleTarget => self
                             .find_spell_on_stack_index(object_id)
@@ -2396,8 +2397,8 @@ impl Game {
                         .map(|id| self.characteristics(id).power)
                 })
             })
-            .unwrap_or_else(|| self.card_power(source_object));
-        i32::from(self.card_mana_value(ObjectId::from(object.entity))) <= power
+            .unwrap_or_else(|| self.object_power(source_object));
+        i32::from(self.object_mana_value(ObjectId::from(object.entity))) <= power
     }
 
     /// Whether a battlefield permanent matches a spec's characteristics and
@@ -2438,15 +2439,15 @@ impl Game {
                 permanent.controller == controller && self.characteristics(id).is_land()
             }
             TargetSpec::SpellOrPermanent { min_mana_value } => {
-                self.card_mana_value(permanent.object) >= *min_mana_value
+                self.object_mana_value(permanent.object) >= *min_mana_value
             }
             _ => false,
         }
     }
 
-    /// The card's mana value; a spell on the stack counts its announced X
+    /// The object's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
-    pub(crate) fn card_mana_value(&self, object: ObjectId) -> u8 {
+    pub(crate) fn object_mana_value(&self, object: ObjectId) -> u8 {
         let Some(cost) = self.state.objects[object].mana_value_cost() else {
             return 0;
         };

@@ -275,12 +275,12 @@ impl Game {
     pub(crate) fn target_mana_value(&self, target: Target) -> u32 {
         match target {
             Target::GraveyardCard(object) => {
-                u32::from(self.card_mana_value(ObjectId::from(object.entity)))
+                u32::from(self.object_mana_value(ObjectId::from(object.entity)))
             }
             Target::Permanent(id) => self.state.permanents[id]
                 .as_ref()
-                .map_or(0, |p| u32::from(self.card_mana_value(p.object))),
-            Target::StackSpell(object_id) => u32::from(self.card_mana_value(object_id)),
+                .map_or(0, |p| u32::from(self.object_mana_value(p.object))),
+            Target::StackSpell(object_id) => u32::from(self.object_mana_value(object_id)),
             _ => 0,
         }
     }
@@ -1165,7 +1165,7 @@ impl Game {
                     })
                     .filter(|predicate| match current {
                         Some(id) => self.permanent_matches_predicate(id, predicate),
-                        None => predicate.matches_card_with_power(object, source.lki.power),
+                        None => predicate.matches_object_with_power(object, source.lki.power),
                     })
                     .count()
             })
@@ -2014,7 +2014,7 @@ impl Game {
         let matches = |predicate: &crate::state::predicate::CardPredicate| {
             predicate.matches(
                 &self.state.objects[moved_object],
-                self.card_power(moved_object),
+                self.object_power(moved_object),
                 if animated { &[CardType::Creature] } else { &[] },
             )
         };
