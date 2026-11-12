@@ -90,6 +90,9 @@ fn condition_event_kinds(condition: &TriggerCondition) -> EventKinds {
         | TriggerCondition::WhileSourceAttacking { condition }
         | TriggerCondition::ActiveIf { condition, .. } => condition_event_kinds(condition),
         TriggerCondition::Sacrificed { .. } => EventKinds::of(EventKind::PermanentSacrificed),
+        // Indexed with counter changes; `check_state_triggers` asks it, never
+        // an event.
+        TriggerCondition::NoCounters { .. } => EventKinds::of(EventKind::CountersPut),
         TriggerCondition::YouCastSpell { .. }
         | TriggerCondition::YouCastThis
         | TriggerCondition::YouCastNthSpellThisTurn { .. }
@@ -1297,6 +1300,69 @@ impl Game {
             .expect("enqueued trigger")
     }
 
+    /// State triggers (CR 603.8) of battlefield sources whose state holds,
+    /// unless that exact source's occurrence is still waiting or on the stack.
+    pub(crate) fn check_state_triggers(&mut self) {
+        let mut fired = Vec::new();
+        for source in self.indexed_sources(EventKinds::of(EventKind::CountersPut)) {
+            let Some(permanent) = self.state.card_to_permanent[source.card]
+                .and_then(|id| self.state.permanents[id].as_ref())
+            else {
+                continue;
+            };
+            let face = self
+                .source_face(source.card, source.lki.definition_id)
+                .expect("source face");
+            for (ability_index, ability) in face.abilities.iter().enumerate() {
+                let Ability::Triggered {
+                    condition: TriggerCondition::NoCounters { kind },
+                    ..
+                } = ability
+                else {
+                    continue;
+                };
+                let object = Some(source.lki.object_ref);
+                let waiting = self.state.pending_triggers.iter().any(|trigger| {
+                    trigger.source_ref == object && trigger.ability_index == ability_index
+                }) || self.state.stack_objects.iter().any(|item| {
+                    matches!(item, StackObject::TriggeredAbility(trigger)
+                        if trigger.source_ref == object && trigger.ability_index == ability_index)
+                });
+                if !source.lki.abilities_lost && permanent.counter_count(*kind) == 0 && !waiting {
+                    fired.push((source.clone(), ability_index));
+                }
+            }
+        }
+        for (source, ability_index) in fired {
+            let id = TriggerId(self.state.trigger_enqueue_counter);
+            self.state.pending_triggers_mut().push(PendingTrigger {
+                program: false,
+                remembered: Vec::new(),
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+                requirement_index: 0,
+                source_card: source.card,
+                source_ref: Some(source.lki.object_ref),
+                source_lki: Some(source.lki),
+                ability_index,
+                controller: source.controller,
+                id,
+                ordering_class: TriggerOrderingClass::Ordinary,
+                context: None,
+                player: None,
+                x: 0,
+                chosen_modes: Vec::new(),
+                attacker: None,
+                inline_effects: None,
+            });
+            *self.state.trigger_enqueue_counter_mut() = self
+                .state
+                .trigger_enqueue_counter
+                .checked_add(1)
+                .expect("trigger occurrence identity exhausted");
+        }
+    }
+
     /// "When you cast this spell" abilities of the spell just cast; the spell
     /// is the source and its caster controls the trigger.
     fn cast_triggers(&mut self, event: &GameEvent) {
@@ -1574,6 +1640,7 @@ impl Game {
                         .position(|cast| cast == card)
                         == Some(*n as usize - 1)
             }
+            (TriggerCondition::NoCounters { .. }, _) => false,
             // Only `cast_triggers` asks this of the spell itself; a
             // battlefield source is never the card being cast.
             (TriggerCondition::YouCastThis, GameEvent::SpellCast { card, .. }) => {

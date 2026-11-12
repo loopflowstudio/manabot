@@ -73,6 +73,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             }
         ),
         TriggerCondition::YouCastThis => "When you cast this spell".into(),
+        TriggerCondition::NoCounters { kind } => {
+            format!("When this has no {} counters on it", counter_description(*kind))
+        }
         TriggerCondition::YouCastSpell { predicate } => format!(
             "When you cast a {}",
             predicate_description(predicate, "spell")
@@ -445,6 +448,8 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
     match kind {
         CounterKind::PlusOnePlusOne => "+1/+1",
         CounterKind::MinusOneMinusOne => "-1/-1",
+        CounterKind::Age => "age",
+        CounterKind::Ice => "ice",
         CounterKind::DoubleStrike => "double strike",
         _ => kind.name(),
     }
@@ -779,6 +784,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             }
         ),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
+        CumulativeUpkeep { each } => format!("Sacrifice this unless you pay {} for each age counter on it", cost_description(each)),
         Cascade => "Cascade: exile cards from the top of your library until you exile a nonland card that costs less. You may cast it without paying its mana cost. Put the exiled cards on the bottom in a random order".into(),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
         TriggerModes { modes, up_to, unchosen } => format!(

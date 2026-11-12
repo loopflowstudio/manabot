@@ -735,7 +735,7 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
-    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, ...).
+    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror, lore, minus_one_minus_one, age, ice, ...).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
     attached_to: int | None

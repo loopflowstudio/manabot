@@ -32,6 +32,10 @@ pub enum CounterKind {
     /// CR 122.1a: -1/-1 to power and toughness (layer 7c); annihilates with
     /// +1/+1 counters as a state-based action (CR 704.5q).
     MinusOneMinusOne,
+    /// No rules meaning of its own; cumulative upkeep counts it (CR 702.24a).
+    Age,
+    /// No rules meaning of its own; cards count it (Dark Depths).
+    Ice,
 }
 
 impl CounterKind {
@@ -50,6 +54,8 @@ impl CounterKind {
             CounterKind::Defense => "defense",
             CounterKind::Trample => "trample",
             CounterKind::MinusOneMinusOne => "minus_one_minus_one",
+            CounterKind::Age => "age",
+            CounterKind::Ice => "ice",
         }
     }
 
@@ -61,7 +67,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 12] = [
+    pub const ALL: [CounterKind; 14] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -74,6 +80,8 @@ impl CounterKind {
         CounterKind::Lore,
         CounterKind::Trample,
         CounterKind::MinusOneMinusOne,
+        CounterKind::Age,
+        CounterKind::Ice,
     ];
 }
 

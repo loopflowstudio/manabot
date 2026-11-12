@@ -1150,6 +1150,21 @@ impl Game {
                 self.reveal_card_to_hand(card, player);
                 None
             }
+            Effect::CumulativeUpkeep { each } => {
+                let ages = self
+                    .source_permanent_id(frame)
+                    .and_then(|id| self.state.permanents[id].as_ref())?
+                    .counter_count(CounterKind::Age);
+                let cost = (0..ages).fold(crate::state::mana::ManaCost::default(), |cost, _| {
+                    cost.plus(each)
+                });
+                Some(Decision::Payment(PaymentProgress::new(
+                    frame.controller,
+                    PaymentCost::Mana(cost),
+                    Vec::new(),
+                    vec![Effect::sacrifice_this()],
+                )))
+            }
             Effect::Cascade => {
                 let player = frame.controller;
                 let below = frame.source.map_or(0, |card| self.card_mana_value(card));

@@ -184,6 +184,9 @@ impl ReplacementCandidate {
             ReplacementEffect::EntersWithXCounters { kind } => {
                 format!("Enter with X {kind:?} counters")
             }
+            ReplacementEffect::EntersWithCounters { kind, count } => {
+                format!("Enter with {count} {kind:?} counters")
+            }
             ReplacementEffect::OpponentDamagePlusCounters { kind } => {
                 format!("Increase damage by this source's {kind:?} counters")
             }
@@ -905,7 +908,8 @@ impl Game {
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
                             ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            | ReplacementEffect::EntersWithXCounters { .. }
+                            | ReplacementEffect::EntersWithCounters { .. } => effect.clone(),
                             ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
                                 if condition.as_ref().is_none_or(|condition| {
                                     self.check_static_condition(condition, entering_controller)
@@ -1150,6 +1154,12 @@ impl Game {
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
                 entry.counters.change(*kind, i32::from(entry.x));
+            }
+            (
+                ProposedEvent::ZoneMove { entry, .. },
+                ReplacementEffect::EntersWithCounters { kind, count },
+            ) => {
+                entry.counters.change(*kind, (*count).max(0));
             }
             // Damage reduced to zero is no longer dealt (release notes).
             (

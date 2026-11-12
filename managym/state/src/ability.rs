@@ -60,6 +60,12 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// "When [this] has no [kind] counters on it": a state trigger (CR 603.8)
+    /// of a battlefield source. It triggers whenever the state holds and
+    /// not again while its last occurrence waits or is on the stack.
+    NoCounters {
+        kind: CounterKind,
+    },
     /// "When you cast this spell" (CR 603.2): functions while the source is
     /// a spell on the stack, and its caster controls the trigger.
     YouCastThis,
@@ -795,6 +801,10 @@ pub enum Effect {
         if_paid: Vec<Effect>,
         if_declined: Vec<Effect>,
     },
+    /// Cumulative upkeep's payment (CR 702.24a): sacrifice this unless you
+    /// pay `each` for each age counter on it. The age counter is put on by a
+    /// preceding instruction.
+    CumulativeUpkeep { each: ManaCost },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife { amount: EffectValue },
     MillCards {
@@ -1533,6 +1543,7 @@ impl Effect {
             | Effect::ExileTopCardsToPlay { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::Cascade
+            | Effect::CumulativeUpkeep { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }

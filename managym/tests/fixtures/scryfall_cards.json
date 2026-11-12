@@ -5582,5 +5582,29 @@
     "colors": [
       "R"
     ]
+  },
+  "Mystic Remora": {
+    "name": "Mystic Remora",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Cumulative upkeep"
+    ],
+    "oracle_text": "Cumulative upkeep {1} (At the beginning of your upkeep, put an age counter on this permanent, then sacrifice it unless you pay its upkeep cost for each age counter on it.)\nWhenever an opponent casts a noncreature spell, you may draw a card unless that player pays {4}.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Dark Depths": {
+    "name": "Dark Depths",
+    "mana_cost": "",
+    "type_line": "Legendary Snow Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Dark Depths enters with ten ice counters on it.\n{3}: Remove an ice counter from Dark Depths.\nWhen Dark Depths has no ice counters on it, sacrifice it. If you do, create Marit Lage, a legendary 20/20 black Avatar creature token with flying and indestructible.",
+    "colors": []
   }
 }

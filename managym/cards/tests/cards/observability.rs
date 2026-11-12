@@ -671,6 +671,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileLinked { .. } => "Effect::ExileLinked",
         Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
         Effect::Cascade => "Effect::Cascade",
+        Effect::CumulativeUpkeep { .. } => "Effect::CumulativeUpkeep",
         Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
         Effect::ShuffleLibrary => "Effect::ShuffleLibrary",
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
@@ -702,7 +703,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 79;
+const EFFECT_VARIANTS: usize = 80;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -857,6 +858,9 @@ fn effect_witnesses() -> Vec<Effect> {
             },
         },
         Effect::Cascade,
+        Effect::CumulativeUpkeep {
+            each: ManaCost::parse("{1}"),
+        },
         Effect::CastFromHandFree {
             predicate: CardPredicate {
                 not_card_types: vec![CardType::Creature, CardType::Land],
@@ -972,6 +976,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
         TriggerCondition::YouCastThis => "TriggerCondition::YouCastThis",
+        TriggerCondition::NoCounters { .. } => "TriggerCondition::NoCounters",
         TriggerCondition::CreatureDealsCombatDamageToYou => {
             "TriggerCondition::CreatureDealsCombatDamageToYou"
         }
@@ -1105,6 +1110,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfEachDrawStep,
         TriggerCondition::BeginningOfEachEndStep,
         TriggerCondition::YouCastThis,
+        TriggerCondition::NoCounters {
+            kind: CounterKind::Ice,
+        },
         TriggerCondition::YouBend,
         TriggerCondition::WhileSourceAttacking {
             condition: Box::new(TriggerCondition::YouCastSpell {

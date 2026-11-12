@@ -20,6 +20,8 @@ mod bng;
 mod c19;
 #[path = "cards/cmr.rs"]
 mod cmr;
+#[path = "cards/csp.rs"]
+mod csp;
 #[path = "cards/definitions.rs"]
 mod definitions;
 #[path = "cards/dft.rs"]

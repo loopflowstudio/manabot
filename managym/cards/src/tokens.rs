@@ -23,6 +23,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         human(),
         human_soldier(),
         komas_coil(),
+        marit_lage(),
         monk(),
         soldier(),
         spirit(),
@@ -207,6 +208,22 @@ fn komas_coil() -> CardDefinition {
         "",
     );
     creature(base, 3, 3, [Color::Blue])
+}
+
+fn marit_lage() -> CardDefinition {
+    let base = token(
+        "token.marit_lage",
+        "8f5c3863-c876-48a8-9bc8-be20cd61074c",
+        "Marit Lage",
+        [CardType::Creature],
+        &["Avatar"],
+        "Flying, indestructible",
+    );
+    CardDefinition {
+        supertypes: vec!["Legendary".into()],
+        keywords: Keywords::of(&[Keyword::Flying, Keyword::Indestructible]),
+        ..creature(base, 20, 20, [Color::Black])
+    }
 }
 
 fn monk() -> CardDefinition {
