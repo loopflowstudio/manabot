@@ -78,3 +78,10 @@ contains origin/main 92560a1e0; no stale `*_encoding_version` references remain;
 on main.
 
 Remaining: gate; delete `scratch/` in the final commit before landing.
+
+Concept review (2026-11-12): no change. One concept (`observation_layout()`, from the
+column table the native encoder writes through) plus renames by the producing-side
+naming rule. Considered and kept: `manabot/env/observation.py` keeps its own index
+constants as the independent reference encoder, checked by native/Python parity
+(the design's stated choice); `policy_history=` matches the encoder option it
+describes, so renaming it to suit the new naming rule would only churn the API.
