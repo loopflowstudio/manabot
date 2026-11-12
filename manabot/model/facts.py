@@ -225,7 +225,8 @@ class FactEncoder(nn.Module):
         Catalog ids need `catalog`; hashed ids ignore it. `count` is the
         admitted row count when the caller trimmed facts to a bucket.
         """
-        if facts.shape[1:] != (count or self.max_facts, FACT_DIM):
+        rows = self.max_facts if count is None else count
+        if facts.shape[1:] != (rows, FACT_DIM):
             raise ValueError(f"expected [batch, {self.max_facts}, {FACT_DIM}] facts")
         valid = facts[..., FACT_VALID_INDEX]
         if not ((valid == 0) | (valid == 1)).all():

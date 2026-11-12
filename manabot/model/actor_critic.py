@@ -683,7 +683,7 @@ class ActorCritic(nn.Module):
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
         batch = objects.shape[0]
-        is_agent = self._ownership(obs).expand(batch, -1)
+        is_agent = self._ownership(buckets).expand(batch, -1)
         if belief_is_agent is not None:
             is_agent = torch.cat(
                 (
@@ -699,18 +699,11 @@ class ActorCritic(nn.Module):
             objects, is_agent, validity, shared_context, frame_context, programs
         )
 
-    def _ownership(self, obs: Dict[str, torch.Tensor]) -> torch.Tensor:
+    def _ownership(self, buckets: BucketSizes | None) -> torch.Tensor:
         """The static ownership mask [1,N] at this batch's object coordinates."""
         template = self._is_agent_template
-        cards = obs["agent_cards"].shape[1]
-        permanents = obs["agent_permanents"].shape[1]
-        if 2 + 2 * cards + 2 * permanents == template.shape[1]:
+        if buckets is None or not buckets.trims_objects:
             return template
-        enc = self.observation_space.encoder
-        buckets = BucketSizes(
-            {"cards": cards, "permanents": permanents},
-            {"cards": enc.cards_per_player, "permanents": enc.perms_per_player},
-        )
         return torch.cat([template[:, part] for part in object_columns(buckets)], 1)
 
     def _join_permanent_links(
