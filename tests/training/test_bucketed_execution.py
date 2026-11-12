@@ -12,7 +12,7 @@ from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.recipes.baseline import baseline_test
-from manabot.training import execution
+from manabot.training import execution, stages
 from manabot.training.regime import (
     Execution,
     FrozenOpponent,
@@ -122,8 +122,8 @@ def test_frozen_opponent_runs_the_stage_setting(
         learners.append(bucketed_shapes)
         raise _Built
 
-    monkeypatch.setattr(execution, "load_checkpoint", load)
-    monkeypatch.setattr(execution, "ActorCritic", build)
+    monkeypatch.setattr(stages, "load_checkpoint", load)
+    monkeypatch.setattr(stages, "ActorCritic", build)
     with VerifyStore(tmp_path / "training.sqlite") as store:
         with pytest.raises(_Built):
             execution.execute_regime(regime, 41, tmp_path / "run", store)
