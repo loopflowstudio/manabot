@@ -33,18 +33,12 @@ People see three actions: `convert` a torch checkpoint, `load_mlx_policy` the re
 The concepts behind them are right (a converted checkpoint is a derived artifact of one torch checkpoint;
 parity is the gate; MLXLearner measures and never writes). One mismatch, settled by the existing design:
 
-- **The converted checkpoint loses its provenance.** `convert` writes the sidecar key `"source": str(checkpoint)`
-  (a local path), replacing the checkpoint's own `source` record (`checkpoint_source()`: commit, dirty, etude_run).
-  `load_mlx_policy` passes that sidecar to `validate_checkpoint_world`, whose `written_at` then reads a string and
-  says "it records no source revision". So mlx.md's claim that it "fails with the same errors" as
-  `load_checkpoint` is false for exactly the case CLAUDE.md requires (a refusal names the writing revision).
-- **Next implement direction:** make the converted checkpoint one file. Store `hypers`, `world_binding`,
-  `architecture` and the checkpoint's `source` record as JSON strings in the safetensors metadata
-  (`mx.save_safetensors(..., metadata=...)`; read back with `mx.load(..., return_metadata=True)`), and the torch
-  path under a separate key (`converted_from`). Drop the `.mlx.json` sidecar and the name-substitution lookup;
-  `converted_paths` returns one path. Update mlx.md's convert output and the test round-trip; add a directed test
-  that a converted checkpoint with a mismatched world binding names the original revision. No re-measurement:
-  timings and parity do not touch this path. Published capture metadata is evidence and stays as written.
+- **The converted checkpoint lost its provenance** (sidecar `"source"` held a local path, so a world-binding
+  refusal said "records no source revision"). Resolved by the single-file conversion above: `hypers`,
+  `world_binding`, `architecture`, `source` are JSON in the safetensors metadata (`_METADATA_KEYS`,
+  manabot/model/mlx/checkpoint.py), the torch path under `converted_from`; test
+  `test_a_refused_converted_checkpoint_names_the_original_revision`. No re-measurement; published capture
+  metadata stays as written.
 
 Noted, not changed: `parity` reads a capture format written by `experiments/mlx_pilot.py capture`; the format is
 documented in parity's docstring. Moving the writer into the package would edit the measured experiment file.
