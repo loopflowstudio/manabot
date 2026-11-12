@@ -56,7 +56,8 @@ class ContinuationEncoder(nn.Module):
     ) -> torch.Tensor:
         """Return [B,R,D], zero for padding; shared by pooling and frame joins.
 
-        Rows must be admitted (`admit_relations`).
+        Rows must be admitted (`admit_relations`); bucketed callers may trim
+        them to fewer than the capacity.
         """
         valid = rows[..., RELATION_VALID_INDEX]
         rows = torch.where(valid.bool().unsqueeze(-1), rows, 0)

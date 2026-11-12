@@ -81,6 +81,16 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Model or training-path changes: `uv run manabot train --recipe local --device
+  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
+  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
+  checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
+  <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
+  sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
+  checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
+  `Sideboard` section, because the default sim match is refused. Fixed seeds
+  make equal win, timeout and mean-step counts a check that every sampled
+  action matched. Ten games took about two minutes on a loaded laptop.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -107,3 +117,20 @@ publish, land or choose the next Graph step from here.
   Academy lists checkpoint opponents named in `ACADEMY_PLAY_CHECKPOINTS` (the
   `MANABOT_RUNS_DIR` scan does not follow symlinks); choose one from the
   `opponent-select` testid before New Game.
+- Training recipes: write a regime JSON from Python
+  (`TrainingRegime(...).model_dump_json()`) and run
+  `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
+  fresh `--out` each time; success prints nothing, so read `<run>/run.json`
+  (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
+  64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
+  `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
+  an empty directory to act like a new machine.
+- TLA Limited decks (the MTG-282 pool corpus) overflow default observation
+  capacities within a few dozen games; copy the `observation` block and the
+  `game_errors` policy (`recover_capacity: true`) of
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
+  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
+- Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
+  preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
+  `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
+  ignores SIGINT, so `pkill -INT` appears to hang.

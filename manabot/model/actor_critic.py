@@ -5,6 +5,8 @@ ActorCritic.forward preserves the serving policy/value interface. Training uses
 forward_distribution when it needs loss/draw/win logits rather than their mean.
 Both read only observations admitted by `manabot.model.admission`, which owns
 every input check; the forward does no validation host reads.
+With `MANABOT_BUCKETED_SHAPES=1` (`manabot.model.buckets`), each forward trims
+its variable axes to power-of-two buckets and returns logits at full capacity.
 """
 
 from dataclasses import dataclass
@@ -25,9 +27,15 @@ from manabot.env.observation import (
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.admission import AdmittedObservation, admission_binding
+from manabot.model.buckets import (
+    BucketSizes,
+    bucket_sizes,
+    bucketed_shapes_enabled,
+    object_columns,
+)
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
-from manabot.model.inference import PreparedObservation
+from manabot.model.inference import PreparedObservation, trim_admitted, trim_prepared
 from manabot.model.name_candidates import NameCandidateEncoder
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import (
@@ -254,7 +262,6 @@ class ActorCritic(nn.Module):
         # weights start additive; skip_init draws no RNG.
         self.link_from_target = nn.ModuleList()
         self.link_to_target = nn.ModuleList()
-        self._permanents_start = 2 + 2 * enc.cards_per_player
         for _ in self._link_columns:
             for layers in (self.link_from_target, self.link_to_target):
                 layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
@@ -282,6 +289,12 @@ class ActorCritic(nn.Module):
             else None,
         )
 
+        # Runtime profiling choice, never model state: no parameter, buffer or
+        # configuration field records it.
+        self.bucketed_shapes = bucketed_shapes_enabled()
+        self.facts.bucketed = self.bucketed_shapes
+        self.name_candidates.bucketed = self.bucketed_shapes
+
         # Built last: every other parameter keeps the masked-mean arm's draws
         # under the same seed, so the two readouts start from one shared model.
         self.value_readout = (
@@ -296,9 +309,7 @@ class ActorCritic(nn.Module):
         self.debug = False
         self.last_raw_logits: Optional[torch.Tensor] = None
 
-    def forward(
-        self, obs: AdmittedObservation
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs: AdmittedObservation) -> tuple[torch.Tensor, torch.Tensor]:
         """Return policy logits [B,A] and acting-viewer critic [B].
 
         WDL expectations are signed; scalar units follow value_semantic.
@@ -322,7 +333,11 @@ class ActorCritic(nn.Module):
         critic and shared encoder directly without passing through its mean.
         A distributional head alone does not select a categorical loss.
         """
-        state = self._gather_object_embeddings(obs)
+        capacity = obs["actions_valid"].shape
+        buckets = None
+        if self.bucketed_shapes:
+            obs, buckets = self._bucketed(obs)
+        state = self._gather_object_embeddings(obs, buckets)
 
         encoded = self._attend_objects(state.objects, state.is_agent, state.validity)
         # The optional trailing token is a critic input, never an action focus.
@@ -342,11 +357,47 @@ class ActorCritic(nn.Module):
         # Public logits retain original coordinates, including interior padding.
         # Only the legal rows entered the action networks; objects/programs were
         # encoded once for the batch, independent of each row's support size.
-        logits = scores.new_full(obs["actions_valid"].shape, -1e8)
+        logits = scores.new_full(capacity, -1e8)
         logits = logits.index_put((batches, slots), scores.to(logits.dtype))
         if self.debug:
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
+
+    def object_trimming(self) -> bool:
+        """Whether buckets may trim object axes: padding objects must be inert."""
+        return (
+            self.config.value_aggregation != "historical_mean"
+            and self.belief_count_buckets == 0
+        )
+
+    def _bucketed(
+        self, obs: AdmittedObservation
+    ) -> tuple[AdmittedObservation, BucketSizes | None]:
+        """Trim `obs` to its buckets; prepared inputs were measured on the host.
+
+        Without buckets (a layout admission did not judge), `obs` is returned
+        unchanged.
+        """
+        self._require_admitted(obs)
+        if isinstance(obs, PreparedObservation):
+            return trim_prepared(obs), obs.buckets
+        buckets = bucket_sizes(
+            obs, self.observation_space.encoder, objects=self.object_trimming()
+        )
+        if buckets is None:
+            return obs, None
+        return trim_admitted(obs, buckets), buckets
+
+    def _require_admitted(self, obs: Dict[str, torch.Tensor]) -> None:
+        if not isinstance(obs, AdmittedObservation):
+            raise TypeError(
+                "policy forward requires an observation from "
+                "manabot.model.admission.admit_observation"
+            )
+        if obs.binding != admission_binding(self):
+            raise ValueError(
+                "observation was admitted for a different policy configuration"
+            )
 
     def _attend_objects(
         self,
@@ -457,17 +508,10 @@ class ActorCritic(nn.Module):
         return self.action_layer(torch.cat((actions, focused.flatten(1)), dim=-1))
 
     def _gather_object_embeddings(
-        self, obs: Dict[str, torch.Tensor]
+        self, obs: Dict[str, torch.Tensor], buckets: BucketSizes | None = None
     ) -> EmbeddedObservation:
-        if not isinstance(obs, AdmittedObservation):
-            raise TypeError(
-                "policy forward requires an observation from "
-                "manabot.model.admission.admit_observation"
-            )
-        if obs.binding != admission_binding(self):
-            raise ValueError(
-                "observation was admitted for a different policy configuration"
-            )
+        self._require_admitted(obs)
+        assert isinstance(obs, AdmittedObservation)
         if isinstance(obs, PreparedObservation):
             obs.scope.check(self)
             if torch.is_grad_enabled():
@@ -492,9 +536,11 @@ class ActorCritic(nn.Module):
             # Learning encodes only referenced definitions (same values within
             # float rounding, identical gradient support); without autograd the
             # full table keeps unprepared inference bitwise equal to serving.
+            # Bucketed shapes encode the complete catalog in learning too: a
+            # fixed recurrent layout instead of a per-batch referenced subset.
             if isinstance(obs, PreparedObservation):
                 programs = obs.scope.catalog()
-            elif torch.is_grad_enabled():
+            elif torch.is_grad_enabled() and not self.bucketed_shapes:
                 programs = self.semantic_cards.definitions(
                     self._referenced_definitions(obs, permanent_ids)
                 )
@@ -599,7 +645,7 @@ class ActorCritic(nn.Module):
         # The visible object layout is static, so its ownership mask is a
         # registered buffer. Explicit belief rows extend it below.
         batch = objects.shape[0]
-        is_agent = self._is_agent_template.expand(batch, -1)
+        is_agent = self._ownership(buckets).expand(batch, -1)
         if belief_is_agent is not None:
             is_agent = torch.cat(
                 (
@@ -615,6 +661,13 @@ class ActorCritic(nn.Module):
             objects, is_agent, validity, shared_context, frame_context, programs
         )
 
+    def _ownership(self, buckets: BucketSizes | None) -> torch.Tensor:
+        """The static ownership mask [1,N] at this batch's object coordinates."""
+        template = self._is_agent_template
+        if buckets is None or not buckets.trims_objects:
+            return template
+        return torch.cat([template[:, part] for part in object_columns(buckets)], 1)
+
     def _join_permanent_links(
         self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
     ) -> torch.Tensor:
@@ -622,7 +675,7 @@ class ActorCritic(nn.Module):
 
         Links are object index + 1 (zero: none) into `objects` [B,N,D].
         """
-        start = self._permanents_start
+        start = 2 + 2 * obs["agent_cards"].shape[1]
         delta = torch.zeros_like(objects)
         for column, from_target, to_target in zip(
             self._link_columns, self.link_from_target, self.link_to_target

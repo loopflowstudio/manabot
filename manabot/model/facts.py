@@ -138,6 +138,9 @@ class FactEncoder(nn.Module):
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
+        # Bucketed shapes look ids up at the fact axis's shape instead of
+        # selecting live rows, and keep every slot on CPU inference.
+        self.bucketed = False
 
     def _programs(
         self, hidden: torch.Tensor, facts: torch.Tensor, kinds: torch.Tensor
@@ -182,6 +185,13 @@ class FactEncoder(nn.Module):
         named, named_detail, program, id_space, detail_space = _catalog_columns(
             kinds, detail
         )
+        if self.bucketed:
+            return (
+                catalog.masked_names(id_space, ident, named)
+                + catalog.masked_names(detail_space, detail, named_detail)
+                + catalog.masked_tokens(facts[..., FACT_VALUE_INDEX], detail, program)
+                + catalog.sources(facts[..., FACT_SOURCE_INDEX])
+            )
         zeros = catalog.cards.token_embedding.weight.new_zeros(
             (*kinds.shape, self.kind.embedding_dim)
         )
@@ -212,10 +222,15 @@ class FactEncoder(nn.Module):
     ) -> torch.Tensor:
         """Add each admitted fact's embedding to its object; `objects` is [B,N,D].
 
-        Catalog ids need `catalog`; hashed ids ignore it.
+        Catalog ids need `catalog`; hashed ids ignore it. Bucketed callers may
+        pass facts trimmed to fewer rows than `max_facts`.
         """
         valid = facts[..., FACT_VALID_INDEX].bool()
-        if facts.device.type == "cpu" and not torch.is_grad_enabled():
+        if (
+            facts.device.type == "cpu"
+            and not torch.is_grad_enabled()
+            and not self.bucketed
+        ):
             # Padding contributes no object delta. Select the ordered union of
             # live columns for this forward only, including the empty union;
             # ordinals, batch ownership and duplicate program occurrences stay

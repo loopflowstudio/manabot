@@ -75,6 +75,8 @@ class SharedEffectEncoder(nn.Module):
 
         Catalog ids need `catalog`; hashed ids ignore it. The host reads below
         build CSR routes; admission has already checked every partition.
+        Bucketed callers may trim headers, details and members to fewer rows
+        than their capacities; row strides follow the tensors.
         """
         if self.vocabulary == "hashed":
             catalog = None
@@ -84,6 +86,11 @@ class SharedEffectEncoder(nn.Module):
         # object joins below still read the original tensors, retaining gradients.
         host = masked_record_rows(headers.detach().cpu(), 17)
         batch, object_count, width = objects.shape
+        header_rows, detail_rows, member_rows = (
+            headers.shape[1],
+            details.shape[1],
+            members.shape[1],
+        )
         live_positions = host[..., 17].nonzero()
         if len(live_positions) == 0:
             return objects
@@ -106,10 +113,10 @@ class SharedEffectEncoder(nn.Module):
             token_indexes.extend(range(detail_start, detail_start + count))
             lengths.append(3 + count)
             detail_indexes.extend(
-                range(b * self.detail_rows + d, b * self.detail_rows + d + count)
+                range(b * detail_rows + d, b * detail_rows + d + count)
             )
             member_indexes.extend(
-                range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m + targets)
+                range(b * member_rows + m, b * member_rows + m + targets)
             )
             member_records.extend([i] * targets)
         detail_host = (
@@ -121,7 +128,7 @@ class SharedEffectEncoder(nn.Module):
         batches = live_positions[:, 0]
         member_batches = batches[member_records]
         device = objects.device
-        header_indexes = (batches * EFFECT_ROWS + live_positions[:, 1]).to(device)
+        header_indexes = (batches * header_rows + live_positions[:, 1]).to(device)
         numeric = headers.reshape(-1, EFFECT_DIM)[header_indexes, 2:10].clone()
         numeric[:, -1] /= EFFECT_ROWS
         controller, source_object = join_record_rows(

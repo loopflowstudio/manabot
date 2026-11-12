@@ -3,6 +3,10 @@
 PyPI retries require the full retained artifact inventory and exact SHA-256
 identity. GitHub completion runs after publication and is independently retryable.
 Only an absent version may upload; partial or different bytes require inspection.
+
+PyPI's per-version JSON can report an uploaded version as absent for a short
+while. Checks that follow an upload (`--require-engine`, `--github`) poll for
+up to `--wait` seconds before treating the version as missing.
 """
 
 import argparse
@@ -11,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -67,6 +72,26 @@ def needs_upload(directory: Path, project: str, version: str) -> bool:
             "PyPI inventory or digests differ; inspect partial/different publication before retrying"
         )
     return False
+
+
+def await_published(
+    directory: Path,
+    projects: tuple[str, ...],
+    version: str,
+    wait: float,
+    *,
+    interval: float = 10.0,
+) -> list[str]:
+    """Return the projects still absent from PyPI after up to ``wait`` seconds.
+
+    Mismatched inventories raise immediately: only absence is a lag to wait out.
+    """
+    deadline = time.monotonic() + wait
+    while True:
+        missing = [p for p in projects if needs_upload(directory, p, version)]
+        if not missing or time.monotonic() >= deadline:
+            return missing
+        time.sleep(interval)
 
 
 def complete_github(repository: str, tag: str, commit: str, notes: str) -> str:
@@ -127,21 +152,22 @@ def main() -> None:
     parser.add_argument("--tag", required=True)
     parser.add_argument("--github", action="store_true")
     parser.add_argument("--require-engine", action="store_true")
+    parser.add_argument(
+        "--wait",
+        type=float,
+        default=0.0,
+        help="seconds to wait for a just-uploaded version to appear on PyPI",
+    )
     args = parser.parse_args()
     if not re.fullmatch(r"v\d+\.\d+\.\d+", args.tag):
         parser.error("expected a vX.Y.Z tag")
-    # Inspect both before emitting either upload instruction. A failure in the
-    # second project must not permit the first upload.
-    uploads = {
-        project: needs_upload(args.directory, project, args.tag[1:])
-        for project in ("managym", "manabot")
-    }
+    version = args.tag[1:]
     if args.require_engine:
-        if uploads["managym"]:
+        if await_published(args.directory, ("managym",), version, args.wait):
             raise ValueError("engine publication is missing; training upload must wait")
         return
     if args.github:
-        if any(uploads.values()):
+        if await_published(args.directory, ("managym", "manabot"), version, args.wait):
             raise ValueError("PyPI publication is missing; release is incomplete")
         root = Path(__file__).resolve().parents[2]
         notes = (root / "release" / args.tag / "NOTES.md").read_text()
@@ -154,6 +180,12 @@ def main() -> None:
             )
         )
     else:
+        # Inspect both before emitting either upload instruction. A failure in
+        # the second project must not permit the first upload.
+        uploads = {
+            project: needs_upload(args.directory, project, version)
+            for project in ("managym", "manabot")
+        }
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
             for project, upload in uploads.items():
                 output.write(f"{project}={str(upload).lower()}\n")

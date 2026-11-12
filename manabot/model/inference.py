@@ -11,6 +11,10 @@ observations. No serving state is persisted in the model or its checkpoints.
 Device inputs move with one contiguous copy per dtype (`transfer`): serving's
 float32 observation keys and int64 catalog references are two copies per batch
 instead of one per key.
+
+With bucketed shapes, preparation measures each batch's buckets on the host
+before transfer; the forward trims the device tensors to them without a device
+read. The prepared dictionary itself keeps full-capacity tensors.
 """
 
 from collections.abc import Mapping
@@ -20,6 +24,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from manabot.model.admission import AdmittedObservation, admit_observation
+from manabot.model.buckets import BucketSizes, bucket_sizes, trim_observation
 from manabot.model.semantic_cards import CardReferences
 
 if TYPE_CHECKING:
@@ -99,17 +104,58 @@ def admit_on_device(
 class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them.
+    `transfers` counts the host-to-device copies that produced them; `buckets`
+    holds host-measured bucket sizes when the policy uses bucketed shapes.
     """
 
     def __init__(
-        self, admitted: AdmittedObservation, scope: "PolicyInference", transfers: int
+        self,
+        admitted: AdmittedObservation,
+        scope: "PolicyInference",
+        transfers: int,
+        buckets: BucketSizes | None = None,
     ) -> None:
         super().__init__(
             admitted, admitted.binding, admitted.references, admitted.legal
         )
         self.scope = scope
         self.transfers = transfers
+        self.buckets = buckets
+
+
+def trim_admitted(
+    obs: AdmittedObservation, buckets: BucketSizes
+) -> AdmittedObservation:
+    """Trim admitted tensors and their checked joins to `buckets`.
+
+    Trimming removes only rows nothing reads, so the admission still holds.
+    """
+    sizes = buckets.sizes
+    references = obs.references
+    return AdmittedObservation(
+        trim_observation(obs, buckets),
+        obs.binding,
+        CardReferences(
+            references.cards[:, :, : sizes["cards"]],
+            references.permanents[:, :, : sizes["permanents"]],
+            None
+            if references.known is None
+            else references.known[:, :, : sizes["known"]],
+            None
+            if references.decklists is None
+            else references.decklists[:, :, : sizes["decklists"]],
+        ),
+        obs.legal,
+    )
+
+
+def trim_prepared(obs: PreparedObservation) -> PreparedObservation:
+    """Trim prepared tensors and their joins to the host-measured buckets."""
+    if obs.buckets is None:
+        return obs
+    return PreparedObservation(
+        trim_admitted(obs, obs.buckets), obs.scope, obs.transfers
+    )
 
 
 class PolicyInference:
@@ -173,7 +219,15 @@ class PolicyInference:
         self.check(self.agent)
         if any(tensor.device.type != "cpu" for tensor in obs.values()):
             raise ValueError("inference preparation requires CPU observations")
-        moved, transfers = transfer_admitted(
-            admit_observation(self.agent, obs), self.device
+        admitted = admit_observation(self.agent, obs)
+        buckets = (
+            bucket_sizes(
+                admitted,
+                self.agent.observation_space.encoder,
+                objects=self.agent.object_trimming(),
+            )
+            if self.agent.bucketed_shapes
+            else None
         )
-        return PreparedObservation(moved, self, transfers)
+        moved, transfers = transfer_admitted(admitted, self.device)
+        return PreparedObservation(moved, self, transfers, buckets)
