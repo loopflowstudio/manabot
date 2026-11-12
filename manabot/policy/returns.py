@@ -54,8 +54,22 @@ def transition_gae(
     gamma: float,
     lam: float,
 ) -> tuple[NDArray[np.floating], NDArray[np.floating]]:
-    """GAE advantages and returns [T,E] for transition-end flags; terminal
-    rewards credit their own episode. `next_value` [E] bootstraps the tail."""
+    """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
+
+    `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
+    episode. `next_value` [E] is read only where a column's last row is not an
+    end. Mismatched shapes raise `ValueError` rather than broadcast.
+    """
+    if (
+        rewards.ndim != 2
+        or values.shape != rewards.shape
+        or ends.shape != rewards.shape
+        or next_value.size != rewards.shape[1]
+    ):
+        raise ValueError(
+            "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
+            f"got {rewards.shape}, {values.shape}, {ends.shape} and {next_value.shape}"
+        )
     ends = ends.astype(bool)
     live = (~ends).astype(rewards.dtype)
     following = np.concatenate([values[1:], next_value.reshape(1, -1)])

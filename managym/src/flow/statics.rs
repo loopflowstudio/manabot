@@ -15,7 +15,6 @@ use crate::{
             StaticAbility, StaticScope,
         },
         game_object::{CardId, ObjectRef, PermanentId, PlayerId, Target},
-        mana::ManaUse,
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -344,17 +343,9 @@ impl Game {
         let Some(permanent) = self.state.permanents.get(id.0).and_then(Option::as_ref) else {
             return view;
         };
-        let purpose = ManaUse::ability(view.subtypes.iter().map(String::as_str));
         let reduction = self.activated_cost_reduction(id, permanent.controller, &view);
-        // Most fixed activations already have an ordinary payment purpose.
         // Preserve the shared allocation when finalization would write nothing.
-        if reduction == 0
-            && !view.has_dynamic_activations()
-            && view
-                .activated_abilities
-                .iter()
-                .all(|ability| ability.mana_cost.purpose == purpose)
-        {
+        if reduction == 0 && !view.has_dynamic_activations() {
             return view;
         }
 
@@ -364,7 +355,7 @@ impl Game {
                     ability.effects = vec![effect];
                 }
             }
-            self.price_activation(permanent.controller, purpose, ability);
+            self.price_activation(permanent.controller, ability);
             let floor = ability.mana_cost.mana_value.saturating_sub(1);
             ability.mana_cost = ability.mana_cost.reduced_generic(reduction.min(floor));
         }

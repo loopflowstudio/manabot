@@ -15,7 +15,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
+        mana::{ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -124,21 +124,28 @@ pub struct RestrictedManaData {
 }
 
 impl RestrictedManaData {
-    fn new(restriction: ManaUse, amounts: [u8; 6]) -> Self {
-        let names = |mask: u8| {
-            SPEND_SUBTYPES
-                .iter()
-                .enumerate()
-                .filter(|(bit, _)| mask & 1 << bit != 0)
-                .map(|(_, name)| name.to_string())
-                .collect()
-        };
+    /// The complete restriction: every subtype it names, of any vocabulary.
+    fn new(restriction: &ManaRestriction, amounts: [u8; 6]) -> Self {
         Self {
-            spells: names(restriction.spells),
-            abilities: names(restriction.abilities),
-            except_nonartifact_spells: restriction.except_nonartifact_spells,
+            spells: restriction.spell_subtypes().map(String::from).collect(),
+            abilities: restriction.source_subtypes().map(String::from).collect(),
+            except_nonartifact_spells: *restriction == ManaRestriction::ExceptNonartifactSpells,
             mana: amounts.map(i32::from),
         }
+    }
+
+    /// The restriction this projects. Subtype order and repeats do not matter.
+    pub fn restriction(&self) -> ManaRestriction {
+        if self.except_nonartifact_spells {
+            return ManaRestriction::ExceptNonartifactSpells;
+        }
+        let spells = self.spells.iter().cloned().map(SpendPredicate::CastSubtype);
+        let sources = self
+            .abilities
+            .iter()
+            .cloned()
+            .map(SpendPredicate::ActivateSubtype);
+        ManaRestriction::Only(spells.chain(sources).collect())
     }
 
     /// Whether this mana may pay for a spell or an ability source with `subtype`.
@@ -1167,7 +1174,7 @@ impl Observation {
             restricted_mana: pool
                 .restricted()
                 .iter()
-                .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
+                .map(|(restriction, amounts)| RestrictedManaData::new(restriction, *amounts))
                 .collect(),
             hand_only_until: game
                 .hand_only_until(player)

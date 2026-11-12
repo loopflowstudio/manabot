@@ -19,6 +19,7 @@ from manabot.backends.torch.rl import (
     reverse_kl,
     squared_value_loss,
     standardized_advantages,
+    transition_gae,
 )
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
@@ -75,6 +76,15 @@ def _health() -> NumericalHealth:
     return NumericalHealth(
         optimizer_steps=0, rejected_steps=0, skipped_steps=0, sampled_steps=0
     )
+
+
+def test_transition_gae_refuses_shapes_it_would_broadcast() -> None:
+    rewards = torch.zeros(3, 2)
+    ends = torch.zeros(3, 2, dtype=torch.bool)
+    with pytest.raises(ValueError, match=r"\[T,E\]"):
+        transition_gae(rewards, torch.zeros(3, 1), ends, torch.zeros(2), 1.0, 1.0)
+    with pytest.raises(ValueError, match=r"\[T,E\]"):
+        transition_gae(rewards, torch.zeros(3, 2), ends, torch.zeros(1), 1.0, 1.0)
 
 
 def test_standardized_advantages_take_statistics_from_the_selected_rows() -> None:
