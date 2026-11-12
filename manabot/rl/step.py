@@ -52,8 +52,26 @@ def check_objective(loss: Tensor) -> None:
     require(torch.isfinite(loss), "nonfinite_objective", loss=loss)
 
 
-def _untimed(section: str) -> AbstractContextManager[object]:
-    return nullcontext()
+class _Unrecorded:
+    """The `StepRecorder` of an unobserved step: no timing, no samples."""
+
+    def track(self, section: str) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def rejecting(self) -> AbstractContextManager[object]:
+        return nullcontext()
+
+    def sampling(self) -> bool:
+        return False
+
+    def before_clip(self, model: nn.Module) -> None:
+        pass
+
+    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None:
+        pass
+
+    def record_step(self, parameters: list[nn.Parameter], before: list[Tensor]) -> None:
+        pass
 
 
 def gradient_step(
@@ -70,17 +88,17 @@ def gradient_step(
     no parameter, or nonfinite gradients; the model and optimizer are then
     unchanged. Raises after stepping if a parameter became nonfinite.
     """
-    track = recorder.track if recorder else _untimed
-    with recorder.rejecting() if recorder else nullcontext():
+    recorder = recorder or _Unrecorded()
+    with recorder.rejecting():
         check_objective(loss)
         parameters = list(model.parameters())
         optimizer.zero_grad(set_to_none=True)
-        with track("Backward and gradient clipping"):
+        with recorder.track("Backward and gradient clipping"):
             loss.backward()
-            sampled = recorder is not None and recorder.sampling()
+            sampled = recorder.sampling()
             if not any(p.grad is not None for p in parameters):
                 raise NumericalError("missing_all_gradients", {"loss": loss})
-            if recorder is not None and sampled:
+            if sampled:
                 recorder.before_clip(model)
             try:
                 # error_if_nonfinite reads the norm on the host: the device wait
@@ -97,9 +115,9 @@ def gradient_step(
                         if p.grad is not None
                     },
                 ) from error
-            if recorder is not None and sampled:
+            if sampled:
                 recorder.record_gradients(model, norm)
-        with track("Optimizer step"):
+        with recorder.track("Optimizer step"):
             before = [p.detach().clone() for p in parameters] if sampled else []
             optimizer.step()
             # One flat read: per-tensor checks cost two launches per parameter tensor.
@@ -110,8 +128,7 @@ def gradient_step(
                     "nonfinite_parameters_after_step",
                     {f"parameter/{name}": p for name, p in model.named_parameters()},
                 )
-            if recorder is not None:
-                recorder.record_step(parameters, before)
+            recorder.record_step(parameters, before)
     return norm
 
 

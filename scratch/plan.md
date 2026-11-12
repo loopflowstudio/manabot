@@ -39,6 +39,8 @@ Checks this pass: test_learning_pieces + test_minimal_loop + test_numerical_heal
 
 `loops/ppo.py` computes the value residual once and starts all three exposure counters in the diagnostics literal. Considered and kept: building PPO's mask with `selection_mask` would derive `selected` in sorted order, which changes the top-count minibatch order and breaks parity; Parity JSON byte-identical; focused suites 74 passed.
 
+Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` recorder when none is passed, removing its `None` branches. Parity JSON byte-identical to `main_e5897.json`; pieces/minimal/health/boundaries 68 passed.
+
 ## Remaining
 
 - PR #474 against `main` with this diff alone; force-push this branch; retitle and rewrite the body for this Task only.
