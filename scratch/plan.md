@@ -14,7 +14,7 @@ Steers (quoted in full in .lf/prompts): comment e43e505b (MPS learner arm at w16
 comment f6ed5b35 ("Stop running MLX or torch on the laptop ... the rented M2 ... is the only place this Task executes code").
 Before that steer, early parity development and one smoke run ran on the laptop; everything after ran on the M2.
 
-Single-file conversion (2026-11-12): done as directed below; `convert` returns (path, tensors), `converted_path` one path;
+Single-file conversion (2026-11-12): done as directed below; `convert` returns (path, tensors), one output path;
 two new tests (round-trip, refusal names original revision). M2: 5 passed; local boundary test: 10 passed.
 
 Remaining: delivery only (publish/review/land). Branch is merged with origin/main (0 behind on 2026-11-12), so the
@@ -48,3 +48,6 @@ parity is the gate; MLXLearner measures and never writes). One mismatch, settled
 
 Noted, not changed: `parity` reads a capture format written by `experiments/mlx_pilot.py capture`; the format is
 documented in parity's docstring. Moving the writer into the package would edit the measured experiment file.
+
+Compress after single-file conversion (2026-11-12): inlined the one-use `converted_path`; `_METADATA_KEYS` private.
+ruff clean; local boundary test 10 passed (MLX tests not rerun: no behavior change, M2-only per steer f6ed5b35).

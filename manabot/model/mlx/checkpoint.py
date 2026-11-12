@@ -4,7 +4,7 @@ A converted checkpoint is one file beside the original,
 `<stem>.mlx.safetensors`: one float32 array per MLX parameter, the integer
 lookup buffers under `buffer/<torch name>`, and string metadata holding the
 checkpoint's `hypers`, `world_binding`, `architecture` and `source` record as
-JSON (`METADATA_KEYS`) plus the torch file it came from (`converted_from`).
+JSON (`_METADATA_KEYS`) plus the torch file it came from (`converted_from`).
 Loading validates the same world binding as
 `manabot.model.checkpoint.load_checkpoint`, so a refusal names the revision
 that wrote the original checkpoint.
@@ -229,11 +229,7 @@ def _assemble(
 
 
 # Checkpoint fields carried, JSON-encoded, in the safetensors metadata.
-METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
-
-
-def converted_path(checkpoint: Path) -> Path:
-    return checkpoint.with_suffix("").with_suffix(".mlx.safetensors")
+_METADATA_KEYS = ("hypers", "world_binding", "architecture", "source")
 
 
 def convert(checkpoint: Path) -> tuple[Path, int]:
@@ -251,9 +247,9 @@ def convert(checkpoint: Path) -> tuple[Path, int]:
     _assemble(agent.config, space, parameters, buffers)  # validates names and shapes
     arrays = {k: mx.array(v) for k, v in parameters.items()}
     arrays.update({f"buffer/{k}": mx.array(v) for k, v in buffers.items()})
-    metadata = {key: json.dumps(raw.get(key), default=str) for key in METADATA_KEYS}
+    metadata = {key: json.dumps(raw.get(key), default=str) for key in _METADATA_KEYS}
     metadata["converted_from"] = str(checkpoint)
-    target = converted_path(checkpoint)
+    target = checkpoint.with_suffix("").with_suffix(".mlx.safetensors")
     mx.save_safetensors(str(target), arrays, metadata=metadata)
     return target, len(state)
 
@@ -263,7 +259,7 @@ def load_mlx_policy(path: str | Path) -> tuple[MLXActorCritic, ObservationSpace]
     loaded = mx.load(str(path), return_metadata=True)
     assert isinstance(loaded, tuple)
     arrays, metadata = loaded
-    meta = {key: json.loads(metadata[key]) for key in METADATA_KEYS}
+    meta = {key: json.loads(metadata[key]) for key in _METADATA_KEYS}
     hypers = meta["hypers"]
     space = ObservationSpace(
         ObservationConfig.from_checkpoint(hypers["observation_hypers"])
