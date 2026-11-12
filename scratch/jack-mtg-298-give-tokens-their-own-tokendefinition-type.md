@@ -118,3 +118,13 @@ PR #476 was CONFLICTING with main's typed mana restrictions (`ManaRestriction`,
   (SHA `28ed11cc…`, terminal state `ebd8947a…`, both pinned), both parity
   receipts, the five Academy fixtures (same Commands and revisions) and the
   four belief v3 pins.
+
+## Concept review 3 (2026-11-12): nothing to change
+Read on f45aa4d71: every identity join is by key or CardDefId (pack
+registration, `token_id`, `CreateToken`, learning-catalog binding), and deck
+entry picks the one eligible card of a name. Remaining name reads are display
+or card-only (name vocabulary, `unsupported_cards`, belief id-name pairs,
+receipt id-to-name, capacity-failure text). Academy `curated_pack` identities
+are still keyed by printed name with a card/token kind, so a matchup cannot
+hold a card and a token of one name; that is the out-of-scope follow-up above.
+No open product choice.
