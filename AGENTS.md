@@ -452,7 +452,10 @@ Activated abilities that function from hand or graveyard set
 Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana ability, not multiple fixed mana abilities. Verify each
-choice by paying a real cost and checking the remaining mana.
+choice by paying a real cost and checking the remaining mana. A mana ability
+with other instructions ("Add {G}{G}. You gain 2 life.") lists its output first;
+the untargeted rest (`ActivatedAbilityDefinition::mana_suffix`) runs once, off
+the stack, as the source's frame before the output choice (CR 605.3b).
 
 ### Etude training records
 

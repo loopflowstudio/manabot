@@ -1224,9 +1224,18 @@ impl Game {
             choices: ability.mana_choices().unwrap(),
             resume,
         };
+        // The sacrifice cost, then the ability's non-mana instructions, run
+        // once as the source's own child frame (CR 605.3b): damage it deals
+        // names the source and can be prevented. Resuming the choice never
+        // reaches this frame again.
+        let mut effects = Vec::new();
         if ability.sacrifice_source {
+            effects.push(Effect::sacrifice_this());
+        }
+        effects.extend_from_slice(ability.mana_suffix());
+        if !effects.is_empty() {
             let source_ref = self.permanent_object_ref(permanent);
-            let mut child = EffectFrame::new(player, vec![Effect::sacrifice_this()]);
+            let mut child = EffectFrame::new(player, effects);
             child.source = self.state.permanents[permanent].as_ref().map(|p| p.card);
             child.source_ref = source_ref;
             self.run_before_decision(child, caller);

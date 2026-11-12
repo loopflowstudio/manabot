@@ -20,7 +20,7 @@ use crate::{
         turn::{PhaseKind, StepKind},
     },
     state::{
-        ability::TargetRequirement,
+        ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
@@ -232,6 +232,15 @@ impl Game {
                 }
                 StaticAbility::CostsLessPerGraveyardCard(predicate) => {
                     self.count_graveyard_matching(player, predicate)
+                }
+                StaticAbility::CostsLessByGreatestPower(predicate) => {
+                    self.controller_value(
+                        &EffectValue::GreatestPowerYouControl {
+                            predicate: predicate.clone(),
+                        },
+                        player,
+                    )
+                    .max(0) as usize
                 }
                 _ => continue,
             };

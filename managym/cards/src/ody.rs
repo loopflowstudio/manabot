@@ -1,14 +1,14 @@
 //! Odyssey.
 use managym_state::{
     ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition},
-    card::{CardDefinition, CardType, CardTypes},
-    mana::ManaCost,
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility},
+    mana::{Mana, ManaCost},
     predicate::CardPredicate,
     zone::ZoneType,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![entomb(), standstill()]
+    vec![entomb(), standstill(), tarnished_citadel()]
 }
 
 fn entomb() -> CardDefinition {
@@ -55,6 +55,33 @@ fn standstill() -> CardDefinition {
                     }],
                 }]),
             ],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn tarnished_citadel() -> CardDefinition {
+    let text_box =
+        "{T}: Add {C}.\n{T}: Add one mana of any color. This land deals 3 damage to you.";
+    CardDefinition {
+        key: "ody.tarnished_citadel",
+        scryfall_id: "30375d24-ccfe-47a2-babd-1bda0a6298fe",
+        name: "Tarnished Citadel".into(),
+        types: CardTypes::new([CardType::Land]),
+        mana_abilities: vec![ManaAbility {
+            mana: Mana::parse("C"),
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            effects: vec![
+                Effect::any_color_mana(),
+                Effect::DealDamageToPlayer {
+                    player: PlayerSelector::You,
+                    amount: EffectValue::Fixed(3),
+                },
+            ],
+            ..Default::default()
         }],
         text_box: text_box.into(),
         ..Default::default()

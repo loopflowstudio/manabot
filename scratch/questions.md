@@ -53,8 +53,8 @@ cards further. The other ~180 non-bonus TLE cards are later work".
   the id of an unprinted token.
 - Production review (`scratch/tle-production-design.md`): event timing and the
   v10 encoding table; blocks Heartbeat of Spring (and non-bonus Toph, Uncle's
-  Musings, Animal Attendant). The Great Henge and Tarnished Citadel no longer
-  wait for it (concept review below).
+  Musings, Animal Attendant). The Great Henge and Tarnished Citadel were built
+  without it (twelfth pass).
 - New observed history v9 cannot hold (no spare player/card columns; a new
   `FactKind` is a layout decision): Bloodchief Ascension needs per-player life
   lost this turn; Brought Back needs per-card "put into a graveyard from the
@@ -290,3 +290,31 @@ with the turn-history question, not a separate fix on this branch.
 
 Re-checked 2026-11-12 UTC: Scryfall `!"Zeppelin" include:extras` returns no
 cards; Lita, Mechanical Engineer resolves to set `j22` with no `all_parts`.
+
+## Twelfth pass — The Great Henge and Tarnished Citadel, 2026-11-12 UTC
+
+Built the concept-review direction. First-printing ids from
+`tle-inventory.jsonl`: Henge eld af915ed2-1f34-43f6-85f5-2430325b720f,
+Citadel ody 30375d24-ccfe-47a2-babd-1bda0a6298fe. A probe over the catalog
+found no existing definition whose classification changes under the wider
+`mana_choices` (only these two have a suffix).
+
+Assumptions taken (reversible):
+- The suffix runs before the output choice is offered (Citadel's damage is
+  dealt, then the color is chosen); one mana ability, so no player sees
+  priority between them.
+- A suffix excludes `If`, `Modal` and every mana-adding effect at top level, so
+  a conditional or modal tail stays a stack ability; nothing needs one yet.
+- Henge's cost reduction is a new `StaticAbility::CostsLessByGreatestPower`
+  (generic floor 0) beside the other `CostsLess*` casting statics.
+- The Academy proof replays the passive villain's recorded steps on the fork
+  after the color choice: choosing completes the payment and the server then
+  plays the villain until the hero's next decision.
+
+Results (debug): cards `great_henge`/`tarnished_citadel` 4 passed;
+observability, scryfall, definitions 65 passed; engine `mana_`/`sacrifice`/
+`payment` filters 21 passed. fmt clean; clippy shows only pre-existing
+warnings. Rebuilt cp313 (atomic replace); `--bonus-sheet` 6 missing, all
+blocked. Academy `test_citadel_payment_recovery.py` and Merchant recovery
+2 passed. Not run: the full workspace nextest, conformance evidence (digest
+moves again) and world-change Python suites (gate).

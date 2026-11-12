@@ -1378,6 +1378,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_lessons",
         ),
+        StaticAbility::CostsLessByGreatestPower(_) => witnessed(
+            "StaticAbility::CostsLessByGreatestPower",
+            Seen::Actions("the cast becomes affordable at the reduced cost"),
+            "The Great Henge",
+            "eld",
+            "the_great_henge_costs_less_by_greatest_power_and_rewards_nontoken_creatures",
+        ),
         StaticAbility::FlashIf(_) => witnessed(
             "StaticAbility::FlashIf",
             Seen::Actions("the cast is offered at instant timing"),
@@ -1629,6 +1636,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::CostsLessPerPermanentOnBattlefield(creature()),
         StaticAbility::CantBeCountered,
         StaticAbility::CostsLessPerGraveyardCard(creature()),
+        StaticAbility::CostsLessByGreatestPower(creature()),
         StaticAbility::FlashIf(Condition::YourTurn),
         StaticAbility::Flashback(ManaCost::parse("{2}")),
         StaticAbility::Foretell(ManaCost::parse("{2}")),

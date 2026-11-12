@@ -498,11 +498,28 @@ pub enum ReplacementEffect {
     },
 }
 
+/// A mana ability's later instruction: it adds no mana and targets nothing
+/// (CR 605.1a), so the ability stays a mana ability and resolves at once.
+fn is_mana_suffix_effect(effect: &Effect) -> bool {
+    !matches!(
+        effect,
+        Effect::AddMana { .. }
+            | Effect::AddOneColorManaValue { .. }
+            | Effect::Modal { .. }
+            | Effect::If { .. }
+    ) && effect.target_spec().is_none()
+}
+
 impl ActivatedAbilityDefinition {
+    /// The outputs of a mana ability (CR 605.1a): an untargeted activation
+    /// whose leading effect adds one of these mana, optionally followed by
+    /// the untargeted non-mana instructions of [`Self::mana_suffix`]. `None`
+    /// for an ability that uses the stack.
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        let [effect] = self.effects.as_slice() else {
+        let (effect, suffix) = self.effects.split_first()?;
+        if !suffix.iter().all(is_mana_suffix_effect) {
             return None;
-        };
+        }
         match effect {
             Effect::AddMana {
                 mana,
@@ -521,6 +538,16 @@ impl ActivatedAbilityDefinition {
                 })
                 .collect(),
             _ => None,
+        }
+    }
+
+    /// What a mana ability does besides adding mana ("You gain 2 life"),
+    /// resolving with it, off the stack, once per activation (CR 605.3b).
+    /// Empty for an ability that is not a mana ability.
+    pub fn mana_suffix(&self) -> &[Effect] {
+        match self.mana_choices() {
+            Some(_) => &self.effects[1..],
+            None => &[],
         }
     }
 
@@ -754,6 +781,10 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] card in your
     /// graveyard"; functions while casting, generic floor 0.
     CostsLessPerGraveyardCard(CardPredicate),
+    /// "This spell costs {X} less to cast, where X is the greatest power
+    /// among [predicate] you control" (The Great Henge); functions while
+    /// casting, generic floor 0.
+    CostsLessByGreatestPower(CardPredicate),
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
     FlashIf(Condition),

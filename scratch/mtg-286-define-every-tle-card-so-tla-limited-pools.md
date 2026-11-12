@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 53 of 61 defined,
-8 missing, no other issues (rebuilt extension, eleventh pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 55 of 61 defined,
+6 missing, no other issues (rebuilt extension, twelfth pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -95,14 +95,20 @@ Rules added on this branch, each with directed tests and observation parity
   `ProtectionFromEverything`; `Modification::PhasedOut` with
   `Game::is_phased_out` as the one reader. Detail in `scratch/questions.md`.
 
+- Twelfth pass (The Great Henge, Tarnished Citadel): `mana_choices` accepts
+  a leading output plus an untargeted non-mana suffix
+  (`ActivatedAbilityDefinition::mana_suffix`), run once in the `flow/mana.rs`
+  child frame with the sacrifice cost, before the output choice; damage names
+  the land and is preventable. `StaticAbility::CostsLessByGreatestPower`.
+  Academy proof `tests/academy/test_citadel_payment_recovery.py`.
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 8 bonus-sheet names by rule family
+## Remaining: 6 bonus-sheet names by rule family
 
 | Family | Cards |
 |---|---|
-| Mana ability with a non-mana suffix (ready, next) | The Great Henge, Tarnished Citadel |
 | Production occurrence (blocked, review) | Heartbeat of Spring |
 | Token identity (blocked, decision) | Release to Memory; Lita, Mechanical Engineer |
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
@@ -126,45 +132,11 @@ or the content pack stays keyed by name;
 (b) which `scryfall_id` a token without a printing carries.
 These block only those two cards.
 
-## Next implement direction: mana abilities with a suffix
+## Mana abilities with a suffix (built, twelfth pass)
 
-Concept review (2026-11-12) split the production family. The Great Henge
-("{T}: Add {G}{G}. You gain 2 life.") and Tarnished Citadel ("{T}: Add one mana
-of any color. Tarnished Citadel deals 3 damage to you.") need only CR 605.1a/605.3b:
-an untargeted activated ability that could add mana is a mana ability, and its
-whole text resolves at once, off the stack. They need no production occurrence,
-trigger on output, spending receipt or v10.
-
-Today `state/card.rs::ActivatedAbilityDefinition::mana_choices` recognizes a mana
-ability only when `effects` is exactly one `AddMana` (or a `Modal` of single
-`AddMana` modes), so `[AddMana, GainLife]` would be a stack ability: wrong.
-
-- `mana_choices` accepts a leading output (`AddMana` or `Modal` of `AddMana`)
-  followed by a suffix with no `AddMana` and no target; add one reader for the
-  suffix. Every current caller (`flow/mana.rs`, `flow/play.rs:1074`,
-  `flow/action.rs:287`, `flow/layers.rs:1125`) then classifies these abilities
-  as mana abilities without its own change.
-- Execution reuses the sacrifice-cost path in `flow/mana.rs` (activation before
-  `Decision::ManaChoice`): the suffix runs as the same child `EffectFrame`,
-  after `sacrifice_this` when both apply, with the activation's `source_ref`, so
-  `DealDamage { by: This }` names the land by LKI and damage is preventable
-  (not a life payment). It runs once; resuming the `ManaChoice` never replays it.
-- Payment search counts the output as today. A suffix-bearing ability is an
-  explicit `PaymentStep::Activate`, never part of the automatic `Fixed`/`Spend`
-  prefix; only trivial-decision skipping may take it when it is the one legal
-  action. Citadel's `{T}: Add {C}` stays a fixed mana ability.
-- No new observation state: the suffix is ability effects, already in learning
-  tokens, LLM ability text and policy card rows; life and damage events exist.
-- Henge's cost reduction uses `GreatestPowerYouControl`; its enters trigger is
-  ordinary.
-- Directed tests: Henge GG plus 2 life once, including while paying a spell;
-  Citadel C without damage, colored with 3 damage, damage prevented under
-  Teferi's Protection; a mid-payment Citadel `ManaChoice` on Academy reconnect,
-  fork and stale Command (`tests/academy/test_merchant_payment_recovery.py`
-  pattern).
-
-When the production occurrence lands, this suffix execution becomes its suffix
-step, not a second path.
+CR 605.1a/605.3b: Henge and Citadel needed no production occurrence. When the
+production occurrence lands, the `mana_suffix` frame becomes its suffix step,
+not a second path. The full direction is in git at 53231b511.
 
 ## Production boundary (open review): Heartbeat of Spring
 
