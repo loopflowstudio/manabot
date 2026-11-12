@@ -1113,8 +1113,10 @@ def analyze(out: Path) -> dict[str, Any]:
             entry["syncs"] = {k: syncs[k] for k in ("per_label", "sites")}
         summary["replays"][replay_dir.name] = entry
     comparisons = {}
-    for path in sorted((out / "numerics").glob("option3-*.pt")):
-        base = path.with_name(path.name.replace("option3-", "baseline-"))
+    for path in sorted((out / "numerics").glob("*-*.pt")):
+        if path.name.startswith("baseline-"):
+            continue
+        base = path.with_name("baseline-" + path.name.split("-", 1)[1])
         if base.exists():
             comparisons[path.stem] = compare(base, path)
     summary["numerics"] = comparisons
@@ -1142,25 +1144,51 @@ def _option3_tree(target: Path) -> Path:
     return target
 
 
-def _clean_env(pythonpath: Path | None) -> dict[str, str]:
-    # Stage processes track locally, never as the launcher's run.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("ETUDE_")}
+@dataclass(frozen=True)
+class Arm:
+    """Source tree (None: the job revision) and switches for one arm's processes."""
+
+    tree: Path | None = None
+    environment: tuple[tuple[str, str], ...] = ()
+
+
+def _arms(candidate: str, work: Path) -> dict[str, Arm]:
+    """Baseline plus one candidate: the option-3 patch, or MTG-302's switch."""
+    if candidate == "option3":
+        return {"baseline": Arm(), "option3": Arm(_option3_tree(work / "option3"))}
+    if candidate == "bucketed":
+        if not (ROOT / "manabot" / "model" / "buckets.py").exists():
+            raise RuntimeError("this revision has no bucketed-shapes switch")
+        return {
+            "baseline": Arm(),
+            "bucketed": Arm(environment=(("MANABOT_BUCKETED_SHAPES", "1"),)),
+        }
+    raise ValueError(f"unknown candidate {candidate!r}")
+
+
+def _clean_env(arm: Arm) -> dict[str, str]:
+    # Stage processes track locally, never as the launcher's run; only the
+    # arm's own switches reach them.
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("ETUDE_") and k != "MANABOT_BUCKETED_SHAPES"
+    }
     # A patched tree shadows the editable install's `manabot`.
-    env["PYTHONPATH"] = str(pythonpath or ROOT)
+    env["PYTHONPATH"] = str(arm.tree or ROOT)
+    env.update(arm.environment)
     return env
 
 
-def _stage(
-    args: list[str], log: Path, pythonpath: Path | None, timeout: float
-) -> dict[str, Any]:
+def _stage(args: list[str], log: Path, arm: Arm, timeout: float) -> dict[str, Any]:
     tick = time.perf_counter()
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as handle:
         try:
             code = subprocess.run(
                 [sys.executable, str(Path(__file__).resolve()), *args],
-                cwd=pythonpath or ROOT,
-                env=_clean_env(pythonpath),
+                cwd=arm.tree or ROOT,
+                env=_clean_env(arm),
                 stdout=handle,
                 stderr=subprocess.STDOUT,
                 timeout=timeout,
@@ -1187,7 +1215,10 @@ def job(smoke: bool = False) -> None:
     log: list[dict[str, Any]] = []
     started = time.perf_counter()
 
-    def replay_stage(arm: str, size: str, tree: Path | None, name: str) -> bool:
+    candidate = os.environ.get("MTG301_CANDIDATE", "option3")
+    arms: dict[str, Arm] = {"baseline": Arm()}
+
+    def replay_stage(arm: str, size: str, name: str) -> bool:
         log.append(
             _stage(
                 [
@@ -1200,7 +1231,7 @@ def job(smoke: bool = False) -> None:
                     device,
                 ],
                 out / "logs" / f"replay-{name}.log",
-                tree,
+                arms[arm],
                 1200,
             )
         )
@@ -1212,14 +1243,14 @@ def job(smoke: bool = False) -> None:
             _stage(
                 ["insitu", str(out / "insitu"), str(captures), *flags],
                 out / "logs" / "insitu.log",
-                None,
+                arms["baseline"],
                 1800,
             )
         )
         if log[-1]["returncode"] != 0:
             raise RuntimeError("in-situ stage failed; nothing to replay")
-        trees = {"baseline": None, "option3": _option3_tree(work / "option3")}
-        for arm, tree in trees.items():
+        arms = _arms(candidate, work)
+        for arm in arms:
             log.append(
                 _stage(
                     [
@@ -1230,24 +1261,19 @@ def job(smoke: bool = False) -> None:
                         device,
                     ],
                     out / "logs" / f"numerics-{arm}.log",
-                    tree,
+                    arms[arm],
                     600,
                 )
             )
         # Interleaved so that host drift shows as a baseline repeat difference.
         large = next(
-            (
-                size
-                for size in larger
-                if replay_stage("baseline", size, None, f"baseline-{size}")
-            ),
-            None,
+            (s for s in larger if replay_stage("baseline", s, f"baseline-{s}")), None
         )
-        replay_stage("baseline", "w160l8", None, "baseline-w160l8")
-        replay_stage("option3", "w160l8", trees["option3"], "option3-w160l8")
+        replay_stage("baseline", "w160l8", "baseline-w160l8")
+        replay_stage(candidate, "w160l8", f"{candidate}-w160l8")
         if large:
-            replay_stage("option3", large, trees["option3"], f"option3-{large}")
-        replay_stage("baseline", "w160l8", None, "baseline-w160l8-repeat")
+            replay_stage(candidate, large, f"{candidate}-{large}")
+        replay_stage("baseline", "w160l8", "baseline-w160l8-repeat")
     finally:
         _write(
             out / "job.json", {"stages": log, "seconds": time.perf_counter() - started}
@@ -1282,13 +1308,15 @@ def _finish(out: Path, captures: Path) -> None:
     shutil.move(packed, out / "results.tar.gz")
 
 
-def runs(revision: str) -> Any:
-    from etude.launch.records import Job
+def runs(revision: str, candidate: str = "option3") -> Any:
+    """`candidate`: option3, or bucketed at a revision carrying MTG-302's switch."""
+    from etude.launch.records import Job, Variable
 
     from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 
     return Job(
-        name="mtg301-l4-step-profile",
+        name=f"mtg301-l4-step-profile-{candidate}",
+        environment=(Variable(name="MTG301_CANDIDATE", value=candidate),),
         setup=machine_setup(""),
         command=(
             'mkdir -p "$ETUDE_OUTPUT_DIR"\n'
