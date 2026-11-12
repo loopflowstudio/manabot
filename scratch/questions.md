@@ -52,12 +52,16 @@ cards further. The other ~180 non-bonus TLE cards are later work".
   Spirit. Lita's Zeppelin has no printing id. Decide name-vs-key resolution and
   the id of an unprinted token.
 - Production review (`scratch/tle-production-design.md`): event timing and the
-  v10 encoding table; blocks Heartbeat of Spring, The Great Henge, Tarnished
-  Citadel (and non-bonus Toph, Uncle's Musings, Animal Attendant).
+  v10 encoding table; blocks Heartbeat of Spring (and non-bonus Toph, Uncle's
+  Musings, Animal Attendant). The Great Henge and Tarnished Citadel no longer
+  wait for it (concept review below).
 - New observed history v9 cannot hold (no spare player/card columns; a new
   `FactKind` is a layout decision): Bloodchief Ascension needs per-player life
   lost this turn; Brought Back needs per-card "put into a graveyard from the
   battlefield this turn". Choose a new fact kind on v9 or wait for a freeze.
+  A new kind is not shape-free: `manabot/model/facts.py` sizes
+  `nn.Embedding(FACT_KINDS + 1)`, so existing w17 checkpoints would refuse.
+  The same choice covers spells cast this turn (concept review below).
 - Cityscape Leveler's Powerstone mana "can't be spent to cast nonartifact
   spells": `ManaUse` restricts only by the Lesson/Shrine/Ally subtype bits and
   the pool's restricted classes are observed by those bits. Needs a restriction
@@ -268,3 +272,21 @@ copy-exception fact; layer phased-out skip is a plain `if`; the redundant
 `life_cost > 0` guard is gone. Debug: cards 672 passed; lib + rules +
 conformance 363 passed, 2 skipped. Rebuilt cp313; parity, observation and
 shared-effect pytest 75 passed; `--bonus-sheet` 8 missing, all blocked.
+
+## Concept review after the eleventh pass, 2026-11-12 UTC
+
+Settled by the design (next implement direction in the plan): The Great Henge
+and Tarnished Citadel are mana abilities with an immediate non-mana suffix
+(CR 605.1a, 605.3b). `ActivatedAbilityDefinition::mana_choices` accepts only a
+lone `AddMana`/`Modal` today; the suffix runs as the child frame the sacrifice
+cost already uses before `Decision::ManaChoice`. No new observation state.
+
+Found: `turn.spells_cast` feeds `EffectValue::SpellsCastThisTurn` (Volcanic
+Torrent, eighth pass), and on main `TriggerCondition::YouCastNthSpellThisTurn`
+and first-spell `SpellsCostLess`, but no observation path carries it (no match
+under `managym/src/agent/`, `manabot/env/observation.py` or the text
+observation). The policy input already falls behind on that count; it belongs
+with the turn-history question, not a separate fix on this branch.
+
+Re-checked 2026-11-12 UTC: Scryfall `!"Zeppelin" include:extras` returns no
+cards; Lita, Mechanical Engineer resolves to set `j22` with no `all_parts`.

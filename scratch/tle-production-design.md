@@ -31,6 +31,11 @@ The completed paragraph allocation adds three constraints to that proposal:
 must use one transition implementation for feasibility witnesses and execution.
 No card-name branches, secondary planner or provenance side table.
 
+The Great Henge and Tarnished Citadel are cut first, without this proposal:
+their suffix runs as the existing pre-`ManaChoice` child frame (plan, "Next
+implement direction"). This transaction later absorbs that step; it does not add
+a second suffix path.
+
 ## Production transaction
 
 Replace the source-free mana output continuation with a production occurrence

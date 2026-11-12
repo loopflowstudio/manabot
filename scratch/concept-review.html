@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-286 concept review: the last 8 bonus-sheet cards</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655b; --rule:#d9d3c7; --new:#2f6b3a; --newbg:#e8f2e6; --old:#8a3b2a; --code:#efeadf; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ece7dd; --bg:#1b1a17; --muted:#a59d8f; --rule:#3a362f; --new:#8fd19a; --newbg:#20301f; --old:#e09a85; --code:#2a2722; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 Georgia, "Iowan Old Style", serif; }
+  main { max-width:44rem; margin:0 auto; padding:2rem 1.25rem 4rem; }
+  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.5rem; margin:0 0 .5rem; } h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-top:1px solid var(--rule); padding-top:1rem; }
+  code { background:var(--code); padding:0 .25em; border-radius:3px; font-size:.88em; }
+  pre { background:var(--code); padding:.75rem; overflow-x:auto; font-size:.85rem; border-radius:4px; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { border-bottom:1px solid var(--rule); padding:.4rem .3rem; text-align:left; vertical-align:top; }
+  .proposed { border-left:4px solid var(--new); background:var(--newbg); padding:.5rem .8rem; margin:.8rem 0; }
+  .proposed::before { content:"Proposed"; display:block; font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:var(--new); }
+  .existing::before { content:"Existing"; display:block; font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:var(--old); }
+  .existing { border-left:4px solid var(--old); padding:.5rem .8rem; margin:.8rem 0; }
+  ol li { margin:.4rem 0; }
+</style>
+</head>
+<body><main>
+<header>
+  <h1>The last 8 bonus-sheet cards: two can be built now</h1>
+  <p>Task MTG-286 · step concept-review · 2026-11-12</p>
+  <p>Built from <code>scratch/mtg-286-define-every-tle-card-so-tla-limited-pools.md</code>, <code>scratch/questions.md</code>, <code>scratch/tle-production-design.md</code>, <code>managym/state/src/card.rs</code>, <code>managym/src/flow/mana.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/model/facts.py</code></p>
+</header>
+
+<p><strong>Decision needed:</strong> none for the next pass. The Great Henge and Tarnished Citadel move out of the blocked production family and are the next implementation. Six cards are still blocked on three choices only a person can make (questions at the end).</p>
+
+<h2>What a player does</h2>
+<p>Tap Tarnished Citadel while paying for a spell, pick a color, take 3 damage. Tap The Great Henge, get {G}{G} and gain 2 life. Neither uses the stack, and nobody gets priority in between (CR 605.3b).</p>
+
+<div class="existing">
+<p><code>ActivatedAbilityDefinition::mana_choices</code> only counts an ability as a mana ability when its effects are exactly one <code>AddMana</code>, or a <code>Modal</code> whose modes are each one <code>AddMana</code>. So <code>[AddMana, GainLife]</code> would go on the stack as an ordinary activated ability. That is wrong.</p>
+</div>
+
+<div class="proposed">
+<p>A mana ability is an untargeted activated ability that starts with a mana output and is followed by a <em>suffix</em> containing no <code>AddMana</code> (CR 605.1a). The suffix runs as the child <code>EffectFrame</code> that a sacrifice cost already uses before <code>Decision::ManaChoice</code>. It carries the activation's <code>source_ref</code>, so Citadel's damage comes from the land and can be prevented. It runs once. Resuming the color choice never runs it again.</p>
+<pre>// Tarnished Citadel, second ability (sketch)
+effects: [
+  Effect::Modal { modes: [[AddMana W], [AddMana U], …] },
+  Effect::deal_damage(3, ObjectSelector::You),  // by: This
+]</pre>
+<p>Payment search counts the mana output as it does now. A suffix-bearing ability is always an explicit <code>PaymentStep::Activate</code> and never part of the automatic prefix. The only way it gets taken without a choice is trivial-decision skipping, when it is the single legal action.</p>
+</div>
+
+<h2>Concepts and APIs, before and after</h2>
+<table>
+<tr><th></th><th>Before</th><th>After</th></tr>
+<tr><td>Henge, Citadel</td><td>Blocked behind the production transaction and v10</td><td>Mana ability plus suffix. No new observation state, because the suffix is ordinary ability effects already in the tokens and text</td></tr>
+<tr><td>Heartbeat of Spring</td><td>Blocked (production review)</td><td>Still blocked. It needs real production occurrences and either player's bonus sources</td></tr>
+<tr><td>Production design</td><td>Owns suffix execution</td><td>Takes over the pre-<code>ManaChoice</code> suffix step later, so there is only ever one suffix path</td></tr>
+</table>
+
+<h2>Counterexamples checked</h2>
+<ul>
+<li><strong>Citadel's colored mode suspends on a color choice.</strong> The child frame runs before the suspended <code>ManaChoice</code>, the same way a sacrifice cost does, and committed effects never replay.</li>
+<li><strong>Citadel damage would kill you mid-payment.</strong> State-based actions wait for the usual check, the same as any damage during a mana ability.</li>
+<li><strong>The automatic payment would choose the damaging land for you.</strong> It can't: suffix abilities are never in the automatic prefix.</li>
+</ul>
+
+<h2>A finding that changes an open question</h2>
+<p><code>turn.spells_cast</code> already affects rules with no observation behind it. On main it feeds <code>YouCastNthSpellThisTurn</code> and the first-spell cost reduction. This branch adds <code>SpellsCastThisTurn</code> (Volcanic Torrent). Nothing under <code>managym/src/agent/</code>, <code>manabot/env/observation.py</code> or the text observation encodes it, so the policy input already lags on this count. Adding a new fact kind also changes a shape: <code>nn.Embedding(FACT_KINDS + 1)</code> in <code>manabot/model/facts.py</code>, so existing w17 checkpoints would refuse to load. The open turn-history question therefore covers three counts: spells cast, life lost, and cards that left the battlefield.</p>
+
+<h2>Questions (each blocks only the named cards)</h2>
+<ol>
+<li>Turn history (Bloodchief Ascension, Brought Back, and the unobserved spells-cast count):
+  <br>a. Add one turn-history fact kind on the open w17, accepting that current w17 checkpoints refuse to load.
+  <br>b. Wait for the next world freeze, and record spells cast as a known gap until then.</li>
+<li>Token identity (Release to Memory; Lita, Mechanical Engineer):
+  <br>a. Tokens resolve by definition key, and only deck-enterable cards need unique names. This moves the learning tokens of every <code>CreateToken</code>.
+  <br>b. Keep the name-keyed pack and leave both cards for later.
+  <br>Separately, Zeppelin has no Scryfall printing (re-checked 2026-11-12), so it also needs an answer for which <code>scryfall_id</code> it carries.</li>
+<li>Powerstone restriction (Cityscape Leveler): a new <code>ManaUse</code> shape, "artifact spells and any ability", plus its observation bit.
+  <br>a. Now, on v9.
+  <br>b. At the freeze.</li>
+<li>Heartbeat of Spring: the authored review of event timing and the v10 table in <code>tle-production-design.md</code>.</li>
+</ol>
+</main></body>
+</html>
