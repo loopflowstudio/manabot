@@ -26,3 +26,11 @@ tests/training/test_bucketed_execution, tests/eval/test_experiment_files — 76 
   blocker for publishing this PR.
 - Pre-land: delete `scratch/` in its own commit; PR notes the 0.x plain
   removal (no alias).
+
+## Concept review (2026-11-12): applied
+
+Report's "run them from" line names `439379869` (last main revision with the
+pooled stream; the load error names it too); results table keeps `7ac8c9b6f`.
+Docs Mix step is one sentence: live-token attention, linking the report.
+Check: `grep -n pooled docs/observation-and-model.md` shows only that pointer
+and unrelated mean-pooling uses.

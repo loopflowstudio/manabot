@@ -50,12 +50,9 @@ validation of its own
    does as well as its name. Facts, links and effects add to the object they
    belong to.
 2. **Mix.** Self-attention lets objects inform each other, with padding masked.
-   To attend over valid objects only, use
-   [live-token attention](#live-token-attention-profiling); it replaced the
-   pooled token stream, whose pilot closed negative
+   [Live-token attention](#live-token-attention-profiling) attends over valid
+   objects only; it replaced the pooled token stream
    ([token-stream report](../experiments/token_stream.md)).
-   A saved configuration naming `token_stream="pooled"` fails to load with an
-   error naming the removal; run it from the revision its report pins.
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are
