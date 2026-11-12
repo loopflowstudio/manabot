@@ -1316,11 +1316,11 @@ mod tests {
             ),
             (
                 TriggerCondition::Dies {
-                    subject: TriggerSubject::Matching {
-                        controlled_by: Actor::Opponent,
-                        predicate: Box::new(CardPredicate::creature()),
-                        another: false,
-                    },
+                    subject: TriggerSubject::matching(
+                        Actor::Opponent,
+                        CardPredicate::creature(),
+                        false,
+                    ),
                 },
                 "When a creature an opponent controls dies",
             ),

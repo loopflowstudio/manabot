@@ -105,3 +105,9 @@ in docs. This pass only reworded the event list in `docs/engine.md`.
 
 No new Task comments, steers or PR reviews; nothing remains to build. PR #484
 CI was pending at this pass.
+
+## Compress (2026-11-12, head 079a8de32)
+
+`TriggerSubject::matching(controlled_by, predicate, another)` owns the box;
+the four named constructors and both tests call it. Debug nextest
+`trigger|description|observability|token` 149/149.

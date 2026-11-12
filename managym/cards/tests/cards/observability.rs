@@ -1925,11 +1925,11 @@ fn every_trigger_event_parameter_reaches_the_learning_tokens() {
                 abilities: vec![Ability::Triggered {
                     intervening_if: None,
                     condition: TriggerCondition::Dies {
-                        subject: TriggerSubject::Matching {
+                        subject: TriggerSubject::matching(
                             controlled_by,
-                            predicate: Box::new(CardPredicate::creature()),
+                            CardPredicate::creature(),
                             another,
-                        },
+                        ),
                     },
                     effects: vec![Effect::DrawCards {
                         count: EffectValue::Fixed(1),

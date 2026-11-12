@@ -451,40 +451,33 @@ pub enum TriggerSubject {
 }
 
 impl TriggerSubject {
+    /// "a/another [predicate] [controlled_by controls]".
+    pub fn matching(controlled_by: Actor, predicate: CardPredicate, another: bool) -> Self {
+        Self::Matching {
+            controlled_by,
+            predicate: Box::new(predicate),
+            another,
+        }
+    }
+
     /// "a [predicate] you control", this included.
     pub fn you_control(predicate: CardPredicate) -> Self {
-        Self::Matching {
-            controlled_by: Actor::You,
-            predicate: Box::new(predicate),
-            another: false,
-        }
+        Self::matching(Actor::You, predicate, false)
     }
 
     /// "another [predicate] you control".
     pub fn another_you_control(predicate: CardPredicate) -> Self {
-        Self::Matching {
-            controlled_by: Actor::You,
-            predicate: Box::new(predicate),
-            another: true,
-        }
+        Self::matching(Actor::You, predicate, true)
     }
 
     /// "a [predicate]", whoever controls it, this included.
     pub fn any(predicate: CardPredicate) -> Self {
-        Self::Matching {
-            controlled_by: Actor::AnyPlayer,
-            predicate: Box::new(predicate),
-            another: false,
-        }
+        Self::matching(Actor::AnyPlayer, predicate, false)
     }
 
     /// "another [predicate]", whoever controls it.
     pub fn another(predicate: CardPredicate) -> Self {
-        Self::Matching {
-            controlled_by: Actor::AnyPlayer,
-            predicate: Box::new(predicate),
-            another: true,
-        }
+        Self::matching(Actor::AnyPlayer, predicate, true)
     }
 }
 
