@@ -50,7 +50,23 @@ def transition_gae(
     gamma: float,
     lam: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """GAE for transition-end flags; terminal rewards credit their own episode."""
+    """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
+
+    `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
+    episode. `next_value` [E] is read only where a column's last row is not an
+    end. Mismatched shapes raise `ValueError` rather than broadcast.
+    """
+    if (
+        rewards.ndim != 2
+        or values.shape != rewards.shape
+        or ends.shape != rewards.shape
+        or next_value.numel() != rewards.shape[1]
+    ):
+        raise ValueError(
+            "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
+            f"got {tuple(rewards.shape)}, {tuple(values.shape)}, "
+            f"{tuple(ends.shape)} and {tuple(next_value.shape)}"
+        )
     host_ends = ends.cpu().bool()
     host_values = values.cpu()
     live = (~host_ends).to(rewards.dtype)
