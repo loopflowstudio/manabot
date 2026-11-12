@@ -87,48 +87,34 @@ caller per stage body; Outcome 7 on resume since `32dd45e43`/`242df4246`). Outco
   exists to route through `Run`. Per-update outcome rows go through Etude
   `log_table`; docs do not promise per-game rows.
 
-## Concept review (2026-11-12, against `6700caf3a`) and its follow-up
+## Concept reviews (2026-11-12): all three mismatches resolved
 
-The review found two callers per stage body: `run_saved_regime` dispatched
-to the private bodies while public functions built a one-stage
-`TrainingRegime` (`_stage_regime`). Done since (`eeca3f374`, `dcd13b7c9`):
+1. Two callers per stage body (against `6700caf3a`): `run_saved_regime` is
+   now an ordinary regime function, one public call per saved stage
+   (`eeca3f374`, `dcd13b7c9`). `initial` reuses that stage's `Model`; a
+   belief collection naming a continued self-play stage reads that stage's
+   own export (`_published_model`). Per-stage rules live in `check_self_play`
+   (regime.py) and `admit_self_play` (stages.py), called by both
+   `validate_regime` and `self_play`; input digests are checked in the stage
+   functions (`_record_inputs` over `Model.source`). `RunRecord.regime` and
+   digest unchanged.
+2. Lineage from live state (against `d4271e1fc`): a resumed run recorded a
+   continued stage's `initial` as `None` (uninterrupted: `"self-play"`), raw
+   weights still bit-equal. Now `Model.trained_by` names the last self-play
+   stage; a stage continues live when `Run.live_session` is that stage, else
+   from this stage's recovery snapshot, else is refused by name
+   (`32dd45e43`, `242df4246`).
+3. Starting states over held weights (against `7fcacc3e5`):
+   `import_policy` then `self_play(..., pretrained=...)` trained weights the
+   record never named. `self_play` refuses `initial_weights`, `pretrained`
+   and `learning_state` on a model with `source` set (every `trained_by`
+   write also sets `source`), before `_open_stage` (`0822bddc0`).
 
-1. `run_saved_regime` is an ordinary regime function: one public call per
-   saved stage (`stage=<id>`, its settings, the regime's `schedule_clock`).
-   Fresh self-play stages get `run.model(<id>, ..., seed=seeds["initialization"])`;
-   `initial` reuses that stage's `Model` (validation admits only the latest
-   self-play stage, so this always continues live, also across intervening
-   belief stages). A belief collection naming a self-play stage whose model a
-   later stage continued reads that stage's own export (`_published_model`).
-   Public `collect_selection` added. `RunRecord.regime` and digest unchanged.
-2. Bodies take decks, model config, observation, settings and schedule clock;
-   `_stage_regime` and `smoke_form` are gone. `admit_self_play` (stages.py,
-   rosters/adaptive/deck source) and `check_self_play` (regime.py, the
-   per-stage rules `TrainingRegime` used to inline) are called by both
-   `validate_regime` and `self_play`. `admit_policy` / `admit_learning_state`
-   take `decks, agent, observation[, schedule_clock]`. `Run` carries
-   `recovery_max_microsteps` / `recovery_every_updates`.
-3. Input digest checks live in the stage functions (`_record_inputs` over
-   `Model.source`, the stage that published the model's weights, or the
-   `BeliefCorpus` stage). `collect_belief` returns `BeliefCorpus`;
-   `train_belief` reads the verified dataset back from disk.
-4. `execute_regime(..., smoke_execution=)`; `--smoke` on a saved regime and
-   `TrainingJob.smoke` (now returns `TrainingRun`) record the saved regime.
-5. A model's self-play lineage is `Model.trained_by`; the open learner is
-   `Run.live_session` (see concept review 2).
+Last check (after 3): regime_functions, regimes, policy_import,
+learning_state, recovery, package_boundaries: 87 passed. Broader module list
+passed after 1, except the known test_game_errors `binding_mismatch` (3).
 
-Checks: test_regime_functions, test_regimes, test_belief_stages (+ a
-continued-policy test), test_policy_import, test_learning_state,
-test_bucketed_execution, test_frozen_opponent, test_training_decks,
-test_recovery, test_active_recovery, test_active_training, test_etude_job,
-test_game_error_recovery, test_mps_training, test_baseline_recipe,
-test_phase_timing, test_step_cadence, test_numerical_health,
-test_ataraxos_regime, test_automatic_game_capture, test_action_cutoff,
-test_process_tree_rss, test_time_cohort, test_monitoring,
-test_package_boundaries, test_experiment_files: all pass except the known
-test_game_errors `binding_mismatch` (3).
-
-### Open product choice (does not block 1-5)
+## Open product choice (does not block 1-5)
 
 - **How a function job declares its Etude budget.** Remote jobs are built on
   one saved self-play stage with `until=updates=N`, continuations and a stop
@@ -141,56 +127,3 @@ test_game_errors `binding_mismatch` (3).
   Etude PR.
 - Known limit, not a choice yet: `run.stage(name)` custom stages refuse
   resume past them, so a regime that uses one cannot recover after it.
-
-## Concept review 2 (2026-11-12, against `d4271e1fc`)
-
-One implementation per stage holds; the remaining mismatch is that a
-model's continuation lineage is derived from live state. `self_play` sets
-`TrainSelfPlay.initial` from `model.session`, and `_restore_model` clears
-the session on resume, so a resumed function run records a continued stage
-as fresh. Probe (two consecutive `self_play` calls on one model, interrupted
-after update 1 of the second, `RecoveryPolicy(checkpoint_updates=1)`, seed 5):
-raw weights bit-equal to the uninterrupted run, but stage 2
-`arguments.settings.initial` was `"self-play"` uninterrupted and `None`
-resumed. That breaks Outcome 7's comparable resolved arguments.
-
-Done since: `Model.trained_by` holds the last self-play stage that trained
-the model; `self_play` and `_restore_model` set it and `initial` reads it.
-`Model.session` is gone: a stage continues live when `Run.live_session` is
-the stage named by `trained_by`, else from this stage's recovery snapshot,
-else it is refused by name (also covers a model trained in non-consecutive
-stages). The parent attempt checked the continuation, so the snapshot path
-does not check it again. Tests:
-`test_a_resumed_continuation_records_and_trains_as_uninterrupted` (the
-probe: equal stage arguments, bit-equal raw weights) and
-`test_a_continuation_without_learner_or_snapshot_is_refused` (orphaned and
-interleaved). Check: test_regime_functions, test_regimes, test_recovery,
-test_active_recovery, test_belief_stages, test_package_boundaries: 61 passed.
-
-Unchanged: the open Etude budget choice and the `run.stage` resume limit.
-
-## Concept review 3 (2026-11-12, against `7fcacc3e5`)
-
-Lineage and one-caller-per-stage hold. Remaining mismatch: a `Model` is
-where a run's weights live, but public `self_play` also takes three
-starting states (`initial_weights`, `pretrained`, `learning_state`) that
-the body loads over `initial=model.network` without looking at the model.
-In a function regime, `m = import_policy(run, "m", ...)` then
-`self_play(run, m, pretrained=...)` trains the pretrained weights while the
-stage records `import-m`'s artifacts as its input (`producer=model.source`),
-and `initial_weights`/`learning_state` behave the same way. Saved regimes
-never hit this: each fresh stage gets a new `run.model`, and
-`TrainingRegime` validation already refuses `initial` with another starting
-state.
-
-Done: `self_play` refuses the three starting states on a model with
-`source` or `trained_by` set, naming model, argument and stage, before
-`_open_stage`; docs say so. Test
-`test_a_starting_state_over_a_model_with_weights_is_refused` uses real
-paths (exported fresh model + `pretrained`; trained model +
-`initial_weights`) rather than a faked import. Check: regime_functions,
-regimes, policy_import, learning_state, recovery, package_boundaries — 87
-passed.
-
-No saved-regime record, digest or stage id changes. Unchanged: the open
-Etude budget choice and the `run.stage` resume limit.

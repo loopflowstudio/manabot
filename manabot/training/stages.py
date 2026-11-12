@@ -969,21 +969,20 @@ def self_play(
     if recorded is not None:
         _restore_model(model, recorded)
         return SelfPlayResult.of(recorded)
-    starting = {
-        "initial_weights": initial_weights,
-        "pretrained": pretrained,
-        "learning_state": learning_state,
-    }
-    given = next((key for key, value in starting.items() if value is not None), None)
-    if given is not None and (model.source or model.trained_by) is not None:
-        # The stage records the model's current weights as its input; loading
-        # other weights over them would train something the record never names.
-        raise ValueError(
-            f"self-play stage {name!r} cannot load {given} into model "
-            f"{model.name!r}, which holds weights from stage "
-            f"{model.trained_by or model.source!r}; {given} starts only a "
-            "fresh model"
-        )
+    # The stage records the model's published weights (`source`, also set by
+    # training) as its input; loading other weights over them would train
+    # something the record never names.
+    for argument, value in (
+        ("initial_weights", initial_weights),
+        ("pretrained", pretrained),
+        ("learning_state", learning_state),
+    ):
+        if value is not None and model.source is not None:
+            raise ValueError(
+                f"self-play stage {name!r} cannot load {argument} into model "
+                f"{model.name!r}, which holds weights from stage "
+                f"{model.source!r}; {argument} starts only a fresh model"
+            )
     if opponent is model:
         raise ValueError("a model cannot be its own frozen opponent")
     if opponent is not None and behavior != "current-self":
