@@ -28,6 +28,8 @@ mod dom;
 mod dtk;
 #[path = "cards/eld.rs"]
 mod eld;
+#[path = "cards/emn.rs"]
+mod emn;
 #[path = "cards/fdn.rs"]
 mod fdn;
 #[path = "cards/frf.rs"]
