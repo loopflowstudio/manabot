@@ -1280,10 +1280,10 @@ impl Observation {
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
                 let mut card = Self::card_data(game, spell.card, ZoneType::Stack);
-                if game.state.cards[spell.card]
-                    .mana_cost
-                    .as_ref()
-                    .is_some_and(|cost| cost.x > 0)
+                let definition = &game.state.cards[spell.card];
+                // A replicated spell's announced count is its X.
+                if definition.mana_cost.as_ref().is_some_and(|cost| cost.x > 0)
+                    || definition.replicate().is_some()
                 {
                     card.x = Some(i32::from(spell.x));
                 }

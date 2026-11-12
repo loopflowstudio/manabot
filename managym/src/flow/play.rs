@@ -198,6 +198,11 @@ impl Game {
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
+        if let Some(replicate) = card_ref.replicate() {
+            for _ in 0..cast.x {
+                cost = cost.plus(replicate);
+            }
+        }
         if cast.kicked {
             if let Some(kicker) = card_ref.optional_cost() {
                 cost = cost.plus(kicker);
@@ -352,7 +357,7 @@ impl Game {
         self.begin_cast(player, card, cast)
     }
 
-    /// CR 601.2b — announce X, then any optional additional cost, before
+    /// CR 601.2b — announce X (or a replicate count), then any optional additional cost, before
     /// modes and targets. Replacing a printed X cost with a free cast or a
     /// fixed alternative fixes X to zero (CR 107.3b).
     fn begin_cast(
@@ -369,7 +374,9 @@ impl Game {
         // CR 107.3a/b: additional X costs still apply to free casts when the
         // printed mana cost has no X. A replaced printed X, however, is zero.
         let additional_x = card_ref.required_waterbend().is_some_and(|cost| cost.x > 0);
-        if selected_x || (!printed_x && additional_x) {
+        // CR 702.56a: the replicate count is announced with the other costs.
+        let replicate = card_ref.replicate().is_some();
+        if selected_x || (!printed_x && additional_x) || replicate {
             self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
             return Ok(());
         }

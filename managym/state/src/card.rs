@@ -841,6 +841,11 @@ pub enum AdditionalCost {
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
     RequiredWaterbend(ManaCost),
+    /// Replicate (CR 702.56): an optional cost paid any number of times,
+    /// announced like X (the spell's announced X holds the count). When the
+    /// spell is cast, a trigger copies it once per payment; each copy may
+    /// take new targets. Payments add to the total cost, not the mana value.
+    Replicate(ManaCost),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -922,6 +927,7 @@ impl CardDefinition {
             | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
             AdditionalCost::Sacrifice(_)
             | AdditionalCost::RequiredWaterbend(_)
+            | AdditionalCost::Replicate(_)
             | AdditionalCost::ExileFromHandAlternative { .. } => None,
         })
     }
@@ -957,6 +963,14 @@ impl CardDefinition {
     pub fn required_waterbend(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::RequiredWaterbend(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    /// The replicate cost, paid once per announced copy.
+    pub fn replicate(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::Replicate(cost) => Some(cost),
             _ => None,
         })
     }

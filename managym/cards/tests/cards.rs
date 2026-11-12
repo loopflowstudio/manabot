@@ -40,6 +40,8 @@ mod fdn;
 mod frf;
 #[path = "cards/fut.rs"]
 mod fut;
+#[path = "cards/gpt.rs"]
+mod gpt;
 #[path = "cards/hob.rs"]
 mod hob;
 #[path = "cards/ice.rs"]

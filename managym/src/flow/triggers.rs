@@ -1380,6 +1380,27 @@ impl Game {
         for effects in fired {
             self.enqueue_inline_trigger(card, source_ref, caster, effects, None);
         }
+        // CR 702.56a: replicate copies the spell once per payment, each copy
+        // with a chance to choose new targets.
+        let replicated = match self.find_spell_on_stack_index(card) {
+            Some(index) => match &self.state.stack_objects[index] {
+                StackObject::Spell(spell) if self.state.cards[card].replicate().is_some() => {
+                    usize::from(spell.x)
+                }
+                _ => 0,
+            },
+            None => 0,
+        };
+        if replicated > 0 {
+            let copies = vec![Effect::CopyTriggeringObject; replicated];
+            self.enqueue_inline_trigger(
+                card,
+                source_ref,
+                caster,
+                copies,
+                Some(Target::StackSpell(card)),
+            );
+        }
     }
 
     /// Abilities that function from their owner's graveyard (CR 113.6k):

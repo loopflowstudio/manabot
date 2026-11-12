@@ -1552,6 +1552,13 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "mh1",
             "force_of_negation_offers_its_alternative_only_outside_your_turn",
         ),
+        AdditionalCost::Replicate(_) => witnessed(
+            "AdditionalCost::Replicate",
+            Seen::Actions("the announcement offers each payable replicate count; the stack spell's announced X shows it"),
+            "Shattering Spree",
+            "gpt",
+            "shattering_spree_replicated_twice_destroys_three_artifacts",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1679,6 +1686,7 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::Kicker(ManaCost::parse("{4}")),
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
+        AdditionalCost::Replicate(ManaCost::parse("{R}")),
         AdditionalCost::PayLifeOrMana {
             life: 5,
             mana: ManaCost::parse("{2}"),
