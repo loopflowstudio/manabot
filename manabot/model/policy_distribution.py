@@ -8,11 +8,11 @@ floor. Collection and learning share this normalization and legal mask.
 import torch
 from torch import Tensor
 
-from manabot.rl.numerics import NumericalError as _NumericalError, require as _require
+from manabot.rl.numerics import NumericalError, require
 
 
 def legal_mask(mask: Tensor) -> Tensor:
-    _require(
+    require(
         torch.isfinite(mask) & ((mask == 0) | (mask == 1)),
         "invalid_action_mask",
         mask=mask,
@@ -28,16 +28,16 @@ def policy_logs(logits: Tensor, valid: Tensor) -> Tensor:
     fail explicitly even when the original logits were finite.
     """
     if logits.shape != valid.shape or logits.ndim < 2:
-        raise _NumericalError("policy_shape", {"logits": logits, "valid": valid})
-    _require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
-    _require(
+        raise NumericalError("policy_shape", {"logits": logits, "valid": valid})
+    require(valid.any(-1), "empty_legal_support", logits=logits, valid=valid)
+    require(
         torch.isfinite(logits) | ~valid,
         "nonfinite_legal_logits",
         logits=logits,
         valid=valid,
     )
     logs = logits.masked_fill(~valid, -torch.inf).log_softmax(-1)
-    _require(
+    require(
         torch.isfinite(logs) | ~valid,
         "nonfinite_legal_logs",
         logs=logs,
@@ -51,17 +51,17 @@ def check_probabilities(
     probabilities: Tensor, valid: Tensor, *, positive: bool
 ) -> None:
     if probabilities.shape != valid.shape or probabilities.ndim < 2:
-        raise _NumericalError(
+        raise NumericalError(
             "distribution_shape", {"probabilities": probabilities, "valid": valid}
         )
     tensors = {"probabilities": probabilities, "valid": valid}
-    _require(valid.any(-1), "empty_legal_support", **tensors)
-    _require(torch.isfinite(probabilities), "nonfinite_probabilities", **tensors)
-    _require(probabilities >= 0, "negative_probabilities", **tensors)
+    require(valid.any(-1), "empty_legal_support", **tensors)
+    require(torch.isfinite(probabilities), "nonfinite_probabilities", **tensors)
+    require(probabilities >= 0, "negative_probabilities", **tensors)
     if positive:
-        _require((probabilities > 0) | ~valid, "nonpositive_legal_support", **tensors)
-    _require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
-    _require(
+        require((probabilities > 0) | ~valid, "nonpositive_legal_support", **tensors)
+    require((probabilities == 0) | valid, "illegal_probability_mass", **tensors)
+    require(
         torch.isclose(
             probabilities.sum(-1),
             torch.ones_like(probabilities[..., 0]),
@@ -75,13 +75,13 @@ def check_probabilities(
 
 def check_logs(logs: Tensor, valid: Tensor) -> None:
     if logs.shape != valid.shape:
-        raise _NumericalError("log_shape", {"logs": logs, "valid": valid})
-    _require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
-    _require(
+        raise NumericalError("log_shape", {"logs": logs, "valid": valid})
+    require(valid.any(-1), "empty_legal_support", logs=logs, valid=valid)
+    require(
         torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", logs=logs, valid=valid
     )
-    _require(torch.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
-    _require(
+    require(torch.isneginf(logs) | valid, "illegal_log_mass", logs=logs, valid=valid)
+    require(
         torch.isclose(
             logs.logsumexp(-1), torch.zeros_like(logs[..., 0]), atol=1e-5, rtol=0
         ),
@@ -116,10 +116,10 @@ def check_behavior(
         or actions.shape != valid.shape[:-1]
         or selected_logs.shape != actions.shape
     ):
-        raise _NumericalError("behavior_shape", tensors)
-    _require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
-    _require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
-    _require(
+        raise NumericalError("behavior_shape", tensors)
+    require(torch.isfinite(logs) | ~valid, "nonfinite_behavior_logs", **tensors)
+    require(torch.isneginf(logs) | valid, "illegal_log_mass", **tensors)
+    require(
         torch.isclose(
             logs.logsumexp(-1), torch.zeros_like(selected_logs), atol=1e-5, rtol=0
         ),
@@ -127,20 +127,18 @@ def check_behavior(
         **tensors,
     )
     # Zero absolute tolerance prevents accepting fabricated tiny probabilities.
-    _require(
+    require(
         torch.isclose(logs.exp(), probabilities, atol=0, rtol=1e-5),
         "behavior_log_probability_mismatch",
         **tensors,
     )
-    _require(
+    require(
         (actions >= 0) & (actions < logs.shape[-1]), "action_out_of_range", **tensors
     )
     chosen = actions[..., None]
-    _require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
-    _require(
-        probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors
-    )
-    _require(
+    require(valid.gather(-1, chosen), "illegal_sampled_action", **tensors)
+    require(probabilities.gather(-1, chosen) > 0, "zero_sampled_probability", **tensors)
+    require(
         torch.isclose(
             logs.gather(-1, chosen).squeeze(-1), selected_logs, atol=1e-5, rtol=1e-5
         ),

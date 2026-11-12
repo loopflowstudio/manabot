@@ -51,10 +51,8 @@ def selection_mask(
     minimum: float,
 ) -> Tensor:
     """Boolean mask shaped like `advantages` keeping `fraction` of rows, |A| >= minimum."""
-    if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum)
     mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
-    mask[selected_rows(advantages.flatten(), fraction, minimum)] = True
+    mask[selected_rows(advantages.flatten(), fraction, minimum, kind=kind)] = True
     return mask.reshape_as(advantages)
 
 
