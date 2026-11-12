@@ -63,7 +63,9 @@ device fails explicitly. Float64 loss and diagnostic arithmetic runs on the
 host with gradients preserved; no automatic operator fallback is enabled.
 Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
-for this workflow. The baseline coordinator reserves a CPU evaluator thread
+for this workflow. A separate [MLX backend](../manabot/backends/mlx.md) of the policy
+and learner step reads the same checkpoints, converted to the shared container,
+for measurement on Apple Silicon; it does not train. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process
 recovery; accelerator runs cannot resume a stopped learner. This support makes
 no speed or strength claim.
