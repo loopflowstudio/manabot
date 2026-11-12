@@ -58,9 +58,7 @@ decklists 64, permanents 32.
 Checks: `pytest tests/model/test_bucketed_shapes.py` 9 passed;
 11 existing model/boundary test files 162 passed, 2 skipped.
 
-Remaining: gate; MTG-301 L4 A/B (`MANABOT_BUCKETED_SHAPES=1`). The switch is
-read in the training process, so the L4 job must set it in that process's
-environment; whether the Etude launcher forwards it is unchecked.
+Remaining: gate; MTG-301 L4 A/B (`MANABOT_BUCKETED_SHAPES=1`).
 
 Upstream (2026-11-12): origin/main is still the checkout base `b2ff1aaed`;
 MTG-299, MTG-300 and MTG-301 are started and unmerged, so the expected
@@ -70,3 +68,17 @@ resolved by whichever lands second.
 Compress: `_ownership` reads the forward's `BucketSizes` instead of rebuilding a
 partial one from shapes; fact count check uses an explicit `None` default.
 `pytest tests/model/test_bucketed_shapes.py` 9 passed.
+
+Concept review (2026-11-12): the concepts hold. One runtime switch, one owner
+(`buckets.py`), trimming only after admission, full-capacity logits, no model
+state. Object trimming silently off under `historical_mean`/belief rows is a
+correctness guard, not a user choice. Remaining packed paths (300/300 full
+signatures) are the stated follow-up for the L4 profile, not a design gap.
+
+Next implement direction: Etude jobs carry the switch. The installed SDK's
+`etude.launch.records.Job.environment` (tuple of `Variable(name, value)`, set
+in the job's process, part of the job's identity) is how an L4 job enables it.
+Add one sentence to the docs section saying so beside the shell example, so
+MTG-301 has the A/B recipe; no code change. Optionally trim that docs section
+toward the facts a user needs (what it does, how to enable, what it does not
+change); the capture numbers live in this plan.
