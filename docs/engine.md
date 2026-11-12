@@ -621,10 +621,39 @@ Magic card (CR 108.2); engine code asks `is_card()`.
 
 ### Objects
 
-CR 109.1 lists every kind of object. Cards, tokens and copies of spells are
-all `GameObject` values (`state::game_object`) held in `GameState::objects`
-and named by `ObjectId`; `GameObject::kind()` returns which of them each one
-is (`ObjectKind`). Every zone list holds `ObjectId`s:
+Each runtime type takes its name and its contents from the rule that defines
+it:
+
+| Rules term | Rule | Engine type | Holds |
+| --- | --- | --- | --- |
+| Card | CR 108 | `Card`, named by `CardId` (planned; today an `Object` with `ObjectKind::Card`, see [What is built](#what-is-built)) | the physical card: owner and definition, for the whole game |
+| Object | CR 109 | `Object` (`state::game_object`) in `GameState::objects`, named by `ObjectId` | one appearance in one zone: characteristics, counters, copy effect and `ObjectKind` |
+| Token | CR 111 | `Object` with `ObjectKind::Token`, from a `TokenDefinition` or a copy effect | no card |
+| Copy of a spell | CR 707.10 | `Object` with `ObjectKind::SpellCopy`, made on the stack | no card |
+| Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card | no card |
+| Permanent | CR 110 | `Permanent`, named by `PermanentId`, beside the object it is | battlefield state: tapped, damage, attachment |
+| Spell | CR 112 | `StackObject::Spell`, beside the object it is | cast choices: targets, X, modes, kicker |
+| Ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` | source, effects and choices; not an `Object` row |
+| Emblem | CR 114 | none yet; no defined card creates one | no card |
+
+An object keeps its kind for its whole life. The one change of kind is a copy
+of a permanent spell, which becomes a token as it resolves (CR 111.12,
+608.3f). A definition's `is_token` says only that its catalog row is a token
+definition's; an object's kind is the authority for what it is.
+
+Every zone change makes a new object (CR 400.7), stack to battlefield included
+(CR 608.3a). Code that means "which object" (a target, "that creature", last
+known information) names one appearance and goes stale when the object moves;
+code that means "which card" (ownership, a decklist, "return that card")
+names the card. Nothing else crosses a zone change: the only bridge from the
+old object to the new one is a carry-over record holding what CR 400.7's
+sub-rules let the new object know (whether it was cast or kicked, and linked
+effects finding the object they moved).
+
+Engine names follow the same rule: `object`, `objects` and `ObjectId` for
+anything that may be a token or copy (the battlefield, the stack, targets,
+events, last known information); `card` and `cards` only where the rules mean
+a card (a decklist, a `CardDefinition`, or an effect whose text says "card").
 
 ```rust
 let object = &game.state.objects[object_id];
@@ -633,40 +662,32 @@ if object.is_card() {
 }
 ```
 
-Engine names follow the same rule: `object`, `objects` and `ObjectId` for
-anything that may be a token or copy (the battlefield, the stack, targets,
-events, last known information); `card` and `cards` only where the rules mean
-a card (a library, a hand, a decklist, a `CardDefinition`, or an effect whose
-text says "card"). An object keeps its kind for its whole life; a zone change
-makes a new object of the same kind (CR 400.7). The one change of kind is a
-copy of a permanent spell, which becomes a token as it resolves (CR 111.12,
-608.3f).
+#### What is built
 
-| Object | Rule | Engine representation |
-| --- | --- | --- |
-| Card | CR 108 | `ObjectKind::Card`, from a `CardDefinition` |
-| Token | CR 111 | `ObjectKind::Token`, from a `TokenDefinition` or a copy effect that creates a token |
-| Copy of a spell | CR 707.10 | `ObjectKind::SpellCopy`, made from a spell on the stack |
-| Copy of a card | CR 707.12 | none yet; no defined card casts a copy of a card |
-| Activated or triggered ability on the stack | CR 113, 602, 603 | `StackObject::ActivatedAbility`, `StackObject::TriggeredAbility` |
-| Emblem | CR 114 | none yet; no defined card creates one |
+The engine stores one `Object` row per physical thing, card or token, and
+keeps it across zone changes; the split into a `Card` store and a store of
+appearances is not built yet. Until it is:
 
-A definition's `is_token` says only that its catalog row is a token
-definition's; an object's kind is the authority for what it is.
+- `ObjectId` is the row's index and outlives a zone change. `ObjectRef`
+  (`EntityId` plus `Incarnation`) is the appearance: its incarnation advances
+  on every zone change (CR 400.7), and `Game::current_object_ref` refuses a
+  stale one. Last known information is the `ObjectLkiLog`, keyed by
+  `ObjectRef`.
+- The row carries the owner and definition a `Card` will hold, and
+  `Object::is_card()` answers "is this a card".
+- `PublicId` is the match-unique number observations show for players,
+  objects and abilities, also used to order timestamps; it is not a storage
+  index.
 
-Two more names are statuses of those objects in a zone, not kinds of their own:
-
-- A **permanent** is a card or token on the battlefield (CR 110.1).
-  `Permanent` holds its battlefield state (tapped, damage, counters,
-  attachment) beside the card or token it is; `PermanentId` names it.
-- A **spell** is a card, or a copy of a card or spell, on the stack
-  (CR 112.1). `StackObject::Spell` holds its cast choices (targets, X,
-  modes, kicker) beside the card or copy it is.
+The split must keep `Card` small and `Copy` (owner, definition id, current
+`ObjectId`), keep both stores flat id-indexed vectors with no hash map on hot
+paths (search clones `Game` constantly), check an object-to-card conversion
+once and assert kinds in debug builds, and measure whether a new id per zone
+change adds layer-view or `TriggerIndex` invalidation before relying on it.
 
 A Clone is still a card. A copy effect changes a card's or token's copiable
 values (CR 707.2) and is recorded on that object (`copy`); it does not make a
-copy object. A copy of a permanent spell becomes a token as it resolves
-(CR 111.12, 608.3f).
+copy object.
 
 ### Zones
 
@@ -690,6 +711,12 @@ hand, graveyard and exile therefore hold cards plus, for that moment, those
 objects. They keep their kind there; such a token can't return to the
 battlefield (CR 111.8), exile grants and "card" selections skip it, and
 `flow/sba.rs` removes it by its kind.
+
+So every zone list holds `ObjectId`s, the library and hand included: a token
+returned to a hand or put into a library really is there until state-based
+actions are checked (CR 111.8 keeps a token that would move again in the zone
+it is in). Only decklists and sideboards, which are outside the game, hold
+cards alone.
 
 Outside the game is not a zone (CR 400.11). Sideboards are fixed rosters held
 beside the game (see [Decks](#decks)); a companion starts there and is put into
