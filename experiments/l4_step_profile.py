@@ -440,6 +440,10 @@ def insitu(out: Path, captures: Path, smoke: bool = False) -> None:
         return batch
 
     original_collect = SeatRoutedCollector.collect
+    # Etude's unpacked bundle has no .git; the launch names the frozen commit.
+    if revision := os.environ.get("MTG301_REVISION"):
+        execution_module.source_commit = lambda: revision
+        receipt["source_commit"] = revision
     execution_module.ActorCritic = make_actor
     inference_module.PolicyInference.prepare = prepare  # type: ignore[method-assign]
     SeatRoutedCollector._sample_learning_rows = sample  # type: ignore[method-assign]
@@ -1318,7 +1322,10 @@ def runs(revision: str, candidate: str = "option3") -> Any:
 
     return Job(
         name=f"mtg301-l4-step-profile-{candidate}",
-        environment=(Variable(name="MTG301_CANDIDATE", value=candidate),),
+        environment=(
+            Variable(name="MTG301_CANDIDATE", value=candidate),
+            Variable(name="MTG301_REVISION", value=revision),
+        ),
         setup=machine_setup(""),
         command=(
             'mkdir -p "$ETUDE_OUTPUT_DIR"\n'
