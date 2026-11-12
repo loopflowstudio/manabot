@@ -362,7 +362,7 @@ uses `scripts/bench_training_update.py --suite` to report the real update split
 across four model sizes, alongside shared-evaluation throughput. It also reports
 inference calls, mean rows per call and the idle stream fraction: complete-game
 closure can leave most streams waiting for the longest games, so 256 configured
-streams need not mean 256 rows per call. Its committed baseline names a reference
+streams need not mean 256 rows per call. A recorded baseline names a reference
 commit and suite interface. Compare that source and the candidate interleaved on
 one machine in one job before claiming a speedup; on a rented GPU, both run on
 the same pod. Local CPU runs check the harness and its runtime, not GPU speed.

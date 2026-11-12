@@ -289,7 +289,7 @@ For a standing speed reading across model sizes, run the
 [training and evaluation benchmark](development.md#training-and-evaluation-speed).
 Its evaluation rows measure checkpoint-versus-checkpoint games through shared
 inference beside the corresponding training rows. Initialized policies measure
-execution speed, not strength. The committed reference names a source commit and
+execution speed, not strength. A recorded reference names a source commit and
 suite interface, not a host's rates. Compare both sources interleaved in one job
 on the same host (the same pod for a rented GPU), device and precision with
 matching behavior digests. Historical absolute rates are context, not a speedup

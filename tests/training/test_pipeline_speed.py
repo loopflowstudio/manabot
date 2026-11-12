@@ -3,6 +3,7 @@
 from copy import deepcopy
 import json
 from pathlib import Path
+import sys
 from typing import Literal, cast
 
 from pydantic import JsonValue
@@ -39,6 +40,17 @@ from scripts.bench_pipeline import (
     training_reading,
     validate_config,
 )
+import scripts.bench_training_update as training_cli
+
+
+@pytest.fixture
+def no_workers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Admission tests must reject before launching any real workload."""
+
+    def unexpected_worker(*args: object, **kwargs: object) -> ProcessOutcome:
+        pytest.fail("admission must finish before starting a worker")
+
+    monkeypatch.setattr(pipeline, "bounded_call", unexpected_worker)
 
 
 def _source() -> Source:
@@ -330,6 +342,7 @@ def test_mps_is_explicitly_training_only() -> None:
 def test_subset_reference_rejected_before_workers_with_retained_error(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    no_workers: None,
     mode: str,
     config: SuiteConfig,
 ) -> None:
@@ -340,10 +353,6 @@ def test_subset_reference_rejected_before_workers_with_retained_error(
     monkeypatch.setattr(pipeline, "source_identity", lambda root: _source())
     monkeypatch.setattr(pipeline, "host_identity", lambda device: _sample().host)
 
-    def unexpected_worker(*args: object, **kwargs: object) -> ProcessOutcome:
-        pytest.fail("reference admission must finish before starting a worker")
-
-    monkeypatch.setattr(pipeline, "bounded_call", unexpected_worker)
     report = run_suite(
         config,
         tmp_path / "reading",
@@ -489,6 +498,106 @@ def test_timeout_retains_failure_and_stops_ladder(
     assert target.read_text() == "previous"
 
 
+@pytest.mark.parametrize("mode", ["standalone", "record", "compare"])
+@pytest.mark.parametrize("seconds", [None, "123.5"])
+def test_suite_cli_deadline_defaults_and_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+    seconds: str | None,
+) -> None:
+    """CLI budgets reach every worker with startup charged once to the job."""
+    out = tmp_path / "reading"
+    baseline = tmp_path / "baseline.json"
+    argv = ["bench_training_update.py", "--suite", "--out", str(out)]
+    if mode == "compare":
+        baseline.write_text(
+            reference_from_report(_reading(SuiteConfig())).model_dump_json()
+        )
+        argv += [
+            "--compare",
+            str(baseline),
+            "--reference-root",
+            str(_reference_checkout(tmp_path)),
+        ]
+    elif mode == "record":
+        argv += ["--record-reference", str(baseline)]
+    if seconds is not None:
+        argv += ["--seconds", seconds]
+    budget = (
+        float(seconds) if seconds is not None else 36000 if mode == "compare" else 7200
+    )
+    started = training_cli.psutil.Process().create_time()
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setattr(pipeline.time, "time", lambda: started + 5)
+    monkeypatch.setattr(pipeline, "source_identity", lambda root: _source())
+    monkeypatch.setattr(pipeline, "host_identity", lambda device: _sample().host)
+
+    def measured(
+        target: object,
+        args: tuple[Path, Path, float],
+        *,
+        deadline_unix: float,
+        process_tree_bytes: int,
+    ) -> ProcessOutcome:
+        _, directory, worker_deadline = args
+        assert deadline_unix == started + budget
+        assert worker_deadline == started + budget - 2
+        request = SuiteConfig.model_validate_json(
+            (directory / "request.json").read_bytes()
+        )
+        atomic_json(
+            directory / "sample.json",
+            _sample(workload=request.workloads[0], size=request.sizes[0]).model_dump(
+                mode="json"
+            ),
+        )
+        return ProcessOutcome({"returncode": 0}, None, 0.1, 0.01, 100, 0, True)
+
+    monkeypatch.setattr(pipeline, "bounded_call", measured)
+    training_cli.main()
+    report = Report.model_validate_json((out / "report.json").read_bytes())
+    assert report.status == "completed", report.error
+    assert report.config == SuiteConfig()
+    assert len(report.attempts) == (48 if mode == "compare" else 8)
+    if mode == "record":
+        assert (
+            Reference.model_validate_json(baseline.read_bytes()).commit
+            == _source().commit
+        )
+
+
+@pytest.mark.parametrize("seconds", ["0", "-1", "4", "nan", "inf"])
+def test_suite_cli_invalid_deadline_retains_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_workers: None, seconds: str
+) -> None:
+    out = tmp_path / "reading"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "bench_training_update.py",
+            "--suite",
+            "--out",
+            str(out),
+            "--seconds",
+            seconds,
+        ],
+    )
+    monkeypatch.setattr(pipeline, "source_identity", lambda root: _source())
+
+    with pytest.raises(SystemExit) as exc:
+        training_cli.main()
+    assert exc.value.code == 1
+    report = Report.model_validate_json((out / "report.json").read_bytes())
+    assert report.status == "incomplete"
+    assert (
+        report.error
+        == "ValueError: suite needs a finite lifetime greater than four seconds"
+    )
+    assert report.attempts == []
+
+
 def test_evaluation_panel_admits_actual_elemental_deck_keys() -> None:
     match = EVALUATION_MATCHUP.match()
     assert sum(match.hero_deck.values()) == 40
@@ -577,7 +686,11 @@ def test_record_reference_keeps_only_source_metadata(
     ],
 )
 def test_invalid_reference_rejected_before_workers(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, problem: str, expected: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    no_workers: None,
+    problem: str,
+    expected: str,
 ) -> None:
     reference = _reference_checkout(tmp_path)
     baseline = {"commit": _source().commit, "suite_interface": 1}
@@ -610,10 +723,6 @@ def test_invalid_reference_rejected_before_workers(
     )
     monkeypatch.setattr(pipeline, "host_identity", lambda device: _sample().host)
 
-    def unexpected_worker(*args: object, **kwargs: object) -> ProcessOutcome:
-        pytest.fail("reference admission must finish before starting a worker")
-
-    monkeypatch.setattr(pipeline, "bounded_call", unexpected_worker)
     report = run_suite(
         SuiteConfig(),
         tmp_path / "reading",

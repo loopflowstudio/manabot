@@ -1,71 +1,82 @@
 <!doctype html>
 <html lang="en">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>855bff — Pipeline benchmark concept review</title>
 <style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
-  body { max-width: 58rem; margin: 2rem auto; padding: 0 1.2rem 2rem; }
-  header, footer { font-size: .85rem; }
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; color: #202124; background: #faf9f6; }
+  body { max-width: 52rem; margin: 1.5rem auto; padding: 0 1rem 1.5rem; }
+  header, footer { font-size: .8rem; }
   h1 { font-size: 1.65rem; line-height: 1.2; margin-bottom: .6rem; }
-  h2 { font-size: 1.1rem; margin: 1.2rem 0 .4rem; }
-  p { margin: .55rem 0; }
-  .decision { border-left: .25rem solid #957333; padding-left: 1rem; }
+  h2 { font-size: 1.1rem; margin: 1rem 0 .35rem; }
+  p { margin: .5rem 0; }
+  .decision { border-left: .25rem solid #846124; padding-left: 1rem; }
   table { width: 100%; border-collapse: collapse; margin: .6rem 0; }
-  th, td { text-align: left; vertical-align: top; padding: .55rem; border-bottom: 1px solid #8886; }
-  code { font-size: .9em; overflow-wrap: anywhere; }
-  .scroll { overflow-x: auto; }
-  a { color: light-dark(#254f91, #a4c7ff); }
-  li { margin: .45rem 0; }
-  @media (max-width: 36rem) { body { margin-top: 1rem; } th, td { padding: .4rem; } }
+  th, td { text-align: left; vertical-align: top; padding: .45rem; border-bottom: 1px solid #8886; }
+  code { font-size: .88em; overflow-wrap: anywhere; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: .7rem; background: #ece9e2; }
+  a { color: #254f91; }
+  li { margin: .35rem 0; }
+  @media (prefers-color-scheme: dark) { :root { color: #eeeae3; background: #202124; } a { color: #a4c7ff; } pre { background: #303136; } .decision { border-color: #c9a969; } }
+  @media (max-width: 36rem) { body { margin-top: 1rem; } th, td { padding: .3rem; font-size: .88rem; } }
 </style>
+</head>
+<body>
 <header>Task 855bff · concept-review · 2026-11-11<br>
-Built from <code>scratch/plan.md</code>, <code>scratch/questions.md</code>, the Task brief,
+Sources: <code>scratch/plan.md</code>, <code>scratch/questions.md</code>, Task brief,
+reference direction in comment <code>262b941c</code>,
 <code>scripts/bench_pipeline.py</code>, <code>scripts/bench_training_update.py</code>,
-<code>manabot/training/rollout/collection.py</code>, <code>docs/development.md</code>
-and <code>tests/training/test_pipeline_speed.py</code>.</header>
+<code>manabot/training/rollout/collection.py</code>, <code>docs/development.md</code>,
+<code>tests/training/test_pipeline_speed.py</code>.</header>
 <main>
-<h1>Which host anchors the standing speed reading?</h1>
+<h1>No host decision remains. Prove the complete workflow.</h1>
 <div class="decision">
-<p><strong>Open choice → Blocked.</strong> The mini is recommended; no host has been
-designated. Local CPU is a candidate. No full ladder or committed reference exists yet.</p>
-<p>The biggest mismatch: the reference workflow is built, but its standing reading
-is still missing. Narrow CPU proofs cannot supply it.</p>
+<p><strong>Review outcome: no concept change or open product choice.</strong>
+The reference selects a commit and suite interface. Each comparison measures
+both sources in one job on one machine.</p>
+<p><strong>Biggest remaining gap:</strong> the harness is implemented; the complete
+default CPU ladder, committed reference and real-source comparison remain unproved.
+A deadline and passing fixtures do not establish practical runtime.</p>
 </div>
-<h2>Actions → concepts → APIs</h2>
-<div class="scroll"><table>
-<thead><tr><th>Action</th><th>Concept that survives</th><th>Existing API / state</th></tr></thead>
+<h2>Before → existing now</h2>
+<p><strong>Superseded:</strong> designate a standing host and retain its reading as
+the baseline. <strong>Existing:</strong> retain source metadata; keep host facts
+and absolute rates in each run. A CPU recording does not bind later jobs to CPU.
+<strong>Proposed changes:</strong> none; the usage docs already follow this model.</p>
+<table>
+<thead><tr><th>Action</th><th>Concept</th><th>API → retained state</th></tr></thead>
 <tbody>
-<tr><td>Measure this machine</td><td>Reading: attempts, including failures</td><td><code>--suite</code> → <code>run_suite</code> → <code>Report</code></td></tr>
-<tr><td>Retain a reviewed reading</td><td>Reference: complete clean reading for this device</td><td><code>--record-reference</code> → baseline JSON</td></tr>
-<tr><td>Check an optimization</td><td>Comparison: matching real runs, whole-sample minima</td><td><code>--compare</code> + <code>--reference-root</code> → <code>Comparison</code></td></tr>
-</tbody></table></div>
-<h2>Before → now: the admission repair is built</h2>
-<p><strong>Before:</strong> recording required the full ladder, while comparison
-could admit a successful one-size report as its reference.</p>
-<p><strong>Existing now:</strong> <code>_require_full_ladder</code> serves recording
-and <code>admit_reference</code>. CPU/CUDA require eight rows; MPS requires four
-training rows. A subset remains diagnostic. Rejection precedes workers and
-persists in <code>report.json</code>; controlled tests cover both paths.</p>
-<p><strong>Proposed, awaiting designation:</strong> use the owned mini's CPU for
-the complete reference, with any MPS training reference separate. No further
-implementation direction follows from this review.</p>
-<h2>Normal use and recovery</h2>
-<p>Designate host → measure clean source → review and retain the complete reading
-→ rerun reference and candidate in alternating order. Historical timings never
-stand in for a fresh control.</p>
-<p>A timeout keeps earlier rows and failure receipts, leaves the reference intact,
-and exits nonzero. Fix the cause and rerun into a new directory. A different host
-or behavior digest means incomparable; it does not mean slower.</p>
-<p><strong>Keep:</strong> existing batching counters, visibly including warmup.
-Streams idle after their quota and terminal game; a larger serving batch limit
-does not remove that tail. No collector redesign follows from this review.</p>
-<h2>Decision for the next conversation</h2>
-<ol><li>Which reference host/device? <strong>1a.</strong> Designate the owned mini's CPU
-for the complete suite, with MPS training separate if wanted. <strong>1b.</strong>
-Name another owned host/device. A rental alternative needs explicit execution
-authority and fresh same-host controls; this review grants neither.</li></ol>
+<tr><td>Measure this machine</td><td>Run, including failures</td><td><code>--suite</code> → <code>run_suite</code> → <code>Report</code> with attempts and samples</td></tr>
+<tr><td>Record reviewed source</td><td>Reference</td><td><code>--record-reference</code> → <code>reference_from_report</code> → <code>{commit, suite_interface}</code></td></tr>
+<tr><td>Compare a change</td><td>Fresh comparison</td><td><code>--compare</code> + <code>--reference-root</code> → <code>admit_reference</code> + <code>compare</code> → ratios or reasons</td></tr>
+</tbody>
+</table>
+<h2>One interaction, including recovery</h2>
+<p>Run a complete clean ladder → review and commit its reference metadata → prepare
+both clean checkouts with matching environments and release extensions → compare:</p>
+<pre><code>uv run --locked --extra evaluation python scripts/bench_training_update.py \
+  --suite --device cpu --compare manabot/perf/baseline.json \
+  --reference-root /path/to/reference-checkout --out .runs/pipeline-compare-001</code></pre>
+<p>Three alternating repetitions retain all samples and select whole minimum-duration
+samples. A timeout retains earlier rows and the error, leaves the baseline intact,
+and exits nonzero. Repair the cause and retry in a new output directory. A changed
+behavior digest is incomparable, even if the candidate finishes faster.</p>
+<p><strong>Counterexamples to keep:</strong> matching GPU labels across rentals
+cannot supply a fresh control; a one-size success cannot establish the ladder;
+batching counters include warmup and cannot stand in for post-warmup timings.
+Complete-game closure idles finished streams; a larger serving batch limit does
+not remove that tail.</p>
+<h2>Review questions, resolved for this step</h2>
+<ol>
+<li><strong>Which host anchors the baseline?</strong> None. The supplied direction
+uses source metadata and fresh controls in one job; provider selection is outside this Task.</li>
+<li><strong>What must be shown next?</strong> Eight default CPU rows and actual
+runtime, recorded metadata, and a real interleaved comparison. CPU proves the
+harness; CUDA remains a documented check on an already provisioned host.</li>
+</ol>
 </main>
-<footer>Working decision: <a href="plan.md">scratch/plan.md</a>. No code changed or workloads launched.</footer>
+<footer>Working account: <a href="plan.md">scratch/plan.md</a>. No code changed or workloads launched in this review.</footer>
+</body>
 </html>

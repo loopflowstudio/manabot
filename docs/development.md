@@ -279,7 +279,7 @@ Measure the training and evaluation pipelines on this machine, across the fixed
 
 ```sh
 uv run --locked --extra evaluation python scripts/bench_training_update.py \
-  --suite --device cpu --out .runs/pipeline-speed-001
+  --suite --device cpu --seconds 7200 --out .runs/pipeline-speed-001
 ```
 
 Run from the repository root with the pinned Python environment and a release
@@ -302,13 +302,21 @@ model shapes, seeds, checkpoint identities and execution limits stay in the
 receipt. Historical experiment declarations and evidence are unchanged.
 
 The default is three training updates per size, with the first excluded from
-the steady-state reading. Evaluation uses the suite's fixed deal set. The whole
-invocation has a 3,600-second deadline, including startup and cleanup; this is a
-limit, not an expected duration. The report records actual elapsed time and
-completed rows. `--seconds` changes that limit, and `--updates` changes the
-training count. A slow machine may need a larger explicit budget to complete
-the ladder. A partial ladder is not a complete suite proof. The process tree has a
-16 GiB RSS ceiling; `--memory-mib` changes it explicitly. Subset checks use
+the steady-state reading. Evaluation uses the suite's fixed deal set. A standalone
+invocation defaults to a 7,200-second deadline, including startup and cleanup;
+this is a limit, not an expected duration. The report records actual elapsed time and
+completed rows, and each finished row prints a progress line to stderr.
+`--seconds` changes that limit, and `--updates` changes the training count.
+On an Apple-silicon laptop CPU (one Torch thread per worker), the former
+3,600-second budget timed out after 3,598 seconds with six completed rows.
+Those completed attempts plus the two attempts in a separate `a384l8` run sum to about
+5,500 seconds, including about 2,500 seconds of `a384l8` training. This is
+summed attempt time, not a completed single-invocation ladder measurement;
+the first training row also overlapped an accidental QA run. The two-hour
+budget leaves headroom over that sum, but still needs a clean full-ladder proof.
+A comparison runs the ladder six times. A partial ladder is not a complete
+suite proof. The process tree has a 16 GiB RSS ceiling; `--memory-mib` changes it
+explicitly. Subset checks use
 `--size w64` and/or `--workload training` (repeat either flag for multiple rows);
 `--streams` remains available. Subsets cannot replace a full-ladder comparison.
 
@@ -344,16 +352,17 @@ failed attempts and billing adjustments and are never a rental bill.
 
 ### Compare against a reference commit
 
-Run from the candidate checkout, with a separate reference checkout on the same
-machine:
+If no reference has been recorded, create one with the complete clean-source
+`--record-reference` run described below. Run the comparison from the candidate
+checkout, with a separate reference checkout on the same machine:
 
 ```sh
 uv run --locked --extra evaluation python scripts/bench_training_update.py \
-  --suite --device cpu --compare manabot/perf/baseline.json \
+  --suite --device cpu --seconds 36000 --compare manabot/perf/baseline.json \
   --reference-root /path/to/reference-checkout --out .runs/pipeline-compare-001
 ```
 
-`manabot/perf/baseline.json` contains `commit` (the full source SHA) and
+The recorded `manabot/perf/baseline.json` contains `commit` (the full source SHA) and
 `suite_interface` (currently `1`).
 There is no designated reference host. Absolute rates and machine details live
 in each run's report as history; they do not bind the baseline to the machine
@@ -373,8 +382,11 @@ The comparison runs both sources interleaved in one job, with three repetitions,
 and reports minimum durations. Each minimum names its sample; phase timings come
 from that sample rather than independently selected minima. Use matching suite
 options for both sources, including updates, streams and memory allowance.
-Comparison has the same total lifetime limit; six interleaved readings may need
-a larger explicit `--seconds` budget. The report retains every attempt, world,
+Comparison defaults to a 36,000-second (ten-hour) total deadline for all six
+ladders, including startup and cleanup. About nine hours is an estimate from
+the summed CPU attempts above, not a completed comparison measurement.
+`--seconds` overrides the total deadline in either mode; it does not change
+workload identity. The report retains every attempt, world,
 input configuration, device, precision, workload and behavior digest, plus
 `TrainingRun.host` facts, machine identity, Python and Torch versions. Host
 admission compares the fresh samples within this job, not an earlier recording.

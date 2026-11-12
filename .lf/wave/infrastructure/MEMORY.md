@@ -62,13 +62,26 @@ recording and comparison share one completeness rule (all four sizes and every
 workload supported by the device), checked before workers start with the error
 retained. Controlled tests cover that rule for CPU/CUDA and training-only MPS;
 they do not establish device performance or real-source repeatability.
-Reference-host designation, complete measurements and real
+There is no reference host to designate. Jack Heart rejected the offered hosts:
+"i dont really thin kany of these options are acceptable tbh". On the
+reference-commit alternative he said: "no i think you have it right. this is a
+strong reason to have at least one more stable gpu. maybe aws gpu perf is more
+consistent?" (comment `262b941c-2188-4426-8ff0-35f7e52eaa10`, 2026-11-11).
+The baseline carries only a source commit and suite interface; comparison reruns
+both clean sources interleaved in one job on one machine, or one pod on a rented
+GPU. Historical rates and hosts cannot supply the denominator or bind future
+jobs. CPU readings prove the harness only. Provider selection is outside this
+Task, and no spending or launch is authorized.
+
+The implementation and controlled tests follow that direction; no baseline has
+been committed. Complete default-ladder runtime, reference adoption and real-source
 interleaving remain open in the Task plan. Short ladders cannot establish MTG-273
 long-run flatness; its separate evidence is in
 `experiments/self-play-collection-273.md`.
 
 Coverage: filesystem inspection on 2026-11-11 found no immediate Infrastructure
 child directories or child memories. Infrastructure memory was read in full;
-related Experiments memory was read only in its self-play metric-indexing section
-this pass (shared-effect performance/delivery was read in the earlier pass).
+related Experiments memory was read only in its introduction and self-play
+metric-indexing section this pass (shared-effect performance/delivery was read
+in an earlier pass).
 Other Experiments sections were not read or curated here.

@@ -37,6 +37,7 @@ import tempfile
 import warnings
 
 import psutil
+from pydantic import ValidationError
 
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.records import TrainingRun
@@ -46,6 +47,9 @@ import managym
 
 RECIPE = Path(__file__).parents[1] / "experiments/regimes/elemental-long-183-v1.json"
 REGIME_ID = "bench-training-update"
+# Failure bounds informed by summed CPU attempts, not measured full invocations.
+SUITE_SECONDS = 7200
+COMPARISON_SECONDS = 36000
 # Driver-side names of a kernel launch in the profiler's CPU events.
 _LAUNCHES = frozenset({"cudaLaunchKernel", "cuLaunchKernel", "cudaLaunchKernelExC"})
 
@@ -118,8 +122,10 @@ def main() -> None:
     parser.add_argument(
         "--seconds",
         type=float,
-        default=3600,
-        help="suite lifetime, including worker cleanup",
+        help=(
+            "suite lifetime in seconds, including startup and cleanup "
+            f"(default: {SUITE_SECONDS}; with --compare: {COMPARISON_SECONDS})"
+        ),
     )
     parser.add_argument(
         "--memory-mib", type=int, default=16384, help="suite process-tree RSS ceiling"
@@ -152,7 +158,7 @@ def main() -> None:
         pipeline.run_worker(args.suite_request, args.out, args.deadline, _execute)
         return
     if args.suite:
-        if args.out is None:
+        if args.out is None or args.out.exists():
             parser.error("--suite requires a new --out directory")
         if (
             args.recipe != str(RECIPE)
@@ -164,19 +170,35 @@ def main() -> None:
                 "suite fixes the recipe/input and retains its own receipts; profiler mode is separate"
             )
         defaults = pipeline.SuiteConfig()
-        config = pipeline.SuiteConfig(
-            device=args.device,
-            streams=args.streams,
-            updates=args.updates,
-            seed=args.seed,
-            sizes=tuple(args.size) if args.size else defaults.sizes,
-            workloads=tuple(args.workload) if args.workload else defaults.workloads,
-            process_tree_bytes=args.memory_mib * 2**20,
-        )
+        try:
+            config = pipeline.SuiteConfig(
+                device=args.device,
+                streams=args.streams,
+                updates=args.updates,
+                seed=args.seed,
+                sizes=tuple(args.size) if args.size else defaults.sizes,
+                workloads=tuple(args.workload) if args.workload else defaults.workloads,
+                process_tree_bytes=args.memory_mib * 2**20,
+            )
+        except ValidationError as exc:
+            flags = {
+                "sizes": "size",
+                "workloads": "workload",
+                "process_tree_bytes": "memory-mib",
+            }
+            parser.error(
+                "; ".join(
+                    f"--{flags.get(str(e['loc'][0]), e['loc'][0])}: {e['msg']}"
+                    for e in exc.errors()
+                )
+            )
+        seconds = args.seconds
+        if seconds is None:
+            seconds = COMPARISON_SECONDS if args.compare else SUITE_SECONDS
         report = pipeline.run_suite(
             config,
             args.out,
-            seconds=args.seconds,
+            seconds=seconds,
             hourly_price=args.hourly_price,
             baseline_path=args.compare,
             reference_root=args.reference_root,

@@ -73,3 +73,14 @@ publish, land or choose the next Graph step from here.
   install the wheel with `--torch-backend cpu` at the minimum pins and run a
   copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
   "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
+- Training/evaluation speed suite: `uv run --locked --extra evaluation python
+  scripts/bench_training_update.py --suite --device cpu --out .runs/<new-dir>`.
+  It hashes tracked *and untracked* files before and after each worker, so do
+  not edit the worktree (including `scratch/`) while it runs; `.runs/` is
+  ignored. Laptop CPU completed attempts sum to ~5,500 s across two runs;
+  no complete invocation was measured. Defaults are 7,200 s standalone and
+  36,000 s for comparison (~9 h estimated, unmeasured); `--seconds` overrides
+  either without changing the workload. Rejection paths (dirty `--record-reference`,
+  `--compare` without `--reference-root`, `--device mps` full suite, bad
+  `--size`) exit before workers start, but check the target `--out` exists
+  before "reuse" tests, or you launch a real run that perturbs a concurrent one.

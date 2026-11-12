@@ -18,6 +18,7 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 import platform
 import subprocess
+import sys
 import time
 from typing import Literal
 
@@ -789,6 +790,8 @@ def run_suite(
         elif reference_root:
             raise ValueError("--reference-root requires --compare")
         repetitions = REPETITIONS if report.reference else 1
+        sides_per_cell = 2 if report.reference else 1
+        total = repetitions * sides_per_cell * len(config.sizes) * len(config.workloads)
         for repetition in range(repetitions):
             sides = ("reference", "candidate") if report.reference else ("candidate",)
             if repetition % 2:
@@ -812,6 +815,12 @@ def run_suite(
                 )
                 report.attempts.append(attempt)
                 atomic_json(out / "report.json", report.model_dump(mode="json"))
+                print(
+                    f"[{len(report.attempts)}/{total}] {side} {workload}/{size}: "
+                    f"{attempt.error or 'measured'} in {attempt.elapsed_seconds:.0f}s",
+                    file=sys.stderr,
+                    flush=True,
+                )
                 if attempt.error:
                     raise RuntimeError(attempt.error)
         report.comparisons = (

@@ -3,163 +3,107 @@
 ## Outcome and constraints
 
 One bounded local command measures training and shared-inference evaluation across
-`w64`, `w128l4`, `w160l8`, `a384l8`, retains a reference commit and suite interface,
-and compares real sources interleaved on one machine in one job. It reports stage attribution, batching utilization and
-supplied-price rates. The default ladder's actual runtime must be measured;
-the 3,600-second deadline is not evidence that it is practical.
+`w64`, `w128l4`, `w160l8`, `a384l8`, records a reference commit and suite interface,
+and compares both sources interleaved on one machine in one job. It reports stage
+attribution, batching utilization and supplied-price rates.
 
 No learning, collector, native, frozen recipe or evidence changes; no paid runs,
-rentals, induced contention or cross-runner timing gate. CPU measurements do not
-establish GPU speed. Batching optimization and long-run slowdown acceptance remain
-separate outcomes.
+rentals, induced contention or cross-runner timing gate. CPU runs prove the
+harness, never GPU performance or a speed claim. Batching optimization,
+learning-equivalence admission and long-run slowdown acceptance are separate.
 
-## Implemented
+## Settled design
 
-The baseline now contains only `commit` and `suite_interface: 1`.
-`reference_from_report` admits a complete clean standalone reading before
-recording metadata; absolute rates and host facts stay in `Report`.
-`admit_reference` validates the clean reference checkout and its literal
-`SUITE_INTERFACE` declaration without executing its code. No historical report
-or host participates in fresh sample admission. Both comparison sources must be
-clean; the same requested suite configuration reaches both workers.
+The reference direction in comment `262b941c-2188-4426-8ff0-35f7e52eaa10`
+specifies no standing host (exact words in `scratch/questions.md`). Keep three
+concepts: a report retains attempts and samples; a reference selects source and
+worker interface; a comparison derives ratios from this job's admitted samples.
+Provider selection is outside this Task and grants no spending authority.
 
-`scripts/bench_training_update.py --suite` keeps `_execute` as the training executor.
-`scripts/bench_pipeline.py` owns `WORKLOADS`, `run_suite` and `_measure_attempt`:
-one bounded worker tree, retained attempts and cleanup, fixed v6/512-fact input,
-float32, 256 streams and three updates. Evaluation uses initialized checkpoints
-and four replay-verified BG/GR legs. Docs link the command and CI includes its tests.
+- `scripts/bench_training_update.py --suite` uses the existing `_execute` training
+  executor. `scripts/bench_pipeline.py` owns `WORKLOADS`, `run_suite` and
+  `_measure_attempt`: one bounded worker tree, cleanup and retained failures.
+  The benchmark owns its current-world Elemental identity: v6/512 facts,
+  float32, 256 streams and three updates; evaluation uses initialized policies
+  and four replay-verified BG/GR legs. New workloads use the same coordinator.
+- `training_reading` excludes update one from timings through
+  `update_metrics.read_updates` / `stage_rows`. Batching counters include warmup;
+  calls/update is a stage average. `SeatRoutedCollector._collect` / `_settle_step`
+  retire streams after their quota and terminal game, shrinking active batches
+  toward the tail. Larger serving limits do not remove this idle cost.
+- `Reference` contains only `commit` and `suite_interface: 1`.
+  `reference_from_report` requires a complete clean standalone reading.
+  `_require_full_ladder` requires all sizes and all device-supported workloads
+  before recording or comparison workers start. Subsets remain diagnostic.
+  No baseline has been recorded or committed; the retired persisted-Report
+  design had no stored baseline needing migration.
+- `admit_reference` reads the other checkout's literal `SUITE_INTERFACE` without
+  executing it. Both clean sources need their own matching environment and
+  release extension. Historical hosts and rates never supply the denominator
+  or bind later jobs' options.
+- `compare` alternates reference/candidate across three repetitions under one
+  deadline, retains every sample and selects whole minimum-duration samples.
+  It checks fresh workload, host (including Python/Torch), device, precision and
+  behavior identity. Both workers receive the same requested options. CPU/CUDA
+  support both workloads; MPS supports training only, without substitution.
+- `docs/development.md` owns usage, recovery and the named one-job CUDA check;
+  training/evaluation docs link it. The harness tests are in the evaluation CI
+  group. No CI timing comparison is introduced.
 
-`training_reading` excludes update one from collection/learning timing, using
-`update_metrics.read_updates` / `stage_rows`. Batching counters are cumulative:
-calls/update is a whole-stage average, rows/call and idle fraction include warmup,
-not individual update measurements. In `SeatRoutedCollector._collect`, complete-game
-streams idle only after meeting their quota and finishing a game; active rows then
-shrink toward the tail. The existing counters expose this without a second store.
+## Evidence and limits
 
-`compare` alternates clean reference and candidate sources for three repetitions,
-retains all samples and selects whole minimum-duration samples after workload,
-host, device, precision and behavior admission. Python and Torch versions are part
-of host identity. Historical durations alone cannot produce a speedup. A reference
-checkout is explicit and must contain the suite interface. MPS supports training
-only; CPU/CUDA support both workloads. No device substitution.
+Merge `0a561319c` brought Python 3.13/dependency changes (`b7c102f2c`) and MTG-273
+outcome tables (`1659b0e29`). `read_updates` still owns outcome-table expansion;
+timing keys remain intact. MTG-273's long-run acceptance is separately documented
+in `experiments/self-play-collection-273.md`.
 
-`_require_full_ladder` is shared by recording and comparison: all four
-sizes and the device's supported workloads are required before workers start.
-A successful subset remains a diagnostic reading. Rejection persists the error
-without replacing a reference. Controlled tests cover CPU/CUDA/MPS admission,
-subset rejection and full eight-row interleaving; actual device measurements
-remain separate acceptance.
+The early dirty `402dfd5b2` CPU subset proofs preceded that merge: a measured
+second training update of 6.144 s / 399 learner decisions, whole-stage 1.743
+rows/call and 0.1285 idle fraction; after correcting deck keys, four replayed
+evaluation games at 0.5197 games/s in a 13.15 s invocation. These establish narrow
+integration only. Commands and retained failure facts are in `scratch/questions.md`.
 
-## Reconciled with main
-
-Merge `0a561319c` includes the Python 3.13/dependency changes (`b7c102f2c`) and
-MTG-273 outcome-table repair (`1659b0e29`). The latter preserves timing keys while
-`read_updates` expands selected outcome-table references. Keep that reader as the
-owner; no benchmark-specific compatibility layer is needed. Python version was
-missing from host admission and is now recorded and compared.
-
-The earlier narrow CPU receipts were produced on dirty `402dfd5b2` source before
-this sync; they demonstrate integration, not the merged source or a standing
-reference. MTG-273's bounded index fixture does not prove long-run flat RSS or
-collection time; neither will this three-update ladder. See
-`experiments/self-play-collection-273.md` for that separate acceptance.
+QA on dirty `2f24ceb09` (2026-11-11, laptop CPU) timed out after 3,598 s under the
+old 3,600 s default, retaining six rows. The separate a384l8 run finished both
+rows in 2,548 s. Completed attempt times sum to ≈5,470 s, not one complete
+invocation. Six ladders imply an estimated ≈9 h comparison, not a measurement.
+w64 overlapped an accidental QA run and is perturbed. a384l8 reported 685
+calls/update, 77.8 rows/call and 0.696 idle. Full receipts and readings:
+`.runs/qa-ladder-001/report.json`, `.runs/qa-a384l8-001/report.json`, `scratch/qa.html`.
 
 ## Delete — do not maintain
 
-- Removed `Report` as the persisted baseline and historical sample/host admission
-  in `admit_reference` and `compare`, including their exclusive test fixtures.
-  No baseline has been committed, so no stored-data migration is needed.
-- Keep `Report` for run evidence, all attempts and failures, complete-ladder
-  recording validation, explicit clean reference checkout admission, and fresh
-  workload/host/behavior checks with whole-sample minima.
-- Removed the duplicate record-and-compare rejection test; the parameterized
-  admission test covers it with controlled sources and baseline preservation.
-  Full-device reference admission now runs through the recording test, covering
-  persisted metadata and receipts for CPU/CUDA/MPS. No deletion targets remain.
+Completed: removed the shared 3,600-second suite CLI default and stale examples.
+Standalone suites now default to 7,200 s; comparisons to 36,000 s. Explicit
+`--seconds` overrides either without changing workload identity. Startup/cleanup
+accounting and failures remain retained. The single-recipe deadline is unchanged.
+No remaining file, symbol or exclusive-fixture deletion targets.
 
-## Remaining acceptance
+Compression keeps the two budgets beside the CLI and uses them in help and
+selection, replacing the nested conditional. Admission tests share one fixture
+that forbids worker launches. The report/attempt/sample separation remains useful:
+failed attempts have no sample. QA guidance now distinguishes summed attempts
+from complete invocation measurements. Before curating the notes, their full
+uncommitted versions were moved to `.runs/compress-context-20261111/`.
 
-1. On clean source with its matching release extension and locked environment,
-   retain a complete default ladder, actual invocation time and all eight rows.
-   Resolve capacity/runtime failures without silently changing workload identity.
-   Label this local CPU run as a harness proof, not a speed claim or GPU evidence.
-   Review and commit the commit-and-interface `manabot/perf/baseline.json`; no
-   baseline exists yet. Keep absolute rates in the run report.
+## Remaining acceptance — gate/measurement
+
+1. On clean source with matching release extension and locked environment,
+   retain one complete default CPU ladder, actual invocation time and eight rows.
+   Resolve capacity/runtime failures without changing workload identity. Record,
+   review and commit `manabot/perf/baseline.json` through `--record-reference`;
+   keep measured rates in the report. This establishes a local harness proof.
 2. Run a real same-host interleaved reference/candidate comparison with matching
-   suite options. Establish repeatable behavior admission; retain failures and
-   incomparable results. Controlled fixtures alone do not satisfy this outcome.
-3. Gate checks the merged metric-reader integration and configured evaluation CI
-   collection. CUDA remains the documented one-job, same-pod comparison check
-   on an already provisioned host; neither CUDA nor MPS
-   has been exercised here. No speedup or learning-equivalence claim is established.
+   options. Establish repeatable behavior admission and retain incomparable
+   results/failures. The full CPU/CUDA comparison has 48 worker attempts sharing
+   one deadline; controlled fixtures do not prove its runtime or repeatability.
+3. Gate checks merged metric-reader integration and the configured evaluation CI
+   collection. CUDA remains a named same-pod check on an already provisioned
+   host. CUDA/MPS have not been exercised here and do not block this repair.
+   No speedup or learning-equivalence claim is established.
 
-Latest focused validation: `uv run --locked --extra dev --extra evaluation pytest
-tests/training/test_pipeline_speed.py -k 'comparison or reference or suite_interleaves or missing_or_failed'
--q` — 39 passed, 9 deselected in 2.88 s. Ruff lint/format, Python compilation,
-CLI `--help` and `git diff --check` passed. Controlled CPU/CUDA/MPS fixtures
-exercise a CPU-recorded reference on another host/device with different requested
-options, one shared deadline, complete interleaving, clean sources, rejected
-metadata/interfaces, and baseline preservation. No device workloads ran in this
-implementation step; gate owns affected suites and remaining acceptance checks.
-
-## Settled reference direction — 2026-11-11
-
-Jack Heart rejected the proposed standing hosts: "i dont really thin kany of these
-options are acceptable tbh". To the alternative of a reference commit with fresh
-same-job controls he said: "no i think you have it right. this is a strong reason
-to have at least one more stable gpu. maybe aws gpu perf is more consistent?"
-Source: comment `262b941c-2188-4426-8ff0-35f7e52eaa10`.
-
-There is no reference host to designate. The committed baseline names a reference
-commit and suite interface. Each comparison reruns both sources interleaved on
-one machine in one job (on one pod for a rented GPU). Absolute rates remain
-per-run history; only same-job ratios can support comparison. CPU runs are free
-harness proofs, never a speed claim. No rental, launch or spending is authorized.
-Whether to add a stable GPU provider remains outside this Task.
-
-This supersedes the earlier concept review's host-choice blocker and its
-host-bound reference model, including the historical walkthrough in
-`scratch/concept-review.html`. Preserve complete-ladder admission, retained failed
-attempts, fresh workload/behavior checks and whole-sample minima. A failed or
-subset run cannot replace the reference. The reference checkout remains explicit
-and clean, with its own environment and extension. No implementation or
-measurement was launched by the documentation step.
-
-## Shipping docs — write-docs, 2026-11-11
-
-The next implementation step must read these edited files in this checkout:
-
-- `docs/development.md`, Training and evaluation speed: measurement example,
-  commit-and-interface reference, fresh interleaved admission, recording and
-  recovery, local CPU proof, exact one-job CUDA comparison command.
-- `docs/training.md`, update-time guidance: batching counters and same-job
-  comparison, with CPU scope explicit.
-- `docs/evaluation.md`, Performance evidence and calibration: reference identity,
-  same-pod comparison and historical rates.
-
-The implementation now matches the reference behavior in these docs; the
-full-ladder and real-source measurement obligations above remain open. The
-existing CLI flags and full-ladder recording prerequisite are preserved.
-
-Presentation: `lf open --host desktop --file docs/development.md --file
-docs/training.md --file docs/evaluation.md` returned "No Desktop Files view
-attached; nothing opened." Files remain at these paths. Reviewed the examples
-against the CLI flags and checked the edited prose; `git diff --check` passed.
-No workloads or tests were run for this documentation-only step.
-
-## Compress — reference metadata, 2026-11-11
-
-Flattened the comparison and coordinator loops with `itertools.product`, keeping
-the same size/workload order and alternating reference/candidate order. The
-receipt types and worker registry remain: attempts must retain failures without
-samples, and workloads share one coordinator. Consolidated the redundant
-reference tests described above.
-
-Validation: `uv run --locked --extra dev --extra evaluation pytest
-tests/training/test_pipeline_speed.py -q` — 46 passed in 5.75 s; focused Ruff
-lint/format and `git diff --check` passed. No benchmark workloads ran. Full-ladder
-runtime, baseline adoption and real-source comparison remain open.
-
-Proposed correction for the read-only Infrastructure memory: replace its stale
-“Reference-host designation” obligation with the settled commit-and-interface
-direction above. Complete measurements and real interleaving remain required.
+Compression validation: `uv run --locked --extra dev --extra evaluation pytest tests/training/test_pipeline_speed.py -q`
+— 57 passed in 1.57 s. Focused Ruff lint/format, Python compilation, CLI help,
+`uv run --locked python scripts/check_loopflow_workflows.py` and `git diff --check`
+passed. No benchmark workloads, servers or watchers were launched. `lf context`
+keeps memory and scratch below both configured token and byte limits.
