@@ -26,6 +26,7 @@ in [experiments.md](experiments.md); metric definitions live in
 ```bash
 uv run manabot train                                   # --recipe local: bounded smoke
 uv run manabot train --recipe baseline --seed 197      # baseline-v3 with evaluation
+uv run manabot train --recipe baseline --seed 197 --padded-shapes  # CUDA comparison without bucketed shapes or live tokens
 uv run manabot train --regime-name direct_self_play --seed 197 --out .runs/direct-pilot
 uv run manabot train --regime regime.json --seed 197 --out .runs/example
 ```
