@@ -456,9 +456,10 @@ impl<'a> Context<'a> {
             }
             if layer == Layer::ModifyPower {
                 for (&id, object) in &mut context.objects {
-                    let count = game
-                        .live_permanent(id)
-                        .counter_count(CounterKind::PlusOnePlusOne);
+                    // CR 613.4c: +1/+1 and -1/-1 counters apply together.
+                    let permanent = game.live_permanent(id);
+                    let count = permanent.counter_count(CounterKind::PlusOnePlusOne)
+                        - permanent.counter_count(CounterKind::MinusOneMinusOne);
                     if count != 0 {
                         let view = Arc::make_mut(&mut Arc::make_mut(object).view);
                         view.power += count;

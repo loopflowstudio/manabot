@@ -8,6 +8,8 @@
 #[path = "../../tests/support/mod.rs"]
 mod support;
 
+#[path = "cards/aer.rs"]
+mod aer;
 #[path = "cards/afr.rs"]
 mod afr;
 #[path = "cards/blb.rs"]
@@ -16,6 +18,8 @@ mod blb;
 mod definitions;
 #[path = "cards/dft.rs"]
 mod dft;
+#[path = "cards/dom.rs"]
+mod dom;
 #[path = "cards/eld.rs"]
 mod eld;
 #[path = "cards/fdn.rs"]
@@ -26,16 +30,26 @@ mod hob;
 mod ice;
 #[path = "cards/iko.rs"]
 mod iko;
+#[path = "cards/kld.rs"]
+mod kld;
 #[path = "cards/ktk.rs"]
 mod ktk;
 #[path = "cards/lea.rs"]
 mod lea;
 #[path = "cards/m20.rs"]
 mod m20;
+#[path = "cards/mbs.rs"]
+mod mbs;
+#[path = "cards/mid.rs"]
+mod mid;
 #[path = "cards/mkm.rs"]
 mod mkm;
 #[path = "cards/observability.rs"]
 mod observability;
+#[path = "cards/ody.rs"]
+mod ody;
+#[path = "cards/pls.rs"]
+mod pls;
 #[path = "cards/rav.rs"]
 mod rav;
 #[path = "cards/roe.rs"]
@@ -54,5 +68,7 @@ mod tla;
 mod tle;
 #[path = "cards/war.rs"]
 mod war;
+#[path = "cards/wth.rs"]
+mod wth;
 #[path = "cards/zen.rs"]
 mod zen;

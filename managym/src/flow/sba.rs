@@ -110,6 +110,11 @@ impl Game {
             };
         }
 
+        // CR 704.5q — +1/+1 and -1/-1 counters on one permanent annihilate
+        // in pairs. Power and toughness are unchanged, so the simultaneous
+        // checks below read the same characteristics either way.
+        performed |= self.annihilate_opposing_counters();
+
         // Candidate discovery uses exact object identities. The mutable
         // storage slot is resolved only while inspecting the current object;
         // no later commit can accidentally follow a re-entered card.
@@ -191,6 +196,28 @@ impl Game {
         } else {
             SbaProgress::Stable
         }
+    }
+
+    fn annihilate_opposing_counters(&mut self) -> bool {
+        let pairs: Vec<(PermanentId, i32)> = self
+            .state
+            .permanents
+            .iter()
+            .enumerate()
+            .filter_map(|(index, permanent)| {
+                let permanent = permanent.as_ref()?;
+                let pairs = permanent
+                    .counter_count(CounterKind::PlusOnePlusOne)
+                    .min(permanent.counter_count(CounterKind::MinusOneMinusOne));
+                (pairs > 0).then_some((PermanentId(index), pairs))
+            })
+            .collect();
+        for &(id, pairs) in &pairs {
+            let permanent = self.state.permanents[id].as_mut().expect("present");
+            permanent.change_counters(CounterKind::PlusOnePlusOne, -pairs);
+            permanent.change_counters(CounterKind::MinusOneMinusOne, -pairs);
+        }
+        !pairs.is_empty()
     }
 
     pub(crate) fn finish_state_based_batch(&mut self) -> bool {

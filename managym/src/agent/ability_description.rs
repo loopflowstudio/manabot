@@ -401,6 +401,7 @@ pub(crate) fn predicate_description(p: &CardPredicate, noun: &str) -> String {
 pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
     match kind {
         CounterKind::PlusOnePlusOne => "+1/+1",
+        CounterKind::MinusOneMinusOne => "-1/-1",
         CounterKind::DoubleStrike => "double strike",
         _ => kind.name(),
     }

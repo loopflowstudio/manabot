@@ -5,11 +5,12 @@ use crate::support::{
         Scenario,
     },
     inspect::{
-        assert_choice_contract, can_activate, can_cast, card_of, offered_cards, offered_targets,
-        tapped,
+        assert_choice_contract, can_activate, can_cast, card_of, counters, has_action, keywords,
+        offered_cards, offered_targets, pt_modifications, tapped,
     },
     play::{
-        activate, attack_with, cast_owned, choose, choose_mode, pass_until, select_card, settle,
+        activate, attack_with, cast_owned, choose, choose_mode, pass_until, resolve_everything,
+        select_card, settle,
     },
 };
 use managym::{
@@ -20,6 +21,7 @@ use managym::{
     },
     flow::turn::StepKind,
     state::{
+        card::Keyword,
         game_object::{PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -117,6 +119,214 @@ fn tle_baseline_wolf_cove_villager_enters_tapped_and_untaps_normally() {
     assert!(tapped(&s, permanent));
     s.advance_to_active_step(0, StepKind::Main);
     assert!(!tapped(&s, permanent));
+}
+
+#[test]
+fn tle_baseline_keyword_creatures_have_printed_body_and_keyword() {
+    for (name, power, toughness, keyword) in [
+        ("Aardvark Sloth", 3, 3, Keyword::Lifelink),
+        ("Deer-Dog", 1, 3, Keyword::FirstStrike),
+        ("Dragon Moose", 3, 3, Keyword::Haste),
+        ("Elephant-Rat", 1, 3, Keyword::Menace),
+        ("Fire Nation Ambushers", 3, 2, Keyword::Flash),
+        ("Fire Nation Soldier", 3, 2, Keyword::Haste),
+        ("Flying Dolphin-Fish", 1, 3, Keyword::Flying),
+        ("Frog-Squirrels", 2, 2, Keyword::Reach),
+        ("Gilacorn", 1, 1, Keyword::Deathtouch),
+        ("Hippo-Cows", 5, 4, Keyword::Trample),
+        ("Komodo Rhino", 5, 2, Keyword::Trample),
+        ("The Terror of Serpent's Pass", 8, 8, Keyword::Hexproof),
+        ("Tundra Wall", 0, 4, Keyword::Defender),
+        ("Turtle-Seals", 2, 4, Keyword::Vigilance),
+        ("Zhao, the Seething Flame", 5, 5, Keyword::Menace),
+        ("Sokka, Wolf Cove's Protector", 3, 3, Keyword::Vigilance),
+    ] {
+        let mut s = five_color_setup(&[name]);
+        let card = cast_owned(&mut s, name);
+        settle(&mut s);
+        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let view = s.game().characteristics(permanent);
+        assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
+        assert!(view.keywords.has(keyword), "{name}");
+    }
+}
+
+#[test]
+fn tle_baseline_dragon_moose_attacks_the_turn_it_enters() {
+    let mut s = five_color_setup(&["Dragon Moose"]);
+    let card = cast_owned(&mut s, "Dragon Moose");
+    settle(&mut s);
+    let moose = s.game().state.card_to_permanent[card].unwrap();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, moose);
+    s.advance_to_step(StepKind::EndOfCombat);
+    s.assert_life(1, 17);
+}
+
+#[test]
+fn tle_baseline_tundra_wall_cannot_attack() {
+    let mut s = five_color_setup(&["Tundra Wall", "Gray Ogre"]);
+    let wall = s.force_permanent_on_battlefield(0, "Tundra Wall");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, wall);
+    clear_summoning_sickness(&mut s, ogre);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    assert!(!has_action(&s, |action| matches!(
+        action,
+        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == wall
+    )));
+    assert!(has_action(&s, |action| matches!(
+        action,
+        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == ogre
+    )));
+}
+
+#[test]
+fn tle_baseline_fire_nation_ambushers_casts_on_the_opponents_turn() {
+    let mut s = five_color_setup(&["Fire Nation Ambushers", "Gray Ogre"]);
+    let ambushers = move_to_hand(&mut s, "Fire Nation Ambushers");
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    s.set_player_mana_pool(0, "2B");
+    while s.action_space().player != Some(PlayerId(0))
+        || s.action_space().kind != ActionSpaceKind::Priority
+    {
+        s.advance_default_action();
+    }
+    assert!(can_cast(&s, ambushers));
+}
+
+#[test]
+fn tle_baseline_aang_air_nomad_gives_other_creatures_vigilance() {
+    let mut s = five_color_setup(&["Aang, Air Nomad", "Gray Ogre"]);
+    let aang = s.force_permanent_on_battlefield(0, "Aang, Air Nomad");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(keywords(&s, ogre).has(Keyword::Vigilance));
+    assert!(keywords(&s, aang).has(Keyword::Flying));
+    assert!(!keywords(&s, foe).has(Keyword::Vigilance));
+    clear_summoning_sickness(&mut s, ogre);
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    attack_with(&mut s, ogre);
+    s.advance_to_step(StepKind::EndOfCombat);
+    assert!(!tapped(&s, ogre));
+}
+
+#[test]
+fn tle_baseline_iroh_pumps_every_attacking_creature() {
+    let mut s = five_color_setup(&["Iroh, Firebending Instructor", "Gray Ogre"]);
+    let iroh = s.force_permanent_on_battlefield(0, "Iroh, Firebending Instructor");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let idle = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    clear_summoning_sickness(&mut s, iroh);
+    clear_summoning_sickness(&mut s, ogre);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == (*permanent == iroh || *permanent == ogre))
+        });
+    }
+    resolve_everything(&mut s);
+    assert_eq!(pt_modifications(&s, iroh), (1, 1));
+    assert_eq!(pt_modifications(&s, ogre), (1, 1));
+    assert_eq!(pt_modifications(&s, idle), (0, 0));
+}
+
+#[test]
+fn tle_baseline_katara_heroic_healer_counters_each_other_creature_you_control() {
+    let mut s = five_color_setup(&["Katara, Heroic Healer", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let card = cast_owned(&mut s, "Katara, Heroic Healer");
+    settle(&mut s);
+    let katara = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(counters(&s, ogre), 1);
+    assert_eq!(counters(&s, katara), 0);
+    assert_eq!(counters(&s, foe), 0);
+    assert!(keywords(&s, katara).has(Keyword::Lifelink));
+}
+
+#[test]
+fn tle_baseline_sledding_otter_penguin_buys_counters_repeatedly() {
+    let mut s = five_color_setup(&["Sledding Otter-Penguin"]);
+    let otter = s.force_permanent_on_battlefield(0, "Sledding Otter-Penguin");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    for expected in 1..=2 {
+        activate(&mut s, otter, 0);
+        settle(&mut s);
+        assert_eq!(counters(&s, otter), expected);
+    }
+    let view = s.game().characteristics(otter);
+    assert_eq!((view.power, view.toughness), (4, 5));
+}
+
+#[test]
+fn tle_baseline_toucan_puffin_pumps_only_your_creature() {
+    let mut s = five_color_setup(&["Toucan-Puffin", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_owned(&mut s, "Toucan-Puffin");
+    for _ in 0..4 {
+        if !offered_targets(&s).is_empty() {
+            break;
+        }
+        s.pass_priority();
+    }
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(ogre)));
+    assert!(!targets.contains(&Target::Permanent(foe)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(pt_modifications(&s, ogre), (2, 0));
+}
+
+#[test]
+fn tle_baseline_fire_nation_s_conquest_pumps_your_creatures() {
+    let mut s = five_color_setup(&["Fire Nation's Conquest", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_owned(&mut s, "Fire Nation's Conquest");
+    settle(&mut s);
+    let view = s.game().characteristics(ogre);
+    assert_eq!((view.power, view.toughness), (3, 2));
+    let view = s.game().characteristics(foe);
+    assert_eq!((view.power, view.toughness), (2, 2));
+}
+
+#[test]
+fn tle_baseline_allied_teamwork_makes_and_pumps_allies() {
+    let mut s = five_color_setup(&["Allied Teamwork", "Kyoshi Warrior Guard", "Gray Ogre"]);
+    let guard = s.force_permanent_on_battlefield(0, "Kyoshi Warrior Guard");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_owned(&mut s, "Allied Teamwork");
+    settle(&mut s);
+    let tokens = s.battlefield_permanents_named(0, "Ally");
+    assert_eq!(tokens.len(), 1);
+    let token = s.game().characteristics(tokens[0]);
+    assert_eq!((token.power, token.toughness), (2, 2));
+    let view = s.game().characteristics(guard);
+    assert_eq!((view.power, view.toughness), (3, 4));
+    let view = s.game().characteristics(ogre);
+    assert_eq!((view.power, view.toughness), (2, 2));
+}
+
+#[test]
+fn tle_baseline_sokka_s_sword_training_pumps_and_makes_a_clue() {
+    let mut s = five_color_setup(&["Sokka's Sword Training", "Gray Ogre"]);
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_owned(&mut s, "Sokka's Sword Training");
+    assert!(s.choose_target(Target::Permanent(foe)));
+    settle(&mut s);
+    assert_eq!(pt_modifications(&s, foe), (2, 2));
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
 }
 
 fn merchant(foods: usize) -> (Scenario, PermanentId, Vec<PermanentId>) {

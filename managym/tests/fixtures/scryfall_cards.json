@@ -4730,5 +4730,455 @@
     "colors": [
       "R"
     ]
+  },
+  "Aardvark Sloth": {
+    "name": "Aardvark Sloth",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Sloth Beast",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Deer-Dog": {
+    "name": "Deer-Dog",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Elk Dog",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike (This creature deals combat damage before creatures without first strike.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Dragon Moose": {
+    "name": "Dragon Moose",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Dragon Elk",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Elephant-Rat": {
+    "name": "Elephant-Rat",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Elephant Rat",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Nation Ambushers": {
+    "name": "Fire Nation Ambushers",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Nation Soldier": {
+    "name": "Fire Nation Soldier",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Flying Dolphin-Fish": {
+    "name": "Flying Dolphin-Fish",
+    "mana_cost": "{1}{U}",
+    "type_line": "Creature — Whale Fish",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Frog-Squirrels": {
+    "name": "Frog-Squirrels",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Frog Squirrel",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach (This creature can block creatures with flying.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Gilacorn": {
+    "name": "Gilacorn",
+    "mana_cost": "{B}",
+    "type_line": "Creature — Lizard",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch (Any amount of damage this deals to a creature is enough to destroy it.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Hippo-Cows": {
+    "name": "Hippo-Cows",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Hippo Ox",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Komodo Rhino": {
+    "name": "Komodo Rhino",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Lizard Rhino",
+    "power": "5",
+    "toughness": "2",
+    "keywords": [
+      "Trample"
+    ],
+    "oracle_text": "Trample (This creature can deal excess combat damage to the player it's attacking.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "The Terror of Serpent's Pass": {
+    "name": "The Terror of Serpent's Pass",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "8",
+    "toughness": "8",
+    "keywords": [
+      "Hexproof"
+    ],
+    "oracle_text": "Hexproof (This creature can't be the target of spells or abilities your opponents control.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Tundra Wall": {
+    "name": "Tundra Wall",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Wall",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender (This creature can't attack.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Turtle-Seals": {
+    "name": "Turtle-Seals",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Turtle Seal",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Zhao, the Seething Flame": {
+    "name": "Zhao, the Seething Flame",
+    "mana_cost": "{4}{R}",
+    "type_line": "Legendary Creature — Human Soldier",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Sokka, Wolf Cove's Protector": {
+    "name": "Sokka, Wolf Cove's Protector",
+    "mana_cost": "{2}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance (Attacking doesn't cause this creature to tap.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Aang, Air Nomad": {
+    "name": "Aang, Air Nomad",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying (This creature can't be blocked except by creatures with flying or reach.)\nVigilance (Attacking doesn't cause this creature to tap.)\nOther creatures you control have vigilance.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Iroh, Firebending Instructor": {
+    "name": "Iroh, Firebending Instructor",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever Iroh attacks, attacking creatures get +1/+1 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Katara, Heroic Healer": {
+    "name": "Katara, Heroic Healer",
+    "mana_cost": "{4}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Lifelink"
+    ],
+    "oracle_text": "Lifelink (Damage dealt by this creature also causes you to gain that much life.)\nWhen Katara enters, put a +1/+1 counter on each other creature you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sledding Otter-Penguin": {
+    "name": "Sledding Otter-Penguin",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Otter Bird",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{3}: Put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Toucan-Puffin": {
+    "name": "Toucan-Puffin",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Bird",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, target creature you control gets +2/+0 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Fire Nation's Conquest": {
+    "name": "Fire Nation's Conquest",
+    "mana_cost": "{2}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control get +1/+0.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Allied Teamwork": {
+    "name": "Allied Teamwork",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a 1/1 white Ally creature token.\nAllies you control get +1/+1.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sokka's Sword Training": {
+    "name": "Sokka's Sword Training",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +2/+2 until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sol Ring": {
+    "name": "Sol Ring",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}{C}.",
+    "colors": []
+  },
+  "Diresight": {
+    "name": "Diresight",
+    "mana_cost": "{2}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Surveil 2, then draw two cards. You lose 2 life. (To surveil 2, look at the top two cards of your library, then put any number of them into your graveyard and the rest on top of your library in any order.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Consider": {
+    "name": "Consider",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "Surveil 1. (Look at the top card of your library. You may put it into your graveyard.)\nDraw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Fervor": {
+    "name": "Fervor",
+    "mana_cost": "{2}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Creatures you control have haste. (They can attack and {T} as soon as they come under your control.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Run Amok": {
+    "name": "Run Amok",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target attacking creature gets +3/+3 and gains trample until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Heroic Intervention": {
+    "name": "Heroic Intervention",
+    "mana_cost": "{1}{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Permanents you control gain hexproof and indestructible until end of turn.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dramatic Reversal": {
+    "name": "Dramatic Reversal",
+    "mana_cost": "{1}{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Untap all nonland permanents you control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Entomb": {
+    "name": "Entomb",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a card, put that card into your graveyard, then shuffle.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Eladamri's Call": {
+    "name": "Eladamri's Call",
+    "mana_cost": "{G}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for a creature card, reveal that card, put it into your hand, then shuffle.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Black Sun's Zenith": {
+    "name": "Black Sun's Zenith",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Put X -1/-1 counters on each creature. Shuffle Black Sun's Zenith into its owner's library.",
+    "colors": [
+      "B"
+    ]
   }
 }

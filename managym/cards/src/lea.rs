@@ -26,6 +26,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         savannah_lions(),
         serra_angel(),
         shivan_dragon(),
+        sol_ring(),
         swamp(),
         wall_of_stone(),
         war_mammoth(),
@@ -356,6 +357,22 @@ fn war_mammoth() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         keywords: Keywords::of(&[Keyword::Trample]),
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sol_ring() -> CardDefinition {
+    let text_box = "{T}: Add {C}{C}.";
+    CardDefinition {
+        key: "lea.sol_ring",
+        scryfall_id: "c4300d24-1cae-4dd5-be7e-38cc677cf5bd",
+        name: "Sol Ring".into(),
+        mana_cost: Some(ManaCost::parse("{1}")),
+        types: CardTypes::new([CardType::Artifact]),
+        mana_abilities: vec![ManaAbility {
+            mana: Mana::parse("CC"),
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -173,3 +173,19 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
         }
     }
 }
+
+#[test]
+fn sol_ring_taps_for_two_colorless() {
+    let mut s = crate::support::game::five_color_unfunded_setup(&["Sol Ring", "Prophetic Prism"]);
+    let ring = s.force_permanent_on_battlefield(0, "Sol Ring");
+    let prism = crate::support::game::move_to_hand(&mut s, "Prophetic Prism");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(crate::support::inspect::can_cast(&s, prism));
+    crate::support::play::cast_card(&mut s, prism);
+    crate::support::play::settle(&mut s);
+    assert!(crate::support::inspect::tapped(&s, ring));
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Prophetic Prism").len(),
+        1
+    );
+}

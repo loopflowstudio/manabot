@@ -3268,8 +3268,11 @@ fn each_counter_kind_reaches_a_fact_row() {
         let id = name_value(&format!("CounterKind::{}", kind.name()));
         let row = fact_row(&facts_about(&changed, 0, index), FactKind::Counter, id);
         assert_eq!(row[FACT_VALUE_INDEX], 0.1, "{kind:?}");
-        if kind == CounterKind::PlusOnePlusOne {
-            continue; // v4 sees +1/+1 counters and the power they add.
+        if matches!(
+            kind,
+            CounterKind::PlusOnePlusOne | CounterKind::MinusOneMinusOne
+        ) {
+            continue; // v4 sees the power and toughness these counters change.
         }
         assert_facts_alone_see(&baseline, &changed, 0);
     }

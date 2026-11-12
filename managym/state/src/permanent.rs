@@ -29,6 +29,9 @@ pub enum CounterKind {
     /// CR 714.2: a Saga's chapter abilities trigger as these are put on it.
     Lore,
     Trample,
+    /// CR 122.1a: -1/-1 to power and toughness (layer 7c); annihilates with
+    /// +1/+1 counters as a state-based action (CR 704.5q).
+    MinusOneMinusOne,
 }
 
 impl CounterKind {
@@ -46,6 +49,7 @@ impl CounterKind {
             CounterKind::Loyalty => "loyalty",
             CounterKind::Defense => "defense",
             CounterKind::Trample => "trample",
+            CounterKind::MinusOneMinusOne => "minus_one_minus_one",
         }
     }
 
@@ -57,7 +61,7 @@ impl CounterKind {
         }
     }
 
-    pub const ALL: [CounterKind; 11] = [
+    pub const ALL: [CounterKind; 12] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
@@ -69,6 +73,7 @@ impl CounterKind {
         CounterKind::Defense,
         CounterKind::Lore,
         CounterKind::Trample,
+        CounterKind::MinusOneMinusOne,
     ];
 }
 

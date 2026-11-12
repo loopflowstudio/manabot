@@ -10,10 +10,12 @@
 //! not deck-entry exclusions. Card behavior
 //! tests live in `tests/cards/<set>.rs` beside the sets.
 
+mod aer;
 mod afr;
 mod blb;
 mod bro;
 mod dft;
+mod dom;
 mod eld;
 mod fdn;
 mod fin;
@@ -22,14 +24,19 @@ mod hob;
 mod ice;
 mod iko;
 mod isd;
+mod kld;
 mod ktk;
 mod lea;
 mod m20;
+mod mbs;
 mod mh1;
 mod mh2;
+mod mid;
 mod mkm;
+mod ody;
 mod ons;
 mod ori;
+mod pls;
 mod por;
 mod ptk;
 mod rav;
@@ -44,6 +51,7 @@ mod tle;
 mod tokens;
 mod vis;
 mod war;
+mod wth;
 mod zen;
 
 use std::sync::OnceLock;
@@ -63,11 +71,13 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 35] = [
+const SETS: [fn() -> Vec<CardDefinition>; 43] = [
+    aer::cards,
     afr::cards,
     blb::cards,
     bro::cards,
     dft::cards,
+    dom::cards,
     eld::cards,
     fdn::cards,
     fin::cards,
@@ -76,14 +86,19 @@ const SETS: [fn() -> Vec<CardDefinition>; 35] = [
     ice::cards,
     iko::cards,
     isd::cards,
+    kld::cards,
     ktk::cards,
     lea::cards,
     m20::cards,
+    mbs::cards,
     mh1::cards,
     mh2::cards,
+    mid::cards,
     mkm::cards,
+    ody::cards,
     ons::cards,
     ori::cards,
+    pls::cards,
     por::cards,
     ptk::cards,
     rav::cards,
@@ -98,5 +113,6 @@ const SETS: [fn() -> Vec<CardDefinition>; 35] = [
     tokens::cards,
     vis::cards,
     war::cards,
+    wth::cards,
     zen::cards,
 ];
