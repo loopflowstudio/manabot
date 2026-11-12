@@ -140,6 +140,7 @@ def _artifacts(directory: Path) -> None:
                 archive.writestr(f"{project}-0.2.0.dist-info/METADATA", metadata)
                 if project == "managym":
                     archive.writestr("managym/_managym.cpython.so", b"native fixture")
+                    archive.writestr("managym/Cargo.lock", "# lockfile fixture\n")
                 else:
                     archive.writestr(
                         "content/semantic/current/learning_schema.json", "{}"
@@ -161,6 +162,21 @@ def test_release_requires_both_platforms_and_interpreters(tmp_path: Path) -> Non
     next(tmp_path.glob("*cp313*whl")).unlink()
     with pytest.raises(ValueError, match="four wheels"):
         module.validate(tmp_path, True)
+
+
+def test_engine_wheel_ships_the_lockfile_training_provenance_hashes(
+    tmp_path: Path,
+) -> None:
+    _artifacts(tmp_path)
+    wheel = next(tmp_path.glob("managym-*cp313*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        files = {name: archive.read(name) for name in archive.namelist()}
+    del files["managym/Cargo.lock"]
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, data in files.items():
+            archive.writestr(name, data)
+    with pytest.raises(ValueError, match="provenance lockfile"):
+        _load("validate").validate(tmp_path, True)
 
 
 @pytest.mark.parametrize(

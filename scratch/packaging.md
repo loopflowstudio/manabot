@@ -107,12 +107,47 @@ Candidate consumers install the engine wheel, then supply both local wheel
 paths when adding training. No new installer or release state is needed.
 Package versions still do not replace world identity or checkpoint admission.
 
-Compression confirmed the requested clarification was already in the working
-tree, retained it, consolidated repeated plan text and updated the stale
-proposal status in `scratch/concept-review.html`. No further runtime cut was
-warranted. Uncommitted notes before curation are retained at
+The iteration feedback describes this clarification as unresolved, but it is
+already committed in `8c46a570bb1ddf816ff131dd5f5265a68b5d1595`, including the
+updated status in `scratch/concept-review.html`. Realign confirmed both openings
+and their local-wheel destination; no further install edit remains. Remote main
+still points to `4c041d6cefe829c5b1b52273ba19991d663ee26b`, an ancestor of this
+checkout. The gate/CI obligations and later publication decisions above remain.
+Uncommitted notes before the earlier curation are retained at
 `/tmp/mtg287-compress-notes.rQn0gz/`.
 
 Documentation check, 2026-11-11: `git diff --check` passed; both qualifiers
 precede the first install command and link to `### Build and verify`.
 No games, builds or publication checks were rerun for this prose-only pass.
+
+## Concept-review outcome — 2026-11-11, loop 2 pass 2
+
+Nothing to change and no open product choice within this packaging Task.
+Advance to validation; do not repeat the implemented install clarification.
+The normal path (engine alone, then matching training), conflicting-version
+recovery and interrupted-publication recovery fit the working design. Retain
+the counterexample: an engine upload can succeed before training fails;
+completion must remain derived from both exact inventories and the GitHub
+entry, with original artifacts retained for retry. No additional release
+record or installer is needed. The first shared version remains a later
+publication prerequisite, not a choice required to implement this design.
+Next show the outstanding gate/CI evidence listed above. This review ran no
+games, builds or external publication checks and changes no runtime behavior.
+
+## QA — 2026-11-11
+
+Report: `scratch/qa.html`. Candidate wheels in `.runs/qa/dist` (macOS arm64,
+cp312/cp313). With Cargo absent from PATH, engine-only installs played complete
+games on both interpreters. Adding training passed `scripts/release/smoke.py`
+including CPU training on 3.12 (minimum Torch/Etude pins) and on 3.13 (latest
+Torch 2.15.0, all extras) only after these fixes:
+- the engine wheel ships `managym/Cargo.lock` again (training provenance hashes
+  it; 0.2.0's single wheel had it at that path), drops the stray `uv.lock`,
+  and `validate.py` requires the lockfile;
+- `docs/engine-python.md` used `uv run ... -c`, which uv 0.12.18 rejects;
+  it now uses `... python -c`;
+- upgrading from PyPI manabot 0.2.0 with pip, or installing the engine before
+  removing 0.2.0, deletes `managym/__init__.py` (owned by 0.2.0's RECORD).
+  `manabot/__init__.py` now raises an ImportError naming the repair; release
+  notes and the engine guide say to uninstall 0.2.0 first. uv's one-step
+  upgrade is unaffected. Repairs verified with pip and uv.

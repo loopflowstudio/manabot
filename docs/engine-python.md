@@ -11,7 +11,7 @@ mkdir managym-example
 cd managym-example
 uv venv --python 3.13
 uv pip install --python .venv/bin/python --only-binary :all: managym
-uv run --no-project --python .venv/bin/python -c 'import managym; print(managym.world_identity())'
+uv run --no-project --python .venv/bin/python python -c 'import managym; print(managym.world_identity())'
 ```
 
 The last command prints the installed world's version and card digest. The
@@ -57,11 +57,16 @@ Install `manabot` when you need training, evaluation or its optional clients:
 ```bash
 uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu manabot
 uv run --no-project --python .venv/bin/python manabot --help
-uv run --no-project --python .venv/bin/python -c 'import managym; from manabot import managym as compatibility; assert compatibility.Env is managym.Env'
+uv run --no-project --python .venv/bin/python python -c 'import managym; from manabot import managym as compatibility; assert compatibility.Env is managym.Env'
 ```
 
 `manabot` requires exactly its own version of `managym`; resolution may update
-the existing engine to that matching version. Keep a project lockfile, or pin
+the existing engine to that matching version. When the environment already has
+`manabot` 0.2.0, which bundled the engine and owns `managym/__init__.py`,
+uninstall it before installing `managym` or a newer `manabot`; removing it
+afterwards deletes that file. Repair an affected environment by reinstalling
+the engine (`uv pip install --reinstall-package managym 'managym==<version>'`
+with uv, `pip install --force-reinstall 'managym==<version>'` with pip). Keep a project lockfile, or pin
 both to the same published version. A resolver conflict between the two is
 fixed by aligning versions, not by using `--no-deps`. See
 [training installation](development.md#install) for extras and Torch backends.

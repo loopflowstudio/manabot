@@ -91,6 +91,8 @@ def validate(directory: Path, complete: bool) -> None:
                     raise ValueError("managym wheel must own its native extension")
                 if any(p.startswith(("manabot/", "academy/")) for p in files):
                     raise ValueError("engine wheel contains training or Academy")
+                if "managym/Cargo.lock" not in files:
+                    raise ValueError("managym wheel is missing its provenance lockfile")
             elif native or any(p.startswith("managym/") for p in files):
                 raise ValueError(
                     "manabot wheel must be pure Python without a second engine"

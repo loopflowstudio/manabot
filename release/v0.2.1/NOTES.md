@@ -22,6 +22,14 @@ for extras, backend selection and dependency troubleshooting.
 This research release includes API removals and world changes since 0.2.0.
 Review the migration guidance before upgrading an existing collector or run.
 
+To upgrade an environment that has `manabot` 0.2.0, uninstall it first:
+`pip uninstall manabot`, then install 0.2.1. The 0.2.0 wheel owns
+`managym/__init__.py`, so removing it after the new engine is installed (what
+pip does in a one-step upgrade) deletes that file. If `import manabot` then
+reports missing `managym` package files, run
+`pip install --force-reinstall 'managym==0.2.1'`. uv upgrades in one step
+without this problem.
+
 ## Read scalar and batched hands
 
 `HandSnapshot` reports authoritative hand contents for an explicit native seat:
