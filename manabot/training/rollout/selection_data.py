@@ -12,7 +12,6 @@ import os
 from pathlib import Path
 from typing import Literal
 
-from managym.decision import Command, DecisionFrame, Observation
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
@@ -27,6 +26,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.training.learning.references import reference_distribution
 from manabot.training.regime import SelectionGameSpec, Strict
 import managym
+from managym.decision import Command, DecisionFrame, Observation
 
 
 class FrozenRecord(Strict):

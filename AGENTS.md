@@ -44,8 +44,10 @@ Name a thing for what it is where it is produced, not for how one consumer
 uses it. managym produces observations, encodings and card tokens for any
 consumer, so its API says `catalog_tokens` and `record_vocabulary`; manabot may
 name the same value by its use. Rename a published name with a deprecated alias
-that warns and states its removal release; serialized configuration keys,
-checkpoint fields and frozen evidence keep their spelling.
+that warns and states its removal release (a moved Python name keeps resolving
+through `__getattr__ = manabot.infra.deprecation.moved(...)` in its old
+module); serialized configuration keys, checkpoint fields and frozen evidence
+keep their spelling.
 
 Code dependencies flow Academy → manabot → the engine in `managym`.
 PyPI distributes the engine as `managym` and training as `manabot`, released

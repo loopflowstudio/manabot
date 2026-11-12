@@ -1,12 +1,14 @@
 """Local numerical health, independent of tracker availability and RNG.
 
-Batch measurements cover every collected row. Detailed gradient/parameter
-measurements sample the first optimizer step at iteration 1 and every 25th
-iteration. Safety checks run on every step; absent samples remain absent.
+Batch measurements cover every collected row (`batch_health`). An
+`OptimizerHealth` is the player's `StepRecorder` (`manabot.rl.step`): passed
+to `gradient_step`, it counts steps and samples gradient and parameter detail,
+including the critic readout's share, at iteration 1 and every 25th iteration.
+Safety checks run on every step, observed or not; absent samples remain absent.
 """
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Callable, Iterator
+from contextlib import AbstractContextManager, contextmanager
 from typing import TypedDict
 
 import numpy as np
@@ -14,8 +16,8 @@ import torch
 from torch import Tensor, nn
 
 from manabot.infra.profiler import Profiler
-from manabot.model.numerics import float64_operand
-from manabot.model.policy_distribution import NumericalError, require
+from manabot.rl.numerics import NumericalError, float64_operand
+from manabot.rl.step import check_objective
 from manabot.training.rollout.actions import PackedActions
 
 HEALTH_INTERVAL = 25
@@ -100,41 +102,42 @@ def batch_health(
 
 
 class OptimizerHealth:
-    """Guard Adam and sample its actual effect without altering loss or RNG.
+    """Record what `gradient_step` does to one iteration's `NumericalHealth`.
+
+    Counts steps and rejections on every step. Detailed gradient and parameter
+    measurements sample the first step of iteration 1 and every 25th
+    iteration. Recording never changes the loss, the step or any RNG.
 
     `check` rejects a detached or nonfinite objective; it waits for the loss on
     the device, so a caller timing its forward pass ends that timer there.
-    `step` then runs backward, clipping and Adam. With a profiler, backward and
-    the optimizer step are timed separately; each ends at a finite check that
-    already waits for the device, so timing adds no synchronization.
+    With a profiler, `gradient_step` times backward and the optimizer step
+    separately; each ends at a finite check that already waits for the device,
+    so timing adds no synchronization.
     """
+
+    _critic_norms: tuple[float, float | None] | None
 
     def __init__(
         self,
-        model: nn.Module,
-        optimizer: torch.optim.Optimizer,
         health: NumericalHealth,
         iteration: int,
         profiler: Profiler | None = None,
     ) -> None:
-        self.model = model
-        self.optimizer = optimizer
         self.health = health
         self.measure = iteration == 1 or iteration % HEALTH_INTERVAL == 0
         self.profiler = profiler or Profiler(enabled=False)
+        self._critic_norms = None
+
+    def track(self, section: str) -> AbstractContextManager[object]:
+        return self.profiler.track(section)
 
     def check(self, loss: Tensor) -> None:
-        with self._rejecting():
-            self._check(loss)
-
-    def step(self, loss: Tensor, max_norm: float, *, checked: bool = False) -> Tensor:
-        with self._rejecting():
-            if not checked:
-                self._check(loss)
-            return self._step(loss, max_norm)
+        with self.rejecting():
+            check_objective(loss)
 
     @contextmanager
-    def _rejecting(self) -> Iterator[None]:
+    def rejecting(self) -> Iterator[None]:
+        """Count a NumericalError as a rejected step and attach the record."""
         try:
             yield
         except NumericalError as error:
@@ -142,109 +145,119 @@ class OptimizerHealth:
             error.health = dict(self.health)
             raise
 
-    def _check(self, loss: Tensor) -> None:
-        if not loss.requires_grad:
-            raise NumericalError("detached_objective", {"loss": loss})
-        require(torch.isfinite(loss), "nonfinite_objective", loss=loss)
+    def sampling(self) -> bool:
+        """Whether the coming step is this iteration's detailed sample."""
+        return self.measure and not self.health["sampled_steps"]
 
-    def _step(self, loss: Tensor, max_norm: float) -> Tensor:
-        parameters = list(self.model.parameters())
-        self.optimizer.zero_grad(set_to_none=True)
-        with self.profiler.track("Backward and gradient clipping"):
-            norm, measured = self._backward(loss, parameters, max_norm)
-        with self.profiler.track("Optimizer step"):
-            self._optimize(parameters, measured)
-        return norm
+    def before_clip(self, model: nn.Module) -> None:
+        """Read the critic's pre-clip gradient norms (`critic_gradient_norms`)."""
+        self._critic_norms = critic_gradient_norms(model)
 
-    def _backward(
-        self, loss: Tensor, parameters: list[nn.Parameter], max_norm: float
-    ) -> tuple[Tensor, bool]:
-        loss.backward()
-        measured = self.measure and not self.health["sampled_steps"]
+    def record_gradients(self, model: nn.Module, norm_before: Tensor) -> None:
+        """After clipping, on a sampled step that `before_clip` already read."""
+        if self._critic_norms is None:
+            raise RuntimeError("record_gradients requires before_clip first")
+        critic_norm, token_norm = self._critic_norms
+        self._critic_norms = None
+        parameters = list(model.parameters())
         grads = [p.grad for p in parameters if p.grad is not None]
-        if not grads:
-            raise NumericalError("missing_all_gradients", {"loss": loss})
-        # Read before clipping rescales the gradients in place.
-        named = dict(self.model.named_parameters()) if measured else {}
-        critic_norm = _norm(
-            [
-                p.grad
-                for name, p in named.items()
-                if p.grad is not None and name.startswith(_CRITIC_READOUT)
-            ]
+        self.health.update(
+            sampled_steps=1,
+            gradient_norm_before=float(norm_before),
+            gradient_norm_after=_norm(grads),
+            gradient_norm_critic_readout=critic_norm,
+            gradient_missing_tensors=sum(
+                p.requires_grad and p.grad is None for p in parameters
+            ),
+            gradient_zero_tensors=sum(not bool(g.any()) for g in grads),
+            gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
+            frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
         )
-        token = named.get(_VALUE_TOKEN)
-        token_norm = (
-            None if token is None else _norm([] if token.grad is None else [token.grad])
-        )
-        try:
-            # error_if_nonfinite reads the norm on the host: the device wait
-            # that ends the backward timer.
-            norm = torch.nn.utils.clip_grad_norm_(
-                parameters, max_norm, error_if_nonfinite=True
-            )
-        except RuntimeError as error:
-            raise NumericalError(
-                "nonfinite_gradients",
-                {
-                    f"gradient/{name}": p.grad
-                    for name, p in self.model.named_parameters()
-                    if p.grad is not None
-                },
-            ) from error
-        if measured:
-            self.health.update(
-                sampled_steps=1,
-                gradient_norm_before=float(norm),
-                gradient_norm_after=_norm(grads),
-                gradient_norm_critic_readout=critic_norm,
-                gradient_missing_tensors=sum(
-                    p.requires_grad and p.grad is None for p in parameters
-                ),
-                gradient_zero_tensors=sum(not bool(g.any()) for g in grads),
-                gradient_nonzero_tensors=sum(bool(g.any()) for g in grads),
-                frozen_parameter_tensors=sum(not p.requires_grad for p in parameters),
-            )
-            if token_norm is not None:
-                self.health["gradient_norm_value_token"] = token_norm
-        return norm, measured
+        if token_norm is not None:
+            self.health["gradient_norm_value_token"] = token_norm
 
-    def _optimize(self, parameters: list[nn.Parameter], measured: bool) -> None:
-        before = [p.detach().clone() for p in parameters] if measured else []
-        self.optimizer.step()
-        # One flat read: per-tensor checks cost two launches per parameter tensor.
-        if not torch.isfinite(
-            torch.cat([p.detach().flatten() for p in parameters])
-        ).all():
-            raise NumericalError(
-                "nonfinite_parameters_after_step",
-                {f"parameter/{name}": p for name, p in self.model.named_parameters()},
-            )
+    def record_step(self, parameters: list[nn.Parameter], before: list[Tensor]) -> None:
+        """Count a completed step; `before` is empty unless this step is sampled."""
         self.health["optimizer_steps"] += 1
-        if measured:
-            delta = (
-                torch.stack(
-                    [
-                        (
-                            float64_operand(p.detach()).double()
-                            - float64_operand(b).double()
-                        )
-                        .square()
-                        .sum()
-                        for p, b in zip(parameters, before, strict=True)
-                    ]
-                )
-                .sum()
-                .sqrt()
+        if not before:
+            return
+        delta = (
+            torch.stack(
+                [
+                    (float64_operand(p.detach()).double() - float64_operand(b).double())
+                    .square()
+                    .sum()
+                    for p, b in zip(parameters, before, strict=True)
+                ]
             )
-            scale = (
-                torch.stack(
-                    [float64_operand(b).double().square().sum() for b in before]
-                )
-                .sum()
-                .sqrt()
-            )
-            self.health["parameter_delta_l2"] = float(delta)
-            self.health["parameter_relative_delta"] = (
-                float(delta / scale) if scale > 0 else float(delta)
-            )
+            .sum()
+            .sqrt()
+        )
+        scale = (
+            torch.stack([float64_operand(b).double().square().sum() for b in before])
+            .sum()
+            .sqrt()
+        )
+        self.health["parameter_delta_l2"] = float(delta)
+        self.health["parameter_relative_delta"] = (
+            float(delta / scale) if scale > 0 else float(delta)
+        )
+
+
+def critic_gradient_norms(model: nn.Module) -> tuple[float, float | None]:
+    """Pre-clip norms of the critic-only readout and, if present, the value token."""
+    named = dict(model.named_parameters())
+    critic = _norm(
+        [
+            p.grad
+            for name, p in named.items()
+            if p.grad is not None and name.startswith(_CRITIC_READOUT)
+        ]
+    )
+    token = named.get(_VALUE_TOKEN)
+    if token is None:
+        return critic, None
+    return critic, _norm([] if token.grad is None else [token.grad])
+
+
+@contextmanager
+def failure_tensors(tensors: Callable[[], dict[str, Tensor]]) -> Iterator[None]:
+    """Attach `tensors()` to a NumericalError raised inside, then re-raise it.
+
+    The callable runs only on failure, so a healthy step builds no evidence.
+    """
+    try:
+        yield
+    except NumericalError as error:
+        error.tensors.update(tensors())
+        raise
+
+
+def minibatch_tensors(
+    *,
+    logits: Tensor,
+    value_logits: Tensor,
+    valid: Tensor,
+    actions: Tensor,
+    behavior_logs: Tensor,
+    reference: Tensor,
+    advantages: Tensor,
+    value_targets: Tensor,
+    actor_selected: Tensor,
+    indexes: Tensor,
+    obs: dict[str, Tensor],
+) -> dict[str, Tensor]:
+    """The evidence a rejected update step retains: its minibatch and outputs."""
+    return {
+        "logits": logits.detach(),
+        "value_logits": value_logits.detach(),
+        "valid": valid,
+        "actions": actions,
+        "behavior_logs": behavior_logs,
+        "reference": reference,
+        "advantages": advantages,
+        "value_targets": value_targets,
+        "actor_selected": actor_selected,
+        "minibatch_indexes": indexes,
+        **{f"minibatch_observation/{key}": value for key, value in obs.items()},
+    }

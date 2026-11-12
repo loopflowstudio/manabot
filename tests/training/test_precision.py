@@ -16,7 +16,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.training import precision
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
+from manabot.training.loops.damped_policy import update_damped_iteration
 from manabot.training.regime import DampedPolicyLearning, Execution, Precision
 from manabot.training.rollout.collection import SeatRoutedCollector
 
@@ -119,15 +119,13 @@ def test_bf16_wraps_exactly_the_policy_forwards_and_keeps_float32_outputs(
 
     batch = collector.collect(agent, 1)
     learner = Learner(agent, "cpu", minibatch_rows=2, precision="bf16")
-    result = update_iteration(
+    result = update_damped_iteration(
         learner,
         batch,
         DampedPolicyLearning(
             gradient="damped_policy", advantage_quantile=0, min_advantage=0
         ),
-        0,
-        np.random.default_rng(1),
-        iteration=1,
+        1,
     )
     collector.close()
 

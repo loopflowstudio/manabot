@@ -7,6 +7,8 @@ mean, and how interrupted or failed work is recovered. Comparisons are declared
 in [experiments.md](experiments.md); metric definitions live in
 [experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
 [evaluation.md](evaluation.md).
+[Training loops](training-loop.md) names the update rules a regime runs and
+the pieces for writing your own learner.
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)

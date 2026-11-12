@@ -18,7 +18,7 @@ from manabot.infra.config import (
 )
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import Learning
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
 

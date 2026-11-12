@@ -6,15 +6,13 @@ import numpy as np
 import pytest
 import torch
 
+from manabot.rl.returns import transition_gae
+from manabot.rl.selection import selected_rows
+from manabot.rl.step import update_ema
 from manabot.training.learning import learner as learner_module
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import (
-    reference_distribution,
-    update_ema,
-    update_iteration,
-)
-from manabot.training.learning.returns import transition_gae
-from manabot.training.learning.selection import selected_rows
+from manabot.training.learning.references import reference_distribution
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import Learning, Schedule
 from manabot.training.rollout.actions import ActionRows, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch

@@ -414,6 +414,7 @@ know and where the code lives.
 | [learning.md](docs/learning.md) | How a manabot learns: play, batch boundaries, credit assignment, filtering, the loss, reading a run, down to the code |
 | [evaluation.md](docs/evaluation.md) | One deal, what counts, anchors and ratings, scenarios, frozen-policy attacks, LLM players, shared inference, card data |
 | [experiments.md](docs/experiments.md) | How a question becomes a report: the claim rules, a worked example, failures worth reading, declaring a comparison |
+| [training-loop.md](docs/training-loop.md) | Training loops: what is specific to Magic (legal-action policy, two-seat complete-game credit, win/draw/loss value, the collector), the damped policy and PPO loops we maintain, and writing your own learner from their pieces |
 | [training.md](docs/training.md) | Running training: regimes and stages, remote training, monitoring, numerical health, recovery, game failures |
 | [experiment-metrics.md](docs/experiment-metrics.md) | Metric definitions the experiment reports read |
 | [workflows.md](docs/workflows.md) | Wave responsibilities, Coverage loops and experiment execution boundaries |

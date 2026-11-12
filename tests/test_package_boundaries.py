@@ -276,3 +276,50 @@ def test_engine_imports_without_training_or_academy() -> None:
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+# Model-agnostic learning pieces: a deck builder or any other role reuses them
+# unchanged, so they never reach the game, its observations, the player model,
+# collection or the engine.
+def test_generic_learning_pieces_import_only_themselves() -> None:
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path in sorted((REPO_ROOT / "manabot/rl").rglob("*.py"))
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+        if module.split(".")[0] in {"managym", "academy", "etude"}
+        or (module.startswith("manabot") and not module.startswith("manabot.rl"))
+    ]
+    assert violations == []
+
+
+class _RefuseRoles(importlib.abc.MetaPathFinder):
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        root = fullname.split(".")[0]
+        if root in {"managym", "academy", "etude"} or (
+            root == "manabot"
+            and fullname != "manabot"
+            and not fullname.startswith("manabot.rl")
+        ):
+            raise ImportError(f"generic learning pieces must not import {fullname}")
+        return None
+
+
+def test_generic_learning_pieces_import_without_the_player() -> None:
+    probe = textwrap.dedent(
+        """
+        import importlib
+        import pkgutil
+        import sys
+        from tests.test_package_boundaries import _RefuseRoles
+        sys.meta_path.insert(0, _RefuseRoles())
+        import manabot.rl
+        for module in pkgutil.walk_packages(manabot.rl.__path__, 'manabot.rl.'):
+            importlib.import_module(module.name)
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

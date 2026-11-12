@@ -110,6 +110,17 @@ publish, land or choose the next Graph step from here.
   `--seed` venv and upgrade with plain `pip` (wheel paths plus `--find-links`
   and the CPU Torch index), since uv's one-step upgrade hides file-ownership
   problems that pip's install order exposes.
+- Python-only library changes (no engine change): `uv build --wheel --package
+  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
+  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
+  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
+  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
+  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
+  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Training guide (`docs/training-loop.md`): run its example command verbatim
+  (about 20 s on CPU), save and reload the policy as it says, call both
+  maintained rules directly on a collected batch, and compare the tables'
+  signatures with `inspect.signature`.
 - Training recipes: write a regime JSON from Python
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a

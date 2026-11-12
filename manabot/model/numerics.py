@@ -3,6 +3,8 @@
 import torch
 from torch import Tensor, nn
 
+from manabot.infra.deprecation import moved
+
 
 def embedding_rows(embedding: nn.Embedding, rows: Tensor) -> Tensor:
     """Embed rows; an empty lookup returns an empty slice of the weights.
@@ -14,17 +16,6 @@ def embedding_rows(embedding: nn.Embedding, rows: Tensor) -> Tensor:
     if rows.numel() == 0:
         return embedding.weight[:0].reshape(*rows.shape, embedding.embedding_dim)
     return embedding(rows)
-
-
-def float64_operand(tensor: Tensor) -> Tensor:
-    """Move MPS operands to the host, where float64 is supported.
-
-    MPS has no float64 tensors. The CPU transfer preserves autograd; callers
-    retain their explicit double casts and keep companion operands together.
-    Elsewhere this is a no-op relabel: the identical tensor, dtype and device
-    are returned, with no transfer or additional tensor operation.
-    """
-    return tensor.cpu() if tensor.device.type == "mps" else tensor
 
 
 def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
@@ -41,3 +32,6 @@ def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
     if name not in cache or cache[name][0] != key:
         cache[name] = (key, buffer.detach().cpu())
     return cache[name][1]
+
+
+__getattr__ = moved(__name__, {"float64_operand": "manabot.rl.numerics"})

@@ -18,7 +18,8 @@ from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.training.execution import execute_regime
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
+from manabot.training.loops.damped_policy import update_damped_iteration
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.panels import PERF
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
@@ -68,6 +69,8 @@ def _update(
     learner: Learner, learning: DampedPolicyLearning | Learning, batch: object
 ) -> dict[str, object]:
     with learner.profiler.track("Learning"):
+        if isinstance(learning, DampedPolicyLearning):
+            return dict(update_damped_iteration(learner, batch, learning, 1))
         return dict(
             update_iteration(
                 learner, batch, learning, 0.5, np.random.default_rng(3), iteration=1

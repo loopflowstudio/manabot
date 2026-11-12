@@ -39,11 +39,13 @@ from manabot.infra.source import source_commit
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
+from manabot.rl.numerics import NumericalError
+from manabot.rl.step import update_ema
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.loops.damped_policy import update_damped_iteration
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.mps import mps_torch_error
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
@@ -58,6 +60,7 @@ from manabot.training.regime import (
     CheckpointCadence,
     CollectBelief,
     CollectSelection,
+    DampedPolicyLearning,
     ImportPolicy,
     TrainBelief,
     TrainingRegime,
@@ -1455,8 +1458,23 @@ def _execute_regime(
                         # queued work (EMA, last step) counts toward learning.
                         with learner.profiler.track("Learning"):
                             try:
-                                diagnostic = (
-                                    update_iteration(
+                                if stage.trainable != "policy_value":
+                                    diagnostic = {
+                                        "rows": batch.actions.size,
+                                        "optimizer_exposures": 0,
+                                        "retained": 0,
+                                        "numerical": {"optimizer_steps": 0},
+                                    }
+                                elif isinstance(stage.learning, DampedPolicyLearning):
+                                    diagnostic = update_damped_iteration(
+                                        learner,
+                                        batch,
+                                        stage.learning,
+                                        iteration + 1,
+                                        bootstrap_agent=behavior_agent,
+                                    )
+                                else:
+                                    diagnostic = update_iteration(
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1472,14 +1490,6 @@ def _execute_regime(
                                         iteration=iteration + 1,
                                         bootstrap_agent=behavior_agent,
                                     )
-                                    if stage.trainable == "policy_value"
-                                    else {
-                                        "rows": batch.actions.size,
-                                        "optimizer_exposures": 0,
-                                        "retained": 0,
-                                        "numerical": {"optimizer_steps": 0},
-                                    }
-                                )
                                 adaptive_diagnostics = collector.commit_adaptive(batch)
                                 if adaptive_diagnostics is not None:
                                     diagnostic["adaptive"] = adaptive_diagnostics

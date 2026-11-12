@@ -22,12 +22,12 @@ from manabot.infra.config import (
 )
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
+from manabot.rl.returns import transition_gae
 from manabot.sim import match as simulation
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_game_journal, write_trace
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.returns import transition_gae
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.regime import BatchClosure, Learning
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.game_errors import (

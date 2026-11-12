@@ -23,20 +23,22 @@ from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import admit_on_device
 from manabot.model.policy_distribution import (
-    NumericalError,
     check_behavior,
     check_probabilities,
     legal_mask,
     policy_logs,
 )
+from manabot.rl.numerics import NumericalError
+from manabot.rl.selection import selected_moves
+from manabot.rl.step import gradient_step
 from manabot.training import execution
-from manabot.training.learning.damped_policy import (
+from manabot.training.learning.health import NumericalHealth, OptimizerHealth
+from manabot.training.learning.learner import Learner
+from manabot.training.learning.selection import value_scale
+from manabot.training.loops.damped_policy import (
     damped_policy_loss,
     update_damped_iteration,
 )
-from manabot.training.learning.health import NumericalHealth, OptimizerHealth
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.selection import selected_moves, value_scale
 from manabot.training.records import TrainingRun
 from manabot.training.regime import DampedPolicyLearning, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
@@ -214,7 +216,7 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         model.parameters(), lr=0 if mode == "zero_rate" else 0.05
     )
     health = _health()
-    observer = OptimizerHealth(model, optimizer, health, iteration=1)
+    observer = OptimizerHealth(health, iteration=1)
     before_rng = torch.get_rng_state().clone()
     valid = torch.ones((2, 2), device=DEVICE, dtype=torch.bool)
     initial = model.weight.detach().clone()
@@ -237,14 +239,22 @@ def test_known_learning_and_ineffective_controls(mode: str) -> None:
         ).sum()
         if mode == "detached":
             with pytest.raises(NumericalError, match="detached_objective"):
-                observer.step(loss.detach(), 1.0)
+                gradient_step(loss.detach(), model, optimizer, 1.0, recorder=observer)
             assert health["rejected_steps"] == 1
             break
         if mode == "invalid":
             with pytest.raises(NumericalError, match="nonfinite_objective"):
-                observer.step(loss * float("nan"), 1.0)
+                gradient_step(
+                    loss * float("nan"), model, optimizer, 1.0, recorder=observer
+                )
             break
-        observer.step(loss * 0 if mode == "zero" else loss, 1.0)
+        gradient_step(
+            loss * 0 if mode == "zero" else loss,
+            model,
+            optimizer,
+            1.0,
+            recorder=observer,
+        )
     torch.testing.assert_close(torch.get_rng_state(), before_rng)
     if mode == "learning":
         assert model(torch.ones((1, 1), device=DEVICE)).softmax(-1)[0, 0] > 0.7
@@ -268,13 +278,17 @@ def test_missing_and_frozen_components_and_unsampled_cadence() -> None:
     optimizer = torch.optim.Adam(model.parameters())
     health = _health()
     loss = model[0](torch.ones((1, 1), device=DEVICE)).square().mean()
-    OptimizerHealth(model, optimizer, health, 1).step(loss, 0.01)
+    gradient_step(loss, model, optimizer, 0.01, recorder=OptimizerHealth(health, 1))
     assert health["gradient_missing_tensors"] == 1
     assert health["frozen_parameter_tensors"] == 1
     assert health["gradient_norm_after"] <= 0.010001
     health = _health()
-    OptimizerHealth(model, optimizer, health, 2).step(
-        model(torch.ones((1, 1), device=DEVICE)).square().mean(), 1.0
+    gradient_step(
+        model(torch.ones((1, 1), device=DEVICE)).square().mean(),
+        model,
+        optimizer,
+        1.0,
+        recorder=OptimizerHealth(health, 2),
     )
     assert health["sampled_steps"] == 0 and "parameter_delta_l2" not in health
 
@@ -314,7 +328,13 @@ def test_critic_readout_norm_excludes_the_shared_value_token(
             else values.square().sum()
         )
         health = _health()
-        OptimizerHealth(agent, optimizer, health, iteration=1).step(objective, 1e9)
+        gradient_step(
+            objective,
+            agent,
+            optimizer,
+            1e9,
+            recorder=OptimizerHealth(health, iteration=1),
+        )
         return health
 
     policy = measure("policy")
@@ -443,7 +463,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
     # collector's clocks real, so CPU/CUDA speed cannot decide this assertion.
     clock = _AccountingClock()
     monkeypatch.setattr(execution, "time", clock)
-    original_update = execution.update_iteration
+    original_update = execution.update_damped_iteration
     calls = [0]
     corrupted_rows: list[int] = []
 
@@ -483,7 +503,7 @@ def test_failed_update_retains_state_and_excludes_prior_overhead(
         if run.status == "running":
             clock.elapsed += 2.0
 
-    monkeypatch.setattr(execution, "update_iteration", update)
+    monkeypatch.setattr(execution, "update_damped_iteration", update)
     monkeypatch.setattr(VerifyStore, "save_training_run", save)
     if fault == "capture":
 
@@ -576,7 +596,7 @@ def test_nonfinite_gradient_rejects_before_adam() -> None:
     health = _health()
     loss = model.weight.sqrt().sum()  # finite loss, infinite derivative at zero
     with pytest.raises(NumericalError, match="nonfinite_gradients") as caught:
-        OptimizerHealth(model, optimizer, health, 1).step(loss, 1.0)
+        gradient_step(loss, model, optimizer, 1.0, recorder=OptimizerHealth(health, 1))
     assert caught.value.health["rejected_steps"] == 1
     assert not optimizer.state
     assert torch.isfinite(model.weight).all()
@@ -592,7 +612,9 @@ def test_optimizer_health_preserves_exact_updates_and_device_rng() -> None:
     cuda_rng = torch.cuda.get_rng_state().clone() if DEVICE == "cuda" else None
     for iteration in (1, 2, 25):
         loss = model(torch.ones((4, 2), device=DEVICE)).square().mean()
-        OptimizerHealth(model, optimizer, _health(), iteration).step(loss, 0.5)
+        gradient_step(
+            loss, model, optimizer, 0.5, recorder=OptimizerHealth(_health(), iteration)
+        )
         baseline.zero_grad(set_to_none=True)
         control(torch.ones((4, 2), device=DEVICE)).square().mean().backward()
         torch.nn.utils.clip_grad_norm_(

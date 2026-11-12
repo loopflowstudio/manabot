@@ -17,9 +17,8 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.damped_policy import _targets
 from manabot.training.learning.learner import AdmittedRollout, Learner
-from manabot.training.learning.objectives import update_iteration
+from manabot.training.loops.damped_policy import _targets, update_damped_iteration
 from manabot.training.regime import BatchClosure, DampedPolicyLearning
 from manabot.training.rollout.actions import ActionRows
 from manabot.training.rollout.collection import RolloutBatch, SeatRoutedCollector
@@ -255,7 +254,7 @@ def test_complete_game_targets_and_actual_loss_gradients(
         agent.offers.register_hook(capture_policy),
         agent.predictions.register_hook(capture_value),
     ]
-    result = update_iteration(trainer, batch, rule, 0, np.random.default_rng(0))
+    result = update_damped_iteration(trainer, batch, rule, 1)
     assert result["actor_exposures"] == result["critic_exposures"] == len(ids)
     for row, marker in enumerate(ids):
         n = min(2, len(ids) - (row // 2) * 2)
@@ -383,11 +382,11 @@ def test_distinct_policies_use_their_own_predictions_and_never_each_others_gradi
         target.values[:, 0], torch.tensor(expected, dtype=torch.float32)
     )
     before_second = second.predictions.detach().clone()
-    update_iteration(trainers[0], a, learning(), 0, np.random.default_rng(0))
+    update_damped_iteration(trainers[0], a, learning(), 1)
     assert second.predictions.grad is None
     torch.testing.assert_close(second.predictions, before_second)
     before_first = first.predictions.detach().clone()
-    update_iteration(trainers[1], b, learning(), 0, np.random.default_rng(0))
+    update_damped_iteration(trainers[1], b, learning(), 1)
     torch.testing.assert_close(first.predictions, before_first)
     assert not torch.equal(second.predictions, before_second)
 
@@ -408,7 +407,7 @@ def test_filter_retains_negative_credit_and_critic_coverage(
         agent.offers.detach().clone(),
         agent.predictions.detach().clone(),
     )
-    result = update_iteration(trainer, batch, rule, 0, np.random.default_rng(0))
+    result = update_damped_iteration(trainer, batch, rule, 1)
     assert result["actor_exposures"] == 3
     assert result["critic_exposures"] == (8 if scope == "actor" else 3)
     for marker in markers(batch):
@@ -439,7 +438,7 @@ def test_off_policy_actions_never_enter_batch_or_receive_gradients(
     assert markers(batch) == [0, 1, 3, 10, 12]
     trainer = Learner(agent, "cpu", minibatch_rows=collector.num_envs)
     before = opponent.offers.detach().clone()
-    update_iteration(trainer, batch, learning(), 0, np.random.default_rng(0))
+    update_damped_iteration(trainer, batch, learning(), 1)
     assert opponent.offers.grad is None
     torch.testing.assert_close(opponent.offers, before)
     assert collector.stats.opponent_decisions == 3
@@ -462,12 +461,8 @@ def test_damped_learning_materializes_only_selected_rows(
         return original(self, indexes)
 
     monkeypatch.setattr(RolloutBatch, "observations", materialize)
-    update_iteration(
-        Learner(agent, "cpu", minibatch_rows=2),
-        batch,
-        learning(),
-        0.5,
-        np.random.default_rng(243),
+    update_damped_iteration(
+        Learner(agent, "cpu", minibatch_rows=2), batch, learning(), 1
     )
     # Admission reads every row once; minibatches re-read only selected rows.
     assert seen and sum(seen) <= 2 * batch.actions.size

@@ -11,6 +11,7 @@ import time
 
 import torch
 
+from manabot.rl.step import gradient_step
 from manabot.training.learning.health import NumericalHealth, OptimizerHealth
 
 
@@ -29,7 +30,9 @@ def measure(device: str, steps: int, guarded: bool) -> float:
             health = NumericalHealth(
                 optimizer_steps=0, rejected_steps=0, skipped_steps=0, sampled_steps=0
             )
-            OptimizerHealth(model, optimizer, health, iteration).step(loss, 0.5)
+            gradient_step(
+                loss, model, optimizer, 0.5, recorder=OptimizerHealth(health, iteration)
+            )
         else:
             optimizer.zero_grad(set_to_none=True)
             loss.backward()

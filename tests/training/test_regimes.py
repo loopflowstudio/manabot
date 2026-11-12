@@ -17,13 +17,14 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
+from manabot.rl.selection import selected_rows
 from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.learning.references import reference_distribution
-from manabot.training.learning.selection import selected_rows
+from manabot.training.loops.damped_policy import update_damped_iteration
+from manabot.training.loops.ppo import update_iteration
 from manabot.training.records import StageRecord, TrainingRun
-from manabot.training.regime import TrainingRegime, TrainSelfPlay
+from manabot.training.regime import DampedPolicyLearning, TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.actions import ACTION_FIELDS, PackedActions
 from manabot.training.rollout.collection import RecordedObservations, RolloutBatch
 from manabot.training.update_metrics import read_updates, stage_rows
@@ -161,8 +162,12 @@ def test_named_treatments_execute_real_optimizer_batches() -> None:
         stage = named_regime(name).stages[0]
         if stage.operation != "train_self_play":
             continue
-        result = update_iteration(
-            trainer, batch, stage.learning, 0.5, np.random.default_rng(7)
+        result = (
+            update_damped_iteration(trainer, batch, stage.learning, 1)
+            if isinstance(stage.learning, DampedPolicyLearning)
+            else update_iteration(
+                trainer, batch, stage.learning, 0.5, np.random.default_rng(7)
+            )
         )
         assert result["optimizer_exposures"] > 0
         assert np.isfinite(result["loss"])
@@ -417,8 +422,6 @@ def test_regime_names_say_file_and_recipe() -> None:
 
 
 def test_legacy_learning_discriminator_is_rejected() -> None:
-    from manabot.training.regime import DampedPolicyLearning
-
     with pytest.raises(ValueError):
         DampedPolicyLearning.model_validate({"gradient": "ataraxos_move"})
     rule = DampedPolicyLearning(gradient="damped_policy")

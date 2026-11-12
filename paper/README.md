@@ -64,8 +64,8 @@ passing the corresponding directory instead of `report.md`.
 - [ActorCritic](../manabot/model/actor_critic.py) and
   [continuation input](../manabot/model/continuation.py): model and versioned context.
 - [Collection](../manabot/training/rollout/collection.py),
-  [returns](../manabot/training/learning/returns.py) and
-  [damped policy learning](../manabot/training/learning/damped_policy.py):
+  [returns](../manabot/rl/returns.py) and
+  [damped policy learning](../manabot/training/loops/damped_policy.py):
   seat trajectories, targets and update ownership.
 - [Ordinary baseline](../manabot/recipes/baseline.py) and
   [Elemental recipe](../experiments/regimes/elemental-two-seat-181-v1.json):
