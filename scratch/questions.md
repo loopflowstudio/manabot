@@ -58,8 +58,5 @@ less. Treat these as provisional billing; retain the full $7.20 live reservation
 and reconcile with the larger whole-lifetime estimate, not the falling status
 amount. This is no scientific-runtime change and no billing-finality claim.
 
-Open (2026-11-12): the remaining ~$11.22 of the $15 cap fits one frozen-envelope
-arm ($7.80), not a pair ($15.00 reserved, ~$11.86 expected). Choose (a) the after
-arm alone, which stays inconclusive under the frozen reader, (b) a cap of about
-$23 for a baseline retry plus the after arm, or (c) closing as inconclusive.
-See collection-growth.md. No paid launch until one is chosen.
+Open (2026-11-12): the remaining-budget choice (after arm alone, a ~$23 cap,
+or close as inconclusive) is in collection-growth.md; no paid launch until chosen.
