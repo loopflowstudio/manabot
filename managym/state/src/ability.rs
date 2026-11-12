@@ -1037,11 +1037,11 @@ pub enum Effect {
     /// target (It'll Quench Ya!) or the trigger-context spell or ability
     /// (ward).
     /// Reports no target spec of its own — targeting is declared on the
-    /// card (`CardDefinition::targeting`) when a choice is required.
+    /// card (`PrintedCharacteristics::targeting`) when a choice is required.
     CounterUnlessPays { cost: PaymentCost },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on
-    /// the card (`CardDefinition::targeting`).
+    /// the card (`PrintedCharacteristics::targeting`).
     TargetCreaturesDealPowerDamageToLastTarget,
     /// Earthbend N: each land `what` names becomes a 0/0
     /// creature with haste that's still a land; put `count` +1/+1 counters

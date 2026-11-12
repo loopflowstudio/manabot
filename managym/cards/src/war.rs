@@ -1,7 +1,7 @@
 //! War of the Spark.
 use managym_state::{
     ability::{Ability, Effect, ObjectSelector, TargetSpec, TriggerCondition},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -17,25 +17,28 @@ fn mayhem_devil() -> CardDefinition {
     CardDefinition {
         key: "war.mayhem_devil",
         scryfall_id: "17416926-168b-49b3-9231-acbb8f8a1d13",
-        name: "Mayhem Devil".into(),
-        mana_cost: Some(ManaCost::parse("{1}{B}{R}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Devil".into()],
-        power: Some(3),
-        toughness: Some(3),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::Sacrificed {
-                predicate: CardPredicate::default(),
-                controller_only: false,
-                another: false,
-            },
-            effects: vec![Effect::deal_damage(
-                1,
-                ObjectSelector::Target(TargetSpec::AnyTarget),
-            )],
-        }],
-        text_box: text_box.into(),
+        printed: PrintedCharacteristics {
+            name: "Mayhem Devil".into(),
+            mana_cost: Some(ManaCost::parse("{1}{B}{R}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Devil".into()],
+            power: Some(3),
+            toughness: Some(3),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Sacrificed {
+                    predicate: CardPredicate::default(),
+                    controller_only: false,
+                    another: false,
+                },
+                effects: vec![Effect::deal_damage(
+                    1,
+                    ObjectSelector::Target(TargetSpec::AnyTarget),
+                )],
+            }],
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

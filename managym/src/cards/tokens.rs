@@ -1,6 +1,7 @@
 //! Learning tokens derived from the engine's own card types.
 //!
-//! A card's rules live once, in the [`CardDefinition`] its set file writes.
+//! A card's or token's rules live once, in the [`PrintedCharacteristics`]
+//! its set file writes, registered as an [`ObjectDefinition`] row.
 //! The policy reads each definition as a token sequence produced by walking
 //! that same value with a `serde` serializer, so every field, `Effect`,
 //! `TriggerCondition` and keyword reaches the tokens without a second
@@ -26,7 +27,7 @@ use super::ContentError;
 use crate::cards::content_pack::ContentPack;
 use crate::state::{
     ability::{Effect, TargetRequirement},
-    card::{CardDefId, CardDefinition},
+    card::{CardDefId, ObjectDefinition, PrintedCharacteristics},
 };
 
 /// What a token's value means. Numbering is part of the learning schema.
@@ -116,7 +117,7 @@ pub fn name_value(name: &str) -> i32 {
 /// One definition's tokens, characteristics then programs, as `(kind, value)`.
 /// Token names in its effects must name definitions in `pack`.
 pub fn definition_tokens(
-    definition: &CardDefinition,
+    definition: &ObjectDefinition,
     pack: &ContentPack,
 ) -> Result<Vec<(TokenKind, i32)>, ContentError> {
     let mut writer = TokenWriter::new(pack);
@@ -205,7 +206,7 @@ struct SpellProgram<'a> {
 }
 
 fn definition_programs_of(
-    definition: &CardDefinition,
+    definition: &PrintedCharacteristics,
     pack: &ContentPack,
 ) -> Result<Vec<(ProgramKind, Span)>, ContentError> {
     fn tokens<T: Serialize>(value: &T, pack: &ContentPack) -> Result<Span, ContentError> {
@@ -248,7 +249,8 @@ pub(crate) struct TokenWriter<'p> {
     references: Vec<(usize, i32)>,
     /// Name of the struct field being written, for definition references.
     field: Option<&'static str>,
-    /// Depth of nested structs; the top-level `CardDefinition` is depth 1.
+    /// Depth of nested structs; the top-level row (serialized as
+    /// `CardDefinition`) is depth 1.
     depth: usize,
 }
 
@@ -270,7 +272,7 @@ impl<'p> TokenWriter<'p> {
 
     pub(crate) fn append_definition(
         &mut self,
-        definition: &CardDefinition,
+        definition: &ObjectDefinition,
     ) -> Result<(), ContentError> {
         definition.serialize(&mut *self)?;
         for (kind, span) in definition_programs_of(definition, self.pack)? {

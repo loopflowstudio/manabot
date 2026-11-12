@@ -9,7 +9,7 @@ import pytest
 import torch
 
 from experiments import tla_frontier_vocabulary as vocabulary_check
-from experiments.tla_frontier import EXPERIMENT, SMALL, SizeLabel, frozen
+from experiments.tla_frontier import EXPERIMENT, SMALL, RuntimeWorld, SizeLabel, frozen
 from experiments.tla_frontier_facts import (
     Observation,
     read,
@@ -23,9 +23,13 @@ from manabot.infra.runtime import regime_tag
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 
+# Scheduling and analysis read the frozen world; see `conftest.py`.
+pytestmark = pytest.mark.usefixtures("frontier_world")
 
-@pytest.fixture(scope="module")
-def positions() -> Observation:
+
+@pytest.fixture
+def positions(frontier_runtime: RuntimeWorld) -> Observation:
+    """Positions played in the current world, from the frozen regime's decks."""
     regimes, protocol = frozen()
     return sample_positions(regimes[SMALL], protocol)
 

@@ -1,6 +1,8 @@
 use managym_state::{
     ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
-    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
+    card::{
+        ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, PrintedCharacteristics,
+    },
     mana::{Mana, ManaCost},
 };
 
@@ -14,27 +16,30 @@ fn prophetic_prism() -> CardDefinition {
     CardDefinition {
         key: "roe.prophetic_prism",
         scryfall_id: "cfb90d44-8cb1-4b83-b2f2-92c19d6304fb",
-        name: "Prophetic Prism".into(),
-        mana_cost: Some(ManaCost::parse("{2}")),
-        types: CardTypes::new([CardType::Artifact]),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::DrawCards {
-                count: EffectValue::Fixed(1),
+        printed: PrintedCharacteristics {
+            name: "Prophetic Prism".into(),
+            mana_cost: Some(ManaCost::parse("{2}")),
+            types: CardTypes::new([CardType::Artifact]),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             }],
-        }],
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::mana_choice(
-                ["W", "U", "B", "R", "G"].map(Mana::parse),
-            )],
+            activated_abilities: vec![ActivatedAbilityDefinition {
+                tap_source: true,
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![Effect::mana_choice(
+                    ["W", "U", "B", "R", "G"].map(Mana::parse),
+                )],
+                ..Default::default()
+            }],
+            text_box: text_box.into(),
             ..Default::default()
-        }],
-        text_box: text_box.into(),
+        },
         ..Default::default()
     }
 }

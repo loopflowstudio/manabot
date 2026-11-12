@@ -31,11 +31,12 @@ are in the [README](../README.md#contracts-the-code-enforces).
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Each card is a function in the file of its first printing's set under
-`cards/src/`, returning the engine's own `CardDefinition` in its rules types
-(`Effect`, `Ability`, `TargetSpec`, …). Tokens are not cards: each is a
-`TokenDefinition` in `cards/src/tokens.rs`, keyed `token.*` and created by that
-key, with a Scryfall id unless it has no printing. The engine runs these values
-directly, and
+`cards/src/`, returning the engine's own `CardDefinition` (key, Scryfall id and
+`PrintedCharacteristics`) in its rules types (`Effect`, `Ability`, `TargetSpec`,
+…). Tokens are not cards: each is a `TokenDefinition` in `cards/src/tokens.rs`
+with the same `PrintedCharacteristics`, keyed `token.*` and created by that
+key, with a Scryfall id unless it has no printing. The engine registers both
+as `ObjectDefinition` rows with token status and runs them directly, and
 the learning catalog (`src/cards/tokens.rs`, `managym.catalog_tokens`)
 derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
 support check (defined cards, excluding tokens and rules fixtures) and the set

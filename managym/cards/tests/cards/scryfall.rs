@@ -49,7 +49,6 @@ fn every_card_key_names_its_set_and_is_unique() {
             "{}: tokens are TokenDefinitions",
             definition.key
         );
-        assert!(!definition.is_token, "{}", definition.key);
         assert!(
             keys.insert(definition.key),
             "duplicate key {}",
@@ -64,12 +63,6 @@ fn every_token_key_is_a_unique_token_key() {
     for token in token_catalog() {
         let name = token.key.strip_prefix("token.").expect("token.<name> key");
         assert!(!name.is_empty(), "{}", token.key);
-        assert!(!token.characteristics.is_token, "{}", token.key);
-        assert!(
-            token.characteristics.key.is_empty() && token.characteristics.scryfall_id.is_empty(),
-            "{}: identity belongs on the TokenDefinition",
-            token.key
-        );
         assert!(keys.insert(token.key), "duplicate key {}", token.key);
     }
 }

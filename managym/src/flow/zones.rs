@@ -380,11 +380,9 @@ impl Game {
     ) -> CardId {
         copy.id = self.state.id_gen.next_id();
         copy.owner = controller;
-        // Any write detaches the shared definition (`DerefMut`), so a copy
-        // of a token without exceptions keeps sharing its source's.
-        if !copy.is_token {
-            copy.is_token = true;
-        }
+        // Token status is the object's, not a copiable value; only an
+        // exception's write detaches the shared definition (`DerefMut`).
+        copy.is_token = true;
         for exception in &exceptions {
             let copiable = exception.apply_copiable(&mut copy);
             debug_assert!(copiable, "copy exception {exception:?} is a rules effect");

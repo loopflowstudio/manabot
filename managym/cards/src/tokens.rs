@@ -1,13 +1,13 @@
 //! Every token definition (`token.*`). Tokens are not cards (CR 108.2,
-//! 111.1): each is a [`TokenDefinition`] whose characteristics are written in
-//! the same rules types, so copy effects treat tokens and cards alike. Effects
+//! 111.1): each is a [`TokenDefinition`] whose [`PrintedCharacteristics`] are
+//! the same type a card prints, so copy effects treat tokens and cards alike. Effects
 //! create a token by its key, and each carries the Scryfall id of its first
 //! token printing, or `None` when it has none.
 use managym_state::{
     ability::{Ability, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject},
     card::{
-        ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
-        Keywords, StaticAbility, TokenDefinition,
+        ActivatedAbilityDefinition, BlockRestriction, CardType, CardTypes, Keyword, Keywords,
+        PrintedCharacteristics, StaticAbility, TokenDefinition,
     },
     effect::Modification,
     mana::{Color, Colors, Mana, ManaCost},
@@ -36,8 +36,8 @@ fn face(
     types: impl IntoIterator<Item = CardType>,
     subtypes: &[&str],
     text_box: &str,
-) -> CardDefinition {
-    CardDefinition {
+) -> PrintedCharacteristics {
+    PrintedCharacteristics {
         name: name.into(),
         types: CardTypes::new(types),
         subtypes: subtypes.iter().map(|&subtype| subtype.into()).collect(),
@@ -49,23 +49,23 @@ fn face(
 fn token(
     key: &'static str,
     scryfall_id: &'static str,
-    characteristics: CardDefinition,
+    printed: PrintedCharacteristics,
 ) -> TokenDefinition {
     TokenDefinition {
         key,
         scryfall_id: Some(scryfall_id),
-        characteristics,
+        printed,
     }
 }
 
 /// A creature token with printed power, toughness and colors.
 fn creature(
-    definition: CardDefinition,
+    definition: PrintedCharacteristics,
     power: i32,
     toughness: i32,
     colors: impl IntoIterator<Item = Color>,
-) -> CardDefinition {
-    CardDefinition {
+) -> PrintedCharacteristics {
+    PrintedCharacteristics {
         power: Some(power),
         toughness: Some(toughness),
         color_override: Some(Colors::from_iter(colors)),
@@ -92,7 +92,7 @@ fn ballistic_boulder() -> TokenDefinition {
     token(
         "token.ballistic_boulder",
         "b9d70342-9d3c-44cb-9026-db5e5941b9fc",
-        CardDefinition {
+        PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Flying]),
             ..creature(base, 2, 1, [])
         },
@@ -112,7 +112,7 @@ fn clue() -> TokenDefinition {
     token(
         "token.clue",
         "f2c859e1-181e-44d1-afbd-bbd6e52cf42a",
-        CardDefinition {
+        PrintedCharacteristics {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{2}"),
                 sacrifice_source: true,
@@ -137,7 +137,7 @@ fn dragon() -> TokenDefinition {
     token(
         "token.dragon",
         "cddc0746-6d3e-441f-866f-28587bf54801",
-        CardDefinition {
+        PrintedCharacteristics {
             keywords: Keywords::of(&[Keyword::Flying]),
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
@@ -159,7 +159,7 @@ fn food() -> TokenDefinition {
     token(
         "token.food",
         "bf36408d-ed85-497f-8e68-d3a922c388a0",
-        CardDefinition {
+        PrintedCharacteristics {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{2}"),
@@ -197,7 +197,7 @@ fn monk() -> TokenDefinition {
     token(
         "token.monk",
         "388180bd-cc96-4b18-9ddd-18a3f7e06282",
-        CardDefinition {
+        PrintedCharacteristics {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::YouCastSpell {
@@ -222,7 +222,7 @@ fn soldier() -> TokenDefinition {
     token(
         "token.soldier",
         "2de43b03-9ac5-4292-ab29-2dc6210ef3d9",
-        CardDefinition {
+        PrintedCharacteristics {
             abilities: vec![Ability::Triggered {
                 intervening_if: None,
                 condition: TriggerCondition::Attacks {
@@ -249,7 +249,7 @@ fn spirit() -> TokenDefinition {
     token(
         "token.spirit",
         "f59eba51-458a-40e0-b754-999f91d5d839",
-        CardDefinition {
+        PrintedCharacteristics {
             statics: vec![
                 StaticAbility::BlockRestriction(BlockRestriction::CantBlock(non_spirit())),
                 StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(non_spirit())),
@@ -263,7 +263,7 @@ fn treasure() -> TokenDefinition {
     token(
         "token.treasure",
         "720f3e68-84c0-462e-a0d1-90236ccc494a",
-        CardDefinition {
+        PrintedCharacteristics {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 sacrifice_source: true,

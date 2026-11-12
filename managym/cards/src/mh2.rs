@@ -1,6 +1,6 @@
 use managym_state::{
     ability::{Ability, Effect, TriggerCondition, TriggerSubject},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, PrintedCharacteristics},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -15,28 +15,31 @@ fn tireless_provisioner() -> CardDefinition {
     CardDefinition {
         key: "mh2.tireless_provisioner",
         scryfall_id: "5c5be54d-660e-42ab-b5ea-5e1cf3bad0bc",
-        name: "Tireless Provisioner".into(),
-        mana_cost: Some(ManaCost::parse("{2}{G}")),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Elf".into(), "Scout".into()],
-        power: Some(3),
-        toughness: Some(2),
-        abilities: vec![Ability::Triggered {
-            intervening_if: None,
-            condition: TriggerCondition::EntersTheBattlefield {
-                subject: TriggerSubject::AnyYouControl(CardPredicate {
-                    card_type: Some(CardType::Land),
-                    ..Default::default()
-                }),
-            },
-            effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::create_tokens("token.food", 1)],
-                    vec![Effect::create_tokens("token.treasure", 1)],
-                ],
+        printed: PrintedCharacteristics {
+            name: "Tireless Provisioner".into(),
+            mana_cost: Some(ManaCost::parse("{2}{G}")),
+            types: CardTypes::new([CardType::Creature]),
+            subtypes: vec!["Elf".into(), "Scout".into()],
+            power: Some(3),
+            toughness: Some(2),
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::Modal {
+                    modes: vec![
+                        vec![Effect::create_tokens("token.food", 1)],
+                        vec![Effect::create_tokens("token.treasure", 1)],
+                    ],
+                }],
             }],
-        }],
-        text_box: text_box.into(),
+            text_box: text_box.into(),
+            ..Default::default()
+        },
         ..Default::default()
     }
 }

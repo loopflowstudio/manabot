@@ -23,7 +23,8 @@ use std::collections::BTreeMap;
 use super::{
     ability::Ability,
     card::{
-        ActivatedAbilityDefinition, CardDefId, CardDefinition, CardType, Keywords, StaticAbility,
+        ActivatedAbilityDefinition, CardDefId, CardType, Keywords, PrintedCharacteristics,
+        StaticAbility,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors},
@@ -170,7 +171,7 @@ impl Modification {
     /// (CR 707.9b). Only modifications of printed characteristics are
     /// copiable; a rules effect returns false and leaves `definition` alone
     /// (no definition authors one as an exception).
-    pub fn apply_copiable(&self, definition: &mut CardDefinition) -> bool {
+    pub fn apply_copiable(&self, definition: &mut PrintedCharacteristics) -> bool {
         match self {
             Self::LoseNonManaAbilities
             | Self::SetCreatureTypes(_)
