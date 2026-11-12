@@ -59,7 +59,7 @@
 ## Remaining
 
 Outcomes 1-5 and 7 are met (Outcome 4 since `eeca3f374`/`dcd13b7c9`: one
-caller per stage body). Outcome 6 waits on the open Etude choice below.
+caller per stage body; Outcome 7 on resume since `32dd45e43`/`242df4246`). Outcome 6 waits on the open Etude choice below.
 
 1. Gate (module by module; a whole-suite run stalled on a busy host). Known
    failures outside this diff, to re-run on a quiet host before landing:
@@ -114,7 +114,8 @@ to the private bodies while public functions built a one-stage
    `train_belief` reads the verified dataset back from disk.
 4. `execute_regime(..., smoke_execution=)`; `--smoke` on a saved regime and
    `TrainingJob.smoke` (now returns `TrainingRun`) record the saved regime.
-5. `Model.session: SelfPlaySession | None`.
+5. A model's self-play lineage is `Model.trained_by`; the open learner is
+   `Run.live_session` (see concept review 2).
 
 Checks: test_regime_functions, test_regimes, test_belief_stages (+ a
 continued-policy test), test_policy_import, test_learning_state,
