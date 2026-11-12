@@ -161,3 +161,7 @@ changed; no code to reduce. Dropped inherited MTG-286 notes from
 QA re-run (head abeab7a87): only scratch changed since bc35142da. 1332 random
 games, 0 errors, output identical; one Academy game to Game Over (63 clicks, no
 page errors) with Tiger-Seal's upkeep trigger on the stack. No fixes.
+
+Gate (head 9479b26a5): since aaa6dd564 only scratch changed and main has not
+moved past 59cf727bc; no suite inputs moved, no reruns. PR #484 CI pending
+(re-run on the latest push).
