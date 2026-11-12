@@ -82,7 +82,7 @@ def real_observation(
         observation_space=observation_space,
         reward=reward,
         device="cpu",
-        opponent_policy="passive",
+        opponent_policy="random",
     )
     obs, _ = vec_env.reset()
     yield obs

@@ -72,14 +72,11 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
         _load("prepare").prepare(stage)
 
 
-def test_release_versions_and_tags_agree() -> None:
-    module = _load("check")
-    module.check("v0.2.0")
-    with pytest.raises(ValueError, match="expected tag"):
-        module.check("v9.9.9")
+def test_current_release_metadata_is_consistent() -> None:
+    _load("check").check(None)
 
 
-def test_release_requires_that_versions_notes(
+def test_release_requires_matching_tag_and_notes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     module = _load("check")
@@ -98,6 +95,8 @@ def test_release_requires_that_versions_notes(
         module.check(None)
     notes.write_text("# v9.9.9\n")
     module.check("v9.9.9")
+    with pytest.raises(ValueError, match="expected tag v9.9.9"):
+        module.check("v0.0.0")
 
 
 def _artifacts(directory: Path) -> None:

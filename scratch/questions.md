@@ -64,3 +64,10 @@ Inherited b015d5 execution/billing notes are historical at
 `402dfd5b2c8aaca6084b5dec446d058d249cddad:scratch/questions.md`; main's unrelated
 MTG-271 notes remain at `9f69a96a1ca5f0c03a9df5af7217138390d415d9:scratch/questions.md`.
 Neither selects work or grants execution authority here.
+
+## Sync resolution — 2026-11-11
+
+Keep this branch’s benchmark decisions; main’s unrelated MTG-285 release notes
+remain at `668555c095c61709191ee7c4c59ad767b6903317:scratch/questions.md`.
+Combine both Infrastructure memory additions, retaining their separate historical
+coverage records. Neither release notes nor historical coverage select new work.

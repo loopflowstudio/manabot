@@ -185,7 +185,7 @@ def test_bounded_replay_separates_binding_and_error_agreement(
     assert scope.paths[0].read_bytes() == original
 
 
-@pytest.mark.parametrize("policy", ["none", "random", "passive"])
+@pytest.mark.parametrize("policy", ["none", "random"])
 def test_ordinary_vector_replays_current_game_after_autoreset(
     tmp_path: Path,
     policy: str,
@@ -373,7 +373,6 @@ def test_search_slot_failures_replay(tmp_path: Path) -> None:
             ObservationSpace(),
             Reward(RewardConfig()),
             seed=24,
-            auto_reset=False,
             enable_profiler=False,
             enable_behavior_tracking=False,
         )

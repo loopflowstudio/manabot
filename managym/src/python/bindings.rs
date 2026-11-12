@@ -28,7 +28,7 @@ use serde_json::{json, Value};
 use crate::{
     agent::{
         action::{ActionSpaceKind, ActionType, AgentError},
-        env::{Env, PreparedPossibleWorldMaterializer},
+        env::{Env, HandSnapshot, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
@@ -54,6 +54,17 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl HandSnapshot {
+    fn __repr__(&self) -> String {
+        format!(
+            "HandSnapshot(player={}, game_id={}, seed={}, revision={}, cards={:?})",
+            self.player, self.game_id, self.seed, self.revision, self.cards
+        )
+    }
+}
 
 #[cfg(feature = "python")]
 pyo3::create_exception!(_managym, PyAgentError, PyRuntimeError);
@@ -3613,6 +3624,15 @@ impl PyEnv {
         Ok(env.current_agent_index())
     }
 
+    /// Detached authoritative hand contents, including hidden information.
+    fn hand_snapshot(&self, player: usize) -> PyResult<HandSnapshot> {
+        let env = self
+            .inner
+            .lock()
+            .map_err(|_| PyRuntimeError::new_err("env lock poisoned"))?;
+        env.hand_snapshot(player).map_err(map_agent_err)
+    }
+
     /// Return a fixed-viewer projection even when another player now acts.
     fn observation_for_player(&self, player_index: usize) -> PyResult<PyObservation> {
         let env = self
@@ -4686,6 +4706,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPreparedPossibleWorldMaterializer>()?;
     m.add_class::<PyDecisionCapture>()?;
     m.add_class::<PyEnv>()?;
+    m.add_class::<HandSnapshot>()?;
     crate::python::vector_env_bindings::register_vector_env_bindings(m)?;
     Ok(())
 }

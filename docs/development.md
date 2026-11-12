@@ -599,24 +599,25 @@ certification of playing strength or rules coverage.
 
 ### Install
 
-Install a locally built compatibility wheel in a fresh directory outside this checkout:
+Install 0.2.1 in a fresh directory outside this checkout:
 
 ```bash
 mkdir manabot-example
 cd manabot-example
 uv venv --python 3.13
-uv pip install --python .venv/bin/python --torch-backend cpu "/path/to/manabot-<version>-cp313-cp313-<platform>.whl"
+uv pip install --python .venv/bin/python --only-binary :all: --torch-backend cpu 'manabot==0.2.1'
 uv run --no-project --python .venv/bin/python manabot --help
 ```
 
-Replace `<version>` and `<platform>` with the values in the built wheel filename.
 This installs the library and bundled engine into `.venv`; the last command
 lists CLI commands without starting training. No repository dependency groups
 are installed. For CPython 3.12, create the environment with
-`--python 3.12` and use the matching `cp312` wheel. These examples use local
-artifacts because the compatibility changes have not been published. The
-published 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
-environment when reproducing that release.
+`--python 3.12`; installation selects the matching wheel. See the
+[0.2.1 release notes](../release/v0.2.1/NOTES.md) for API migration guidance.
+The historical 0.2.0 release is 3.12-only; install `'manabot==0.2.0'` in a 3.12
+environment when reproducing that release. To verify an unpublished build,
+replace `'manabot==0.2.1'` with the path to its matching wheel; see
+[Build and verify](#build-and-verify).
 
 For Linux NVIDIA training use `--torch-backend cu128`; always select the backend
 explicitly. CI validates CPU, not GPU, execution.
@@ -655,8 +656,8 @@ Choose extras for the features you use:
 | `llm` | Local transformer inference |
 | `openrouter` | OpenRouter inference |
 
-For notebook work, append `[notebook]` to the quoted wheel path in the install
-command. In a checkout, use `uv sync --locked --extra notebook`. If a command reports
+For notebook work, use `'manabot[notebook]==0.2.1'` in the install command.
+In a checkout, use `uv sync --locked --extra notebook`. If a command reports
 a missing optional dependency, install its named extra in the same environment
 and retry. Development groups are not installed as part of a downstream package.
 

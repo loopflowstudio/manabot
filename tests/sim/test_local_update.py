@@ -81,9 +81,7 @@ def make_teacher(
         config
         or LocalSearchConfig(worlds=2, depth=3, decision_seconds=10, sampling="belief"),
     )
-    env = Env(
-        match, space, Reward(RewardConfig()), auto_reset=False, enable_profiler=False
-    )
+    env = Env(match, space, Reward(RewardConfig()), enable_profiler=False)
     env.reset(seed=42)
     return teacher, env
 
