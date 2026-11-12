@@ -11,7 +11,9 @@ ManaRestriction/SpendingContext and proposed restricted-mana fact row; don't
 rewrite pool storage in parallel. If spending must wait for MTG-242 to reach
 main, finish production and stop there."
 
-MTG-242 had no PR and was not on main on 2026-11-12, so this PR stops after
+MTG-242 is PR #496 (open, not merged, last updated 2026-11-12); it touches
+`state/mana.rs`, `flow/mana.rs`, `agent/continuation.rs`, `cards/src/tla.rs`
+and `observability.rs`, so expect conflicts there. This PR stops after
 production. Animal Attendant, Toph, Greatest Earthbender and Uncle's Musings
 stay undefined; their Scryfall ids are recorded below for the spending Task.
 
@@ -38,11 +40,21 @@ stay undefined; their Scryfall ids are recorded below for the spending Task.
   adds the pending bonuses as an Output obligation. A fixed source whose bonus
   would need a type choice is left out of automatic production; no current
   fixed source produces two types.
+- Decision B's `producer` field became `produced` (the mana the ability
+  made) plus `bonuses`; the bonus choice is offered as ordinary `ManaChoice`
+  actions, so no new action block. `TriggeredManaOutput` variants and the
+  tapping `Actor` are guarded into the learning tokens
+  (`observability.rs::every_triggered_mana_output_and_actor_reaches_the_learning_tokens`).
 - `docs/engine.md`: Heartbeat row removed, 59 of 61, corpus count updated.
 
 ## Remaining
 
-- Spending half: waits on MTG-242 (see heartbeat-design.md).
+- Spending half (pool classes, receipts, Animal Attendant, Toph, Uncle's
+  Musings): waits on PR #496 reaching main (see heartbeat-design.md). The
+  Task outcome names all four cards, so this PR alone does not complete it;
+  spending is either a later PR in this Task or a linked Task, which is the
+  caller's decision.
+- Rebase onto main after #496 merges if this PR is still open.
 
 ## Spending cards (for the follow-up)
 
@@ -55,7 +67,8 @@ stay undefined; their Scryfall ids are recorded below for the spending Task.
 
 ## Checks
 
-- `cargo test --manifest-path managym/cards/Cargo.toml --test cards`: 691 passed.
+- `cargo test --manifest-path managym/cards/Cargo.toml --test cards`: 691 passed;
+  the added token guard passes (debug).
 - `rules_tests`, `content_pack_tests`, `search_state_contract`: passed.
 - Corpus: first 1,000 MTG-213 trophy decks re-admitted from source with the
   rebuilt extension: 998 admit (Heartbeat decks 173, 925, 932 included); the

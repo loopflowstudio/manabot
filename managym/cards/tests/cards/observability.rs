@@ -69,7 +69,7 @@ use managym::{
             Keyword, Keywords, PowerCda, Restriction, SacrificeCost, SetCharacteristics,
             SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
             StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant,
-            TargetCostReduction,
+            TargetCostReduction, TriggeredManaAbility, TriggeredManaOutput,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -1834,6 +1834,44 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
                 tokens.contains(&(TokenKind::Variant, name_value(name))),
                 "{name}"
             );
+        }
+    }
+}
+
+/// A triggered mana ability's tapping actor and each output reach the
+/// learning tokens.
+#[test]
+fn every_triggered_mana_output_and_actor_reaches_the_learning_tokens() {
+    fn output_token(output: &TriggeredManaOutput) -> &'static str {
+        match output {
+            TriggeredManaOutput::Fixed(_) => "TriggeredManaOutput::Fixed",
+            TriggeredManaOutput::OneProducedType => "TriggeredManaOutput::OneProducedType",
+        }
+    }
+    for (who, actor) in [
+        (Actor::You, "Actor::You"),
+        (Actor::AnyPlayer, "Actor::AnyPlayer"),
+    ] {
+        for output in [
+            TriggeredManaOutput::Fixed(Mana::parse("G")),
+            TriggeredManaOutput::OneProducedType,
+        ] {
+            let definition = CardDefinition {
+                name: "Witness".into(),
+                triggered_mana_abilities: vec![TriggeredManaAbility {
+                    who,
+                    predicate: CardPredicate::default(),
+                    output: output.clone(),
+                }],
+                ..Default::default()
+            };
+            let tokens = tokens_of(&definition);
+            for name in [actor, output_token(&output)] {
+                assert!(
+                    tokens.contains(&(TokenKind::Variant, name_value(name))),
+                    "{name} in {output:?}"
+                );
+            }
         }
     }
 }
