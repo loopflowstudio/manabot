@@ -23,3 +23,13 @@ space; `card_evaluation.py` registers code players only. None needed a change.
 
 Remains: CI (rerun of the timed-out self-play test noted in questions.md),
 then a GPU evaluation pass that admits a frontier checkpoint, run by MTG-267.
+
+Concept review: one concept, one owner. A checkpoint registration's ABI
+hashes are the checkpoint's input contract, set only by `register_checkpoint`
+from the loaded space; serving (`manabot/sim/serving.py`) and evaluation load
+checks read them for checkpoints alone. Code players' ABI fields are inert
+there: the experiments give them fresh-default hashes, while `register_anchor`
+copies the candidate's. Both conventions pass every reader (card evidence
+registers code players only), so no change is needed. A shared code-player
+constructor would only matter if a reader started comparing code players'
+hashes across a match.

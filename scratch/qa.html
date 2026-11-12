@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>MTG-310 QA</title>
+<style>body{font:15px/1.5 system-ui;max-width:860px;margin:2em auto;padding:0 1em}pre{background:#f4f1ea;padding:.8em;overflow:auto}td,th{padding:.2em .6em;border-bottom:1px solid #ddd;text-align:left}</style></head>
+<body>
+<h1>MTG-310 QA: checkpoint registrations carry the checkpoint's ABI</h1>
+<p>This change is for someone running a frontier evaluation pass on served inference, the way MTG-267 does on CUDA. I did not have a GPU, so I used the CPU serving child instead. It is the same <code>PolicyStore</code> load path and runs the same ABI checks. I trained real checkpoints with non-default observations, registered them through each experiment's own <code>_registration</code>, and played them against the heuristic. I ran every evaluation once on this branch and once on <code>main</code>'s source (merge base <code>34980fdaa</code>).</p>
+
+<h2>Scenario 1: TLA frontier-shaped checkpoint (<code>experiments/tla_frontier.py</code>)</h2>
+<p>Training: <code>uv run manabot train --regime .runs/qa310/regime.json --seed 1 --out .runs/qa310/run1</code>. The regime is the frozen w64 regime with its real observation (max_facts 512, 64 actions, first-legal) and its 134-deck pool, cut down to CPU, 4 streams, 64 transitions and 2 updates. It took 13 s, and <code>run.json</code> reported <code>status: completed</code>.</p>
+<p>Evaluation: <code>scratch/drive.py</code> builds an Etude <code>Model</code> on the <code>file://</code> raw checkpoint and the frozen protocol's first pair. It calls <code>tla_frontier._registration</code> and then <code>evaluate</code>.</p>
+<table><tr><th>Source</th><th>Path</th><th>Registered obs ABI</th><th>Result</th></tr>
+<tr><td>branch</td><td>served (CPU)</td><td>83f8c11b… (checkpoint's), not the fresh default 5fc09677…</td><td>4/4 legs valid, 4.6 s</td></tr>
+<tr><td>branch</td><td>scalar</td><td>83f8c11b…</td><td>4/4 legs valid, 9.0 s</td></tr>
+<tr><td>main</td><td>served (CPU)</td><td>5fc09677… (fresh default)</td><td><b>refused</b>: <code>InferenceFailure: ValueError: checkpoint observation ABI drift</code></td></tr></table>
+<p>On the branch the action ABI is also the checkpoint's own: 8721a5c1… against the fresh 51c9d704…, which comes from the 64-slot action space. The artifact ID is still <code>c5fba4/&lt;sha256&gt;</code>, and the role is <code>challenger</code>.</p>
+
+<h2>Scenario 2: learning-signal design (<code>experiments/learning_signal.py</code>)</h2>
+<p>Training: the local recipe's regime (<code>local_smoke(device="cpu")</code>) with <code>max_facts=256</code>, run with the <code>manabot train --regime</code> CLI. It completed. Evaluation: <code>scratch/drive_ls.py</code>, design <code>closure-lambda-v1</code> in matchup mode "all" (8 legs).</p>
+<table><tr><th>Source</th><th>Path</th><th>Result</th></tr>
+<tr><td>branch</td><td>served (CPU)</td><td>8/8 legs valid, 9.3 s. Obs ABI c525fb03…, artifact <code>closure-lambda-v1/&lt;sha&gt;</code>, roles challenger/anchor</td></tr>
+<tr><td>branch</td><td>scalar</td><td>8/8 legs valid</td></tr>
+<tr><td>main</td><td>served (CPU)</td><td><b>refused</b>: <code>InferenceFailure: ValueError: checkpoint observation ABI drift</code></td></tr></table>
+
+<h2>Returning users and identities</h2>
+<ul>
+<li><code>matchup_sha256</code> now comes from <code>model_dump()</code> instead of <code>model_dump(mode="json")</code>. For both matchups above the two hashes are equal, so match identity has not moved.</li>
+<li>Code-player registrations have the same fields and values as before.</li>
+<li>Checkpoint registrations do change their ABI hashes. That is the fix, and the error message is the one <code>docs/evaluation.md</code> names.</li>
+<li>Monitor registration (<code>checkpoint_manifest</code>, now <code>artifact_prefix="monitor"</code>): <code>tests/training/test_monitor_evaluation.py</code> and <code>tests/eval/test_batched_eval.py</code> gave 42 passed and 1 skipped.</li>
+</ul>
+
+<h2>Fixed</h2><p>Nothing. No step broke.</p>
+
+<h2>Summary</h2>
+<p><b>Works:</b> frontier-shaped and <code>max_facts</code>-changed checkpoints are now admitted by served evaluation through both experiments' registration code. The same runs on <code>main</code> reproduce the refusal this Task exists to remove.</p>
+<p><b>Not reached:</b> CUDA itself (no GPU here; the serving check is device-independent, and MTG-267's GPU pass is the remaining confirmation). I also did not run an Etude-launched <code>play()</code>/<code>play_deal()</code> callback: those call <code>evaluate</code> without an execution, so they are scalar, and I exercised them through the same <code>_registration</code>.</p>
+<p><b>Still wrong:</b> nothing new. Still open from questions.md: the frozen <code>experiments/elemental_long_eval.py</code> keeps fresh-default action hashes, and the self-play test that timed out locally needs a CI rerun.</p>
+<p>Added to <code>.lf/skills/qa.md</code>: how to drive served evaluation on CPU and how to compare a driver against <code>main</code>'s source.</p>
+</body></html>
