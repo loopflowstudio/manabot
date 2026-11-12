@@ -16,8 +16,6 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_iteration
 from manabot.training.regime import DampedPolicyLearning, Learning, TrainSelfPlay
 from manabot.training.rollout.adaptive import (
     AdaptiveConfig,
@@ -26,6 +24,9 @@ from manabot.training.rollout.adaptive import (
     GameResult,
 )
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 
@@ -97,13 +98,11 @@ def test_both_seat_targets_and_recovery_preserve_physical_games(
                 + learning.value_lambda * expected[index + 1, 0]
             )
     expected -= batch.values
-    diagnostic = update_iteration(
-        Learner(agent, "cpu", minibatch_rows=2),
-        batch,
-        learning,
-        0.0,
-        np.random.default_rng(17),
-        iteration=1,
+    learner = Learner(agent, "cpu", minibatch_rows=2)
+    diagnostic = (
+        update_damped_iteration(learner, batch, learning, 1)
+        if isinstance(learning, DampedPolicyLearning)
+        else update_iteration(learner, batch, learning, 0.0, np.random.default_rng(17))
     )
     assert batch.target_residuals is not None
     assert batch.target_residuals.shape == batch.values.shape

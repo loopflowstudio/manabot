@@ -190,7 +190,7 @@ Each observation path admits once per batch:
 
 - Collection and search serving admit inside `PolicyInference.prepare` (below).
 - Learning wraps each rollout batch in `AdmittedRollout`
-  ([`learner.py`](../training/learning/learner.py)): it admits the bootstrap
+  ([`learner.py`](../training/updates/learner.py)): it admits the bootstrap
   rows and then the rows an update trains, in minibatch-sized chunks; rows the
   advantage filter drops are never admitted, and epochs re-read admitted rows
   without checks.

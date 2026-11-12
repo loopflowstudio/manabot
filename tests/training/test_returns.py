@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from manabot.training.learning.damped_policy import categorical_lambda_returns
-from manabot.training.learning.returns import (
+from manabot.rl.returns import (
+    categorical_lambda_returns,
     reverse_waves,
     terminal_distances,
     transition_gae,
