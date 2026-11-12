@@ -1826,23 +1826,20 @@ impl Game {
         }
         let mut suspended = self.state.suspended_decision_mut().take().unwrap();
         match (&mut suspended.decision, action) {
-            (Decision::EnterAsCopy { candidates, .. }, Action::ChooseTarget { target, .. }) => {
-                let chosen = match target {
-                    Target::Permanent(id) if candidates.contains(id) => *id,
+            (Decision::EnterAsCopy { candidates, .. }, choice) => {
+                let of = match choice {
+                    Action::ChooseTarget {
+                        target: Target::Permanent(id),
+                        ..
+                    } if candidates.contains(id) => Some(*id),
+                    Action::Decline { .. } => None,
                     _ => {
                         *self.state.suspended_decision_mut() = Some(suspended);
                         return Err(AgentError("illegal creature to copy".into()));
                     }
                 };
                 let mut batch = suspended.frame.batch.take().expect("retained event batch");
-                self.choose_entry_copy(&mut batch, Some(chosen));
-                suspended.frame.batch = Some(batch);
-                self.run_frame(suspended.frame);
-                Ok(())
-            }
-            (Decision::EnterAsCopy { .. }, Action::Decline { .. }) => {
-                let mut batch = suspended.frame.batch.take().expect("retained event batch");
-                self.choose_entry_copy(&mut batch, None);
+                self.choose_entry_copy(&mut batch, of);
                 suspended.frame.batch = Some(batch);
                 self.run_frame(suspended.frame);
                 Ok(())

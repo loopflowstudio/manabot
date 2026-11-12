@@ -1382,14 +1382,14 @@ impl Game {
         }
         // CR 702.56a: replicate copies the spell once per payment, each copy
         // with a chance to choose new targets.
-        let replicated = match self.find_spell_on_stack_index(card) {
-            Some(index) => match &self.state.stack_objects[index] {
-                StackObject::Spell(spell) if self.state.cards[card].replicate().is_some() => {
-                    usize::from(spell.x)
-                }
-                _ => 0,
-            },
-            None => 0,
+        let replicated = match self
+            .find_spell_on_stack_index(card)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) if self.state.cards[card].replicate().is_some() => {
+                usize::from(spell.x)
+            }
+            _ => 0,
         };
         if replicated > 0 {
             let copies = vec![Effect::CopyTriggeringObject; replicated];

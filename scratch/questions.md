@@ -213,3 +213,9 @@ policy catalog, record vocabulary, Academy alternative-cost and Merchant
 recovery: 114 passed. Not run here (gate): semantic-kernel evidence,
 `test_decision_surface.py`, Academy offers, reconnect and fork for
 `EnterAsCopy` and opponent-chosen activation targets, browser checks.
+
+Tenth-pass compress (no behavior change): one `EnterAsCopy` action arm, one
+`entry_copy_terms` lookup, `ActivatedTargeting` instead of a 6-tuple, the
+action space reuses `activation_clause_chosen`. `cargo nextest run --workspace`
+(debug): 1145 passed, 2 skipped, 1 failed — only
+`checked_semantic_conformance_evidence_reproduces` (all 14 traces drifted; gate).

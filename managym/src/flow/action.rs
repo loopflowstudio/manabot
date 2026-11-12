@@ -645,12 +645,11 @@ impl Game {
                         target,
                     })
                     .collect();
-                let ability = self.activation_ability(*source, *ability_index)?;
-                let clause = ability.target_requirements().get(*requirement)?.clone();
-                let indices = ability.target_clause_indices(chosen.len());
-                let in_clause = (0..chosen.len())
-                    .filter(|slot| indices.get(*slot).copied().unwrap_or(0) == *requirement)
-                    .count();
+                let clause =
+                    self.activation_target_requirement(*source, *ability_index, *requirement)?;
+                let in_clause = self
+                    .activation_clause_chosen(*source, *ability_index, *requirement, chosen)
+                    .len();
                 if in_clause >= clause.min {
                     actions.push(Action::Decline { player: chooser });
                 }

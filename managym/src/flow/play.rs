@@ -17,6 +17,7 @@ use crate::{
         event::GameEvent,
         game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
         proposed_event::ProposedEvent,
+        turn::{PhaseKind, StepKind},
     },
     state::{
         ability::TargetRequirement,
@@ -32,6 +33,16 @@ use crate::{
 /// is monotone in X, so the scan stops at the first unpayable value.
 fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
     (least..=u8::MAX).take_while(|&x| can_pay(x)).collect()
+}
+
+/// The fields of `PendingChoice::ActivatedTarget`: `player` activates and
+/// `requirement` is the clause being chosen.
+struct ActivatedTargeting {
+    player: PlayerId,
+    source: ActivationSource,
+    ability_index: usize,
+    chosen: Vec<Target>,
+    requirement: usize,
 }
 
 #[derive(Default)]
@@ -1206,12 +1217,8 @@ impl Game {
     /// phase, the first main phase or the beginning of combat.
     fn before_attackers_declared(&self) -> bool {
         match self.state.turn.current_phase_kind() {
-            crate::flow::turn::PhaseKind::Beginning
-            | crate::flow::turn::PhaseKind::PrecombatMain => true,
-            crate::flow::turn::PhaseKind::Combat => {
-                self.state.turn.current_step_kind()
-                    == crate::flow::turn::StepKind::BeginningOfCombat
-            }
+            PhaseKind::Beginning | PhaseKind::PrecombatMain => true,
+            PhaseKind::Combat => self.state.turn.current_step_kind() == StepKind::BeginningOfCombat,
             _ => false,
         }
     }
@@ -1319,7 +1326,7 @@ impl Game {
     }
 
     /// Targeting clause `requirement` of the activation in progress.
-    fn activation_target_requirement(
+    pub(crate) fn activation_target_requirement(
         &self,
         source: ActivationSource,
         ability_index: usize,
@@ -1347,7 +1354,7 @@ impl Game {
     }
 
     /// The targets already chosen for clause `requirement`.
-    fn activation_clause_chosen(
+    pub(crate) fn activation_clause_chosen(
         &self,
         source: ActivationSource,
         ability_index: usize,
@@ -1434,20 +1441,8 @@ impl Game {
         common.is_some_and(|common| !common.is_empty())
     }
 
-    /// The pending activation targeting and its current chooser.
-    fn pending_activated_target(
-        &self,
-    ) -> Result<
-        (
-            PlayerId,
-            ActivationSource,
-            usize,
-            Vec<Target>,
-            usize,
-            PlayerId,
-        ),
-        AgentError,
-    > {
+    /// The pending activation targeting.
+    fn pending_activated_target(&self) -> Result<ActivatedTargeting, AgentError> {
         let Some(PendingChoice::ActivatedTarget {
             player,
             source,
@@ -1458,14 +1453,25 @@ impl Game {
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
-        Ok((player, source, ability_index, chosen, requirement, chooser))
+        Ok(ActivatedTargeting {
+            player,
+            source,
+            ability_index,
+            chosen,
+            requirement,
+        })
     }
 
     /// Finish choosing the current clause's targets once its minimum is met.
     pub(crate) fn decline_activated_target(&mut self, actor: PlayerId) -> Result<(), AgentError> {
-        let (player, source, ability_index, chosen, requirement, chooser) =
-            self.pending_activated_target()?;
+        let ActivatedTargeting {
+            player,
+            source,
+            ability_index,
+            chosen,
+            requirement,
+        } = self.pending_activated_target()?;
+        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
         let clause = self
             .activation_target_requirement(source, ability_index, requirement)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
@@ -1483,8 +1489,14 @@ impl Game {
         actor: PlayerId,
         target: Target,
     ) -> Result<(), AgentError> {
-        let (player, source, ability_index, mut chosen, requirement, chooser) =
-            self.pending_activated_target()?;
+        let ActivatedTargeting {
+            player,
+            source,
+            ability_index,
+            mut chosen,
+            requirement,
+        } = self.pending_activated_target()?;
+        let chooser = self.activation_target_chooser(player, source, ability_index, requirement);
         if actor != chooser
             || !self
                 .activated_ability_targets(player, source, ability_index, requirement, &chosen)

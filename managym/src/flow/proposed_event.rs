@@ -692,15 +692,7 @@ impl Game {
         if pending.copy_chosen {
             return None;
         }
-        let (scope, predicate) = self.state.cards[*card]
-            .replacement_effects
-            .iter()
-            .find_map(|effect| match effect {
-                ReplacementEffect::EntersAsCopy {
-                    scope, predicate, ..
-                } => Some((*scope, predicate)),
-                _ => None,
-            })?;
+        let (scope, predicate, _) = self.entry_copy_terms(*card)?;
         let player = entry.controller.unwrap_or(self.state.cards[*card].owner);
         let controllers = match scope {
             crate::state::ability::Scope::YouControl => vec![player],
@@ -736,15 +728,34 @@ impl Game {
             return;
         };
         let source = self.state.cards[source.card].clone();
-        let exceptions = self.state.cards[card]
+        let Some((_, _, exceptions)) = self.entry_copy_terms(card) else {
+            return;
+        };
+        let exceptions = exceptions.to_vec();
+        self.state.cards[card].become_copy_of(&source, &exceptions);
+    }
+
+    /// The scope, predicate and copy exceptions of the card's "enter as a
+    /// copy" replacement, if it has one.
+    fn entry_copy_terms(
+        &self,
+        card: CardId,
+    ) -> Option<(
+        crate::state::ability::Scope,
+        &crate::state::predicate::CardPredicate,
+        &[crate::state::effect::Modification],
+    )> {
+        self.state.cards[card]
             .replacement_effects
             .iter()
             .find_map(|effect| match effect {
-                ReplacementEffect::EntersAsCopy { exceptions, .. } => Some(exceptions.clone()),
+                ReplacementEffect::EntersAsCopy {
+                    scope,
+                    predicate,
+                    exceptions,
+                } => Some((*scope, predicate, exceptions.as_slice())),
                 _ => None,
             })
-            .unwrap_or_default();
-        self.state.cards[card].become_copy_of(&source, &exceptions);
     }
 
     pub(crate) fn choose_replacement(
