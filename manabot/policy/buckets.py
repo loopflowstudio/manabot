@@ -1,4 +1,4 @@
-"""Opt-in bucketed padding: trim an admitted batch's variable axes to fixed buckets.
+"""Bucket selection for bucketed padding: the sizes a batch's variable axes trim to.
 
 Every observation buffer arrives padded to its declared capacity, yet real
 batches use little of it. With `ActorCritic(..., bucketed_shapes=True)`, set
@@ -8,11 +8,12 @@ at least `MIN_BUCKET` and at most the declared capacity. A forward then takes
 one of a few shapes per axis. The setting changes no `ModelConfig` field,
 parameter, buffer, checkpoint or policy input.
 
-Principal entry points:
-
-- `bucket_sizes` measures one batch with a single host read.
-- `trim_observation` slices every axis to its bucket and rewrites object
-  references into the trimmed object coordinates.
+This module chooses the sizes, on the host, with NumPy: `bucket_sizes`
+measures one admitted batch. Admission measures it before any device transfer
+(`manabot.model.admission`), so a forward trims device tensors without reading
+the device. Each backend trims its own arrays to these sizes
+(`trim_observation` in `manabot.model.inference` for torch), remapping the
+object references listed here.
 
 An axis's need covers every row the default path could read or reject: the
 last row with any nonzero value (so poisoned padding is kept and still
@@ -26,9 +27,10 @@ only when padding objects are inert: not under `historical_mean`, whose
 average includes padding, and not with belief rows, which follow the objects.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
-import torch
+import numpy as np
 
 from manabot.env.observation import ObservationEncoder
 from managym import observation_layout
@@ -37,7 +39,7 @@ MIN_BUCKET = 8
 
 # Keys trimmed along axis 1, by axis; seat-major keys ([B, 2, rows, ...])
 # are trimmed along axis 2.
-_ROW_KEYS: dict[str, tuple[str, ...]] = {
+ROW_KEYS: dict[str, tuple[str, ...]] = {
     "facts": ("facts",),
     "effects": ("effects",),
     "details": ("effect_details",),
@@ -58,7 +60,7 @@ _ROW_KEYS: dict[str, tuple[str, ...]] = {
         "opponent_permanents_valid",
     ),
 }
-_SEAT_KEYS: dict[str, tuple[str, ...]] = {
+SEAT_KEYS: dict[str, tuple[str, ...]] = {
     "cards": ("semantic_cards",),
     "known": ("known_hand",),
     "decklists": ("decklists",),
@@ -140,43 +142,52 @@ def _capacities(encoder: ObservationEncoder) -> dict[str, int]:
     }
 
 
-def _extent(value: torch.Tensor, axis: int) -> torch.Tensor:
+def _extent(value: np.ndarray, axis: int) -> int:
     """One past the last row along `axis` holding any nonzero (or NaN) value."""
     rows = value.shape[axis]
-    flags = (value != 0).movedim(axis, 1).reshape(value.shape[0], rows, -1).any(-1)
-    positions = torch.arange(1, rows + 1, device=value.device)
-    return _maximum(flags * positions)
+    flags = (
+        (value != 0).swapaxes(axis, 1).reshape(value.shape[0], rows, -1).any(-1)
+    ).any(0)
+    used = np.flatnonzero(flags)
+    return int(used[-1]) + 1 if used.size else 0
 
 
-def _maximum(values: torch.Tensor) -> torch.Tensor:
-    """Maximum as int64, zero for an empty tensor."""
-    flat = values.reshape(-1).long()
-    return torch.cat((flat, flat.new_zeros(1))).max()
+def _float32(values: np.ndarray, invalid: float) -> np.ndarray:
+    """`values` as float32 with NaN and infinities replaced by `invalid`."""
+    return np.nan_to_num(
+        values.astype(np.float32), nan=invalid, posinf=invalid, neginf=invalid
+    )
 
 
-def _reference_extent(values: torch.Tensor, capacity: int) -> torch.Tensor:
+def _maximum(values: np.ndarray) -> int:
+    """Maximum of the integer parts, zero for an empty array."""
+    return int(values.max(initial=0))
+
+
+def _reference_extent(values: np.ndarray, capacity: int) -> int:
     """Largest integer part of finite one-based references, clamped to capacity."""
-    clean = torch.nan_to_num(values.float(), nan=0.0, posinf=0.0, neginf=0.0)
-    return _maximum(clean.floor().clamp(0, capacity))
+    return _maximum(np.clip(np.floor(_float32(values, 0.0)), 0, capacity))
 
 
-def _object_references(obs: dict[str, torch.Tensor]) -> list[torch.Tensor]:
+def has_history_events(obs: Mapping[str, object]) -> bool:
+    """Whether `events` holds policy-history rows, whose contexts name objects."""
+    events = obs.get("events")
+    shape = getattr(events, "shape", None)
+    return shape is not None and len(shape) == 3 and shape[-1] == _EVENT_WIDTH
+
+
+def _object_references(obs: Mapping[str, np.ndarray]) -> list[np.ndarray]:
     """Every object reference in zero-based full object coordinates."""
-    references = [obs["action_focus"].float()]
+    references = [obs["action_focus"].astype(np.float32)]
     references.extend(obs[key][..., column] - 1 for key, column in ONE_BASED_REFERENCES)
-    if _has_history_events(obs):
+    if has_history_events(obs):
         references.extend(
             obs[key][..., column] for key, column in ZERO_BASED_REFERENCES
         )
     return references
 
 
-def _has_history_events(obs: dict[str, torch.Tensor]) -> bool:
-    events = obs.get("events")
-    return events is not None and events.ndim == 3 and events.shape[-1] == _EVENT_WIDTH
-
-
-def _object_segments(capacities: dict[str, int]) -> list[tuple[str, int, int]]:
+def object_segments(capacities: Mapping[str, int]) -> list[tuple[str, int, int]]:
     """(axis, start, rows) of each object segment after the two player rows.
 
     The object table is players, agent cards, opponent cards, agent
@@ -191,24 +202,23 @@ def _object_segments(capacities: dict[str, int]) -> list[tuple[str, int, int]]:
 
 
 def _object_extents(
-    references: list[torch.Tensor], capacities: dict[str, int]
-) -> dict[str, torch.Tensor]:
+    references: list[np.ndarray], capacities: dict[str, int]
+) -> dict[str, int]:
     """Rows of each card and permanent axis that any reference names."""
-    needs: dict[str, list[torch.Tensor]] = {"cards": [], "permanents": []}
+    needs = {"cards": 0, "permanents": 0}
     for values in references:
-        index = torch.nan_to_num(values.float(), nan=-1.0, posinf=-1.0, neginf=-1.0)
-        index = index.floor()
-        for axis, start, rows in _object_segments(capacities):
+        index = np.floor(_float32(values, -1.0))
+        for axis, start, rows in object_segments(capacities):
             offset = index - start
             inside = (offset >= 0) & (offset < rows)
-            needs[axis].append(_maximum(torch.where(inside, offset + 1, 0)))
-    return {axis: torch.stack(values).max() for axis, values in needs.items()}
+            needs[axis] = max(needs[axis], _maximum(np.where(inside, offset + 1, 0)))
+    return needs
 
 
 def bucket_sizes(
-    obs: dict[str, torch.Tensor], encoder: ObservationEncoder, *, objects: bool
+    obs: Mapping[str, np.ndarray], encoder: ObservationEncoder, *, objects: bool
 ) -> BucketSizes | None:
-    """Measure one batch's buckets with one host read; None leaves it untouched.
+    """Measure one batch's buckets; None leaves it untouched.
 
     A batch whose keys or shapes differ from the declared layout is not
     trimmed, so the model rejects it exactly as it would without buckets.
@@ -222,12 +232,12 @@ def bucket_sizes(
     ):
         return None
     capacities = _capacities(encoder)
-    needs: dict[str, list[torch.Tensor]] = {axis: [] for axis in capacities}
-    for axis, keys in _ROW_KEYS.items():
+    needs: dict[str, list[int]] = {axis: [0] for axis in capacities}
+    for axis, keys in ROW_KEYS.items():
         needs[axis].extend(
             _extent(obs[key], 1) for key in keys if key not in _UNMEASURED_KEYS
         )
-    for axis, keys in _SEAT_KEYS.items():
+    for axis, keys in SEAT_KEYS.items():
         needs[axis].extend(_extent(obs[key], 2) for key in keys)
     # Live effect headers name detail and member spans [offset, offset + count).
     effects = obs["effects"]
@@ -257,62 +267,16 @@ def bucket_sizes(
     if objects:
         for axis, need in _object_extents(_object_references(obs), capacities).items():
             needs[axis].append(need)
-    axes = list(capacities)
-    measured = torch.stack([torch.stack(needs[axis]).max() for axis in axes]).tolist()
-    sizes = {
-        axis: bucket(int(need), capacities[axis])
-        for axis, need in zip(axes, measured, strict=True)
-    }
+    sizes = {axis: bucket(max(needs[axis]), capacities[axis]) for axis in capacities}
     if not objects:
         sizes["cards"] = capacities["cards"]
         sizes["permanents"] = capacities["permanents"]
     return BucketSizes(sizes, capacities)
 
 
-def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
-    """Map zero-based full object coordinates to trimmed ones.
-
-    Each value shifts by the rows trimmed from segments ending at or before
-    it. Integer parts, signs and out-of-range values keep their meaning, so
-    reference checks accept and reject exactly what they would at full capacity.
-    """
-    shift = torch.zeros_like(values)
-    for axis, start, rows in _object_segments(buckets.capacities):
-        cut = rows - buckets.sizes[axis]
-        shift = shift + (values >= start + rows).to(values.dtype) * cut
-    return values - shift
-
-
-def trim_observation(
-    obs: dict[str, torch.Tensor], buckets: BucketSizes
-) -> dict[str, torch.Tensor]:
-    """Slice every variable axis to its bucket; other keys pass through."""
-    trimmed = dict(obs)
-    for axis, keys in _ROW_KEYS.items():
-        for key in keys:
-            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
-    for axis, keys in _SEAT_KEYS.items():
-        for key in keys:
-            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
-    if not buckets.trims_objects:
-        return trimmed
-    trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
-    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
-        for key in dict.fromkeys(key for key, _ in references):
-            if key == "events" and not _has_history_events(trimmed):
-                continue
-            columns = [column for name, column in references if name == key]
-            value = trimmed[key].clone()
-            value[..., columns] = (
-                _object_remap(value[..., columns] - base, buckets) + base
-            )
-            trimmed[key] = value
-    return trimmed
-
-
 def object_columns(buckets: BucketSizes) -> list[slice]:
     """Full-coordinate object slices kept by `buckets`, in object order."""
     return [slice(0, 2)] + [
         slice(start, start + buckets.sizes[axis])
-        for axis, start, _ in _object_segments(buckets.capacities)
+        for axis, start, _ in object_segments(buckets.capacities)
     ]

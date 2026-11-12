@@ -225,7 +225,7 @@ class Execution(Strict):
     # regimes that set it still validate with unchanged identities.
     profile_collection: bool = Field(default=False, exclude_if=lambda value: not value)
     # Collection and learner forwards trim variable axes to power-of-two
-    # buckets (`manabot.model.buckets`). Omitted when unset so existing regime
+    # buckets (`manabot.policy.buckets`). Omitted when unset so existing regime
     # hashes are unchanged; never part of the model or its checkpoints.
     bucketed_shapes: bool = Field(default=False, exclude_if=lambda value: not value)
 

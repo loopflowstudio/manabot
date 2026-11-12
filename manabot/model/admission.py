@@ -6,7 +6,9 @@ validity, definition and vocabulary references, permanent links, fact and
 record programs, shared-effect partitions and membership, continuation and
 naming references, recent events, belief rows, the legal-action mask and the
 object a value aggregation reads. It returns an `AdmittedObservation`, which
-keeps the tensor dictionary interface and carries the checked definition rows.
+keeps the tensor dictionary interface and carries the checked definition rows
+and, for a policy with bucketed shapes, the batch's bucket sizes, measured on
+the host (`manabot.policy.buckets`) so the forward trims without a device read.
 
 `ActorCritic.forward` and `forward_distribution` accept only admitted input
 (plain dictionaries raise `TypeError`) and perform no validation host reads;
@@ -44,6 +46,7 @@ from manabot.model.semantic_cards import (
     definition_rows,
 )
 from manabot.model.shared_effects import admit_shared_effects
+from manabot.policy.buckets import BucketSizes, bucket_sizes
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -83,7 +86,10 @@ class AdmittedObservation(dict[str, torch.Tensor]):
 
     `references` holds the checked definition rows of visible cards,
     permanents, public hands and decklists; `legal` is whether every row has a
-    legal action. Construct with `admit_observation`, never by hand.
+    legal action; `buckets` holds the bucket sizes measured at admission for a
+    policy with bucketed shapes (None otherwise, after trimming, or for a
+    layout bucketing leaves untouched). Construct with `admit_observation`,
+    never by hand.
     """
 
     def __init__(
@@ -92,11 +98,13 @@ class AdmittedObservation(dict[str, torch.Tensor]):
         binding: str,
         references: CardReferences,
         legal: bool,
+        buckets: BucketSizes | None = None,
     ) -> None:
         super().__init__(tensors)
         self.binding = binding
         self.references = references
         self.legal = legal
+        self.buckets = buckets
 
 
 def admit_observation(
@@ -151,7 +159,11 @@ def admit_observation(
     legal = legal_mask(obs["actions_valid"])
     _admit_actions(agent, obs, legal, lookup, valid_count)
     return AdmittedObservation(
-        obs, admission_binding(agent), references, bool(legal.any(-1).all())
+        obs,
+        admission_binding(agent),
+        references,
+        bool(legal.any(-1).all()),
+        measure_buckets(agent, obs),
     )
 
 
@@ -165,6 +177,24 @@ def bind_admitted(
         admission_binding(agent),
         _references(agent, obs, lookup, check=False),
         bool(obs["actions_valid"].any(-1).all()),
+        measure_buckets(agent, obs),
+    )
+
+
+def measure_buckets(
+    agent: "ActorCritic", obs: Mapping[str, torch.Tensor]
+) -> BucketSizes | None:
+    """The bucket sizes of a batch for a policy with bucketed shapes.
+
+    Reads host arrays; CPU tensors are viewed without a copy. A policy without
+    bucketed shapes measures nothing.
+    """
+    if not agent.bucketed_shapes:
+        return None
+    return bucket_sizes(
+        {key: value.detach().cpu().numpy() for key, value in obs.items()},
+        agent.observation_space.encoder,
+        objects=agent.object_trimming(),
     )
 
 

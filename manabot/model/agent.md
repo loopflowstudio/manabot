@@ -148,6 +148,23 @@ This updated design document reflects both the current implementation and our st
 
 
 
+## Where the code lives
+
+The policy is split by what depends on an array framework:
+
+- [`manabot/policy/`](../policy/README.md): host preparation (definition rows,
+  record vocabulary, legal actions, packed GRU schedules, shared-effect
+  routes, column compaction, bucket selection) and the checkpoint container.
+  NumPy only.
+- [`manabot/backends/torch/policy.py`](../backends/torch/policy.py):
+  `ActorCritic`, the forward over a prepared batch. Other frameworks sit
+  beside it under [`manabot/backends/`](../backends/README.md).
+- This directory: the torch model's components, admission, inference
+  preparation, architecture receipts and world binding.
+
+`manabot.model.actor_critic.ActorCritic` and the `manabot.model.checkpoint`
+functions still resolve, with a `DeprecationWarning` and removal in 0.3.0.
+
 ## Observation admission
 
 A policy forward reads only admitted observations. Admission
@@ -181,10 +198,10 @@ it, and a model with another configuration raises `ValueError`. Admitted
 tensors are read-only; assembling an `AdmittedObservation` by hand is outside
 the contract.
 
-The forward still compacts data-dependent structure per batch: legal action
-rows, the object and fact columns in use, packed card programs and
-shared-effect CSR routes. Those reads choose the CPU work; they are not
-validation.
+Host preparation (`manabot.policy.prepare`) then compacts data-dependent
+structure per batch: legal action rows, the object and fact columns in use,
+packed card programs and shared-effect CSR routes. Those reads choose the
+work; they are not validation.
 
 Each observation path admits once per batch:
 

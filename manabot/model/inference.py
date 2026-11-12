@@ -12,9 +12,10 @@ Device inputs move with one contiguous copy per dtype (`transfer`): serving's
 float32 observation keys and int64 catalog references are two copies per batch
 instead of one per key.
 
-With bucketed shapes, preparation measures each batch's buckets on the host
-before transfer; the forward trims the device tensors to them without a device
-read. The prepared dictionary itself keeps full-capacity tensors.
+With bucketed shapes, admission measures each batch's buckets on the host
+before transfer (`manabot.policy.buckets`); the forward trims the device tensors
+to them without a device read (`trim_admitted`). The prepared dictionary itself
+keeps full-capacity tensors.
 """
 
 from collections.abc import Mapping
@@ -24,8 +25,16 @@ from typing import TYPE_CHECKING
 import torch
 
 from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.buckets import BucketSizes, bucket_sizes, trim_observation
 from manabot.model.semantic_cards import CardReferences
+from manabot.policy.buckets import (
+    ONE_BASED_REFERENCES,
+    ROW_KEYS,
+    SEAT_KEYS,
+    ZERO_BASED_REFERENCES,
+    BucketSizes,
+    has_history_events,
+    object_segments,
+)
 
 if TYPE_CHECKING:
     from manabot.backends.torch.policy import ActorCritic
@@ -87,6 +96,7 @@ def transfer_admitted(
             moved.get("references/decklists"),
         ),
         admitted.legal,
+        admitted.buckets,
     ), transfers
 
 
@@ -104,23 +114,62 @@ def admit_on_device(
 class PreparedObservation(AdmittedObservation):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them; `buckets`
-    holds host-measured bucket sizes when the policy uses bucketed shapes.
+    `transfers` counts the host-to-device copies that produced them.
     """
 
     def __init__(
-        self,
-        admitted: AdmittedObservation,
-        scope: "PolicyInference",
-        transfers: int,
-        buckets: BucketSizes | None = None,
+        self, admitted: AdmittedObservation, scope: "PolicyInference", transfers: int
     ) -> None:
         super().__init__(
-            admitted, admitted.binding, admitted.references, admitted.legal
+            admitted,
+            admitted.binding,
+            admitted.references,
+            admitted.legal,
+            admitted.buckets,
         )
         self.scope = scope
         self.transfers = transfers
-        self.buckets = buckets
+
+
+def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
+    """Map zero-based full object coordinates to trimmed ones.
+
+    Each value shifts by the rows trimmed from segments ending at or before
+    it. Integer parts, signs and out-of-range values keep their meaning, so
+    reference checks accept and reject exactly what they would at full capacity.
+    """
+    shift = torch.zeros_like(values)
+    for axis, start, rows in object_segments(buckets.capacities):
+        cut = rows - buckets.sizes[axis]
+        shift = shift + (values >= start + rows).to(values.dtype) * cut
+    return values - shift
+
+
+def trim_observation(
+    obs: Mapping[str, torch.Tensor], buckets: BucketSizes
+) -> dict[str, torch.Tensor]:
+    """Slice every variable axis to its bucket; other keys pass through."""
+    trimmed = dict(obs)
+    for axis, keys in ROW_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, : buckets.sizes[axis]]
+    for axis, keys in SEAT_KEYS.items():
+        for key in keys:
+            trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
+    if not buckets.trims_objects:
+        return trimmed
+    trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
+    for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
+        for key in dict.fromkeys(key for key, _ in references):
+            if key == "events" and not has_history_events(trimmed):
+                continue
+            columns = [column for name, column in references if name == key]
+            value = trimmed[key].clone()
+            value[..., columns] = (
+                _object_remap(value[..., columns] - base, buckets) + base
+            )
+            trimmed[key] = value
+    return trimmed
 
 
 def trim_admitted(
@@ -128,11 +177,13 @@ def trim_admitted(
 ) -> AdmittedObservation:
     """Trim admitted tensors and their checked joins to `buckets`.
 
-    Trimming removes only rows nothing reads, so the admission still holds.
+    Trimming removes only rows nothing reads, so the admission still holds. A
+    prepared observation stays prepared, in the same scope. The result carries
+    no buckets: it is already trimmed.
     """
     sizes = buckets.sizes
     references = obs.references
-    return AdmittedObservation(
+    trimmed = AdmittedObservation(
         trim_observation(obs, buckets),
         obs.binding,
         CardReferences(
@@ -147,15 +198,9 @@ def trim_admitted(
         ),
         obs.legal,
     )
-
-
-def trim_prepared(obs: PreparedObservation) -> PreparedObservation:
-    """Trim prepared tensors and their joins to the host-measured buckets."""
-    if obs.buckets is None:
-        return obs
-    return PreparedObservation(
-        trim_admitted(obs, obs.buckets), obs.scope, obs.transfers
-    )
+    if isinstance(obs, PreparedObservation):
+        return PreparedObservation(trimmed, obs.scope, obs.transfers)
+    return trimmed
 
 
 class PolicyInference:
@@ -220,14 +265,5 @@ class PolicyInference:
         if any(tensor.device.type != "cpu" for tensor in obs.values()):
             raise ValueError("inference preparation requires CPU observations")
         admitted = admit_observation(self.agent, obs)
-        buckets = (
-            bucket_sizes(
-                admitted,
-                self.agent.observation_space.encoder,
-                objects=self.agent.object_trimming(),
-            )
-            if self.agent.bucketed_shapes
-            else None
-        )
         moved, transfers = transfer_admitted(admitted, self.device)
-        return PreparedObservation(moved, self, transfers, buckets)
+        return PreparedObservation(moved, self, transfers)

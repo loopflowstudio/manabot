@@ -2,19 +2,20 @@
 
 from collections.abc import Callable
 
+import numpy as np
 import pytest
 import torch
 
 from manabot.backends.torch.policy import ActorCritic
 from manabot.env.observation import FACT_OBJECT_INDEX
 from manabot.model.admission import admit_observation
-from manabot.model.buckets import (
+from manabot.model.inference import PolicyInference
+from manabot.policy.buckets import (
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
     bucket,
     bucket_sizes,
 )
-from manabot.model.inference import PolicyInference
 import managym
 from tests.model.test_inference import PolicyFixture, _policy
 
@@ -34,6 +35,10 @@ def _bucketed(case: PolicyFixture) -> ActorCritic:
             reference.add_(noise)
             copy.add_(noise)
     return agent
+
+
+def _host(obs: dict[str, torch.Tensor]) -> dict[str, np.ndarray]:
+    return {key: value.numpy() for key, value in obs.items()}
 
 
 def _later_decisions(case: PolicyFixture) -> dict[str, torch.Tensor]:
@@ -87,7 +92,7 @@ def test_outputs_and_gradients_match_default(
     case = _policy(history=history)
     obs = _later_decisions(case)
     agent = _bucketed(case)
-    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
     for model in (case.agent, agent):
@@ -170,7 +175,7 @@ def test_reference_to_padding_object_is_kept() -> None:
     agent = _bucketed(case)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
-    buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
+    buckets = bucket_sizes(_host(obs), agent.observation_space.encoder, objects=True)
     assert buckets is not None
     assert buckets.sizes["permanents"] == buckets.capacities["permanents"]
     with torch.no_grad():

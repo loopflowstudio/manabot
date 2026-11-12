@@ -633,9 +633,18 @@ training, experiment scheduling or reports, even when loading a frozen model.
 The package-boundary tests import every simulation module and play a checkpoint
 with those packages blocked.
 
-- `model/`: network construction/inference and portable checkpoint admission.
-  `model.checkpoint.save_checkpoint` and `load_checkpoint` own policy files;
-  their serialized historical keys remain unchanged.
+- `policy/`: the framework-free policy contract: host preparation, bucket
+  selection, the safetensors checkpoint container and the backend Protocols.
+  It imports no array framework ([policy contract](policy/README.md)).
+- `backends/<framework>/`: one folder per array framework with the same files
+  (`policy.py`, `rl.py`, `learner.py`, `arrays.py`, `checkpoint.py`);
+  `backends/torch/` is the reference and `backends/parity.py` checks the others
+  against it ([backends](backends/README.md)).
+  `backends.torch.checkpoint.save_checkpoint` and `load_checkpoint` own policy
+  files; `load_checkpoint` still reads `.pt` checkpoints, whose serialized
+  historical keys remain unchanged.
+- `model/`: the torch model's components, observation admission and
+  inference preparation, architecture receipts and world binding.
 - `sim/`: registered players, bounded game execution, replay, native card evidence,
   search and batched games.
 - `training/`: regime execution, seat-routed collection, learning rules,
@@ -646,12 +655,10 @@ with those packages blocked.
   complete-game accounting.
 - `training/updates/`: an update learns from one collected batch. The damped
   policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
-  and their pieces: Learner, rollout admission, the reference magnet,
-  numerical health and selection diagnostics.
+  and their pieces: rollout admission, the reference magnet, numerical health
+  and selection diagnostics. They call the torch backend's `Learner`.
 - `training/loops/`: a loop keeps playing and updating until it is done; a
   one-page example (`minimal.py`).
-- `rl/`: model-agnostic pieces (returns, losses, selection, the gradient step
-  and EMA); they import nothing else from manabot.
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;

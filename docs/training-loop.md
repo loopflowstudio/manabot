@@ -35,7 +35,7 @@ it. Its learning record selects the update; both live in
   normalization and filtering, scalar value targets and optional reference
   and collection KL penalties. Use it as the baseline a new method must beat.
 
-Both take a `Learner` (`manabot.training.updates.learner`), which holds the
+Both take a `Learner` (`manabot.backends.torch.learner`), which holds the
 model, its Adam optimizer, the precision and a profiler, and a learning
 record (`manabot.training.regime`). Call them directly to reproduce a
 recipe's update exactly:
@@ -89,7 +89,7 @@ logits for `value_kind="categorical_wdl"`, `[B,1]` for scalar.
 | `damped_policy_loss(logits, actions, advantages, behavior_logs, reference, valid, *, clip, collection_kl, tau)` | `manabot.training.updates.damped_policy` | The damped policy objective per row: the clipped surrogate plus both reverse KL penalties. |
 
 Reduced precision is a context around the forward only:
-`with forward_precision(precision, device):` (`manabot.training.precision`)
+`with forward_precision(precision, device):` (`manabot.backends.torch.learner`)
 runs `bf16` autocast, and you cast the outputs with `.float()` before any loss.
 `bf16` and `tf32` are CUDA-only; losses and their float64 terms stay in full
 precision on every device.
@@ -108,26 +108,28 @@ None of these change the update; call them when you want the numbers.
 ## Standard methods, kept local
 
 The rest is standard reinforcement learning, kept as small local functions in
-`manabot.rl` rather than taken from an RL library. They read only tensors, an
-`nn.Module`, an optimizer and small typed records, and import nothing else
-from manabot (`tests/test_package_boundaries.py` enforces it), so another
-role reuses them unchanged. Each returns one value per row `[B]` where it is a
+the backend's `rl.py` and `learner.py` rather than taken from an RL library.
+The torch versions below read only tensors, an `nn.Module`, an optimizer and
+small typed records, and import nothing else from manabot
+(`tests/test_package_boundaries.py` enforces it), so another role reuses them
+unchanged. Each [backend](../manabot/backends/README.md) has the same
+functions over its own arrays. Each returns one value per row `[B]` where it is a
 loss, so you choose the reduction, mask and weight.
 
 | Piece | Module | What it is |
 | --- | --- | --- |
-| `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.rl.returns` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our updates call it once per lambda (policy and value). |
-| `standardized_advantages(advantages, over=None)` | `manabot.rl.returns` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO update takes the statistics over the rows it trains on. |
-| `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.rl.returns` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). `bootstrap` `[E,3]` is the outcome distribution past each column's last row (read only where it is not an end). |
-| `clipped_surrogate(log_ratio, advantages, clip)` | `manabot.rl.losses` | Negative PPO clipped surrogate (Schulman et al. 2017), with float64 ratios. |
-| `reverse_kl(logs, target_logs, valid)` | `manabot.rl.losses` | KL(current ‖ frozen target) over valid entries. |
-| `squared_value_loss(values, targets)`, `categorical_value_loss(value_logits, targets)` | `manabot.rl.losses` | Scalar squared error; cross entropy of `[B,3]` loss/draw/win logits against target mixtures. |
-| `entropy(logs, valid)` | `manabot.rl.losses` | Entropy over valid entries. |
-| `selection_mask(advantages, kind, fraction, minimum)`, `selected_mean(values, selected)` | `manabot.rl.selection` | Keep a top count or inclusive quantile of advantage magnitude; average a per-row term over the mask (zero gradient when empty). |
-| `gradient_step(loss, model, optimizer, max_grad_norm, *, recorder=None)` | `manabot.rl.step` | Backward, `clip_grad_norm_`, step; returns the pre-clip norm. |
-| `update_ema(averaged, model, rate)` | `manabot.rl.step` | Moves `averaged`'s parameters toward `model`'s by `1 - rate` and copies buffers. Start from `deepcopy(model)`. |
+| `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.backends.torch.rl` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our updates call it once per lambda (policy and value). |
+| `standardized_advantages(advantages, over=None)` | `manabot.backends.torch.rl` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO update takes the statistics over the rows it trains on. |
+| `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.backends.torch.rl` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). `bootstrap` `[E,3]` is the outcome distribution past each column's last row (read only where it is not an end). |
+| `clipped_surrogate(log_ratio, advantages, clip)` | `manabot.backends.torch.rl` | Negative PPO clipped surrogate (Schulman et al. 2017), with float64 ratios. |
+| `reverse_kl(logs, target_logs, valid)` | `manabot.backends.torch.rl` | KL(current ‖ frozen target) over valid entries. |
+| `squared_value_loss(values, targets)`, `categorical_value_loss(value_logits, targets)` | `manabot.backends.torch.rl` | Scalar squared error; cross entropy of `[B,3]` loss/draw/win logits against target mixtures. |
+| `entropy(logs, valid)` | `manabot.backends.torch.rl` | Entropy over valid entries. |
+| `selection_mask(advantages, kind, fraction, minimum)`, `selected_mean(values, selected)` | `manabot.backends.torch.rl` | Keep a top count or inclusive quantile of advantage magnitude; average a per-row term over the mask (zero gradient when empty). |
+| `gradient_step(loss, model, optimizer, max_grad_norm, *, recorder=None)` | `manabot.backends.torch.learner` | Backward, `clip_grad_norm_`, step; returns the pre-clip norm. |
+| `update_ema(averaged, model, rate)` | `manabot.backends.torch.learner` | Moves `averaged`'s parameters toward `model`'s by `1 - rate` and copies buffers. Start from `deepcopy(model)`. |
 
-`gradient_step` raises `NumericalError` (`manabot.rl.numerics`) instead of
+`gradient_step` raises `NumericalError` (`manabot.backends.torch.rl`) instead of
 stepping on a detached or nonfinite loss, a loss with no gradients, or
 nonfinite gradients, and after a step that leaves a nonfinite parameter. Its
 `invariant` names the check and its `tensors` hold the offending values. Any
@@ -177,14 +179,19 @@ from copy import deepcopy
 import numpy as np
 import torch
 
+from manabot.backends.torch.learner import gradient_step, update_ema
+from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import (
+    clipped_surrogate,
+    entropy,
+    squared_value_loss,
+    standardized_advantages,
+    transition_gae,
+)
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import legal_mask, policy_logs
-from manabot.rl.losses import clipped_surrogate, entropy, squared_value_loss
-from manabot.rl.returns import standardized_advantages, transition_gae
-from manabot.rl.step import gradient_step, update_ema
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.updates.learner import AdmittedRollout
 
@@ -260,10 +267,12 @@ uv run python -c "from manabot.training.loops.minimal import train; train(3)"
 
 Three iterations take a few seconds on a laptop CPU and return a policy;
 they teach it almost nothing. Keep a run with `save_checkpoint(policy,
-policy.observation_space, "policy.pt", player_configs=Match().to_rust())` from
-`manabot.model.checkpoint`, which binds it to the decks it played, as a
-recipe's checkpoints are bound to their setups; `load_checkpoint("policy.pt")`
-returns the policy and its observation space. `tests/training/test_minimal_loop.py`
+policy.observation_space, "policy.safetensors", player_configs=Match().to_rust())`
+from `manabot.backends.torch.checkpoint`, which binds it to the decks it
+played, as a recipe's checkpoints are bound to their setups;
+`load_checkpoint("policy.safetensors")` returns the policy and its observation
+space. The file is the [shared container](../manabot/policy/README.md#the-checkpoint-container),
+so any backend can load it. `tests/training/test_minimal_loop.py`
 runs the loop on two streams and a tiny model through the `model` argument,
 then saves and reloads its checkpoint.
 

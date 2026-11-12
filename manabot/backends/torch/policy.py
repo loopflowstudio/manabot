@@ -10,7 +10,7 @@ Object attention runs over the fixed object tables, or, with
 `ModelConfig.token_stream="pooled"`, over one packed token sequence of valid
 objects, continuation relations and legal actions (`manabot.model.token_stream`).
 Both share every embedding and join before attention and the critic after it.
-With `bucketed_shapes=True` (`manabot.model.buckets`), each forward trims its
+With `bucketed_shapes=True` (`manabot.policy.buckets`), each forward trims its
 variable axes to power-of-two buckets and returns logits at full capacity.
 """
 
@@ -33,15 +33,14 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
-from manabot.model.admission import AdmittedObservation, admission_binding
-from manabot.model.buckets import (
-    BucketSizes,
-    bucket_sizes,
-    object_columns,
+from manabot.model.admission import (
+    AdmittedObservation,
+    admission_binding,
+    measure_buckets,
 )
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
-from manabot.model.inference import PreparedObservation, trim_admitted, trim_prepared
+from manabot.model.inference import PreparedObservation, trim_admitted
 from manabot.model.name_candidates import NameCandidateEncoder
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import (
@@ -60,6 +59,7 @@ from manabot.model.token_stream import (
     pack,
     unpack,
 )
+from manabot.policy.buckets import BucketSizes, object_columns
 import managym
 
 
@@ -433,17 +433,17 @@ class ActorCritic(nn.Module):
     def _bucketed(
         self, obs: AdmittedObservation
     ) -> tuple[AdmittedObservation, BucketSizes | None]:
-        """Trim `obs` to its buckets; prepared inputs were measured on the host.
+        """Trim `obs` to the buckets admission measured on the host.
 
         Without buckets (a layout admission did not judge), `obs` is returned
-        unchanged.
+        unchanged. Input admitted by a policy without bucketed shapes is
+        measured here, from a host copy.
         """
         self._require_admitted(obs)
-        if isinstance(obs, PreparedObservation):
-            return trim_prepared(obs), obs.buckets
-        buckets = bucket_sizes(
-            obs, self.observation_space.encoder, objects=self.object_trimming()
-        )
+        assert isinstance(obs, AdmittedObservation)
+        buckets = obs.buckets
+        if buckets is None:
+            buckets = measure_buckets(self, obs)
         if buckets is None:
             return obs, None
         return trim_admitted(obs, buckets), buckets

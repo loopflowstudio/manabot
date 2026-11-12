@@ -84,7 +84,7 @@ seat decides again or the game ends.
 The expected game outcome from the acting seat's observation, under the
 policies currently playing: $V(o) \approx \mathbb{E}[\text{outcome} \mid o]$.
 From `ActorCritic.forward` in
-[`manabot/model/actor_critic.py`](../manabot/model/actor_critic.py):
+[`manabot/backends/torch/policy.py`](../manabot/backends/torch/policy.py):
 
 ```python
 logits, raw_value = self.forward_distribution(obs)
@@ -174,7 +174,7 @@ categorical value head uses a three-way loss/draw/win mixture with the same λ
 and a one-hot terminal. A scalar head uses $A_t + V_t$.
 
 From `transition_gae` in
-[`manabot/rl/returns.py`](../manabot/rl/returns.py):
+[`manabot/backends/torch/rl.py`](../manabot/backends/torch/rl.py):
 
 ```python
 for step in reversed(range(len(rewards))):
@@ -530,11 +530,11 @@ each piece they are made of as a public function.
 | --- | --- |
 | Iteration loop, checkpoints; which update a stage calls | `execute_regime` in [`training/execution.py`](../manabot/training/execution.py) |
 | Play and batch boundaries | `SeatRoutedCollector` in [`training/rollout/collection.py`](../manabot/training/rollout/collection.py) |
-| Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`rl/returns.py`](../manabot/rl/returns.py) |
-| Loss terms | `damped_policy_loss` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`rl/losses.py`](../manabot/rl/losses.py) |
-| Gradient step, EMA | `gradient_step`, `update_ema` in [`rl/step.py`](../manabot/rl/step.py) |
+| Advantages and value targets | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Loss terms | `damped_policy_loss` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py) |
+| Gradient step, EMA | `gradient_step`, `update_ema` in [`backends/torch/learner.py`](../manabot/backends/torch/learner.py) |
 | Update rule | `_targets`, `update_damped_iteration` in [`training/updates/damped_policy.py`](../manabot/training/updates/damped_policy.py); the PPO control `update_iteration` in [`training/updates/ppo.py`](../manabot/training/updates/ppo.py) |
-| Filter | `selection_mask` in [`rl/selection.py`](../manabot/rl/selection.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
+| Filter | `selection_mask` in [`backends/torch/rl.py`](../manabot/backends/torch/rl.py); its diagnostics in [`training/updates/selection.py`](../manabot/training/updates/selection.py) |
 | Magnet | [`training/updates/references.py`](../manabot/training/updates/references.py) |
 | Defaults | `DampedPolicyLearning`, `TrainSelfPlay` in [`training/regime.py`](../manabot/training/regime.py) |
 | Behavior pinned by tests | [`tests/training/test_credit_assignment.py`](../tests/training/test_credit_assignment.py) |

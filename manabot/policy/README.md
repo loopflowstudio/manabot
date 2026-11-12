@@ -14,6 +14,9 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   configuration, world binding and source record. It validates the world
   binding as `manabot.model.checkpoint.load_checkpoint` does and refuses
   configurations the backends do not implement (`UnsupportedPolicy`).
+- `buckets.py` chooses the sizes bucketed shapes trim a batch's variable
+  axes to (`bucket_sizes`). Admission measures them on the host; each backend
+  trims its own arrays.
 - `protocol.py` states what a backend provides (`BackendPolicy`,
   `BackendLearner`, `Backend`) and the learner's per-minibatch inputs
   (`Targets`, `Settings`). Values are `[B]`.

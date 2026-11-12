@@ -356,7 +356,6 @@ _TORCH_NOT_YET_MOVED = frozenset(
         "manabot/infra/torch.py",
         "manabot/llm/transformers_runtime.py",
         "manabot/model/admission.py",
-        "manabot/model/buckets.py",
         "manabot/model/catalog.py",
         "manabot/model/continuation.py",
         "manabot/model/facts.py",
