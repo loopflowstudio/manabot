@@ -8,8 +8,8 @@ embedded from its kind, its vocabulary id and effect detail (learning-token
 values rebuilt from their 16-bit halves), its amounts, duration, timestamp rank
 and source, then summed into its object's pre-attention embedding.
 
-Two id vocabularies exist. `hashed` (every frozen model) hashes ids and
-sources into `buckets` learned rows each. `catalog` (v8 onward) reads ids
+Two id vocabularies exist. `hashed` hashes ids and sources into `buckets`
+learned rows each. `catalog` reads ids
 through the card encoder's token embedding and sources through its row for
 that definition (`RecordEmbeddings`); ordinal ids (an ability index, a
 continuation frame) are numbers, not vocabulary.
@@ -17,8 +17,7 @@ continuation frame) are numbers, not vocabulary.
 The output layer starts at zero, so a fresh model's objects are unchanged until
 the facts earn weight; gradients reach every fact row that names a valid object.
 
-V8 also encodes captured programs in row order and preserves signed numeric
-tokens. Earlier inputs retain their kind embeddings and row-only architecture.
+Captured programs are encoded in row order and preserve signed numeric tokens.
 """
 
 from typing import Literal
@@ -39,7 +38,6 @@ from manabot.env.observation import (
     FACT_ID_INDEX,
     FACT_KIND_INDEX,
     FACT_KINDS,
-    FACT_KINDS_V8,
     FACT_OBJECT_INDEX,
     FACT_ORDER_INDEX,
     FACT_SET_NAME,
@@ -84,17 +82,13 @@ class FactEncoder(nn.Module):
         max_facts: int,
         buckets: int = 4096,
         *,
-        kinds: int = FACT_KINDS,
         vocabulary: RecordVocabulary = "hashed",
     ) -> None:
         super().__init__()
-        if vocabulary == "catalog" and kinds < FACT_KINDS_V8:
-            raise ValueError("catalog fact ids require policy input v8")
         self.buckets = buckets
         self.max_facts = max_facts
-        self.kinds = kinds
         self.vocabulary = vocabulary
-        self.kind = nn.Embedding(kinds + 1, width)
+        self.kind = nn.Embedding(FACT_KINDS + 1, width)
         if vocabulary == "hashed":
             self.ident = nn.Embedding(buckets, width)
             self.detail = nn.Embedding(buckets, width)
@@ -102,10 +96,8 @@ class FactEncoder(nn.Module):
         # Amounts (2), duration one-hot (2) and timestamp rank; catalog ids
         # add the ordinal id.
         self.numeric = nn.Linear(5 if vocabulary == "hashed" else 6, width)
-        self.program_numeric = nn.Linear(1, width) if kinds >= FACT_KINDS_V8 else None
-        self.program_sequence = (
-            nn.GRU(width, width, batch_first=True) if kinds >= FACT_KINDS_V8 else None
-        )
+        self.program_numeric = nn.Linear(1, width)
+        self.program_sequence = nn.GRU(width, width, batch_first=True)
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
@@ -120,8 +112,6 @@ class FactEncoder(nn.Module):
         identical provenance. Padding and independent program order carry no
         meaning; token order within each program does. No state crosses programs.
         """
-        if self.program_sequence is None or self.program_numeric is None:
-            return hidden
         program = _isin(kinds, _PROGRAM_KINDS)
         if not program.any():
             return hidden
@@ -244,7 +234,7 @@ class FactEncoder(nn.Module):
             (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
         ).all():
             raise ValueError("invalid fact object reference")
-        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= self.kinds)).all():
+        if not ((kinds == kinds.floor()) & (kinds >= 0) & (kinds <= FACT_KINDS)).all():
             raise ValueError("invalid fact kind")
         duration = facts[..., FACT_DURATION_INDEX]
         columns = [

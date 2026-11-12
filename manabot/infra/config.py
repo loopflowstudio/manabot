@@ -17,7 +17,12 @@ from pydantic import (
 
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
-StateEncoder = Literal["rows", "typed_pool", "typed_gru"]
+# The one policy input this revision encodes, admits and models. Earlier
+# inputs run from the revision that recorded them; a future input widens the
+# field's literal and this constant together.
+POLICY_INPUT_VERSION: Literal[9] = 9
+# The last revision whose encoders, bindings and model accept inputs v1-v8.
+LAST_MULTI_INPUT_REVISION = "ac601834d"
 # How the critic summarizes the final object board; see ActorCritic._value_from_objects.
 ValueAggregation = Literal[
     "historical_mean", "masked_mean", "value_token", "attention_readout"
@@ -44,21 +49,34 @@ class BaseConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class UnsupportedPolicyInput(ValueError):
+    """A checkpoint, replay or saved configuration bound to another policy input.
+
+    `version` is the saved version; a saved configuration that omits it was
+    written for policy input v1.
+    """
+
+    def __init__(self, version: object) -> None:
+        self.version = version
+        super().__init__(
+            f"the checkpoint was written for policy input v{version} and must be "
+            "run from the revision that recorded it; this revision supports only "
+            f"policy input v{POLICY_INPUT_VERSION}, and {LAST_MULTI_INPUT_REVISION} "
+            "is the last revision supporting v1-v8"
+        )
+
+
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9] = Field(
-        default=6, exclude_if=lambda value: value == 1
-    )
-    # V6 onward carries a configurable local-fact capacity. Omission on older inputs
-    # preserves their serialized architecture receipts, including v1 defaults.
-    max_facts: int | None = Field(
-        default=None, gt=0, exclude_if=lambda value: value is None
-    )
+    # Always serialized, so a saved configuration names its input.
+    policy_input_version: Literal[9] = POLICY_INPUT_VERSION
+    # Local fact rows; shared effects have their own fixed buffers.
+    max_facts: int = Field(default=512, gt=0)
 
     max_cards_per_player: int = 60
     # 30 -> 40: token-heavy GW Allies games exceed 30 battlefield entries.
     max_permanents_per_player: int = 40
-    # Every input uses this capacity directly; v9 names through bounded group
-    # prompts. A pilot may explicitly retain a legal prefix.
+    # Naming is bounded group prompts, so this capacity is independent of the
+    # name vocabulary. A pilot may explicitly retain a legal prefix.
     max_actions: int = Field(default=512, gt=0)
     action_overflow: Literal["error", "first-legal"] = Field(
         default="error", exclude_if=lambda value: value == "error"
@@ -69,28 +87,25 @@ class ObservationConfig(BaseConfig):
         default=0, exclude_if=lambda value: value == 0
     )
 
-    @model_validator(mode="after")
-    def validate_fact_capacity(self) -> "ObservationConfig":
-        if self.policy_input_version >= 6:
-            if self.max_facts is None:
-                self.max_facts = 128 if self.policy_input_version == 7 else 512
-        elif self.max_facts is not None:
-            raise ValueError("max_facts requires policy input v6")
-        return self
-
-    @property
-    def fact_rows(self) -> int:
-        if self.policy_input_version < 5:
-            return 0
-        if self.policy_input_version == 5:
-            return 128
-        assert self.max_facts is not None
-        return self.max_facts
+    @field_validator("policy_input_version", mode="before")
+    @classmethod
+    def reject_other_inputs(cls, value: object) -> object:
+        """Name the recording revision instead of a bare literal mismatch."""
+        if value != POLICY_INPUT_VERSION:
+            raise UnsupportedPolicyInput(value)
+        return value
 
     @classmethod
     def from_checkpoint(cls, payload: dict[str, Any]) -> "ObservationConfig":
-        """Missing version means the frozen input-v1 contract, never today's default."""
-        return cls(**{"policy_input_version": 1, "max_actions": 64, **payload})
+        """Read a saved configuration, rejecting any other policy input.
+
+        A missing version means the input-v1 contract, never today's default.
+        Raises `UnsupportedPolicyInput` before any other field is validated.
+        """
+        version = payload.get("policy_input_version", 1)
+        if version != POLICY_INPUT_VERSION:
+            raise UnsupportedPolicyInput(version)
+        return cls(**payload)
 
 
 class MatchConfig(BaseConfig):
@@ -228,12 +243,6 @@ class ModelConfig(BaseConfig):
     this Python type changes neither field meanings nor ordinary reload admission.
     """
 
-    # Within-observation reducers for frozen v5 fragments or explicit v7 shared
-    # payloads and typed continuations. Capacity belongs to ObservationConfig;
-    # none of these encoders carries temporal memory.
-    state_encoder: StateEncoder = Field(
-        default="rows", exclude_if=lambda value: value == "rows"
-    )
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
     # The semantic vocabulary the model reads: the world's one catalog. Fresh
@@ -255,12 +264,11 @@ class ModelConfig(BaseConfig):
     attention_feedforward_dim: int | None = Field(
         default=None, ge=1, exclude_if=lambda value: value is None
     )
-    # How fact and shared-effect ids embed on explicit inputs v8 onward:
-    # `catalog` reads the card encoder's exact token rows and definition
-    # rows; `hashed` learns 4096 hashed rows per id column. Earlier inputs and
-    # models without a world have only the hashed layout. Saved v8+ world
-    # checkpoints that omit the field are hashed (`from_checkpoint`); regimes
-    # omit the fresh default.
+    # How fact and shared-effect ids embed: `catalog` reads the card encoder's
+    # exact token rows and definition rows; `hashed` learns 4096 hashed rows
+    # per id column. Models without a world have only the hashed layout. Saved
+    # world checkpoints that omit the field are hashed (`from_checkpoint`);
+    # regimes omit the fresh default.
     record_vocabulary: Literal["hashed", "catalog"] = Field(
         default="catalog", exclude_if=lambda value: value == "catalog"
     )
@@ -289,19 +297,17 @@ class ModelConfig(BaseConfig):
         return data
 
     @classmethod
-    def from_checkpoint(
-        cls, payload: dict[str, Any], policy_input_version: int
-    ) -> "ModelConfig":
-        """Read a saved configuration for its saved policy input version.
+    def from_checkpoint(cls, payload: dict[str, Any]) -> "ModelConfig":
+        """Read a saved model configuration.
 
         A checkpoint that omits the record vocabulary predates the choice, so
-        it means the frozen hashed ids where the choice exists (v8+ with a
-        world). Elsewhere both values build the same model, and omission
-        reads as the fresh default so it equals its regime's configuration.
+        it means the frozen hashed ids where the choice exists (with a world).
+        Without a world both values build the same model, and omission reads
+        as the fresh default so it equals its regime's configuration.
         """
         config = cls(**payload)
         predates_choice = "record_vocabulary" not in payload
-        if predates_choice and config.world is not None and policy_input_version >= 8:
+        if predates_choice and config.world is not None:
             return cls(**{**payload, "record_vocabulary": "hashed"})
         return config
 
@@ -310,13 +316,9 @@ class ModelConfig(BaseConfig):
         `from_checkpoint` reads a fresh catalog model back as catalog."""
         return {**self.model_dump(), "record_vocabulary": self.record_vocabulary}
 
-    def catalog_records(self, policy_input_version: int) -> bool:
+    def catalog_records(self) -> bool:
         """Whether fact and shared-effect ids read the card vocabulary."""
-        return (
-            self.record_vocabulary == "catalog"
-            and self.world is not None
-            and policy_input_version >= 8
-        )
+        return self.record_vocabulary == "catalog" and self.world is not None
 
     @model_validator(mode="after")
     def validate_value_architecture(self) -> "ModelConfig":

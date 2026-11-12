@@ -30,7 +30,7 @@ def _attached_observation() -> tuple[ObservationSpace, dict[str, np.ndarray], in
     first, second = obs.agent_permanents
     second.attached_to = first.id
     obs.agent_permanents = [first, second]
-    space = ObservationSpace(ObservationConfig(policy_input_version=5))
+    space = ObservationSpace(ObservationConfig())
     host = 2 + 2 * space.encoder.cards_per_player
     return space, space.encode(obs), host
 
@@ -65,15 +65,6 @@ def test_attachment_link_is_a_join_not_a_numeric_feature() -> None:
     assert changed[host] > 0, "the host reads its attachment"
     assert changed[host + 1] > 0, "the attachment reads its host"
     assert changed[host + 2 :].sum() == 0 and changed[:host].sum() == 0
-
-
-def test_permanent_link_joins_exist_only_for_v5() -> None:
-    torch.manual_seed(5)
-    v4 = ActorCritic(
-        ObservationSpace(ObservationConfig(policy_input_version=4)),
-        ModelConfig(hidden_dim=16, num_attention_heads=2),
-    )
-    assert not any("link_" in name for name in v4.state_dict())
 
 
 @pytest.mark.parametrize("column", PERMANENT_LINK_INDEXES)

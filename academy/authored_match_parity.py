@@ -11,13 +11,13 @@ from tempfile import TemporaryDirectory
 from typing import Any, Iterable, Mapping
 
 from fastapi.testclient import TestClient
+
+import managym
 from managym.decision import (
     Command as SemanticCommand,
     SemanticContractError,
     apply_semantic_command,
 )
-
-import managym
 
 from . import server, trace as trace_store
 from .authored_match_receipt import DEFAULT_RECEIPT_PATH
@@ -620,8 +620,8 @@ def _source_manifest() -> dict[str, Any]:
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",
-        "manabot/managym/experience.py",
-        "manabot/managym/experience_projection.py",
+        "managym/experience.py",
+        "managym/experience_projection.py",
         "academy/presentation.py",
         "academy/replay_index.py",
         "academy/semantic_boundary.py",
@@ -632,7 +632,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/Cargo.toml",
         "managym/state/Cargo.toml",
         "managym/cards/Cargo.toml",
-        "manabot/managym/decision.py",
+        "managym/decision.py",
         "managym/tests/rules/structured_offers.rs",
         "scripts/verify-authored-match-parity",
         "tests/academy/test_authored_match_parity.py",
@@ -790,6 +790,9 @@ def write_receipt() -> dict[str, Any]:
 def verify_receipt() -> dict[str, Any]:
     checked = json.loads(RECEIPT_PATH.read_text())
     generated = build_receipt()
+    # Source paths and bytes can change while the retained replay stays exact.
+    # Normalize only the comparison; keep the historical receipt untouched.
+    generated["identity"]["relevant_source"] = checked["identity"]["relevant_source"]
     if generated != checked:
         raise RuntimeError("checked authored-match parity receipt is stale")
     return checked

@@ -1,8 +1,9 @@
 # Experiments
 
-An experiment here is a question with a numeric prediction, committed to git
-before anything runs, and a report that stays on the record whichever way it
-goes. This guide covers how a question becomes a report, what makes a result
+An experiment here is a module, the runs it launched and one report that stays
+on the record whichever way it goes. Most are exploratory. One that will be
+cited as a finding also commits a numeric prediction to git before it runs.
+This guide covers how a question becomes a report, what makes a result
 count, and the tools that declare and execute a comparison. The
 [research program](../manabot/RESEARCH.md) says which questions are open; the
 [experiments index](../experiments/README.md) lists every report.
@@ -45,9 +46,18 @@ matter most on day one:
   (loss, KL, entropy), relative progress (wins against the latest opponent)
   and durable progress (strength across held-out opponents). The first two can
   improve while the third gets worse.
-- **Predictions come first.** The question, numeric prediction, kill criteria
-  and cost cap are committed before a run. Without that, a result is
-  exploratory.
+- **Exploratory is the default.** Calibration, throughput, capacity and pilot
+  runs, and anything run to make later work possible, need no prediction. Their
+  reports say what was learned, under the word "Exploratory", and their numbers
+  are not cited as findings.
+- **A finding predicts first.** A result that will be cited as a claim about a
+  method or about playing strength (in the README's "What we know", the
+  research program or the paper) opens its report with one paragraph committed
+  before any scored run: the question, a numeric prediction, the result that
+  would refute it and a cost cap. That paragraph is the whole preregistration.
+- **The freeze is the commit and the run ID.** A change that keeps the question
+  is a dated line in the report, not a new protocol. Cost is the launcher's
+  number for the run.
 - **Seeds are the unit of evidence for a method.** Many games from one
   training run don't replace independent training runs. Three seeds are three
   data points.
@@ -189,7 +199,7 @@ completed single-stage fresh self-play `run.json` and measures completed
 iterations per collection-plus-learning second; `updates_for(hours)` floors to
 whole iterations. Use a representative, separately authorized pilot per
 capacity; apply each target to `TrainSelfPlay.updates` and one shared interval
-to every `checkpoint_updates`; commit the frozen declaration before launch.
+to every `checkpoint_updates`; commit the declaration before launch.
 Execution never consults pilot rates. Equal steps do not mean equal
 transitions, exposures, active time or dollars.
 

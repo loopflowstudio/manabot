@@ -191,8 +191,13 @@ def test_segments_keep_adam_ema_and_absolute_coordinates(
     final = torch.load(
         third.stages[0].artifacts["optimizer"]["path"], weights_only=True
     )
-    for key, value in admitted.optimizer["state"].items():
-        assert final["state"][key]["step"].item() > value["step"].item()
+    # Adam advances a parameter only on updates that give it a gradient; the
+    # sparse record encoders see none when a batch holds no such rows.
+    advanced = [
+        final["state"][key]["step"].item() - value["step"].item()
+        for key, value in admitted.optimizer["state"].items()
+    ]
+    assert min(advanced) >= 0 and max(advanced) > 0
     assert parent_export.read_bytes() == frozen
 
 

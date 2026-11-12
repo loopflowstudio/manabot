@@ -1,44 +1,31 @@
-"""Manabot's bundled rules engine and native public API.
+"""Compatibility alias for the separately distributed ``managym`` engine."""
 
-The engine types are implemented by PyO3 and described in ``__init__.pyi``;
-shared decision/protocol adapters live beside this module.
-"""
+from importlib import import_module
+from importlib.util import find_spec
+import sys
 
-from collections.abc import Callable
-from typing import ParamSpec, TypeVar
-import warnings
+# manabot <= 0.2.1 owned ``managym/__init__.py``. Upgrading can uninstall
+# that file after the separate engine wheel is installed, leaving a namespace
+# package. Diagnose this only when the engine is requested: offline report
+# imports must not even probe the native runtime.
+_spec = find_spec("managym")
+if _spec is not None and _spec.origin in (None, "namespace"):
+    raise ImportError(
+        "managym is missing its package files, usually because upgrading from "
+        "manabot 0.2.0 or 0.2.1 removed them. Reinstall the engine at manabot's version: "
+        "`pip install --force-reinstall 'managym==<version>'` "
+        "(uv: `uv pip install --reinstall-package managym 'managym==<version>'`)."
+    )
 
-from . import _managym
-from ._managym import *  # noqa: F403 — expose the native API described by the stub.
-
-# ---------------------------------------------------------------------------
-# Deprecated spellings, removed in 0.3.0. Engine names describe what managym
-# produces; these older names described how manabot's policy consumes it.
-# ---------------------------------------------------------------------------
-
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
-
-
-def _deprecated_alias(old: str, new: Callable[_P, _R]) -> Callable[_P, _R]:
-    def alias(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-        warnings.warn(
-            f"managym.{old} is deprecated; use managym.{new.__name__}",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return new(*args, **kwargs)
-
-    alias.__name__ = old
-    alias.__qualname__ = old
-    alias.__doc__ = f"Deprecated alias of :func:`{new.__name__}`, removed in 0.3.0."
-    return alias
-
-
-learning_catalog = _deprecated_alias("learning_catalog", _managym.catalog_tokens)
-learning_token_value = _deprecated_alias(
-    "learning_token_value", _managym.catalog_token_value
-)
-learning_record_names = _deprecated_alias(
-    "learning_record_names", _managym.record_vocabulary
-)
+_engine = import_module("managym")
+sys.modules[__name__] = _engine
+for _name in (
+    "_managym",
+    "decision",
+    "decision_capture",
+    "enums",
+    "experience",
+    "experience_projection",
+    "possible_worlds",
+):
+    sys.modules[f"{__name__}.{_name}"] = import_module(f"managym.{_name}")

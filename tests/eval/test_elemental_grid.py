@@ -56,7 +56,7 @@ def test_pair_admits_both_saved_schemas_and_forwards_shared_service(
     setup = AuthoredMatchup(pack_key=PACK, role_a=a, role_b=b)
     checkpoints: list[LocalCheckpoint] = []
     for version in (1, 2):
-        space = ObservationSpace(ObservationConfig(policy_input_version=version))
+        space = ObservationSpace(ObservationConfig())
         model = ActorCritic(
             space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK)
         )
@@ -107,16 +107,15 @@ def test_pair_admits_both_saved_schemas_and_forwards_shared_service(
         ),
         inference=shared,  # type: ignore[arg-type] -- forwarding sentinel; no games run
     )
-    assert admitted == [1, 2]
+    assert admitted == [9, 9]
 
 
-@pytest.mark.parametrize("version", (1, 2))
 def test_grid_registers_saved_policy_inputs_for_shared_admission(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: Literal[1, 2]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     torch.set_num_threads(1)
     setup = AuthoredMatchup(pack_key=PACK, role_a=DECKS[0], role_b=DECKS[1])
-    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    space = ObservationSpace(ObservationConfig())
     model = ActorCritic(
         space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK)
     )
@@ -158,7 +157,7 @@ def test_grid_registers_saved_policy_inputs_for_shared_admission(
             output=tmp_path / "evidence",
         )
     )
-    assert admitted == [version]
+    assert admitted == [9]
 
 
 def test_schedule_is_frozen_and_complete() -> None:

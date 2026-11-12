@@ -111,7 +111,7 @@ def bind_etude_source() -> None:
     bundle = SourceBundle.model_validate(config["source_bundle"])
     _verify(root, bundle, "Etude archive")
     suffix = sysconfig.get_config_var("EXT_SUFFIX")
-    native = root / "manabot" / "managym" / f"_managym{suffix}"
+    native = root / "managym" / f"_managym{suffix}"
     files = dict(bundle.files)
     files[str(native.relative_to(root))] = file_sha256(native)
     target = root / ".manabot-source.json"

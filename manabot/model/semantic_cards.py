@@ -151,7 +151,7 @@ class SemanticCardEncoder(nn.Module):
         *,
         records: bool = False,
     ) -> None:
-        """`decklists` (policy input v5) adds a projection of the pooled
+        """`decklists` adds a projection of the pooled
         decklist rows into each player's knowledge vector; `records` adds the
         fact and shared-effect id vocabulary (see the module docstring)."""
         super().__init__()

@@ -235,14 +235,14 @@ fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
     }
 }
 
-/// Shared payloads are admitted before the old per-keyword/per-object gate.
+/// One shared record per effect, however many keywords and objects it covers.
 #[test]
-fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
+fn shared_effects_admit_many_memberships_without_changing_rules_records() {
     use managym::agent::{
         observation::Observation,
         observation_encoder::{encode, ObservationEncoderConfig},
     };
-    for (activations, targets, version, capacity) in [(7, 10, 5, 128), (9, 15, 6, 256)] {
+    for (activations, targets) in [(7, 10), (9, 15)] {
         let (mut s, _) = ogre_scenario();
         let objects: Vec<_> = (0..targets)
             .map(|_| s.force_permanent_on_battlefield(1, "Mountain"))
@@ -266,15 +266,6 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
         let before = s.game().state.deterministic_hash();
         for viewer in [PlayerId(0), PlayerId(1)] {
             let obs = Observation::for_player(s.game(), viewer);
-            let config = ObservationEncoderConfig {
-                encoding_version: version,
-                max_facts: capacity,
-                ..Default::default()
-            };
-            assert!(encode(&obs, &config)
-                .unwrap_err()
-                .to_string()
-                .contains("facts"));
             let shared = obs.shared_effects.as_ref().unwrap();
             assert_eq!(shared.len(), activations);
             assert!(
@@ -283,14 +274,7 @@ fn shared_effects_admit_140_and_270_fragments_without_changing_rules_records() {
                     .all(|effect| effect.effect.keywords.len() == 2
                         && effect.members.len() == targets)
             );
-            let encoded = encode(
-                &obs,
-                &ObservationEncoderConfig {
-                    encoding_version: 7,
-                    ..config
-                },
-            )
-            .unwrap();
+            let encoded = encode(&obs, &ObservationEncoderConfig::default()).unwrap();
             assert_eq!(
                 encoded
                     .effects
@@ -370,7 +354,7 @@ fn shared_effects_keep_intervening_grants_and_different_expiries() {
     assert!(s.game().characteristics(ogre).keywords.has(Keyword::Flying));
 }
 
-/// Equal old payloads bound to different exact sources have different futures.
+/// Equal payloads bound to different exact sources have different futures.
 #[test]
 fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
     use managym::agent::{
@@ -402,18 +386,7 @@ fn shared_effects_bind_exact_sources_before_and_after_a_zone_change() {
         let observations = games
             .each_ref()
             .map(|game| Observation::for_player(game, viewer));
-        let old = ObservationEncoderConfig {
-            encoding_version: 6,
-            ..Default::default()
-        };
-        assert_eq!(
-            encode(&observations[0], &old).unwrap(),
-            encode(&observations[1], &old).unwrap()
-        );
-        let new = ObservationEncoderConfig {
-            encoding_version: 7,
-            ..old
-        };
+        let new = ObservationEncoderConfig::default();
         let encoded = observations
             .each_ref()
             .map(|obs| encode(obs, &new).unwrap());
@@ -1263,20 +1236,13 @@ fn cr_613_granted_activation_retains_program_after_sacrificing_source_and_suspen
     );
     crate::support::play::activate(&mut s, source, 0);
     assert!(s.game().state.permanents[source].is_none());
-    let config = ObservationEncoderConfig {
-        encoding_version: 8,
-        ..Default::default()
-    };
+    let config = ObservationEncoderConfig::default();
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert!(obs
         .continuation
         .iter()
         .any(|frame| frame.kind == 2 && !frame.program.is_empty()));
     assert!(obs.shared_effects.as_ref().unwrap().is_empty());
-    assert!(encode(&obs, &ObservationEncoderConfig::default())
-        .unwrap_err()
-        .to_string()
-        .contains("select v8"));
     assert!(encode(&obs, &config).is_ok());
     for _ in 0..4 {
         if s.game().state.suspended_decision.is_some() {

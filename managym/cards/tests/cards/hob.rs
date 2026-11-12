@@ -55,26 +55,11 @@ fn beorn_adds_bear_and_keeps_trample_after_kellan_replaces_types() {
         // Clone an actual priority boundary, preserving input and pending offers.
         let fork = s.game().clone();
         let obs = Observation::for_player(s.game(), PlayerId(0));
-        let config = ObservationEncoderConfig {
-            encoding_version: 8,
-            ..Default::default()
-        };
+        let config = ObservationEncoderConfig::default();
         assert_eq!(
             encode(&obs, &config).unwrap(),
             encode(&Observation::for_player(&fork, PlayerId(0)), &config).unwrap()
         );
-        for version in 1..8 {
-            assert!(encode(
-                &obs,
-                &ObservationEncoderConfig {
-                    encoding_version: version,
-                    ..Default::default()
-                }
-            )
-            .unwrap_err()
-            .to_string()
-            .contains("select v8"));
-        }
     }
 }
 

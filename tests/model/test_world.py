@@ -10,8 +10,9 @@ from academy.villain import CheckpointVillain
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.source import source_commit
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 
 
@@ -33,7 +34,7 @@ def checkpoint():
         "model_state_dict": agent.state_dict(),
         "bc": {"value_semantic": "signed_outcome"},
         "hypers": {
-            "agent_hypers": agent.config.model_dump(),
+            "agent_hypers": agent.config.checkpoint_payload(),
             "observation_hypers": space.encoder.config.model_dump(),
         },
         "world_binding": checkpoint_world(selected_match().to_rust(), space),
@@ -159,3 +160,33 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     validate_checkpoint_world(payload, space, match.to_rust())
     with pytest.raises(ValueError, match="world/setup/input"):
         validate_checkpoint_world(payload, space, selected_match().to_rust())
+
+
+def test_a_refused_checkpoint_names_its_revision_and_the_changed_buffer() -> None:
+    payload = checkpoint()
+    payload["source"] = {"commit": "7c1e9a2", "dirty": False, "etude_run": "3a1380d9"}
+    schema = payload["world_binding"]["input_schema"]
+    schema["agent_permanents"]["shape"] = [40, 37]
+    with pytest.raises(ValueError) as refused:
+        validate_checkpoint_world(payload, ObservationSpace())
+    message = str(refused.value)
+    assert "agent_permanents 40x37 -> 40x38" in message
+    assert (
+        "written at revision 7c1e9a2, Etude run 3a1380d9; run it from there" in message
+    )
+
+    del payload["source"]
+    with pytest.raises(ValueError, match="records no source revision"):
+        validate_checkpoint_world(payload, ObservationSpace())
+
+
+def test_a_saved_checkpoint_records_the_revision_that_wrote_it(
+    tmp_path: Path,
+) -> None:
+    space = ObservationSpace()
+    agent = ActorCritic(space, ModelConfig())
+    path = tmp_path / "policy.pt"
+    save_checkpoint(agent, space, path, player_configs=Match().to_rust())
+    source = torch.load(path, weights_only=False)["source"]
+    assert source["commit"] == source_commit()
+    assert set(source) == {"commit", "dirty", "etude_run"}

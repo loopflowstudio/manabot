@@ -1,7 +1,7 @@
-"""Versioned shared effect buffers with explicit CSR memberships.
+"""Shared effect buffers with explicit CSR memberships.
 
 Native authority supplies exact provenance. This reference encoder never infers
-it from old per-object fragments. Offsets address bounded token/member arrays;
+it from per-object fragments. Offsets address bounded token/member arrays;
 padding does not count as a record and no capacity failure is truncated.
 """
 
@@ -13,17 +13,13 @@ from numpy.typing import NDArray
 import managym
 
 EFFECT_ROWS, EFFECT_DIM = 128, 18
-DETAIL_ROWS, DETAIL_DIM = 512, 3
+DETAIL_ROWS, DETAIL_DIM = 4096, 3
 MEMBER_ROWS, MEMBER_DIM = 2048, 2
-
-
-def shared_effect_shapes(version: int) -> dict[str, tuple[int, int]]:
-    """The selected input's shared layout; v7's detail capacity stays frozen."""
-    return {
-        "effects": (EFFECT_ROWS, EFFECT_DIM),
-        "effect_details": (4096 if version >= 8 else DETAIL_ROWS, DETAIL_DIM),
-        "effect_members": (MEMBER_ROWS, MEMBER_DIM),
-    }
+SHARED_EFFECT_SHAPES: dict[str, tuple[int, int]] = {
+    "effects": (EFFECT_ROWS, EFFECT_DIM),
+    "effect_details": (DETAIL_ROWS, DETAIL_DIM),
+    "effect_members": (MEMBER_ROWS, MEMBER_DIM),
+}
 
 
 def _token(name: str) -> tuple[float, float]:
@@ -35,12 +31,11 @@ def encode_shared_effects(
     observation: managym.Observation,
     objects: Mapping[int, int],
     ranks: Mapping[int, float],
-    version: int = 7,
 ) -> dict[str, NDArray[np.float32]]:
-    shapes = shared_effect_shapes(version)
+    shapes = SHARED_EFFECT_SHAPES
     records = observation.shared_effects
     if records is None:
-        raise ValueError("v7 requires native shared-effect provenance")
+        raise ValueError("policy input requires native shared-effect provenance")
     counts = {
         "effects": len(records),
         "effect_details": sum(

@@ -25,9 +25,9 @@ def _json(request: Request) -> dict[str, Any]:
     return data
 
 
-def published_files(version: str) -> dict[str, str]:
+def published_files(project: str, version: str) -> dict[str, str]:
     try:
-        data = _json(Request(f"https://pypi.org/pypi/manabot/{version}/json"))
+        data = _json(Request(f"https://pypi.org/pypi/{project}/{version}/json"))
     except HTTPError as error:
         if error.code == 404:
             return {}
@@ -45,19 +45,21 @@ def published_files(version: str) -> dict[str, str]:
     return files
 
 
-def needs_upload(directory: Path, version: str) -> bool:
+def needs_upload(directory: Path, project: str, version: str) -> bool:
     local: dict[str, str] = {}
     for path in directory.iterdir():
-        if path.suffix == ".whl" or path.name.endswith(".tar.gz"):
+        if path.name.startswith(f"{project}-") and (
+            path.suffix == ".whl" or path.name.endswith(".tar.gz")
+        ):
             with path.open("rb") as stream:
                 local[path.name] = hashlib.file_digest(stream, "sha256").hexdigest()
-    if len(local) != 5 or any(
-        not name.startswith(f"manabot-{version}-")
-        and name != f"manabot-{version}.tar.gz"
+    if len(local) != {"managym": 5, "manabot": 2}[project] or any(
+        not name.startswith(f"{project}-{version}-")
+        and name != f"{project}-{version}.tar.gz"
         for name in local
     ):
-        raise ValueError("expected the validated five-artifact release inventory")
-    published = published_files(version)
+        raise ValueError("expected the validated package release inventory")
+    published = published_files(project, version)
     if not published:
         return True
     if published != local:
@@ -74,7 +76,8 @@ def complete_github(repository: str, tag: str, commit: str, notes: str) -> str:
         raise ValueError("release notes are empty")
     body = (
         notes.rstrip()
-        + f"\n\nInstall from [PyPI](https://pypi.org/project/manabot/{tag[1:]}/).\n"
+        + f"\n\nInstall [managym](https://pypi.org/project/managym/{tag[1:]}/) "
+        + f"or [manabot](https://pypi.org/project/manabot/{tag[1:]}/) from PyPI.\n"
     )
     endpoint = f"https://api.github.com/repos/{repository}/releases"
     headers = {
@@ -123,12 +126,22 @@ def main() -> None:
     parser.add_argument("directory", type=Path)
     parser.add_argument("--tag", required=True)
     parser.add_argument("--github", action="store_true")
+    parser.add_argument("--require-engine", action="store_true")
     args = parser.parse_args()
     if not re.fullmatch(r"v\d+\.\d+\.\d+", args.tag):
         parser.error("expected a vX.Y.Z tag")
-    upload = needs_upload(args.directory, args.tag[1:])
+    # Inspect both before emitting either upload instruction. A failure in the
+    # second project must not permit the first upload.
+    uploads = {
+        project: needs_upload(args.directory, project, args.tag[1:])
+        for project in ("managym", "manabot")
+    }
+    if args.require_engine:
+        if uploads["managym"]:
+            raise ValueError("engine publication is missing; training upload must wait")
+        return
     if args.github:
-        if upload:
+        if any(uploads.values()):
             raise ValueError("PyPI publication is missing; release is incomplete")
         root = Path(__file__).resolve().parents[2]
         notes = (root / "release" / args.tag / "NOTES.md").read_text()
@@ -142,7 +155,8 @@ def main() -> None:
         )
     else:
         with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
-            output.write(f"upload={str(upload).lower()}\n")
+            for project, upload in uploads.items():
+                output.write(f"{project}={str(upload).lower()}\n")
 
 
 if __name__ == "__main__":
