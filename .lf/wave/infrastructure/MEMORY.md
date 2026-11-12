@@ -116,18 +116,27 @@ GPU. Historical rates and hosts cannot supply the denominator or bind future
 jobs. CPU readings prove the harness only. Provider selection is outside this
 Task, and no spending or launch is authorized.
 
-The implementation and controlled tests follow that direction; no baseline has
-been committed. Complete default-ladder runtime, reference adoption and real-source
-interleaving remain open in the Task plan. Short ladders cannot establish MTG-273
+Bound a whole invocation from retained runtime evidence, not update counts alone.
+The first CPU ladder exhausted its former 3,600-second deadline with six rows;
+the remaining size completed separately. Their completed attempts sum to about
+5,500 seconds, with w64 perturbed by an accidental overlapping run. That sum is
+not a full invocation measurement, and the derived nine-hour comparison remains
+an estimate. The repaired 7,200-second standalone and 36,000-second comparison
+limits preserve workload identity; controlled deadline tests establish plumbing,
+not sufficient runtime. Receipts are located in 855bff's `scratch/plan.md`.
+
+No baseline has been committed. Complete clean default-ladder runtime, reference
+adoption and real-source interleaving remain open in the Task plan. Rebuild the
+matching native extension after upstream API changes before fresh measurements;
+pre-sync receipts do not validate the merged pipeline. Short ladders cannot establish MTG-273
 long-run flatness; its separate evidence is in
 `experiments/self-play-collection-273.md`.
 
-855bff coverage: filesystem inspection on 2026-11-11 found no immediate Infrastructure
-child directories or child memories. Infrastructure memory was read in full;
-related Experiments memory was read only in its introduction and self-play
-metric-indexing section this pass (shared-effect performance/delivery was read
-in an earlier pass).
-Other Experiments sections were not read or curated here.
+855bff coverage: realignment on 2026-11-11 listed Infrastructure and found no
+immediate child directories or child memories; its memory was read in full.
+Related Experiments memory was not re-read in this pass. Earlier passes read its
+introduction, self-play metric-indexing and shared-effect performance/delivery;
+other Experiments sections were not read or curated.
 
 4ceb1d coverage: the Graph's reconciliation found no immediate Infrastructure child
 directories or child memories on 2026-11-11. Related Experiments memory was read

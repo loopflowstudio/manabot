@@ -28,7 +28,8 @@
 Sources: <code>scratch/plan.md</code>, <code>scratch/questions.md</code>, Task brief,
 reference direction in comment <code>262b941c</code>,
 <code>scripts/bench_pipeline.py</code>, <code>scripts/bench_training_update.py</code>,
-<code>manabot/training/rollout/collection.py</code>, <code>docs/development.md</code>,
+<code>docs/development.md</code>, <code>docs/training.md</code>, <code>docs/evaluation.md</code>,
+<code>.lf/skills/experiment-measure.md</code>, <code>.lf/skills/qa.md</code>,
 <code>tests/training/test_pipeline_speed.py</code>.</header>
 <main>
 <h1>No host decision remains. Prove the complete workflow.</h1>
@@ -38,7 +39,8 @@ The reference selects a commit and suite interface. Each comparison measures
 both sources in one job on one machine.</p>
 <p><strong>Biggest remaining gap:</strong> the harness is implemented; the complete
 default CPU ladder, committed reference and real-source comparison remain unproved.
-A deadline and passing fixtures do not establish practical runtime.</p>
+The repaired two-hour standalone and ten-hour comparison limits bound failure;
+passing fixtures do not establish practical runtime. Advance to validation.</p>
 </div>
 <h2>Before → existing now</h2>
 <p><strong>Superseded:</strong> designate a standing host and retain its reading as
@@ -48,7 +50,7 @@ and absolute rates in each run. A CPU recording does not bind later jobs to CPU.
 <table>
 <thead><tr><th>Action</th><th>Concept</th><th>API → retained state</th></tr></thead>
 <tbody>
-<tr><td>Measure this machine</td><td>Run, including failures</td><td><code>--suite</code> → <code>run_suite</code> → <code>Report</code> with attempts and samples</td></tr>
+<tr><td>Measure this machine</td><td>Report, including failures</td><td><code>--suite</code> → <code>run_suite</code> → attempts, admitted samples and receipts</td></tr>
 <tr><td>Record reviewed source</td><td>Reference</td><td><code>--record-reference</code> → <code>reference_from_report</code> → <code>{commit, suite_interface}</code></td></tr>
 <tr><td>Compare a change</td><td>Fresh comparison</td><td><code>--compare</code> + <code>--reference-root</code> → <code>admit_reference</code> + <code>compare</code> → ratios or reasons</td></tr>
 </tbody>
@@ -63,6 +65,9 @@ both clean checkouts with matching environments and release extensions → compa
 samples. A timeout retains earlier rows and the error, leaves the baseline intact,
 and exits nonzero. Repair the cause and retry in a new output directory. A changed
 behavior digest is incomparable, even if the candidate finishes faster.</p>
+<p>Keep failed attempts separate from admitted samples: elapsed time and cleanup
+evidence survive without inventing a rate. Recovery starts a fresh job; successful
+rows from separate jobs cannot be stitched into a comparison.</p>
 <p><strong>Counterexamples to keep:</strong> matching GPU labels across rentals
 cannot supply a fresh control; a one-size success cannot establish the ladder;
 batching counters include warmup and cannot stand in for post-warmup timings.
@@ -74,7 +79,8 @@ not remove that tail.</p>
 uses source metadata and fresh controls in one job; provider selection is outside this Task.</li>
 <li><strong>What must be shown next?</strong> Eight default CPU rows and actual
 runtime, recorded metadata, and a real interleaved comparison. CPU proves the
-harness; CUDA remains a documented check on an already provisioned host.</li>
+harness; prepare a matching release extension after the main sync. CUDA remains
+a documented check on an already provisioned host.</li>
 </ol>
 </main>
 <footer>Working account: <a href="plan.md">scratch/plan.md</a>. No code changed or workloads launched in this review.</footer>

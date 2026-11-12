@@ -57,6 +57,15 @@ outcome tables (`1659b0e29`). `read_updates` still owns outcome-table expansion;
 timing keys remain intact. MTG-273's long-run acceptance is separately documented
 in `experiments/self-play-collection-273.md`.
 
+Merge `e3e68601c` incorporates main through `668555c09`: the 0.2.1 release,
+MTG-272 native hand snapshots/reset bookkeeping (`0b296e617`) and the
+`experiment-performance` workflow (`830161795`). The metric reader and frozen
+size declaration are unchanged by this sync. `VectorEnv.reset` and
+`CapturedVector` now depend on the merged native API; the next clean proof needs
+a matching rebuilt extension, not the extension used for pre-sync QA.
+`.lf/skills/experiment-measure.md` already anticipates this Task's shipped
+ladder/reference; it remains on per-size attribution until that delivery.
+
 The early dirty `402dfd5b2` CPU subset proofs preceded that merge: a measured
 second training update of 6.144 s / 399 learner decisions, whole-stage 1.743
 rows/call and 0.1285 idle fraction; after correcting deck keys, four replayed
@@ -65,26 +74,43 @@ integration only. Commands and retained failure facts are in `scratch/questions.
 
 QA on dirty `2f24ceb09` (2026-11-11, laptop CPU) timed out after 3,598 s under the
 old 3,600 s default, retaining six rows. The separate a384l8 run finished both
-rows in 2,548 s. Completed attempt times sum to ≈5,470 s, not one complete
+rows in 2,548 s. Completed attempt times sum to 5,466.9 s (≈5,500 s), not one complete
 invocation. Six ladders imply an estimated ≈9 h comparison, not a measurement.
 w64 overlapped an accidental QA run and is perturbed. a384l8 reported 685
 calls/update, 77.8 rows/call and 0.696 idle. Full receipts and readings:
 `.runs/qa-ladder-001/report.json`, `.runs/qa-a384l8-001/report.json`, `scratch/qa.html`.
 
-## Delete — do not maintain
+## Implemented deadline repair
 
 Completed: removed the shared 3,600-second suite CLI default and stale examples.
 Standalone suites now default to 7,200 s; comparisons to 36,000 s. Explicit
 `--seconds` overrides either without changing workload identity. Startup/cleanup
 accounting and failures remain retained. The single-recipe deadline is unchanged.
-No remaining file, symbol or exclusive-fixture deletion targets.
+`SUITE_SECONDS` and `COMPARISON_SECONDS` own CLI selection and help;
+`test_suite_cli_deadline_defaults_and_override` checks standalone, recording and
+comparison budgets, explicit overrides, startup accounting and unchanged config
+with injected workers. Invalid deadlines retain errors before workers start.
+The previous step's requested repair is complete; these checks do not establish
+that either budget suffices for a complete real invocation.
 
-Compression keeps the two budgets beside the CLI and uses them in help and
-selection, replacing the nested conditional. Admission tests share one fixture
-that forbids worker launches. The report/attempt/sample separation remains useful:
-failed attempts have no sample. QA guidance now distinguishes summed attempts
-from complete invocation measurements. Before curating the notes, their full
-uncommitted versions were moved to `.runs/compress-context-20261111/`.
+## Delete — do not maintain
+
+No remaining file, symbol or exclusive-fixture deletion targets. Archived context
+and exact decisions remain located by `scratch/questions.md`.
+
+## Concept review — 2026-11-11, after main sync
+
+No design change or open product choice. Keep the measure → record source →
+compare interaction. An attempt must remain distinct from its admitted sample:
+a timeout still has logs, elapsed time and cleanup evidence, but no rate. Recovery
+starts a fresh job and retains the failed report; stitching successful rows from
+separate jobs would break the one-job comparison contract. There is no additional
+resume or reference-host lifecycle to build. The repaired deadlines bound failure;
+they do not settle whether the workflow is practical. The remaining acceptance
+below must answer that with a complete invocation, without shrinking the workload.
+Usage docs and the experiment-measure skill already describe the intended boundary;
+no proposed usage or implementation change is needed. Loop-or-next can advance
+from concept review; this does not complete measurement or delivery.
 
 ## Remaining acceptance — gate/measurement
 
@@ -93,6 +119,8 @@ uncommitted versions were moved to `.runs/compress-context-20261111/`.
    Resolve capacity/runtime failures without changing workload identity. Record,
    review and commit `manabot/perf/baseline.json` through `--record-reference`;
    keep measured rates in the report. This establishes a local harness proof.
+   Recheck w64's unattributed collection time without the earlier accidental
+   overlap; overlap is a possible cause, not an established explanation.
 2. Run a real same-host interleaved reference/candidate comparison with matching
    options. Establish repeatable behavior admission and retain incomparable
    results/failures. The full CPU/CUDA comparison has 48 worker attempts sharing
@@ -102,8 +130,10 @@ uncommitted versions were moved to `.runs/compress-context-20261111/`.
    host. CUDA/MPS have not been exercised here and do not block this repair.
    No speedup or learning-equivalence claim is established.
 
-Compression validation: `uv run --locked --extra dev --extra evaluation pytest tests/training/test_pipeline_speed.py -q`
+Retained pre-sync validation: `uv run --locked --extra dev --extra evaluation pytest tests/training/test_pipeline_speed.py -q`
 — 57 passed in 1.57 s. Focused Ruff lint/format, Python compilation, CLI help,
 `uv run --locked python scripts/check_loopflow_workflows.py` and `git diff --check`
-passed. No benchmark workloads, servers or watchers were launched. `lf context`
-keeps memory and scratch below both configured token and byte limits.
+passed. This supersedes QA's earlier 46-test count; merged integration checks
+remain with gate. Realignment re-read the two receipts and the deadline code and
+tests without repeating workloads. No product decision remains; CUDA/MPS and
+provider selection retain the limits above.
