@@ -601,12 +601,20 @@ def main() -> None:
         return
     # Retain the changed execution owners. Current imported encoders would
     # otherwise silently give the baseline today's optimizations.
-    reference = cast(
-        type[LocalUpdateTeacher],
-        reference_module(
-            args.reference, "manabot/sim/search/local_update.py"
-        ).LocalUpdateTeacher,
+    reference_search = reference_module(
+        args.reference, "manabot/sim/search/local_update.py"
     )
+    reference = cast(type[LocalUpdateTeacher], reference_search.LocalUpdateTeacher)
+
+    def _reference_config(current: LocalSearchConfig) -> LocalSearchConfig:
+        """The reference's own config class, so its receipts keep its config bytes."""
+        return cast(
+            LocalSearchConfig,
+            reference_search.LocalSearchConfig.model_validate_json(
+                current.receipt_config_json()
+            ),
+        )
+
     reference_model = reference_module(args.reference, "manabot/model/actor_critic.py")
     reference_facts = reference_module(args.reference, "manabot/model/facts.py")
     reference_model.FactEncoder = reference_facts.FactEncoder
@@ -620,7 +628,7 @@ def main() -> None:
         digest = file_sha256(checkpoint)
         config = LocalSearchConfig(depth=20, decision_seconds=120)
         with patch("manabot.model.checkpoint.ActorCritic", reference_model.ActorCritic):
-            before = reference(checkpoint, digest, config)
+            before = reference(checkpoint, digest, _reference_config(config))
         teachers = {
             "before": before,
             "after": LocalUpdateTeacher(checkpoint, digest, config),
@@ -648,6 +656,8 @@ def main() -> None:
                 seconds: dict[str, float] = {}
                 for name, teacher in teachers.items():
                     teacher.config = config.model_copy(update={"worlds": worlds})
+                    if name == "before":
+                        teacher.config = _reference_config(teacher.config)
                     started = time.perf_counter()
                     receipts[name] = teacher.search(engine, history, seed=17)
                     seconds[name] = time.perf_counter() - started
@@ -697,6 +707,8 @@ def main() -> None:
                     teacher.config = config.model_copy(
                         update={"worlds": max(args.worlds)}
                     )
+                    if name == "before":
+                        teacher.config = _reference_config(teacher.config)
                     profiler = cProfile.Profile()
                     encode = teacher.space.encode
 

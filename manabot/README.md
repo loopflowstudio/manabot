@@ -203,7 +203,12 @@ player, observation_space = make_player(
         "kind": "local_update",
         "checkpoint": str(checkpoint),
         "checkpoint_sha256": file_sha256(checkpoint),
-        "config": {"worlds": 16, "depth": 20, "rollout_evidence": "compact"},
+        "config": {
+            "worlds": 16,
+            "depth": 20,
+            "decision_seconds": 30,
+            "rollout_evidence": "compact",
+        },
     },
     seed=42,
 )
