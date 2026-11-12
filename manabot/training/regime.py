@@ -827,14 +827,6 @@ class TrainingRegime(Strict):
                 raise ValueError(
                     f"{accelerator} requires self-contained ordinary self-play"
                 )
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.bucketed_shapes for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support bucketed shapes")
-        if self.agent.token_stream == "pooled" and any(
-            stage.execution.live_tokens for stage in self.stages
-        ):
-            raise ValueError("token_stream='pooled' does not support live tokens")
         previous: dict[str, Stage] = {}
         latest_self_play = None
         for stage in self.stages:
