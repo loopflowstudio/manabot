@@ -1318,6 +1318,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "iko",
             "drannith_magistrate_stops_opponents_casting_from_the_graveyard",
         ),
+        StaticAbility::LegendRuleDoesntApply => witnessed(
+            "StaticAbility::LegendRuleDoesntApply",
+            Seen::Actions("no legend-rule choice is asked of its controller"),
+            "Sakashima of a Thousand Faces",
+            "cmr",
+            "sakashima_copies_a_legend_you_control_and_both_stay",
+        ),
         StaticAbility::AdditionalLandPlayEachPlayer => witnessed(
             "StaticAbility::AdditionalLandPlayEachPlayer",
             Seen::Actions("a second land play is offered"),
@@ -1609,6 +1616,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::Foretell(ManaCost::parse("{2}")),
         StaticAbility::NoMaximumHandSize,
         StaticAbility::AdditionalLandPlayEachPlayer,
+        StaticAbility::LegendRuleDoesntApply,
         StaticAbility::ActivatedAbilitiesCostLess {
             predicate: creature(),
             generic: 2,
@@ -2325,6 +2333,16 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
         stripped.statics.retain(|candidate| {
             std::mem::discriminant(candidate) != std::mem::discriminant(&ability)
         });
+        // A copy exception granting the same static (Sakashima) goes too.
+        for effect in &mut stripped.replacement_effects {
+            if let managym::state::card::ReplacementEffect::EntersAsCopy { exceptions, .. } = effect
+            {
+                exceptions.retain(|exception| {
+                    !matches!(exception, Modification::GrantStatic(granted)
+                        if std::mem::discriminant(&**granted) == std::mem::discriminant(&ability))
+                });
+            }
+        }
         let without = tokens_of(&stripped);
         assert_ne!(tokens, without, "{}", row.card);
         for name in names {

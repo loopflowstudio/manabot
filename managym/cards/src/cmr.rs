@@ -1,13 +1,40 @@
 //! Commander Legends.
 use managym_state::{
     ability::{Ability, Effect, EffectValue, ObjectSelector, Scope, TriggerCondition},
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, ReplacementEffect, StaticAbility},
+    effect::Modification,
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![volcanic_torrent()]
+    vec![sakashima_of_a_thousand_faces(), volcanic_torrent()]
+}
+
+/// Partner has no rules effect outside Commander and is not modeled.
+fn sakashima_of_a_thousand_faces() -> CardDefinition {
+    let text_box = "You may have Sakashima enter as a copy of another creature you control, except it has Sakashima's other abilities.\nThe \"legend rule\" doesn't apply to permanents you control.\nPartner (You can have two commanders if both have partner.)";
+    CardDefinition {
+        key: "cmr.sakashima_of_a_thousand_faces",
+        scryfall_id: "714c3a1f-7b30-4ed8-8f38-6176758741fb",
+        name: "Sakashima of a Thousand Faces".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Rogue".into()],
+        power: Some(3),
+        toughness: Some(1),
+        statics: vec![StaticAbility::LegendRuleDoesntApply],
+        replacement_effects: vec![ReplacementEffect::EntersAsCopy {
+            scope: Scope::YouControl,
+            predicate: CardPredicate::creature(),
+            exceptions: vec![Modification::GrantStatic(Box::new(
+                StaticAbility::LegendRuleDoesntApply,
+            ))],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn volcanic_torrent() -> CardDefinition {

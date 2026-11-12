@@ -31,8 +31,17 @@ impl Game {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
-            for (id, characteristics) in self.layer_views(self.iter_battlefield_permanents(player))
-            {
+            let views: Vec<_> = self
+                .layer_views(self.iter_battlefield_permanents(player))
+                .collect();
+            if views.iter().any(|(_, characteristics)| {
+                characteristics
+                    .static_abilities
+                    .contains(&crate::state::card::StaticAbility::LegendRuleDoesntApply)
+            }) {
+                continue;
+            }
+            for (id, characteristics) in views {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                 if characteristics.is_legendary {
                     names

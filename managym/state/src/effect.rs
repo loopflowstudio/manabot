@@ -197,7 +197,6 @@ impl Modification {
             | Self::AddColors(_)
             | Self::GrantActivated(_)
             | Self::GrantTriggered(_)
-            | Self::GrantStatic(_)
             | Self::SwitchPt => return false,
             Self::AddSubtypes(subtypes) => {
                 for subtype in subtypes {
@@ -209,6 +208,8 @@ impl Modification {
             Self::BecomeCreature => {
                 definition.types.types.insert(CardType::Creature);
             }
+            // "Except it has [this card's] other abilities" (CR 707.9b).
+            Self::GrantStatic(ability) => definition.statics.push((**ability).clone()),
             Self::Nonlegendary => definition
                 .supertypes
                 .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary")),

@@ -8,7 +8,8 @@ use crate::support::{
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::{
-        game_object::{CardId, PlayerId},
+        card::StaticAbility,
+        game_object::{CardId, PlayerId, Target},
         zone::ZoneType,
     },
 };
@@ -124,4 +125,45 @@ fn volcanic_torrent_cascade_respects_hand_only_casting() {
     let pinned = cascade_over(&mut s, &["Hill Giant"]);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
     assert_eq!(bottom(&s, 1), pinned);
+}
+
+/// Sakashima offers only creatures its controller controls, enters as a
+/// copy that keeps the legend-rule exemption (CR 707.9b), so both legendary
+/// Rhys stay without a legend-rule choice.
+#[test]
+fn sakashima_copies_a_legend_you_control_and_both_stay() {
+    let mut s = five_color_setup(&[
+        "Sakashima of a Thousand Faces",
+        "Rhys the Redeemed",
+        "Gray Ogre",
+    ]);
+    let rhys = s.force_permanent_on_battlefield(0, "Rhys the Redeemed");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let sakashima = move_to_hand(&mut s, "Sakashima of a Thousand Faces");
+    cast_card(&mut s, sakashima);
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let offered: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            Action::ChooseTarget { target, .. } => Some(*target),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered, vec![Target::Permanent(rhys)]);
+    assert!(s.choose_target(Target::Permanent(rhys)));
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Rhys the Redeemed").len(),
+        2
+    );
+    let copy = s.game().state.card_to_permanent[sakashima].expect("entered");
+    assert!(s
+        .game()
+        .characteristics(copy)
+        .static_abilities
+        .contains(&StaticAbility::LegendRuleDoesntApply));
 }
