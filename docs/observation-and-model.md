@@ -117,6 +117,55 @@ facts remain a separate sum. Neither path adds attention tokens.
 Complete shared records retain duration, timestamp, controller and exact source
 bindings that can change future behavior.
 
+### Bucketed padding (profiling)
+
+Each buffer arrives padded to its declared capacity, but a real batch uses
+little of it. Across 300 captured collection batches the median batch needed 59
+of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. By default
+the network still processes every slot, and skips lookups for an axis that is
+empty in the batch, so tensor shapes change from batch to batch.
+
+Bucketed padding is an opt-in alternative meant for comparing accelerator
+cost. After an observation is admitted, the network trims each variable axis
+(facts, effect headers, details and members, relations, actions, events, cards,
+permanents, known hands and decklists) to a bucket: the next power of two at or
+above what the batch uses, at least 8 and at most the declared capacity. What a
+batch uses includes every row a reference can name, so trimming removes only
+empty rows nothing refers to. Trimming cards and permanents renumbers object
+references; it is skipped under `historical_mean` value aggregation, whose
+average includes padding, and with belief rows. Logits keep their full action
+capacity. Inference measures the buckets on the host while preparing a batch,
+so the device forward reads nothing back to find them; learning measures them
+with one read per forward.
+
+Inside the network, fact ids are looked up at the fact axis's shape instead of
+for selected rows, and learning encodes the complete card catalog instead of
+the definitions a batch references. Shared-effect routing, fact programs and
+legal-action selection keep their packed, data-dependent layouts. A forward
+therefore takes one of a few shapes per input axis instead of a new shape for
+nearly every batch, and does much less work than padding everything to
+capacity.
+
+Turn it on for a process with an environment variable, which takes effect when
+an `ActorCritic` is constructed:
+
+```bash
+MANABOT_BUCKETED_SHAPES=1 uv run python experiments/<name>.py
+```
+
+Leave it unset, or set it to `0`, for the default path. To compare the two,
+run the same job once with each setting.
+
+The setting is a runtime choice, not part of the model. It changes no
+`ModelConfig` field, regime hash, checkpoint, world binding or policy input, so
+a checkpoint trained with either setting loads and runs with the other. On CPU,
+action probabilities, values, losses and gradients agree with the default path
+up to the order of floating-point sums. A batch that references no card
+definition is the one difference in gradient support: the catalog encoder then
+receives exactly zero gradients instead of none. Capacity overflow and
+malformed inputs are rejected with the same error and message as on the
+default path.
+
 ## Policy inputs
 
 Main carries one policy input, v9. `ObservationConfig.policy_input_version` is
@@ -380,8 +429,10 @@ is not evidence for any of them:
 - No paired observation test shows a lost activated ability removing an action,
   or a source that leaves and re-enters as the same physical card. Those cases
   rest on rules anchors and reasoning.
-- Fixed padded capacity against packed variable length is open. Natural
-  length distributions have not been gathered.
+- Fixed padded capacity against packed variable length is open. Collection
+  batches use a small fraction of each capacity
+  ([bucketed padding](#bucketed-padding-profiling)); how that affects
+  accelerator cost has not been measured.
 - Learned sums preserve multiplicity but are not injective; whether that loses
   decision-relevant distinctions in practice is unmeasured.
 - Sequence training changes collection, sampling and recovery, and that cost has

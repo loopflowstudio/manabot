@@ -61,20 +61,31 @@ class SharedEffectEncoder(nn.Module):
         members: torch.Tensor,
         objects: torch.Tensor,
         catalog: RecordEmbeddings | None = None,
+        *,
+        counts: tuple[int, int, int] | None = None,
     ) -> torch.Tensor:
-        """Catalog ids need `catalog`; hashed ids ignore it."""
+        """Catalog ids need `catalog`; hashed ids ignore it.
+
+        `counts` are the admitted header, detail and member rows when the
+        caller trimmed them to buckets; CSR bounds still check capacities.
+        """
         if self.vocabulary == "hashed":
             catalog = None
         elif catalog is None:
             raise ValueError("catalog effect ids require the card encoder")
         # One metadata transfer admits the entire batch. Numerical features and
         # object joins below still read the original tensors, retaining gradients.
-        host = masked_record_rows(headers.detach().cpu(), EFFECT_ROWS, EFFECT_DIM, 17)
+        header_rows, detail_rows, member_rows = counts or (
+            EFFECT_ROWS,
+            self.detail_rows,
+            MEMBER_ROWS,
+        )
+        host = masked_record_rows(headers.detach().cpu(), header_rows, EFFECT_DIM, 17)
         batch, object_count, width = objects.shape
         if (
             host.shape[0] != batch
-            or details.shape != (batch, self.detail_rows, DETAIL_DIM)
-            or members.shape != (batch, MEMBER_ROWS, MEMBER_DIM)
+            or details.shape != (batch, detail_rows, DETAIL_DIM)
+            or members.shape != (batch, member_rows, MEMBER_DIM)
         ):
             raise ValueError("invalid shared effect buffer shape")
         live_positions = host[..., 17].nonzero()
@@ -122,10 +133,8 @@ class SharedEffectEncoder(nn.Module):
             token_indexes.extend(range(3 * i, 3 * i + 3))
             token_indexes.extend(range(detail_start, detail_start + count))
             lengths.append(3 + count)
-            detail_indexes.extend(
-                range(b * self.detail_rows + d, b * self.detail_rows + d_end)
-            )
-            member_indexes.extend(range(b * MEMBER_ROWS + m, b * MEMBER_ROWS + m_end))
+            detail_indexes.extend(range(b * detail_rows + d, b * detail_rows + d_end))
+            member_indexes.extend(range(b * member_rows + m, b * member_rows + m_end))
             member_records.extend([i] * targets)
         # Validate all live details/members together, ignoring poisoned padding.
         detail_host = details.detach().cpu().reshape(-1, DETAIL_DIM)[detail_indexes]
@@ -148,7 +157,7 @@ class SharedEffectEncoder(nn.Module):
         if len(global_orders.unique()) != len(global_orders):
             raise ValueError("duplicate effect membership order")
         device = objects.device
-        header_indexes = (batches * EFFECT_ROWS + live_positions[:, 1]).to(device)
+        header_indexes = (batches * header_rows + live_positions[:, 1]).to(device)
         numeric = headers.reshape(-1, EFFECT_DIM)[header_indexes, 2:10].clone()
         numeric[:, -1] /= EFFECT_ROWS
         controller, source_object = join_record_rows(
