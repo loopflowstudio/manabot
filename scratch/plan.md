@@ -80,3 +80,9 @@ line (its own table row says so; the demo confirmed Small's mirrored line is
 dropped). Done: the frontier paragraph now says earlier-self and heuristic
 charts have a line per size and the two Large vs Small charts show Large's
 line only (above 0.5 means Large is stronger). No open product choice.
+
+## Concept review 3 (2026-11-12, headless)
+
+No change since review 2's fix: helpers, frontier `report()`, the docs
+example and its paragraph and helper table agree (head-to-head draws
+`subject` only; earlier-self mixes roles until EXP-53). No open product choice.

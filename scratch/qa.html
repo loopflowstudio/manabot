@@ -1,0 +1,67 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MTG-274 QA: report helpers</title>
+<style>body{font:15px/1.5 system-ui;max-width:960px;margin:2em auto;padding:0 1em}img{max-width:100%;border:1px solid #ddd}pre{background:#f6f6f6;padding:.6em;overflow:auto;font-size:13px}h2{margin-top:2em}</style>
+
+<h1>MTG-274 QA: manabot report helpers</h1>
+<p>This QA used the change the way its users meet it. An experiment author writes <code>report()</code> from
+<code>manabot.training.report</code>, and a reader opens the rendered Etude page. QA ran on 2026-11-12 at
+branch HEAD <code>599620f56</code>, with Etude 0.2.16 from the locked venv.</p>
+
+<h2>1. Reader: the frontier page rebuilt at HEAD</h2>
+<p><b>What I did.</b> I built the page from the frontier's 2 training and 10 eval run prefixes in
+<code>r2://manabot/jobs</code>, read-only through Doppler <code>manabot/prd</code>. The build used a wrapper
+that imports <code>experiments.tla_frontier.report</code> and has no <code>eval</code>, with an empty
+<code>ETUDE_HOME</code> (scripts in <code>/tmp/mtg274-script/</code>). It took 61 s at 0.77 GB peak and
+produced 418 cells with no notes. The resulting <code>page.json</code> is byte-identical to the
+earlier demo build. I opened the HTML in headless Chromium and hovered the points.</p>
+<p><b>What I saw.</b> The legend reads “Small (width 64) · 1 seed” and “Large (width 160, 8 layers) · 1 seed”.
+Evals shows four charts with 0.5 drawn as even. The earlier-self and heuristic charts have one line
+per size, and both Large vs Small charts show only Large's line. Hover text matches the docs:</p>
+<pre>updates 1200
+0.64 · 95% interval 0.53–0.75
+Small (width 64) · 1 seed · 64 games · 16 matches
+
+updates 925 (Model vs heuristic)
+0.70 · 95% interval 0.61–0.80   Large (width 160, 8 layers) · 1 seed · 64 games · 16 matches · vs heuristic
+—                               Small (width 64) · 1 seed · not evaluated</pre>
+<img src="qa/top.png" alt="Header, legend and the first two Evals charts">
+<img src="qa/hover.png" alt="Hover on the half-training chart">
+<img src="qa/h2h.png" alt="Both Large vs Small charts, Large's line only">
+<p>Under ML details, both schedule charts run to each job's damping horizon (Small to about 2,474 updates,
+Large to about 1,000), with each run's latest update marked as a filled dot. Perf and the numerical-stability
+rows use the same display names.</p>
+<img src="qa/perf-ml.png" alt="Perf panels and ML schedule charts">
+<p>Comparing points against the published <code>page.json</code> gives the same result as the demo.
+Model vs heuristic and Large's head-to-head lines match exactly. Model vs itself differs where a
+checkpoint was also an earlier partner (EXP-53, documented).</p>
+
+<h2>2. Author: helpers with real regimes and wrong input</h2>
+<pre>job_labels({"x": ("Large", w160l8), "y": ("Small", w64)})
+  → {'x': 'Large (width 160)', 'y': 'Small (width 64, 2 layers)'}
+learning_schedule({"y": w64})            → 77 sampled points, last at update 2474 (lr 1.99e-05)
+learning_schedule({"plain": no stages})  → ValueError: plain: a learning schedule needs one damped self-play stage
+against_fixed("x", "heuristic", tags=()) → ValidationError: curve_matches_must_not_be_empty</pre>
+<p>Errors name the job and the problem. As documented, <code>job_labels</code> names the layer count
+relative to the <em>first</em> job. Listing Large first gives “Small (width 64, 2 layers)”. That label
+is accurate but is not the intended reading. The alternative is recorded in <code>scratch/questions.md</code>.</p>
+
+<h2>Fixed</h2>
+<p>Nothing. No step in either scenario broke within the change's scope.</p>
+
+<h2>Still wrong or unreached, worst first</h2>
+<ol>
+<li><b>Rebuilding a finished experiment from a later revision needs a wrapper.</b> Running
+<code>etude report experiments/tla_frontier.py</code> from this revision refuses the held tournament
+(<code>tournament_conflict</code>), so I did not run the documented one-line command against this
+experiment. The docs state this limitation, and EXP-55 tracks it.</li>
+<li><b>Model vs itself mixes roles</b> until EXP-53 is done. This is documented.</li>
+<li><b>Schedule caption reads “Configured · · updates”</b> for the learning rate because its unit is empty.
+Etude's <code>page.html</code> interpolates <code>${panel.unit}</code> without omitting an empty value.
+This is cosmetic, and the fix belongs in Etude. No Task was filed.</li>
+<li><b>The page-level Opponent toggle shows “heuristic” selected</b> while the head-to-head and
+earlier-self captions say “vs all opponents”, which can confuse a reader. This is Etude's control and
+is outside this change.</li>
+<li>The header says “1 running or unfinished” for this build. That comes from the build wrapper's stub
+for the retired launcher status, not from the helpers.</li>
+</ol>
