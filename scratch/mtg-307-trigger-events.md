@@ -103,6 +103,7 @@ still say "When" (fix moves the w17 authored-match receipt).
 Shipping docs: `docs/engine.md` (card definitions: prowess example, event list)
 and the trigger rule in `AGENTS.md`/`CLAUDE.md`. No stale variant names remain
 in docs. This pass only reworded the event list in `docs/engine.md`.
+Re-checked at d002b743b against `ability.rs` (variants, constructors, links): no edits.
 
 ## Compress (2026-11-12, head 079a8de32)
 
@@ -129,3 +130,7 @@ debug nextest `trigger|description|attack|combat_damage|dies|sacrific|observabil
 249/249; clippy `--workspace --all-targets` no findings. Base merges since then
 are Python token-stream work this branch doesn't touch; full matrix left to CI.
 Reflowed the event paragraph in `docs/engine.md`.
+
+Implement pass (head d002b743b): nothing to build. Main's only new commit,
+c32b321b0 (#480), is Python policy-input admission with no `managym/` or docs
+changes and merges cleanly (`git merge-tree`).
