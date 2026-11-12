@@ -33,19 +33,16 @@
 ## Open
 
 - Who extends `manabot/policy/prepare.py` and `checkpoint.py` to every torch
-  configuration (FiLM, belief, history, pooled token stream, v10, categorical
-  value, historical_mean, attention off) and the `.pt` extras? Assumed: this
-  Task, after PR #495 lands, editing those files in place. Until then the
-  torch forward keeps its inline lookups.
+  configuration and the `.pt` extras? #495 merged without answering steer
+  8d8dc862; assumed this Task, editing those files in place.
 - `save_checkpoint` keeps writing `.pt` until the container carries every
   configuration and the `.pt` extras (belief binding, `bc` value semantic);
   `load_checkpoint` reads both, choosing by the zip magic (`PK\x03\x04`).
   Docs (`training-loop.md`, `manabot/README.md`, `backends/README.md`) now say
-  so. Extensions requested on MTG-321 (steer 8d8dc862, 2026-11-12); assumed
-  this Task edits `prepare.py`/`checkpoint.py` in place after #495 lands.
-- Main (#497) is merged into this branch although #474 has not merged it;
-  until #474 does, this branch's diff against #474 includes main's two commits
-  (#497, MTG-318 report). Reversible by rebasing onto #474 once it moves.
+  so.
+- Main through #495 is merged here; #474 (9b2aeae33) has main only through
+  #497, so this branch's diff against #474 includes #495 until #474 merges
+  main again.
 - `live_token_count` stays on `PreparedObservation` (counted in
   `PolicyInference.prepare`) as #497 wrote it, while buckets moved to
   admission here; moving the count to admission is a possible follow-up.

@@ -54,20 +54,15 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   module). Registration in `backends/parity.py` waits for #495 on this
   branch (parity.py/convert.py are not here).
 
-## Coordination (2026-11-12)
+## Coordination (rechecked 20:53Z 2026-11-12)
 
-- Extensions requested on MTG-321 at 19:41Z (prepare: FiLM, belief, history
-  beyond w160l8, pooled token stream, v10, categorical value,
-  historical_mean, attention off; container: belief binding, `bc`). No reply
-  yet. #495 head 0c7cd1419 changes no shared file since 88c97936b (only its
-  scratch), so the copies here are current. #474 still 05c1203e9.
-- Rechecked 20:05Z: #495 still 0c7cd1419, #474 still 05c1203e9, no reply on
-  MTG-321 to 8d8dc862. #497 merged to main (439379869), so Remaining 5 is done.
-- Rechecked after the L4 run: #495 at 90cc33d98 (merge of main/#497, already
-  here, plus one `test_experiment_files.py` line); shared `policy/` and
-  `backends/__init__.py` files identical to this branch apart from the
-  `buckets.py` README bullet, so no re-sync. #474 still 05c1203e9; no reply
-  on MTG-321 to 8d8dc862. Remaining 1-3 wait on #495 landing via #474/main.
+- #495 (MTG-321) merged to main 20:33Z and is merged here (9a728aca2).
+  #474 moved to 9b2aeae33 (deletes every deprecated alias; contains main up
+  to #497, not #495) and is merged here (e56150ece). This branch's diff
+  against #474 therefore includes #495 until #474 merges main again.
+- MTG-321 never answered the 19:41Z extension request (steer 8d8dc862);
+  its PR is merged, so the extensions to `policy/prepare.py` and
+  `policy/checkpoint.py` fall to this Task (the questions.md assumption).
 
 ## Checks
 
@@ -121,29 +116,26 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 
 ## Remaining
 
-1. ActorCritic over `manabot.policy.prepare.Prepared`. Blocked on #495
-   landing and MTG-321's answer to the request above: MTG-321's `prepare.py` covers only the
-   w160l8 subset (`require_supported` refuses FiLM, belief, history, pooled
-   token stream, v10, categorical value, historical_mean, attention off);
-   torch must keep running all of them bitwise. Extending `prepare.py` edits
-   MTG-321's file; do it after #495 lands, then move each component's inline
-   lookups (semantic_cards, facts, shared_effects, name_candidates,
-   continuation, recent_events, token_stream, belief) onto prepared indices.
+1. ActorCritic over `manabot.policy.prepare.Prepared`. Unblocked (#495
+   is here); this Task extends MTG-321's files in place. `require_supported`
+   refuses FiLM, belief, history beyond w160l8, pooled token stream, v10,
+   categorical value, historical_mean and attention off; torch must keep
+   running all of them bitwise. Extend `prepare.py`, then move each
+   component's inline lookups (semantic_cards, facts, shared_effects,
+   name_candidates, continuation, recent_events, token_stream, belief) onto
+   prepared indices. Substantial; candidate for the second stacked PR.
 2. `save_checkpoint` writing the container (`load_checkpoint` reads both,
    by zip magic): needs the container to carry every config and the `.pt`
    extras (belief binding, `bc`), which `require_supported`/`_METADATA_KEYS`
-   do not yet.
-3. #495 is merged here (9a728aca2, steer a4ef98a9: "Merge main and consume
-   them from there"). Next: register `"torch": "torch"` in
-   `backends/parity.py` and run parity on a w160l8 capture.
+   do not yet. Follows item 1.
+3. Register `"torch": "torch"` in `backends/parity.py` `BACKENDS` (today
+   `{"mlx": "mlx"}`) and run parity on a w160l8 capture. Unblocked.
 4. Done (Etude 15d399dab9ae, see Checks). Re-run CPU and the L4 launch
    (`scratch/equivalence/mtg325_cuda_equivalence.py`, regenerate
    `base.patch`) after item 1 changes the forward.
-5. Done (b62cd6c8e): main merged, `live_tokens.py` in `backends/torch/`
-   (unreleased, no alias), `Execution.live_tokens` unchanged; prepared
-   observations carry `live_token_count` beside admitted buckets.
-6. Rebase/merge onto #474 when it moves (unchanged at 05c1203e9 on
-   2026-11-12); delete `scratch/` before landing.
+5. Done (b62cd6c8e).
+6. Done: #474 at 9b2aeae33 merged (e56150ece). Merge again if #474 moves;
+   delete `scratch/` before landing.
 
 ## Concept review items (2026-11-12): built
 
@@ -204,8 +196,9 @@ backend first, client second). Next passes:
    `manabot.backends.torch`; `minimal.py` reads `rl.`/`learner.` from the
    torch backend; docs/training-loop.md and backends/README.md
    "Algorithms are written once" updated.
-8. Delete MLX's copied loss in `manabot/backends/mlx/learner.py` for the
-   shared update (needs #495's mlx backend here); show agreement with the
+8. Delete MLX's copied loss (`damped_loss`, `MLXLearner._loss` in
+   `manabot/backends/mlx/learner.py`) for the shared update; the mlx backend
+   is on this branch now. MLX is not installed on this laptop. Show agreement with the
    MTG-321 parity capture on the rented M2 (`~/.manabot-mps-bench/access.md`,
    ours until 23:39 UTC 2026-11-12; after that skip and say so).
 9. Done on CPU (pre-registered: byte-identical). `scratch/equivalence/updates.py`
@@ -224,11 +217,12 @@ backend first, client second). Next passes:
    `TYPE_CHECKING` blocks and reuses `_FRAMEWORKS`. Boundaries, learning
    pieces, minimal loop, credit assignment: 66 passed; `updates.py` JSON
    still `cmp`-identical to after.json.
-10. Tests: `test_learning_pieces`, `test_minimal_loop` on torch; one
+10. Torch half done (`test_learning_pieces`, `test_minimal_loop` pass).
+    Remaining: one
     parametrized test running the update on every installed backend on the
     same captured batch within MTG-321 tolerances (skip absent backends).
-11. Docs: `docs/training-loop.md` shows the backend argument and the one-line
-    swap; `backends/README.md` gains "algorithms are written once".
+11. Done in a522c22ba: `docs/training-loop.md` shows the backend argument
+    and the one-line swap; `backends/README.md` "Algorithms are written once".
 
 ## Main merge (9a728aca2, 2026-11-12)
 
