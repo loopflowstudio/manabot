@@ -2,9 +2,37 @@ from __future__ import annotations
 
 from enum import IntEnum
 import os
-from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
+from typing import Any, Dict, List, Literal, NotRequired, Optional, Tuple, TypedDict
 
 import numpy as np
+
+class ObservationValueLayout(TypedDict):
+    kind: Literal["id", "reference", "category", "flag", "count", "number", "rank", "tagged"]
+    encoding: str
+    range: str
+
+class ObservationColumnLayout(ObservationValueLayout):
+    index: int
+
+class ObservationArrayLayout(TypedDict):
+    axes: list[str]
+    shape: list[int | None]
+    dtype: Literal["float32", "int32"]
+    columns: dict[str, ObservationColumnLayout]
+    row_kinds: dict[int, str]
+    element: NotRequired[ObservationValueLayout]
+
+def observation_layout(
+    policy_input_version: int, *, policy_history_version: int = 0
+) -> dict[str, ObservationArrayLayout]:
+    """Native column names, encodings and fixed extents; None extents are caller capacities.
+
+    Requires input 1–9 and history 0–1; unsupported versions raise ValueError.
+    No game or policy buffers are allocated. Seats are viewer-relative.
+    """
+
+def recommended_policy_input_version() -> int:
+    """Input v9 for new consumers. Does not change implicit defaults or saved versions."""
 
 class PoolDefinition(TypedDict):
     card_def_id: int

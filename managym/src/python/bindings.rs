@@ -4672,6 +4672,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(policy_action_count, m)?)?;
+    crate::python::layout_bindings::register(m)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;
     m.add_class::<crate::agent::continuation::VisibleReference>()?;

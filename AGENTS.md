@@ -118,6 +118,10 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Named observation columns live in `managym/src/agent/observation_layout.rs`.
+  Its declarations supply native encoder indices/widths and Python discovery;
+  use those names in the observability guard. Keep numeric ABI assertions and
+  Python/native parity checks so a metadata edit cannot silently move a column.
 - Native scalar/vector observation buffers bind continuation input semantics by
   relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
   remains column 31. Waiting delayed triggers are v5 relation frames (kind

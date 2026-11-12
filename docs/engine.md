@@ -124,6 +124,14 @@ pub fn for_player(game: &Game, viewer: PlayerId) -> Self {
   mechanic that reaches one reaches all three in the same change
   ([observations and the policy network](observation-and-model.md)).
 
+For NumPy consumers, [reading arrays by name](observation-and-model.md#reading-arrays-by-name)
+shows how to look up columns, value kinds and encodings through
+`managym.observation_layout`. Start new consumers with the explicit
+`managym.recommended_policy_input_version()`; saved inputs keep their version,
+and the existing implicit default remains v6. See
+[choosing an input version](observation-and-model.md#choosing-an-input-version)
+for capacity limits and recovery from an unrepresentable observation.
+
 ### Executing an action
 
 Whatever chose the action, the engine checks it again before anything changes.

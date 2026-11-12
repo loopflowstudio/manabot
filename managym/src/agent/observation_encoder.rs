@@ -1,3 +1,7 @@
+use super::observation_layout::{
+    action, card, decklist, event, fact, known_hand, name, permanent, player,
+};
+
 use std::{
     collections::{BTreeMap, HashMap},
     fmt,
@@ -14,54 +18,54 @@ use crate::{
 
 /// Player and card widths before policy input v5, which appends cast
 /// permissions, the hand-only lock and restricted mana by spending subtype.
-pub const LEGACY_PLAYER_DIM: usize = 40;
+pub const LEGACY_PLAYER_DIM: usize = player::RESTRICTED_LESSON_WHITE;
 /// v5 player columns: restricted mana each spending subtype may use
 /// (`SPEND_SUBTYPES` × W/U/B/R/G/C), then the hand-only casting lock, the
 /// hand-size freedom, the turn number, the seat (0 is on the play), kept
 /// red mana, then turn history: attacked, permanents sacrificed, a land
 /// entered and cards drawn this turn.
-pub const PLAYER_RESTRICTED_INDEX: usize = LEGACY_PLAYER_DIM;
-pub const PLAYER_HAND_ONLY_INDEX: usize = PLAYER_RESTRICTED_INDEX + 3 * 6;
-pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = PLAYER_HAND_ONLY_INDEX + 1;
-pub const PLAYER_TURN_INDEX: usize = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1;
-pub const PLAYER_SEAT_INDEX: usize = PLAYER_TURN_INDEX + 1;
-pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = PLAYER_SEAT_INDEX + 1;
-pub const PLAYER_ATTACKED_INDEX: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
-pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
-pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
-pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
+pub const PLAYER_RESTRICTED_INDEX: usize = player::RESTRICTED_LESSON_WHITE;
+pub const PLAYER_HAND_ONLY_INDEX: usize = player::HAND_ONLY;
+pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = player::NO_MAXIMUM_HAND_SIZE;
+pub const PLAYER_TURN_INDEX: usize = player::TURN;
+pub const PLAYER_SEAT_INDEX: usize = player::SEAT;
+pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = player::KEEPS_RED_MANA;
+pub const PLAYER_ATTACKED_INDEX: usize = player::ATTACKED;
+pub const PLAYER_SACRIFICED_INDEX: usize = player::PERMANENTS_SACRIFICED;
+pub const PLAYER_LAND_ENTERED_INDEX: usize = player::LAND_ENTERED;
+pub const PLAYER_CARDS_DRAWN_INDEX: usize = player::CARDS_DRAWN;
 /// Bending done this turn: water, earth, fire, air.
-pub const PLAYER_BENT_INDEX: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
-pub const PLAYER_EXTRA_TURNS_INDEX: usize = PLAYER_BENT_INDEX + 4;
-pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = PLAYER_EXTRA_TURNS_INDEX + 1;
-pub const PLAYER_DIM: usize = PLAYER_ADDITIONAL_COMBATS_INDEX + 1;
-pub const LEGACY_CARD_DIM: usize = 41;
+pub const PLAYER_BENT_INDEX: usize = player::BENT_WATER;
+pub const PLAYER_EXTRA_TURNS_INDEX: usize = player::EXTRA_TURNS;
+pub const PLAYER_ADDITIONAL_COMBATS_INDEX: usize = player::ADDITIONAL_COMBATS;
+pub const PLAYER_DIM: usize = player::WIDTH;
+pub const LEGACY_CARD_DIM: usize = card::PERMISSION + 1;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
 /// new last column: 13 cast-permission terms, then announced X. A face-down
 /// card is foretold, so its permission's foretold term marks it.
-pub const CARD_PERMISSION_INDEX: usize = LEGACY_CARD_DIM - 1;
-pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 13;
-pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
-pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const LEGACY_PERMANENT_DIM: usize = 29;
+pub const CARD_PERMISSION_INDEX: usize = card::PERMISSION;
+pub const CARD_X_INDEX: usize = card::HAS_X;
+pub const CARD_DIM: usize = card::WIDTH;
+pub const PERMANENT_DEFINITION_INDEX: usize = permanent::DEFINITION;
+pub const LEGACY_PERMANENT_DIM: usize = permanent::EXHAUSTED_ABILITIES + 1;
 // V5 permanent terms start where v4's validity flag was; validity stays last.
 // Open-ended vocabularies (counter kinds, subtypes, set characteristics, used
 // abilities, continuous-effect records) are fact rows, not columns.
-pub const PERMANENT_EXHAUSTED_INDEX: usize = LEGACY_PERMANENT_DIM - 1;
-pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = PERMANENT_EXHAUSTED_INDEX + 1;
-pub const PERMANENT_FIREBENDING_INDEX: usize = PERMANENT_ONCE_EACH_TURN_INDEX + 1;
+pub const PERMANENT_EXHAUSTED_INDEX: usize = permanent::EXHAUSTED_ABILITIES;
+pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = permanent::ONCE_EACH_TURN_USED;
+pub const PERMANENT_FIREBENDING_INDEX: usize = permanent::GRANTED_FIREBENDING;
 /// Object index + 1 of the permanent this Aura or Equipment is attached to;
 /// zero when unattached. A join like action focus, never a numeric feature.
-pub const PERMANENT_ATTACHED_INDEX: usize = PERMANENT_FIREBENDING_INDEX + 1;
-pub const PERMANENT_GRANTED_LAND_INDEX: usize = PERMANENT_ATTACHED_INDEX + 1;
+pub const PERMANENT_ATTACHED_INDEX: usize = permanent::ATTACHED_TO;
+pub const PERMANENT_GRANTED_LAND_INDEX: usize = permanent::GRANTED_LAND;
 /// Object index + 1 of the attacker this creature blocks; a join.
-pub const PERMANENT_BLOCKING_INDEX: usize = PERMANENT_GRANTED_LAND_INDEX + 1;
-pub const PERMANENT_ABILITIES_LOST_INDEX: usize = PERMANENT_BLOCKING_INDEX + 1;
+pub const PERMANENT_BLOCKING_INDEX: usize = permanent::BLOCKING;
+pub const PERMANENT_ABILITIES_LOST_INDEX: usize = permanent::ABILITIES_LOST;
 /// Its timestamp's rank among this observation's timestamps (`FACT_ORDER_INDEX`).
-pub const PERMANENT_TIMESTAMP_INDEX: usize = PERMANENT_ABILITIES_LOST_INDEX + 1;
+pub const PERMANENT_TIMESTAMP_INDEX: usize = permanent::TIMESTAMP;
 /// It was dealt damage this turn, whether or not that damage is still marked.
-pub const PERMANENT_DEALT_DAMAGE_INDEX: usize = PERMANENT_TIMESTAMP_INDEX + 1;
-pub const PERMANENT_DIM: usize = PERMANENT_DEALT_DAMAGE_INDEX + 2;
+pub const PERMANENT_DEALT_DAMAGE_INDEX: usize = permanent::DEALT_DAMAGE_THIS_TURN;
+pub const PERMANENT_DIM: usize = permanent::WIDTH;
 
 /// v5 fact rows: one open-vocabulary fact about a player or permanent, joined
 /// to it like relation references. Vocabulary ids are the learning tokens'
@@ -69,24 +73,24 @@ pub const PERMANENT_DIM: usize = PERMANENT_DEALT_DAMAGE_INDEX + 2;
 /// into 16-bit halves so f32 keeps them exact.
 pub const V5_FACT_ROWS: usize = 128;
 /// Object index + 1 of the player or permanent the fact is about.
-pub const FACT_OBJECT_INDEX: usize = 0;
+pub const FACT_OBJECT_INDEX: usize = fact::OBJECT;
 /// `FactKind` value.
-pub const FACT_KIND_INDEX: usize = 1;
+pub const FACT_KIND_INDEX: usize = fact::KIND;
 /// Vocabulary id (high, low halves): the counter kind, subtype, name,
 /// creature type, ability index or `Modification` variant.
-pub const FACT_ID_INDEX: usize = 2;
+pub const FACT_ID_INDEX: usize = fact::ID_HIGH;
 /// Effect detail id (high, low): a keyword, subtype or color it names.
-pub const FACT_DETAIL_INDEX: usize = 4;
+pub const FACT_DETAIL_INDEX: usize = fact::DETAIL_HIGH;
 /// Amounts / 10: a count, power or firebending N, then toughness.
-pub const FACT_VALUE_INDEX: usize = 6;
+pub const FACT_VALUE_INDEX: usize = fact::VALUE;
 /// Effect duration: 1 until end of turn, 2 indefinite.
-pub const FACT_DURATION_INDEX: usize = 8;
+pub const FACT_DURATION_INDEX: usize = fact::DURATION;
 /// Effect timestamp rank among this observation's timestamps (1-based).
-pub const FACT_ORDER_INDEX: usize = 9;
+pub const FACT_ORDER_INDEX: usize = fact::TIMESTAMP;
 /// Effect source definition + 1.
-pub const FACT_SOURCE_INDEX: usize = 10;
-pub const FACT_VALID_INDEX: usize = 11;
-pub const FACT_DIM: usize = 12;
+pub const FACT_SOURCE_INDEX: usize = fact::SOURCE_DEFINITION;
+pub const FACT_VALID_INDEX: usize = fact::VALID;
+pub const FACT_DIM: usize = fact::WIDTH;
 
 /// What a fact row states. Kinds 1–10 are frozen v5; 11–14 require input v8.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -140,17 +144,17 @@ impl FactKind {
     ];
 }
 
-pub const ACTION_TYPE_DIM: usize = 17;
+pub const ACTION_TYPE_DIM: usize = action::DECLARED;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
-pub const ACTION_DECLARED_INDEX: usize = ACTION_TYPE_DIM;
-pub const ACTION_MODE_INDEX: usize = ACTION_DECLARED_INDEX + 1;
-pub const ACTION_ABILITY_INDEX: usize = ACTION_MODE_INDEX + 1;
-pub const ACTION_CONTINUATION_INDEX: usize = ACTION_ABILITY_INDEX + 1;
-pub const ACTION_DIM: usize = ACTION_TYPE_DIM + 5;
+pub const ACTION_DECLARED_INDEX: usize = action::DECLARED;
+pub const ACTION_MODE_INDEX: usize = action::MODE;
+pub const ACTION_ABILITY_INDEX: usize = action::ABILITY;
+pub const ACTION_CONTINUATION_INDEX: usize = action::CONTINUATION;
+pub const ACTION_DIM: usize = action::WIDTH;
 /// Selectors encode index+1, reserving zero for absence. Keep f32 integers exact.
 pub const MAX_ACTION_SELECTOR: usize = (1 << 24) - 1;
-pub const EVENT_DIM: usize = 7;
+pub const EVENT_DIM: usize = event::WIDTH;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
@@ -191,11 +195,11 @@ pub fn policy_action_count(
     Ok(count.min(capacity))
 }
 /// v9 name candidate columns per action row.
-pub const NAME_DIM_V9: usize = 4;
+pub const NAME_DIM_V9: usize = name::WIDTH;
 
 /// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
 /// remaining-sideboard counts (`PlayerData` decklist maps).
-pub const DECKLIST_DIM: usize = 5;
+pub const DECKLIST_DIM: usize = decklist::WIDTH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
@@ -474,12 +478,14 @@ impl fmt::Display for ObservationEncodeError {
         match self {
             Self::UnsupportedEffectExecutionInput(version) => write!(
                 f,
-                "policy input v{version} cannot represent effect execution; select v8 or later"
+                "policy input v{version} cannot represent effect execution; select v8 or later (recommended for new consumers: v{})",
+                super::observation_layout::RECOMMENDED_POLICY_INPUT_VERSION
             ),
             Self::InvalidName(reason) => write!(f, "invalid name candidate: {reason}"),
             Self::UnsupportedLayerInput(version) => write!(
                 f,
-                "policy input v{version} cannot represent layer payload; select v8"
+                "policy input v{version} cannot represent layer payload; select v8 or later (recommended for new consumers: v{})",
+                super::observation_layout::RECOMMENDED_POLICY_INPUT_VERSION
             ),
             Self::InvalidShared(reason) => write!(f, "invalid shared effects: {reason}"),
             Self::Capacity {
@@ -818,8 +824,8 @@ pub fn encode_into(
         }
         for (slot, (definition, count)) in player.known_hand.iter().enumerate() {
             let offset = (seat * config.max_cards_per_player + slot) * 2;
-            out.known_hand[offset] = (definition + 1) as f32;
-            out.known_hand[offset + 1] = *count as f32;
+            out.known_hand[offset + known_hand::DEFINITION] = (definition + 1) as f32;
+            out.known_hand[offset + known_hand::COUNT] = *count as f32;
         }
     }
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
@@ -898,8 +904,8 @@ pub fn encode_into(
         let index = obs.agent_cards.len() + offset;
         let width = config.card_dim();
         let row = &mut out.agent_cards[index * width..(index + 1) * width];
-        row[7] = 1.0;
-        row[37] = 1.0; // outside inventory; all seven zone bits remain zero
+        row[card::IS_MINE] = 1.0;
+        row[card::OUTSIDE] = 1.0; // outside inventory; all seven zone bits remain zero
         row[width - 1] = 1.0;
         out.agent_cards_valid[index] = 1.0;
         object_to_index.insert(card.candidate_id, 2 + index as i32);
@@ -1024,10 +1030,10 @@ fn decklist_rows(player: &PlayerData) -> Vec<[f32; DECKLIST_DIM]> {
         for (definition, count) in counts.iter().flatten() {
             let row = rows.entry(*definition).or_insert_with(|| {
                 let mut row = [0.0; DECKLIST_DIM];
-                row[0] = (definition + 1) as f32;
+                row[decklist::DEFINITION] = (definition + 1) as f32;
                 row
             });
-            row[column + 1] = *count as f32;
+            row[column + decklist::MAIN] = *count as f32;
         }
     }
     rows.into_values().collect()
@@ -1055,28 +1061,28 @@ fn encode_player_features(
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
-    out[0] = player.life as f32 / 20.0;
-    out[1] = bool_to_f32(player.is_active);
+    out[player::LIFE] = player.life as f32 / 20.0;
+    out[player::IS_ACTIVE] = bool_to_f32(player.is_active);
 
     for i in 0..ZONE_DIM {
-        out[2 + i] = player.zone_counts[i] as f32 / 60.0;
+        out[player::LIBRARY_COUNT + i] = player.zone_counts[i] as f32 / 60.0;
     }
 
     let phase_index = phase_index(turn.phase);
     if phase_index < PHASE_DIM {
-        out[9 + phase_index] = 1.0;
+        out[player::PHASE_BEGINNING + phase_index] = 1.0;
     }
 
     let step_index = step_index(turn.step);
     if step_index < STEP_DIM {
-        out[14 + step_index] = 1.0;
+        out[player::STEP_UNTAP + step_index] = 1.0;
     }
 
-    out[26] = player.graveyard_lessons as f32 / 10.0;
-    out[27] = player.combat_mana as f32 / 10.0;
+    out[player::GRAVEYARD_LESSONS] = player.graveyard_lessons as f32 / 10.0;
+    out[player::COMBAT_MANA] = player.combat_mana as f32 / 10.0;
     for slot in 0..6 {
-        out[28 + slot] = player.mana[slot] as f32 / 10.0;
-        out[34 + slot] = player.lesson_mana[slot] as f32 / 10.0;
+        out[player::MANA_WHITE + slot] = player.mana[slot] as f32 / 10.0;
+        out[player::LESSON_MANA_WHITE + slot] = player.lesson_mana[slot] as f32 / 10.0;
     }
     if out.len() == PLAYER_DIM {
         // Restricted mana each spending subtype may use, by color. A class
@@ -1154,66 +1160,66 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
     if zone_index < ZONE_DIM {
         out[zone_index] = 1.0;
     }
-    out[7] = is_mine;
-    out[8] = card.power as f32 / 10.0;
-    out[9] = card.toughness as f32 / 10.0;
-    out[10] = card.mana_cost.mana_value as f32 / 10.0;
-    out[11] = bool_to_f32(card.card_types.is_land);
-    out[12] = bool_to_f32(card.card_types.is_creature);
-    out[13] = bool_to_f32(card.card_types.is_artifact);
-    out[14] = bool_to_f32(card.card_types.is_enchantment);
-    out[15] = bool_to_f32(card.card_types.is_planeswalker);
-    out[16] = bool_to_f32(card.card_types.is_battle);
-    out[17] = bool_to_f32(card.keywords.flying);
-    out[18] = bool_to_f32(card.keywords.reach);
-    out[19] = bool_to_f32(card.keywords.haste);
-    out[20] = bool_to_f32(card.keywords.vigilance);
-    out[21] = bool_to_f32(card.keywords.trample);
-    out[22] = bool_to_f32(card.keywords.first_strike);
-    out[23] = bool_to_f32(card.keywords.double_strike);
-    out[24] = bool_to_f32(card.keywords.deathtouch);
-    out[25] = bool_to_f32(card.keywords.lifelink);
-    out[26] = bool_to_f32(card.keywords.defender);
-    out[27] = bool_to_f32(card.keywords.menace);
-    out[28] = bool_to_f32(card.keywords.flash);
-    out[29] = bool_to_f32(card.is_token);
-    out[30] = bool_to_f32(card.is_ally);
-    out[31] = bool_to_f32(card.is_lesson);
-    out[32] = bool_to_f32(card.ward_cost > 0);
-    out[33] = card.ward_cost as f32 / 10.0;
-    out[34] = bool_to_f32(card.kicker_cost > 0);
-    out[35] = card.kicker_cost as f32 / 10.0;
-    out[36] = bool_to_f32(card.keywords.hexproof);
-    out[38] = bool_to_f32(card.keywords.indestructible);
-    out[39] = bool_to_f32(card.is_legendary);
+    out[card::IS_MINE] = is_mine;
+    out[card::POWER] = card.power as f32 / 10.0;
+    out[card::TOUGHNESS] = card.toughness as f32 / 10.0;
+    out[card::MANA_VALUE] = card.mana_cost.mana_value as f32 / 10.0;
+    out[card::IS_LAND] = bool_to_f32(card.card_types.is_land);
+    out[card::IS_CREATURE] = bool_to_f32(card.card_types.is_creature);
+    out[card::IS_ARTIFACT] = bool_to_f32(card.card_types.is_artifact);
+    out[card::IS_ENCHANTMENT] = bool_to_f32(card.card_types.is_enchantment);
+    out[card::IS_PLANESWALKER] = bool_to_f32(card.card_types.is_planeswalker);
+    out[card::IS_BATTLE] = bool_to_f32(card.card_types.is_battle);
+    out[card::FLYING] = bool_to_f32(card.keywords.flying);
+    out[card::REACH] = bool_to_f32(card.keywords.reach);
+    out[card::HASTE] = bool_to_f32(card.keywords.haste);
+    out[card::VIGILANCE] = bool_to_f32(card.keywords.vigilance);
+    out[card::TRAMPLE] = bool_to_f32(card.keywords.trample);
+    out[card::FIRST_STRIKE] = bool_to_f32(card.keywords.first_strike);
+    out[card::DOUBLE_STRIKE] = bool_to_f32(card.keywords.double_strike);
+    out[card::DEATHTOUCH] = bool_to_f32(card.keywords.deathtouch);
+    out[card::LIFELINK] = bool_to_f32(card.keywords.lifelink);
+    out[card::DEFENDER] = bool_to_f32(card.keywords.defender);
+    out[card::MENACE] = bool_to_f32(card.keywords.menace);
+    out[card::FLASH] = bool_to_f32(card.keywords.flash);
+    out[card::IS_TOKEN] = bool_to_f32(card.is_token);
+    out[card::IS_ALLY] = bool_to_f32(card.is_ally);
+    out[card::IS_LESSON] = bool_to_f32(card.is_lesson);
+    out[card::HAS_WARD] = bool_to_f32(card.ward_cost > 0);
+    out[card::WARD_COST] = card.ward_cost as f32 / 10.0;
+    out[card::HAS_KICKER] = bool_to_f32(card.kicker_cost > 0);
+    out[card::KICKER_COST] = card.kicker_cost as f32 / 10.0;
+    out[card::HEXPROOF] = bool_to_f32(card.keywords.hexproof);
+    out[card::INDESTRUCTIBLE] = bool_to_f32(card.keywords.indestructible);
+    out[card::IS_LEGENDARY] = bool_to_f32(card.is_legendary);
     if context.width == CARD_DIM {
         if let Some(permission) = &card.cast_permission {
-            let base = CARD_PERMISSION_INDEX;
-            out[base] = 1.0;
-            out[base + 1] = bool_to_f32(permission.player_id == context.viewer_id);
+            out[card::PERMISSION] = 1.0;
+            out[card::PERMISSION_IS_MINE] = bool_to_f32(permission.player_id == context.viewer_id);
             if let Some(cost) = &permission.cost {
-                out[base + 2] = 1.0;
-                out[base + 3] = cost.mana_value as f32 / 10.0;
+                out[card::PERMISSION_HAS_COST] = 1.0;
+                out[card::PERMISSION_MANA_VALUE] = cost.mana_value as f32 / 10.0;
             }
-            out[base + 4] = bool_to_f32(permission.this_turn);
-            out[base + 5] = bool_to_f32(permission.own_turn_only);
+            out[card::PERMISSION_THIS_TURN] = bool_to_f32(permission.this_turn);
+            out[card::PERMISSION_OWN_TURN_ONLY] = bool_to_f32(permission.own_turn_only);
             // Not yet usable: "cast it on a later turn" and this is that turn
             // or earlier.
-            out[base + 6] = bool_to_f32(
+            out[card::PERMISSION_NOT_YET] = bool_to_f32(
                 permission
                     .after_turn
                     .is_some_and(|turn| context.turn_number <= turn),
             );
-            out[base + 7] = bool_to_f32(permission.source_permanent_id.is_some());
-            out[base + 8] = bool_to_f32(permission.flash);
-            out[base + 9] = bool_to_f32(permission.any_mana);
-            out[base + 10] = bool_to_f32(permission.waterbend);
-            out[base + 11] = bool_to_f32(permission.foretold);
-            out[base + 12] = bool_to_f32(permission.through_next_turn);
+            out[card::PERMISSION_HAS_SOURCE] =
+                bool_to_f32(permission.source_permanent_id.is_some());
+            out[card::PERMISSION_FLASH] = bool_to_f32(permission.flash);
+            out[card::PERMISSION_ANY_MANA] = bool_to_f32(permission.any_mana);
+            out[card::PERMISSION_WATERBEND] = bool_to_f32(permission.waterbend);
+            out[card::PERMISSION_FORETOLD] = bool_to_f32(permission.foretold);
+            out[card::PERMISSION_THROUGH_NEXT_TURN] = bool_to_f32(permission.through_next_turn);
         }
         if let Some(x) = card.x {
             out[CARD_X_INDEX] = 1.0;
-            out[CARD_X_INDEX + 1] = x as f32 / 10.0;
+            out[card::X] = x as f32 / 10.0;
         }
     }
     out[context.width - 1] = 1.0; // validity flag
@@ -1247,35 +1253,36 @@ fn encode_permanents(
 }
 
 fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut [f32]) {
-    out[0] = is_mine;
-    out[1] = bool_to_f32(permanent.tapped);
-    out[2] = permanent.damage as f32 / 10.0;
-    out[3] = bool_to_f32(permanent.is_summoning_sick);
-    out[4] = permanent.plus1_counters as f32 / 10.0;
-    out[5] = bool_to_f32(permanent.cant_be_blocked_this_turn);
-    out[6] = permanent.power as f32 / 10.0;
-    out[7] = permanent.toughness as f32 / 10.0;
-    out[8] = bool_to_f32(permanent.is_animated);
-    out[9] = bool_to_f32(permanent.has_exile_link);
+    out[permanent::IS_MINE] = is_mine;
+    out[permanent::TAPPED] = bool_to_f32(permanent.tapped);
+    out[permanent::DAMAGE] = permanent.damage as f32 / 10.0;
+    out[permanent::SUMMONING_SICK] = bool_to_f32(permanent.is_summoning_sick);
+    out[permanent::PLUS_ONE_COUNTERS] = permanent.plus1_counters as f32 / 10.0;
+    out[permanent::CANT_BE_BLOCKED_THIS_TURN] = bool_to_f32(permanent.cant_be_blocked_this_turn);
+    out[permanent::POWER] = permanent.power as f32 / 10.0;
+    out[permanent::TOUGHNESS] = permanent.toughness as f32 / 10.0;
+    out[permanent::ANIMATED] = bool_to_f32(permanent.is_animated);
+    out[permanent::HAS_EXILE_LINK] = bool_to_f32(permanent.has_exile_link);
     // Effective keywords (printed + until-EOT grants) — agents see what the
     // permanent can do right now, not just what's printed on the card.
-    out[10] = bool_to_f32(permanent.keywords.flying);
-    out[11] = bool_to_f32(permanent.keywords.reach);
-    out[12] = bool_to_f32(permanent.keywords.haste);
-    out[13] = bool_to_f32(permanent.keywords.flash);
-    out[14] = bool_to_f32(permanent.keywords.vigilance);
-    out[15] = bool_to_f32(permanent.keywords.trample);
-    out[16] = bool_to_f32(permanent.keywords.first_strike);
-    out[17] = bool_to_f32(permanent.keywords.double_strike);
-    out[18] = bool_to_f32(permanent.keywords.deathtouch);
-    out[19] = bool_to_f32(permanent.keywords.lifelink);
-    out[20] = bool_to_f32(permanent.keywords.defender);
-    out[21] = bool_to_f32(permanent.keywords.menace);
-    out[22] = bool_to_f32(permanent.keywords.hexproof);
-    out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
-    out[25] = bool_to_f32(permanent.keywords.indestructible);
-    out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
-    out[27] = bool_to_f32(permanent.attacking);
+    out[permanent::FLYING] = bool_to_f32(permanent.keywords.flying);
+    out[permanent::REACH] = bool_to_f32(permanent.keywords.reach);
+    out[permanent::HASTE] = bool_to_f32(permanent.keywords.haste);
+    out[permanent::FLASH] = bool_to_f32(permanent.keywords.flash);
+    out[permanent::VIGILANCE] = bool_to_f32(permanent.keywords.vigilance);
+    out[permanent::TRAMPLE] = bool_to_f32(permanent.keywords.trample);
+    out[permanent::FIRST_STRIKE] = bool_to_f32(permanent.keywords.first_strike);
+    out[permanent::DOUBLE_STRIKE] = bool_to_f32(permanent.keywords.double_strike);
+    out[permanent::DEATHTOUCH] = bool_to_f32(permanent.keywords.deathtouch);
+    out[permanent::LIFELINK] = bool_to_f32(permanent.keywords.lifelink);
+    out[permanent::DEFENDER] = bool_to_f32(permanent.keywords.defender);
+    out[permanent::MENACE] = bool_to_f32(permanent.keywords.menace);
+    out[permanent::HEXPROOF] = bool_to_f32(permanent.keywords.hexproof);
+    out[permanent::EXILE_IF_DIES_THIS_TURN] = bool_to_f32(permanent.exile_if_dies_this_turn);
+    out[permanent::INDESTRUCTIBLE] = bool_to_f32(permanent.keywords.indestructible);
+    out[permanent::ADDED_AVATAR] =
+        bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
+    out[permanent::ATTACKING] = bool_to_f32(permanent.attacking);
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
     if out.len() == PERMANENT_DIM {
         // Ability-use limits and granted firebending.
@@ -1623,13 +1630,14 @@ fn encode_actions(
         match (action.name_index, action.name_group) {
             // A name is categorical; its position is never a numeric mode feature.
             (Some(index), _) if names > 0 => {
-                name_row[0] = (index + 1) as f32;
-                name_row[1] = action.name_definition.map_or(0.0, |id| (id + 1) as f32);
+                name_row[name::NAME] = (index + 1) as f32;
+                name_row[name::DEFINITION] =
+                    action.name_definition.map_or(0.0, |id| (id + 1) as f32);
             }
             // A group is its public member span.
             (_, Some([first, last])) if names == NAME_DIM_V9 => {
-                name_row[2] = (first + 1) as f32;
-                name_row[3] = (last + 1) as f32;
+                name_row[name::GROUP_FIRST] = (first + 1) as f32;
+                name_row[name::GROUP_LAST] = (last + 1) as f32;
             }
             _ => {
                 row[ACTION_MODE_INDEX] = action.mode_index.map_or(0.0, |index| (index + 1) as f32);
@@ -1639,7 +1647,7 @@ fn encode_actions(
         row[ACTION_CONTINUATION_INDEX] = action
             .continuation_index
             .map_or(0.0, |index| (index + 1) as f32);
-        row[ACTION_DIM - 1] = 1.0;
+        row[action::VALID] = 1.0;
         out_valid[action_index] = 1.0;
 
         let focus_start = action_index * config.max_focus_objects;
@@ -1661,13 +1669,13 @@ fn encode_events(events: &[EventData], max_events: usize, out: &mut [f32], out_v
     for (event_index, event) in learning_events.into_iter().skip(start_index).enumerate() {
         let row_start = event_index * EVENT_DIM;
         let row = &mut out[row_start..row_start + EVENT_DIM];
-        row[0] = event.event_type as f32;
-        row[1] = event.source_kind as f32;
-        row[2] = event.source_id as f32;
-        row[3] = event.target_kind as f32;
-        row[4] = event.target_id as f32;
-        row[5] = event.amount as f32;
-        row[6] = event.controller_id as f32;
+        row[event::KIND] = event.event_type as f32;
+        row[event::SOURCE_KIND] = event.source_kind as f32;
+        row[event::SOURCE_ID] = event.source_id as f32;
+        row[event::TARGET_KIND] = event.target_kind as f32;
+        row[event::TARGET_ID] = event.target_id as f32;
+        row[event::AMOUNT] = event.amount as f32;
+        row[event::CONTROLLER] = event.controller_id as f32;
         out_valid[event_index] = 1.0;
     }
 }
