@@ -53,7 +53,7 @@ def source_effect_root() -> managym.Env:
 def shared_effect_root(activations: int) -> managym.Env:
     """Resolve Drill activations through Commands in a bounded constructed root.
 
-    Six activations fit v5; seven reproduce the 140-fact capacity failure.
+    Seven activations are the pilot's 140-fragment shared-effect load.
     This is a new directed fixture, not a replay of the pilot's retained seed.
     """
     if not 1 <= activations <= 7:
@@ -109,7 +109,7 @@ def aged_grant_root(
     """Age one grant past the public history window using only real Commands.
 
     An end-of-turn root casts Yip Yip! on Gray Ogre. An indefinite root activates
-    Invasion Submersible, whose payload v7 can represent, and casts Lightning
+    Invasion Submersible and casts Lightning
     Bolt, which leaves the same hand because an activation records no history
     row. Eight Raging Goblins then add four rows each (stack arrival, cast,
     battlefield arrival, resolved) within the turn, so the end-of-turn record is

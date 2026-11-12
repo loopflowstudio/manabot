@@ -274,15 +274,11 @@ def test_attack_plans_keep_saved_closure_and_default_new_ones(
     [
         (
             "elemental-two-seat-181-v1",
-            "c797953518dd0349b473ea451b4d6d3dcaee4243a23b044e6fca68d27befe899",
+            "d7dd8111d943e9017ccc7a58021f1b0ac3ce911fd0f0992450903f18a17ec0de",
         ),
         (
             "elemental-long-183-v1",
-            "48f56059fa2ed072637e573a0a72a6260f5cab56225e877559206f6348c2d62d",
-        ),
-        (
-            "tla-trophy-213-v9",
-            "04d344024aa8428a125936a2d709588d5fdf9c26af1e2b653d38550b9f47048c",
+            "e55196d26df5a51087b211e9671eb4a47980fdb84ff129819e178326ad04b05e",
         ),
     ],
 )
@@ -296,12 +292,12 @@ def test_frozen_one_seat_recipes_keep_their_closure_and_digest() -> None:
     ladder = scale_ladder()
     assert _closure(ladder) == "exact-quota"
     assert canonical_sha256(ladder.model_dump(mode="json")) == (
-        "ea87e37fee96bf5f64854a4ed27819a359a854174526adb5d45d350294c6946c"
+        "022bb2c002aef264f305270ce1e9fcad0e3214a88f70dbc14ffb053aa4a62f26"
     )
     one = seat_comparison("one", 10)
     assert _closure(one) == "complete-games"
     assert canonical_sha256(one.model_dump(mode="json")) == (
-        "91be75cc279047c86590b5d8c8ca52d23f63f20a5d4930b89a1c9dca1f2108f8"
+        "b27f1c3b6a5c21857b20e268151d83dd3cac4cb8841305ef225ba8393cc17e82"
     )
 
 

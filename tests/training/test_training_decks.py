@@ -295,6 +295,9 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         "rules",
         "input_schema",
         "learning_schema_sha256",
+        "naming_representation",
+        "naming_branching",
+        "naming_vocabulary",
     }
     assert binding["world"] == managym.WORLD_VERSION
     assert inspect_checkpoint(target).compatible
