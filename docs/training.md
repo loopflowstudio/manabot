@@ -539,7 +539,7 @@ ladder again for the new width; a precision written explicitly
 
 | `precision` | What changes |
 | --- | --- |
-| `auto` (default) | Resolved when the regime is built: `bf16` on CUDA at `hidden_dim >= BF16_MIN_HIDDEN_DIM`, otherwise `float32`. Never serialized; the regime stores the resolved value. |
+| `auto` (default) | The ladder above; never serialized. |
 | `float32` | Nothing; the process's own TF32 switches are left as they were. |
 | `tf32` | For the stage, CUDA matmul and cuDNN may use TF32 tensor cores (`torch.backends.cuda.matmul.allow_tf32`, `torch.backends.cudnn.allow_tf32`). Every tensor stays float32. |
 | `bf16` | `torch.autocast(cuda, bfloat16)` around the policy forwards only: behavior sampling and stored values in collection, bootstrap targets and the loss forward in the learner. Forward outputs are cast back to float32, so behavior log-probabilities, targets, losses and their reductions are float32; weights and Adam state stay float32 and no gradient scaler is used. |
