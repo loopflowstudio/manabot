@@ -345,14 +345,26 @@ value encodings for every buffer come from `managym.observation_layout()`
 
 Relation validity is column 31. Only the acting viewer receives private
 continuation. Transport IDs are joins to the card catalog and object table,
-never numeric features. At `Decision::ManaChoice` the activation source is
-unavailable because rules state has discarded it.
+never numeric features. At `Decision::ManaChoice` the frame's source is the
+mana ability's source; a triggered mana ability's type choice (Heartbeat of
+Spring) names that ability's source, with the permanent tapped for mana as
+its context.
 
 Waiting delayed abilities (frame kind 10) carry event codes independently of
 frequency and expiry. Relation row kind 9 carries frequency in column 28 (1
 once, 2 each matching event); column 48 retains cleanup expiry. Remembered
 objects are kind-8 reference rows, separate from event context. Ordered control
 schedules and delegated decisions use kinds 13 and 14.
+
+Pooled mana whose spending has an effect (Animal Attendant's "that creature
+enters with an additional +1/+1 counter") counts in its player's ordinary
+mana columns and is stated as an effect program on that player: fact kind 11
+under the id `PooledMana`, one program per class, in the tokens the producing
+card's definition uses. The mana actually spent to cast a spell (CR 601.2h) is
+an execution occurrence of its stack or resolution frame (`mana spent`, a
+kind-14 continuation program) when a rule still reads it: the definition
+counts that mana (Toph, converge) or a spend effect applied. Both are public
+and identical in v9 and v10.
 
 Fact rows carry source, duration and timestamp rank. The model divides
 timestamp ranks by 128, independent of fact capacity.

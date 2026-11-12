@@ -28,7 +28,9 @@ use crate::{
     },
     state::{
         ability::Effect,
+        card::CardDefId,
         game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+        mana::ManaSpent,
     },
 };
 
@@ -426,7 +428,7 @@ impl<'a> Projection<'a> {
             } => {
                 self.paid_summary();
                 if !spent.is_empty() {
-                    self.field("mana spent", spent);
+                    self.receipt(spent);
                 }
                 self.field("return", &"paid announcement");
                 self.field("payer", player);
@@ -494,6 +496,27 @@ impl<'a> Projection<'a> {
                 }
             }
         }
+    }
+
+    /// The mana actually spent to cast (CR 601.2h) and the entry counters
+    /// its spend effects add.
+    fn receipt(&mut self, spent: &ManaSpent) {
+        self.field("mana spent", spent);
+        self.summary(|| {
+            let mana: String = ["W", "U", "B", "R", "G", "C"]
+                .into_iter()
+                .zip(spent.amounts)
+                .flat_map(|(symbol, amount)| {
+                    std::iter::repeat_n(format!("{{{symbol}}}"), usize::from(amount))
+                })
+                .collect();
+            match spent.entry_counters {
+                0 => format!("Mana spent to cast: {mana}."),
+                counters => format!(
+                    "Mana spent to cast: {mana}; it enters with {counters} additional +1/+1 counter(s)."
+                ),
+            }
+        });
     }
 
     fn paid_summary(&mut self) {
@@ -788,6 +811,47 @@ impl<'a> Projection<'a> {
     }
 }
 
+/// Whether a rule still reads `spent`, the mana spent to cast the spell that
+/// is, or became the source of, the object defined by `definition`: its
+/// definition counts that mana (Toph, converge), or a spend effect applied
+/// (Animal Attendant's counter). Other receipts are not projected.
+pub(crate) fn receipt_matters(spent: &ManaSpent, definition: Option<CardDefId>) -> bool {
+    static READS: std::sync::OnceLock<Vec<bool>> = std::sync::OnceLock::new();
+    if spent.is_empty() {
+        return false;
+    }
+    if spent.entry_counters > 0 {
+        return true;
+    }
+    let reads = READS.get_or_init(|| {
+        let mut reads = Vec::new();
+        for (id, definition) in default_content_pack().definition_entries() {
+            let index = id.0 as usize;
+            if reads.len() <= index {
+                reads.resize(index + 1, false);
+            }
+            let json = serde_json::to_string(definition).expect("serializable definition");
+            reads[index] = json.contains("ManaSpentToCast") || json.contains("ColorsSpentToCast");
+        }
+        reads
+    });
+    definition.is_some_and(|id| reads.get(id.0 as usize).copied().unwrap_or(false))
+}
+
+/// Project the cast receipt of a stack spell, or of the stack ability an
+/// entering permanent's own trigger became.
+pub(crate) fn project_receipt(
+    game: &Game,
+    spent: &ManaSpent,
+    viewer: PlayerId,
+    frame: &mut ContinuationFrame,
+    text: bool,
+) {
+    let mut out = Projection::new(game, viewer, text);
+    out.receipt(spent);
+    out.finish(frame);
+}
+
 /// Project a suspended effect frame's retained work. `text` additionally
 /// renders its description and summaries; the policy occurrence is identical
 /// either way.
@@ -832,6 +896,12 @@ pub(crate) fn project_frame(
     }
     if effect.excess_damage != 0 {
         out.field("excess damage", &effect.excess_damage);
+    }
+    let source_definition = effect
+        .source
+        .map(|card| game.state.cards[card].definition_id);
+    if receipt_matters(&effect.spent, source_definition) {
+        out.receipt(&effect.spent);
     }
     if let Some(player) = effect.triggering_player {
         out.field("triggering player", &player);

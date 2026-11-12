@@ -731,6 +731,16 @@ class _Renderer:
                     )
                     + "."
                 )
+            for pooled in player.spend_effect_mana:
+                lines.append(
+                    f"Mana that puts {pooled.effect}: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", pooled.mana, strict=True)
+                        if count
+                    )
+                    + "."
+                )
             if player.hand_only_until is not None:
                 lines.append(
                     "Can cast spells only from hand, overriding permissions to cast "

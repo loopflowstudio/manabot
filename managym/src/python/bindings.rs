@@ -33,7 +33,8 @@ use crate::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
             Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
-            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            SpendEffectManaData, StackObjectData, StackObjectKindData, StackTargetData,
+            StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         shared_effects,
@@ -1231,6 +1232,9 @@ pub struct PyPlayer {
     pub lesson_mana: [i32; 6],
     #[pyo3(get)]
     pub restricted_mana: Vec<PyRestrictedMana>,
+    /// Pooled mana whose spending has an effect, by class.
+    #[pyo3(get)]
+    pub spend_effect_mana: Vec<PySpendEffectMana>,
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
@@ -1442,6 +1446,42 @@ pub struct PyRestrictedMana {
     pub mana: [i32; 6],
 }
 
+/// Pooled mana of one class that carries a spend effect: its description,
+/// amounts by W/U/B/R/G/C and learning-token program.
+#[cfg(feature = "python")]
+#[pyclass(name = "SpendEffectMana")]
+#[derive(Clone)]
+pub struct PySpendEffectMana {
+    #[pyo3(get)]
+    pub effect: String,
+    #[pyo3(get)]
+    pub mana: [i32; 6],
+    #[pyo3(get)]
+    pub program: Vec<(u16, i32)>,
+}
+
+#[cfg(feature = "python")]
+impl From<SpendEffectManaData> for PySpendEffectMana {
+    fn from(value: SpendEffectManaData) -> Self {
+        Self {
+            effect: value.effect,
+            mana: value.mana,
+            program: value.program,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PySpendEffectMana> for SpendEffectManaData {
+    fn from(value: PySpendEffectMana) -> Self {
+        Self {
+            effect: value.effect,
+            mana: value.mana,
+            program: value.program,
+        }
+    }
+}
+
 #[cfg(feature = "python")]
 impl From<RestrictedManaData> for PyRestrictedMana {
     fn from(value: RestrictedManaData) -> Self {
@@ -1492,6 +1532,11 @@ impl From<PlayerData> for PyPlayer {
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            spend_effect_mana: value
+                .spend_effect_mana
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -1529,6 +1574,11 @@ impl From<PyPlayer> for PlayerData {
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            spend_effect_mana: value
+                .spend_effect_mana
+                .into_iter()
+                .map(Into::into)
+                .collect(),
             hand_only_until: value.hand_only_until,
             effects: value.effects.into_iter().map(Into::into).collect(),
         }
@@ -4737,6 +4787,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCard>()?;
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
+    m.add_class::<PySpendEffectMana>()?;
     m.add_class::<PyPlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;

@@ -15,7 +15,7 @@ use crate::{
         card::{CardDefId, CardType, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::{ManaCost, ManaRestriction, SpendPredicate},
+        mana::{Mana, ManaCost, ManaRestriction, SpendPredicate},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
@@ -57,6 +57,11 @@ pub struct PlayerData {
     /// Restricted mana by restriction class, in class order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub restricted_mana: Vec<RestrictedManaData>,
+    /// Pooled mana whose spending has an effect (Animal Attendant), by
+    /// class, in class order. Its amounts are also counted in `mana` when
+    /// unrestricted and in `restricted_mana` when restricted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spend_effect_mana: Vec<SpendEffectManaData>,
     /// While set, this player can cast spells only from their hand until the
     /// named player's next turn begins (Avatar's Wrath). It overrides every
     /// card's `cast_permission`.
@@ -121,6 +126,18 @@ pub struct RestrictedManaData {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub except_nonartifact_spells: bool,
     pub mana: [i32; 6],
+}
+
+/// Pooled mana of one class that carries a spend effect. `program` is the
+/// class and its amounts (W/U/B/R/G/C) in the learning-token vocabulary, the
+/// same serialization the producing card's definition uses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpendEffectManaData {
+    /// "a +1/+1 counter on a non-Human creature spell it casts".
+    pub effect: String,
+    pub mana: [i32; 6],
+    pub program: Vec<(u16, i32)>,
 }
 
 impl RestrictedManaData {
@@ -1169,7 +1186,7 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: pool.mana.map(i32::from),
+            mana: pool.unrestricted_colors().map(i32::from),
             lesson_mana: pool.restricted_colors().map(i32::from),
             restricted_mana: pool
                 .classes()
@@ -1177,6 +1194,22 @@ impl Observation {
                 .filter_map(|(class, amounts)| {
                     let restriction = class.restriction.as_ref()?;
                     Some(RestrictedManaData::new(restriction, *amounts))
+                })
+                .collect(),
+            spend_effect_mana: pool
+                .classes()
+                .iter()
+                .filter_map(|(class, amounts)| {
+                    let effect = class.effect.as_ref()?;
+                    Some(SpendEffectManaData {
+                        effect: effect.describe(),
+                        mana: amounts.map(i32::from),
+                        program: crate::cards::tokens::rules_tokens(
+                            &Mana::of_class(class.clone(), *amounts),
+                            default_content_pack(),
+                        )
+                        .expect("registered rules payload"),
+                    })
                 })
                 .collect(),
             hand_only_until: game

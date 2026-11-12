@@ -17,7 +17,7 @@ use crate::{
     state::{
         ability::{DelayedExpiry, DelayedFrequency, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaSpent},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -196,6 +196,18 @@ impl ContinuationFrame {
             .collect();
         self.lesson = !cost.purpose.is_resolving();
     }
+}
+
+/// The cast receipt a stack object carries when a rule still reads it
+/// (`effect_execution::receipt_matters`).
+fn stack_receipt(object: &StackObject) -> Option<ManaSpent> {
+    let spent = match object {
+        StackObject::Spell(spell) => spell.spent,
+        StackObject::TriggeredAbility(ability) => ability.spent,
+        StackObject::ActivatedAbility(_) => return None,
+    };
+    super::effect_execution::receipt_matters(&spent, Some(object.source_definition_id()))
+        .then_some(spent)
 }
 
 impl Game {
@@ -640,6 +652,9 @@ impl Game {
         // Stack definitions remain public after the original source departs.
         frame.source.definition = Some(object.source_definition_id().0);
         frame.targets = self.clause_targets(object.targets(), clauses, viewer);
+        if let Some(spent) = stack_receipt(object) {
+            super::effect_execution::project_receipt(self, &spent, viewer, &mut frame, false);
+        }
         frame
     }
 
@@ -839,6 +854,13 @@ impl Game {
         viewer: PlayerId,
         frames: &mut [ContinuationFrame],
     ) {
+        // Stack frames lead, top to bottom; their receipts are public.
+        for (frame, object) in frames.iter_mut().zip(self.state.stack_objects.iter().rev()) {
+            debug_assert!(matches!(frame.kind, 1..=3));
+            if let Some(spent) = stack_receipt(object) {
+                super::effect_execution::project_receipt(self, &spent, viewer, frame, true);
+            }
+        }
         if self.current_action_space.as_ref().and_then(|s| s.player) != Some(viewer)
             || self.is_game_over()
         {
@@ -930,7 +952,7 @@ impl Game {
                     .enumerate()
                     .map(|(mode, output)| ManaOutput {
                         mode,
-                        mana: output.mana,
+                        mana: output.unrestricted_colors(),
                         lesson: output.restricted_colors(),
                     })
                     .collect();

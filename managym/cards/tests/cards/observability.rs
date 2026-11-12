@@ -33,8 +33,8 @@ use managym::{
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
             ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, StackObjectData, StackTargetData, TurnData,
-            KEYWORD_COUNT,
+            RestrictedManaData, SideboardCardData, SpendEffectManaData, StackObjectData,
+            StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
             encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM, FACT_DIM,
@@ -2860,6 +2860,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         mana => [Columns(Player, player::MANA_WHITE, 6)],
         lesson_mana => [Columns(Player, player::LESSON_MANA_WHITE, 6)],
         restricted_mana => [Rows("restricted mana below")],
+        spend_effect_mana => [Rows("spend-effect mana below")],
         hand_only_until => [column(Player, player::HAND_ONLY)],
         known_hand => [Rows("known_hand")],
         main_counts => [Rows("decklists")],
@@ -2918,6 +2919,14 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         waterbend => [column(Card, card::PERMISSION_WATERBEND)],
         foretold => [column(Card, card::PERMISSION_FORETOLD)],
         through_next_turn => [column(Card, card::PERMISSION_THROUGH_NEXT_TURN)],
+    }));
+    fields.extend(encoding!(SpendEffectManaData {
+        effect => [FactOccurrence(FactKind::EffectProgram)],
+        mana => [
+            FactOccurrence(FactKind::EffectProgram),
+            Columns(Player, player::MANA_WHITE, 6),
+        ],
+        program => [FactOccurrence(FactKind::EffectProgram)],
     }));
     fields.extend(encoding!(RestrictedManaData {
         spells => [Columns(Player, player::RESTRICTED_LESSON_WHITE, 18)],
@@ -4314,6 +4323,122 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     let mut expected = [0.0; 18];
     expected[12 + 4] = 0.1; // Ally, green
     assert_eq!(by_subtype, expected);
+}
+
+/// Animal Attendant's mana counts as ordinary green and states its spend
+/// effect as a program on its player, in catalog tokens, for both viewers.
+#[test]
+fn spend_effect_mana_is_a_program_on_its_player() {
+    let mut s = five_color_setup(&["Animal Attendant"]);
+    let attendant = s.force_permanent_on_battlefield(0, "Animal Attendant");
+    clear_summoning_sickness(&mut s, attendant);
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, attendant, 0);
+    choose_mode(&mut s, 4);
+
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let owner = if viewer == 0 {
+            &observation.agent
+        } else {
+            &observation.opponent
+        };
+        assert_eq!(owner.mana, [0, 0, 0, 0, 1, 0]);
+        assert_eq!(owner.lesson_mana, [0; 6]);
+        let classes = &owner.spend_effect_mana;
+        assert_eq!(classes.len(), 1);
+        assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
+        assert!(classes[0].effect.contains("non-Human creature spell"));
+        assert_eq!(
+            managym::agent::observation_encoder::unrepresentable_state(&observation),
+            None
+        );
+
+        let encoded = encoded_default(&observation);
+        let pooled = id_columns(name_value(managym::agent::observation_encoder::POOLED_MANA));
+        let rows: Vec<&[f32]> = encoded
+            .facts
+            .chunks(FACT_DIM)
+            .filter(|row| {
+                row[fact::KIND] == FactKind::EffectProgram as u8 as f32
+                    && row[fact::ID_HIGH..fact::ID_HIGH + 2] == pooled
+            })
+            .collect();
+        assert_eq!(rows.len(), classes[0].program.len());
+        let owner_row = if viewer == 0 { 1.0 } else { 2.0 };
+        for (ordinal, (row, &(kind, value))) in rows.iter().zip(&classes[0].program).enumerate() {
+            assert_eq!(row[fact::OBJECT], owner_row);
+            assert_eq!(row[fact::VALUE], f32::from(kind));
+            assert_eq!(row[fact::VALUE + 1], ordinal as f32);
+            assert_eq!(
+                row[fact::DETAIL_HIGH..fact::DETAIL_HIGH + 2],
+                id_columns(value)
+            );
+        }
+        // Every program token is one the Attendant's own definition spells.
+        let definition = managym_cards::catalog()
+            .iter()
+            .find(|definition| definition.name == "Animal Attendant")
+            .unwrap();
+        let tokens = tokens_of(definition);
+        let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+        for &(kind, value) in &classes[0].program {
+            assert!(
+                literal.contains(&kind)
+                    || tokens.iter().any(|&(k, v)| k as u16 == kind && v == value),
+                "program token ({kind}, {value}) is outside the definition's vocabulary"
+            );
+        }
+    }
+}
+
+/// The mana spent to cast a spell that counts it (converge) is an execution
+/// occurrence of its stack frame for both viewers, in registered tokens; a
+/// spell no rule reads the receipt of has none.
+#[test]
+fn cast_receipt_reaches_the_stack_frame_only_when_a_rule_reads_it() {
+    let mut s = five_color_setup(&["Uncle's Musings", "Kyoshi Warrior Guard"]);
+    s.set_player_mana_pool(0, "WUGG");
+    cast(&mut s, "Uncle's Musings");
+    // The policy's token vocabulary: every definition's tokens and the
+    // registered runtime names.
+    let vocabulary: std::collections::HashSet<(u16, i32)> =
+        managym::agent::record_vocabulary::record_names()
+            .into_iter()
+            .filter_map(|name| name.token)
+            .chain(
+                managym_cards::catalog()
+                    .iter()
+                    .flat_map(tokens_of)
+                    .map(|(kind, value)| (kind as u16, value)),
+            )
+            .collect();
+    let literal = [TokenKind::Integer, TokenKind::Boolean, TokenKind::Null].map(|k| k as u16);
+    let marker = (TokenKind::Text as u16, name_value("mana spent"));
+    for viewer in [0, 1] {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        let frame = &observation.continuation[0];
+        assert_eq!(frame.kind, 1);
+        assert!(frame.effect_execution.contains(&marker));
+        for token in &frame.effect_execution {
+            assert!(
+                literal.contains(&token.0) || vocabulary.contains(token),
+                "unregistered execution token {token:?}"
+            );
+        }
+        let rows = encoded_default(&observation).facts;
+        let programs = rows
+            .chunks(FACT_DIM)
+            .filter(|row| row[fact::KIND] == FactKind::ContinuationProgram as u8 as f32)
+            .count();
+        assert_eq!(programs, frame.effect_execution.len());
+    }
+
+    let mut s = five_color_setup(&["Kyoshi Warrior Guard"]);
+    cast(&mut s, "Kyoshi Warrior Guard");
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(observation.continuation[0].kind, 1);
+    assert!(observation.continuation[0].effect_execution.is_empty());
 }
 
 /// A spell on the stack shows its announced X.

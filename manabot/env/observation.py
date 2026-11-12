@@ -131,6 +131,9 @@ FACT_COPY_EXCEPTION = 8
 FACT_TRANSFORMS = 9
 FACT_COMBAT_RESTRICTION = 10
 FACT_EFFECT_PROGRAM = 11
+# The id of an effect program that states a player's pooled mana with a
+# spend effect (native `observation_encoder::POOLED_MANA`).
+POOLED_MANA = "PooledMana"
 FACT_EFFECTIVE_COLOR = 12
 FACT_KEYWORD_COUNTER_TIMESTAMP = 13
 FACT_CONTINUATION_PROGRAM = 14
@@ -659,6 +662,17 @@ class ObservationEncoder:
                     (0.0, 0.0),
                     provenance=(0.0, timestamp, None),
                 )
+        # Pooled mana with a spend effect: one program per class on its player.
+        for player in (obs.agent, obs.opponent):
+            for pooled in player.spend_effect_mana:
+                for ordinal, (token_kind, token_value) in enumerate(pooled.program):
+                    push(
+                        player.id,
+                        FACT_EFFECT_PROGRAM,
+                        token(POOLED_MANA),
+                        (float(token_kind), float(ordinal)),
+                        token_value,
+                    )
         if len(rows) > self.config.max_facts:
             raise ValueError(
                 f"observation capacity exceeded: facts {len(rows)} > {self.config.max_facts}"

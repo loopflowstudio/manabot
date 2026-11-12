@@ -161,8 +161,9 @@ impl TriggeredManaOutput {
             Self::Fixed(mana) => vec![mana.clone()],
             Self::OneProducedType => {
                 let restricted = produced.restricted_colors();
+                let unrestricted = produced.unrestricted_colors();
                 (0..6)
-                    .filter(|&slot| produced.mana[slot] + restricted[slot] > 0)
+                    .filter(|&slot| unrestricted[slot] + restricted[slot] > 0)
                     .map(|slot| {
                         let mut mana = Mana::default();
                         mana.mana[slot] = 1;
