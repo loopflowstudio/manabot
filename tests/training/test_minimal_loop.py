@@ -35,3 +35,9 @@ def test_minimal_loop_returns_a_moved_finite_average(tmp_path: Path) -> None:
         loaded.state_dict().items(), trained.state_dict().values(), strict=True
     ):
         assert torch.equal(kept, saved), name
+
+
+def test_guide_shows_the_loop_as_written() -> None:
+    root = Path(__file__).resolve().parents[2]
+    loop = (root / "manabot/training/loops/minimal.py").read_text()
+    assert loop in (root / "docs/training-loop.md").read_text()

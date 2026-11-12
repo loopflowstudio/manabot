@@ -3,8 +3,6 @@
 import torch
 from torch import Tensor, nn
 
-from manabot.infra.deprecation import moved
-
 
 def embedding_rows(embedding: nn.Embedding, rows: Tensor) -> Tensor:
     """Embed rows; an empty lookup returns an empty slice of the weights.
@@ -32,6 +30,3 @@ def buffer_on(module: nn.Module, name: str, device: torch.device) -> Tensor:
     if name not in cache or cache[name][0] != key:
         cache[name] = (key, buffer.detach().cpu())
     return cache[name][1]
-
-
-__getattr__ = moved(__name__, {"float64_operand": "manabot.backends.torch.rl"})

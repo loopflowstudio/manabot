@@ -13,6 +13,7 @@ import torch
 from manabot.backends.torch.learner import Learner, gradient_step
 from manabot.backends.torch.policy import ActorCritic
 from manabot.backends.torch.rl import (
+    clip_fraction,
     clipped_surrogate,
     entropy,
     float64_operand,
@@ -22,6 +23,7 @@ from manabot.backends.torch.rl import (
     selected_rows,
     squared_value_loss,
     standardized_advantages,
+    support_logs,
     transition_gae,
 )
 from manabot.env.observation import ACTION_TYPE_DIM
@@ -31,7 +33,6 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
-    clip_fraction,
     failure_tensors,
     minibatch_tensors,
 )
@@ -184,7 +185,7 @@ def update_iteration(
                     kl_ref = selected_mean(
                         reverse_kl(
                             logs,
-                            reference.masked_fill(~valid, 1).log(),
+                            support_logs(reference, valid),
                             valid,
                         ),
                         actor_mask,

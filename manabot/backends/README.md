@@ -24,7 +24,7 @@ files; a backend may add private modules that its `policy.py` uses (torch's
 | `__init__.py` | the import guard naming the optional extra; nothing else |
 | `arrays.py` | conversion to and from NumPy, the float dtype, the device |
 | `policy.py` | the forward over a `Prepared` batch: logits and values |
-| `rl.py` | the loss terms of `manabot.training.learning` over the framework's arrays |
+| `rl.py` | the loss terms of `manabot.training.updates` over the framework's arrays |
 | `learner.py` | the optimizer, gradient step and precision |
 | `checkpoint.py` | the map from canonical names to the backend's layout, loading, and `BACKEND` |
 
@@ -42,7 +42,7 @@ backend-generic.
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic` |
-| `manabot.backends.torch.rl` | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `selection_mask`, `selected_mean`, `NumericalError` |
+| `manabot.backends.torch.rl` | `transition_gae`, `standardized_advantages`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `clip_fraction`, `support_logs`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `selection_mask`, `selected_mean`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `apply_matmul_precision` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
@@ -101,8 +101,8 @@ that is not a container (a `.pt`, or a conversion without the metadata) raises
 input. Backends
 cover what the w160l8 regime uses: a catalog world with catalog record ids,
 table attention, a masked-mean scalar critic and policy input v9. A checkpoint
-that enables anything else (belief inputs, policy history, the pooled token
-stream, another critic, FiLM, input v10) is refused with every unsupported
+that enables anything else (belief inputs, policy history, another critic,
+FiLM, input v10) is refused with every unsupported
 field named (`UnsupportedPolicy`), rather than run partially. Checkpoints of
 the `local` recipe use FiLM and are refused.
 

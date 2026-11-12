@@ -23,5 +23,6 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
   (`Targets`, `Settings`). Values are `[B]`.
 
 Backends live in [`manabot/backends/`](../backends/README.md). The PyTorch
-model in `manabot.model` reads `.pt` checkpoints directly and does not yet
-consume this package.
+backend uses the bucket sizes and reads the container (`load_checkpoint`
+accepts one). Its `ActorCritic` still does its own lookups in the forward
+rather than reading a `Prepared` batch, and `save_checkpoint` writes `.pt`.

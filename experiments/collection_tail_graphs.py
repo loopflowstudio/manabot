@@ -363,7 +363,7 @@ def call(
     """Collection's preparation and `Policy inference and action selection` block
     (`SeatRoutedCollector._sample_learning_rows`), with `forward` in place of the
     policy's own `forward_distribution`."""
-    from manabot.model.policy_distribution import legal_mask, policy_logs, require
+    from manabot.backends.torch.rl import legal_mask, policy_logs, require
 
     obs_t = inference.prepare(obs)
     with torch.no_grad():

@@ -102,7 +102,6 @@ None of these change the update; call them when you want the numbers.
 | --- | --- | --- |
 | `batch_health(action_data, advantages, selected, *, actor_only)` | `manabot.training.updates.health` | A `NumericalHealth` record for the batch: legal-logit range, underflow, forced rows, zero advantages, rows each head trains on. Pass `batch.action_data`. |
 | `OptimizerHealth(health, iteration, profiler=None)` | `manabot.training.updates.health` | The player's step recorder. Pass as `gradient_step(..., recorder=observer)` to count steps and rejections into the `batch_health` record and, on iteration 1 and every 25th, sample gradient norms (including the critic readout's) and the parameter change. With a profiler, backward and the optimizer step are timed. |
-| `clip_fraction(log_ratio, clip)` | `manabot.training.updates.health` | The fraction of rows whose likelihood ratio left `1 ± clip`, the record's `clip_fraction`. |
 | `selection_diagnostics(advantages, residuals, selected, ends, action_types)` | `manabot.training.updates.selection` | Advantage and residual quantiles by action type and distance to the game's end ([reading a run](learning.md#reading-a-run)). Every argument is `[T,E]`: `ends` is `batch.dones` and `action_types` is `batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM)` (`manabot.env.observation`). |
 
 ## Standard methods, kept local
@@ -121,8 +120,11 @@ loss, so you choose the reduction, mask and weight.
 | `transition_gae(rewards, values, ends, next_value, gamma, lam)` | `manabot.backends.torch.rl` | GAE (Schulman et al. 2016): advantages and lambda returns `[T,E]`. Each column is one agent's trajectory; an end cuts bootstrap and trace. `next_value` `[E]` is read only where a column's last row is not an end. Our updates call it once per lambda (policy and value). |
 | `standardized_advantages(advantages, over=None)` | `manabot.backends.torch.rl` | Every row shifted and scaled by the mean and population std of the rows `over` selects (all rows when omitted); the std is clamped at 1e-8. Our PPO update takes the statistics over the rows it trains on. |
 | `categorical_lambda_returns(probabilities, rewards, ends, bootstrap, trace_lambda)` | `manabot.backends.torch.rl` | Undiscounted loss/draw/win lambda-return targets `[T,E,3]`; a terminal row is the one-hot outcome (`rewards` -1, 0 or 1, nonzero only at an end). `bootstrap` `[E,3]` is the outcome distribution past each column's last row (read only where it is not an end). |
+| `expected_outcome(probabilities)` | `manabot.backends.torch.rl` | The signed expected outcome, P(win) − P(loss), of loss/draw/win mixtures `[...,3]`. |
 | `clipped_surrogate(log_ratio, advantages, clip)` | `manabot.backends.torch.rl` | Negative PPO clipped surrogate (Schulman et al. 2017), with float64 ratios. |
 | `reverse_kl(logs, target_logs, valid)` | `manabot.backends.torch.rl` | KL(current ‖ frozen target) over valid entries. |
+| `support_logs(probabilities, valid)` | `manabot.backends.torch.rl` | A frozen target's log-probabilities `[B,A]` for `reverse_kl`, finite (zero) off the valid entries. |
+| `clip_fraction(log_ratio, clip)` | `manabot.backends.torch.rl` | The fraction of rows whose likelihood ratio left `1 ± clip`, the health record's `clip_fraction`. |
 | `squared_value_loss(values, targets)`, `categorical_value_loss(value_logits, targets)` | `manabot.backends.torch.rl` | Scalar squared error; cross entropy of `[B,3]` loss/draw/win logits against target mixtures. |
 | `entropy(logs, valid)` | `manabot.backends.torch.rl` | Entropy over valid entries. |
 | `selection_mask(advantages, kind, fraction, minimum)`, `selected_mean(values, selected)` | `manabot.backends.torch.rl` | Keep a top count or inclusive quantile of advantage magnitude; average a per-row term over the mask (zero gradient when empty). |
@@ -136,6 +138,11 @@ nonfinite gradients, and after a step that leaves a nonfinite parameter. Its
 object with the `StepRecorder` methods observes the step; `OptimizerHealth`
 is the player's. Set the learning rate on `optimizer.param_groups` before
 stepping to schedule it.
+
+Another framework (MLX, JAX) plugs in at the update's minibatch step: the
+forward, the loss terms above, backward, clipping and the optimizer step.
+Credit, targets, selection and minibatch order are computed once per batch
+and do not depend on how a minibatch is stepped.
 
 ### What a deck builder reuses
 

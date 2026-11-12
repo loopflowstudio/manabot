@@ -98,7 +98,23 @@ def transition_gae(
     gamma: float,
     lam: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """GAE for transition-end flags; terminal rewards credit their own episode."""
+    """GAE (Schulman et al. 2016): advantages and lambda returns, both [T,E].
+
+    `rewards`, `values` and `ends` are [T,E]; terminal rewards credit their own
+    episode. `next_value` [E] is read only where a column's last row is not an
+    end. Mismatched shapes raise `ValueError` rather than broadcast.
+    """
+    if (
+        rewards.ndim != 2
+        or values.shape != rewards.shape
+        or ends.shape != rewards.shape
+        or next_value.numel() != rewards.shape[1]
+    ):
+        raise ValueError(
+            "transition_gae requires rewards, values and ends [T,E] and next_value [E]; "
+            f"got {tuple(rewards.shape)}, {tuple(values.shape)}, "
+            f"{tuple(ends.shape)} and {tuple(next_value.shape)}"
+        )
     host_ends = ends.cpu().bool()
     host_values = values.cpu()
     live = (~host_ends).to(rewards.dtype)
@@ -127,6 +143,11 @@ def standardized_advantages(advantages: Tensor, over: Tensor | None = None) -> T
     return (advantages - reference.mean()) / reference.std(unbiased=False).clamp_min(
         1e-8
     )
+
+
+def expected_outcome(probabilities: Tensor) -> Tensor:
+    """Expected signed outcome `[...]` of loss/draw/win mixtures `[...,3]`: P(win) - P(loss)."""
+    return probabilities[..., 2] - probabilities[..., 0]
 
 
 @torch.no_grad()
@@ -199,7 +220,8 @@ def categorical_lambda_returns(
 # -- Losses --------------------------------------------------------------------
 # Per-row loss terms over one minibatch; the caller reduces, masks and weights.
 #
-# Every function returns one value per row, `[B]`. Policy terms read padded
+# Every loss returns one value per row, `[B]`; `support_logs` builds a frozen
+# target for `reverse_kl` and `clip_fraction` is the surrogate's diagnostic. Policy terms read padded
 # categorical log-probabilities `[B,A]` that are `-inf` off a `valid` mask
 # `[B,A]`, and never read the padding. Targets, behavior likelihoods and
 # references are constants: gradients reach only the current policy and value
@@ -221,6 +243,25 @@ def clipped_surrogate(log_ratio: Tensor, advantages: Tensor, clip: float) -> Ten
         ratio * advantages.detach(),
         ratio.clamp(1 - clip, 1 + clip) * advantages.detach(),
     )
+
+
+@torch.no_grad()
+def clip_fraction(log_ratio: Tensor, clip: float) -> float:
+    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
+
+    The ratio is exponentiated in float64 so large log ratios do not overflow.
+    """
+    return float(
+        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
+    )
+
+
+def support_logs(probabilities: Tensor, valid: Tensor) -> Tensor:
+    """Log-probabilities `[B,A]` of a distribution, zero off `valid` (log 1).
+
+    `reverse_kl` never reads the padding; filling it with 1 keeps `log` finite.
+    """
+    return probabilities.masked_fill(~valid, 1).log()
 
 
 def reverse_kl(logs: Tensor, target_logs: Tensor, valid: Tensor) -> Tensor:
@@ -304,10 +345,8 @@ def selection_mask(
     minimum: float,
 ) -> Tensor:
     """Boolean mask shaped like `advantages` keeping `fraction` of rows, |A| >= minimum."""
-    if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum)
     mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
-    mask[selected_rows(advantages.flatten(), fraction, minimum)] = True
+    mask[selected_rows(advantages.flatten(), fraction, minimum, kind=kind)] = True
     return mask.reshape_as(advantages)
 
 

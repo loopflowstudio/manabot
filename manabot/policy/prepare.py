@@ -608,7 +608,7 @@ def _effects(
 
 
 def reference_distribution(obs: Mapping[str, Array], kind: str) -> Array:
-    """`manabot.training.learning.references.reference_distribution` in numpy."""
+    """`manabot.training.updates.references.reference_distribution` in numpy."""
     valid = np.asarray(obs["actions_valid"]) > 0
     if kind == "uniform":
         return (valid / valid.sum(-1, keepdims=True)).astype(np.float32)

@@ -16,7 +16,7 @@ use managym_state::{
         StaticScope, StaticTriggeredGrant, StaticTypeGrant, TapCost, TargetCostReduction,
         TriggeredManaAbility,
     },
-    mana::{Color, Colors, Mana, ManaCost, ManaUse},
+    mana::{Color, Colors, Mana, ManaCost, ManaRestriction},
     permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
@@ -4658,7 +4658,9 @@ fn hermitic_herbalist() -> CardDefinition {
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![two_mana_in_any_combination(ManaUse::spell(["Lesson"]))],
+                effects: vec![two_mana_in_any_combination(ManaRestriction::spell([
+                    "Lesson",
+                ]))],
                 ..Default::default()
             },
         ],
@@ -5086,7 +5088,7 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![one_mana_of_any_color(Some(ManaUse::new(
+                effects: vec![one_mana_of_any_color(Some(ManaRestriction::only(
                     ["Ally"],
                     ["Ally"],
                 )))],
@@ -10411,7 +10413,7 @@ fn white_lotus_hideout() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![one_mana_of_any_color(Some(ManaUse::spell([
+                effects: vec![one_mana_of_any_color(Some(ManaRestriction::spell([
                     "Lesson", "Shrine",
                 ])))],
                 ..Default::default()
@@ -10892,9 +10894,9 @@ fn return_transformed() -> Vec<Effect> {
 const COLOR_SLOTS: std::ops::Range<usize> = 0..5;
 
 /// Mana of `amounts` by slot, restricted to `spend` when set (CR 106.6).
-fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
+fn mana_of(amounts: [u8; 6], spend: Option<&ManaRestriction>) -> Mana {
     match spend {
-        Some(spend) => Mana::restricted_to(spend, amounts),
+        Some(spend) => Mana::restricted_to(spend.clone(), amounts),
         None => Mana {
             mana: amounts,
             ..Mana::default()
@@ -10903,23 +10905,24 @@ fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
 }
 
 /// "Add one mana of any color": one mode per color, W through G.
-fn one_mana_of_any_color(spend: Option<ManaUse>) -> Effect {
+fn one_mana_of_any_color(spend: Option<ManaRestriction>) -> Effect {
     Effect::mana_choice(COLOR_SLOTS.map(|slot| {
         let mut amounts = [0; 6];
         amounts[slot] = 1;
-        mana_of(amounts, spend)
+        mana_of(amounts, spend.as_ref())
     }))
 }
 
 /// "Add two mana in any combination of colors": one mode per unordered pair
 /// (WW, WU, ..., GG), each restricted to `spend`.
-fn two_mana_in_any_combination(spend: ManaUse) -> Effect {
+fn two_mana_in_any_combination(spend: ManaRestriction) -> Effect {
     Effect::mana_choice(COLOR_SLOTS.flat_map(|first| {
+        let spend = spend.clone();
         (first..COLOR_SLOTS.end).map(move |second| {
             let mut amounts = [0; 6];
             amounts[first] += 1;
             amounts[second] += 1;
-            mana_of(amounts, Some(spend))
+            mana_of(amounts, Some(&spend))
         })
     }))
 }

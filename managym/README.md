@@ -278,6 +278,17 @@ spend-purpose bounds count repeatable outputs optimistically; every accepted
 payment still requires an identity-preserving witness with explicit tap choices.
 This is finite search, without a general large-board performance guarantee.
 
+Spending restrictions (CR 106.6) are typed: `ManaRestriction::Only` holds
+`SpendPredicate`s naming any subtype a spell must have or an activation's
+source must have, and `ExceptNonartifactSpells` is a Powerstone's exclusion.
+Every cost carries a `SpendingContext`: `Cast` with the spell's announced
+subtypes and types, `Activate` with the source's zone and subtypes, or
+`Resolving`, which only exclusions admit. Observation data names each
+restriction whole. The policy input's restricted-mana columns name exactly
+Lesson and Shrine spells and Ally spells or sources (and, in v10, Powerstone
+mana); every encoder refuses other restricted mana (`unrepresentable_state`)
+rather than drop it.
+
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
 v5: the schema-8 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
