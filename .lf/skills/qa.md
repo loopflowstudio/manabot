@@ -111,6 +111,16 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+- MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
+  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
+  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
+  `local` recipe checkpoints use FiLM and are refused), load it with
+  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  admitting each batch with `admit_observation` and comparing against torch
+  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
+  `policy.evaluate`; untrained-policy argmax
+  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir>` on the published subset takes about 50 s on an M2.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
