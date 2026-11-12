@@ -39,3 +39,22 @@ belief/academy parity/semantic/env pytest 402 passed; world-change list 65 passe
 
 Remaining: CI on fbfca586b (all checks pass except `preflight` pending at 2026-11-12 realign);
 main has no newer commits. Then review; Engine Budget runs in CI (no gameplay change expected).
+
+## Concept review (2026-11-12)
+
+The model holds up: cards and tokens are separate authored definitions sharing one
+`PrintedCharacteristics`; `ObjectDefinition` is the registered row; token status lives on the row
+and the game object, never on `printed`; tokens resolve by key, cards by name. No open product
+choice.
+
+Next implement direction (one comment, no behavior change):
+- `managym/src/flow/zones.rs` `create_token` doc says "Tokens are full cards in
+  `GameState::cards`", which contradicts the split. Say tokens are game objects stored in
+  `GameState::cards` beside cards.
+
+Considered and left alone:
+- `CardDefId` names rows that include tokens and back faces. Renaming it touches every engine
+  and binding call site for a name only; not this Task.
+- `CardDefinition.scryfall_id` defaults to `""` (needed for `..Default::default()` in set files);
+  "required" is enforced by the offline `scryfall.rs` check, which is what the Task asked for.
+- Game objects remain `Card` for tokens too; that is the object model, not the definition split.
