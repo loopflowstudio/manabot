@@ -570,6 +570,13 @@ pub enum ObjectSelector {
     /// Cards the resolving player owns in a zone. Hidden selection retains
     /// the zone provenance across sampled worlds.
     Zone(ZoneType),
+    /// Cards the clause's chosen target player owns in a zone ("search target
+    /// opponent's library"); `spec` declares that player target. The
+    /// resolving player selects, and only that zone is revealed to them.
+    TargetPlayersZone {
+        spec: Box<TargetSpec>,
+        zone: ZoneType,
+    },
     /// The resolving player ("you"), as whom a continuous effect affects
     /// ("you have no maximum hand size"), damage, or discard. Object-only
     /// verbs find nothing because a player is not a card object.
@@ -665,6 +672,7 @@ impl ObjectSelector {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Self::Target(spec) | Self::Targets(spec) => Some(spec),
+            Self::TargetPlayersZone { spec, .. } => Some(spec),
             Self::Each {
                 of: Scope::TargetPlayerControls,
                 ..

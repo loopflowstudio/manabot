@@ -74,6 +74,8 @@ mod mh1;
 mod mid;
 #[path = "cards/mkm.rs"]
 mod mkm;
+#[path = "cards/mmq.rs"]
+mod mmq;
 #[path = "cards/observability.rs"]
 mod observability;
 #[path = "cards/ody.rs"]

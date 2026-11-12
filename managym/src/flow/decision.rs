@@ -999,6 +999,27 @@ impl Game {
             })
     }
 
+    /// Whether `viewer` (or a player sharing information with them) is
+    /// inspecting `owner`'s library: a named search, or a pending selection
+    /// from that library ("search target opponent's library"). The library
+    /// selection grants no hand access, but its exact library cards fix the
+    /// hidden partition, so sampled worlds keep `owner`'s zones as they are.
+    pub(crate) fn inspects_library(&self, viewer: PlayerId, owner: PlayerId) -> bool {
+        self.searches_private_zones(viewer, owner)
+            || self
+                .state
+                .suspended_decision
+                .as_ref()
+                .is_some_and(|suspended| {
+                    suspended.decisions().any(|decision| {
+                        matches!(decision, Decision::SelectCards { player, from: Some(source), .. }
+                        if self.shares_information(viewer, *player)
+                            && source.owner == owner
+                            && source.zone == ZoneType::Library)
+                    })
+                })
+    }
+
     /// Search permission reveals all cards in the searched zones only to
     /// the chooser; eligibility by name restricts actions, not information.
     pub(crate) fn named_search_cards(&self, owner: PlayerId) -> impl Iterator<Item = CardId> + '_ {

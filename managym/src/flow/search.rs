@@ -90,9 +90,10 @@ impl Game {
             self.decklist_known(opponent, perspective),
             "determinize requires the opponent's open decklist"
         );
-        // Searching an opponent's hand and library reveals their exact
-        // membership to the searcher until this instruction finishes.
-        let searching_opponent = self.searches_private_zones(perspective, opponent);
+        // Searching an opponent's library (with or without their hand) fixes
+        // their exact membership for the searcher until the instruction
+        // finishes.
+        let searching_opponent = self.inspects_library(perspective, opponent);
         if !searching_opponent {
             if self.shares_information(perspective, opponent) {
                 self.shuffle_private_library(opponent, &mut rng);

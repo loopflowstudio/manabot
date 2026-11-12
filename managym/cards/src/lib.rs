@@ -46,6 +46,7 @@ mod mh1;
 mod mh2;
 mod mid;
 mod mkm;
+mod mmq;
 mod ody;
 mod ons;
 mod ori;
@@ -87,7 +88,7 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 59] = [
+const SETS: [fn() -> Vec<CardDefinition>; 60] = [
     aer::cards,
     afr::cards,
     blb::cards,
@@ -124,6 +125,7 @@ const SETS: [fn() -> Vec<CardDefinition>; 59] = [
     mh2::cards,
     mid::cards,
     mkm::cards,
+    mmq::cards,
     ody::cards,
     ons::cards,
     ori::cards,

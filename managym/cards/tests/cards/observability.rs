@@ -435,13 +435,14 @@ fn selector_token(selector: &ObjectSelector) -> &'static str {
         ObjectSelector::CardsThisWay => "ObjectSelector::CardsThisWay",
         ObjectSelector::Selected => "ObjectSelector::Selected",
         ObjectSelector::Zone(_) => "ObjectSelector::Zone",
+        ObjectSelector::TargetPlayersZone { .. } => "ObjectSelector::TargetPlayersZone",
         ObjectSelector::You => "ObjectSelector::You",
         ObjectSelector::Chosen { .. } => "ObjectSelector::Chosen",
         ObjectSelector::Each { .. } => "ObjectSelector::Each",
     }
 }
 
-fn selector_witnesses() -> [ObjectSelector; 15] {
+fn selector_witnesses() -> [ObjectSelector; 16] {
     [
         ObjectSelector::This,
         ObjectSelector::Target(TargetSpec::Creature),
@@ -455,6 +456,10 @@ fn selector_witnesses() -> [ObjectSelector; 15] {
         ObjectSelector::CardsThisWay,
         ObjectSelector::Selected,
         ObjectSelector::Zone(ZoneType::Hand),
+        ObjectSelector::TargetPlayersZone {
+            spec: Box::new(TargetSpec::Opponent),
+            zone: ZoneType::Library,
+        },
         ObjectSelector::You,
         ObjectSelector::another_chosen(CardPredicate::creature()),
         ObjectSelector::Each {

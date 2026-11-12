@@ -525,6 +525,25 @@ impl Game {
         }
     }
 
+    /// The owner and zone a zone selector reads: the resolving player's,
+    /// or the clause's target player's.
+    fn selection_zone(
+        &self,
+        selector: &ObjectSelector,
+        frame: &EffectFrame,
+    ) -> Option<(PlayerId, ZoneType)> {
+        match selector {
+            ObjectSelector::Zone(zone) => Some((frame.controller, *zone)),
+            ObjectSelector::TargetPlayersZone { zone, .. } => {
+                match self.present_primary_target(frame)? {
+                    Target::Player(player) => Some((player, *zone)),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub(crate) fn present_primary_target(&self, frame: &EffectFrame) -> Option<Target> {
         frame
             .primary_target()
@@ -936,24 +955,24 @@ impl Game {
                             ObjectSelector::CardsThisWay => {
                                 super::decision::SelectionOrigin::Milled
                             }
-                            ObjectSelector::Zone(ZoneType::Library) => {
-                                super::decision::SelectionOrigin::Library
-                            }
+                            ObjectSelector::Zone(ZoneType::Library)
+                            | ObjectSelector::TargetPlayersZone {
+                                zone: ZoneType::Library,
+                                ..
+                            } => super::decision::SelectionOrigin::Library,
                             ObjectSelector::Zone(ZoneType::Hand) => {
                                 super::decision::SelectionOrigin::Hand
                             }
                             _ => super::decision::SelectionOrigin::Other,
                         },
                         player: frame.controller,
-                        from: if let ObjectSelector::Zone(zone) = from {
-                            Some(crate::state::binding::ZoneSelection {
-                                owner: frame.controller,
-                                zone: *zone,
+                        from: self.selection_zone(from, frame).map(|(owner, zone)| {
+                            crate::state::binding::ZoneSelection {
+                                owner,
+                                zone,
                                 predicate: predicate.clone(),
-                            })
-                        } else {
-                            None
-                        },
+                            }
+                        }),
                         candidates,
                         selected: Vec::new(),
                         min,
@@ -2070,11 +2089,15 @@ impl Game {
                 })
                 .collect()
             }
-            ObjectSelector::Zone(zone) => self
-                .selection_zone_cards(frame.controller, *zone)
-                .into_iter()
-                .filter_map(|card| self.current_object_ref(card))
-                .collect(),
+            ObjectSelector::Zone(_) | ObjectSelector::TargetPlayersZone { .. } => {
+                let Some((owner, zone)) = self.selection_zone(what, frame) else {
+                    return Vec::new();
+                };
+                self.selection_zone_cards(owner, zone)
+                    .into_iter()
+                    .filter_map(|card| self.current_object_ref(card))
+                    .collect()
+            }
             ObjectSelector::You => Vec::new(),
             ObjectSelector::Chosen { .. } => {
                 debug_assert!(frame.chosen.is_some(), "a Chosen selector is chosen first");

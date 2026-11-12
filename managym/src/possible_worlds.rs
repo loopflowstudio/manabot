@@ -425,7 +425,7 @@ impl HiddenHandConstraints {
             .expect("valid viewer has a semantic observation")
             .identity;
         let known_hand = if game.shares_information(viewer, opponent)
-            || game.searches_private_zones(viewer, opponent)
+            || game.inspects_library(viewer, opponent)
         {
             name_counts(
                 game,
@@ -534,7 +534,7 @@ impl HiddenHandConstraints {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         // An active search exposes exact cards and their zones. Preserve
         // those physical witnesses, not merely the hand's name multiset.
-        if !source.searches_private_zones(self.viewer, opponent)
+        if !source.inspects_library(self.viewer, opponent)
             && !source.shares_information(self.viewer, opponent)
         {
             // Group the opponent's unseen CardIds by name, sorted ascending so
@@ -592,7 +592,7 @@ impl HiddenHandConstraints {
                 .reassign_hidden(opponent, new_hand, new_library);
         }
         if source.shares_information(self.viewer, opponent)
-            && !source.searches_private_zones(self.viewer, opponent)
+            && !source.inspects_library(self.viewer, opponent)
         {
             branch.shuffle_private_library(opponent, &mut rng);
         }

@@ -531,6 +531,11 @@ fn selector_description(selector: &ObjectSelector) -> String {
         ObjectSelector::CardsThisWay => "cards moved by the latest mill or discard".into(),
         ObjectSelector::Selected => "the selected cards".into(),
         ObjectSelector::Zone(zone) => format!("your {}", format!("{zone:?}").to_lowercase()),
+        ObjectSelector::TargetPlayersZone { spec, zone } => format!(
+            "{}'s {}",
+            target_description(spec),
+            format!("{zone:?}").to_lowercase()
+        ),
         ObjectSelector::You => "you".into(),
         ObjectSelector::Chosen { predicate, except } => format!(
             "{}{}",
