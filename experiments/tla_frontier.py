@@ -969,7 +969,6 @@ def _registration(
             ),
         ), None
     path = local_checkpoint_file(player)
-    digest = file_sha256(path)
     admission = register_checkpoint(
         path,
         match=setup,
@@ -977,7 +976,7 @@ def _registration(
         player_id=name,
         display_name=player.name,
         role=role,
-        artifact_id=f"c5fba4/{digest}",
+        artifact_prefix="c5fba4",
         allow_deck_repetition=True,
     )
     if admission.space.encoder.config != observation:

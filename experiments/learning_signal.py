@@ -334,7 +334,7 @@ def _registration(
         player_id=name,
         display_name=player.name,
         role=role,
-        artifact_id=f"{arena}/{file_sha256(path)}",
+        artifact_prefix=arena,
         allow_deck_repetition=True,
     )
     return admission.registration, path

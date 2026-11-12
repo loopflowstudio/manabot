@@ -47,7 +47,7 @@ def register_checkpoint(
     display_name: str,
     role: Literal["anchor", "incumbent", "challenger"] = "challenger",
     training_seed: int | None = None,
-    artifact_id: str | None = None,
+    artifact_prefix: str = "checkpoint",
     expected_sha256: str | None = None,
     expected_bytes: int | None = None,
     allow_deck_repetition: bool = False,
@@ -96,7 +96,7 @@ def register_checkpoint(
         checkpoint_bytes=size,
         parameter_count=sum(parameter.numel() for parameter in agent.parameters()),
         training_seed=training_seed,
-        artifact_id=artifact_id or f"checkpoint/{digest}",
+        artifact_id=f"{artifact_prefix}/{digest}",
     )
     return CheckpointAdmission(registration, runtime, space)
 

@@ -2,7 +2,8 @@
 
 Docs changed: `docs/evaluation.md` (Shared inference → **Checkpoint identity.** paragraph).
 
-Built: `register_checkpoint` takes `role` and returns the loaded `space`;
+Built: `register_checkpoint` takes `role` and `artifact_prefix` (id is
+`<prefix>/<digest>`, so callers don't rehash) and returns the loaded `space`;
 `experiments/tla_frontier.py` and `experiments/learning_signal.py` register
 checkpoints through it (code players keep fresh-default hashes). Test:
 `tests/eval/test_batched_eval.py::test_registered_non_default_checkpoint_is_admitted_by_serving`
@@ -10,3 +11,5 @@ checkpoints through it (code players keep fresh-default hashes). Test:
 
 Check: focused pytest (batched_eval -k non_default, learning_signal, experiment_files,
 layer_input, local_evaluation) passed.
+
+Compress: `artifact_id` → `artifact_prefix` (all callers used `<prefix>/<digest>`).
