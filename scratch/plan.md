@@ -67,7 +67,10 @@ resolved by whichever lands second.
 
 Compress: `_ownership` reads the forward's `BucketSizes` instead of rebuilding a
 partial one from shapes; fact count check uses an explicit `None` default.
-`pytest tests/model/test_bucketed_shapes.py` 9 passed.
+Second pass: one `_object_segments` table (players, then card/card/permanent/
+permanent segments) drives reference extents, `_object_remap` and
+`object_columns`, replacing three hand-written copies of the offsets.
+`pytest tests/model/test_bucketed_shapes.py` 10 passed.
 
 Concept review (2026-11-12): the concepts hold. One runtime switch, one owner
 (`buckets.py`), trimming only after admission, full-capacity logits, no model

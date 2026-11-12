@@ -188,25 +188,33 @@ def _has_history_events(obs: dict[str, torch.Tensor]) -> bool:
     return events is not None and events.ndim == 3 and events.shape[-1] == _EVENT_WIDTH
 
 
+def _object_segments(capacities: dict[str, int]) -> list[tuple[str, int, int]]:
+    """(axis, start, rows) of each object segment after the two player rows.
+
+    The object table is players, agent cards, opponent cards, agent
+    permanents, opponent permanents, each segment at its declared capacity.
+    """
+    segments: list[tuple[str, int, int]] = []
+    start = 2
+    for axis in ("cards", "cards", "permanents", "permanents"):
+        segments.append((axis, start, capacities[axis]))
+        start += capacities[axis]
+    return segments
+
+
 def _object_extents(
-    references: list[torch.Tensor], cards: int, permanents: int
-) -> tuple[torch.Tensor, torch.Tensor]:
+    references: list[torch.Tensor], capacities: dict[str, int]
+) -> dict[str, torch.Tensor]:
     """Rows of each card and permanent axis that any reference names."""
-    card_need: list[torch.Tensor] = []
-    permanent_need: list[torch.Tensor] = []
+    needs: dict[str, list[torch.Tensor]] = {"cards": [], "permanents": []}
     for values in references:
         index = torch.nan_to_num(values.float(), nan=-1.0, posinf=-1.0, neginf=-1.0)
         index = index.floor()
-        for start, size, needs in (
-            (2, cards, card_need),
-            (2 + cards, cards, card_need),
-            (2 + 2 * cards, permanents, permanent_need),
-            (2 + 2 * cards + permanents, permanents, permanent_need),
-        ):
+        for axis, start, rows in _object_segments(capacities):
             offset = index - start
-            inside = (offset >= 0) & (offset < size)
-            needs.append(_maximum(torch.where(inside, offset + 1, 0)))
-    return torch.stack(card_need).max(), torch.stack(permanent_need).max()
+            inside = (offset >= 0) & (offset < rows)
+            needs[axis].append(_maximum(torch.where(inside, offset + 1, 0)))
+    return {axis: torch.stack(values).max() for axis, values in needs.items()}
 
 
 def bucket_sizes(
@@ -259,11 +267,8 @@ def bucket_sizes(
         )
     )
     if objects:
-        card_need, permanent_need = _object_extents(
-            _object_references(obs), capacities["cards"], capacities["permanents"]
-        )
-        needs["cards"].append(card_need)
-        needs["permanents"].append(permanent_need)
+        for axis, need in _object_extents(_object_references(obs), capacities).items():
+            needs[axis].append(need)
     axes = list(capacities)
     measured = torch.stack([torch.stack(needs[axis]).max() for axis in axes]).tolist()
     sizes = {
@@ -276,22 +281,17 @@ def bucket_sizes(
     return BucketSizes(sizes, capacities)
 
 
-def object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
+def _object_remap(values: torch.Tensor, buckets: BucketSizes) -> torch.Tensor:
     """Map zero-based full object coordinates to trimmed ones.
 
-    Each segment shifts by the rows trimmed before it. Integer parts, signs
-    and out-of-range values keep their meaning, so reference checks accept and
-    reject exactly what they would at full capacity.
+    Each value shifts by the rows trimmed from segments ending at or before
+    it. Integer parts, signs and out-of-range values keep their meaning, so
+    reference checks accept and reject exactly what they would at full capacity.
     """
-    cards, permanents = buckets.capacities["cards"], buckets.capacities["permanents"]
-    card_cut = cards - buckets.sizes["cards"]
-    permanent_cut = permanents - buckets.sizes["permanents"]
-    shift = (
-        (values >= 2 + cards).to(values.dtype) * card_cut
-        + (values >= 2 + 2 * cards).to(values.dtype) * card_cut
-        + (values >= 2 + 2 * cards + permanents).to(values.dtype) * permanent_cut
-        + (values >= 2 + 2 * cards + 2 * permanents).to(values.dtype) * permanent_cut
-    )
+    shift = torch.zeros_like(values)
+    for axis, start, rows in _object_segments(buckets.capacities):
+        cut = rows - buckets.sizes[axis]
+        shift = shift + (values >= start + rows).to(values.dtype) * cut
     return values - shift
 
 
@@ -308,7 +308,7 @@ def trim_observation(
             trimmed[key] = obs[key][:, :, : buckets.sizes[axis]]
     if not buckets.trims_objects:
         return trimmed
-    trimmed["action_focus"] = object_remap(trimmed["action_focus"], buckets)
+    trimmed["action_focus"] = _object_remap(trimmed["action_focus"], buckets)
     for references, base in ((ONE_BASED_REFERENCES, 1), (ZERO_BASED_REFERENCES, 0)):
         for key in dict.fromkeys(key for key, _ in references):
             if key == "events" and not _has_history_events(trimmed):
@@ -316,7 +316,7 @@ def trim_observation(
             columns = [column for name, column in references if name == key]
             value = trimmed[key].clone()
             value[..., columns] = (
-                object_remap(value[..., columns] - base, buckets) + base
+                _object_remap(value[..., columns] - base, buckets) + base
             )
             trimmed[key] = value
     return trimmed
@@ -324,13 +324,7 @@ def trim_observation(
 
 def object_columns(buckets: BucketSizes) -> list[slice]:
     """Full-coordinate object slices kept by `buckets`, in object order."""
-    cards, permanents = buckets.capacities["cards"], buckets.capacities["permanents"]
-    kept_cards, kept_permanents = buckets.sizes["cards"], buckets.sizes["permanents"]
-    base = 2 + 2 * cards
-    return [
-        slice(0, 2),
-        slice(2, 2 + kept_cards),
-        slice(2 + cards, 2 + cards + kept_cards),
-        slice(base, base + kept_permanents),
-        slice(base + permanents, base + permanents + kept_permanents),
+    return [slice(0, 2)] + [
+        slice(start, start + buckets.sizes[axis])
+        for axis, start, _ in _object_segments(buckets.capacities)
     ]
