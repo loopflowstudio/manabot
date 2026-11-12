@@ -10,6 +10,10 @@ observations. No serving state is persisted in the model or its checkpoints.
 Device inputs move with one contiguous copy per dtype (`transfer`): serving's
 float32 observation keys and int64 catalog references are two copies per batch
 instead of one per key.
+
+With bucketed shapes, preparation measures each batch's buckets on the host
+before transfer; the forward trims the device tensors to them without a device
+read. The prepared dictionary itself keeps full-capacity tensors.
 """
 
 from collections.abc import Mapping
@@ -19,6 +23,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from manabot.env.observation import PERMANENT_DEFINITION_INDEX
+from manabot.model.buckets import BucketSizes, bucket_sizes, trim_observation
 from manabot.model.semantic_cards import CardReferences, admit_definition_ids
 
 if TYPE_CHECKING:
@@ -66,7 +71,8 @@ def transfer(
 class PreparedObservation(dict[str, torch.Tensor]):
     """Device tensors and CPU-admitted joins, valid only in their owning scope.
 
-    `transfers` counts the host-to-device copies that produced them.
+    `transfers` counts the host-to-device copies that produced them; `buckets`
+    holds host-measured bucket sizes when the policy uses bucketed shapes.
     """
 
     def __init__(
@@ -76,12 +82,39 @@ class PreparedObservation(dict[str, torch.Tensor]):
         references: CardReferences,
         objects_checked: bool,
         transfers: int,
+        buckets: BucketSizes | None = None,
     ) -> None:
         super().__init__(tensors)
         self.scope = scope
         self.references = references
         self.objects_checked = objects_checked
         self.transfers = transfers
+        self.buckets = buckets
+
+
+def trim_prepared(obs: PreparedObservation) -> PreparedObservation:
+    """Trim prepared tensors and their admitted joins to the measured buckets."""
+    buckets = obs.buckets
+    if buckets is None:
+        return obs
+    sizes = buckets.sizes
+    references = obs.references
+    return PreparedObservation(
+        trim_observation(obs, buckets),
+        obs.scope,
+        CardReferences(
+            references.cards[:, :, : sizes["cards"]],
+            references.permanents[:, :, : sizes["permanents"]],
+            None
+            if references.known is None
+            else references.known[:, :, : sizes["known"]],
+            None
+            if references.decklists is None
+            else references.decklists[:, :, : sizes["decklists"]],
+        ),
+        obs.objects_checked,
+        obs.transfers,
+    )
 
 
 class PolicyInference:
@@ -179,6 +212,15 @@ class PolicyInference:
             validity = torch.cat([obs[key] for key in _VALIDITY_KEYS], dim=1)
             if (validity.sum(1) == 0).any():
                 raise ValueError("value aggregation requires a valid object")
+        buckets = (
+            bucket_sizes(
+                obs,
+                self.agent.observation_space.encoder,
+                objects=self.agent.object_trimming(),
+            )
+            if self.agent.bucketed_shapes
+            else None
+        )
         joins = {"cards": references.cards, "permanents": references.permanents}
         if references.known is not None:
             joins["known"] = references.known
@@ -199,4 +241,5 @@ class PolicyInference:
             ),
             objects_checked,
             transfers,
+            buckets,
         )

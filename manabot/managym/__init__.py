@@ -26,6 +26,7 @@ for _name in (
     "enums",
     "experience",
     "experience_projection",
+    "format",
     "possible_worlds",
 ):
     sys.modules[f"{__name__}.{_name}"] = import_module(f"managym.{_name}")

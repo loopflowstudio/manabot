@@ -1713,6 +1713,9 @@ pub struct PyManaCost {
     pub cost: Vec<i32>,
     #[pyo3(get, set)]
     pub mana_value: i32,
+    /// Number of {X} symbols; `mana_value` counts none of them (CR 202.3e).
+    #[pyo3(get)]
+    pub x: u8,
 }
 
 #[cfg(feature = "python")]
@@ -1726,6 +1729,7 @@ impl From<ManaCost> for PyManaCost {
                 .collect(),
             cost: value.cost[..6].iter().map(|v| i32::from(*v)).collect(),
             mana_value: i32::from(value.mana_value),
+            x: value.x,
         }
     }
 }
@@ -1745,7 +1749,7 @@ impl From<PyManaCost> for ManaCost {
             purpose: Default::default(),
             cost,
             mana_value,
-            x: 0,
+            x: value.x,
             hybrid: value
                 .hybrid
                 .into_iter()

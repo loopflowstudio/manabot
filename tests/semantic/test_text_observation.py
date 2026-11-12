@@ -225,6 +225,13 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
 
 
+def test_x_cost_definition_renders_its_x() -> None:
+    """A visible {X} card renders instead of failing capture validation."""
+    env = priority_root(("Black Sun's Zenith",), ("Swamp", "Swamp"))
+    text = capture_text_decision(env).text
+    assert "Black Sun's Zenith. Sorcery; cost {X}{B}{B};" in text
+
+
 def _viewer_observation(decision: TextDecision) -> managym.Observation:
     source = DecisionInput.model_validate_json(decision.capture_json)
     return managym.Observation.from_json(json.dumps(source.observation.viewer_state))

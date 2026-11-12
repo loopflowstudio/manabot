@@ -13,6 +13,7 @@ pub mod decision_capture;
 mod decision_context;
 pub mod experience;
 pub mod flow;
+pub mod format;
 pub mod infra;
 pub mod match_fixtures;
 pub mod possible_worlds;

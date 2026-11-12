@@ -1,56 +1,23 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-286 concept review: spells cast this turn in v10</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-286 concept review</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655b; --rule:#d9d3c7; --new:#2f6b3a; --newbg:#e8f2e6; --old:#8a3b2a; --code:#efeadf; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#ece7dd; --bg:#1b1a17; --muted:#a59d8f; --rule:#3a362f; --new:#8fd19a; --newbg:#20301f; --old:#e09a85; --code:#2a2722; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.55 Georgia, "Iowan Old Style", serif; }
-  main { max-width:44rem; margin:0 auto; padding:2rem 1.25rem 4rem; }
-  header p { color:var(--muted); font-size:.9rem; margin:.2rem 0; }
-  h1 { font-size:1.5rem; margin:0 0 .5rem; } h2 { font-size:1.15rem; margin:2rem 0 .5rem; border-top:1px solid var(--rule); padding-top:1rem; }
-  code { background:var(--code); padding:0 .25em; border-radius:3px; font-size:.88em; }
-  pre { background:var(--code); padding:.75rem; overflow-x:auto; font-size:.85rem; border-radius:4px; }
-  table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { border-bottom:1px solid var(--rule); padding:.4rem .3rem; text-align:left; vertical-align:top; }
-  .proposed { border-left:4px solid var(--new); background:var(--newbg); padding:.5rem .8rem; margin:.8rem 0; }
-  .proposed::before { content:"Proposed"; display:block; font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:var(--new); }
-  .existing::before { content:"Existing"; display:block; font-size:.75rem; letter-spacing:.06em; text-transform:uppercase; color:var(--old); }
-  .existing { border-left:4px solid var(--old); padding:.5rem .8rem; margin:.8rem 0; }
-  ol li { margin:.4rem 0; }
-</style>
-</head>
-<body><main>
-<header>
-  <h1>V10 carries turn history, but not spells cast this turn</h1>
-  <p>Task MTG-286 · step concept-review (after the thirteenth pass) · 2026-11-12</p>
-  <p>Built from <code>scratch/mtg-286-define-every-tle-card-so-tla-limited-pools.md</code>, <code>scratch/questions.md</code>, <code>docs/observation-and-model.md</code>, <code>managym/src/flow/turn.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>managym/cards/tests/cards/observability.rs</code>, <code>managym/cards/src/cmr.rs</code></p>
-</header>
-
-<p><strong>Decision needed:</strong> none for the next pass. One v10 column is missing, and the design already says where it goes. One reversible assumption is listed at the end.</p>
-
-<h2>What a player sees</h2>
-<p>Casting Volcanic Torrent deals X damage, where X is the number of spells its caster has cast this turn. A TLA card with "whenever you cast your second spell each turn" waits on the same count. A person watching can count the spells. The policy can't.</p>
-
-<div class="existing">
-<p><code>TurnState.spells_cast</code> holds the count. The observability guard says it is seen through <em>"spell-cast events in the history rows"</em>. Those rows are the <code>recent_events</code> suffix. It is off by default, holds at most 32 rows, and the observation guide says it must not be needed to know the rules state. No player column holds the count, in v9 or in v10.</p>
-</div>
-
-<div class="proposed">
-<p>The v10 <code>player_turn_state</code> row grows from 2 × 7 to 2 × 8:</p>
-<pre>[ life lost / 20, spells cast / 10, nonartifact-locked mana W U B R G C / 10 ]</pre>
-<p>This goes through the native scalar and vector encoders, the Python encoder, the LLM text and the guard row. V10 has no checkpoints, so changing its layout breaks nothing.</p>
-</div>
-
-<h2>Why v10 and not a v9 fix</h2>
-<p>V9 is frozen, and w17 checkpoints are bound to its layout. V10 already exists as the turn-history input, and the rule is that new observation state reaches the policy input in the same change. A count read by a card defined on this branch counts as that state.</p>
-
-<h2>Questions</h2>
-<ol>
-  <li>Should v9 refuse positions where a visible card reads spells cast this turn?
-    <br>a. No (assumption taken): main's TLA cards already played on v9 with this gap, and a refusal would stop that collection.
-    <br>b. Yes: the same rule as life lost. It is one predicate in <code>input_v10_state</code>.</li>
-</ol>
-</main></body>
-</html>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd}
+@media(prefers-color-scheme:dark){:root{--fg:#e8e6e1;--bg:#1b1a18;--mute:#a09c94;--rule:#3a3835}}
+body{font:16px/1.55 Georgia,serif;color:var(--fg);background:var(--bg);max-width:42rem;margin:2rem auto;padding:0 1rem}
+header{color:var(--mute);font-size:.9rem;border-bottom:1px solid var(--rule);margin-bottom:1.5rem}
+code{font:.9em ui-monospace,monospace}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid var(--rule);padding:.3rem;text-align:left;vertical-align:top}
+</style></head><body>
+<header><p>Task MTG-286 · concept review after the fourteenth pass · 2026-11-12<br>
+Built from <code>scratch/mtg-286-define-every-tle-card-so-tla-limited-pools.md</code>, <code>scratch/questions.md</code>, <code>managym/src/agent/observation_layout.rs</code>, <code>docs/observation-and-model.md</code>, <code>AGENTS.md</code></p></header>
+<h1>No decision needed: v10 now carries every turn fact its cards read</h1>
+<p>The previous review found spells cast this turn reaching the policy only through optional event rows. It is now column 1 of <code>player_turn_state</code>, named in the published layout and shown in Academy and the LLM text.</p>
+<h2>What v10 adds (built)</h2>
+<table><tr><th>Buffer</th><th>Columns</th><th>Read by</th></tr>
+<tr><td><code>player_turn_state</code> 2 × 8</td><td>life_lost, spells_cast, nonartifact_mana_{W,U,B,R,G,C}</td><td>Bloodchief Ascension, Volcanic Torrent, Powerstone mana</td></tr>
+<tr><td><code>card_turn_state</code> 2 × cards</td><td>put into graveyard from the battlefield this turn</td><td>Brought Back</td></tr></table>
+<h2>Still open (recorded, not blocking)</h2>
+<ol><li>Should v10 replace v9 at the w17 freeze rather than sit beside it?</li>
+<li>A v9 pilot over decks with Bloodchief Ascension, Brought Back or Cityscape Leveler stops at the first position needing v10 state.</li>
+<li>Native refusal raises <code>ValueError</code>; Python raises <code>UnsupportedPolicyInput</code>.</li></ol>
+<p>Next: the gate list in the plan (corpus admission, conformance evidence, world-change suites, Academy checks).</p>
+</body></html>

@@ -373,6 +373,15 @@ Main added named layout columns (`agent/observation_layout.rs`,
 shared-effect writes to those names and described duration code 4. Remaining
 work is in the plan.
 
+## Concept review after the fourteenth pass, 2026-11-12 UTC
+
+Reviewed v10 `player_turn_state` (life lost, spells cast, six
+nonartifact-restricted mana columns) and `card_turn_state` against the named
+layout, `AGENTS.md` and `docs/observation-and-model.md`: one owner per fact,
+columns named for what they hold, docs agree. The earlier mismatch (spells cast
+missing from the policy) is closed. Nothing new for implement; the open v10
+questions above don't block gate. Remaining work is the plan's gate list.
+
 ## MTG-307 (2026-11-12)
 
 - Assumption (reversible): the trigger player actor is a small `Actor` enum

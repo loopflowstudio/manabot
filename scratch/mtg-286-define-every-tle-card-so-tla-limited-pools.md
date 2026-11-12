@@ -175,6 +175,13 @@ pytest named-layout, input-v10, parity, text observation, experience protocol
 passed; cp313 rebuilt atomically. Academy vitest/svelte-check not run (no
 `node_modules`).
 
+## QA result (2026-11-12, `scratch/qa.html`)
+
+Corpus admission: 995/1000; the 5 failures are Heartbeat of Spring (3) and
+Lita (2); no dropped cards. Admit `Decklist(t.decklist.source, t.decklist.filename)`:
+the saved `Trophy.decklist` keeps the old world's issues (134/1000). QA fixed
+{X} text capture (`ManaCost.x`) and the Academy `CardState` conformance failure.
+
 ## Acceptance checks (gate)
 
 - Bonus-sheet coverage reports 58/61 (the three waiting names missing); every name has a unique key,

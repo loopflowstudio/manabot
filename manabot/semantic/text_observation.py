@@ -307,7 +307,9 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     )
     if generic < 0:
         raise TextEncodingError("inconsistent mana value")
-    symbols = (f"{{{generic}}}" if generic else "") + "".join(
+    if cost.x < 0:
+        raise TextEncodingError("unsupported mana cost")
+    symbols = "{X}" * cost.x + (f"{{{generic}}}" if generic else "") + "".join(
         f"{{{symbol}}}" * count
         for symbol, count in zip("WUBRGC", cost.cost[:6], strict=True)
     )
