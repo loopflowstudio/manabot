@@ -74,8 +74,6 @@ def test_cuda_semantic_policy_admission(declared: Literal["float32", "bf16"]) ->
     torch.set_num_threads(1)
     torch.manual_seed(26400)
     regime = elemental_recipe("precision-admission-fixture", 2)
-    assert regime.observation.policy_input_version == 6
-    assert not regime.agent.catalog_records(regime.observation.policy_input_version)
     regime.agent.hidden_dim = 16
     regime.agent.num_attention_heads = 2
     space = ObservationSpace(regime.observation)

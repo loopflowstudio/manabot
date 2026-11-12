@@ -470,18 +470,16 @@ def test_batch_rejects_incomplete_and_nonfinite_rows(
         teacher.predict_batch([env._engine, env._engine])
 
 
-@pytest.mark.parametrize("version", range(1, 10))
 @pytest.mark.parametrize("history", [0, 1])
 def test_batch_inputs_match_python_at_selected_capacities(
-    tmp_path: Path, version: int, history: int
+    tmp_path: Path, history: int
 ) -> None:
     """Every selected key and row reaches inference, with no shared buffer state."""
     teacher, env = make_teacher(
         tmp_path,
         observation=ObservationConfig(
-            policy_input_version=version,
             policy_history_version=history,
-            max_facts=17 if version >= 6 else None,
+            max_facts=17,
             max_cards_per_player=33,
             max_permanents_per_player=7,
             max_actions=37,

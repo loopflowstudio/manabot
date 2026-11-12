@@ -21,16 +21,13 @@ use crate::{
     },
 };
 
-/// Policy inputs v2/v3/v4/v5: up to 64 relation rows, 32/33/49 floats per row.
-/// Overflow is an admission error, never truncation. Zero is padding/absence
-/// for selectors. Validity stays at column 31 in every width.
+/// Up to 64 relation rows of 49 floats. Overflow is an admission error,
+/// never truncation. Zero is padding/absence for selectors. Validity is
+/// column 31 and target eligibility column 32, followed by the frame's X
+/// (33), its granted keywords (34..48, in `KeywordData` field order) and a
+/// waiting delayed trigger's "this turn" (48).
 pub const RELATION_ROWS: usize = 64;
-pub const LEGACY_RELATION_DIM: usize = 32;
-pub const RELATION_DIM: usize = 33;
-/// V5 appends the frame's X (column 33), its granted keywords (34..48, in
-/// `KeywordData` field order) and a waiting delayed trigger's "this turn"
-/// (48) after v4's eligibility column.
-pub const RELATION_DIM_V5: usize = 49;
+pub const RELATION_DIM: usize = 49;
 pub const RELATION_X_INDEX: usize = 33;
 pub const RELATION_KEYWORDS_INDEX: usize = 34;
 pub const RELATION_THIS_TURN_INDEX: usize = RELATION_KEYWORDS_INDEX + KEYWORD_COUNT;
@@ -80,7 +77,7 @@ pub struct ContinuationFrame {
     /// Effect execution tokens, a separate ordered occurrence from the source program.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effect_execution: Vec<(u16, i32)>,
-    /// v8 kind-10 relation rows link the one-based slots in effect execution tokens.
+    /// Kind-10 relation rows link the one-based slots in effect execution tokens.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effect_execution_references: Vec<VisibleReference>,
     /// Every retained fact as `name: value` text. Filled only by
@@ -92,8 +89,6 @@ pub struct ContinuationFrame {
     /// filled with `effect_execution_description`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effect_execution_summary: Vec<String>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub effect_execution_requires_v8: bool,
     /// Viewer-safe exact subjects retained by a delayed ability, separate from event context.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remembered: Vec<VisibleReference>,
@@ -120,10 +115,6 @@ pub struct ContinuationFrame {
     /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
     /// group plus one. Kind 10: delayed event code. Zero otherwise.
     pub decision: u8,
-    /// Frozen v1–v7 code for a selection migrated to the shared executor.
-    /// Absent for new selection domains, which require the successor input.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub legacy_decision: Option<u8>,
     pub parent: Option<usize>,
     pub controller: usize,
     pub source: VisibleReference,
@@ -152,7 +143,7 @@ pub struct ContinuationFrame {
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub granted_keywords: [bool; KEYWORD_COUNT],
     /// Waiting frequency: 1 once, 2 each match. Missing historical data is unknown.
-    /// V5/v6 encode it as a kind-9 relation row with the code in column 28.
+    /// Encoded as a kind-9 relation row with the code in column 28.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delayed_frequency: Option<u8>,
     /// A waiting delayed trigger that ends in this turn's cleanup step.
@@ -932,13 +923,8 @@ impl Game {
                 frame.mode = Some(*next);
             }
             Decision::SelectCards {
-                origin,
-                selected,
-                min,
-                max,
-                ..
+                selected, min, max, ..
             } => {
-                frame.legacy_decision = origin.legacy_code();
                 frame.can_decline = selected.len() >= *min;
                 frame.mode = Some(max.saturating_sub(selected.len()));
             }
@@ -1031,49 +1017,27 @@ pub fn decision_code(decision: &Decision) -> u8 {
 pub fn encode_into(
     frames: &[ContinuationFrame],
     viewer: usize,
-    version: u8,
     objects: &std::collections::HashMap<i32, i32>,
     out: &mut [f32],
 ) -> Result<(), super::observation_encoder::ObservationEncodeError> {
     use super::observation_encoder::ObservationEncodeError;
-    let dim = out.len() / RELATION_ROWS;
-    if ![LEGACY_RELATION_DIM, RELATION_DIM, RELATION_DIM_V5].contains(&dim)
-        || out.len() != RELATION_ROWS * dim
-    {
+    if out.len() != RELATION_ROWS * RELATION_DIM {
         return Err(ObservationEncodeError::InvalidLength {
             field: "relations",
-            expected: RELATION_ROWS * RELATION_DIM_V5,
+            expected: RELATION_ROWS * RELATION_DIM,
             actual: out.len(),
         });
     }
-    // Delayed triggers and scheduling are v5 facts; frozen v2-v4 inputs keep their
-    // rows. They follow every other frame, so no index moves.
-    let frames = if dim == RELATION_DIM_V5 {
-        frames
-    } else {
-        let shown = frames
-            .iter()
-            .position(|f| f.kind >= 10)
-            .unwrap_or(frames.len());
-        &frames[..shown]
-    };
     let count: usize = frames
         .iter()
         .map(|f| {
-            1 + if version >= 8 {
-                f.effect_execution_references.len()
-            } else {
-                0
-            } + f.targets.len()
+            1 + f.effect_execution_references.len()
+                + f.targets.len()
                 + usize::from(f.context.is_some())
                 + usize::from(f.sacrifice.is_some())
-                + if dim == RELATION_DIM_V5 {
-                    usize::from(f.inherited_from.is_some())
-                        + f.remembered.len()
-                        + usize::from(f.delayed_frequency.is_some())
-                } else {
-                    0
-                }
+                + usize::from(f.inherited_from.is_some())
+                + f.remembered.len()
+                + usize::from(f.delayed_frequency.is_some())
                 + f.hybrid.len()
                 + 2 * f.mana_outputs.len()
         })
@@ -1086,7 +1050,7 @@ pub fn encode_into(
         });
     }
     out.fill(0.0);
-    let mut rows = out.chunks_exact_mut(dim);
+    let mut rows = out.as_chunks_mut::<RELATION_DIM>().0.iter_mut();
     let link = |reference: VisibleReference| {
         reference
             .object
@@ -1096,7 +1060,7 @@ pub fn encode_into(
     let definition =
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
-        let mut header = [0.0; RELATION_DIM_V5];
+        let mut header = [0.0; RELATION_DIM];
         header[0] = 1.0;
         header[1] = (index + 1) as f32;
         header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
@@ -1117,17 +1081,7 @@ pub fn encode_into(
         header[19] = f32::from(frame.lesson);
         header[20] = f32::from(frame.waterbend);
         header[21] = f32::from(frame.can_decline);
-        if version < 8 && frame.legacy_decision.is_some() {
-            // Retired obligations left these fields unset. Their successor's
-            // count/decline metadata must not reinterpret saved scalar inputs.
-            header[7] = 0.0;
-            header[21] = 0.0;
-        }
-        header[28] = if version < 8 {
-            frame.legacy_decision.unwrap_or(frame.decision)
-        } else {
-            frame.decision
-        } as f32;
+        header[28] = frame.decision as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
         header[RELATION_X_INDEX] = f32::from(frame.x);
@@ -1135,18 +1089,16 @@ pub fn encode_into(
             header[RELATION_KEYWORDS_INDEX + index] = f32::from(*granted);
         }
         header[RELATION_THIS_TURN_INDEX] = f32::from(frame.this_turn);
-        rows.next().unwrap().copy_from_slice(&header[..dim]);
+        rows.next().unwrap().copy_from_slice(&header);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,
                                  clause: usize,
                                  ordinal: usize,
                                  legal: Option<bool>| {
             let row = rows.next().unwrap();
-            row.copy_from_slice(&header[..dim]);
+            row.copy_from_slice(&header);
             row[0] = kind;
-            if dim >= RELATION_DIM {
-                row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
-            }
+            row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
             row[22] = (clause + 1) as f32;
             row[29] = (ordinal + 1) as f32;
             row[23] = definition(reference);
@@ -1173,28 +1125,24 @@ pub fn encode_into(
         if let Some(target) = frame.sacrifice {
             reference_row(4.0, target, 0, 0, None);
         }
-        if version >= 8 {
-            for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
-                reference_row(10.0, *reference, 0, ordinal, None);
-            }
+        for (ordinal, reference) in frame.effect_execution_references.iter().enumerate() {
+            reference_row(10.0, *reference, 0, ordinal, None);
         }
-        if dim == RELATION_DIM_V5 {
-            if let Some(definition) = frame.inherited_from {
-                reference_row(7.0, definition, 0, 0, None);
-            }
-            for (ordinal, reference) in frame.remembered.iter().enumerate() {
-                reference_row(8.0, *reference, 0, ordinal, None);
-            }
-            if let Some(frequency) = frame.delayed_frequency {
-                let row = rows.next().unwrap();
-                row.copy_from_slice(&header);
-                row[0] = 9.0;
-                row[28] = f32::from(frequency);
-            }
+        if let Some(definition) = frame.inherited_from {
+            reference_row(7.0, definition, 0, 0, None);
+        }
+        for (ordinal, reference) in frame.remembered.iter().enumerate() {
+            reference_row(8.0, *reference, 0, ordinal, None);
+        }
+        if let Some(frequency) = frame.delayed_frequency {
+            let row = rows.next().unwrap();
+            row.copy_from_slice(&header);
+            row[0] = 9.0;
+            row[28] = f32::from(frequency);
         }
         for pair in &frame.hybrid {
             let row = rows.next().unwrap();
-            row.copy_from_slice(&header[..dim]);
+            row.copy_from_slice(&header);
             row[0] = 5.0;
             row[26] = (pair[0] + 1) as f32;
             row[27] = (pair[1] + 1) as f32;
@@ -1202,7 +1150,7 @@ pub fn encode_into(
         for output in &frame.mana_outputs {
             for (restricted, amounts) in [(false, output.mana), (true, output.lesson)] {
                 let row = rows.next().unwrap();
-                row.copy_from_slice(&header[..dim]);
+                row.copy_from_slice(&header);
                 row[0] = 6.0;
                 row[7] = (output.mode + 1) as f32;
                 for (index, amount) in amounts.iter().enumerate() {
@@ -1469,44 +1417,11 @@ mod tests {
     }
 
     #[test]
-    fn migrated_selection_preserves_each_frozen_obligation_code_and_header() {
-        for legacy in [5, 6, 7] {
-            let frame = ContinuationFrame {
-                kind: 6,
-                decision: 28,
-                legacy_decision: Some(legacy),
-                mode: Some(2),
-                can_decline: true,
-                ..Default::default()
-            };
-            for version in 2..=8 {
-                let width = match version {
-                    2 | 3 => LEGACY_RELATION_DIM,
-                    4 => RELATION_DIM,
-                    _ => RELATION_DIM_V5,
-                };
-                let mut out = vec![0.0; RELATION_ROWS * width];
-                encode_into(
-                    std::slice::from_ref(&frame),
-                    0,
-                    version,
-                    &HashMap::new(),
-                    &mut out,
-                )
-                .unwrap();
-                assert_eq!(out[28], if version < 8 { legacy as f32 } else { 28.0 });
-                assert_eq!(out[7], if version < 8 { 0.0 } else { 3.0 });
-                assert_eq!(out[21], if version < 8 { 0.0 } else { 1.0 });
-            }
-        }
-    }
-
-    #[test]
     fn relation_capacity_rejects_instead_of_truncating() {
         let frames = vec![ContinuationFrame::default(); RELATION_ROWS + 1];
         let mut out = vec![0.0; RELATION_ROWS * RELATION_DIM];
         assert!(matches!(
-            encode_into(&frames, 0, 8, &HashMap::new(), &mut out),
+            encode_into(&frames, 0, &HashMap::new(), &mut out),
             Err(super::super::observation_encoder::ObservationEncodeError::Capacity { .. })
         ));
     }
@@ -1539,10 +1454,10 @@ mod tests {
             ..ContinuationFrame::default()
         }];
         let mut left = vec![0.0; RELATION_ROWS * RELATION_DIM];
-        encode_into(&frames, 0, 8, &HashMap::new(), &mut left).unwrap();
+        encode_into(&frames, 0, &HashMap::new(), &mut left).unwrap();
         frames[0].targets.reverse();
         let mut right = left.clone();
-        encode_into(&frames, 0, 8, &HashMap::new(), &mut right).unwrap();
+        encode_into(&frames, 0, &HashMap::new(), &mut right).unwrap();
         assert_ne!(left, right);
         assert_eq!(&left[12..19], &[0., 1., 0., 0., 0., 0., 3.]);
         assert_eq!(left[19], 1.);
@@ -1550,7 +1465,7 @@ mod tests {
             &left[3 * RELATION_DIM + 26..3 * RELATION_DIM + 28],
             &[1., 3.]
         );
-        encode_into(&[], 0, 8, &HashMap::new(), &mut right).unwrap();
+        encode_into(&[], 0, &HashMap::new(), &mut right).unwrap();
         assert!(right.iter().all(|value| *value == 0.));
     }
 }

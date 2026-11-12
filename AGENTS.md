@@ -70,8 +70,28 @@ checkpoints or experiment evidence.
 - Loopflow discovers repository graphs in `.lf/graphs/`, not legacy `.lf/flows/`.
   Compose builtin graphs; use narrowly named forks for domain review placement.
   Validate changes with `uv run python scripts/check_loopflow_workflows.py`.
-  A nested software verification step must not complete a parent experiment
-  before its scientific outcome; see [work boundaries](docs/workflows.md).
+  See [work boundaries](docs/workflows.md).
+
+### Experiments
+
+- Most runs are exploratory: calibration, throughput, capacity, pilots and
+  anything run to make later work possible. They need no prediction, protocol
+  or review; the report ends them. A finding, a result that will be cited as a claim
+  about a method or about playing strength, opens its report with one
+  paragraph committed before any scored run: question, numeric prediction, the
+  result that would refute it and a cost cap. When unsure, it is exploratory.
+- The freeze is the commit and the Etude run ID. A change that keeps the
+  question (capacity, crash fix, device, retry) is a dated line in the report,
+  never a new protocol version. Cost is the launcher's number for the run,
+  recorded once; do not reconstruct bills, reserves or settlements.
+- An experiment whose whole cost is at or under USD25 launches under the
+  launcher's cap (`--max-usd`). Above that, a person approves the amount first.
+- An experiment is `experiments/<name>.py` at a commit with one report,
+  `experiments/<name>.md`. Do not add a protocol document, a serialized regime,
+  a digest check or a test suite for one experiment's schedule; reusable
+  machinery belongs in `manabot/` or Etude, tested once there.
+- Paired deals, replay verification, world-bound checkpoints and training
+  seeds as the unit of evidence are measurement quality and stay as they are.
 
 ### Python structure and documentation
 
@@ -118,88 +138,57 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
-- Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
-  remains column 31. Waiting delayed triggers are v5 relation frames (kind
-  10, after stack/decision frames); scheduled turns and combats follow as kinds
-  11/12. V2–v4 encode none of these v5 frames. V5 widens player rows to 73, card rows to 56 and
-  permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
-  `facts` block (128 × 12, one row per `FactKind` fact about a player or
-  permanent). Open-ended vocabularies (counter kinds, added subtypes, set
-  names, used abilities, continuous-effect records, copy effects and their
-  exceptions) are fact kinds, never columns. Preserve the frozen widths and
-  derive buffers from `ObservationSpace`. V6 retains those columns and serializes
-  `max_facts` (fresh default 512); v5 stays fixed at 128. Scalar/vector native
-  buffers read capacity from the fact axis; a 128-row v6 buffer encodes exactly
-  like v5. Model timestamp normalization remains rank / 128 in both versions,
-  independent of capacity. Legacy configurations omit `max_facts`.
-  Native buffer binding derives card, permanent, action, focus and event capacities
-  from the supplied `ObservationSpace` arrays on both scalar and vector paths.
-  Companion shapes must agree before writes. Event width selects legacy events
-  or public history; only public history has the 32-row bound. Relation and
-  shared-effect axes stay version-fixed. Never replace a supplied capacity with
-  a native default. Overflow rejects by default. Jack Heart's 2026-11-04 TLA
-  pilot exception explicitly selects `action_overflow=first-legal` with 64
-  policy slots and aggregate replay-linked diagnostics; native legality and
-  Academy retain all choices. Preserve prefix indices/Commands and frozen
-  configurations; an omitted overflow policy still means error.
+- A checkpoint records the revision and Etude run that wrote it
+  (`checkpoint_source`). The world binding compares every input buffer's shape,
+  so a layout change refuses older checkpoints, naming that revision and the
+  buffers that differ. Do not bump the input version for a layout change or add
+  a loading path for an older layout.
+- Main carries one policy input, v9 (`ObservationConfig.policy_input_version`);
+  it is always serialized. A checkpoint, replay or saved configuration bound to
+  any other version, or omitting it, raises `UnsupportedPolicyInput`, which
+  names the revision to run it from (`ac601834d` is the last revision
+  supporting v1-v8). Do not add version branches to the encoders or the model;
+  a new layout replaces this one at a world freeze.
+- Open-ended vocabularies (counter kinds, added subtypes, set names, used
+  abilities, continuous-effect records, copy effects and their exceptions) are
+  fact rows, never columns. Active effects are shared records: `effects`
+  headers own bounded offset/count slices into `effect_details` and
+  `effect_members`; members keep one-based public object joins. Detail and fact
+  rows carry learning-token kinds and exact signed i32 values in two 16-bit
+  halves; raw storage identities never enter these tokens. A stacked activation
+  owns its chosen effects; catalog joins are observation provenance, never
+  resolution lookup authority.
+- Derive every buffer and key from the supplied `ObservationSpace` on both the
+  scalar and vector paths, never from a native default or a global key list.
+  Companion shapes must agree before writes. Fact, relation and capacity
+  overflow is a typed Capacity error, never truncation. The one exception is
+  Jack Heart's 2026-11-04 TLA pilot choice of `action_overflow=first-legal`
+  with 64 policy slots and aggregate replay-linked diagnostics; native legality
+  and Academy retain all choices, and an omitted overflow policy means error.
+- Model timestamp normalization is rank / 128, independent of fact capacity.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
-  that adds it; a frozen policy-input version never silently falls behind.
+  that adds it; the policy input never silently falls behind.
   `managym/cards/tests/cards/observability.rs` names each `Observation` field's
   tensor columns or fact kind and fails to compile when a field is unlisted.
 - Decklist disclosure (open by default, or closed) lives on native
   `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
   `GameConfig.decklists`. Observations, search and possible worlds read it
   through `Game::decklist_known`/`require_open_decklist`; never filter decklist
-  information in an encoder or the browser. V5 encodes the lists in the
-  `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
+  information in an encoder or the browser. The policy input encodes the lists in
+  the `decklists` block (2 seats × max cards × 5); a closed opponent's rows are zero.
   Academy's server keeps a closed opponent's deck name, the matchup's asset pack
   and unseen definition names out of its frames and viewer trace exports.
-- Explicit input v7 retains the v5 object/relation widths but moves active
-  effects out of local facts: `effects` is 128 × 18, `effect_details` 512 × 3,
-  `effect_members` 2048 × 2. Headers own bounded offset/count slices; members
-  retain one-based public object joins and original record ordinals. Native
-  projection owns complete payloads, controller and exact source incarnation;
-  the model routes shared vectors before attention, preserving duplicate edges.
-  V1–v6 remain frozen and fresh defaults remain v6. Allocate and collect every
-  key from the selected `ObservationSpace`, never a global default key list.
-- Explicit input v8 preserves v7 object/relation/shared header/member widths,
-  with 4096 × 3 effect details. Detail kinds 11–19 carry learning-token kinds
-  1–9 and exact signed i32 values in two 16-bit halves. Local fact kinds 11–14
-  carry copy-exception programs, changed colors, keyword-counter timestamps,
-  and captured continuation programs (frame index + 1, token kind/value/ordinal).
-  V8 defaults to 512 local facts; v7 retains 128 and fresh input remains v6.
-  Shared admission rejects new unrepresentable layer payloads on v1–v7 before
-  either encoder writes buffers. A stacked activation owns its chosen effects;
-  catalog joins are observation provenance, never resolution lookup authority. V8
-  also carries effect execution as a separate fact-kind-14 occurrence (ordinal
-  reset), with one-based visible reference slots in relation kind 10. The native
-  frame/batch owners project rules payloads; raw storage identities never enter
-  these tokens. Frozen selection obligations retain codes 5/6/7 on v1–v7, while
-  v8 uses 28. Earlier instructions' results (selected, moved, created) stay out
-  of v1–v7, which remain admissible; open event batches, iterations and new
-  completions are novel and reject earlier inputs before buffer writes;
-  fact/relation overflow is a typed Capacity error, never truncation.
 - Naming is ordinary native decisions: `Decision::NameCard` holds a
   `NameScope`; scopes over `NAME_BRANCHING` (64) names offer balanced groups of
-  sorted names, and only a name choice commits. Explicit input v9 retains v8
-  layouts and adds `name_candidates[A,4]` at ordinary action capacity: name row,
-  optional definition reference, then a group's first and last name rows, all
-  one-based. V1–v8 carry no name identity and see naming prompts as anonymous
-  modal choices. Names are not game objects; do not use card slots or invent
-  definitions for them. Native scalar/vector paths select v9 from this buffer's
-  presence. V1–v8 and fresh v6 defaults remain unchanged.
-- Fact and shared-effect ids on v8/v9 read the card encoder's token rows
+  sorted names, and only a name choice commits. `name_candidates[A,4]` at
+  ordinary action capacity holds the name row, an optional definition
+  reference, then a group's first and last name rows, all one-based. Names are
+  not game objects; do not use card slots or invent definitions for them.
+- Fact and shared-effect ids read the card encoder's token rows
   (`ModelConfig.record_vocabulary="catalog"`, the fresh default, omitted from
   regimes); native `agent/record_vocabulary.rs` lists every name the encoders
   hash, so a new hashed name must appear there or the policy rejects it.
-  Checkpoints keep hashed ids: load through `ModelConfig.from_checkpoint` and
-  save `checkpoint_payload()`.
-- Saved observation configurations use `ObservationConfig.from_checkpoint` so
-  an absent policy-input version retains v1 semantics. Fresh construction uses
-  the current version. Keep version-specific zero/default exclusions stable:
-  architecture receipts hash the serialized configuration, including omissions.
 
 ## Commands
 
