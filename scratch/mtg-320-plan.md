@@ -1,72 +1,44 @@
 # MTG-320: runtime object kinds by zone
 
-## Rename pass (steers d57fc17e, 0779d3e9, e3b2a142, dbf13009; 2026-11-12)
-- Merged current MTG-298 branch (6320ad43c); `PutIntoGraveyard` now reads `moved.is_card()`;
-  `become_copy_of` already leaves kind alone. Four card tests moved off the removed `is_token` field.
-- Design written to docs/engine.md "Objects and zones" (CR term -> type table, "What is built",
-  token moment). Built: record `Object` in `state::game_object`, `ObjectId`/`ObjectVec`,
-  `GameState::objects`, `object_to_permanent`, `PublicId` for the old u32 id, locals/fields renamed
-  with serde wire names kept. Details and exclusions in questions.md.
-- Wire check: `semantic-kernel-w17-v2` conformance reproduces (state hashes byte-identical). A
-  misplaced serde attribute (on `ObjectLki.counters`) was the one drift found, by diffing regenerated
-  traces against a base-revision build.
-- Checks: `cargo nextest run --workspace --profile ci` 1166 passed, 4 timed out at load ~250-380;
-  those 4 pass alone without the limit (conformance 508 s, base revision 345 s at the same load).
-- clippy `--workspace --all-targets -D warnings` clean. Rebuilt cp313 extension; pytest env, belief,
-  semantic, verify, academy + world-change list: 907 passed, 1 failed
-  (`tests/verify/test_input_v10.py::test_v10_vector_buffers_reach_the_model`: "policy forward
-  requires an observation from admit_observation"; no Python differs from main on this branch, so
-  inherited), 1 deselected (`test_real_population_learning_is_held_out_and_beats_p0` hit the 5-min
-  per-test limit at load ~260; trains a model, touches nothing renamed).
-- Left for the PR body as remaining: Card/CardId store split, new object per zone change, CR 400.7
-  carry-over record, bench numbers (Engine Budget in CI).
+Design: `docs/engine.md#objects-and-zones` (CR term -> type table, zones, token moment, "What is
+built"); `managym/README.md` links it. Assumptions and naming exclusions: `questions.md`.
 
-Docs: `docs/engine.md#objects-and-zones` (rename written 2026-11-12: `GameObject`/`ObjectId`/`GameState::objects`, card-only naming rule, departure "record named Card" dropped), `managym/README.md` (Architecture pointer; policy-input paragraph says `ObjectId`). Build must match these names.
+## Built (HEAD 2a3eae3b0, synced with main a343904ee and MTG-298 15e50b205)
+- Kind: `ObjectKind { Card, Token, SpellCopy }`, private `kind` on the runtime record, set at
+  construction (`with_kind` for token copies and spell copies); `resolve_into_token()` in
+  `commit_zone_move` when a spell copy enters the battlefield (CR 111.12). Runtime readers use the
+  kind: SBA (CR 704.5d-e), predicate/layer `token` filter, exile cast grants, "card" selection,
+  return-to-battlefield guard, main's `PutIntoGraveyard` (`moved.is_card()`). `become_copy_of`
+  leaves kind alone. Remaining `is_token` reads are catalog rows, deck/sideboard admission, the
+  observation column (`!is_card()`) and hash wire bytes.
+- Rename (steers d57fc17e, 0779d3e9, e3b2a142, dbf13009): record `Card` -> `Object` in
+  `state::game_object`, `CardId` -> `ObjectId`, `CardVec` -> `ObjectVec`, `GameState::objects`,
+  `object_to_permanent`, old u32 `ObjectId` -> `PublicId`; object-level helpers `remove_object`,
+  `object_zones`, `matches_object[_with_power]`, `object_power`, `object_mana_value`. Serde keeps
+  wire names. Incoming MTG-298 tests ported in 2a3eae3b0.
+- Byte identity: observation `is_token` = `!is_card()`; hash keeps `is_token: true` for non-card
+  objects. `semantic-kernel-w17-v2` conformance reproduced after the rename (one serde-attribute
+  drift on `ObjectLki.counters` found by diffing traces and fixed).
+- Test: Azula instant copy is `SpellCopy` and ceases off the stack.
 
-Built:
-- `state::card::ObjectKind { Card, Token, SpellCopy }`, private `kind` on the runtime object record
-  (`Card`), set at construction (`from_definition` reads the row's `is_token`; `with_kind` for token
-  copies and spell copies). `is_card()`; `resolve_into_token()` in `commit_zone_move` when a spell copy
-  enters the battlefield (CR 111.12).
-- Runtime readers moved off the definition flag: SBA (tokens off battlefield, spell copies off stack,
-  CR 704.5d-e), predicates/layers (`token` filter = kind Token), cast_permission exile grants,
-  "card" selection in decision.rs, return-to-battlefield guard in resolution.rs.
-- Deleted: `show()` re-setting `is_token` on a token's back face; `prepare_token_copy` writing
-  `is_token` into the copy's definition. `CardDefinition.is_token` now only marks token catalog rows.
-- Byte-identity: observation `is_token` = `!is_card()`; match-state hash `copied_characteristics` for
-  non-card objects carries `is_token: true` (v16 bytes unchanged, no version bump).
-- Test: Azula instant copy is `SpellCopy` and ceases off the stack; existing permanent-copy test checks Token.
+## Checks seen (before the MTG-298 15e50b205 merge and 2a3eae3b0)
+- Debug `cargo nextest --workspace --profile ci`: 1166 passed; 4 timed out at load ~250-380 and
+  pass alone (conformance 508 s; base revision 345 s at the same load). Clippy `-D warnings` clean.
+- pytest env/belief/semantic/verify/academy + world-change list: 907 passed, 1 failed
+  (`test_v10_vector_buffers_reach_the_model`, "policy forward requires an observation from
+  admit_observation"; no Python differs from main here, so inherited), 1 deselected (5-min limit).
+- After the rename's compress: `cargo build --tests --workspace` ok.
+- QA (release extension): 60 random games, 150 Azula games, 4 Academy games; no token or copy seen
+  off battlefield/stack at a decision except Treasures mid mana choice (CR 704.3, correct).
 
-Checks: `cargo nextest run --workspace --profile ci` 1058 passed; rebuilt cp313 extension; pytest
-belief/verify/semantic/search-command-evidence/academy authored+parity+study 444 passed.
-Remaining for gate: clippy; CLAUDE.md world-change pytest list; Engine Budget in CI (digest should not move).
-
-Upstream (origin/main 92e476217, checked 2026-11-12): this branch stacks on MTG-298 (`ac213b488`),
-which is not on main yet; its merge base with main is `01d5abd2c`. Main has since added two runtime
-readers of the definition flag that must move to the kind when this branch meets main:
-- `TriggerCondition::PutIntoGraveyard` in `flow/triggers.rs` matching: `!moved.is_token` ->
-  `moved.is_card()` ("card put into a graveyard"; a dying token doesn't match).
-- `Card::become_copy_of` in `state/src/card.rs` saves and restores `is_token` around the copy; with the
-  private `kind` untouched by copying, that save/restore goes away.
-After the sync, re-grep runtime `is_token` reads (`git grep -n is_token -- managym/src managym/state/src`)
-and rerun the debug nextest. Main's new cards define no emblem and cast no copy of a card, so the
-"none yet" rows in `docs/engine.md#objects` stay true.
-
-Compress: only import tidying (`ObjectKind` in retarget.rs, predicate.rs). Kept `kind() == ObjectKind::Token`
-over a `Card::is_token()` method: it would share a name with the deref'd row flag `CardDefinition.is_token`.
-No runtime `Card` reads that flag any more (grep: remaining reads are rows or observation `CardData`).
-`cargo build --tests` ok.
-
-Concept review (2026-11-12): no concept change. The model reads as the rules do: a definition (card or
-token row) says what a thing is, `ObjectKind` says what each game object is, zones say where. One
-authority per fact: `kind` for runtime questions, the row's `is_token` only for catalog rows and the
-frozen wire/hash bytes. Emblem and copy-of-a-card stay "none yet". Keeping the record named `Card` is
-a naming refactor, not a product choice; it stays as recorded in questions.md. The only outstanding
-work is the main sync above (two readers to move to `is_card()`/kind), already written as direction.
-
-Compress after rename (2026-11-12): renamed object-level functions still named for cards to the
-naming rule: `ZoneManager::remove_card`/`card_zones` -> `remove_object`/`object_zones` (serde keeps
-`card_zones`), `CardPredicate::matches_card[_with_power]` -> `matches_object[_with_power]`,
-`Game::card_power` -> `object_power`, `card_mana_value` -> `object_mana_value`. Functions over
-libraries, hands and "card" text (`draw_cards`, `exile_top_cards_to_play`, `unseen_cards`, ...) keep
-`card`. `cargo build --tests --workspace` ok; nextest sba/704/predicate/power filter 48 passed.
+## Remaining
+- CI on 2a3eae3b0 (run 43325427802) was pending when read: Rust Tests (debug), Engine Budget
+  (digest should not move), conformance, integration. It is the first full check after the
+  15e50b205 merge.
+- PR #491 body is stale: it says the record keeps the name `Card`, lists the two main readers as
+  unmoved, and gives old check counts. Rewrite at publish: rename built, readers moved, current
+  checks, and "left for later" below.
+- Stack parent PR #476 (MTG-298) is open; it lands first.
+- Left for later (steer allows "land the rename plus the typed ids here, and say what is left in
+  the PR body"): separate `Card`/`CardId` store, new object per zone change, the CR 400.7
+  carry-over record, measuring their layer/`TriggerIndex` invalidation cost.
