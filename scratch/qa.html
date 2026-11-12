@@ -3,6 +3,18 @@
 <h1>MTG-307 QA — triggers as "whenever X does Y"</h1>
 <p>Head <code>0c2ce18e1</code>, base <code>fa56bd4a2</code>. Release extension rebuilt at head (cp313, atomic replace) before every check below.</p>
 
+<section style="border:1px solid #9b9;padding:.2em 1em;background:#f4fbf4">
+<h2>Re-run at head <code>da964c606</code> (2026-11-12)</h2>
+<p>Since the first pass: the <code>TriggerSubject::Matching</code> fold, the boxed predicate, the shared <code>matching</code> constructor and two base merges. Release extension rebuilt at this head and swapped in atomically.</p>
+<ul>
+<li><b>Trigger text:</b> dumped <code>trigger_description</code> for every triggered ability in the catalog at <code>0c2ce18e1</code> and at this head, using a throwaway test that was removed afterward. 276 lines on each side, <b>byte-identical</b>: the subject fold changed no text a player or model reads.</li>
+<li><b>Random games:</b> the same <code>.runs/qa307/play.py</code> run: 1332 complete games, 0 errors, 0 unfinished, the same 76 distinct stack-ability descriptions.</li>
+<li><b>Academy table:</b> started with <code>./scripts/play --port 18741 --frontend-port 18742</code> and played one game to Game Over in headless Chromium, clicking only offered choices (96 clicks, no page errors). A trigger-ordering decision showed two draw-event triggers with their new text:</li>
+</ul>
+<img src="qa307/trigger-order.png" alt="Choose the next ability to put on the stack: Otter-Penguin and Tiger-Seal, both 'Whenever you draw your second card each turn'">
+<p>Nothing needed fixing. The "not reached" and "still wrong" lists below still apply.</p>
+</section>
+
 <h2>1. Trigger text every player and model reads</h2>
 <p>Ran the engine's own <code>trigger_description</code> (what Academy's stack, the decision context and LLM text show) over every triggered ability of all 460 catalog definitions at base and head, via a throwaway test, since removed. 276 abilities each side, 91 changed, none lost. Full diff: <a href="qa307/trigger-text.diff">qa307/trigger-text.diff</a>.</p>
 <table><tr><th>Base</th><th>Head</th></tr>

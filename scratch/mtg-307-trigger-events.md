@@ -116,3 +116,7 @@ Nothing remains to build. The latest base merge (7ef6ce588) only adds TLE
 spells to `tests/sim/test_heuristic.py`; no trigger code moved. Remaining:
 parent PR #469 lands first (open, blocked), then PR #484 CI (preflight pending
 at this pass) and the Engine Budget digest adoption noted under Gate.
+
+QA re-run (head da964c606): catalog trigger text byte-identical to 0c2ce18e1
+(276 lines); 1332 random games 0 errors; Academy game to Game Over with a
+draw-event trigger-order decision. No fixes. See `scratch/qa.html`.
