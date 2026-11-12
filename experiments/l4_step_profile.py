@@ -47,6 +47,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 import traceback
 from typing import Any, TypedDict
@@ -1213,7 +1214,8 @@ def job(smoke: bool = False) -> None:
     """All stages in order; `smoke` runs them on CPU at toy scale."""
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    work = Path(os.environ.get("MTG301_WORK", "/tmp/mtg301"))
+    # Attempts on one rented machine share /tmp; each takes its own directory.
+    work = Path(os.environ.get("MTG301_WORK") or tempfile.mkdtemp(prefix="mtg301-"))
     captures = work / "captures"
     device = "cpu" if smoke else "cuda"
     flags = ["--smoke"] if smoke else []
