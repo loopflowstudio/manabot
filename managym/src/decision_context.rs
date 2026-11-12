@@ -377,11 +377,6 @@ impl Game {
             };
             view.stage = stage.into();
             view.instruction = instruction.into();
-            if let Decision::ManaUpfront { tap_remaining, .. } = &suspended.decision {
-                if *tap_remaining > 0 {
-                    view.instruction = format!("Choose an untapped permanent to tap. {tap_remaining} more tap selections are required to pay this ability.");
-                }
-            }
         }
         if let Some(placement) = &self.state.trigger_placement {
             let choosing_mode = placement

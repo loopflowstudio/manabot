@@ -1,28 +1,141 @@
 //! TLE card behavior through ordinary choices and exact Command forks.
 use crate::support::{
-    game::{clear_summoning_sickness, five_color_unfunded_setup, move_to_hand, Scenario},
-    inspect::{assert_choice_contract, can_activate, can_cast, card_of, offered_cards, tapped},
-    play::{activate, cast_owned, choose, choose_mode, pass_until, select_card, settle},
+    game::{
+        clear_summoning_sickness, five_color_setup, five_color_unfunded_setup, move_to_hand,
+        Scenario,
+    },
+    inspect::{
+        assert_choice_contract, can_activate, can_cast, card_of, offered_cards, offered_targets,
+        tapped,
+    },
+    play::{
+        activate, attack_with, cast_owned, choose, choose_mode, pass_until, select_card, settle,
+    },
 };
 use managym::{
-    agent::{action::{Action, ActionSpaceKind}, observation::Observation, observation_encoder::encode},
+    agent::{
+        action::{Action, ActionSpaceKind},
+        observation::Observation,
+        observation_encoder::encode,
+    },
     flow::turn::StepKind,
-    state::game_object::{PermanentId, PlayerId},
+    state::{
+        game_object::{PermanentId, PlayerId, Target},
+        zone::ZoneType,
+    },
 };
+
+#[test]
+fn tle_baseline_vanilla_creatures_cast_and_deal_printed_combat_damage() {
+    for (name, power, toughness) in [
+        ("Capital Guard", 2, 2),
+        ("Kyoshi Warrior Guard", 2, 3),
+        ("Warship Scout", 2, 1),
+    ] {
+        let mut s = five_color_setup(&[name]);
+        let card = cast_owned(&mut s, name);
+        settle(&mut s);
+        let permanent = s.game().state.card_to_permanent[card].unwrap();
+        let view = s.game().characteristics(permanent);
+        assert_eq!((view.power, view.toughness), (power, toughness), "{name}");
+        assert!(!tapped(&s, permanent), "{name}");
+        clear_summoning_sickness(&mut s, permanent);
+        let life = s.life(1);
+        pass_until(&mut s, ActionSpaceKind::DeclareAttacker);
+        attack_with(&mut s, permanent);
+        s.advance_to_step(StepKind::EndOfCombat);
+        assert_eq!(s.life(1), life - power, "{name}");
+    }
+}
+
+#[test]
+fn tle_baseline_explosive_shot_targets_only_creatures_and_deals_four() {
+    let mut s = five_color_setup(&["Explosive Shot", "Craw Wurm"]);
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    cast_owned(&mut s, "Explosive Shot");
+    assert!(!offered_targets(&s).contains(&Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[wurm].is_none());
+    s.assert_zone_size(1, ZoneType::Graveyard, 1);
+    s.assert_life(1, 20);
+}
+
+#[test]
+fn tle_baseline_zukos_offense_can_damage_player_or_creature() {
+    for hit_player in [false, true] {
+        let mut s = five_color_setup(&["Zuko's Offense", "Gray Ogre"]);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        cast_owned(&mut s, "Zuko's Offense");
+        let targets = offered_targets(&s);
+        assert!(targets.contains(&Target::Permanent(ogre)));
+        assert!(targets.contains(&Target::Player(PlayerId(1))));
+        assert!(s.choose_target(if hit_player {
+            Target::Player(PlayerId(1))
+        } else {
+            Target::Permanent(ogre)
+        }));
+        settle(&mut s);
+        s.assert_life(1, if hit_player { 18 } else { 20 });
+        assert_eq!(s.game().state.permanents[ogre].is_some(), hit_player);
+    }
+}
+
+#[test]
+fn tle_baseline_kindly_customer_draws_on_entry() {
+    let mut s = five_color_setup(&["Kindly Customer"]);
+    cast_owned(&mut s, "Kindly Customer");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let library = s.zone_size(0, ZoneType::Library);
+    settle(&mut s);
+    s.assert_zone_size(0, ZoneType::Hand, hand + 1);
+    s.assert_zone_size(0, ZoneType::Library, library - 1);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Kindly Customer").len(),
+        1
+    );
+}
+
+#[test]
+fn tle_baseline_koala_sheep_gains_three_on_entry() {
+    let mut s = five_color_setup(&["Koala-Sheep"]);
+    let life = s.life(0);
+    cast_owned(&mut s, "Koala-Sheep");
+    settle(&mut s);
+    s.assert_life(0, life + 3);
+    s.assert_life(1, 20);
+}
+
+#[test]
+fn tle_baseline_wolf_cove_villager_enters_tapped_and_untaps_normally() {
+    let mut s = five_color_setup(&["Wolf Cove Villager"]);
+    let card = cast_owned(&mut s, "Wolf Cove Villager");
+    settle(&mut s);
+    let permanent = s.game().state.card_to_permanent[card].unwrap();
+    assert!(tapped(&s, permanent));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(tapped(&s, permanent));
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(!tapped(&s, permanent));
+}
 
 fn merchant(foods: usize) -> (Scenario, PermanentId, Vec<PermanentId>) {
     let mut s =
         five_color_unfunded_setup(&["The Cabbage Merchant", "Prophetic Prism", "Gray Ogre"]);
     let source = s.force_permanent_on_battlefield(0, "The Cabbage Merchant");
-    let foods = (0..foods)
+    let foods = create_foods(&mut s, foods);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    (s, source, foods)
+}
+
+fn create_foods(s: &mut Scenario, count: usize) -> Vec<PermanentId> {
+    (0..count)
         .map(|_| {
             s.game_mut()
                 .create_token("Food", PlayerId(0), false)
                 .unwrap()
         })
-        .collect();
-    s.game_mut().scenario_refresh_priority().unwrap();
-    (s, source, foods)
+        .collect()
 }
 
 #[test]
@@ -178,13 +291,7 @@ fn merchant_sacrifices_a_food_for_each_creature_dealing_combat_damage_to_you() {
 fn merchant_paid_foods_are_not_offered_again_for_waterbending() {
     let mut s = five_color_unfunded_setup(&["The Cabbage Merchant", "Waterbending Lesson"]);
     let source = s.force_permanent_on_battlefield(0, "The Cabbage Merchant");
-    let foods = (0..3)
-        .map(|_| {
-            s.game_mut()
-                .create_token("Food", PlayerId(0), false)
-                .unwrap()
-        })
-        .collect::<Vec<_>>();
+    let foods = create_foods(&mut s, 3);
     s.set_player_mana_pool(0, "3U");
     cast_owned(&mut s, "Waterbending Lesson");
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));

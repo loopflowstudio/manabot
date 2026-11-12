@@ -33,6 +33,7 @@ from manabot.env.observation import (
     ObservationEncoder,
 )
 from manabot.managym.enums import ActionEnum
+from manabot.semantic.text_observation import capture_text_decision, submit_response
 from manabot.verify.representation import source_effect_root
 from manabot.verify.text_observation import priority_root
 import managym
@@ -796,8 +797,6 @@ def test_v6_vector_buffers_derive_fact_capacity(capacity: int) -> None:
 
 @pytest.mark.parametrize("version", [5, 6, 8, 9])
 def test_merchant_tap_count_native_reference_and_text_parity(version: int) -> None:
-    from manabot.semantic.text_observation import capture_text_decision, submit_response
-
     env = priority_root(
         ("Unlucky Cabbage Merchant", "Unlucky Cabbage Merchant"),
         ("The Cabbage Merchant", "Forest", "Forest", "Forest", "Forest"),

@@ -1,8 +1,13 @@
 # Every TLE card in the development world
 
-Status: implementation in progress. The Merchant payment slice is implemented;
-233 definitions and the full clause allocation remain open. State/observation
-contracts for phasing, end-turn and player counters still need detailed design.
+Status: implementation in progress. The 242-name/411-paragraph rule allocation
+is complete as a planning ledger, not a behavior proof. Merchant tap choices now
+have scalar, vector, Academy reconnect and Command/fork proofs. Eight ordinary
+TLE definitions join the Merchant; 225 inventory names remain absent. The
+production/spending replacement is proposed in `scratch/tle-production-design.md`;
+its event timing and exact v10 encoding table require authored review before
+dependent writers. Phasing, end-turn and player counters also need detailed
+state/observation contracts.
 The shipping doc is
 `docs/engine.md#tla-decks-with-tle-bonus-sheet-cards`; decisions and evidence are
 in `scratch/questions.md`.
@@ -27,10 +32,11 @@ without substituting deck names, weakening printed card behavior or construction
 rules, or changing split assignments to make the check pass. Expanding MTG-282's
 saved corpus is subsequent work.
 
-Proposed scope assumption: retain the current 1v1 development format.
+Retained scope assumption: use the current 1v1 development format.
 Commander-dependent clauses must
 behave correctly when no commander exists; adding a Commander format or
-multiplayer setup is not part of the proposed scope. That does not permit
+multiplayer setup remains a demo question, not an implementation prerequisite.
+That does not permit
 substituting a legendary creature for a commander or making Arcane Signet
 produce arbitrary colors. Catalog tokens must still describe the printed rule.
 
@@ -41,17 +47,51 @@ the proposal keeps 1v1 while retaining all 242 names and their printed clauses.
 
 ## What exists
 
-The catalog now includes The Cabbage Merchant with counted tap costs and its
-two triggers. Seven directed Merchant tests cover repeatability, reserved costs,
-waterbending, observations, Command replay and printed triggers. Learning tokens
-carry the counted cost. Existing single-tap definitions preserve serialization.
+`managym/cards/src/tle.rs::the_cabbage_merchant` defines the counted tap cost and
+both printed triggers. `flow/mana.rs::PaymentResources` separates presence,
+untapped resources and limited ability uses; `PaymentStep::Tap` records each
+selected Food. `PaymentModel::plan_after_tap` shares reservation and remaining-count
+logic between ordinary and nested payments. Count-one `TapCost` definitions retain
+their serialization and tokens.
+
+Recorded focused results in `scratch/questions.md` establish these bounded proofs:
+
+- Seven tests in `managym/cards/tests/cards/tle.rs` cover two activations using
+  four distinct Foods, three-Food rejection, a tapped/summoning-sick Merchant,
+  reserved Food costs, waterbend exclusion, viewer-safe continuation and both
+  printed triggers. `support/inspect.rs::assert_choice_contract` compares cloned
+  Command execution and rejects a repeated stale Command without mutation.
+- `observability.rs::merchant_counted_tap_cost_reaches_learning_tokens` checks
+  the count and Food predicate. The registered-mana resource guard and focused
+  existing single-tap/nested-payment regressions passed in debug.
+- `tests/verify/test_observation_parity.py::test_merchant_tap_count_native_reference_and_text_parity`
+  passed for v5/v6/v8/v9 at both tap selections: native allocated and preallocated
+  **scalar** buffers agree with Python and LLM text. The extension was rebuilt
+  after the final payment edits. This test does not execute `VectorEnv` or Academy.
+
+`tests/academy/test_merchant_payment_recovery.py` executes a real three-Food
+position with forced skipping on. It recovers both tap prompts and the color
+prompt through WebSocket reconnect; fork execution and replay into a native
+VectorEnv agree at every prompt for v5/v6/v8/v9. Duplicate and stale Commands
+leave state and trace length unchanged. Two Foods would make the second tap
+forced, so that setup cannot prove a second user choice.
+
+The full affected suites, current-world receipts and browser visual checks
+remain outstanding. Focused passes do not establish
+complete payment correctness or a general large-board performance bound.
 
 `managym/cards/tests/fixtures/tle-inventory.jsonl` pins all 242 Oracle identities,
 TLE printing IDs, first-printing IDs/sets and every Oracle paragraph. It retains
 existing definition identities, chooses KLD over its simultaneous MPS Gearhulk
 printing, and records Three Dreams' earlier PSAL printing. This is source data,
-not a completed rule allocation or support list. Nine names are now defined;
-233 remain absent. No corpus re-admission receipt exists. The shipping guide's
+not a support list. `tle-allocation.jsonl` binds an implementation obligation to
+every one of its 411 Oracle paragraphs, retaining all 242 definition owners,
+including the three vanilla cards. Seventeen names are now defined; 225 remain
+absent. Eight additions use existing rules: Capital Guard, Kyoshi Warrior Guard,
+Warship Scout, Explosive Shot, Zuko's Offense, Kindly Customer, Koala-Sheep and
+Wolf Cove Villager. Their six `tle_baseline` tests passed in debug; their printing
+shells/Oracle text are in the existing conformance snapshot. Sheep is now a
+creature subtype in the shared table. No corpus re-admission receipt exists. The shipping guide's
 Scout's Warning example correctly remains planned behavior.
 
 ## Why a definitions-only implementation is insufficient
@@ -80,20 +120,25 @@ Other concrete semantic boundaries found while reading the current owners:
 Keep these as internal slices of this Task. Each introduces real card consumers
 and directed tests together; no empty setup, feature flag or alternate catalog.
 
-1. **Complete the rule allocation.** Use the pinned first-printing identities
-   and map every printed clause to an existing or planned native
-   rule. Use the existing TLA allocation fixtures as a structural precedent,
-   specifically `managym/cards/tests/fixtures/tla-allocation.jsonl`, without
-   importing their old Task ordering. Pin the TLE name inventory in an
-   offline completeness test; it only detects missing definitions and never
-   controls admission. Add Oracle shells to the existing Scryfall conformance
+1. **Rule allocation (planning ledger complete).** The new
+   `managym/cards/tests/fixtures/tle-allocation.jsonl` assigns each pinned Oracle
+   paragraph to existing or planned native rules. Indices bind to the unchanged
+   source fixture; modal bullets retain their announcement owner. The TLA
+   allocation supplied the structural precedent, without its old Task ordering.
+   `tests/infra/test_tle_allocation.py` protects pinned source and clause binding.
+   Add Oracle shells to the existing Scryfall conformance
    snapshot (`managym/tests/fixtures/scryfall_cards.json`) when definitions are
-   added. Resolve token identities separately. This allocation is the next
-   concrete deliverable; the mechanism families below are not a complete design.
+   added. Resolve token identities separately.
+   `uv run python scripts/check_tle_coverage.py --allocation-only` checks
+   the pinned source and exact paragraph coverage. Without that option it requires
+   all names in the installed catalog, first-printing identities, unique keys
+   and learning tokens; it must fail while definitions remain missing.
+   Neither check establishes printed behavior. Token closure identities and
+   the mechanism families below still require implementation design.
 
 2. **Payment resources and production.** The Merchant tap-resource subset is
    implemented under the contract below, with focused evidence in
-   `scratch/questions.md`. Finish the shared vector/Academy proofs. Design
+   `scratch/questions.md`. The shared vector/Academy proofs now pass. Design
    triggered extra production and spend provenance before registering Heartbeat
    of Spring or Animal Attendant; their counterexample is below.
 
@@ -132,8 +177,11 @@ and directed tests together; no empty setup, feature flag or alternate catalog.
    guide's existing examples and prove them with the rebuilt extension, then
    replace its planned-support wording with the demonstrated behavior.
 
-The full allocation in slice 1 is still required. The table above is a verified
-set of counterexamples, not a claim that all 233 remaining cards have been designed.
+Slice 1 allocates all clauses but does not certify the planned extensions.
+The ledger adds concrete production/spending consumers (Toph, Greatest Earthbender,
+Uncle's Musings, Tarnished Citadel and The Great Henge), plus state-trigger,
+entry-copy, chosen-color and event-batch obligations that the earlier family list
+omitted. Review these before defining cards against incomplete rules.
 
 ## Shared observation and compatibility contract
 
@@ -178,14 +226,17 @@ and ability use existing reference slots, committed taps use permanent tapped
 columns. Native and Python encoders already carry mode; text must name the
 remaining count and action labels must say Tap. Counted cost learning tokens
 come from the definition's serializer. No new tensor width or fresh default.
-The focused proof must include clone/Command replay at each tap and output,
-competing waterbend/activation resources, three versus four Foods, tapped
-Merchant, and its other two printed triggers before registration is complete.
+The focused native proof covers clone/Command replay at each tap and output,
+competing waterbend/activation resources, three versus four Foods, a tapped
+Merchant and both printed triggers. The integration proof executes both tap selections through vector buffers and
+Academy's actual pending decision, including stale rejection, reconnect and
+replay/fork identity. Browser presentation remains with gate/demo.
 
-## Next production boundary — stop dependent implementation
+## Production boundary requiring design
 
 Heartbeat of Spring cannot be represented by the existing triggered-mana
-record. `TriggeredManaAbility` holds a fixed `Mana`; `zones.rs::tap_bonus_sources`
+record. `state/card.rs::TriggeredManaAbility` holds a fixed `Mana`;
+`flow/zones.rs::tap_bonus_sources`
 scans only the tapping player's permanents, and `tap_permanent(for_mana=true)`
 fires bonuses before a chosen output exists. `Decision::ManaChoice` retains
 choices and a caller but discards the source. Heartbeat applies to either player
@@ -193,17 +244,18 @@ and chooses a type that the land actually produced. Treating it as a fixed
 bonus, computing its color from printed abilities, or granting it only to its
 controller is incorrect. Animal Attendant also needs mana-unit provenance that
 survives spending into cast/entry; `Mana` currently retains color/restriction,
-not this entry-effect provenance. These are production/observation contract
+not this entry-effect provenance (`state/mana.rs::Mana`). These are production/observation contract
 changes, not more definitions over the completed tap-resource slice.
 
-Revise the production design before implementing those consumers: retain exact
-production source and actual output through triggered mana choices; gather
-applicable triggers from both players; distinguish the producing player from
-the trigger's controller; retain spend provenance into cast and entry. Define
-viewer-safe joins, typed pool facts and scalar/vector/Python parity before any
-writer. No new mutable state or guessed behavior for those cards was added.
-The implement rule stops dependent work at this concrete counterexample; the
-Merchant slice remains independently testable. All-card scope is unchanged.
+The proposed replacement contract is now in `scratch/tle-production-design.md`.
+It specifies production occurrences, actual-output triggers, semantically distinct
+mana classes, explicit spending choices and receipts attached to the cast/entry.
+It names the existing consumers that move in each deletion cut. Toph's total
+spending, Uncle's Musings' distinct colors, Citadel's damage and Henge's life gain
+are additional constraints from the clause allocation. Production-event timing
+and the concrete v10 fact/action join table remain explicit review questions;
+no new writer or input version has been added. Continue only definitions that
+use existing rules until the corresponding new contract is settled.
 
 ## Delete — do not maintain
 
@@ -211,11 +263,10 @@ Completed: replaced `PaymentSearchState.available`, both one-use pruning
 bounds and `registered_mana_activations_have_finite_source_costs`. The surviving
 resource model and explicit tap witnesses retain reservations and finite
 progress. Single-object tap costs use the counted type while serializing identically.
-Compression removes duplicated selected-tap reservation/count logic:
-`PaymentModel::plan_after_tap` consumes the choice on the same resource state
-used by search. Callers pass the full unpaid count. Nested candidate offers
-build one model/pool per action list; ordinary tap-cost offers use one complete
-affordability search. No parallel mana planner or remaining deletion target.
+`PaymentModel::plan_after_tap` also replaced duplicated selected-tap
+reservation/count logic. No parallel mana planner remains. The proposed
+production/spending cut names its additional deletion targets in
+`scratch/tle-production-design.md`; do not extend those predecessors.
 
 Keep `ExileUntilNonlandCastFree` for its distinct existing card behavior.
 No catalogs, importers, frozen receipts, split assignments or card definitions
@@ -223,12 +274,13 @@ are deletion targets; there is no predecessor TLE implementation.
 
 ## Acceptance and remaining work
 
-The Merchant subset of slice 2 is implemented. Remaining: finish slice 1's
-per-clause rule allocation, design production provenance/triggered choices,
-then implement the remaining slices and all 233 missing definitions. The
+The Merchant subset of slice 2 and eight ordinary definitions are implemented.
+Remaining: review the proposed production/spending contract and settle its exact
+observation grammar, design the other planned rule extensions from the allocation,
+then implement the remaining slices and all 225 missing definitions. The
 Merchant does not establish Heartbeat/Attendant support or corpus admission.
-Do not advance the Graph on this partial implementation. Follow AGENTS.md's
-debug-test and extension-rebuild requirements during implementation. At gate:
+The all-card outcome is not met. At gate, after implementation and extension
+rebuild:
 
 - Check every pinned TLE name is a defined non-token card, with unique key and
   first-printing Scryfall ID, learning tokens and directed behavior coverage.
@@ -237,6 +289,11 @@ debug-test and extension-rebuild requirements during implementation. At gate:
   `docs/development.md`, including encoder parity/admission and checkpoint
   rejection for incompatible historical worlds. Exercise Academy pending
   choices, stale Commands, reconnect and replay/fork identity for new decisions.
+  Include the required choice-navigation, Learn setup, model/checkpoint,
+  observation, action-cutoff and native-buffer-capacity suites named in
+  `docs/development.md#validation-by-change-area`; the four scalar parity cases
+  above do not replace them. Browser checks can run headless after frontend
+  generation/build, on isolated ports.
 - Fetch the pinned corpus through `manabot.data` with R2 credentials injected
   by Doppler; read the same first 1,000 ordered events and admit every full deck
   and sideboard through the public import path. `experiments/tla_corpus.py`

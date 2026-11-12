@@ -256,9 +256,10 @@ prefix considers concrete pool remainders and the parent's completion.
 
 Payment search tracks an object's untapped resource, presence and limited
 ability uses separately. Counted tap costs select distinct untapped matching
-permanents through ordinary SelectCard decisions; The Cabbage Merchant can use
-four Foods twice without tapping itself. Each selected tap commits before the
-next selection and is unavailable to nested costs or waterbending. Pending tap
+permanents through ordinary SelectCard decisions; The Cabbage Merchant can
+activate twice by tapping four distinct Foods without tapping itself. Each
+selected tap commits before the next selection and is unavailable to nested
+costs or waterbending. Pending tap
 counts use the continuation mode field; source and ability retain their usual
 joins. Single-object costs keep their serialized definition shape.
 Every registered mana ability must consume a finite resource. The total and

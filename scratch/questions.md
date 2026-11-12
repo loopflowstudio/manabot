@@ -86,3 +86,82 @@ Validation of compression:
 - `cargo test -j 2 --manifest-path managym/Cargo.toml -p managym --lib registered_mana_activations_consume_finite_payment_resources -- --test-threads=2` — 1 passed.
 - `cargo fmt --manifest-path managym/Cargo.toml --check`, changed-Python Ruff and `git diff --check` — passed. Offline comparison verified all 242 names against the historical table and the unchanged JSONL SHA256.
 - Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 macOS arm64 extension installed atomically. `uv run --extra dev --extra play pytest tests/verify/test_observation_parity.py -k merchant_tap_count -q` — 4 passed (v5/v6/v8/v9). Full affected suites remain with gate.
+
+## Realignment — 2026-11-12 UTC
+
+`lf task status MTG-286 --json` returned no Wave or PR and no direction beyond
+the existing claim comment. Fetched `origin/main` at
+`c405da851f98ccbb0697f98205451a47cbbad9b8` (MIT licensing/release work), already
+an ancestor of checkout HEAD `afdab8dca00cbc3ff6cc6fe6d557f724ad4100b3`.
+The incoming feedback's "runtime sources remain unchanged, 234 definitions are
+missing" describes the earlier pass; the current Merchant implementation and
+recorded focused results supersede it.
+
+Offline inventory comparison still found 242 unique names, 9 literal definitions
+and 233 absent; the JSONL SHA256 remains unchanged. Source inspection confirms
+the recorded parity test uses scalar allocated/preallocated buffers, not vector
+execution. The plan now separates those proofs, makes production/spending and
+observation design obligations explicit, and retains 1v1/no-commander as the
+reversible assumption with expansion left for demo. Existing focused test results
+were reused; no runtime suite or corpus admission was rerun during realignment.
+
+## Clause allocation and integration — 2026-11-12 UTC
+
+The allocation binds all 242 names and 411 Oracle paragraphs to native rule
+obligations; it includes vanilla cards and retains first-printing owners.
+`check_tle_coverage.py --allocation-only` checks that binding, while its default
+mode checks the installed catalog and fails for missing support. Neither is an
+admission authority or a printed-behavior proof. Five offline tests cover the
+intact allocation and rejection of missing/duplicate clauses, wrong owners and
+changed source bytes. The inventory SHA256 remains unchanged.
+
+Merchant's first WebSocket fixture with exactly two Foods skipped the second
+tap automatically. Three Foods preserve real choices at both taps with default
+forced skipping on. The final fixture casts ordinary cards, reconnects at both
+unpaid counts and the color choice, compares exact fork/Command execution and
+native VectorEnv replay with Python encoding, and rejects stale/duplicate
+Commands without mutation. It covers v5/v6/v8/v9; it is not browser visual proof.
+
+Eight ordinary definitions were added with six directed debug tests. Their
+printing shells were fetched by the pinned IDs through
+`https://api.scryfall.com/cards/collection` on 2026-11-12 UTC; IDs, sets and every
+Oracle paragraph matched the pinned inventory. The retained shells are in
+`managym/tests/fixtures/scryfall_cards.json`. Names: Capital Guard, Explosive Shot,
+Kindly Customer, Koala-Sheep, Kyoshi Warrior Guard, Warship Scout, Wolf Cove
+Villager and Zuko's Offense. No new mechanic was needed; Sheep was missing from
+the shared subtype category table and is now a creature type.
+
+The production proposal now includes additional allocation findings: Toph,
+Greatest Earthbender requires actual total cast spending; Uncle's Musings requires
+its distinct colors. Citadel damage and Henge life gain must run inside the mana
+ability, once. `scratch/tle-production-design.md` names the single production
+occurrence, pool equivalence, explicit spending and cast receipt owners plus
+predecessors to delete. Production-event timing and the exact v10 encoding/join
+grammar remain unresolved review items, not runtime support. No version/default
+or frozen evidence changed. The no-commander assumption and planned-support
+shipping documentation remain in place.
+
+Focused validation:
+
+- `cargo test -j 2 --manifest-path managym/Cargo.toml -p managym-cards --test cards tle_baseline -- --test-threads=2` — 6 passed in debug, covering all eight additions.
+- `cargo test -j 2 --manifest-path managym/Cargo.toml -p managym --test conformance_tests every_registered_real_card_matches_scryfall -- --test-threads=2` — 1 passed.
+- Root `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` — passed; matching cp313 macOS arm64 extension replaced atomically after final Rust edits.
+- `uv run --extra dev --extra play pytest tests/academy/test_merchant_payment_recovery.py tests/infra/test_tle_allocation.py tests/verify/test_observation_parity.py -k 'merchant_payment or tle_allocation or merchant_tap_count' -q` — 13 passed against the rebuilt extension.
+- `uv run python scripts/check_tle_coverage.py` — exit 1, exactly 225 missing definitions; the 17 present names pass identity, eligibility, key uniqueness and learning-row checks. This is an unmet outcome, not a passing coverage result.
+- `cargo fmt --manifest-path managym/Cargo.toml --all -- --check` — passed. Root-only Cargo formatting omitted child-crate files; AGENTS.md now names `--all`.
+
+Remaining: review/design of the new contracts and other allocated rule extensions,
+225 definitions, token identity closure, current-world integration/receipts,
+full gate suites and the 1,000-event corpus admission proof. No corpus fetch,
+Graph transition, publication or Task completion occurred.
+
+## Compression — second pass, 2026-11-12 UTC
+
+Code-only cuts: `flow/mana.rs` imports hoisted and four still-accurate search
+comments restored; the counted tap-payment instruction no longer overwrites its
+stage text with a duplicate count (LLM text names it from the continuation
+relation, "N tap selections still required"); TLE tests share `create_foods`;
+the parity test's text-observation import moved to the module header.
+Debug `merchant_ tle_baseline boiling_rock_rioter committed_optional_payment`
+21 passed; lib `registered_mana_activations continuation` 10 passed; rebuilt
+cp313 extension, focused Academy/allocation/parity pytest 13 passed.

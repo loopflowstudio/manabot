@@ -227,6 +227,8 @@ checkpoints or experiment evidence.
   Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
   code-signature termination on subsequent imports.
+- Format all Rust workspace members with `cargo fmt --manifest-path managym/Cargo.toml --all`;
+  formatting only the root package does not format the `state` and `cards` crates.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 

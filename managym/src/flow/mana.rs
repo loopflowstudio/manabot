@@ -7,10 +7,10 @@
 use std::sync::Arc;
 
 use crate::{
-    agent::action::AgentError,
+    agent::action::{Action, AgentError},
     flow::{
-        decision::{EffectFrame, SuspendedResolution},
-        game::Game,
+        decision::{Decision, EffectFrame, SuspendedResolution},
+        game::{ActivationSource, Game, Payment, PendingChoice},
         statics::Characteristics,
     },
     state::{
@@ -83,8 +83,7 @@ enum PaymentStep {
 }
 
 impl PaymentStep {
-    fn action(&self, player: PlayerId) -> Option<crate::agent::action::Action> {
-        use crate::agent::action::Action;
+    fn action(&self, player: PlayerId) -> Option<Action> {
         match self {
             Self::Activate(permanent, ability_index) => Some(Action::ActivateAbility {
                 player,
@@ -128,6 +127,7 @@ struct PaymentSearchState {
     prefix: Option<usize>,
 }
 
+/// Which transitions may be automatic at the caller's current boundary.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SourcePolicy {
     All,
@@ -145,7 +145,7 @@ impl PaymentModel {
         if let Some(source) = self
             .sources
             .iter_mut()
-            .find(|s| s.permanent == reservation.permanent)
+            .find(|source| source.permanent == reservation.permanent)
         {
             if reservation.tap {
                 source.fixed = None;
@@ -269,6 +269,7 @@ impl PaymentModel {
                 _ => None,
             })
             .sum::<u64>();
+        // Only states that need exploration need an owned visited key.
         if total < owed || !visited.insert(state.clone()) {
             return None;
         }
@@ -405,6 +406,8 @@ impl PaymentModel {
                             }
                         }
                     }
+                    // Chosen activations cannot nest before the automatic
+                    // prefix's first Spend, so its budget needs no depth.
                     if policy == SourcePolicy::FixedOnly
                         || (policy == SourcePolicy::AutomaticPrefix && state.prefix.is_some())
                     {
@@ -519,6 +522,8 @@ impl PaymentModel {
         obligations: Vec<Obligation>,
         policy: SourcePolicy,
     ) -> Option<Vec<PaymentStep>> {
+        // Offers need one executable witness, not a proof of the fewest taps.
+        // Only a nested automatic prefix minimizes early commitments.
         if policy != SourcePolicy::AutomaticPrefix {
             return self.witness(
                 PaymentSearchState {
@@ -625,7 +630,7 @@ impl Game {
                 sacrifice: true,
             });
         }
-        if let Some(crate::flow::game::PendingChoice::ManaPayment {
+        if let Some(PendingChoice::ManaPayment {
             payment, sacrifice, ..
         }) = &self.pending_choice
         {
@@ -640,19 +645,12 @@ impl Game {
                 });
             }
         }
-        if let Some(crate::flow::game::PendingChoice::SacrificePayment { payment, .. }) =
-            &self.pending_choice
-        {
+        if let Some(PendingChoice::SacrificePayment { payment, .. }) = &self.pending_choice {
             if let Some(reservation) = self.payment_reservation(payment) {
                 reserved.push(reservation);
             }
         }
-        fn reserve(
-            decision: &crate::flow::decision::Decision,
-            game: &Game,
-            reserved: &mut Vec<SourceReservation>,
-        ) {
-            use crate::flow::decision::Decision;
+        fn reserve(decision: &Decision, game: &Game, reserved: &mut Vec<SourceReservation>) {
             match decision {
                 Decision::ManaUpfront {
                     permanent,
@@ -732,11 +730,11 @@ impl Game {
             .collect();
         let mut life = self.state.players[player.0].life.max(0) as u32;
         if let Some(
-            crate::flow::game::PendingChoice::ManaPayment { payment, .. }
-            | crate::flow::game::PendingChoice::SacrificePayment { payment, .. },
+            PendingChoice::ManaPayment { payment, .. }
+            | PendingChoice::SacrificePayment { payment, .. },
         ) = &self.pending_choice
         {
-            if let crate::flow::game::Payment::Activation {
+            if let Payment::Activation {
                 source,
                 ability_index,
                 ..
@@ -754,13 +752,10 @@ impl Game {
         model
     }
 
-    fn payment_reservation(
-        &self,
-        payment: &crate::flow::game::Payment,
-    ) -> Option<SourceReservation> {
+    fn payment_reservation(&self, payment: &Payment) -> Option<SourceReservation> {
         match payment {
-            crate::flow::game::Payment::Activation {
-                source: crate::flow::game::ActivationSource::Permanent(permanent),
+            Payment::Activation {
+                source: ActivationSource::Permanent(permanent),
                 ability_index,
                 ..
             } => {
@@ -776,7 +771,6 @@ impl Game {
     }
 
     fn payment_obligations(&self, player: PlayerId) -> Vec<Obligation> {
-        use crate::flow::{decision::Decision, game::PendingChoice};
         fn append(decision: &Decision, game: &Game, result: &mut Vec<Obligation>) {
             match decision {
                 Decision::ManaUpfront {
@@ -908,7 +902,7 @@ impl Game {
         &self,
         player: PlayerId,
         sacrifice: Option<PermanentId>,
-    ) -> Vec<crate::agent::action::Action> {
+    ) -> Vec<Action> {
         self.payment_model(player, sacrifice)
             .sources
             .iter()
@@ -916,7 +910,7 @@ impl Game {
                 source.abilities.iter().filter_map(|ability| {
                     let ability_index = ability.ability_index;
                     self.activation_witness(player, source.permanent, ability_index)
-                        .map(|_| crate::agent::action::Action::ActivateAbility {
+                        .map(|_| Action::ActivateAbility {
                             player,
                             permanent: source.permanent,
                             ability_index,
@@ -950,11 +944,11 @@ impl Game {
     pub(crate) fn tap_activation_payment_possible(
         &self,
         player: PlayerId,
-        payment: &crate::flow::game::Payment,
+        payment: &Payment,
         remaining: usize,
         selected: Option<PermanentId>,
     ) -> bool {
-        let crate::flow::game::Payment::Activation {
+        let Payment::Activation {
             source,
             ability_index,
             ..
@@ -995,14 +989,14 @@ impl Game {
         &self,
         player: PlayerId,
         cost: &ManaCost,
-        payment: &crate::flow::game::Payment,
+        payment: &Payment,
         sacrifice: Option<PermanentId>,
     ) -> bool {
         let mut model = self.payment_model(player, sacrifice);
         if let Some(reservation) = self.payment_reservation(payment) {
             model.reserve(reservation);
         }
-        if let crate::flow::game::Payment::Activation {
+        if let Payment::Activation {
             source,
             ability_index,
             ..
@@ -1105,7 +1099,7 @@ impl Game {
         };
         *self.state.suspended_decision_mut() = Some(SuspendedResolution {
             frame,
-            decision: crate::flow::decision::Decision::ManaUpfront {
+            decision: Decision::ManaUpfront {
                 player,
                 permanent,
                 ability_index,
@@ -1117,11 +1111,7 @@ impl Game {
     }
 
     /// Keep only selections that leave a complete witness for every caller.
-    pub(crate) fn mana_tap_cost_actions(
-        &self,
-        player: PlayerId,
-    ) -> Vec<crate::agent::action::Action> {
-        use crate::agent::action::Action;
+    pub(crate) fn mana_tap_cost_actions(&self, player: PlayerId) -> Vec<Action> {
         let obligations = self.payment_obligations(player);
         let Some(Obligation::Tap { candidates, .. }) = obligations.first() else {
             return Vec::new();
@@ -1148,7 +1138,6 @@ impl Game {
         player: PlayerId,
         card: CardId,
     ) -> Result<(), AgentError> {
-        use crate::{agent::action::Action, flow::decision::Decision};
         if !self
             .mana_tap_cost_actions(player)
             .contains(&Action::SelectCard { player, card })
@@ -1170,7 +1159,6 @@ impl Game {
     /// Automatic fixed sources and spending commit the exact witness prefix.
     /// Chosen-output sources suspend instead; no witness selects a player's color.
     pub(crate) fn advance_mana_upfront(&mut self) -> Result<(), AgentError> {
-        use crate::flow::decision::Decision;
         let Some(suspended) = &self.state.suspended_decision else {
             return Ok(());
         };

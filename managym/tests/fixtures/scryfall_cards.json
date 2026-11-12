@@ -4634,5 +4634,101 @@
     "colors": [
       "G"
     ]
+  },
+  "Capital Guard": {
+    "name": "Capital Guard",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Explosive Shot": {
+    "name": "Explosive Shot",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Explosive Shot deals 4 damage to target creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Kindly Customer": {
+    "name": "Kindly Customer",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Citizen",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When this creature enters, draw a card.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Koala-Sheep": {
+    "name": "Koala-Sheep",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Bear Sheep",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, you gain 3 life.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Kyoshi Warrior Guard": {
+    "name": "Kyoshi Warrior Guard",
+    "mana_cost": "{1}{W}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "W"
+    ]
+  },
+  "Warship Scout": {
+    "name": "Warship Scout",
+    "mana_cost": "{R}",
+    "type_line": "Creature — Human Scout",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "",
+    "colors": [
+      "R"
+    ]
+  },
+  "Wolf Cove Villager": {
+    "name": "Wolf Cove Villager",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Peasant",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "This creature enters tapped.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Zuko's Offense": {
+    "name": "Zuko's Offense",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Zuko's Offense deals 2 damage to any target.",
+    "colors": [
+      "R"
+    ]
   }
 }
