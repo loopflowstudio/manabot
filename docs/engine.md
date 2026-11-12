@@ -550,10 +550,10 @@ fn lightning_bolt() -> CardDefinition {
   `casts` builds `Casts { who, predicate, nth: None }`. Changing `who` to
   `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an opponent casts" or
   "whenever a player casts"; `nth: Some(2)` gives "your second spell each
-  turn". The same applies to draws (`Draws { who, nth }`),
-  steps (`BeginningOf { step, whose }`), keyword actions such as searching,
-  scrying or bending (`Performs { who, any_of }`), cards reaching a
-  graveyard (`PutIntoGraveyard { whose, predicate }`) and putting counters
+  turn". The same applies to draws (`Draws { who, nth }`), steps
+  (`BeginningOf { step, whose }`), keyword actions such as searching, scrying
+  or bending (`Performs { who, any_of }`), cards reaching a graveyard
+  (`PutIntoGraveyard { whose, predicate }`) and putting counters
   (`PutsCounters { who, kind, on }`). Object events name a `TriggerSubject`
   instead, whose controller is the same kind of `Actor` ("a creature an
   opponent controls" is `Matching { controlled_by: Actor::Opponent, .. }`):
@@ -562,9 +562,8 @@ fn lightning_bolt() -> CardDefinition {
   more" creatures trigger once per batch or once each, and `attackers` says
   whether the attack is alone or with at least one other creature. The ability
   description ("Whenever an opponent draws their second card each turn, ...")
-  and the learning tokens come from one
-  template per event, so a card that needs a new actor or count needs no new
-  variant.
+  and the learning tokens come from one template per event, so a card that
+  needs a new actor or count needs no new variant.
 - Learning tokens derive from the same definition
   ([`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs)), so the
   policy can read what a card does and a new variant reaches the model without

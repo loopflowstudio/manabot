@@ -120,3 +120,12 @@ at this pass) and the Engine Budget digest adoption noted under Gate.
 QA re-run (head da964c606): catalog trigger text byte-identical to 0c2ce18e1
 (276 lines); 1332 random games 0 errors; Academy game to Game Over with a
 draw-event trigger-order decision. No fixes. See `scratch/qa.html`.
+
+## Gate (head b206873cd, 2026-11-12)
+
+Rust changed since the publish gate only through the `matching` constructor
+(serde-transparent `Box`, no token or digest change). `cargo fmt --check` clean;
+debug nextest `trigger|description|attack|combat_damage|dies|sacrific|observability|token`
+249/249; clippy `--workspace --all-targets` no findings. Base merges since then
+are Python token-stream work this branch doesn't touch; full matrix left to CI.
+Reflowed the event paragraph in `docs/engine.md`.
