@@ -320,6 +320,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::HasAbilitiesOfSource",
             Seen::Fact(FactKind::Effect),
         ),
+        Modification::NextCreatureCastFlash => (
+            "Modification::NextCreatureCastFlash",
+            Seen::Fact(FactKind::Effect),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -381,6 +385,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::ExileIfWouldDie),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
+        (true, Modification::NextCreatureCastFlash),
         permanent(Modification::ControlChanged {
             previous: PlayerId(1),
         }),
@@ -389,7 +394,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 28;
+const MODIFICATION_VARIANTS: usize = 29;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {

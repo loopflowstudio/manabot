@@ -5180,5 +5180,17 @@
     "colors": [
       "B"
     ]
+  },
+  "Scout's Warning": {
+    "name": "Scout's Warning",
+    "mana_cost": "{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "The next creature card you play this turn can be played as though it had flash.\nDraw a card.",
+    "colors": [
+      "W"
+    ]
   }
 }

@@ -858,3 +858,58 @@ def test_merchant_tap_count_native_reference_and_text_parity(version: int) -> No
         )
         submit_response(env, decision, decision.actions[0].reference)
     assert len(capture_text_decision(env).actions) == 5
+
+
+@pytest.mark.parametrize("version", [5, 6, 8, 9])
+def test_scout_s_warning_record_and_minus_counters_native_reference_and_text_parity(
+    version: int,
+) -> None:
+    env = priority_root(("Scout's Warning", "Gray Ogre"), ("Plains", "Gray Ogre"))
+    owner = env.current_agent_index()
+    assert owner is not None
+    decision = capture_text_decision(env)
+    cast = next(
+        action
+        for action in decision.actions
+        if "Cast" in action.description and "Scout's Warning" in action.description
+    )
+    submit_response(env, decision, cast.reference)
+    for _ in range(16):
+        obs = env.observation_for_player(owner)
+        if not obs.stack_objects and env.current_agent_index() == owner:
+            break
+        actor = env.current_agent_index()
+        assert actor is not None
+        pending = env.observation_for_player(actor)
+        index = next(
+            index
+            for index, action in enumerate(pending.action_space.actions)
+            if int(action.action_type)
+            in (ActionEnum.PAY_COST, ActionEnum.PRIORITY_PASS_PRIORITY)
+        )
+        env.step(index)
+    else:
+        raise AssertionError("Scout's Warning did not resolve")
+    obs = env.observation_for_player(owner)
+    assert [effect.modification for effect in obs.agent.effects] == [
+        "NextCreatureCastFlash"
+    ]
+    decision = capture_text_decision(env)
+    assert (
+        "the next creature card cast can be cast as though it had flash"
+        in decision.text
+    )
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=version))
+    unchanged = encoder.encode(obs)["facts"]
+    permanents = obs.agent_permanents
+    ogre = next(p for p in permanents if p.power is not None)
+    ogre.counters = {"minus_one_minus_one": 1}
+    obs.agent_permanents = [ogre if p.id == ogre.id else p for p in permanents]
+    reference = encoder.encode(obs)
+    assert not np.array_equal(reference["facts"], unchanged), "counter fact row"
+    native = env.encode_observation(obs, version, encoder.config.max_facts)
+    buffers = encoder.allocate()
+    env.encode_observation_into(obs, buffers)
+    for key, value in reference.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
+        np.testing.assert_array_equal(buffers[key], value, err_msg=key)

@@ -24,6 +24,8 @@ mod dom;
 mod eld;
 #[path = "cards/fdn.rs"]
 mod fdn;
+#[path = "cards/fut.rs"]
+mod fut;
 #[path = "cards/hob.rs"]
 mod hob;
 #[path = "cards/ice.rs"]

@@ -198,6 +198,21 @@ impl Game {
             .any(|effect| effect.modification == Modification::NoMaximumHandSize)
     }
 
+    /// Whether `player`'s next creature card may be cast with flash timing.
+    pub(crate) fn has_next_creature_cast_flash(&self, player: PlayerId) -> bool {
+        self.player_effects(player)
+            .any(|effect| effect.modification == Modification::NextCreatureCastFlash)
+    }
+
+    /// The cast creature card was "the next creature card" of every such
+    /// record on its caster, so all of them end (CR 601.2i).
+    pub(crate) fn end_next_creature_cast_flash(&mut self, player: PlayerId) {
+        self.end_effects(|effect| {
+            effect.affects_player(player)
+                && effect.modification == Modification::NextCreatureCastFlash
+        });
+    }
+
     /// CR 514.2: "until end of turn" effects end in the cleanup step.
     pub(crate) fn end_turn_effects(&mut self) {
         self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn);

@@ -172,3 +172,40 @@ claim. `uv run python scripts/check_tle_coverage.py` still reports exactly 225
 missing definitions against the installed extension. The incoming direction's
 allocation and Merchant vector/Academy items were already complete; the plan
 already records them. No runtime suite was rerun.
+
+## Fourth pass — definitions and three rule slices, 2026-11-12 UTC
+
+Open question (does not block other slices): Heartbeat of Spring, Animal
+Attendant, Toph, Greatest Earthbender, Uncle's Musings, Tarnished Citadel and
+The Great Henge stay unregistered until an authored review settles the
+production-event timing and the v10 encoding table in
+`scratch/tle-production-design.md`.
+
+Assumptions taken (reversible): Scout's Warning is a payload-free player record
+`Modification::NextCreatureCastFlash`; every such record on the caster ends when
+any creature card is cast (each Warning's "next creature card" is that card).
+Its observation is the existing player effect fact (`Seen::Fact(Effect)`), like
+`HasAbilitiesOfSource`; v1–v4 see only the offered off-timing cast. -1/-1
+counters follow the existing open counter-kind fact vocabulary; v4 sees their
+P/T change only. Eladamri's Call moves the found card to hand by the existing
+search/return path (same as the TLA "reveal ... put into your hand" searches).
+
+Results (debug unless stated):
+- `cargo test -p managym-cards --test cards tle_baseline` — 18 passed; new reprint/rule
+  filters `sol_ring diresight consider fervor run_amok heroic_intervention
+  dramatic_reversal entomb eladamri` 9 passed; `black_sun each_counter_kind` 3
+  passed; `scout_s_warning modification` 4 passed; `observability scryfall
+  definition subtype` 66 passed; `conformance_tests` 2 passed; lib `counter sba
+  layer` 14 passed and `vocabulary flash effect` 9 passed.
+- Rebuilt cp313 extension (atomic replace). `check_tle_coverage.py` — exit 1,
+  190 missing (52 TLE names defined), no other issues.
+- `pytest tests/verify/test_observation_parity.py` — 33 passed, including the new
+  real-cast Scout's Warning + -1/-1 fact parity at v5/v6/v8/v9;
+  `tests/semantic/test_text_observation.py` 61 passed.
+- The shipping guide's Scout's Warning example now prints `[[]]`; its
+  planned-support wording is retained until gate/demo.
+
+Next slice candidate: player experience counters. A player `counters` field
+touches PlayerData, PyO3 bindings, experience projection, six protocol schemas,
+Python encoder facts, LLM text and Academy UI (traced from
+`no_maximum_hand_size`); counter facts on player rows need no new width.

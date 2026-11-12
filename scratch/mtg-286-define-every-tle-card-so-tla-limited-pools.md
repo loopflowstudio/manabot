@@ -2,8 +2,10 @@
 
 Status: implementation in progress. The 242-name/411-paragraph rule allocation
 is complete as a planning ledger, not a behavior proof. Merchant tap choices now
-have scalar, vector, Academy reconnect and Command/fork proofs. Eight ordinary
-TLE definitions join the Merchant; 225 inventory names remain absent. The
+have scalar, vector, Academy reconnect and Command/fork proofs. 52 inventory
+names are defined (ordinary definitions, -1/-1 counters with CR 704.5q
+annihilation for Black Sun's Zenith, and the next-creature flash record for
+Scout's Warning); 190 remain absent. The
 production/spending replacement is proposed in `scratch/tle-production-design.md`;
 its event timing and exact v10 encoding table require authored review before
 dependent writers. Phasing, end-turn and player counters also need detailed
@@ -86,8 +88,8 @@ existing definition identities, chooses KLD over its simultaneous MPS Gearhulk
 printing, and records Three Dreams' earlier PSAL printing. This is source data,
 not a support list. `tle-allocation.jsonl` binds an implementation obligation to
 every one of its 411 Oracle paragraphs, retaining all 242 definition owners,
-including the three vanilla cards. Seventeen names are now defined; 225 remain
-absent. Eight additions use existing rules: Capital Guard, Kyoshi Warrior Guard,
+including the three vanilla cards. 52 names are now defined; 190 remain
+absent (evidence in `scratch/questions.md`, fourth pass). Eight additions use existing rules: Capital Guard, Kyoshi Warrior Guard,
 Warship Scout, Explosive Shot, Zuko's Offense, Kindly Customer, Koala-Sheep and
 Wolf Cove Villager. Their six `tle_baseline` tests passed in debug; their printing
 shells/Oracle text are in the existing conformance snapshot. Sheep is now a
@@ -276,8 +278,9 @@ are deletion targets; there is no predecessor TLE implementation.
 
 The Merchant subset of slice 2 and eight ordinary definitions are implemented.
 Remaining: review the proposed production/spending contract and settle its exact
-observation grammar, design the other planned rule extensions from the allocation,
-then implement the remaining slices and all 225 missing definitions. The
+observation grammar; implement the remaining slices (player experience counters,
+cascade, end-turn, phasing and the rest of the allocation) and all 190 missing
+definitions. The
 Merchant does not establish Heartbeat/Attendant support or corpus admission.
 The all-card outcome is not met. At gate, after implementation and extension
 rebuild:

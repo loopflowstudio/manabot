@@ -365,6 +365,9 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
+        "NextCreatureCastFlash": (
+            "the next creature card cast can be cast as though it had flash"
+        ),
         "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
         "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
         "HasAbilitiesOfSource": (

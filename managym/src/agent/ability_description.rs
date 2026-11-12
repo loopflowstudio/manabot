@@ -990,6 +990,15 @@ pub(super) fn continuous_description(
             format!("{color:?}").to_lowercase()
         ),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
+        Modification::NextCreatureCastFlash => {
+            let this_turn = match duration {
+                EffectDuration::EndOfTurn => " this turn",
+                _ => until,
+            };
+            format!(
+                "the next creature card {subject} cast{this_turn} can be cast as though it had flash"
+            )
+        }
         Modification::ControlChanged { .. } => {
             format!("You control {}{until}", subject.to_lowercase())
         }

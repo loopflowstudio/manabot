@@ -859,6 +859,9 @@ impl Game {
             self.change_life(player, -(life as i32));
         }
         self.state.turn.spells_cast[player.0].push(card);
+        if self.state.cards[card].types.is_creature() {
+            self.end_next_creature_cast_flash(player);
+        }
         // CR 601.2i — A cast spell is put onto the stack.
         self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, cast);
         self.emit(GameEvent::SpellCast {

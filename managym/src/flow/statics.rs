@@ -554,6 +554,7 @@ impl Game {
         let card = &self.state.cards[card];
         granted_flash
             || card.is_instant_speed()
+            || (card.types.is_creature() && self.has_next_creature_cast_flash(player))
             || card
                 .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))

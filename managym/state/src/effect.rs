@@ -98,6 +98,10 @@ pub enum Modification<N = i32> {
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// Rules effect on a player: the next creature card they cast may be
+    /// cast as though it had flash (Scout's Warning). Casting any creature
+    /// card ends every such record, whether or not it needed the timing.
+    NextCreatureCastFlash,
     /// Layer 2 (CR 613.1b): the record's controller controls the object;
     /// when the record ends with the object still theirs, control returns
     /// to `previous`. Only resolutions create it (`Effect::GainControl`).
@@ -156,6 +160,7 @@ impl<N> Modification<N> {
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
+            Self::NextCreatureCastFlash => Modification::NextCreatureCastFlash,
             Self::ControlChanged { previous } => Modification::ControlChanged {
                 previous: *previous,
             },
@@ -212,6 +217,7 @@ impl Modification {
             | Self::ExileIfWouldDie
             | Self::KeepUnspentMana(_)
             | Self::NoMaximumHandSize
+            | Self::NextCreatureCastFlash
             | Self::ControlChanged { .. }
             | Self::ModeChosen { .. }
             | Self::HasAbilitiesOfSource => return false,

@@ -527,7 +527,7 @@ impl CopyData {
 /// Every name `ContinuousEffectData::modification` takes, as the fact and
 /// shared-effect encoders hash it (`Modification::{name}`). Debug builds check
 /// each written name against this list.
-pub const MODIFICATION_NAMES: [&str; 28] = [
+pub const MODIFICATION_NAMES: [&str; 29] = [
     "SetCreatureTypes",
     "AddTypes",
     "SetTypes",
@@ -553,6 +553,7 @@ pub const MODIFICATION_NAMES: [&str; 28] = [
     "ExileIfWouldDie",
     "KeepUnspentMana",
     "NoMaximumHandSize",
+    "NextCreatureCastFlash",
     "ControlChanged",
     "ModeChosen",
     "HasAbilitiesOfSource",
@@ -655,6 +656,7 @@ impl ContinuousEffectData {
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::NextCreatureCastFlash => "NextCreatureCastFlash",
             Modification::ControlChanged { previous } => {
                 data.amount = Some(previous.0 as i32);
                 "ControlChanged"
