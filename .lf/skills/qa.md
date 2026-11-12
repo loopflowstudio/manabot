@@ -97,6 +97,10 @@ publish, land or choose the next Graph step from here.
   `manabot/sim/native_game.py` does; the default `decision_seconds=1` times
   out full evidence at 16 worlds × depth 20 (about 0.9 s on the
   initialized fixture), so set the budget explicitly for full-evidence arms.
+  `_bench_match` and `_initialized_checkpoint` from the bench script give the
+  match and checkpoint; with equal player and reset seeds, every evidence and
+  encoder arm must pick identical Commands for a whole game (two 93-decision
+  games per arm at 4 worlds × depth 20 took about 90 s).
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
