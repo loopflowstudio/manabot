@@ -72,5 +72,42 @@ manabot 0.2.0 can delete engine files; uninstall-first and engine-reinstall
 recovery remain necessary. First paired publication still requires the selected
 version, both trusted publishers and explicit publication authorization.
 
-Local gate is complete. No servers or watchers were started; all check/build
-processes finished. Source changes and these gate notes remain uncommitted.
+The initial local gate completed without servers or watchers; all check/build
+processes finished. Its source changes and notes were committed in 333f1b575.
+
+## Incremental gate for 0.2.2
+
+Reviewed 52b549322 against that validated tree: only package/crate versions,
+lockfiles and release documentation changed. The published 0.2.1 notes now
+match the checkout base byte for byte. Updated the engine install guide and
+missing-package diagnostic to cover upgrades from both bundled releases,
+0.2.0 and 0.2.1.
+
+Plan: release-tool tests cover version agreement, staging and publication
+recovery; a locked sync plus package-boundary/source tests covers the new
+workspace versions and diagnostic edit. Build fresh 0.2.2 source archives
+and wheels, validate metadata, and exercise their installed consumer path.
+Reuse prior rules, protocol and lint evidence for identical source bytes.
+The repository CI selector still selects all nine groups; the full platform,
+interpreter and broad integration matrix remains deferred to CI.
+
+- `git diff --name-only -z 333f1b575 | bash .github/ci/select-tests.sh` — all nine groups selected; broad matrix deferred to CI.
+- `uv run --no-project --with pytest pytest --confcutdir=tests/infra tests/infra/test_release.py -q` — 35 passed in 0.33 s.
+- `CARGO_BUILD_JOBS=2 uv run --locked --extra dev --extra artifacts pytest tests/test_package_boundaries.py tests/training/test_etude_source.py -q` — locked sync rebuilt both 0.2.2 packages; 11 passed in 3.35 s.
+- `uv run --no-project python scripts/release/check.py --tag v0.2.2` — shared version and tag valid.
+- `uv run --no-sync ruff check --fix manabot/__init__.py` and `uv run --no-sync ruff format manabot/__init__.py` — passed; no formatting changes.
+- `uv run --no-project python scripts/release/prepare.py .runs/gate-022/staging` — staged current tracked bytes, including the diagnostic edit.
+- `CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/tmp/mtg287-qa-target uv build --no-sources --python 3.13 .runs/gate-022/staging/managym --out-dir .runs/gate-022/dist` — built 0.2.2 engine archive and macOS arm64 CPython 3.13 wheel from that archive; `.runs/gate-022/engine-build.log`.
+- `uv build --no-sources .runs/gate-022/staging --out-dir .runs/gate-022/dist` — built 0.2.2 training archive and pure-Python wheel from that archive; `.runs/gate-022/bot-build.log`.
+- `uv run --no-project python scripts/release/validate.py .runs/gate-022/dist` and `uv run --no-project --with twine twine check --strict .runs/gate-022/dist/*` — all four fresh artifacts passed.
+- `uv venv --python 3.13 /tmp/managym-gate-022.cvrur0/venv` and `uv pip install --python <venv>/bin/python --only-binary :all: <0.2.2 engine wheel>` — clean seven-package engine install.
+- Outside the checkout, `uv run --no-project --python <venv>/bin/python engine_smoke.py` — 107-decision complete game passed with only a uv symlink and `/usr/bin:/bin` on PATH, PYTHONPATH unset, and no training packages installed.
+- `uv pip install --python <venv>/bin/python --only-binary :all: --torch-backend cpu <both 0.2.2 wheels> 'torch==2.10.0' 'etude-sdk==0.2.15'` and `uv pip check --python <venv>/bin/python` — 39 installed packages compatible.
+- Outside the checkout with Rust absent from PATH, `uv run --no-project --python <venv>/bin/python smoke.py` — CPU training, checkpoint reload and alias/catalog checks passed on CPython 3.13.15, Torch 2.10.0 and Etude SDK 0.2.15; `.runs/gate-022/training-smoke.log`.
+- `git diff --check` — passed.
+
+Incremental local gate is complete. The shared release version is now 0.2.2;
+both trusted publishers and explicit publication authorization remain release
+prerequisites. The new diagnostic/doc edits and this note remain uncommitted.
+No tag, upload, publication or merge was performed. All started processes
+finished; no servers or watchers were started.

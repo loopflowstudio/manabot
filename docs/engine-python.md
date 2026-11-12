@@ -62,7 +62,7 @@ uv run --no-project --python .venv/bin/python python -c 'import managym; from ma
 
 `manabot` requires exactly its own version of `managym`; resolution may update
 the existing engine to that matching version. When the environment already has
-`manabot` 0.2.0, which bundled the engine and owns `managym/__init__.py`,
+`manabot` 0.2.0 or 0.2.1, which bundled the engine and owns `managym/__init__.py`,
 uninstall it before installing `managym` or a newer `manabot`; removing it
 afterwards deletes that file. Repair an affected environment by reinstalling
 the engine (`uv pip install --reinstall-package managym 'managym==<version>'`
