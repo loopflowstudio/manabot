@@ -54,6 +54,12 @@ Remaining:
   will touch where `bucketed_shapes`/`live_tokens` enter the forward; keep one
   path (constraint: "switches reach the backend forward through one path").
 
+Implement pass 3 (2026-11-12): nothing new to build. origin/main is two
+commits ahead (e38518093 mana restrictions, #499), sharing no file with this
+branch and not merged here because the engine change needs an extension
+rebuild; main still has no `precision="auto"` and no `manabot/backends/torch`,
+and neither MTG-324 nor MTG-325 has a PR open.
+
 ## Delete — do not maintain
 
 Removed `Execution._from_auto` and its custom `__eq__`: Pydantic's
