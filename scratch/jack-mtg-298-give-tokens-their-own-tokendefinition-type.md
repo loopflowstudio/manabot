@@ -45,10 +45,13 @@ place still merges the two namespaces.
 ## Remaining
 - Concept-review change made in e22a18a29 (`named_definition` returns the single
   Eligible row; test `a_card_is_admitted_when_a_token_shares_its_printed_name`).
-  Debug `cargo test --lib -- cards::decklist cards::deck_admission`: 12 passed.
+  Compressed in ff1f16a66 to one match over eligible rows (with none, all rows
+  are Unsupported, so only the shared reason is compared). Debug
+  `cargo test --lib -- cards::decklist cards::deck_admission`: 12 passed.
 - CI run 43300525427 on 686a4724f: Rust Tests and Engine Budget passed; two
   Integration jobs (core, evaluation) still pending when read. PR body Checks
-  refreshed. CI on e22a18a29 started at push; confirm green.
+  refreshed. CI on e22a18a29: Rust Tests and Engine Budget passed; Integration
+  core pending when read. ff1f16a66 not yet pushed.
 - Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
   `CardDefId`;
   keying Academy curated token art by `token.*`.
