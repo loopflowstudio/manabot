@@ -120,6 +120,15 @@ at the source each run pinned; ac601834d is the last revision carrying them.
 
 ## Index
 
+[Mirror search on MTG-183](search-mirror.md): **completed 2026-11-12**,
+exploratory — 3,000 games (six settings × 500 deals) plus an 8,000-game earlier
+sweep on the frozen w13 policy. With playable uniform hand sampling, mirror
+search beats the policy's sampled play by +12.5 to +17.4 points from 4 to 16
+shuffles and beats PUCT-1024 at lower cost; the true hand adds at most +5.2.
+The HTML report and evidence are in the data manifest under
+`experiments/data/search-mirror-v1/` and `search-mirror-v2/`; source is tag
+`mirror-w13-study-frozen`.
+
 [Critic readouts and attention depth, MTG-252](value-readout-252-results.md):
 **completed 2026-11-09** — five arms, three seeds each, 300 updates and 28,200
 valid evaluation games. Depth-4 masked mean/token score 61.0%/61.7% against the

@@ -1,0 +1,598 @@
+# Mirror search: more shuffles and uniform versus oracle hands
+
+## Final analysis — 2026-11-12
+
+The owning report (`search-mirror-v1/report.html`, `summary.json`) was rebuilt
+over all 3,000 outcomes with the existing reader and decision rule. Full offline
+trace audits now cover every outcome: original 1,500 oracle games (299,087
+Commands, 141,138 receipts, full rollout algebra, max |Q| 1.15808) and native
+1,500 uniform games (305,007 Commands, 146,394 compact receipts, max |Q|
+1.14319). The one TimeoutError game remains a scored failure. No replay or new execution.
+
+Cell-stratified 95% gains over the sampled policy, against the raw policy:
+
+| Hands | 4 shuffles | 8 shuffles | 16 shuffles |
+|---|---|---|---|
+| Oracle | +13.3 [+8.9, +17.7] | +19.9 [+15.7, +24.3] | +22.7 [+18.4, +27.1] |
+| Uniform | +12.5 [+8.1, +17.0] | +15.7 [+11.4, +20.0] | +17.35 [+13.2, +21.5] (499/500) |
+
+Oracle minus uniform: +0.8 [−3.2, +4.8], +4.2 [+0.2, +8.2], +5.2 [+2.0, +8.4]
+(16: 499 deals). Within-sampler steps: oracle 8−4 +6.6 [+3.0, +10.2], 16−8
++2.8 [−0.4, +6.0]; uniform 8−4 +3.2 [−0.8, +7.2], 16−8 +1.8 [−2.0, +5.4].
+Interactions (uniform step − oracle step): 8−4 −3.4 [−9.0, +2.2], 16−8 −1.0
+[−5.8, +3.8]; both inconclusive. Eleven of fifteen declared contrasts are
+complete; the four involving uniform 16 shuffles stay unresolved under the
+rule, though each paired subset keeps one sign across 0–1 failure bounds.
+
+Common-opponent context, not head-to-head: uniform PUCT-1024 gains +4.5
+[−0.1, +9.1] (nominal) at 4.52 s/decision; uniform mirror minus uniform
+PUCT-1024 is +8.4 [+4.2, +12.7] at 4 shuffles and +13.2 [+9.1, +17.3] at 16
+(478–479 shared deals). Mean search seconds per decision: oracle 2.85 / 5.51 /
+11.13 (Python encoder), uniform 0.92 / 1.85 / 3.53 (native encoder); the cost
+gap is mostly implementation. Native attempt wall 13.1 h for 1,500 games;
+inclusive operational elapsed 56.6 h of 168; $0 rental.
+
+The report now opens with the three questions and plain answers, one chart
+each, cost and limits; provenance moved to a collapsed appendix. Superseded
+receipts are kept as `validation-20261111.json`,
+`launcher-inventory-20261111.json`, `transition/{execution-accounting,summary}-20261111.json`.
+Acceptance remains unresolved for evidence review.
+
+## Execution complete — final collection 2026-11-12
+
+Etude `mtg269-mirror-v2-uniform-native` / `b9b50aa247df` **succeeded** at
+2026-11-12 02:51:17 UTC (started 2026-11-11 13:45:05 UTC, exit 0) on the owned
+mini; the original `mtg269-mirror-v2` / `3a2b62144b9a` remains cancelled. Both
+report $0 rental spend. No search worker was running at collection.
+
+The existing collector sealed both segments at 10:09–10:12 UTC and published
+them through `manabot.data`. All **3,000** declared outcomes are present:
+
+| Segment | Cells (beta 0.01, depth 20) | Outcomes | Scored | Failed |
+|---|---|---:|---:|---:|
+| Original | oracle 4/8/16 worlds, 500 each | 1,500 | 1,500 | 0 |
+| Uniform native | uniform 4/8/16 worlds, 500 each | 1,500 | 1,499 | 1 |
+
+The one scored failure is `policy/mirror-v2-uniform-d20-b0.01-w16/1819058000`:
+`TimeoutError: local search deadline exceeded; target unavailable` from the
+per-decision search deadline, retained with its full traceback and attempt
+trace. It is a game failure, not an interruption, and belongs in the report's
+missing-evidence sensitivity. The seven original-shell uniform interruptions
+stay uncommitted attempt files under their earlier reconciliation receipt.
+
+Original-segment seals were re-verified byte-for-byte against the prior
+published inventory (1,500 of 1,500); every new uniform trace was parsed from
+start record to outcome. All 3,053 published game/inventory entries match local
+bytes, and the 13 displaced local files remain exact prefixes of their
+replacements. Summed game wall time: original 931,110.94 s, uniform native
+318,836.18 s. These are separate implementation costs; complete CPU and
+inclusive monetary costs remain unmeasured.
+
+Evidence: `search-mirror-v2/reconciliation/{remote-inventory,uniform-native-inventory,collection-final-20261112}.json`
+and `search-mirror-v2/transition/etude-final-20261112.json`. This collection is
+not a replay or an extension of the dated Command/algebra audit. The report
+rebuild over the full grid is the next step.
+
+## Native uniform continuation running — 2026-11-11
+
+Etude run **`mtg269-mirror-v2-uniform-native`**, attempt **`b9b50aa247df`**,
+session `c0e8be79ff4c`, started at **13:45:05 UTC** on the owned mini. Seven
+actual uniform workers and their compact start records were verified. The
+continuation uses source `f845b02ef4a26377abad4e1c54bf6443ad3fab0e`, native binary
+`8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`, one inference
+thread per worker, and the original checkpoint and deadline **1794852989**.
+The zero-cost Etude quote and launch/attempt receipts are retained; no rental,
+training update or checkpoint export was introduced.
+
+Before allocation, all 351 candidate and 349 original source bindings, both
+native binaries and the checkpoint were rechecked. The admitted native/search/
+encoder files are unchanged. The runner AST differs only in its idempotent
+stop handler; the recovery and report owners have separately identified changes.
+All 62 local runner/report/data/recovery checks and nine mini recovery checks
+pass. The existing 304-view and six-root native admission remains applicable to
+those unchanged components; it is not a new full-grid equivalence claim.
+
+The recovered predecessor seals all 1,500 oracle outcomes and seven original
+uniform interruptions, including four explicitly reconciled missing callbacks.
+Original source and evidence bytes remain unchanged. Shared predecessor locks
+exclude an original-job restart; the new segment executes only missing keys.
+
+The native snapshot collected at **13:51:36–13:51:38 UTC** contains **10 valid
+outcomes** (4/8/16 worlds: **3/5/2**), with zero scored failures. Its audit reconciles **2,088 Commands** and
+**953 compact receipts**, including the frozen world/observation contracts,
+physical hand sampler and native/checkpoint identities. Values are finite;
+maximum |Q| is 1.05719. This is early, uneven coverage, not a strength result or
+a reliable seven-worker throughput/sub-second claim. The report retains all six
+500-slot cells: **1,510/3,000** outcomes in this snapshot, **1,490 missing**.
+
+Completed original game wall time sums to 931,110.94 seconds; the native snapshot
+sums to 1,713.33 seconds. These are separate implementation costs, excluding
+ongoing games and some setup/interruption costs. The seven interrupted attempts
+retain 10 Commands and two completed search receipts (4.68 seconds), plus
+unfinished work whose complete timing is unavailable. Full Etude attempt windows,
+the inclusive operational clock and missing CPU/cost measurements are recorded in
+`search-mirror-v2/transition/execution-accounting.json`. The original seven-day
+ceiling is unchanged; elapsed recovery time was not replenished.
+
+The original snapshot was collected at **13:09:53–13:10:27 UTC**. All its
+bytes are published and verified; displaced earlier game
+files remain identical prefixes. The native snapshot and private interruption
+blobs use the same content-addressed store. The owning HTML/summary remain at
+`search-mirror-v1/{report.html,summary.json}`, with implementation costs and
+recovery limits labeled separately. The 8,000-outcome v1 study is unchanged.
+
+## Oracle barrier and cancellation recovery — 2026-11-11
+
+The original segment completed all **1,500 oracle outcomes**, with no scored
+failures. The barrier was observed at 13:07:35 UTC after rechecking all 349
+original source/protocol bindings. Etude records attempt `3a2b62144b9a` cancelled
+at 13:07:38 UTC; no original game worker remains. Its automatic uniform stage
+started seven attempts and committed no outcomes before cancellation.
+
+Three attempts contain explicit interruption footers. Four readable, CRC-valid
+gzip streams end at a retained pending decision without a terminal callback.
+The first sealing attempt rejected those four streams. Worker 0's original log
+shows repeated SIGTERM interrupting `traceback.format_exc()` and gzip cleanup;
+the other missing-callback logs are partial and do not establish their exact
+exception. These are unscored attempts, not ordinary failed games. Original
+source, streams, pending states, seeds, Commands and logs remain unchanged.
+
+The runner now handles repeated stop signals idempotently so the first stop can
+write its interruption receipt. Recovery of the four existing missing callbacks
+is separate from that fix: `mirror-interruption-recovery/v1` binds their exact
+trace hashes, all seven worker-log hashes and Etude's confirmed cancellation
+receipt. Only readable uniform traces ending at a pending decision, started
+within that cancelled attempt, with no failure/outcome event, may use this
+explicit recovery. Wrong receipts, changed bytes, unused recovery entries,
+uncommitted outcomes and truncated/unreadable streams still block admission.
+No synthetic footer or score is written into the original evidence.
+
+The resulting predecessor uses v2 to distinguish external cancellation recovery
+from in-stream interruption callbacks. It retains all seven interrupted attempts
+and every completed key. The continuation may execute only missing uniform keys;
+scored failures remain completed. All 62 runner/report/data/recovery checks pass,
+including real repeated signals during interruption formatting and negative
+recovery cases. This control-flow repair changes no checkpoint, native encoding,
+search estimator, world, action contract, worker ceiling or absolute deadline.
+
+The final original snapshot contains all 1,500 sealed oracle outcomes. The
+independent algebra/Command audit covers the earlier 1,469-outcome snapshot:
+292,767 Commands, 138,025 search receipts, finite values and maximum |Q| 1.15808.
+The remaining 31 outcomes retain their source-generated finite-value checks and
+sealed traces; they are not silently added to that dated offline audit's scope.
+Recovery evidence is in `search-mirror-v2/transition/recovery/`, with the official
+stop receipt alongside it. This recovery completed before the separately recorded
+native continuation above; the original job must not be resumed.
+
+## Authorized uniform transition — 2026-11-11 preparation
+
+Jack Heart chose “Switch at oracle barrier (Recommended)”, then directed:
+“Switch the uniform stage to compact+native at the oracle barrier per the
+conversation decision, then continue toward report and PR”. This supersedes
+the earlier instruction to keep the sequential implementation for both stages.
+Scientific settings, raw sampled MTG-183 opponent, 3,000 slots, seven one-thread
+workers, zero rentals and deadline **1794852989** remain fixed.
+
+At 10:44:31 UTC the original Etude run `mtg269-mirror-v2`, attempt
+`3a2b62144b9a`, remains running: **1,465 sealed outcomes**, all oracle
+(488/489/488 at 4/8/16 worlds), zero recorded failures and two live oracle
+workers. All 349 source bindings and the frozen `7c22a1e1…` native bytes match.
+This is a ledger inventory, not a new scientific audit or deterministic replay.
+The prior report snapshot remains separately dated.
+
+The native encoder from implementation commit
+`69c76f87fd4f0e649d4c38a5717ac801a0456b9d` was built separately on the M1 mini:
+SHA-256 `8addfe1025dc7ccf2d32118913ccfa9a1cce48e4fbd69f21f25492e0b779ad69`.
+Source archive SHA-256
+`3430be3428ff3609e1988ecfc7bde4c4685fd4dab66f8889e8438937cb9624ef`.
+The frozen environment lacked the maturin command; an isolated uv tool overlay
+built the wheel without replacing the environment or its mapped extension.
+Build logs and identity remain at mini `~/search-scaling/mirror-native-build/`.
+
+Before cancellation, admit the separate mini build against all 304 golden
+actor/terminal views and the six retained checkpoint roots. Cross-host metadata
+is recorded explicitly; Commands, final observations, allocation, terminal signs
+and numerical tolerances are unchanged. A failed admission leaves the original
+job running; no new game smoke is needed merely to repeat these observations.
+
+After all 1,500 oracle outcomes exist, stop the original job through Etude and
+seal its ledger and every attempt. If its automatic uniform stage has started,
+retain those scored outcomes and any explicit interrupted attempts separately.
+Scored failures are completed keys and cannot be retried. Only missing uniform
+keys enter a separate output directory with `mirror-execution/v3`, compact v4
+receipts, actual native/source digests, one inference thread and the sealed
+predecessor digest. Shared locks on all predecessor shards prevent the original
+runner restarting during continuation. Truncated or unsealed evidence blocks
+admission and requires recovery, never an invented score.
+
+The new v3 source binding excludes `experiments/data.manifest.json`: that catalog
+records published outputs and can grow during execution. Actual checkpoint bytes,
+world/input files, executable source and protocol remain bound. The original v2
+source map, including its historical catalog entry, is unchanged.
+
+The implementation change is an explicit scientific limitation: fixed-position
+parity supports this transition but is not full-grid equivalence. Preserve
+oracle/full and uniform/compact costs under their respective identities; do not
+attribute their latency difference solely to hand sampling. The original
+8,000 outcomes, v2 oracle evidence and existing report inputs remain unchanged.
+
+## Analysis snapshot — 2026-11-09 22:32 UTC
+
+The existing report now uses **78/3,000 sealed valid outcomes**, with 2,922
+missing and zero failed outcomes: oracle 4/8/16 worlds contributes 27/26/25;
+uniform has no completed campaign outcomes in this snapshot. Collection spans
+22:32:42–22:32:55 UTC with per-shard cutoffs, not one atomic campaign cutoff.
+Seven original sequential workers remain live. Eight uncommitted filenames
+were listed but their contents were not read or classified as failures. The
+Etude read-only status still reports the original run active on mini at $0.
+No execution, source transition, restart, allocation or deadline change occurred.
+
+Every collected file matches its receipt hash and all prior local game,
+decision, attempt and log bytes remain identical prefixes. The existing audit
+reconciles 12,890 Commands
+and 6,170 search receipts, both game seeds, legal offers/revisions and admitted
+source/runtime/checkpoint/world bindings. Retained worker log prefixes contain
+no warnings or failures. Maximum |Q| is 1.11600; the scalar estimator remains
+unclipped. No deterministic replay was performed. Summed closed-game wall time
+is 39,876.27 seconds and hero search is 39,456.07 seconds, excluding ongoing work,
+setup and smoke; neither is inclusive worker time or a reliable full-grid ETA.
+
+All 15 declared comparisons and six 500-slot denominators remain in the same
+HTML/summary. Five contrasts have partial paired observations; none has full-grid
+stratified uncertainty because deck cells remain missing. Nominal estimates do
+not establish strength, shuffle effects or equivalence. Uniform-versus-oracle
+and interaction effects remain unmeasured. Training exposure, learning and
+generalization remain unsupported independently of the bounded native smoke;
+scientific acceptance remains unresolved. The 77-row batching inventory is
+historical operational evidence, now explicitly labeled separately from this
+newer closed-evidence snapshot. The candidate batching implementation remains
+undeployed, with its inconclusive speed finding unchanged.
+
+The existing reader/audit and dated receipts remain in v2 `reconciliation/`,
+including the prior three-game snapshot receipt. All original v1 scientific
+fields and baseline input bindings reproduce unchanged. Seventeen focused
+runner/report tests and Ruff pass. The previously recorded broader Etude/duckdb
+collection failures remain unresolved; no frozen environment was upgraded.
+
+Publication updated 97 manifest entries; all 224 mirror artifacts verify. The
+HTML and summary rebuild byte-for-byte. The post-publication untracked-data
+check passes. No local server, watcher or analysis process remains running.
+
+## Batching check — 2026-11-09 22:26 UTC
+
+The authorized MTG-268 Python batching adaptation is implemented locally and
+**not admitted to the running campaign**. The same sequential Etude run
+`mtg269-mirror-v2`, attempt `3a2b62144b9a`, session `04058802ff84`, remains
+running. No drain, source replacement, restart, continuation segment, extra game,
+new allocation or rental occurred. The six cells, raw sampled opponent, worker
+ceiling and absolute deadline `1794852989` are unchanged.
+
+The direction is “thats pretty slow” and “you might want to adopt the work from
+mtg-268”. The narrow port reuses frontier execution, per-branch RNGs and batched
+policy forwards from MTG-268 `afcee56b996175130c057cb8c01656f7b79078d8`.
+It preserves the frozen Python encoder, w13 native build, model/input shapes,
+physical/oracle samplers and compound-prefix path; no native writer or main sync.
+The original sequential source at `0063d781710928df996402957a0b30123d332875`
+is the comparison reference. The candidate remains local to this checkout;
+its presence does not authorize passing the new source through an old identity
+lock. Any later execution needs a separately bound, reconciled continuation.
+
+Eighteen paired searches used actual raw MTG-183 bytes and the exact w13 native
+build, at depth 20 / alpha .02 / beta .01, oracle and uniform, 4/8/16 worlds.
+Roots at Commands 0/100/286 were reconstructed from the sealed oracle-four-world
+smoke (deal 1819000000); all 286 historical Commands and pending witnesses match.
+All discrete receipt fields, sampled hands, action/world ordering, independent
+rollout seeds and branch audit Commands match. Each implementation executed
+616 rollouts / 11,618 Commands. Maximum absolute errors: base 0, action values
+1.79e-7, rollout values 5.67e-7, targets 2.90e-7, within the unchanged MTG-268
+atol 1e-6 / rtol 1e-5. Terminal signed values match exactly. Uniform receipts
+pass the physical-sampler reader. This is narrow observed-position correctness,
+not full-grid equivalence or a strength result.
+
+Single-pair laptop ratios span **0.928–1.454×**. Summed sequential/batched time
+is 68.06/59.40 seconds; these sums are not representative game weighting.
+Opening ratios are 1.19–1.45×, midgame 0.995–1.36×, terminal 0.928–1.33×.
+Unrelated compilation and other host activity overlapped the measurements.
+The 16-world terminal oracle case regressed; no reliable uncontended mini
+throughput improvement or campaign ETA follows. Preserve the live sequential
+campaign rather than transition based on this inconclusive speed check. No
+additional optimization campaign or favorable-result rerun was started.
+
+Two harness API errors are retained: the first after all six opening pairs,
+the second before any further comparison. Both assumed a Command parser that
+w13 does not provide. The corrected invocation reconstructed Commands through
+the existing dataclass and ran only the twelve remaining pairs. No completed
+pair was rerun or replaced. Full receipts, exact candidate/sequential source,
+errors, process logs, host-activity snapshot and diagnostics are under
+`experiments/data/search-mirror-v2/batching/`. The existing HTML/summary display
+these separately from campaign timings; they remain inference-only checks.
+
+At `2026-11-09T22:26:12.500515+00:00`, a read-only per-shard ledger inventory
+has **77/3,000 completed rows, zero failures**: oracle 4/8/16 = 27/26/24.
+Seven workers remain live, and all 349 source bindings match the immutable
+remote archive. Completed game wall time sums to 39,225.35 seconds, hero search
+to 38,810.10 seconds; these exclude ongoing work and setup and are not inclusive
+worker hours. The newer inventory did not collect private closed attempts, so
+the scientific report still uses the earlier three-game sealed snapshot.
+`reconciliation/batching-inventory.json` retains rows, hashes, worker inventory
+and uncommitted filenames; uncommitted attempts are not failures.
+
+Validation: 24 frontier/runner/report/data checks plus 26 existing fixed-position
+search/compound checks pass; 44 search tests collect together. These fixture
+checks do not claim a full integration suite. No Rust changed or wheel rebuilt.
+The established environment was preserved. No local process remains running.
+
+Publication changed 57 manifest entries; all 139 mirror artifacts match the
+published manifest. HTML and summary rebuild byte-for-byte. All original v1
+scientific fields remain unchanged. CI selection and the post-publication
+untracked-data check pass. No new resource was acquired or stopped.
+
+## Analysis snapshot — 2026-11-09 20:46 UTC
+
+The existing report now includes the first **3/3,000 valid campaign outcomes**,
+with 2,997 missing and no retained failed games. The per-shard snapshot began
+at `2026-11-09T20:46:26.235533+00:00`; it is not an atomic cross-worker cutoff.
+Seven oracle workers remain owned by the existing Etude attempt. No new
+execution, restart, stop, deadline change or resource allocation was performed.
+
+Only committed game-file prefixes, their closed decision gzip members and
+sealed private attempt files enter the snapshot. Seven other attempt files
+were present but were not read or classified as failures. Exact retained file
+hashes, collection code and audit results live in v2 `reconciliation/`; source
+game and attempt bytes remain unchanged on the mini. The audit reconciles 330
+Commands and 181 search receipts, both per-game seeds, legal offers/revisions,
+checkpoint/world/runtime/source bindings against the admitted smoke, and search
+allocation/update algebra. No deterministic replay was performed. Logs contain
+no warnings or failures in these dated prefixes; full campaign health is unknown.
+
+The existing HTML/summary retain all six 500-slot cells and 15 comparisons,
+including missing-evidence bounds. No full-grid stratified interval is available;
+the sparse nominal intervals cannot establish gain or equivalence. The report
+now displays measured campaign game/decision cost separately from smoke and
+policy-only cost. Training exposure remains absent, no learning or generalization
+claim is supported, and scientific acceptance remains unresolved. All v1
+scientific summary fields reproduce unchanged. Continue the existing campaign;
+the next analysis needs a later closed-evidence snapshot, not a new launch.
+
+## Execution status — 2026-11-09: campaign running
+
+Etude run `mtg269-mirror-v2`, attempt `3a2b62144b9a`, session
+`04058802ff84`, started on the owned mini at `2026-11-09T20:40:21.931237Z`.
+The launch snapshot at `2026-11-09T20:41:21.920412+00:00` verifies seven one-thread oracle
+workers, seven in-flight attempts, and **0/3,000 completed campaign outcomes**.
+This is a launch receipt, not a completion or strength claim. The Etude-owned
+job advances to uniform only after all 1,500 oracle outcomes reconcile. Its
+maximum attempt count is one; it never retries failed games. Both stages keep
+`--deadline 1794852989` (November 16, 18:16:29 UTC), counting setup from the
+original November 9, 18:16:29 UTC start. No rental, training, new export or
+callback is expected; observed rental spend is $0. Training exposure is still
+unmeasured. Campaign evidence remains on the mini under
+`~/search-scaling/mirror-v2`; do not launch a duplicate while this job runs.
+
+The separate Etude smoke `mtg269-mirror-v2-smoke` succeeded and released its
+allocation: six valid outcomes on one original deal, one per cell, no failures
+or worker warnings. Its 1,784 Commands match retained legal offers/revisions;
+771 search receipts retain complete configured policy-support allocation,
+finite values and matching update algebra. Uniform receipts validate through
+the existing physical-sampler reader. Oracle is the explicit custom point-mass
+sampler. Maximum retained |Q| was 1.04313; this scalar estimator is not clipped.
+This proves only the observed smoke positions, not full-grid validity or replay
+equivalence. No deterministic replay was performed.
+
+Smoke wall time per game at 4/8/16 worlds: oracle 273/430/812 seconds;
+uniform 223/525/1,375 seconds. Summed game wall time is 1.011 hours. Extrapolating
+those six games to 500 per cell and seven workers gives about **72.2 hours**,
+excluding setup and differences in seven-worker contention. One reused deal
+per cell is not a reliable full-grid ETA. Different game lengths confound raw
+wall-time scaling. Inclusive CPU/worker hours remain unavailable; the shared
+elapsed ceiling has not been reset or expanded.
+
+Source is committed `0063d781710928df996402957a0b30123d332875`, staged separately
+at mini `~/src/manabot.w13-mirror-v2`. The original w13 checkout and v1 evidence
+were preserved. Archive SHA-256:
+`fb50c92e66f2ceffb2f57fef915cf1af919d836984d0eddebfbdff3f20851240`.
+All 349 source bindings match that archive; smoke and campaign agree on source,
+checkpoint, native build, packages and deadline. They use the existing frozen
+mini environment and native build. The execution copy of this protocol is the
+prelaunch committed text; this status amendment changes no scientific setting.
+
+The explicitly canceled curriculum allocation is now `cancelled` in Etude.
+Its absent SSH startup exposed the existing EXP-13 defect: the scheduler waited
+for a creation receipt, while SSH cleanup returned no end receipt even without
+a boot claim. A process-local transport correction allowed Etude's existing
+DirectoryJournal and scheduler to retain shutdown and cancellation under the
+mini lock. No database rows or prior evidence were deleted. Reproduction and
+the immutable recovery receipt were attached to EXP-13; no new Etude graph was
+started. The frozen game environment was not upgraded.
+
+Sealed smoke match blobs, identity, decision rows, worker logs, audit source and
+receipts are published under `experiments/data/search-mirror-v2/smoke/` and
+`reconciliation/`. In-flight campaign traces stay private on the mini until
+closed; the launch snapshot publishes its identity, counts and worker inventory.
+The existing v1 HTML/summary own scientific reporting and retain all six full
+500-slot denominators. A successful smoke does not fill any study slot.
+
+Prospective continuation of MTG-269, 2026-11-09. The conversation directs:
+“i want to try 8 and 16 shuffles, and then i want to combine magic mirror with
+uniform random vs oracle”. This authorizes implementation, validation and
+execution of this continuation on the already authorized owned mini. It
+supersedes the earlier pending-follow-up status for these comparisons.
+
+The subsequent clarification is “to be clear the games shoudl be against raw
+policy” and “right, that and unerstanding performance across multiple shuffles
+(should be more more meaning ful for uniform random)”. The primary comparison
+is therefore a fixed-beta factorial, with all six cells against the raw sampled
+MTG-183 policy. No v2 games or smoke had started when this schedule superseded
+the earlier 5,000- and 2,500-game proposals; no evidence is relabeled.
+
+Reuse `search-mirror-v1.md`, its checkpoint/world, 500 paired deals,
+search implementation, completed controls and report machinery.
+Keep the original 8,000 outcomes and noise evidence unchanged. No training,
+noise collection, PUCT rerun, main merge, or rental is required.
+
+## Fixed comparisons
+
+Depth 20, alpha 0.02 and beta 0.01 throughout. The opponent samples the raw
+checkpoint policy, with no search, mirror update, greedy choice or EMA replacement.
+
+| Stage | Hand sampler | Beta | Worlds/shuffles | New games |
+| --- | --- | --- | --- | --- |
+| 1 | Oracle | 0.01 | 4 | 500 |
+| 1 | Oracle | 0.01 | 8 | 500 |
+| 1 | Oracle | 0.01 | 16 | 500 |
+| 2 | Uniform physical | 0.01 | 4 | 500 |
+| 2 | Uniform physical | 0.01 | 8 | 500 |
+| 2 | Uniform physical | 0.01 | 16 | 500 |
+
+Each row is 500 games against raw sampled policy, on
+the original five deals per ordered deck cell: 3,000 new games total. Run the oracle stage first,
+then the uniform stage without selecting settings based on stage-1 winners.
+Within each stage, visit four worlds before eight and sixteen. Reuse the
+policy-versus-policy baseline. The existing oracle beta-0.03/four-world result
+is a separate contextual reference, never a control for shuffle effects.
+
+Use `PhysicalHandSampler` for uniform physical copies from the unseen pool,
+conditioned on publicly known cards and hand size. Oracle keeps the true hand.
+Both reshuffle libraries and sample rollout actions. Uniform does not mean
+random root actions, uniformly weighted card names, or a trained belief model.
+Verify that the uniform path does not call the oracle private-hand reader.
+
+## Minimal preparation and execution
+
+Extend the existing runner with explicitly selected sampler/settings and
+versioned keys; keep its default v1 schedule and keys unchanged. Retain source,
+checkpoint, runtime and plan hashes with the new run; keep outputs under
+`search-mirror-v2` / mini `~/search-scaling/mirror-v2`, separate from v1.
+Record worlds and sampler in rows and use the same admitted implementation
+for both stages. Do not copy an unvalidated current-world wheel into w13.
+
+MTG-268 is a separate optimization. Its current results are not admitted for
+the trained w13 policy. Use the existing sequential search here; do not wait
+for its aspirational latency target or start another optimization campaign.
+Test plan counts, distinct identities, sampler selection/privacy, preservation
+of v1 defaults and resume behavior. Run a small bounded real smoke on the mini
+under separate smoke keys, then proceed with the fixed schedule when correct.
+Capture actual timing and report a measured ETA; do not promise batching speed.
+
+Inspect current remote work before starting. At 2026-11-09 18:14:57 UTC no
+mirror/noise or local-update benchmark processes were found on the mini; only
+the existing v1 directories were present. Recheck immediately before launch.
+Use at most seven one-thread workers; no laptop games or artificial load.
+An operational ceiling of seven elapsed days (168 hours, at most 1,176
+worker-hours), including smoke/setup, and zero rental spend bounds this run.
+Retain existing 600-second decision and 10,000-command game bounds; enforce
+the campaign stop and preserve partial outcomes if reached. Do not silently
+increase the schedule or spend to obtain a favorable result. These ceilings
+are operational choices, not measured durations or a new paid budget.
+
+Resume missing keys only after reconciling live ownership, retaining failures
+and partial logs. Never replace failed outcomes with retries. Publish all
+evidence bytes through the existing artifact store before manifest commits.
+
+## Analysis and delivery
+
+Keep the v1 report accessible and extend its comparison machinery for v2.
+Report paired gains over sampled policy, oracle-minus-uniform at each shuffle
+count, 8-minus-4 and 16-minus-8 within each sampler, and paired
+difference-in-differences: (uniform higher minus uniform lower) minus (oracle
+higher minus oracle lower). Do not assume the interaction is positive. Retain
+game coverage/failures, uncertainty, and actual decision/game cost.
+Reuse the v1 uncertainty methods and describe
+all results as exploratory because the policy, deals and candidate selection
+are already inspected. These are against the same raw policy opponent, never
+oracle-versus-uniform or mirror-PUCT head-to-head matches. No additional controls need rerunning merely to add
+these settings. Preserve historical evidence limits rather than demanding
+new instruments retroactively. Publish progress and the final charts.
+
+There is no new design approval needed for these requested comparisons.
+Finish necessary preparation, then execute and analyze in the same Task.
+Report genuine technical failures or resource limits; do not reinterpret
+older notes saying the follow-up was unapproved as a current blocker.
+
+## Execution status — 2026-11-09 18:27 UTC
+
+**Not launched: Etude reports no available mini allocation.** The frozen SDK
+expects launcher schema 10 while the existing database is schema 13. The clean
+installed checkout `/Users/jack/src/etude.ad319b-show-live-progress` (SDK 0.2.14,
+schema 13) can read it through the existing Etude environment with `PYTHONPATH`
+selecting that source. Neither database nor frozen game environment was changed.
+
+Etude retains `curriculum-held-out-707e62cad5fe-r3` on machine `mini`, phase
+`renting` (an owned host, not a newly rented machine), attempt `ab69a427b4a1`,
+session `c24c6c598b42`. Its evidence reports an unknown SSH create reply and
+missing worker/job output. A bounded log refresh did not resolve that state.
+A read-only zero-rental capacity quote returned:
+`cannot launch on mini: no free machine; etude queue would wait`.
+That allocation belongs to other work. It was not canceled, replaced or bypassed.
+Etude must reconcile it before smoke or campaign admission; an empty process
+listing alone does not release the allocation.
+
+Read-only SSH at 18:26:41 UTC found no search workers and no `mirror-v2`
+directory. All 8,000 v1 game keys and the seven game-file hashes still match the
+published evidence. The v1 HTML and summary rebuild byte-for-byte unchanged.
+No new games, smoke, training, paid resources or queued runs were created.
+The requested comparisons remain unmeasured; there is no measured v2 ETA.
+
+Runner preparation now selects the six factorial cells explicitly, leaves v1
+defaults/keys intact, and distinguishes smoke keys. Uniform uses the existing
+physical sampler; opponents use the existing sampled checkpoint player. V2
+binds source/runtime/package/plan identities, workers and an absolute deadline,
+locks each shard, requires oracle outcomes before uniform, and rejects changed
+identities, duplicate outcomes, or unreconciled partial attempts. Failed outcomes
+remain completed keys. Private attempt streams retain pending observations,
+Commands, original errors, RNG seeds/state, configured capacities and full
+search receipts; campaign interruption is separate from a failed game.
+
+Fifteen focused runner/report/data checks pass, as does Ruff. The required
+broader CI collection found 72 tests but still has the six previously observed
+import errors (`etude.eval.match.agent` unavailable and `duckdb` absent).
+No environment upgrade was made to hide that limitation. These are fixture and
+accounting checks, not native runtime admission: the bounded mini smoke remains
+required before the campaign. No source or native binary was copied to the mini.
+
+Reconciliation evidence is under
+`experiments/data/search-mirror-v2/reconciliation/` (`launcher-inventory.json`,
+`remote-inventory.json`, and `validation.json`). Bytes are published through the
+existing content-addressed artifact store before their manifest is committed.
+There are no game blobs to publish yet. The next execution step needs a free
+Etude-owned mini allocation, the source-bound smoke, then the fixed stages.
+The following analysis step must extend the existing report machinery to the
+factorial contrasts above; the v1 report remains at its original path.
+
+For conservative inclusive accounting, the setup window began with this Graph
+step at 2026-11-09 18:16:29 UTC. Its seven-day ceiling is
+**2026-11-16 18:16:29 UTC** (`--deadline 1794852989`), shared by smoke and campaign.
+Do not reset that deadline on retry, stage transition or allocation delay.
+
+## Analysis handoff — 2026-11-09
+
+The existing `search_mirror_report.py` now accepts `--extension
+experiments/data/search-mirror-v2` alongside its v1 inputs and updates the same
+`experiments/data/search-mirror-v1/report.html` and `summary.json`. The v1
+results remain separate and unchanged; no second result store is introduced.
+Extension snapshots put runner outputs in `games/` and dated receipts in
+`reconciliation/`. No game evidence exists in the retained prelaunch snapshot.
+
+The report preserves all six 500-slot cells, the sampled-policy control, and
+all 15 declared comparisons: six gains over sampled policy, three hand-sampler
+contrasts, four adjacent shuffle contrasts, and two four-cell interactions.
+Each estimate pairs complete whole-deal vectors for its contributing arms.
+Bootstrap uncertainty uses 10,000 within-cell resamples, seed 26901, equal cell
+weights; a wholly missing cell prevents a full-grid interval. Sensitivity keeps
+all 500 slots and ranges missing scores over [0, 1]. Interactions therefore have
+possible missing-evidence bounds as wide as [-2, 2], not [-1, 1]. These are
+exploratory procedures, not a new acceptance threshold.
+
+At the retained 18:26 UTC execution snapshot all 3,000 new slots are missing,
+with zero attempted-game failures; estimates, intervals and measured cost remain
+unavailable. This cannot answer whether uniform benefits more from shuffles.
+Health, native admission, replay proof and training exposure remain unresolved
+for evidence review. Capacity reconciliation and the bounded native smoke belong
+to execution; analysis launched nothing and did not refresh or reset the deadline.
+
+Validation: 18 focused runner/report/data checks pass, as does Ruff. The broader
+CI invocation collects 75 tests but retains the six known import errors involving
+`etude.eval.match.agent` and absent `duckdb`; the frozen environment was not
+changed. Every pre-existing v1 summary field except the analysis source digest
+reproduces exactly. The report carries these results and the dated execution
+receipts; this handoff is not a second scientific summary.
