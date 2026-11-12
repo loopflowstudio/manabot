@@ -1078,6 +1078,9 @@ def analyze(out: Path) -> dict[str, Any]:
         summary["insitu"]["syncs"] = {k: syncs[k] for k in ("per_label", "sites")}
     summary["replays"] = {}
     for replay_dir in sorted((out / "replay").glob("*")):
+        if not (replay_dir / "receipt.json").exists():
+            summary["replays"][replay_dir.name] = {"status": "missing"}
+            continue
         receipt = json.loads((replay_dir / "receipt.json").read_text())
         entry: dict[str, Any] = {
             k: receipt.get(k)
@@ -1164,27 +1167,58 @@ def _stage(
             ).returncode
         except subprocess.TimeoutExpired:
             code = -9
+    # Etude retains stdout; a failed stage's tail stays readable without outputs.
+    tail = log.read_text(errors="replace").splitlines()[-40 if code else -3 :]
+    print(
+        f"== {' '.join(args[:1])} {log.name}: exit {code}", *tail, sep="\n", flush=True
+    )
     return {"args": args, "returncode": code, "seconds": time.perf_counter() - tick}
 
 
-def job() -> None:
+def job(smoke: bool = False) -> None:
+    """All stages in order; `smoke` runs them on CPU at toy scale."""
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    work = Path("/tmp/mtg301")
+    work = Path(os.environ.get("MTG301_WORK", "/tmp/mtg301"))
     captures = work / "captures"
+    device = "cpu" if smoke else "cuda"
+    flags = ["--smoke"] if smoke else []
+    larger = ("w256l8",) if smoke else ("w384l8", "w256l8")
     log: list[dict[str, Any]] = []
     started = time.perf_counter()
+
+    def replay_stage(arm: str, size: str, tree: Path | None, name: str) -> bool:
+        log.append(
+            _stage(
+                [
+                    "replay",
+                    str(captures),
+                    str(out / "replay" / name),
+                    arm,
+                    size,
+                    "--device",
+                    device,
+                ],
+                out / "logs" / f"replay-{name}.log",
+                tree,
+                1200,
+            )
+        )
+        receipt = out / "replay" / name / "receipt.json"
+        return receipt.exists() and json.loads(receipt.read_text())["status"] == "ok"
+
     try:
         log.append(
             _stage(
-                ["insitu", str(out / "insitu"), str(captures)],
+                ["insitu", str(out / "insitu"), str(captures), *flags],
                 out / "logs" / "insitu.log",
                 None,
                 1800,
             )
         )
-        option3 = _option3_tree(work / "option3")
-        trees = {"baseline": None, "option3": option3}
+        if log[-1]["returncode"] != 0:
+            raise RuntimeError("in-situ stage failed; nothing to replay")
+        trees = {"baseline": None, "option3": _option3_tree(work / "option3")}
         for arm, tree in trees.items():
             log.append(
                 _stage(
@@ -1193,7 +1227,7 @@ def job() -> None:
                         str(captures),
                         str(out / "numerics" / f"{arm}-w160l8.pt"),
                         "w160l8",
-                        "cuda",
+                        device,
                     ],
                     out / "logs" / f"numerics-{arm}.log",
                     tree,
@@ -1201,77 +1235,51 @@ def job() -> None:
                 )
             )
         # Interleaved so that host drift shows as a baseline repeat difference.
-        large = None
-        plan = [("baseline", "w160l8"), ("option3", "w160l8")]
-        for size in ("w384l8", "w256l8"):
-            record = _stage(
-                [
-                    "replay",
-                    str(captures),
-                    str(out / "replay" / f"baseline-{size}"),
-                    "baseline",
-                    size,
-                ],
-                out / "logs" / f"replay-baseline-{size}.log",
-                None,
-                1200,
-            )
-            log.append(record)
-            receipt = out / "replay" / f"baseline-{size}" / "receipt.json"
-            if receipt.exists() and json.loads(receipt.read_text())["status"] == "ok":
-                large = size
-                break
-        for arm, size in plan + ([("option3", large)] if large else []):
-            log.append(
-                _stage(
-                    [
-                        "replay",
-                        str(captures),
-                        str(out / "replay" / f"{arm}-{size}"),
-                        arm,
-                        size,
-                    ],
-                    out / "logs" / f"replay-{arm}-{size}.log",
-                    trees[arm],
-                    1200,
-                )
-            )
-        log.append(
-            _stage(
-                [
-                    "replay",
-                    str(captures),
-                    str(out / "replay" / "baseline-w160l8-repeat"),
-                    "baseline",
-                    "w160l8",
-                ],
-                out / "logs" / "replay-baseline-w160l8-repeat.log",
-                None,
-                1200,
-            )
+        large = next(
+            (
+                size
+                for size in larger
+                if replay_stage("baseline", size, None, f"baseline-{size}")
+            ),
+            None,
         )
-        analyze(out)
+        replay_stage("baseline", "w160l8", None, "baseline-w160l8")
+        replay_stage("option3", "w160l8", trees["option3"], "option3-w160l8")
+        if large:
+            replay_stage("option3", large, trees["option3"], f"option3-{large}")
+        replay_stage("baseline", "w160l8", None, "baseline-w160l8-repeat")
     finally:
         _write(
             out / "job.json", {"stages": log, "seconds": time.perf_counter() - started}
         )
-        # Retain a few inputs for later reproduction; the rest stay on the machine.
-        keep = out / "inputs"
-        for kind, count in (("learner", 4), ("inference", 8)):
-            for path in sorted((captures / kind).glob("*"))[:count]:
-                (keep / kind).mkdir(parents=True, exist_ok=True)
-                shutil.copy(path, keep / kind / path.name)
-        for name in ("regime.json", "initial.pt"):
-            if (captures / name).exists():
-                shutil.copy(captures / name, keep / name)
-        for trace in out.rglob("*-trace.json"):
-            with trace.open("rb") as src, gzip.open(f"{trace}.gz", "wb") as dst:
-                shutil.copyfileobj(src, dst)
-            trace.unlink()
-        with tarfile.open(work / "results.tar.gz", "w:gz") as archive:
-            for path in sorted(out.iterdir()):
-                archive.add(path, arcname=path.name)
-        shutil.move(work / "results.tar.gz", out / "results.tar.gz")
+        _finish(out, captures)
+
+
+def _finish(out: Path, captures: Path) -> None:
+    """Analyze what exists, keep a few inputs, compress traces and pack outputs."""
+    try:
+        analyze(out)
+    except Exception:  # noqa: BLE001 - partial evidence is still delivered
+        (out / "analyze-error.txt").write_text(traceback.format_exc())
+        print(traceback.format_exc(), flush=True)
+    keep = out / "inputs"
+    for kind, count in (("learner", 4), ("inference", 8)):
+        for path in sorted((captures / kind).glob("*"))[:count]:
+            (keep / kind).mkdir(parents=True, exist_ok=True)
+            shutil.copy(path, keep / kind / path.name)
+    for name in ("regime.json", "initial.pt"):
+        if (captures / name).exists():
+            keep.mkdir(parents=True, exist_ok=True)
+            shutil.copy(captures / name, keep / name)
+    for trace in out.rglob("*-trace.json"):
+        with trace.open("rb") as src, gzip.open(f"{trace}.gz", "wb") as dst:
+            shutil.copyfileobj(src, dst)
+        trace.unlink()
+    packed = captures.parent / "results.tar.gz"
+    with tarfile.open(packed, "w:gz") as archive:
+        for path in sorted(out.iterdir()):
+            archive.add(path, arcname=path.name)
+    shutil.move(packed, out / "results.tar.gz")
 
 
 def runs(revision: str) -> Any:
@@ -1302,7 +1310,8 @@ def runs(revision: str) -> Any:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("job")
+    p = sub.add_parser("job")
+    p.add_argument("--smoke", action="store_true")
     p = sub.add_parser("insitu")
     p.add_argument("out", type=Path)
     p.add_argument("captures", type=Path)
@@ -1325,7 +1334,7 @@ def main() -> None:
     p.add_argument("out", type=Path)
     args = parser.parse_args()
     if args.command == "job":
-        job()
+        job(args.smoke)
     elif args.command == "insitu":
         insitu(args.out, args.captures, args.smoke)
     elif args.command == "replay":
