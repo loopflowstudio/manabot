@@ -526,10 +526,12 @@ to an authored setup refuse imported decks even when shapes agree
 
 ### TLA decks with TLE bonus-sheet cards
 
-TLA Limited decks containing Avatar: The Last Airbender Eternal (TLE) cards
-use the same importer, with no extra pack or flag. Full TLE coverage is planned;
-the current catalog still lacks Scout's Warning and other TLE names. The example
-below describes the intended admission result once those definitions are added:
+TLA play boosters include a bonus sheet of 61 Avatar: The Last Airbender
+Eternal (TLE) cards, collector numbers 1–61. TLA Limited decks use the same
+importer, with no extra pack or flag. Support for 58 of the 61 is planned; the
+current catalog still lacks Scout's Warning and other bonus-sheet names. The
+example below describes the intended admission result once those definitions
+are added:
 
 ```python
 import managym
@@ -543,10 +545,29 @@ print(managym.check_decks([admitted.deck]))
 # Expected after TLE support: [[]] — no admission issues
 ```
 
-Every defined non-token card belongs to the world pool; the planned coverage
-adds all remaining TLE names. This small example checks
-`development-v1` admission, not Limited construction or booster contents;
-use a complete deck for play.
+Every defined non-token card belongs to the world pool. This small example
+checks `development-v1` admission, not Limited construction or booster
+contents; use a complete deck for play.
+
+Three bonus-sheet cards stay undefined after this support lands, so a deck
+listing one of them raises `managym.DeckImportError` naming it as unknown:
+
+| Card | Waits for |
+| --- | --- |
+| Release to Memory | Tokens with their own definition type, resolved by key |
+| Lita, Mechanical Engineer | The same token change (its Zeppelin token has no printing) |
+| Heartbeat of Spring | A redesign of how mana production triggers see what a land produced |
+
+Of the first 1,000 TLA PremierDraft trophy decks in the MTG-213 corpus, only
+those listing one of these three are expected to fail. Do not drop or
+substitute the card to admit such a deck; it admits once its definition exists.
+
+Bloodchief Ascension, Brought Back and Cityscape Leveler depend on state that
+policy input v9 cannot hold: life lost this turn, cards put into a graveyard
+from the battlefield this turn, and Powerstone mana that can't be spent on
+nonartifact spells. Their decks admit and play under any input, but a v9 policy
+refuses an observation that needs that state; train on them with input v10
+([policy inputs](observation-and-model.md#input-v10-turn-history-and-powerstone-mana)).
 
 `managym.set_cards(["tla"])` selects definitions by their first-printing set.
 Adding `"tle"` still excludes reprints defined under earlier sets. Admit the

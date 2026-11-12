@@ -119,10 +119,11 @@ bindings that can change future behavior.
 
 ## Policy inputs
 
-Main carries one policy input, v9. `ObservationConfig.policy_input_version` is
-always serialized. A checkpoint, replay or saved configuration bound to any
-other version, or omitting it, raises `UnsupportedPolicyInput`, which names the
-revision to run it from
+Main carries policy input v9, the fresh default, and explicit input v10
+([below](#input-v10-turn-history-and-powerstone-mana)).
+`ObservationConfig.policy_input_version` is always serialized. A checkpoint,
+replay or saved configuration bound to any other version, or omitting it,
+raises `UnsupportedPolicyInput`, which names the revision to run it from
 ([`ac601834d`](https://github.com/loopflowstudio/manabot/tree/ac601834d) is the
 last revision supporting v1–v8). Load saved configurations through
 `ObservationConfig.from_checkpoint`; do not edit a checkpoint's version or
@@ -134,6 +135,43 @@ shape. A checkpoint from an earlier layout is refused with the buffers that
 differ and the revision to run it from. Loading an architecture does not
 admit a checkpoint to the current world; see
 [world identity](../manabot/README.md#world-identity).
+
+### Input v10: turn history and Powerstone mana
+
+Three TLE bonus-sheet cards read state v9 has no place for:
+
+| Card | State v10 adds |
+| --- | --- |
+| Bloodchief Ascension | Life each player has lost this turn |
+| Brought Back | Which graveyard cards were put there from the battlefield this turn |
+| Cityscape Leveler | Mana that can't be spent to cast nonartifact spells (its Powerstone tokens) |
+
+Select v10 explicitly before constructing the collector and model:
+
+```python
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
+from manabot.recipes.local import local_smoke
+
+regime = local_smoke(steps=1).model_copy(
+    update={"observation": ObservationConfig(policy_input_version=10)}
+)
+space = ObservationSpace(regime.observation)
+```
+
+Use that `space` for `SeatRoutedCollector` and `ActorCritic(space, regime.agent)`;
+the serialized `TrainingRegime` keeps the selection. V10 is v9 plus this state,
+in the same native scalar, vector and Python encoders, the LLM text observation
+and the learning tokens.
+
+V9 and its checkpoints are unchanged: w17 checkpoints keep loading, and fresh
+configurations stay v9. A v9 encoder refuses a position that needs v10 state: one of these cards is visible to the viewer and the state
+it reads is present (life lost this turn, a card that left the battlefield this
+turn, or restricted Powerstone mana in a pool). It raises
+`UnsupportedPolicyInput` naming v10 and the state, before writing any buffer.
+A game, replay or Academy session needs no policy input and plays these cards
+under any configuration. A v9 checkpoint cannot be widened to v10; train a new
+one.
 
 ### Layout
 

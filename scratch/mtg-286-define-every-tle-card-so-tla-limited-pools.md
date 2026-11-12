@@ -105,20 +105,16 @@ Rules added on this branch, each with directed tests and observation parity
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 6 bonus-sheet names by rule family
+## Remaining: 6 bonus-sheet names (decisions 2026-11-12, `scratch/questions.md`)
 
-| Family | Cards |
+| Cards | Disposition |
 |---|---|
-| Production occurrence (blocked, review) | Heartbeat of Spring |
-| Token identity (blocked, decision) | Release to Memory; Lita, Mechanical Engineer |
-| Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
-| Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
+| Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn), Cityscape Leveler (Powerstone restriction; trigger and unearth otherwise ready) | Build here on explicit input v10 |
+| Release to Memory; Lita, Mechanical Engineer | Wait for Task 6c0248 (TokenDefinition, tokens by key, scryfall_id optional only on tokens); allocation rows marked blocked on it |
+| Heartbeat of Spring | Split out to Task e698a9; don't implement `scratch/tle-production-design.md` here |
 
-None of the six can be implemented on this branch until one of these is
-settled: the token-identity choices (a)/(b) below; whether turn history and the
-Powerstone restriction get new v9 observation state (a new fact
-kind makes w17 checkpoints refuse, `manabot/model/facts.py` `FACT_KINDS`) or wait for a world freeze; and
-the production review. Until then the remaining work is the gate checks below.
+Gate on 58 of 61. Corpus admission reports the exact count of events failing
+on Release to Memory, Lita or Heartbeat of Spring, and lists any other failure.
 
 Known deviation in a defined card: activated abilities never offer their own
 source as a target, so neither player can choose Diaochan herself. Filed as
@@ -126,17 +122,13 @@ bug Task MTG-296: the fix (exclude only `TargetRequirement.another`) moves
 retained replays (`drill-270` shared-effect transport, T3 observation parity),
 so it is not local to this branch.
 
-## Token identity (decision open)
+## Shipping docs (written 2026-11-12)
 
-`managym/src/cards/content_pack.rs` registers every definition under a unique
-name (`cards_by_name`), and `token.spirit` is the TLA Spirit with its blocking
-restriction. Release to Memory needs a plain 1/1 colorless Spirit. Lita's
-Zeppelin has no token printing on Scryfall, so it has no `scryfall_id`. Two
-decisions are open:
-(a) whether tokens resolve by key, so that two tokens can share a printed name,
-or the content pack stays keyed by name;
-(b) which `scryfall_id` a token without a printing carries.
-These block only those two cards.
+- `docs/engine.md#tla-decks-with-tle-bonus-sheet-cards`: 58 of 61, the three
+  undefined names and what each waits for, the v10 pointer.
+- `docs/observation-and-model.md#input-v10-turn-history-and-powerstone-mana`:
+  selecting v10, what it adds, v9 refusal. Open questions on v10 beside v9
+  are in `scratch/questions.md`.
 
 ## Mana abilities with a suffix (built, twelfth pass)
 
@@ -144,7 +136,7 @@ CR 605.1a/605.3b: Henge and Citadel needed no production occurrence. When the
 production occurrence lands, the `mana_suffix` frame becomes its suffix step,
 not a second path. The full direction is in git at 53231b511.
 
-## Production boundary (open review): Heartbeat of Spring
+## Production boundary (split out to Task e698a9): Heartbeat of Spring
 
 Heartbeat needs the land's actual produced types and either player's bonus
 sources; `state/card.rs::TriggeredManaAbility` holds a fixed `Mana`,
@@ -159,13 +151,13 @@ non-bonus Toph, Uncle's Musings, Animal Attendant).
 
 New state reaches native scalar/vector and Python encoders, semantic capture,
 LLM text and learning tokens in the change that adds it; hashed names go in
-`agent/record_vocabulary.rs`; open vocabularies are fact rows. Main carries only
-v9; do not widen it or add version branches. A layout that v9 cannot express
-waits for a world freeze (the production review's v10 question).
+`agent/record_vocabulary.rs`; open vocabularies are fact rows. Main carries v9;
+v10 is explicit, and v9 refuses positions needing v10 state before writing
+buffers (open question on the one-input rule in `scratch/questions.md`).
 
 ## Acceptance checks (gate)
 
-- Bonus-sheet coverage reports 61/61; every name has a unique key,
+- Bonus-sheet coverage reports 58/61 (the three waiting names missing); every name has a unique key,
   first-printing Scryfall id, learning tokens and a directed debug test. Debug
   Rust suite (`cargo nextest --profile ci`), conformance, observability, fmt, clippy.
 - Regenerate `conformance/semantic-kernel-w17-v2` evidence: the pack

@@ -45,27 +45,39 @@ cards further. The other ~180 non-bonus TLE cards are later work".
 - Lita's Zeppelin has no token printing on Scryfall (`name:Zeppelin include:extras`,
   `set:tj22`), so it has no `scryfall_id`.
 
-## Open questions (each blocks only the named cards)
+## Decisions, 2026-11-12 (Task comments c5eddc0f, then 1f321981)
 
-- Token identity: Release to Memory needs a plain colorless 1/1 Spirit, but the
-  content pack registers tokens by unique name and `token.spirit` is the TLA
-  Spirit. Lita's Zeppelin has no printing id. Decide name-vs-key resolution and
-  the id of an unprinted token.
-- Production review (`scratch/tle-production-design.md`): event timing and the
-  v10 encoding table; blocks Heartbeat of Spring (and non-bonus Toph, Uncle's
-  Musings, Animal Attendant). The Great Henge and Tarnished Citadel were built
-  without it (twelfth pass).
-- New observed history v9 cannot hold (no spare player/card columns; a new
-  `FactKind` is a layout decision): Bloodchief Ascension needs per-player life
-  lost this turn; Brought Back needs per-card "put into a graveyard from the
-  battlefield this turn". Choose a new fact kind on v9 or wait for a freeze.
-  A new kind is not shape-free: `manabot/model/facts.py` sizes
-  `nn.Embedding(FACT_KINDS + 1)`, so existing w17 checkpoints would refuse.
-  The same choice covers spells cast this turn (concept review below).
-- Cityscape Leveler's Powerstone mana "can't be spent to cast nonartifact
-  spells": `ManaUse` restricts only by the Lesson/Shrine/Ally subtype bits and
-  the pool's restricted classes are observed by those bits. Needs a restriction
-  shape (artifact spells plus any ability) and its observation.
+Jack Heart, answering the four blockers: token identity "Resolve by key";
+Lita's Zeppelin "Optional for unprinted"; turn history and Powerstone "New v10
+input" ("v1-v9 stay frozen and reject positions that need it before buffers are
+written, fresh defaults stay v6, and w17 checkpoints keep loading. Same pattern
+as v8/v9"); Heartbeat of Spring "Split it out" to e698a9.
+Revision of the first two: "I think calling tokens cards is techncially wrong in
+mtg, and the scryfall id thing is probably reason enough to make the split now"
+and "so that scryfall id is only optional for tokens". Tokens move to Task
+6c0248 (TokenDefinition), which lands first; MTG-286 changes neither token
+identity nor scryfall_id. Build Bloodchief Ascension, Brought Back and
+Cityscape Leveler on explicit v10; Release to Memory and Lita wait on 6c0248
+(allocation rows marked blocked on it). Gate on 58 of 61; report corpus
+admission with the exact count of failures from those three names.
+
+## Open questions
+
+- v10 against the one-input rule. `CLAUDE.md` and
+  `docs/observation-and-model.md` say main carries only v9, with "no version
+  branches" and a new layout replacing v9 at a world freeze. The decision says
+  v9 stays (w17 checkpoints keep loading) and v10 is explicit, which is two
+  inputs and a version branch on main. Its "fresh defaults stay v6" predates
+  v1–v8 removal; the docs assume fresh defaults stay **v9**. Exact question:
+  does v10 sit beside v9 on main (and `CLAUDE.md`'s one-input paragraph change
+  to say so), or does v10 replace v9 at a w17 freeze?
+- When a v9 encoder refuses (docs, written as the assumption): a v10-reading
+  card is visible to the viewer and the state it reads is present. Refusing on
+  any life lost this turn would refuse almost every game. Consequence to
+  confirm: a v9 TLA pilot whose corpus decks list Bloodchief Ascension, Brought
+  Back or Cityscape Leveler raises mid-collection once such a position arises.
+- Refusal error type: docs reuse `UnsupportedPolicyInput` naming v10 and the
+  state. Reversible.
 
 ## Known gaps
 
