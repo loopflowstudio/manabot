@@ -20,6 +20,17 @@ Checks: `cargo nextest run --workspace --profile ci` 1058 passed; rebuilt cp313 
 belief/verify/semantic/search-command-evidence/academy authored+parity+study 444 passed.
 Remaining for gate: clippy; CLAUDE.md world-change pytest list; Engine Budget in CI (digest should not move).
 
+Upstream (origin/main 92e476217, checked 2026-11-12): this branch stacks on MTG-298 (`ac213b488`),
+which is not on main yet; its merge base with main is `01d5abd2c`. Main has since added two runtime
+readers of the definition flag that must move to the kind when this branch meets main:
+- `TriggerCondition::PutIntoGraveyard` in `flow/triggers.rs` matching: `!moved.is_token` ->
+  `moved.is_card()` ("card put into a graveyard"; a dying token doesn't match).
+- `Card::become_copy_of` in `state/src/card.rs` saves and restores `is_token` around the copy; with the
+  private `kind` untouched by copying, that save/restore goes away.
+After the sync, re-grep runtime `is_token` reads (`git grep -n is_token -- managym/src managym/state/src`)
+and rerun the debug nextest. Main's new cards define no emblem and cast no copy of a card, so the
+"none yet" rows in `docs/engine.md#objects` stay true.
+
 Compress: only import tidying (`ObjectKind` in retarget.rs, predicate.rs). Kept `kind() == ObjectKind::Token`
 over a `Card::is_token()` method: it would share a name with the deref'd row flag `CardDefinition.is_token`.
 No runtime `Card` reads that flag any more (grep: remaining reads are rows or observation `CardData`).
