@@ -13,8 +13,8 @@ pooled mention in `docs/observation-and-model.md` points at the report.
 Departure from the brief: the brief said keep `experiments/token_stream.py`,
 but it imports the deleted module, so Etude discovery broke; it was removed
 with its `test_experiment_files.py` entry. `experiments/token_stream.md` and
-its two manifest entries stay; the report names `7ac8c9b6f` (its pilot
-revision) as where to run it.
+its two manifest entries stay; the report names `439379869` (last main
+revision with the pooled stream) as where to run it.
 
 Check: tests/model/{value_aggregation,live_tokens,agent},
 tests/training/test_bucketed_execution, tests/eval/test_experiment_files — 76 passed.
@@ -27,10 +27,8 @@ tests/training/test_bucketed_execution, tests/eval/test_experiment_files — 76 
 - Pre-land: delete `scratch/` in its own commit; PR notes the 0.x plain
   removal (no alias).
 
-## Concept review (2026-11-12): applied
+## Compress (2026-11-12)
 
-Report's "run them from" line names `439379869` (last main revision with the
-pooled stream; the load error names it too); results table keeps `7ac8c9b6f`.
-Docs Mix step is one sentence: live-token attention, linking the report.
-Check: `grep -n pooled docs/observation-and-model.md` shows only that pointer
-and unrelated mean-pooling uses.
+No code cuts left: no `token_stream`/pooled-stream references remain outside
+the refusal validator, its message and test; `encoded_relations` still feeds
+`shared_context`/`frame_context`; ruff clean on touched files.
