@@ -74,3 +74,27 @@ Concept review (2026-11-12): the concepts hold. One runtime switch, one owner
 state. Object trimming silently off under `historical_mean`/belief rows is a
 correctness guard, not a user choice. Remaining packed paths (300/300 full
 signatures) are the stated follow-up for the L4 profile, not a design gap.
+
+Concept review after merging main (2026-11-12, at `ac7bda09e`): main now ships
+`managym.observation_layout()`, the native column table with each column's name,
+kind and encoding. It already names every object reference `buckets.py`
+remaps: encoding "Padded object table index + 1" on facts.object,
+effects.controller/source, effect_members.object, relations.source/reference,
+agent/opponent_permanents.attached_to/blocking; zero-based object-table index
+on action_focus and policy-history events.source_context/target_context. The
+engine guide says to look columns up by name. `_ONE_BASED_REFERENCES` and
+`_EVENT_FOCUS_COLUMNS` still hard-code 10, 12, 0, 6, 24, 5, 10, so a reference
+column added later would be trimmed away and not renumbered: wrong objects, no
+error.
+
+Next implement direction:
+- Name each remapped column through the layout (`layout[key]["columns"][name]["index"]`,
+  events via `observation_layout(policy_history=True)`); keep the env constants
+  where they already exist only if they agree.
+- Add a test that the remapped set equals every layout column whose encoding is
+  an object-table index (one-based or zero-based), so a new reference fails the
+  test instead of corrupting a trimmed batch.
+- The merge changed Rust; the checkout's `_managym` extension is stale
+  (`import managym` fails: no `catalog_tokens`). Rebuild it per CLAUDE.md before
+  any test; that build is the only native step, no cargo tests.
+
