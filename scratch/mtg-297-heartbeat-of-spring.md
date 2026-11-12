@@ -15,6 +15,9 @@
   `TriggeredManaAbility.mana`, `flow/zones.rs::tap_bonus_sources(controller)`
   and tap-time firing can't supply them. Read the reviewed version, not this
   summary, when resuming.
+- The brief says to copy that design here "before starting", and the steer
+  says it "is copied"; it is not in this checkout. Copy the reviewed version
+  from MTG-286's branch or main when implement resumes.
 
 ## Docs
 
@@ -24,9 +27,9 @@ plus directed tests. The tracked markdown that names mana triggers
 The proposed v10 `mana_choices` encoding table belongs to MTG-286's
 observation review. Changed doc paths: none.
 
-## Implement status (2026-11-12)
+## Implement status (2026-11-12, rechecked at realign)
 
-Blocked; no code written. Rechecked at implement: `origin/main` still at
+Blocked; no code written. Rechecked at implement and realign: `origin/main` still at
 92560a1e0 and PR #469 (MTG-286) is OPEN, unmerged. Per the steer, this stops
 at design review. The production design is also unreviewed and says "no new
 triggering record is implemented before that review". Resume implement once
