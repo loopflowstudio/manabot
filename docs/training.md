@@ -547,8 +547,13 @@ not resolve learning differences that small. TF32 is 1.1× faster at w160l8 and
 1.3–1.5× at w384l8; BF16 is slower at w160l8 and 2–2.7× faster at w384l8. A
 reduced precision becomes a recommendation only after a real learning
 comparison: same seeds, bucketed shapes, strength at matched updates. Before
-training in one on another GPU or model size, rerun the
-[CUDA numerics validation](#validation) on that host.
+training in one on another GPU or model size, run the
+[CUDA numerics validation](#validation), which checks float32, and the bf16
+dtype-join admission on that host:
+
+```bash
+MANABOT_REQUIRE_CUDA=1 uv run --extra dev pytest tests/model/test_semantic_card_precision.py -q
+```
 
 ### Terminal incidents
 

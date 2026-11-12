@@ -46,3 +46,9 @@ report and default decision.
 - `experiments/cuda_precision.py` measurement path left as run at `71c044113`
   (the freeze); only `charts` was added after. docs/training.md's results
   paragraph cut to decision + pointer; the method lives in the report.
+
+## Concept review (2026-11-12)
+- No new concepts: `Execution.precision` (on main) is the one switch; the
+  branch adds a report, its experiment file and a docs section that points at
+  it. Docs' `#validation` and `#reduced-precision` anchors resolve. Nothing to
+  change, no open product choice.

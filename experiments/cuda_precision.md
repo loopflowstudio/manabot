@@ -96,8 +96,8 @@ timed passes. Peak memory is in GB.
 | | bf16 | 196 | 194 | 3.4 | 1.1 |
 
 The float32 order and repeat arms read within 2% of float32 in every group, so
-host drift is small. Small calls (≤ 8 rows) are host-bound at 19–31 ms in
-every arm. BF16 adds 2–7 ms to them, the cost of the autocast casts. At w160l8,
+host drift is small. Small calls (≤ 8 rows) are host-bound at 19–32 ms in
+every arm. BF16 adds 3–7 ms to them, the cost of the autocast casts. At w160l8,
 BF16's cast and layout overhead exceeds its tensor-core gain, and with padded
 shapes it doubles learner peak memory. At w384l8 the gain dominates and memory
 falls. The default bar (≥ 1.10× on both the learner step and large calls, at
@@ -113,7 +113,7 @@ group). Values are the worst over the four groups:
 
 | | float32 repeat | TF32 | BF16 |
 |---|---:|---:|---:|
-| Loss, relative difference | 6e-7 | 8e-4 | 6.4e-3 |
+| Loss, relative difference | 3e-7 | 8e-4 | 6.4e-3 |
 | Gradient cosine (min) | 1.0000000 | 0.99983 | 0.9925 |
 | Gradient norm, relative | 3e-6 | 1.9e-3 | 7.4e-3 |
 | Collection log-probability, abs | 2.4e-7 | 7.2e-6 | 7.1e-5 |
@@ -126,7 +126,7 @@ skipped, rejected or produced a non-finite step in 200 optimizer steps.
 **Learning** (ten epochs over 20 minibatches). The figure plots each metric's
 largest per-epoch mean deviation from float32 as a multiple of float32's own
 spread. TF32 ranges 0.35–1.87× (12 readings, 6 above 1). BF16 ranges 0.24–3.10×
-(12 readings, 6 above 1, one above 2: policy loss at w160l8 bucketed). Both
+(12 readings, 5 above 1, one above 2: policy loss at w160l8 bucketed). Both
 scatter around 1 in the same way.
 
 The ratios divide by a reference that is one draw and, for policy loss, nearly
@@ -152,7 +152,7 @@ to about 0.10, and clip fraction from 0 to 0.07–0.15.
 BF16's rejecting reading is 8.7e-4 against references of 2.8e-4 (repeat) and
 1.7e-4 (order). Elsewhere the float32 order arm alone reaches 7.8e-4.
 
-The reference itself is large. By epoch 10, float32 against its own repeat
+The reference itself is large. Within ten epochs, float32 against its own repeat
 differs in clip fraction by 0.04–0.08, against levels of 0.07–0.15. In the
 first epoch, before divergence compounds, the ordering is visible. The largest
 first-epoch value-loss difference from float32 is 5e-5–1.8e-3 for the repeat,
@@ -236,7 +236,7 @@ $0.45 (launcher, run `f71ee505f7cc`), under the USD 3 cap.
 Reproduce:
 
 ```sh
-uv run python -m experiments.cuda_precision smoke          # CPU, toy scale
+uv run python -m experiments.cuda_precision smoke          # CPU, toy scale, about 2.5 minutes
 uv run etude launch experiments/cuda_precision.py --rent l4-etude \
     --cohort NAME --max-usd 3 --revision COMMIT --hours 2.0 --usd 1.5
 uv run --extra reports python -m experiments.cuda_precision charts \
