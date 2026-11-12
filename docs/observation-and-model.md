@@ -54,9 +54,8 @@ validation of its own
    [live-token attention](#live-token-attention-profiling); it replaced the
    pooled token stream, whose pilot closed negative
    ([token-stream report](../experiments/token_stream.md)).
-   `ModelConfig.token_stream` accepts only `"tables"`, and a saved
-   configuration naming `"pooled"` fails to load with an error naming the
-   removal; run it from the revision its report pins.
+   A saved configuration naming `token_stream="pooled"` fails to load with an
+   error naming the removal; run it from the revision its report pins.
 3. **Score actions.** Each action gathers the post-attention embeddings of its
    focus objects, and a small head gives it one logit. With `policy_film`, a
    pooled game state first scales each action embedding. Illegal slots are

@@ -1,17 +1,13 @@
 # MTG-327 plan
 
-## Docs (written ahead of implementation)
-
-- `docs/observation-and-model.md`: the pooled stream's description, its
-  bucketed-shapes guard sentence and its live-tokens guard sentence are gone;
-  "Mix" now points to the token-stream report and states that a saved
-  `token_stream="pooled"` configuration fails to load with an error naming the
-  removal. Implementation must make that error true (ModelConfig validator).
-- `manabot/infra/config.py` field comment still describes pooled; rewrite it
-  with the code change.
-
 ## Status
 
-Implemented: token_stream.py and its tests deleted; `_attend_pooled`,
-token types, both guards removed; `ModelConfig` refuses `pooled` by name.
-Check: tests/model/{live_tokens,value_aggregation,agent,bucketed_shapes,inference,policy_film}, tests/training/test_bucketed_execution, experiment discovery — 102 passed.
+Implemented: `manabot/model/token_stream.py`, its tests, `_attend_pooled`,
+token types and both pooled guards removed. `ModelConfig.token_stream` is no
+longer a field: a before-validator (`reject_pooled_token_stream`, like
+`reject_compound_decisions`) admits only `"tables"` and refuses anything else
+with `POOLED_TOKEN_STREAM_REMOVED`. `experiments/token_stream.py` (imported the
+deleted module) removed; its report points at `7ac8c9b6f`.
+
+Check: tests/model/{value_aggregation,live_tokens,agent},
+tests/training/test_bucketed_execution, tests/eval/test_experiment_files — 76 passed.

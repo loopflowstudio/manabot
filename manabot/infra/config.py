@@ -247,6 +247,7 @@ COMPOUND_DECISIONS_REMOVED = (
     "compound-decision policies are no longer executable; reproduce them at "
     "commit ba3cd58de25bcc5d0b32e0fa3c546ee3d27be52b"
 )
+# The pooled token stream (`token_stream="pooled"`) was removed the same way.
 POOLED_TOKEN_STREAM_REMOVED = (
     "token_stream='pooled' was removed after its pilot closed negative "
     "(experiments/token_stream.md); live-token attention replaces it. "
@@ -295,13 +296,6 @@ class ModelConfig(BaseConfig):
     # Number of attention heads used in the GameObjectAttention layer.
     num_attention_heads: int = 4
     attention_on: bool = True
-    # What object attention runs over: the fixed object tables. The only value
-    # is `tables`, kept so saved configurations naming it still load; it is
-    # omitted when serialized, so recipes keep their identities. A saved
-    # `pooled` stream is refused by name (`POOLED_TOKEN_STREAM_REMOVED`).
-    token_stream: Literal["tables"] = Field(
-        default="tables", exclude_if=lambda value: value == "tables"
-    )
     # Canonical belief rows are an opt-in checkpoint ABI. A positive bucket
     # count requires explicit belief tensors on every forward pass; there is
     # no neutral or positional-condition fallback on this path.
@@ -324,8 +318,12 @@ class ModelConfig(BaseConfig):
     @model_validator(mode="before")
     @classmethod
     def reject_pooled_token_stream(cls, data: Any) -> Any:
-        """Refuse the removed pooled stream by name rather than as a bad literal."""
-        if isinstance(data, dict) and data.get("token_stream") == "pooled":
+        """Admit the retired `token_stream` only as `tables`, the one remaining
+        attention layout; a saved `pooled` stream is refused by name."""
+        if not isinstance(data, dict) or "token_stream" not in data:
+            return data
+        data = dict(data)
+        if data.pop("token_stream") != "tables":
             raise ValueError(POOLED_TOKEN_STREAM_REMOVED)
         return data
 

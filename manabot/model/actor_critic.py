@@ -6,8 +6,9 @@ forward_distribution when it needs loss/draw/win logits rather than their mean.
 Both read only observations admitted by `manabot.model.admission`, which owns
 every input check; the forward does no validation host reads.
 
-Object attention runs over the fixed object tables. With `bucketed_shapes=True` (`manabot.model.buckets`), each forward trims its
-variable axes to power-of-two buckets and returns logits at full capacity.
+Object attention runs over the fixed object tables. With `bucketed_shapes=True`
+(`manabot.model.buckets`), each forward trims its variable axes to power-of-two
+buckets and returns logits at full capacity.
 With `live_tokens=True` (`manabot.model.live_tokens`), table attention runs
 over the batch's valid objects packed into one sequence; either setting
 composes with the other and neither changes the model.
