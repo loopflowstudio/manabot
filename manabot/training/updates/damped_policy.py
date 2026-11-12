@@ -88,7 +88,7 @@ def _targets(
             value_targets = rl.categorical_lambda_returns(
                 probabilities, rewards, ends, bootstrap, learning.value_lambda
             )
-            next_value = bootstrap[:, 2] - bootstrap[:, 0]
+            next_value = rl.expected_outcome(bootstrap)
         else:
             next_value = next_raw.squeeze(-1)
             _, value_targets = rl.transition_gae(
@@ -171,7 +171,7 @@ def update_damped_iteration(
         diagnostics["numerical"] = health
         observer = OptimizerHealth(health, iteration, learner.profiler)
         expected_targets = (
-            targets.values[..., 2] - targets.values[..., 0]
+            rl.expected_outcome(targets.values)
             if categorical
             else targets.values
         )

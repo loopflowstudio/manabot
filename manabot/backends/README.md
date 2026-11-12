@@ -89,7 +89,7 @@ backend lacks into its modules.
 | Module | Names |
 | --- | --- |
 | `manabot.backends.torch.policy` | `ActorCritic` |
-| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `require`, `require_finite`, `NumericalError` |
+| `manabot.backends.torch.rl` | `legal_mask`, `policy_logs`, `action_logs`, `reference_logs`, `damped_policy_loss`, `transition_gae`, `standardized_advantages`, `expected_outcome`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `clip_fraction`, `selected_rows`, `selection_mask`, `selected_mean`, `require`, `require_finite`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `no_grad`, `apply_matmul_precision` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
 | `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |

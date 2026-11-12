@@ -292,6 +292,11 @@ def standardized_advantages(advantages: Tensor, over: Tensor | None = None) -> T
     )
 
 
+def expected_outcome(probabilities: Tensor) -> Tensor:
+    """Expected signed outcome `[...]` of loss/draw/win mixtures `[...,3]`: P(win) - P(loss)."""
+    return probabilities[..., 2] - probabilities[..., 0]
+
+
 @torch.no_grad()
 def categorical_lambda_returns(
     probabilities: Tensor,

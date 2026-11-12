@@ -2,31 +2,24 @@
 
 from contextlib import AbstractContextManager, nullcontext
 from copy import deepcopy
-import importlib
-from typing import cast
 
-import numpy as np
 import pytest
 import torch
 from torch import Tensor
 
-from manabot.backends.torch.learner import (
-    Learner,
-    StepRecorder,
-    gradient_step,
-    update_ema,
-)
+from manabot.backends.torch.learner import StepRecorder, gradient_step, update_ema
 from manabot.backends.torch.rl import (
     NumericalError,
     categorical_value_loss,
+    clip_fraction,
     entropy,
+    expected_outcome,
     policy_logs,
+    reference_logs,
+    reverse_kl,
     squared_value_loss,
     standardized_advantages,
 )
-from manabot.training.learning import objectives
-from manabot.training.regime import DampedPolicyLearning, Learning
-from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import NumericalHealth, OptimizerHealth
 
 
@@ -56,6 +49,26 @@ def test_entropy_reads_only_legal_offers() -> None:
     torch.testing.assert_close(
         entropy(logs, valid), torch.tensor([torch.log(torch.tensor(2.0)), 0.0])
     )
+
+
+def test_reference_logs_give_a_finite_reverse_kl_target_on_padding() -> None:
+    valid = torch.tensor([[True, True, False]])
+    reference = torch.tensor([[0.25, 0.75, 0.0]])
+    target = reference_logs(reference, valid)
+    torch.testing.assert_close(target, torch.tensor([[0.25, 0.75, 1.0]]).log())
+    logs = policy_logs(torch.zeros(1, 3), valid)
+    expected = 0.5 * (torch.tensor(0.5 / 0.25).log() + torch.tensor(0.5 / 0.75).log())
+    torch.testing.assert_close(reverse_kl(logs, target, valid), expected[None])
+
+
+def test_clip_fraction_counts_ratios_outside_the_clip_band() -> None:
+    ratios = torch.tensor([1.0, 1.1, 1.3, 0.7, 1e6])
+    assert clip_fraction(ratios.log(), 0.2) == pytest.approx(0.6)
+
+
+def test_expected_outcome_is_win_minus_loss() -> None:
+    mixtures = torch.tensor([[0.2, 0.3, 0.5], [1.0, 0.0, 0.0]])
+    torch.testing.assert_close(expected_outcome(mixtures), torch.tensor([0.3, -1.0]))
 
 
 def _health() -> NumericalHealth:
@@ -172,110 +185,3 @@ def test_update_ema_moves_parameters_by_one_minus_rate() -> None:
     torch.testing.assert_close(averaged.weight, start + 1.0)
     with pytest.raises(ValueError):
         update_ema(averaged, model, rate=1.0)
-
-
-# Names published in 0.2, and where they live now.
-_MOVED = [
-    (
-        "manabot.training.learning.objectives",
-        "update_ema",
-        "manabot.backends.torch.learner",
-    ),
-    (
-        "manabot.training.learning.damped_policy",
-        "update_damped_iteration",
-        "manabot.training.updates.damped_policy",
-    ),
-    (
-        "manabot.training.learning.damped_policy",
-        "damped_policy_loss",
-        "manabot.backends.torch.rl",
-    ),
-    (
-        "manabot.training.learning.damped_policy",
-        "categorical_lambda_returns",
-        "manabot.backends.torch.rl",
-    ),
-    (
-        "manabot.training.learning.returns",
-        "transition_gae",
-        "manabot.backends.torch.rl",
-    ),
-    (
-        "manabot.training.learning.selection",
-        "selection_mask",
-        "manabot.backends.torch.rl",
-    ),
-    (
-        "manabot.training.learning.selection",
-        "selected_mean",
-        "manabot.backends.torch.rl",
-    ),
-    (
-        "manabot.training.learning.selection",
-        "selection_diagnostics",
-        "manabot.training.updates.selection",
-    ),
-    (
-        "manabot.training.learning.learner",
-        "Learner",
-        "manabot.backends.torch.learner",
-    ),
-    (
-        "manabot.training.learning.learner",
-        "AdmittedRollout",
-        "manabot.training.updates.learner",
-    ),
-    (
-        "manabot.training.learning.health",
-        "OptimizerHealth",
-        "manabot.training.updates.health",
-    ),
-    ("manabot.model.policy_distribution", "legal_mask", "manabot.backends.torch.rl"),
-    ("manabot.model.policy_distribution", "policy_logs", "manabot.backends.torch.rl"),
-    (
-        "manabot.model.policy_distribution",
-        "NumericalError",
-        "manabot.backends.torch.rl",
-    ),
-    ("manabot.model.policy_distribution", "require", "manabot.backends.torch.rl"),
-    (
-        "manabot.model.policy_distribution",
-        "clipped_surrogate",
-        "manabot.backends.torch.rl",
-    ),
-    ("manabot.model.policy_distribution", "reverse_kl", "manabot.backends.torch.rl"),
-    ("manabot.model.numerics", "float64_operand", "manabot.backends.torch.rl"),
-]
-
-
-@pytest.mark.parametrize(("old", "name", "new"), _MOVED)
-def test_moved_names_resolve_through_deprecated_aliases(
-    old: str, name: str, new: str
-) -> None:
-    module = importlib.import_module(old)
-    with pytest.warns(DeprecationWarning, match=rf"{new}\.{name}.*0\.3\.0"):
-        alias = getattr(module, name)
-    assert alias is getattr(importlib.import_module(new), name)
-    with pytest.raises(AttributeError):
-        getattr(module, "not_a_name")
-
-
-def test_deprecated_update_iteration_dispatches_on_the_learning_record(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(objectives.ppo, "update_iteration", lambda *a, **k: {"rows": 1})
-    monkeypatch.setattr(
-        objectives, "update_damped_iteration", lambda *a, **k: {"rows": 2}
-    )
-    rng = np.random.default_rng(0)
-    learner, batch = cast(Learner, None), cast(RolloutBatch, None)
-    damped = DampedPolicyLearning(gradient="damped_policy")
-    with pytest.warns(DeprecationWarning, match=r"updates\.ppo.*0\.3\.0"):
-        assert objectives.update_iteration(learner, batch, Learning(), 0, rng) == {
-            "rows": 1
-        }
-    with pytest.warns(DeprecationWarning, match=r"update_damped_iteration.*0\.3\.0"):
-        assert objectives.update_iteration(learner, batch, damped, 0, rng) == {
-            "rows": 2
-        }

@@ -11,8 +11,15 @@
   The write-docs drafts of `policy/README.md` and `backends/README.md` used
   other names; both were replaced by MTG-321's files.
 - `AdmittedRollout` stays in `manabot.training.updates.learner` (torch-only
-  admission). `legal_mask`/`policy_logs` moved to `backends/torch/rl.py`;
-  `model/policy_distribution.py` keeps #474's released names as aliases.
+  admission). `legal_mask`/`policy_logs` moved to `backends/torch/rl.py`.
+  #474 (61902c194) deleted every deprecated alias and `manabot.infra.deprecation`;
+  the sync took that, deleting `model/policy_distribution.py`,
+  `training/learning/` and the model.numerics alias, and pointing experiment
+  imports at the new homes. #474's `support_logs` is this branch's
+  `rl.reference_logs` (kept the branch name); `clip_fraction` was already in
+  `backends/torch/rl.py`; `expected_outcome` was added there and the damped
+  update uses it. Dropped #474's training-loop paragraph about frameworks
+  plugging in at the minibatch step: here the whole update runs over a backend.
 - The update's `backend` parameter is typed `types.ModuleType` (no protocol
   for a backend module yet); torch types are TYPE_CHECKING annotations.
 - `no_grad` lives in `backend.learner` and the learning rate is a `Learner`
