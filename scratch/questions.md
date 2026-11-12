@@ -205,10 +205,9 @@ Results (debug unless stated):
 - The shipping guide's Scout's Warning example now prints `[[]]`; its
   planned-support wording is retained until gate/demo.
 
-Next slice candidate: player experience counters. A player `counters` field
-touches PlayerData, PyO3 bindings, experience projection, six protocol schemas,
-Python encoder facts, LLM text and Academy UI (traced from
-`no_maximum_hand_size`); counter facts on player rows need no new width.
+Player experience counters (traced from `no_maximum_hand_size`: PlayerData,
+PyO3, experience projection, six protocol schemas, encoder facts, LLM text,
+Academy UI) serve only non-bonus cards; outside the narrowed scope below.
 
 ## Fifth pass — bonus-sheet scope, 2026-11-12 UTC
 
@@ -255,3 +254,12 @@ Wildspeaker, Training Grounds, Agent of Treachery); new tokens (Join the Dance
 Human, Release to Memory Spirit, Lita's Zeppelin, Koma's Coil, Rhys's Elf Warrior,
 Marit Lage); damage source/LKI (Warstorm Surge, Noxious Gearhulk, Searing Blood);
 uncounterable + color predicates (Rending Volley, Koma); others per allocation.
+
+## Realignment — sixth pass, 2026-11-12 UTC
+
+`origin/main` has no commits beyond HEAD. The incoming direction's counts
+(17 defined/225 missing) and its experience-counter slice predate the bonus-sheet
+steer; current `check_tle_coverage.py --bonus-sheet` is 21/61 with 40 missing
+(66/242 on the full ledger). For this Task the production open question blocks
+only Heartbeat of Spring, The Great Henge and Tarnished Citadel; Toph, Uncle's
+Musings and Animal Attendant are non-bonus. Plan rewritten to the 61-card scope.
