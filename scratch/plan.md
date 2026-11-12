@@ -43,6 +43,15 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   module names without line numbers. `arrays.from_numpy`/`flat_numpy` stay
   unused until the torch parity `BACKEND` (Remaining 3), matching MLX's file.
 
+- `61b87f84a`: `load_checkpoint` reads `.pt` (zip magic) or the container
+  (`read_container`, then world/policy-input/architecture checks); save stays
+  `.pt`. Next commit: `assemble(PolicyCheckpoint)` and `BACKEND`
+  (`TorchPolicy`/`TorchLearner`, NumPy protocol, canonical names, `Retained`
+  carries the admitted torch observation; the damped loss is a local import
+  because `training.updates.damped_policy` reaches collection → search →
+  this module). `backends/parity.py` registration (`BACKENDS["torch"]`) waits
+  for #495 on main (parity.py/convert.py are not on this branch).
+
 ## Checks
 
 - Boundaries, learning pieces (incl. new alias rows), minimal loop, learner,
@@ -51,6 +60,20 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   experiments, two-seat, bucketed shapes/execution, inference, mps, collection:
   all passed (several runs). After compress: boundaries, learner, bucketed
   shapes, inference, admission, learning pieces: 78 passed in 39 s.
+- CPU equivalence, 05c1203e9 vs HEAD (`/tmp/mtg325equiv/run.py`,
+  `compare.py`; base as a detached worktree with the same `.so`, one thread):
+  1,676 tensors bitwise identical, 0 differ. Covers logits, values, a
+  log-likelihood + value loss and every parameter gradient for 11 configs
+  (default historical_mean, masked_mean, history v1, categorical WDL, FiLM,
+  pooled token stream, attention off, 2 layers, hashed records, no world,
+  input v10), each padded and bucketed (pooled padded only; base refuses
+  bucketed pooled), on 24 real Elemental observations; plus every weight
+  after `minimal.train(2)` for two configs (covers rl, gradient_step,
+  update_ema, collection). Belief inputs not covered (need belief rows).
+  HEAD vs HEAD rerun also 0 differ. Losses distinct per config; 1,152/1,439
+  gradients non-zero, none non-finite.
+- New: `test_torch_container_load.py` (2), `test_torch_backend_protocol.py`
+  (1); with boundaries, policy container, capacity, minimal loop: 37 passed.
 - `pytest --collect-only` over every changed test file: 1,116 collected; only
   errors are duckdb-dependent files (extra not installed).
 - Bucket parity: `/tmp/mtg325buckets/compare.py` runs the old torch
@@ -67,18 +90,18 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    MTG-321's file; do it after #495 lands, then move each component's inline
    lookups (semantic_cards, facts, shared_effects, name_candidates,
    continuation, recent_events, token_stream, belief) onto prepared indices.
-2. `save_checkpoint` writing the container and `load_checkpoint` reading it:
+2. `save_checkpoint` writing the container (`load_checkpoint` reads it now):
    needs the container to carry every config and the `.pt` extras (belief
    binding, `bc`), which `require_supported`/`_METADATA_KEYS` do not yet;
    `read_container` now raises `NotAContainer` for `.pt`, so `load_checkpoint`
    must dispatch on format rather than try the container first.
    Docs (training-loop.md checkpoint example, manabot/README.md) already
    describe this and are ahead of the code.
-3. Torch `BACKEND` in `backends/torch/checkpoint.py` + registration in
-   `backends/parity.py` (MTG-321's), retained-reference mode; needs 1.
-4. Equivalence proof: MTG-299's harness / 617-tensor comparison against the
-   pre-change torch path; CUDA L4 check (under USD 3) with `bucketed_shapes`
-   and `precision="tf32"`.
+3. Register `"torch": "torch"` in `backends/parity.py` once #495 is on this
+   branch (via #474/main), and run parity on a w160l8 capture.
+4. CUDA L4 check (under USD 3) with `bucketed_shapes` and `precision="tf32"`,
+   using `/tmp/mtg325equiv/run.py` (copy into the job) on both commits.
+   Re-run the CPU comparison after item 1 changes the forward.
 5. After #497 (MTG-319) merges to main: merge main in, move
    `manabot/model/live_tokens.py` into `manabot/backends/torch/` with
    ActorCritic, keep `Execution.live_tokens` where it is (steer cc1dfb64).

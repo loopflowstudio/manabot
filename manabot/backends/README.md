@@ -43,7 +43,7 @@ backend-generic.
 | `manabot.backends.torch.rl` | `transition_gae`, `standardized_advantages`, `categorical_lambda_returns`, `clipped_surrogate`, `reverse_kl`, `squared_value_loss`, `categorical_value_loss`, `entropy`, `selection_mask`, `selected_mean`, `NumericalError` |
 | `manabot.backends.torch.learner` | `Learner`, `gradient_step`, `update_ema`, `StepRecorder`, `forward_precision`, `apply_matmul_precision` |
 | `manabot.backends.torch.arrays` | `from_numpy`, `to_numpy`, `flat_numpy`, `device_of` |
-| `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint` |
+| `manabot.backends.torch.checkpoint` | `load_checkpoint`, `save_checkpoint`, `assemble`, `BACKEND` |
 
 ```python
 from manabot.backends.torch.checkpoint import load_checkpoint
@@ -57,6 +57,12 @@ learner = Learner(agent, "cpu", minibatch_rows=64)
 their first bytes; `save_checkpoint` writes `.pt` until the container carries
 every configuration the torch policy runs (belief inputs, history, FiLM and
 the rest refused below).
+
+`BACKEND` is torch's `manabot.policy.protocol.Backend`, NumPy in and out,
+beside the native torch API; its parameters and gradients keep canonical
+names. Until `ActorCritic` reads `Prepared` indices, its `prepare` builds the
+shared `Prepared` and keeps the admitted torch observation on it (`Retained`),
+so parity can run torch against its own torch reference.
 
 `rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
 runtime, so another role reuses them unchanged. The same names in

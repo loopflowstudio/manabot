@@ -6,8 +6,18 @@ that file or the shared container (`manabot.policy.checkpoint`), choosing by
 the file's bytes, verifies bindings before loading weights and returns an
 eval-mode model. Optimizer/collector recovery belongs to training. Historical
 serialized keys remain unchanged; these are not training snapshots.
+
+`BACKEND` is the torch `manabot.policy.protocol.Backend`: NumPy in and out,
+beside the native torch API that training and evaluation use. Its parameters
+and gradients keep canonical names (torch's tensors have the canonical
+shapes). Until `ActorCritic` reads `Prepared` indices itself, its `prepare`
+builds the shared `Prepared` and retains the admitted torch observation on it
+(`Retained`), which `evaluate` and the learner run; parity against the
+retained-reference torch path then exercises the harness with torch alone.
 """
 
+from collections.abc import Mapping
+from dataclasses import dataclass, field, fields
 import json
 import os
 from pathlib import Path
@@ -18,9 +28,12 @@ from urllib.parse import unquote, urlsplit
 from etude.run.records import ArtifactRef
 from etude.run.storage import storage_from_uri
 from etude.train.records import CheckpointRecord
+import numpy as np
 import torch
 
+from manabot.backends.torch.learner import gradient_step
 from manabot.backends.torch.policy import ActorCritic
+from manabot.backends.torch.rl import selected_mean
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
@@ -29,10 +42,12 @@ from manabot.belief.encoding import (
 from manabot.env.observation import ObservationSpace
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact, verify_file
 from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.architecture import (
     architecture_receipt,
     validate_architecture_receipt,
 )
+from manabot.model.policy_distribution import legal_mask
 from manabot.model.world import (
     checkpoint_source,
     checkpoint_world,
@@ -40,7 +55,14 @@ from manabot.model.world import (
     validate_checkpoint_world,
     validate_policy_input,
 )
-from manabot.policy.checkpoint import canonical_name, read_container
+from manabot.policy.checkpoint import (
+    PolicyCheckpoint,
+    canonical_name,
+    canonical_parameters,
+    read_container,
+)
+from manabot.policy.prepare import Prepared, prepare
+from manabot.policy.protocol import Settings, Targets
 import managym
 
 if TYPE_CHECKING:
@@ -204,27 +226,36 @@ def _load_container(
         key: json.loads(container.metadata[key])
         for key in ("world_binding", "source", "architecture")
     }
-    agent = ActorCritic(
-        container.space, container.model, bucketed_shapes=bucketed_shapes
-    )
+    agent = assemble(container, bucketed_shapes=bucketed_shapes)
     world_binding = validate_checkpoint_world(record, container.space)
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
     if record["architecture"] is not None:
         validate_architecture_receipt(agent, record["architecture"])
+    agent.eval()
+    return agent, container.space
+
+
+def assemble(
+    checkpoint: PolicyCheckpoint, *, bucketed_shapes: bool = False
+) -> ActorCritic:
+    """An `ActorCritic` holding a container's parameters and buffers; binds
+    no world (`load_checkpoint` validates the binding)."""
+    agent = ActorCritic(
+        checkpoint.space, checkpoint.model, bucketed_shapes=bucketed_shapes
+    )
     torch_names = {canonical_name(name): name for name in agent.state_dict()}
-    arrays = {**container.parameters, **container.buffers}
+    arrays = {**checkpoint.parameters, **checkpoint.buffers}
     unknown = sorted(set(arrays) - set(torch_names))
     if unknown:
         raise KeyError(f"container tensors with no policy parameter: {unknown}")
     agent.load_state_dict(
         {
-            torch_names[name]: torch.from_numpy(value.copy())
+            torch_names[name]: torch.from_numpy(np.array(value))
             for name, value in arrays.items()
         }
     )
-    agent.eval()
-    return agent, container.space
+    return agent
 
 
 def save_checkpoint(
@@ -270,3 +301,147 @@ def save_checkpoint(
         )
     )
     torch.save(checkpoint, path)
+
+
+# -- the NumPy backend protocol ------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Retained(Prepared):
+    """A `Prepared` batch that keeps the admitted torch observation the torch
+    forward still reads. Removed when `ActorCritic` reads `Prepared` itself."""
+
+    admitted: AdmittedObservation = field(kw_only=True)
+
+
+class TorchPolicy:
+    """`BackendPolicy` over an `ActorCritic`."""
+
+    def __init__(self, agent: ActorCritic, checkpoint: PolicyCheckpoint) -> None:
+        self.agent = agent
+        self._tables = checkpoint.tables()
+
+    def prepare(
+        self, obs: Mapping[str, np.ndarray], *, inference: bool = False
+    ) -> Retained:
+        shared = prepare(obs, self._tables, inference=inference)
+        admitted = admit_observation(
+            self.agent, {key: torch.from_numpy(value) for key, value in obs.items()}
+        )
+        return Retained(
+            **{item.name: getattr(shared, item.name) for item in fields(shared)},
+            admitted=admitted,
+        )
+
+    def evaluate(self, batch: Prepared) -> tuple[np.ndarray, np.ndarray]:
+        """The eval-mode forward, as collection runs it."""
+        self.agent.eval()
+        with torch.no_grad():
+            logits, values = self.agent(_admitted(batch))
+        return logits.numpy(), values.numpy()
+
+    def cache_programs(self) -> None:
+        """The torch forward encodes its programs per call; nothing to cache."""
+
+    def clear_cache(self) -> None:
+        pass
+
+
+class TorchLearner:
+    """`BackendLearner`: the damped PPO loss with a clipped Adam step, as
+    `manabot.training.updates.damped_policy` computes it, over canonical names."""
+
+    def __init__(self, agent: ActorCritic) -> None:
+        self.agent = agent
+        self.optimizer = torch.optim.Adam(agent.parameters(), lr=0.0, eps=1e-5)
+
+    def _loss(
+        self, batch: Prepared, targets: Targets, settings: Settings
+    ) -> torch.Tensor:
+        # Imported here: the update module reaches collection and search,
+        # which load checkpoints through this module.
+        from manabot.training.updates.damped_policy import damped_policy_loss
+
+        obs = _admitted(batch)
+        self.agent.train()
+        logits, values = self.agent.forward_distribution(obs)
+        policy = damped_policy_loss(
+            logits,
+            torch.from_numpy(targets.actions),
+            torch.from_numpy(targets.advantages),
+            torch.from_numpy(targets.behavior_logs),
+            torch.from_numpy(targets.reference),
+            legal_mask(obs["actions_valid"]),
+            clip=settings.clip,
+            collection_kl=settings.collection_kl,
+            tau=settings.tau,
+        )
+        value = (
+            (values.squeeze(-1) - torch.from_numpy(targets.value_targets))
+            .square()
+            .mean()
+        )
+        return selected_mean(policy, torch.from_numpy(targets.actor_mask)) + value
+
+    def gradients(
+        self, batch: Prepared, targets: Targets, settings: Settings
+    ) -> tuple[float, dict[str, np.ndarray]]:
+        self.agent.zero_grad(set_to_none=True)
+        loss = self._loss(batch, targets, settings)
+        loss.backward()
+        gradients = canonical_parameters(
+            {
+                name: (
+                    np.zeros(tuple(parameter.shape), np.float32)
+                    if parameter.grad is None
+                    else parameter.grad.numpy().copy()
+                )
+                for name, parameter in self.agent.named_parameters()
+            }
+        )
+        self.agent.zero_grad(set_to_none=True)
+        return float(loss.detach()), gradients
+
+    def step(
+        self, batch: Prepared, targets: Targets, settings: Settings
+    ) -> tuple[float, float]:
+        for group in self.optimizer.param_groups:
+            group["lr"] = settings.learning_rate
+        loss = self._loss(batch, targets, settings)
+        norm = gradient_step(loss, self.agent, self.optimizer, settings.max_grad_norm)
+        return float(loss.detach()), float(norm)
+
+    def parameters(self) -> dict[str, np.ndarray]:
+        return canonical_parameters(
+            {
+                name: parameter.detach().numpy().copy()
+                for name, parameter in self.agent.named_parameters()
+            }
+        )
+
+
+def _admitted(batch: Prepared) -> AdmittedObservation:
+    if not isinstance(batch, Retained):
+        raise TypeError("the torch backend evaluates batches its own prepare built")
+    return batch.admitted
+
+
+class _Torch:
+    name = "torch"
+
+    def load(self, checkpoint: PolicyCheckpoint) -> tuple[TorchPolicy, TorchLearner]:
+        agent = assemble(checkpoint)
+        return TorchPolicy(agent, checkpoint), TorchLearner(agent)
+
+    def parameter_layout(
+        self, canonical: Mapping[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
+        return {name: np.asarray(value) for name, value in canonical.items()}
+
+    def gradient_layout(
+        self, canonical: Mapping[str, np.ndarray]
+    ) -> dict[str, np.ndarray]:
+        return {name: np.asarray(value) for name, value in canonical.items()}
+
+
+BACKEND = _Torch()
