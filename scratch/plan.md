@@ -45,12 +45,22 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 
 - `61b87f84a`: `load_checkpoint` reads `.pt` (zip magic) or the container
   (`read_container`, then world/policy-input/architecture checks); save stays
-  `.pt`. Next commit: `assemble(PolicyCheckpoint)` and `BACKEND`
-  (`TorchPolicy`/`TorchLearner`, NumPy protocol, canonical names, `Retained`
-  carries the admitted torch observation; the damped loss is a local import
-  because `training.updates.damped_policy` reaches collection → search →
-  this module). `backends/parity.py` registration (`BACKENDS["torch"]`) waits
-  for #495 on main (parity.py/convert.py are not on this branch).
+  `.pt`.
+- `3b9581475`, `e143082bb`: `assemble(PolicyCheckpoint)` and `BACKEND` in
+  `backends/torch/checkpoint.py` (`TorchPolicy`/`TorchLearner`, NumPy
+  protocol, canonical names; `Retained` carries the admitted torch
+  observation; the damped loss is a local import because
+  `training.updates.damped_policy` reaches collection → search → this
+  module). Registration in `backends/parity.py` waits for #495 on this
+  branch (parity.py/convert.py are not here).
+
+## Coordination (2026-11-12)
+
+- Extensions requested on MTG-321 at 19:41Z (prepare: FiLM, belief, history
+  beyond w160l8, pooled token stream, v10, categorical value,
+  historical_mean, attention off; container: belief binding, `bc`). No reply
+  yet. #495 head 0c7cd1419 changes no shared file since 88c97936b (only its
+  scratch), so the copies here are current. #474 still 05c1203e9; #497 open.
 
 ## Checks
 
@@ -84,8 +94,8 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 
 ## Remaining
 
-1. ActorCritic over `manabot.policy.prepare.Prepared`. Blocked on a design
-   point (`scratch/questions.md`): MTG-321's `prepare.py` covers only the
+1. ActorCritic over `manabot.policy.prepare.Prepared`. Blocked on #495
+   landing and MTG-321's answer to the request above: MTG-321's `prepare.py` covers only the
    w160l8 subset (`require_supported` refuses FiLM, belief, history, pooled
    token stream, v10, categorical value, historical_mean, attention off);
    torch must keep running all of them bitwise. Extending `prepare.py` edits
