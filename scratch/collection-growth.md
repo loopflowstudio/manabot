@@ -12,7 +12,14 @@ attempts refused L4 capacity before submission. No active Task rental remains.
 The execution evidence and qualified report are published; the paired scientific
 acceptance is unmet.
 
-## Open decision: remaining budget cannot buy the frozen pair
+## Decided 2026-11-12: close as inconclusive
+
+Jack Heart replied "c" to (a) after-arm only / (b) raise the cap to ~$23 /
+(c) close as inconclusive. No further rentals; spend stays ~$3.78. Finalize the
+report with the inconclusive verdict, file one follow-up Task for the controlled
+comparison (carrying the baseline-stall question and prepared jobs), deliver.
+
+## Former open decision: remaining budget cannot buy the frozen pair
 
 The iteration direction asks to "execute the pinned arms serially within the
 cumulative $15 cap". About $3.78 is spent (whole-lifetime estimate), which
