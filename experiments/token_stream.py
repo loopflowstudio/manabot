@@ -365,7 +365,7 @@ def _capturing(out: Path, probe: Probe) -> Iterator[None]:
     """Keep collection inputs (no grad) and learner minibatches (grad) of the forward."""
     import torch
 
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PreparedObservation
 
     original = ActorCritic.forward_distribution
@@ -522,8 +522,8 @@ def _replay(capture: Path, probe: Probe) -> dict[str, object]:
     """Both arms at each size on the captured inputs, interleaved pass by pass."""
     import torch
 
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.model.inference import PolicyInference
 
     collection = [

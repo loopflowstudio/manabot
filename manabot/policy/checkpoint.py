@@ -7,7 +7,7 @@ checkpoint's `hypers`, `world_binding`, `architecture` and `source` record as
 JSON (`_METADATA_KEYS`) plus the PyTorch file it came from (`converted_from`).
 `manabot.backends.convert` writes one from a PyTorch `.pt` checkpoint, which
 stays readable as before; `read_container` validates the same world
-binding as `manabot.model.checkpoint.load_checkpoint`, so a refusal names the
+binding as `manabot.backends.torch.checkpoint.load_checkpoint`, so a refusal names the
 revision that wrote the original.
 
 Canonical names are the PyTorch state-dict names with the framework's own

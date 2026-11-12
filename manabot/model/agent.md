@@ -162,9 +162,6 @@ The policy is split by what depends on an array framework:
 - This directory: the torch model's components, admission, inference
   preparation, architecture receipts and world binding.
 
-`manabot.model.actor_critic.ActorCritic` and the `manabot.model.checkpoint`
-functions still resolve, with a `DeprecationWarning` and removal in 0.3.0.
-
 ## Observation admission
 
 A policy forward reads only admitted observations. Admission

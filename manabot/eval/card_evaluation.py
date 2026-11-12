@@ -34,7 +34,7 @@ from etude.eval.tournament import hold
 from etude.run.records import ArtifactRef
 from pydantic import Field, model_validator
 
-from manabot.backends.torch.checkpoint import local_checkpoint_file
+from manabot.infra.artifacts import local_checkpoint_file
 from manabot.eval.card_metrics import (
     CARD_ROLLUPS,
     METRIC_VERSION,

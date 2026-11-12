@@ -163,7 +163,7 @@ class _Captured(TypedDict):
 @contextmanager
 def _capturing(folder: Path, probe: Probe) -> Iterator[None]:
     """Keep initial weights, collection observations and learner loss inputs."""
-    from manabot.model.actor_critic import ActorCritic
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.model.inference import PreparedObservation
     from manabot.training.learning.health import OptimizerHealth
 
@@ -356,8 +356,8 @@ def _agent(
     folder: Path, size: str, bucketed: bool, seed: int, device: torch.device
 ) -> Any:
     """w160l8 from the captured initial weights; larger sizes from `seed`."""
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
 
     regime = TrainingRegime.model_validate_json((folder / "regime.json").read_text())

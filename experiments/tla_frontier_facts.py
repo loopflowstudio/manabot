@@ -62,6 +62,8 @@ from experiments.tla_frontier import (
     size_run,
     with_launcher_ends,
 )
+from manabot.backends.torch.checkpoint import load_checkpoint
+from manabot.backends.torch.policy import ActorCritic
 from manabot.env.match import Match
 from manabot.env.observation import (
     FACT_ADDED_SUBTYPE,
@@ -83,10 +85,9 @@ from manabot.env.observation import (
     FACT_VALID_INDEX,
     ObservationSpace,
 )
+from manabot.infra.artifacts import fetch_etude_checkpoint
 from manabot.infra.identity import StrictModel
-from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
-from manabot.model.checkpoint import fetch_etude_checkpoint, load_checkpoint
 from manabot.model.facts import FactEncoder
 from manabot.training.regime import TrainingRegime
 import managym

@@ -12,7 +12,7 @@ framework** (PyTorch, MLX, JAX); it uses NumPy only
 - `checkpoint.py` is the checkpoint container: one safetensors file of
   canonical float32 parameters, lookup buffers and the checkpoint's
   configuration, world binding and source record. It validates the world
-  binding as `manabot.model.checkpoint.load_checkpoint` does and refuses
+  binding as `manabot.backends.torch.checkpoint.load_checkpoint` does and refuses
   configurations the backends do not implement (`UnsupportedPolicy`) and
   files that are not containers (`NotAContainer`).
 - `buckets.py` chooses the sizes bucketed shapes trim a batch's variable

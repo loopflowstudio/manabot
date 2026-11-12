@@ -15,7 +15,9 @@ checked against.
 
 ## Layout
 
-Every backend is one package, `manabot/backends/<name>/`, with the same files:
+Every backend is one package, `manabot/backends/<name>/`, with at least these
+files; a backend may add private modules that its `policy.py` uses (torch's
+`live_tokens.py`):
 
 | File | Holds |
 | --- | --- |
@@ -65,10 +67,7 @@ shared `Prepared` and keeps the admitted torch observation on it (`Retained`),
 so parity can run torch against its own torch reference.
 
 `rl.py`, `learner.py` and `arrays.py` import nothing else from manabot at
-runtime, so another role reuses them unchanged. The same names in
-`manabot.model.actor_critic`, `manabot.model.checkpoint` and
-`manabot.training.learning.*`, where 0.2 released them, still resolve with a
-`DeprecationWarning` naming the new module and removal in 0.3.0.
+runtime, so another role reuses them unchanged.
 
 ## Convert a PyTorch checkpoint
 
@@ -95,7 +94,7 @@ update, new), and attention's packed in-projection is `qkv_weight` /
 buffer, or conversion fails naming the key.
 
 Loading a container validates the same world binding as
-`manabot.model.checkpoint.load_checkpoint` and fails with the same errors; a
+`manabot.backends.torch.checkpoint.load_checkpoint` and fails with the same errors; a
 refusal names the revision that wrote the original torch checkpoint. A file
 that is not a container (a `.pt`, or a conversion without the metadata) raises
 `NotAContainer`, saying to convert the `.pt`; `convert` refuses a `.safetensors`

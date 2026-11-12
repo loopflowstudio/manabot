@@ -144,43 +144,69 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 6. Rebase/merge onto #474 when it moves (unchanged at 05c1203e9 on
    2026-11-12); delete `scratch/` before landing.
 
-## Concept review (2026-11-12): next implement direction
+## Concept review items (2026-11-12): built
 
-The three layers hold, but three framework-free facts still live behind torch,
-so a second backend would reach through `manabot.backends.torch` or copy them.
-None needs #495; none touches MTG-321's files. Do them before review/gate.
+- `fetch_etude_checkpoint`/`local_checkpoint_file` live in
+  `manabot/infra/artifacts.py`; `load_etude_checkpoint` stays in the torch
+  backend. `eval/benchmark.py`/`card_evaluation.py` were never on
+  `_TORCH_NOT_YET_MOVED` (they import the backend, not torch), so the list
+  is unchanged.
+- `model/architecture.py` imports no backend: `architecture_receipt(spec,
+  space, {name: (numel, trainable)})`, `validate_architecture_receipt(actual,
+  saved)`; torch calls `ActorCritic.architecture_receipt()`. Receipts written
+  by 51f204ac4 (default, FiLM, 2-layer WDL, three params frozen) verify with
+  identical canonical JSON under the new code; `test_capacity.py` pins the
+  stored-vs-recomputed bytes.
+- `backends/README.md`: the five files are a minimum; private modules allowed.
+- Alias cut (steer 8332334d, quoting Jack Heart: "i think were being too
+  ambitious withh the deprecations"; "if theyre not explicitly calling
+  someting, we dont need to worry about maintaining it"): deleted
+  `manabot/model/actor_critic.py` and `manabot/model/checkpoint.py` aliases,
+  their `_MOVED` rows and doc mentions; 11 experiments import the new homes.
+  The `training.learning`/`model.numerics`/`policy_distribution` aliases are
+  #474's and #474 deletes them. `policy/README.md` and `policy/checkpoint.py`
+  (MTG-321 copies) now name `manabot.backends.torch.checkpoint.load_checkpoint`:
+  expect a one-line conflict when #495 lands.
+- Check: boundaries, capacity, torch container load, policy container, recent
+  events, record vocabulary, learning pieces, artifact storage, etude job,
+  mirror admission, evaluation models, card evaluation, learning signal: 176
+  passed, 1 skipped; after the alias cut, boundaries + learning pieces +
+  learning signal 53 passed; every changed experiment imports.
 
-1. Verified checkpoint bytes are not a backend concern.
-   `fetch_etude_checkpoint` and `local_checkpoint_file` (verify a digest, download
-   S3/R2 to a partial and rename) moved into `backends/torch/checkpoint.py`, so
-   `eval/benchmark.py` and `eval/card_evaluation.py` import the torch backend
-   only to verify a file. Move both beside `verify_file`/`materialize_artifact`
-   in `manabot/infra/artifacts.py`; `load_etude_checkpoint` (it loads torch
-   weights) stays in the backend. Re-point the `manabot.model.checkpoint`
-   aliases to the new home. Unchanged behaviour; the eval modules may then drop
-   off `_TORCH_NOT_YET_MOVED` if nothing else there imports torch.
-2. The architecture receipt is policy contract, not torch.
-   `model/architecture.py` imports `ActorCritic` only to walk
-   `named_parameters()`. `architecture_identity` is already framework-free.
-   Make the counting take parameter sizes by name (`Mapping[str, tuple[int,
-   bool]]`, size and trainable); torch passes its named parameters. Canonical
-   names change only the leaf (`canonical_name`), so owner = first segment and
-   sizes are identical either way: existing receipts must verify byte-for-byte
-   (test on a saved `.pt` receipt). Keep the module where it is (it is
-   released under `manabot.model.architecture`); only its torch import goes.
-3. A backend's file set is a minimum, not the whole package. `live_tokens.py`
-   already sits beside the five matched files, and the forward's components
-   (`model/semantic_cards`, `facts`, `shared_effects`, `name_candidates`,
-   `continuation`, `recent_events`, `token_stream`, `records`, `catalog`) are
-   torch `nn.Module`s exempted as "not yet moved", though the Outcome reserves
-   that list for training/eval. State in `backends/README.md` that the five
-   files are required and a backend may add private modules its `policy.py`
-   uses. Move each component into `backends/torch/` (with 0.3.0 aliases where
-   0.2 released it) in Remaining 1, as its host lookups move onto `Prepared`:
-   moving them now would be churn on files Remaining 1 rewrites.
+## Scope change (steer 7258182e, 2026-11-12): MTG-326 folded in
 
-Settled, no change: `.pt` save until the container carries every config; one
-`BACKEND` per backend in `checkpoint.py`; `Retained` as the torch prepare
-until Remaining 1. Bucket sizes on `AdmittedObservation` beside
-`live_token_count` on `PreparedObservation` are two host shape facts in two
-places (see questions.md); unify when Remaining 1 rewrites prepare, not before.
+Jack Heart: "it doesnt make sense to do the framework without a client or
+vice versa". Same PR (or two stacked PRs from this Task if too large:
+backend first, client second). Next passes:
+
+7. `training/updates`: `update_damped_iteration(backend, learner, batch,
+   learning, *, iteration)` and PPO `update_iteration(backend, learner,
+   batch, learning, progress, rng, ...)` take the backend module
+   (`import manabot.backends.torch as backend`); array math through
+   `backend.rl`/`backend.learner`, NumPy for host bookkeeping. One owner each
+   for `damped_policy_loss`, `legal_mask`, `policy_logs`,
+   `reference_distribution` (`manabot/policy` if NumPy/index logic, else
+   `backend.rl`). Executor and `training/loops/minimal.py` pass
+   `manabot.backends.torch`; recipes, regimes, Etude entry points unchanged.
+   MTG-326's names (steer 8be1c72a): `backend.rl` gets legal_mask,
+   policy_logs, damped_policy_loss, clipped_surrogate, reverse_kl,
+   squared_value_loss, categorical_value_loss, entropy, transition_gae,
+   standardized_advantages, categorical_lambda_returns, selected_rows,
+   selection_mask, selected_mean, require, float64_operand;
+   `backend.learner` gradient_step, update_ema, forward_precision;
+   reference_distribution in `manabot.policy.prepare`. MTG-326's contract text:
+   `manabot/backends/README.md` "Algorithms are written once" on branch
+   jack/mtg-326-write-the-damped-policy-and-ppo-updates-once.
+8. Delete MLX's copied loss in `manabot/backends/mlx/learner.py` for the
+   shared update (needs #495's mlx backend here); show agreement with the
+   MTG-321 parity capture on the rented M2 (`~/.manabot-mps-bench/access.md`,
+   ours until 23:39 UTC 2026-11-12; after that skip and say so).
+9. Equivalence, pre-registered: torch backend, one collected batch, PPO with
+   KL terms, damped scalar, damped categorical: every diagnostic and every
+   per-parameter sum after one update byte-identical to pre-change code;
+   name and bound any summation-order difference.
+10. Tests: `test_learning_pieces`, `test_minimal_loop` on torch; one
+    parametrized test running the update on every installed backend on the
+    same captured batch within MTG-321 tolerances (skip absent backends).
+11. Docs: `docs/training-loop.md` shows the backend argument and the one-line
+    swap; `backends/README.md` gains "algorithms are written once".

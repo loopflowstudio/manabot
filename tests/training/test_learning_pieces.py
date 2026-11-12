@@ -249,22 +249,6 @@ _MOVED = [
     ),
     ("manabot.model.policy_distribution", "reverse_kl", "manabot.backends.torch.rl"),
     ("manabot.model.numerics", "float64_operand", "manabot.backends.torch.rl"),
-    ("manabot.model.actor_critic", "ActorCritic", "manabot.backends.torch.policy"),
-    (
-        "manabot.model.actor_critic",
-        "EmbeddedObservation",
-        "manabot.backends.torch.policy",
-    ),
-    *(
-        ("manabot.model.checkpoint", name, "manabot.backends.torch.checkpoint")
-        for name in (
-            "load_checkpoint",
-            "save_checkpoint",
-            "load_etude_checkpoint",
-            "local_checkpoint_file",
-            "fetch_etude_checkpoint",
-        )
-    ),
 ]
 
 

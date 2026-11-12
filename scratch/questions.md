@@ -1,9 +1,11 @@
 # Assumptions taken (reversible) and open questions
 
-- `experiments/` keep their deprecated import paths (each runs at its own
-  commit; aliases resolve until 0.3.0). Exception: `experiments/cuda_precision.py`
-  now imports `manabot.backends.torch.learner`, because `training.precision`
-  was never released and has no alias.
+- Aliases: the Task definition (edited 20:20Z) still says old paths resolve
+  through `moved`; steer 8332334d (quoting Jack Heart, later) says add none
+  and update callers. Followed the steer: this branch's `model.actor_critic`
+  and `model.checkpoint` aliases are gone and experiments import new homes.
+- `architecture_receipt` (released in 0.2 with an `ActorCritic` argument) now
+  takes config, space and parameter sizes; no alias, per the same steer.
 - MTG-321's names are final (its steer f1d09a50): container metadata keys are
   `hypers`, `world_binding`, `architecture`, `source`, `converted_from`.
   The write-docs drafts of `policy/README.md` and `backends/README.md` used

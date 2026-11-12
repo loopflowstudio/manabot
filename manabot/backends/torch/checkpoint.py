@@ -14,14 +14,10 @@ beside the native torch API (see the protocol section below).
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 import json
-import os
 from pathlib import Path
 import tempfile
-from typing import TYPE_CHECKING, Any, Literal, overload
-from urllib.parse import unquote, urlsplit
+from typing import Any, Literal, overload
 
-from etude.run.records import ArtifactRef
-from etude.run.storage import storage_from_uri
 from etude.train.records import CheckpointRecord
 import numpy as np
 import torch
@@ -35,13 +31,14 @@ from manabot.belief.encoding import (
     belief_checkpoint_fields,
 )
 from manabot.env.observation import ObservationSpace
-from manabot.infra.artifacts import StoredArtifact, materialize_artifact, verify_file
+from manabot.infra.artifacts import (
+    StoredArtifact,
+    fetch_etude_checkpoint,
+    materialize_artifact,
+)
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.admission import AdmittedObservation, admit_observation
-from manabot.model.architecture import (
-    architecture_receipt,
-    validate_architecture_receipt,
-)
+from manabot.model.architecture import validate_architecture_receipt
 from manabot.model.policy_distribution import legal_mask
 from manabot.model.world import (
     checkpoint_source,
@@ -60,10 +57,6 @@ from manabot.policy.prepare import Prepared, prepare
 from manabot.policy.protocol import Settings, Targets
 import managym
 
-if TYPE_CHECKING:
-    # Local policy loading must not import managed evaluation machinery.
-    from etude.eval.records import Player
-
 
 def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSpace]:
     """Admit the exact policy named by an Etude checkpoint record.
@@ -76,59 +69,6 @@ def load_etude_checkpoint(record_path: Path) -> tuple[ActorCritic, ObservationSp
         return load_checkpoint(
             str(fetch_etude_checkpoint(record.artifact, Path(directory) / "policy.pt"))
         )
-
-
-def local_checkpoint_file(seated: "Player") -> Path:
-    """The verified file a model plays; raises for code or a remote checkpoint."""
-    if seated.kind != "model":
-        raise ValueError("expected a model with a digest and byte count")
-    artifact = seated.checkpoint.artifact
-    if artifact.sha256 is None or artifact.size_bytes is None:
-        raise ValueError("expected a model with a digest and byte count")
-    uri = urlsplit(artifact.uri)
-    if uri.scheme != "file" or uri.netloc:
-        raise ValueError("checkpoint must be a verified local file")
-    path = Path(unquote(uri.path))
-    verify_file(path, artifact.sha256, artifact.size_bytes)
-    return path
-
-
-def fetch_etude_checkpoint(reference: ArtifactRef, target: Path) -> Path:
-    """The verified local bytes of an Etude checkpoint artifact; loads no weights.
-
-    A local file is verified in place and returned. An S3 or R2 object is
-    downloaded to `target` through the SDK's storage adapter and verified before
-    it is renamed there, so a partial download never becomes a cached policy.
-    Each call writes its own partial file, so concurrent fetches of one target
-    are safe.
-    """
-    if reference.sha256 is None or reference.size_bytes is None:
-        raise ValueError("Etude checkpoint requires a digest and byte count")
-    uri = urlsplit(reference.uri)
-    if uri.scheme == "file" and uri.netloc in {"", "localhost"}:
-        path = Path(unquote(uri.path))
-        verify_file(path, reference.sha256, reference.size_bytes)
-        return path
-    if uri.scheme not in {"s3", "r2"} or uri.query or uri.fragment or not uri.netloc:
-        raise ValueError("Etude checkpoint must name a local file or S3/R2 object")
-    storage = storage_from_uri(f"{uri.scheme}://{uri.netloc}")
-    key = uri.path.lstrip("/")
-    descriptor, name = tempfile.mkstemp(
-        prefix=f"{target.name}.", suffix=".partial", dir=target.parent
-    )
-    partial = Path(name)
-    with os.fdopen(descriptor, "wb") as file:
-        offset = 0
-        while offset < reference.size_bytes:
-            length = min(8 * 1024 * 1024, reference.size_bytes - offset)
-            block = storage.get_range(key, offset, length)
-            if len(block) != length:
-                raise ValueError("incomplete Etude checkpoint download")
-            file.write(block)
-            offset += length
-    verify_file(partial, reference.sha256, reference.size_bytes)
-    partial.replace(target)
-    return target
 
 
 @overload
@@ -206,7 +146,9 @@ def load_checkpoint(
     if agent.belief_count_buckets > 0:
         binding = BeliefCheckpointBinding.from_checkpoint(checkpoint)
     if "architecture" in checkpoint:
-        validate_architecture_receipt(agent, checkpoint["architecture"])
+        validate_architecture_receipt(
+            agent.architecture_receipt(), checkpoint["architecture"]
+        )
     agent.load_state_dict(checkpoint["model_state_dict"])
     agent.eval()
     if include_belief_binding:
@@ -237,7 +179,9 @@ def _load_container(
     validate_policy_input(agent, world_binding)
     agent.world_binding = world_binding
     if record["architecture"] is not None:
-        validate_architecture_receipt(agent, record["architecture"])
+        validate_architecture_receipt(
+            agent.architecture_receipt(), record["architecture"]
+        )
     agent.eval()
     return agent, container.space
 
@@ -288,7 +232,7 @@ def save_checkpoint(
             else checkpoint_world(player_configs, obs_space)
         ),
         "source": checkpoint_source(),
-        "architecture": architecture_receipt(agent).model_dump(mode="json"),
+        "architecture": agent.architecture_receipt().model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,
         "hypers": {

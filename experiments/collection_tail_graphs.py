@@ -335,8 +335,8 @@ def _inputs(captures: Path) -> list[tuple[str, dict[str, torch.Tensor]]]:
 
 
 def _agent(captures: Path, size: str, device: str, *, bucketed: bool) -> Any:
+    from manabot.backends.torch.policy import ActorCritic
     from manabot.env.observation import ObservationSpace
-    from manabot.model.actor_critic import ActorCritic
     from manabot.training.regime import TrainingRegime
 
     regime = TrainingRegime.model_validate_json((captures / "regime.json").read_text())

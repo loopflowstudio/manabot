@@ -37,6 +37,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
+from manabot.model.architecture import ArchitectureReceipt, architecture_receipt
 from manabot.model.admission import (
     AdmittedObservation,
     admission_binding,
@@ -445,6 +446,17 @@ class ActorCritic(nn.Module):
         if self.debug:
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
+
+    def architecture_receipt(self) -> ArchitectureReceipt:
+        """This model's receipt; `named_parameters` yields each shared parameter once."""
+        return architecture_receipt(
+            self.config,
+            self.observation_space,
+            {
+                name: (parameter.numel(), parameter.requires_grad)
+                for name, parameter in self.named_parameters()
+            },
+        )
 
     def live_token_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
         """Host count of the tokens live-token attention packs for CPU `obs`.
