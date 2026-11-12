@@ -124,6 +124,7 @@ def test_learning_admits_each_trained_row_once(
     monkeypatch: pytest.MonkeyPatch, rule: str
 ) -> None:
     admit = learner_module.admit_observation
+    check = learner_module.check_observation
 
     def admitted_rows(epochs: int) -> list[int]:
         agent, batch = _policy(history=False)
@@ -135,7 +136,12 @@ def test_learning_admits_each_trained_row_once(
             rows.append(len(obs["actions_valid"]))
             return admit(model, obs)
 
+        def counting_checks(model: ActorCritic, obs: dict[str, torch.Tensor]) -> None:
+            rows.append(len(obs["actions_valid"]))
+            check(model, obs)
+
         monkeypatch.setattr(learner_module, "admit_observation", counting)
+        monkeypatch.setattr(learner_module, "check_observation", counting_checks)
         learner = Learner(agent, "cpu", minibatch_rows=2)
         if rule == "ppo":
             update_iteration(
@@ -151,7 +157,7 @@ def test_learning_admits_each_trained_row_once(
             )
         # Bootstrap rows first, then trained rows in minibatch-sized chunks.
         assert rows[0] == len(batch.next_done)
-        assert sum(rows[1:]) <= batch.actions.size
+        assert 0 < sum(rows[1:]) <= batch.actions.size
         return rows
 
     once = admitted_rows(1)
