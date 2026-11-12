@@ -1746,10 +1746,8 @@ impl Game {
                 *card,
                 *controller,
             ),
-            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. }) => {
-                self.trigger_multiplicity(condition, source_card, source_controller, event) > 0
-            }
-            (
+            (TriggerCondition::Attacks { .. }, GameEvent::AttackersDeclared { .. })
+            | (
                 TriggerCondition::DealsCombatDamage { .. },
                 GameEvent::CombatDamageToPlayers { .. },
             ) => self.trigger_multiplicity(condition, source_card, source_controller, event) > 0,
@@ -1902,8 +1900,8 @@ impl Game {
     }
 
     /// How many times one event triggers a matching ability: once, except
-    /// combat damage `per` object, which triggers for each creature that
-    /// dealt it (CR 603.2c).
+    /// attacks and combat damage `per` object, which trigger for each
+    /// matching creature (CR 603.2c).
     fn trigger_multiplicity(
         &self,
         condition: &TriggerCondition,
@@ -1911,7 +1909,7 @@ impl Game {
         source_controller: PlayerId,
         event: &GameEvent,
     ) -> usize {
-        match (condition, event) {
+        let (subject, per, creatures) = match (condition, event) {
             (
                 TriggerCondition::DealsCombatDamage { subject, to, per },
                 GameEvent::CombatDamageToPlayers { creatures },
@@ -1922,21 +1920,7 @@ impl Game {
                 if !to.includes(source_controller, defender) {
                     return 0;
                 }
-                let dealt = creatures
-                    .iter()
-                    .filter(|creature| {
-                        self.subject_matches_permanent(
-                            subject,
-                            source_card,
-                            source_controller,
-                            **creature,
-                        )
-                    })
-                    .count();
-                match per {
-                    Per::Object => dealt,
-                    Per::Batch => usize::from(dealt > 0),
-                }
+                (subject, per, creatures)
             }
             (
                 TriggerCondition::Attacks {
@@ -1954,23 +1938,19 @@ impl Game {
                 if !size_holds {
                     return 0;
                 }
-                let attacked = attackers
-                    .iter()
-                    .filter(|attacker| {
-                        self.subject_matches_permanent(
-                            subject,
-                            source_card,
-                            source_controller,
-                            **attacker,
-                        )
-                    })
-                    .count();
-                match per {
-                    Per::Object => attacked,
-                    Per::Batch => usize::from(attacked > 0),
-                }
+                (subject, per, attackers)
             }
-            _ => 1,
+            _ => return 1,
+        };
+        let matching = creatures
+            .iter()
+            .filter(|creature| {
+                self.subject_matches_permanent(subject, source_card, source_controller, **creature)
+            })
+            .count();
+        match per {
+            Per::Object => matching,
+            Per::Batch => usize::from(matching > 0),
         }
     }
 

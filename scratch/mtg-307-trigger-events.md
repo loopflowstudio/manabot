@@ -34,6 +34,8 @@ uses `TriggerCondition::attacks(subject, per)`), `Sacrificed { subject }`
 The Earth King, Bitter Work and Obsessive Pursuit; Beastmaster Ascension is
 `Per::Object` and now gets one trigger per attacker
 (`zen::beastmaster_ascension_triggers_once_for_each_attacker`).
+`trigger_multiplicity` owns both: each arm checks its gate (defender, attack
+size) and yields the creatures; one count applies `subject` and `per`.
 
 Kept on purpose (actor fixed by the rules, or single-consumer meta-event):
 `YouCastThis`, `SpellTargetsOnlyThis`, `YourAttackingCreatureTriggers`.
@@ -45,6 +47,8 @@ subject.
 - `cargo nextest run --workspace --profile ci` (debug): 1163/1164 pass;
   `checked_semantic_conformance_evidence_reproduces` fails as on base
   d95734088 (state_hash/content_digest only). Clippy: no findings in changed code.
+- Compress pass: trigger-filtered debug nextest (`attack|combat_damage|trigger|…`)
+  139/139.
 - `uv run --extra dev pytest tests/semantic -q`: 197 passed (rebuilt extension).
 
 ## Remaining
