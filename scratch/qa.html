@@ -1,0 +1,35 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>MTG-327 QA: pooled token stream removal</title>
+<style>body{font:15px/1.5 system-ui;max-width:52rem;margin:2rem auto;padding:0 1rem}pre{background:#f4f1ea;padding:.6rem;overflow:auto;font-size:13px}h2{margin-top:1.6rem}</style>
+<h1>MTG-327 QA: removing the pooled token stream</h1>
+<p>The people this affects are training users running recipes and saved regimes, and anyone who loads checkpoints. The surface is the CLI (<code>manabot train</code>, <code>manabot sim</code>) and loading saved configurations. I ran the branch at <code>4eb7d2e3c</code> and compared it with main at <code>454a73dda</code>, using a detached worktree that shared the extension (the Rust is unchanged).</p>
+
+<h2>1. A fresh local training run</h2>
+<pre>$ uv run manabot train --recipe local --device cpu --out .runs/qa-local
+local: completed; run: 48a3596abcbb472b95cf4b583fc86ef2   (11.7 s)</pre>
+<p>Main ran the same command. Both runs have the same <code>architecture</code> identity (<code>2f052799…</code>), the same action ABI, the same experience protocol and the same serialized regime. With the same seed, the trained <code>self-play-raw.pt</code> weights are <b>bit-identical</b> (<code>torch.equal</code> on every tensor). The tables path is unchanged.</p>
+
+<h2>2. A returning user's checkpoint</h2>
+<p>I used <code>manabot sim</code>, with deck files taken from the checkpoint's <code>world_binding.setups</code>. Main's checkpoint played as hero and the branch's as villain, for 4 games on the branch code: 4 games in 90 s, hero 1 to villain 3, 0 timeouts and no errors.</p>
+
+<h2>3. A saved regime or checkpoint that names <code>token_stream</code></h2>
+<pre>$ uv run manabot train --regime regime-pooled.json --seed 1 --out …   # exit 1, no output dir
+ValidationError: 1 validation error for TrainingRegime
+agent
+  Value error, token_stream='pooled' was removed after its pilot closed negative
+(experiments/token_stream.md); live-token attention replaces it. Reproduce it at
+commit 439379869541cf29e781d7215b088e828041889e</pre>
+<p>A regime that names <code>token_stream: "tables"</code> trains to <code>completed</code> with the same architecture hash as above. <code>ModelConfig.from_checkpoint</code> on a checkpoint's agent hypers returns the same config with <code>"tables"</code> and the same named error with <code>"pooled"</code>. I confirmed that commit <code>439379869</code> exists, is an ancestor of main, and contains both <code>manabot/model/token_stream.py</code> and <code>experiments/token_stream.py</code>.</p>
+
+<h2>4. Docs and experiment discovery</h2>
+<p>The new docs link <code>#live-token-attention-profiling</code> resolves to the existing heading. No code or docs reference the deleted module outside the frozen report, which points readers at the last revision that has it. <code>tests/eval/test_experiment_files.py</code> passes, together with the value-aggregation, live-token and bucketed-execution tests: 63 tests.</p>
+
+<h2>Result</h2>
+<ul>
+<li><b>Works:</b> fresh training, cross-revision checkpoint play, a <code>tables</code> regime loading, and a clear refusal for <code>pooled</code> that names the report and the revision.</li>
+<li><b>Fixed:</b> nothing; nothing broke.</li>
+<li><b>Minor, left as is:</b> a hand-typed invalid value such as <code>token_stream: "bogus"</code> gets the pooled-removal message, not a "must be tables" message. Main would have rejected it as a bad literal. It is unlikely, and the message still points to the right place.</li>
+<li><b>Not reached:</b> <code>manabot/policy/checkpoint.py</code> (PR #495, still open) is not on this base yet, so shortening its pooled refusal list waits for that rebase.</li>
+<li><b>Unrelated:</b> the sim's "Behavior Metrics" lines report <code>games_played: 0</code> even though games were played. This change doesn't touch the sim code; I did not check it on main.</li>
+</ul>
