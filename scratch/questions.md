@@ -65,10 +65,9 @@ the design or send it back to review." This stops dependent production work;
 it does not remove all-card scope or mark the Task complete. No Graph transition,
 publication, corpus fetch or corpus admission proof occurred.
 
-Remaining: full clause allocation; production/observation contract review;
-233 definitions and their mechanics; vector-run/Academy pending-choice proofs;
-world integration/current receipts; full gate suites and the 1,000-event corpus
-admission proof. The artifact corpus is in the manifest, not initially local;
+Remaining at that point (clause allocation and vector/Academy proofs were
+completed later; see below): contract review, missing definitions, world
+integration, gate suites and the 1,000-event corpus admission proof. The artifact corpus is in the manifest, not initially local;
 fetch through Doppler at that acceptance step. Frozen evidence stays unchanged.
 
 ## Compression — 2026-11-12 UTC
@@ -165,3 +164,11 @@ the parity test's text-observation import moved to the module header.
 Debug `merchant_ tle_baseline boiling_rock_rioter committed_optional_payment`
 21 passed; lib `registered_mana_activations continuation` 10 passed; rebuilt
 cp313 extension, focused Academy/allocation/parity pytest 13 passed.
+
+## Realignment — third pass, 2026-11-12 UTC
+
+`origin/main` had no commits beyond HEAD; the Task had no comments beyond the
+claim. `uv run python scripts/check_tle_coverage.py` still reports exactly 225
+missing definitions against the installed extension. The incoming direction's
+allocation and Merchant vector/Academy items were already complete; the plan
+already records them. No runtime suite was rerun.
