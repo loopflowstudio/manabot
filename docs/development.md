@@ -257,10 +257,11 @@ the extension build count against it. Read a job's time from the run:
 
 ```console
 $ gh run view <run-id> --json jobs \
-    --jq '.jobs[] | select(.conclusion == "success") | "\(((.completedAt | fromdate) - (.startedAt | fromdate)) / 60 | floor) min  \(.name)"' | sort -rn | head -3
-7 min  Integration / Integration (ubuntu-latest, core)
+    --jq '.jobs[] | select(.conclusion == "success") | "\(((.completedAt | fromdate) - (.startedAt | fromdate)) / 60 | floor) min  \(.name)"' | sort -rn | head -4
+15 min  Engine Budget / Engine Budget
 6 min  Rust Tests
-6 min  Integration / Integration (ubuntu-latest, evaluation)
+6 min  Integration / Integration (ubuntu-latest, training)
+6 min  Integration / Integration (ubuntu-latest, experiment)
 ```
 
 Integration and Academy Integration install every extra they use in one
