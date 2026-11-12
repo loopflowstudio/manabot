@@ -32,8 +32,8 @@ Decisions and run evidence are in `scratch/questions.md`.
 
 ## What exists
 
-`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 47 of 61 defined,
-14 missing, no other issues (rebuilt extension, ninth pass). `--allocation-only` checks that
+`uv run python scripts/check_tle_coverage.py --bonus-sheet`: 52 of 61 defined,
+9 missing, no other issues (rebuilt extension, tenth pass). `--allocation-only` checks that
 `managym/cards/tests/fixtures/tle-allocation.jsonl` binds all 411 Oracle
 paragraphs of `tle-inventory.jsonl`; `tests/infra/test_tle_allocation.py`
 protects it. The ledger is planning data, not a behavior proof.
@@ -81,10 +81,18 @@ Rules added on this branch, each with directed tests and observation parity
   payment choice and Academy proof; `TargetSpec::SpellMatching`,
   `CounterSpell { exile }`; Elf Warrior token. Detail in `scratch/questions.md`.
 
+- Tenth pass (5 cards): `AdditionalCost::Replicate` (count announced as X);
+  `ObjectSelector::TargetPlayersZone` and `Game::inspects_library` (Bribery);
+  `ReplacementEffect::EntersAsCopy` with `Decision::EnterAsCopy` (code 30),
+  printed row restored on leaving; copiable `GrantStatic` exceptions and
+  `StaticAbility::LegendRuleDoesntApply` (Sakashima); several activation
+  target clauses, `TargetRequirement::opponent_chooses`,
+  `before_attackers` (Diaochan). Detail in `scratch/questions.md`.
+
 Twelve non-bonus definitions written before the steer are parked, uncommitted,
 on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 
-## Remaining: 14 bonus-sheet names by rule family
+## Remaining: 9 bonus-sheet names by rule family
 
 | Family | Cards |
 |---|---|
@@ -92,30 +100,39 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 | Token identity (blocked, decision) | Release to Memory; Lita, Mechanical Engineer |
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
 | Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
-| Replicate | Shattering Spree |
-| Enter as a copy | Clone, Sakashima of a Thousand Faces |
-| Another player's library | Bribery |
-| Multi-clause activation, opponent chooser | Diaochan, Artful Beauty |
-| Phasing and life lock | Teferi's Protection |
+| Phasing and life lock (contract written) | Teferi's Protection |
 
-Eight are blocked; six are unblocked, each needing new machinery:
+Eight are blocked. Teferi's Protection is unblocked: implement the contract
+below.
 
-- Shattering Spree: a replicate count announced like X, then that many copies
-  with new targets (`copy_stack_object` + `next_retarget` exist).
-- Clone, Sakashima: an entry-copy choice inside the replacement batch (a new
-  decision before the `ZoneMove` commits; the copied definition's own entry
-  replacements then apply, CR 614.12), and the card's printed definition kept
-  and restored when it leaves the battlefield. Sakashima also needs a
-  legend-rule exemption static, "except it has Sakashima's other abilities"
-  as copy exceptions, and the Partner keyword (no 1v1 effect).
-- Bribery: `searches_private_zones` grants hand and library together, and
-  determinization then keeps the opponent's hand exact; Bribery needs a
-  library-only private search, its observation and possible-worlds handling.
-- Diaochan: activated abilities hold one target clause
-  (`PendingChoice::ActivatedTarget`); it needs two clauses, the second chosen
-  by an opponent, and a "before attackers are declared" timing.
-- Teferi's Protection: phasing and a life-total lock; write the state and
-  observation contract first.
+## Teferi's Protection contract (proposed, tenth pass)
+
+Every new state is an `Effect::ApplyContinuous` record, per the duration rule,
+so v9's shared-effect rows (header, details, one-based members) carry it with
+no new column or fact kind:
+
+- `EffectDuration::UntilYourNextTurn`: ends as the record controller's next
+  turn begins (before the untap step's phasing, CR 502.1).
+- Player records on the caster: `Modification::LifeTotalCantChange` (life
+  gain, loss, damage-as-loss and setting are no-ops; life costs other than 0
+  cannot be paid, CR 119.8) and `Modification::ProtectionFromEverything`
+  (CR 702.16j: cannot be targeted, all damage to them prevented).
+- Phasing (CR 702.26): `Modification::PhasedOut` on each permanent the caster
+  controls, plus anything attached to them (phased out indirectly, 702.26g),
+  ending when its controller's untap step phases it in (702.26a). No zone
+  change, no triggers, counters and attachments kept (702.26d-e).
+- One authority: `Game::is_phased_out(id)` reads the effect index by object;
+  the battlefield iterators (`iter_battlefield_permanents`,
+  `battlefield_permanents`, `layer_views` scans, trigger index, SBAs, combat,
+  target legality, mana sources, counts) skip phased-out permanents. Permanent
+  rows stay in the observation (public), marked by the effect membership; the
+  LLM text names the record; Academy notes it.
+- Card: instant {2}{W}, `c17.rs`, effects = the two player records, the
+  phase-out record over `each_you_control`, then `Move This` to exile.
+- Directed tests: the caster's life stays put against Lightning Bolt and a
+  life payment is refused; their creatures are not attackable/targetable/
+  counted (Volcanic Torrent misses them), and phase in, before untapping, on
+  the caster's next untap step with counters kept; no ETB triggers fire.
 
 ## Token identity (decision open)
 

@@ -176,3 +176,40 @@ Realign after the ninth pass: `test_merchant_payment_recovery` now checks only
 the current policy input (its v5/v6/v8 cases predated main's v9-only input);
 1 passed. The three `test_decision_surface.py` precision demo failures remain
 gate work with the conformance evidence.
+
+## Tenth pass — five bonus cards, 2026-11-12 UTC
+
+Defined: Shattering Spree (new `gpt.rs`), Bribery (new `mmq.rs`), Clone (lea),
+Sakashima of a Thousand Faces (cmr), Diaochan, Artful Beauty (ptk). Card data
+fetched 2026-11-12 UTC by pinned first-printing id from
+`https://api.scryfall.com/cards/collection`.
+
+Assumptions taken (reversible):
+- Replicate reuses `CastChoices::x` for the payment count (no v9 column); the
+  stack spell shows it as its announced X, so the LLM text reads "announced X
+  n"; copies carry it with no effect.
+- `ObjectSelector::TargetPlayersZone` sits beside `Zone` ("your zone") rather
+  than replacing it, so the four existing `Zone` definitions keep their tokens.
+- Bribery emits no `LibrarySearched` (that event means searching one's own
+  library). While a player inspects the opponent's library, determinization
+  and possible worlds keep the opponent's hand exact as well: with an open
+  decklist the hand is the complement (foretold cards aside).
+- Entry copy is asked only inside retained event batches; immediate batches
+  decline it. The copy is applied to the card when chosen; if the move then
+  fails, it stays copied until it next leaves the battlefield.
+- Partner is not modeled (no effect in 1v1 without commanders).
+- Several activation clauses must each be fixed-count (`debug_assert`);
+  clause positions are derived, not threaded through payment.
+- `before_attackers` holds in the beginning phase, the first main phase and
+  beginning of combat; an additional combat's beginning of combat also counts.
+- Activated abilities never offer their own source as a target (existing
+  behavior), so Diaochan cannot target herself although the card allows it.
+
+Results (debug): cards target 670 passed; lib + `rules_tests` +
+`conformance_tests` 376 passed (2 skipped); fmt applied. Rebuilt cp313
+extension (atomic replace); `check_tle_coverage.py --bonus-sheet` 52 of 61,
+9 missing. Pytest observation parity, text observation, TLE allocation,
+policy catalog, record vocabulary, Academy alternative-cost and Merchant
+recovery: 114 passed. Not run here (gate): semantic-kernel evidence,
+`test_decision_surface.py`, Academy offers, reconnect and fork for
+`EnterAsCopy` and opponent-chosen activation targets, browser checks.
