@@ -115,6 +115,9 @@ Earlier blocker history, procedure, concept review and check detail:
 `scratch/concept-review.html` (no product change; show the actual paired report
 with limitations, inventories and rental accounting once execution is possible).
 
+- Implement pass 2026-11-12: no new Task comment or budget choice; RunPod lists
+  only `etude-8a95fe6d04e9` (not an MTG-281 rental, untouched). No code change.
+
 ## Docs
 
 User-facing docs: `experiments/self-play-collection-273.md` (report, reproduction,
