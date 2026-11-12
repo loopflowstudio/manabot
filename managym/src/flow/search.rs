@@ -139,7 +139,7 @@ impl Game {
                                 | Decision::OrderLibrary { .. }
                                 | Decision::Learn { .. }
                                 | Decision::Discard { .. }
-                                | Decision::SearchDistinctLands { .. }
+                                | Decision::SearchDistinctNames { .. }
                                 | Decision::SearchNamed { .. }
                                 | Decision::CastDuringResolution { .. }
                         )

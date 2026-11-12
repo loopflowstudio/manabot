@@ -1005,6 +1005,10 @@ impl Game {
                 self.state.turn.extra_turns.push(frame.controller);
                 None
             }
+            Effect::EndTheTurn => {
+                self.end_the_turn();
+                None
+            }
             Effect::ControlPlayer { what, duration } => {
                 for affected in self.resolve_affected(what, frame) {
                     if let Affected::Player(player) = affected {
@@ -1210,18 +1214,20 @@ impl Game {
                 };
                 (!self.revealed_hand_candidates(&decision).is_empty()).then_some(decision)
             }
-            Effect::SearchLandsOpponentSplits {
+            Effect::SearchDistinctNames {
+                predicate,
                 count,
-                opponent_picks,
+                end,
             } => {
                 self.emit(GameEvent::LibrarySearched {
                     player: frame.controller,
                 });
-                Some(Decision::SearchDistinctLands {
+                Some(Decision::SearchDistinctNames {
                     player: frame.controller,
+                    predicate: predicate.clone(),
                     remaining: *count,
                     selected: Vec::new(),
-                    opponent_picks: *opponent_picks,
+                    end: *end,
                 })
             }
             Effect::OwnerPutsIntoLibrary { .. } => {
@@ -1392,15 +1398,15 @@ impl Game {
                 None
             }
             Effect::CreateTokenCopy { of, exceptions } => {
-                let exceptions = exceptions
+                let exceptions: Vec<_> = exceptions
                     .iter()
                     .map(|exception| exception.resolve(|value| self.effect_value(value, frame)))
                     .collect();
-                let copied = match of {
-                    None => frame.source?,
+                let copied: Vec<CardId> = match of {
+                    ObjectSelector::This => vec![frame.source?],
                     // The target as it was chosen, even once the resolution
                     // has moved it ("exile ..., create a copy of it").
-                    Some(_) => match frame.primary_target()? {
+                    ObjectSelector::Target(_) => vec![match frame.primary_target()? {
                         Target::Permanent(id) => {
                             self.present_primary_target(frame)?;
                             self.state.permanents[id].as_ref()?.card
@@ -1414,20 +1420,34 @@ impl Game {
                             card
                         }
                         _ => return None,
-                    },
+                    }],
+                    selector => self
+                        .select(selector, frame)
+                        .into_iter()
+                        .map(|object| CardId::from(object.entity))
+                        .collect(),
                 };
-                let mut batch = self.event_batch(vec![ProposedEvent::CreateTokens {
-                    definition: Box::new(TokenDefinition::Copy {
-                        definition_id: self.state.cards[copied].definition_id,
-                        definition: self.state.cards[copied].copiable_definition(),
-                        front: self.state.cards[copied].front_face().cloned(),
-                        copy: self.state.cards[copied].copy.clone(),
-                        exceptions,
-                    }),
-                    controller: frame.controller,
-                    count: 1,
-                    entry: ZoneEntry::default(),
-                }]);
+                if copied.is_empty() {
+                    return None;
+                }
+                // Every copiable value is read before any token exists, so
+                // the copies are created simultaneously (CR 707.2).
+                let events = copied
+                    .into_iter()
+                    .map(|copied| ProposedEvent::CreateTokens {
+                        definition: Box::new(TokenDefinition::Copy {
+                            definition_id: self.state.cards[copied].definition_id,
+                            definition: self.state.cards[copied].copiable_definition(),
+                            front: self.state.cards[copied].front_face().cloned(),
+                            copy: self.state.cards[copied].copy.clone(),
+                            exceptions: exceptions.clone(),
+                        }),
+                        controller: frame.controller,
+                        count: 1,
+                        entry: ZoneEntry::default(),
+                    })
+                    .collect();
+                let mut batch = self.event_batch(events);
                 batch.binding = EventBinding::Created { attacking: false };
                 frame.batch = Some(batch);
                 None

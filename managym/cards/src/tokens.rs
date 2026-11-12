@@ -19,6 +19,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         bear(),
         clue(),
         dragon(),
+        elf_warrior(),
         food(),
         human(),
         human_soldier(),
@@ -152,6 +153,18 @@ fn dragon() -> CardDefinition {
         }],
         ..creature(base, 4, 4, [Color::Red])
     }
+}
+
+fn elf_warrior() -> CardDefinition {
+    let base = token(
+        "token.elf_warrior",
+        "49180301-f72f-48ca-8be1-df295e89cdd7",
+        "Elf Warrior",
+        [CardType::Creature],
+        &["Elf", "Warrior"],
+        "",
+    );
+    creature(base, 1, 1, [Color::Green, Color::White])
 }
 
 fn food() -> CardDefinition {

@@ -4,13 +4,37 @@ use managym_state::{
         Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes},
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![visions_of_beyond(), warstorm_surge()]
+    vec![
+        sundial_of_the_infinite(),
+        visions_of_beyond(),
+        warstorm_surge(),
+    ]
+}
+
+fn sundial_of_the_infinite() -> CardDefinition {
+    let text_box = "{1}, {T}: End the turn. Activate only during your turn. (Exile all spells and abilities from the stack. Discard down to your maximum hand size. Damage wears off, and \"this turn\" and \"until end of turn\" effects end.)";
+    CardDefinition {
+        key: "m12.sundial_of_the_infinite",
+        scryfall_id: "36d3da9c-cb7a-4cea-b6e6-6722bd16c73c",
+        name: "Sundial of the Infinite".into(),
+        mana_cost: Some(ManaCost::parse("{2}")),
+        types: CardTypes::new([CardType::Artifact]),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{1}"),
+            tap_source: true,
+            own_turn_only: true,
+            effects: vec![Effect::EndTheTurn],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn visions_of_beyond() -> CardDefinition {

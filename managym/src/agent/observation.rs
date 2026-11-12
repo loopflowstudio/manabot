@@ -1251,9 +1251,9 @@ impl Observation {
                     decision @ Decision::DiscardFromRevealedHand { .. } => {
                         game.revealed_hand_candidates(decision)
                     }
-                    decision @ Decision::SearchDistinctLands { selected, .. } => {
+                    decision @ Decision::SearchDistinctNames { selected, .. } => {
                         let mut cards = selected.clone();
-                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards.extend(game.distinct_name_search_candidates(decision));
                         cards
                     }
                     decision => decision.revealed_cards().to_vec(),

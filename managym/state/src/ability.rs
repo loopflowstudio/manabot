@@ -505,6 +505,16 @@ impl PaymentCost {
     }
 }
 
+/// Where the revealed cards of a distinct-name search go.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DistinctSearchEnd {
+    /// An opponent chooses `picks` of them for the graveyard; the rest enter
+    /// the battlefield tapped, then the searcher shuffles.
+    OpponentSplits { picks: usize },
+    /// Into the searcher's hand, then the searcher shuffles.
+    Hand,
+}
+
 /// Which end of a library receives a moved or ordered card.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LibraryEnd {
@@ -781,8 +791,11 @@ pub enum Effect {
     Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
     RemoveAllCounters { from: ObjectSelector },
-    /// Create a token that's a copy of the source, or of the target `of`
-    /// names (CR 707.2, 111.1). The token copies the copiable values: the
+    /// Create a token that's a copy of each object `of` names (CR 707.2,
+    /// 111.1): the source (`This`), the target, or every permanent of an
+    /// `Each` ("for each creature target player controls, create a token
+    /// that's a copy of that creature"), all copied as the instruction
+    /// resolves and created simultaneously. The token copies the copiable values: the
     /// definition of the face that's up, including any copy effect already
     /// applied, and never counters, damage, tapped state or non-copy
     /// effects. A copy of a double-faced permanent has both faces and enters
@@ -792,8 +805,7 @@ pub enum Effect {
     /// the token's own copiable values (CR 707.9b), so a copy of it inherits
     /// them.
     CreateTokenCopy {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        of: Option<TargetSpec>,
+        of: ObjectSelector,
         exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
@@ -877,6 +889,10 @@ pub enum Effect {
     /// "Take an extra turn after this one" (CR 500.7): the resolving
     /// player's, before any extra turn created earlier.
     TakeExtraTurn,
+    /// "End the turn" (CR 723.1): every object on the stack is exiled,
+    /// waiting triggered abilities cease to exist, and the turn skips to its
+    /// cleanup step, which proceeds as usual.
+    EndTheTurn,
     /// Control the selected player during their next actual turn or combat.
     /// This changes decision authority, never ownership of their resources.
     ControlPlayer {
@@ -936,10 +952,14 @@ pub enum Effect {
         target: TargetSpec,
         predicate: CardPredicate,
     },
-    /// Search for up to `count` land cards with different names; an
-    /// opponent puts `opponent_picks` of them into the graveyard and the rest
-    /// enter tapped (Elemental Teachings).
-    SearchLandsOpponentSplits { count: usize, opponent_picks: usize },
+    /// Search your library for up to `count` [predicate] cards with
+    /// different names, revealing each, then `end` places them (Elemental
+    /// Teachings, Three Dreams).
+    SearchDistinctNames {
+        predicate: CardPredicate,
+        count: usize,
+        end: DistinctSearchEnd,
+    },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
     PlaceTargetInLibrary { second_from_top: bool },
@@ -1518,7 +1538,7 @@ impl Effect {
             Effect::ForPlayer { effects: then, .. } | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateTokenCopy { of, .. } => of.as_ref(),
+            Effect::CreateTokenCopy { of, .. } => of.target_spec(),
             Effect::PutCounters { .. }
             | Effect::PutCountersFrom { .. }
             | Effect::Sacrifice { .. }
@@ -1550,11 +1570,12 @@ impl Effect {
             | Effect::TriggerModes { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
-            | Effect::SearchLandsOpponentSplits { .. }
+            | Effect::SearchDistinctNames { .. }
             | Effect::DrawCards { .. }
             | Effect::CreateToken { .. }
             | Effect::TransformSource
             | Effect::TakeExtraTurn
+            | Effect::EndTheTurn
             | Effect::ControlPlayer { .. }
             | Effect::AdditionalCombatPhase { .. }
             | Effect::EachPlayerChoosesToExile { .. }

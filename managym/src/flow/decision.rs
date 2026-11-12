@@ -22,7 +22,7 @@ use crate::{
         turn::OnceEachTurnKey,
     },
     state::{
-        ability::{Effect, LibraryEnd, LinkedGrant, PaymentCost},
+        ability::{DistinctSearchEnd, Effect, LibraryEnd, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         mana::ManaCost,
         permanent::CounterKind,
@@ -519,14 +519,16 @@ pub enum Decision {
         next: usize,
         end: LibraryEnd,
     },
-    /// Search for up to `remaining` more land cards with different names,
-    /// revealing each (Elemental Teachings). The revealed cards stay in the
-    /// library until an opponent splits them (`OpponentSplitsRevealed`).
-    SearchDistinctLands {
+    /// Search for up to `remaining` more [predicate] cards with names
+    /// different from every one already `selected`, revealing each. The
+    /// revealed cards stay in the library until `end` places them; an
+    /// opponent's split is `OpponentSplitsRevealed`.
+    SearchDistinctNames {
         player: PlayerId,
+        predicate: CardPredicate,
         remaining: usize,
         selected: Vec<CardId>,
-        opponent_picks: usize,
+        end: DistinctSearchEnd,
     },
     /// `player` chooses a card matching `predicate` from `owner`'s revealed
     /// hand; `owner` discards it. Candidates are read from the current hand,
@@ -638,7 +640,7 @@ impl Decision {
             | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectCards { player, .. }
-            | Decision::SearchDistinctLands { player, .. }
+            | Decision::SearchDistinctNames { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
@@ -701,7 +703,7 @@ impl Decision {
                 LibraryEnd::Bottom => &cards[*next..],
             },
             Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
-            Decision::SearchDistinctLands { selected, .. } => selected,
+            Decision::SearchDistinctNames { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::CastDuringResolution {
                 offer: ResolutionCastOffer::LibraryTop { card },
@@ -1507,12 +1509,12 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
-            Decision::SearchDistinctLands { player, .. } => ActionSpace {
+            Decision::SearchDistinctNames { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.distinct_land_search_candidates(&suspended.decision),
+                    self.distinct_name_search_candidates(&suspended.decision),
                     true,
                 ),
                 focus: source_focus,
@@ -2246,15 +2248,15 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::SearchDistinctLands { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::SearchDistinctNames { .. }, Action::SelectCard { card, .. }) => {
                 if !self
-                    .distinct_land_search_candidates(&suspended.decision)
+                    .distinct_name_search_candidates(&suspended.decision)
                     .contains(card)
                 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                     return Err(AgentError("not a distinct land card in library".into()));
                 }
-                let Decision::SearchDistinctLands {
+                let Decision::SearchDistinctNames {
                     remaining,
                     selected,
                     ..
@@ -2267,7 +2269,7 @@ impl Game {
                 if *remaining > 0 {
                     *self.state.suspended_decision_mut() = Some(suspended);
                 } else {
-                    self.finish_distinct_land_search(suspended);
+                    self.finish_distinct_name_search(suspended);
                 }
                 Ok(())
             }
@@ -2363,8 +2365,8 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
-                self.finish_distinct_land_search(suspended);
+            (Decision::SearchDistinctNames { .. }, Action::Decline { .. }) => {
+                self.finish_distinct_name_search(suspended);
                 Ok(())
             }
             (
@@ -2733,11 +2735,14 @@ impl Game {
         candidates
     }
 
-    /// Library land cards whose names differ from every card already
-    /// selected by a `SearchDistinctLands` decision.
-    pub(crate) fn distinct_land_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::SearchDistinctLands {
-            player, selected, ..
+    /// Library cards matching a `SearchDistinctNames` predicate whose names
+    /// differ from every card it already selected.
+    pub(crate) fn distinct_name_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::SearchDistinctNames {
+            player,
+            predicate,
+            selected,
+            ..
         } = decision
         else {
             return Vec::new();
@@ -2750,7 +2755,7 @@ impl Game {
             .copied()
             .filter(|card| {
                 let card_ref = &self.state.cards[*card];
-                card_ref.types.is_land()
+                self.card_matches_predicate(*card, predicate)
                     && !selected
                         .iter()
                         .any(|chosen| self.state.cards[*chosen].name == card_ref.name)
@@ -2760,29 +2765,35 @@ impl Game {
         candidates
     }
 
-    /// The revealed lands pass to an opponent's split, or, when there are
-    /// none, the library is shuffled.
-    fn finish_distinct_land_search(&mut self, mut suspended: SuspendedResolution) {
-        let Decision::SearchDistinctLands {
+    /// The revealed cards go to `end`: into hand, or to an opponent's split.
+    /// With none revealed, or once in hand, the library is shuffled.
+    fn finish_distinct_name_search(&mut self, mut suspended: SuspendedResolution) {
+        let Decision::SearchDistinctNames {
             player,
             selected,
-            opponent_picks,
+            end,
             ..
         } = &mut suspended.decision
         else {
             unreachable!()
         };
         let player = *player;
-        if selected.is_empty() {
-            self.shuffle_library(player);
-            self.run_frame(suspended.frame);
-            return;
-        }
+        let picks = match *end {
+            DistinctSearchEnd::OpponentSplits { picks } if !selected.is_empty() => picks,
+            DistinctSearchEnd::OpponentSplits { .. } | DistinctSearchEnd::Hand => {
+                for card in std::mem::take(selected) {
+                    self.reveal_card_to_hand(card, player);
+                }
+                self.shuffle_library(player);
+                self.run_frame(suspended.frame);
+                return;
+            }
+        };
         suspended.decision = Decision::OpponentSplitsRevealed {
             player: PlayerId(1 - player.0),
             owner: player,
             revealed: std::mem::take(selected),
-            remaining: *opponent_picks,
+            remaining: picks,
         };
         *self.state.suspended_decision_mut() = Some(suspended);
     }

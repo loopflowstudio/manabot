@@ -991,7 +991,7 @@ pub fn decision_code(decision: &Decision) -> u8 {
         Decision::Learn { .. } => 11,
         Decision::Discard { .. } => 12,
         Decision::LegendRule { .. } => 13,
-        Decision::SearchDistinctLands { .. } => 14,
+        Decision::SearchDistinctNames { .. } => 14,
         Decision::OpponentSplitsRevealed { .. } => 15,
         Decision::DiscardFromRevealedHand { .. } => 16,
         Decision::CastDuringResolution { .. } => 17,
@@ -1166,6 +1166,7 @@ pub fn encode_into(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::ability::DistinctSearchEnd;
     use std::collections::HashMap;
 
     #[test]
@@ -1342,11 +1343,12 @@ mod tests {
                 min_select: 0,
                 max_select: 1,
             },
-            Decision::SearchDistinctLands {
+            Decision::SearchDistinctNames {
                 player,
+                predicate: predicate.clone(),
                 remaining: 1,
                 selected: vec![],
-                opponent_picks: 1,
+                end: DistinctSearchEnd::OpponentSplits { picks: 1 },
             },
             Decision::DiscardFromRevealedHand {
                 player,

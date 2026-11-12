@@ -4,9 +4,9 @@
 
 use crate::state::{
     ability::{
-        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayerSelector,
-        Scope, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd,
+        Effect, EffectValue, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
+        PlayerSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
@@ -742,7 +742,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateTokenCopy { of, exceptions } => copy_description(of.as_ref(), exceptions),
+        CreateTokenCopy { of, exceptions } => copy_description(of, exceptions),
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
@@ -800,6 +800,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             crate::state::ability::PlayerControlDuration::NextTurn => "turn",
         }),
         TakeExtraTurn => "Take an extra turn after this one".into(),
+        EndTheTurn => "End the turn".into(),
         AdditionalCombatPhase { attackers } => match attackers {
             None => "After this phase, there is an additional combat phase".into(),
             Some(predicate) => format!(
@@ -848,7 +849,13 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
-        SearchLandsOpponentSplits { count, opponent_picks } => format!("Search your library for up to {count} land cards with different names and reveal them. An opponent chooses {opponent_picks}; put those into your graveyard and the rest onto the battlefield tapped, then shuffle"),
+        SearchDistinctNames { predicate, count, end } => {
+            let search = format!("Search your library for up to {count} {} with different names and reveal them", predicate_description(predicate, "card"));
+            match end {
+                DistinctSearchEnd::OpponentSplits { picks } => format!("{search}. An opponent chooses {picks}; put those into your graveyard and the rest onto the battlefield tapped, then shuffle"),
+                DistinctSearchEnd::Hand => format!("{search}, put them into your hand, then shuffle"),
+            }
+        }
         OwnerPutsIntoLibrary { target } => format!("The owner of {} puts it into their library second from the top or on the bottom", target_description(target)),
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
@@ -892,12 +899,15 @@ fn effect_description(effect: &Effect) -> Option<String> {
 }
 
 /// "Create a token that's a copy of this[, except …]" (CR 707.9).
-fn copy_description(of: Option<&TargetSpec>, exceptions: &[Modification<EffectValue>]) -> String {
+fn copy_description(of: &ObjectSelector, exceptions: &[Modification<EffectValue>]) -> String {
     let mut text = match of {
-        None => "Create a token that's a copy of this".to_string(),
-        Some(spec) => format!(
+        ObjectSelector::Each { .. } => format!(
+            "For {}, create a token that's a copy of it",
+            selector_description(of)
+        ),
+        _ => format!(
             "Create a token that's a copy of {}",
-            target_description(spec)
+            selector_description(of)
         ),
     };
     for (index, exception) in exceptions.iter().enumerate() {

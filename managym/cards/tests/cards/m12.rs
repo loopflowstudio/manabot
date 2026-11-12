@@ -1,10 +1,48 @@
 //! Tests for cards filed in `src/m12.rs`, in card order.
 
 use crate::support::{
-    game::{five_color_setup, plant_in_graveyard},
-    play::{cast_owned, settle},
+    game::{five_color_setup, plant_in_graveyard, until_end_of_turn},
+    inspect::zone_of,
+    play::{activate, cast, cast_owned, offers_ability, settle, target_opponent},
 };
-use managym::state::zone::ZoneType;
+use managym::{
+    flow::turn::StepKind,
+    state::{effect::Modification, zone::ZoneType},
+};
+
+/// Ending the turn exiles the spell beneath the ability, skips straight to
+/// cleanup, where until-end-of-turn effects end; the next turn is the
+/// opponent's, on whose turn the Sundial is not offered.
+#[test]
+fn sundial_of_the_infinite_ends_the_turn_exiling_the_stack() {
+    let mut s = five_color_setup(&["Sundial of the Infinite", "Lightning Bolt", "Gray Ogre"]);
+    let sundial = s.force_permanent_on_battlefield(0, "Sundial of the Infinite");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: 3,
+            toughness: 3,
+        },
+    );
+    let turn = s.game().state.turn.turn_number;
+    let bolt = cast(&mut s, "Lightning Bolt");
+    target_opponent(&mut s);
+    assert!(offers_ability(&mut s, sundial, 0));
+    activate(&mut s, sundial, 0);
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(zone_of(&s, bolt), Some(ZoneType::Exile));
+    assert!(s.game().state.stack_objects.is_empty());
+    s.assert_life(1, 20);
+    assert_eq!(s.game().state.turn.turn_number, turn + 1);
+    assert_eq!(s.active_player(), 1);
+    assert_eq!(s.game().characteristics(ogre).power, 2);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!offers_ability(&mut s, sundial, 0));
+}
 
 /// Either player's graveyard counts, read before drawing.
 #[test]

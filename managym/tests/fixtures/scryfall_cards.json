@@ -5606,5 +5606,52 @@
     "keywords": [],
     "oracle_text": "Dark Depths enters with ten ice counters on it.\n{3}: Remove an ice counter from Dark Depths.\nWhen Dark Depths has no ice counters on it, sacrifice it. If you do, create Marit Lage, a legendary 20/20 black Avatar creature token with flying and indestructible.",
     "colors": []
+  },
+  "Clone Legion": {
+    "name": "Clone Legion",
+    "mana_cost": "{7}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "For each creature target player controls, create a token that's a copy of that creature.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Rhys the Redeemed": {
+    "name": "Rhys the Redeemed",
+    "mana_cost": "{G/W}",
+    "type_line": "Legendary Creature — Elf Warrior",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{2}{G/W}, {T}: Create a 1/1 green and white Elf Warrior creature token.\n{4}{G/W}{G/W}, {T}: For each creature token you control, create a token that's a copy of that creature.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Three Dreams": {
+    "name": "Three Dreams",
+    "mana_cost": "{4}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for up to three Aura cards with different names, reveal them, put them into your hand, then shuffle.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Sundial of the Infinite": {
+    "name": "Sundial of the Infinite",
+    "mana_cost": "{2}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}, {T}: End the turn. Activate only during your turn. (Exile all spells and abilities from the stack. Discard down to your maximum hand size. Damage wears off, and \"this turn\" and \"until end of turn\" effects end.)",
+    "colors": []
   }
 }

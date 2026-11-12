@@ -1,13 +1,31 @@
 //! Dragons of Tarkir.
 use managym_state::{
-    ability::{Effect, ObjectSelector, TargetSpec},
+    ability::{Effect, ObjectSelector, Scope, TargetSpec},
     card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::{Color, ManaCost},
     predicate::CardPredicate,
 };
 
 pub(super) fn cards() -> Vec<CardDefinition> {
-    vec![rending_volley()]
+    vec![clone_legion(), rending_volley()]
+}
+
+fn clone_legion() -> CardDefinition {
+    let text_box =
+        "For each creature target player controls, create a token that's a copy of that creature.";
+    CardDefinition {
+        key: "dtk.clone_legion",
+        scryfall_id: "45c6a201-1d4d-4ae5-a84e-098e094eaf61",
+        name: "Clone Legion".into(),
+        mana_cost: Some(ManaCost::parse("{7}{U}{U}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![Effect::CreateTokenCopy {
+            of: ObjectSelector::each(Scope::TargetPlayerControls, CardPredicate::creature()),
+            exceptions: vec![],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }
 
 fn rending_volley() -> CardDefinition {

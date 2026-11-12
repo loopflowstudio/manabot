@@ -166,6 +166,9 @@ impl Game {
             if let Some(space) = self.tick_priority() {
                 return Some(space);
             }
+            if !self.state.turn.step_initialized {
+                return None;
+            }
         }
 
         // CR 106.4 — Unspent mana empties at the end of each step and phase.
@@ -176,6 +179,39 @@ impl Game {
         self.skip_combat_phases_if_required();
 
         None
+    }
+
+    /// End the turn (CR 723.1): exile every spell on the stack and remove
+    /// every ability from it (723.1a), drop triggered abilities waiting to be
+    /// put on it (723.1b), end combat, and skip every remaining phase and
+    /// step but cleanup (723.1d). The cleanup step then runs normally, and
+    /// may repeat if anything triggers during it (723.1e).
+    pub(crate) fn end_the_turn(&mut self) {
+        while let Some(object) = self.state.stack_objects.last() {
+            match object {
+                crate::state::stack_object::StackObject::Spell(spell) => {
+                    let card = spell.card;
+                    self.move_card(card, crate::state::zone::ZoneType::Exile);
+                }
+                _ => {
+                    self.state.stack_objects_mut().pop();
+                }
+            }
+        }
+        self.state.pending_triggers_mut().clear();
+        if self.state.combat.is_some() {
+            self.on_step_end(StepKind::EndOfCombat);
+        }
+        self.clear_mana_pools();
+        let turn = &mut self.state.turn;
+        turn.additional_combats.clear();
+        turn.combat_attackers = None;
+        let ending = PhaseKind::Ending as usize;
+        turn.current_phase = ending;
+        turn.current_step = PHASE_STEPS[ending].len() - 1;
+        turn.step_initialized = false;
+        turn.turn_based_actions_complete = false;
+        turn.cleanup_priority = false;
     }
 
     /// A player skipping their combat phases passes from the precombat main
@@ -482,6 +518,11 @@ impl Game {
                 if !self.stack_is_empty() {
                     // CR 117.4, 405.2 — If all players pass with a nonempty stack, resolve top object.
                     self.resolve_top_of_stack();
+                    if !self.state.turn.step_initialized {
+                        // The resolution ended the turn (CR 723.1d): the
+                        // cleanup step begins without priority.
+                        return None;
+                    }
                     self.restart_priority_round();
                     stabilized = false;
                     continue;

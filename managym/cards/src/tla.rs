@@ -3,9 +3,10 @@
 use managym_state::effect::{EffectDuration, Modification};
 use managym_state::{
     ability::{
-        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-        Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost, PlayWindow,
-        PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd,
+        Effect, EffectValue, Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector,
+        PaymentCost, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -3182,9 +3183,13 @@ fn elemental_teachings() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{4}{G}")),
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::SearchLandsOpponentSplits {
+        spell_effects: vec![Effect::SearchDistinctNames {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Land),
+                ..Default::default()
+            },
             count: 4,
-            opponent_picks: 2,
+            end: DistinctSearchEnd::OpponentSplits { picks: 2 },
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3195,7 +3200,7 @@ fn ember_island_production() -> CardDefinition {
     let text_box = "Choose one —\n• Create a token that's a copy of target creature you control, except it's not legendary and it's a 4/4 Hero in addition to its other types.\n• Create a token that's a copy of target creature an opponent controls, except it's not legendary and it's a 2/2 Coward in addition to its other types.";
     let production = |target: TargetSpec, size: i32, subtype: &str| {
         vec![Effect::CreateTokenCopy {
-            of: Some(target),
+            of: ObjectSelector::Target(target),
             exceptions: vec![
                 Modification::Nonlegendary,
                 Modification::base_pt(Some(size), Some(size)),
@@ -4082,7 +4087,7 @@ fn foggy_swamp_visions() -> CardDefinition {
             effects: vec![
                 Effect::exile(ObjectSelector::Target(creature_card())),
                 Effect::CreateTokenCopy {
-                    of: Some(creature_card()),
+                    of: ObjectSelector::Target(creature_card()),
                     exceptions: vec![],
                 },
                 Effect::CreateDelayedTrigger {
@@ -5301,7 +5306,7 @@ fn joo_dee_one_of_many() -> CardDefinition {
             effects: vec![
                 Effect::Surveil { count: 1 },
                 Effect::CreateTokenCopy {
-                    of: None,
+                    of: ObjectSelector::This,
                     exceptions: vec![],
                 },
                 Effect::Sacrifice {
@@ -6776,7 +6781,7 @@ fn phoenix_fleet_airship() -> CardDefinition {
             condition: TriggerCondition::BeginningOfYourEndStep,
             intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
             effects: vec![Effect::CreateTokenCopy {
-                of: None,
+                of: ObjectSelector::This,
                 exceptions: vec![],
             }],
         }],
@@ -7123,7 +7128,7 @@ fn ran_and_shaw() -> CardDefinition {
                     },
                 }),
                 effects: vec![Effect::CreateTokenCopy {
-                    of: None,
+                    of: ObjectSelector::This,
                     exceptions: vec![Modification::Nonlegendary],
                 }],
             },

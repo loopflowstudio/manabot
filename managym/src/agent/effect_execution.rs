@@ -75,6 +75,7 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "damaged player",
     "discard from hand",
     "discards remaining",
+    "distinct name search",
     "effect execution",
     "end batch",
     "entering definition",
@@ -105,7 +106,6 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "iteration instructions",
     "kept creature",
     "kept on top",
-    "land choices remaining",
     "last known characteristics",
     "last known definition",
     "legend group",
@@ -150,8 +150,8 @@ pub(crate) const EXECUTION_TEXT: &[&str] = &[
     "sacrificing player",
     "saved decision",
     "selected",
+    "selected distinct names",
     "selected for graveyard",
-    "selected lands",
     "selected so far",
     "selection",
     "selection domain",
@@ -966,14 +966,15 @@ pub(crate) fn project_decision(
             remaining,
             ..
         } => out.field("named search", &(owner, name, remaining)),
-        Decision::SearchDistinctLands {
+        Decision::SearchDistinctNames {
+            predicate,
             remaining,
             selected,
-            opponent_picks,
+            end,
             ..
         } => {
-            out.cards("selected lands", selected);
-            out.field("land choices remaining", &(remaining, opponent_picks));
+            out.cards("selected distinct names", selected);
+            out.field("distinct name search", &(predicate, remaining, end));
         }
         Decision::OpponentSplitsRevealed {
             owner,

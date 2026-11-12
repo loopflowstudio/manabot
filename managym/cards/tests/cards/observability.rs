@@ -66,10 +66,10 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, Effect, EffectValue,
-            Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
-            PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject,
+            Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd,
+            Effect, EffectValue, Except, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector,
+            PaymentCost, PlayWindow, PlayerSelector, Scope, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -619,6 +619,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::TransformSource => "Effect::TransformSource",
         Effect::ControlPlayer { .. } => "Effect::ControlPlayer",
         Effect::TakeExtraTurn => "Effect::TakeExtraTurn",
+        Effect::EndTheTurn => "Effect::EndTheTurn",
         Effect::AdditionalCombatPhase { .. } => "Effect::AdditionalCombatPhase",
         Effect::EachPlayerChoosesToExile { .. } => "Effect::EachPlayerChoosesToExile",
         Effect::NameAndExileFromTargetPlayer { .. } => "Effect::NameAndExileFromTargetPlayer",
@@ -677,7 +678,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
         Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
         Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
-        Effect::SearchLandsOpponentSplits { .. } => "Effect::SearchLandsOpponentSplits",
+        Effect::SearchDistinctNames { .. } => "Effect::SearchDistinctNames",
         Effect::PlaceTargetInLibrary { .. } => "Effect::PlaceTargetInLibrary",
         Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
@@ -703,7 +704,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 80;
+const EFFECT_VARIANTS: usize = 81;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -717,7 +718,7 @@ fn effect_witnesses() -> Vec<Effect> {
     };
     vec![
         Effect::CreateTokenCopy {
-            of: Some(TargetSpec::Creature),
+            of: ObjectSelector::Target(TargetSpec::Creature),
             exceptions: vec![Modification::Nonlegendary],
         },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
@@ -884,9 +885,10 @@ fn effect_witnesses() -> Vec<Effect> {
                 ..Default::default()
             },
         },
-        Effect::SearchLandsOpponentSplits {
-            count: 4,
-            opponent_picks: 2,
+        Effect::SearchDistinctNames {
+            predicate: CardPredicate::subtype("Aura"),
+            count: 3,
+            end: DistinctSearchEnd::Hand,
         },
         Effect::PlaceTargetInLibrary {
             second_from_top: true,
@@ -925,6 +927,7 @@ fn effect_witnesses() -> Vec<Effect> {
             duration: managym::state::ability::PlayerControlDuration::NextCombat,
         },
         Effect::TakeExtraTurn,
+        Effect::EndTheTurn,
         Effect::AdditionalCombatPhase {
             attackers: Some(CardPredicate::creature()),
         },

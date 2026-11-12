@@ -1074,7 +1074,7 @@ fn cr_613_dependency_loop_keeps_timestamp_order_and_copy_ignores_grants_and_loss
         source,
         Modification::GrantActivated(Box::new(ActivatedAbilityDefinition {
             effects: vec![Effect::CreateTokenCopy {
-                of: None,
+                of: managym::state::ability::ObjectSelector::This,
                 exceptions: vec![],
             }],
             ..Default::default()

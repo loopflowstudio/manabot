@@ -84,6 +84,8 @@ mod ori;
 mod pls;
 #[path = "cards/por.rs"]
 mod por;
+#[path = "cards/psal.rs"]
+mod psal;
 #[path = "cards/ptk.rs"]
 mod ptk;
 #[path = "cards/rav.rs"]
@@ -92,6 +94,8 @@ mod rav;
 mod roe;
 #[path = "cards/scryfall.rs"]
 mod scryfall;
+#[path = "cards/shm.rs"]
+mod shm;
 #[path = "cards/soi.rs"]
 mod soi;
 #[path = "cards/sth.rs"]

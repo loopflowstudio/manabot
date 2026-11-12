@@ -3440,7 +3440,7 @@ fn retained_creation_precedes_allocation_and_preserves_copy_entry_terms() {
         player,
         vec![
             Effect::CreateTokenCopy {
-                of: None,
+                of: ObjectSelector::This,
                 exceptions: vec![Modification::SetBasePt {
                     power: Some(EffectValue::Fixed(4)),
                     toughness: Some(EffectValue::Fixed(5)),
