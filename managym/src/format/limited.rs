@@ -125,9 +125,12 @@ impl LimitedRules {
         if size > self.max_cards {
             return Err(ContentError("picks exceed the episode cap".into()));
         }
-        cards.extend(self.pool.iter().filter_map(|(name, count)| {
-            (picks.get(name).copied().unwrap_or(0) < *count).then(|| name.clone())
-        }));
+        cards.extend(
+            self.pool
+                .iter()
+                .filter(|&(name, count)| picks.get(name).copied().unwrap_or(0) < *count)
+                .map(|(name, _)| name.clone()),
+        );
         Ok(LimitedChoices {
             cards: if size == self.max_cards {
                 Vec::new()

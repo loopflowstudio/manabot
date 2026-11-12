@@ -9,7 +9,7 @@ td,th{border:1px solid #ddd;padding:.3rem .5rem;vertical-align:top}table{border-
 </style></head><body>
 <h1>MTG-282 deck-building foundations: QA (2026-11-11)</h1>
 <p>These are libraries and CLIs, so I used them through the documented commands and public Python APIs: <code>manabot train --regime</code>,
-<code>python -m manabot.data fetch</code>, <code>python -m experiments.tla_pools</code>, <code>managym.LimitedRules</code>,
+<code>uv run python -m manabot.data fetch</code>, <code>uv run python -m experiments.tla_pools</code>, <code>managym.LimitedRules</code>,
 <code>PoolCorpus.read</code> and <code>read_game_results</code>. All runs used the native extension rebuilt from this checkout. Scripts and run outputs are in <code>/tmp/qa282</code>.</p>
 
 <h2>1. Limited picking (docs example, then wrong input)</h2>
