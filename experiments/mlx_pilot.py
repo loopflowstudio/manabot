@@ -7,7 +7,7 @@ Report: experiments/mlx_pilot.md. Three commands, all run on the measurement hos
   every learner minibatch and the time collection spends outside the policy.
   The run itself is unchanged: hooks only copy inputs and read clocks.
 - `bench OUT --phase P`: one phase per process. `parity`
-  (`manabot.model.mlx.parity`) gates the rest; `collection` times per-call
+  (`manabot.backends.parity`) gates the rest; `collection` times per-call
   latency at B = 1, 8, 64, 256; `learner` and `learner-mps` time the learner
   step at `--width` 160 or 384, CPU8 alternating with MLX or with torch MPS;
   `widths` finds the largest width whose MLX step fits 24 GiB.
@@ -310,7 +310,7 @@ class StepSettings:
 def _minibatches(
     capture_dir: Path, count: int | None = None
 ) -> Iterator[tuple[dict[str, np.ndarray], Any, StepSettings]]:
-    from manabot.model.mlx.parity import minibatches
+    from manabot.backends.parity import minibatches
 
     for obs, targets, settings, meta in minibatches(capture_dir, count):
         yield (
@@ -332,9 +332,9 @@ def _agents(capture_dir: Path, width: int) -> tuple[Any, Any]:
     the same architecture at another width; and its MLX twin."""
     import torch
 
+    from manabot.backends.mlx.checkpoint import build
     from manabot.model.actor_critic import ActorCritic
     from manabot.model.checkpoint import load_checkpoint
-    from manabot.model.mlx.checkpoint import build
 
     agent, space = load_checkpoint(str(capture_dir / "initial.pt"))
     if width != agent.config.hidden_dim:
@@ -354,7 +354,7 @@ def _mlx_step(
     targets: Any,
     settings: StepSettings,
 ) -> tuple[float, float]:
-    from manabot.model.mlx.learner import Settings
+    from manabot.policy.protocol import Settings
 
     return learner.step(
         policy.prepare(obs),
@@ -457,9 +457,11 @@ def bench(out: Path, capture_dir: Path, phase: str, width: int = 160) -> None:
         },
     )
     if phase == "parity":
-        from manabot.model.mlx.parity import check
+        from manabot.backends.parity import check
 
-        report = check(capture_dir / "initial.pt", capture_dir, 8, 16)
+        report = check(
+            capture_dir / "initial.pt", capture_dir, 8, 16, backend_name="mlx"
+        )
         failures = report.failures()
         _emit(ledger, {"event": "parity", "failures": failures, **vars(report)})
         if failures:
@@ -523,7 +525,7 @@ def _bench_learner(ledger: Path, capture_dir: Path, phase: str, width: int) -> N
     import mlx.core as mx
     import torch
 
-    from manabot.model.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import MLXLearner
 
     label = f"w{width}l8"
     count = 24 if phase == "learner" else 12
@@ -587,7 +589,7 @@ def _bench_widths(ledger: Path, capture_dir: Path, phase: str, width: int) -> No
     the first 24 captured minibatches; stops before a predicted overflow."""
     import mlx.core as mx
 
-    from manabot.model.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import MLXLearner
 
     obs, targets, settings = max(
         _minibatches(capture_dir, 24), key=lambda s: len(s[1].actions)
@@ -650,7 +652,7 @@ def soak(out: Path, capture_dir: Path) -> None:
     import mlx.core as mx
     import torch
 
-    from manabot.model.mlx.learner import MLXLearner
+    from manabot.backends.mlx.learner import MLXLearner
 
     out.mkdir(parents=True, exist_ok=True)
     ledger = out / "soak.jsonl"

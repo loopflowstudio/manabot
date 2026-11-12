@@ -1,15 +1,16 @@
-"""Host-side index preparation for the MLX policy.
+"""Host-side index preparation shared by every framework backend.
 
 The PyTorch forward mixes float arithmetic with integer bookkeeping it does on
 tensors: definition-row lookups, record-vocabulary `searchsorted`, legal-action
 coordinates, packed GRU schedules and shared-effect CSR routes. Here that
 bookkeeping runs once per batch in numpy (`prepare`), producing a `Prepared`
-batch of float features and integer indexes, so the MLX graph
-(`manabot.model.mlx.model`) holds only gathers, scatters and arithmetic.
+batch of float features and integer indexes, so a backend's graph (for example
+`manabot.backends.mlx.policy`) holds only gathers, scatters and arithmetic.
 
 `Tables` holds the checkpoint's lookup buffers (catalog programs, record
 vocabulary, naming joins, ownership template) and the observation layout; it is
-read from the converted checkpoint, never from the running engine.
+read from the checkpoint container (`manabot.policy.checkpoint`), never from
+the running engine. This module imports NumPy only.
 
 Inputs must already be admitted (`manabot.model.admission`): nothing here
 validates ids or partitions, exactly as the PyTorch forward does not.
@@ -272,7 +273,7 @@ class EffectRoutes:
 
 @dataclass(frozen=True)
 class Prepared:
-    """One admitted observation batch, ready for `MLXActorCritic`."""
+    """One admitted observation batch, ready for a backend policy."""
 
     batch: int
     agent_player: Array
@@ -320,7 +321,7 @@ class Prepared:
 def prepare(
     obs: Mapping[str, Array], tables: Tables, *, inference: bool = False
 ) -> Prepared:
-    """Build every index the MLX forward reads from one admitted batch.
+    """Build every index a backend forward reads from one admitted batch.
 
     `inference` applies the PyTorch CPU inference compaction: fact columns no
     row uses are dropped, and attention runs over the object columns some row

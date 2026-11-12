@@ -49,3 +49,21 @@ ruff clean; local boundary test 10 passed (MLX tests not rerun: no behavior chan
 Concept review, second pass (2026-11-12, headless): checked the built change against the design. Public surface is
 still the three actions (`convert`, `load_mlx_policy`, `parity`); provenance mismatch is resolved in code and guide.
 Nothing to change, no open product choice. scratch/concept-review.html marked as built.
+
+## Backend layout (steer 2d4fb551, 2026-11-12)
+
+Built as directed: `manabot/policy/` (prepare.py moved; checkpoint.py = container with canonical names,
+`PolicyCheckpoint`, `read_container`/`write_container`, `from_torch_state`, `require_supported`/`UnsupportedPolicy`,
+`Dimensions`; protocol.py = `BackendPolicy`, `BackendLearner`, `Backend`, `Targets`, `Settings`; README),
+`manabot/backends/mlx/{__init__,arrays,policy,rl,learner,checkpoint}.py`, `manabot/backends/{parity,convert}.py`,
+`manabot/backends/README.md` (matched layout), `manabot/backends/mlx.md`. Canonical names = torch names with GRU leaves
+`input_weight/hidden_weight/input_bias/hidden_bias` and attention `qkv_weight/qkv_bias`; MLX split/fold lives in
+backends/mlx/checkpoint.py. Container written/read by numpy (no safetensors dependency); `mx.load` reads it too.
+Converted file is now `<stem>.safetensors`. Parity compares in each backend's own layout so numbers are unchanged.
+Names aligned with MTG-325's draft (steer 310e6b5f) except metadata keys: kept `hypers`, `world_binding`,
+`architecture`, `source`, `converted_from` (the torch record's own fields, which `validate_checkpoint_world` reads).
+`policy/buckets.py` not moved: moving `model/buckets.py` would change the torch path.
+
+M2: 19 passed (test_mlx_backend, test_policy_container, test_package_boundaries); parity on the full capture
+reproduced the ledger's parity record exactly except step_update_min_cosine (informative) at 1e-10.
+Local: boundary + container tests 14 passed; ruff clean.

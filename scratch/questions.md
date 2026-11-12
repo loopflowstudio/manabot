@@ -8,3 +8,5 @@
   the full 12 GB capture stays on the host and is lost when it is released.
 - Publishing (manabot.data publish) runs on the laptop: an upload, not MLX/torch compute; R2 creds from Doppler manabot/prd.
 - Concept review: converted checkpoint becomes one safetensors file with JSON metadata (no .mlx.json sidecar); simpler of the two ways to keep the checkpoint's source record.
+- Backend `checkpoint.py` loads only; no MLX save to the container (the backend does not train, and nothing would call it). Add with the first training backend.
+- `rl.py` holds only the terms the damped learner uses (no entropy, GAE); add with their first caller.

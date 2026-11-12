@@ -40,18 +40,67 @@ def test_manabot_never_imports_academy() -> None:
     assert violations == []
 
 
-def test_only_the_mlx_port_imports_mlx() -> None:
-    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
-    # every other module must import neither it nor the port, eagerly or lazily.
-    port = REPO_ROOT / "manabot/model/mlx"
+_FRAMEWORKS = ("torch", "mlx", "jax", "jaxlib", "flax")
+_BACKENDS = REPO_ROOT / "manabot/backends"
+
+
+def _manabot_imports() -> list[tuple[Path, int, str]]:
+    return [
+        (path, line, module)
+        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+    ]
+
+
+def test_policy_contract_imports_no_array_framework() -> None:
+    policy = REPO_ROOT / "manabot/policy"
     violations = [
         f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
-        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
-        if port not in path.parents
-        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
-        if module.split(".")[0] == "mlx"
-        or module == "manabot.model.mlx"
-        or module.startswith("manabot.model.mlx.")
+        for path, line, module in _manabot_imports()
+        if policy in path.parents
+        and (
+            module.split(".")[0] in _FRAMEWORKS
+            or module == "manabot.backends"
+            or module.startswith("manabot.backends.")
+        )
+    ]
+    assert violations == []
+    # Transitively too: the shared preparation and container load no framework.
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        import manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
+        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
+        assert not loaded, loaded
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
+
+
+def test_only_the_mlx_backend_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module import neither it nor any backend, eagerly or lazily.
+    mlx = _BACKENDS / "mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
+        or (
+            (module == "manabot.backends" or module.startswith("manabot.backends."))
+            and _BACKENDS not in path.parents
+        )
+    ]
+    assert violations == []
+
+
+def test_backends_never_import_each_other() -> None:
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if _BACKENDS in path.parents
+        and path.parent != _BACKENDS
+        and module.startswith("manabot.backends.")
+        and module.split(".")[2] != path.relative_to(_BACKENDS).parts[0]
     ]
     assert violations == []
 

@@ -1,12 +1,16 @@
-"""Check that the MLX port agrees with the PyTorch policy on captured real inputs.
+"""Check that every installed backend agrees with the PyTorch policy on captured
+real inputs.
 
-    uv run --extra mlx python -m manabot.model.mlx.parity CHECKPOINT.pt --capture DIR
+    uv run --extra mlx python -m manabot.backends.parity CHECKPOINT.pt --capture DIR
 
 `DIR` is a capture written by `experiments/mlx_pilot.py capture`: learner
 minibatches (`learner/NNN.npz` with `minibatches.json`) and collection calls
 (`collection/NNNNN.npz`). The reference is the PyTorch model in float32 on CPU,
 running the training code's own loss (`damped_policy_loss`, `selected_mean`).
-For each minibatch, at the checkpoint's weights:
+Each backend whose framework is installed (`BACKENDS`) loads the same weights
+through the shared container's canonical names and is compared in its own
+parameter layout (`manabot.policy.protocol.Backend`). For each minibatch, at
+the checkpoint's weights:
 
 - forward logits on legal actions and values: max absolute difference <= 1e-4;
 - PPO loss: relative difference <= 0.1%;
@@ -20,36 +24,41 @@ For each minibatch, at the checkpoint's weights:
 Collection calls compare inference logits and values with the same 1e-4 bar.
 The first minibatch also takes one clipped Adam step in both frameworks and
 reports how far the parameters then differ; that comparison is informative and
-not part of the bar. The command prints one line per check, writes `--json`
-when given, and exits 1 naming the worst component if any check fails; it
-exits 2 when the checkpoint or capture is missing or the checkpoint is refused.
+not part of the bar. The command prints one line per check and backend, writes
+`--json` (one report per backend) when given, and exits 1 naming each failing
+backend's worst components if any check fails; it exits 2 when the checkpoint
+or capture is missing, the checkpoint is refused or no backend is installed.
 """
 
 import argparse
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass, field
+import importlib
+import importlib.util
 import json
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, cast
 
-import mlx.core as mx
-from mlx.utils import tree_flatten
 import numpy as np
 import torch
 
 from manabot.model.admission import admit_observation
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.mlx.checkpoint import (
-    GRUS,
-    UnsupportedForMLX,
-    build,
-    mlx_parameters,
-    torch_to_mlx,
-)
-from manabot.model.mlx.learner import MLXLearner, Settings, Targets, damped_loss
-from manabot.model.mlx.prepare import reference_distribution
 from manabot.model.policy_distribution import legal_mask
+from manabot.policy.checkpoint import (
+    UnsupportedPolicy,
+    canonical_parameters,
+    from_torch_state,
+)
+from manabot.policy.prepare import Prepared, reference_distribution
+from manabot.policy.protocol import (
+    Backend,
+    BackendLearner,
+    BackendPolicy,
+    Settings,
+    Targets,
+)
 from manabot.training.learning.damped_policy import damped_policy_loss
 from manabot.training.learning.references import (
     reference_distribution as torch_reference,
@@ -60,6 +69,23 @@ LOGIT_TOLERANCE = 1e-4
 LOSS_TOLERANCE = 1e-3
 COSINE_TOLERANCE = 0.999
 ZERO_GRADIENT = 1e-6  # of the global gradient norm
+
+# Backend name -> the framework it needs; each provides
+# `manabot.backends.<name>.checkpoint.BACKEND`.
+BACKENDS = {"mlx": "mlx"}
+
+
+def installed_backends() -> list[str]:
+    return [
+        name
+        for name, framework in BACKENDS.items()
+        if importlib.util.find_spec(framework) is not None
+    ]
+
+
+def backend(name: str) -> Backend:
+    module = importlib.import_module(f"manabot.backends.{name}.checkpoint")
+    return cast(Backend, module.BACKEND)
 
 
 @dataclass
@@ -149,25 +175,18 @@ def minibatches(
         yield obs, targets, settings, row
 
 
-def torch_gradients(agent: torch.nn.Module, hidden: int) -> dict[str, np.ndarray]:
-    """PyTorch gradients under MLX parameter names.
-
-    A folded GRU input bias `b` receives exactly `bias_ih`'s gradient (the
-    reset/update parts of `bias_hh` have the same one), and `bhn` the new-gate
-    slice of `bias_hh`'s.
-    """
-    grads: dict[str, np.ndarray] = {}
-    for name, parameter in agent.named_parameters():
-        grad = (
-            np.zeros(tuple(parameter.shape), np.float32)
-            if parameter.grad is None
-            else parameter.grad.detach().numpy()
-        )
-        prefix = next((p for p in GRUS if name.startswith(p + ".")), None)
-        if prefix is not None and name.endswith("bias_ih_l0"):
-            grads[f"{prefix}.b"] = grad
-        grads.update(torch_to_mlx(name, grad, hidden))
-    return grads
+def torch_gradients(agent: torch.nn.Module) -> dict[str, np.ndarray]:
+    """PyTorch gradients under canonical names (zero where none flowed)."""
+    return canonical_parameters(
+        {
+            name: (
+                np.zeros(tuple(parameter.shape), np.float32)
+                if parameter.grad is None
+                else parameter.grad.detach().numpy()
+            )
+            for name, parameter in agent.named_parameters()
+        }
+    )
 
 
 def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
@@ -181,9 +200,9 @@ def _cosine(a: np.ndarray, b: np.ndarray, floor: float = 0.0) -> float | None:
 
 
 def _legal_difference(
-    mlx_logits: np.ndarray, torch_logits: np.ndarray, legal: np.ndarray
+    logits: np.ndarray, torch_logits: np.ndarray, legal: np.ndarray
 ) -> tuple[float, float]:
-    difference = np.abs(mlx_logits - torch_logits)[legal]
+    difference = np.abs(logits - torch_logits)[legal]
     scale = np.abs(torch_logits[legal]).max()
     return float(difference.max()), float(difference.max() / scale) if scale else 0.0
 
@@ -193,13 +212,16 @@ def check(
     capture: Path,
     minibatch_count: int | None = 8,
     collection_count: int = 8,
+    *,
+    backend_name: str,
 ) -> Report:
+    """Compare one backend against the PyTorch reference."""
     torch.set_num_threads(8)
     agent, space = load_checkpoint(str(checkpoint))
     state = {k: v.detach().numpy().copy() for k, v in agent.state_dict().items()}
-    policy, _ = build(agent.config, space.encoder.config, state)
-    hidden = agent.config.hidden_dim
-    learner = MLXLearner(policy)
+    weights = from_torch_state(agent.config, space.encoder.config, state)
+    port = backend(backend_name)
+    policy, learner = port.load(weights)
     report = Report()
     agent.train()
     for index, (obs, targets, settings, meta) in enumerate(
@@ -232,22 +254,19 @@ def check(
         )
         loss = policy_loss + value_loss
         loss.backward()
-        expected = torch_gradients(agent, hidden)
+        expected = port.gradient_layout(torch_gradients(agent))
 
         batch = policy.prepare(obs)
-        mlx_loss, (mlx_logits, mlx_values) = damped_loss(
-            policy, batch, targets, settings
-        )
+        port_logits, port_values = policy.evaluate(batch)
         loss_value, grads = learner.gradients(batch, targets, settings)
-        mx.eval(mlx_logits, mlx_values, mlx_loss)
         absolute, relative = _legal_difference(
-            np.array(mlx_logits), logits.detach().numpy(), valid.numpy()
+            port_logits, logits.detach().numpy(), valid.numpy()
         )
         value_difference = float(
-            np.abs(np.array(mlx_values) - values.detach().numpy()).max()
+            np.abs(port_values - values.detach().numpy().reshape(-1)).max()
         )
         reference_loss = float(loss.detach())
-        loss_relative = abs(float(loss_value) - reference_loss) / max(
+        loss_relative = abs(loss_value - reference_loss) / max(
             abs(reference_loss), 1e-12
         )
         cosines: dict[str, float] = {}
@@ -258,8 +277,8 @@ def check(
                 sum(np.square(g.astype(np.float64)).sum() for g in expected.values())
             )
         )
-        for name, grad in tree_flatten(grads):
-            cosine = _cosine(np.array(grad), expected[name], floor)
+        for name, grad in grads.items():
+            cosine = _cosine(grad, expected[name], floor)
             if cosine is None:
                 both_zero += 1
                 zero.add(name)
@@ -273,7 +292,7 @@ def check(
             "logits_relative": relative,
             "values": value_difference,
             "loss_torch": reference_loss,
-            "loss_mlx": float(loss_value),
+            "loss_backend": loss_value,
             "loss_relative": loss_relative,
             "gradient_min_cosine": cosines[worst],
             "gradient_worst": worst,
@@ -289,16 +308,11 @@ def check(
             report.gradient_min_cosine = cosines[worst]
             report.gradient_worst = worst
         if index == 0:
-            _compare_step(
-                agent, learner, batch, targets, settings, zero, hidden, report
-            )
-            policy.update(
-                build(agent.config, space.encoder.config, state)[0].parameters()
-            )
-            learner = MLXLearner(policy)
+            _compare_step(agent, port, learner, batch, targets, settings, zero, report)
+            policy, learner = port.load(weights)
             agent.load_state_dict({k: torch.from_numpy(v) for k, v in state.items()})
         print(
-            f"minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
+            f"{backend_name} minibatch {meta['index']:3d}  B {row['B']:3d}  logits {absolute:.1e}  "
             f"values {value_difference:.1e}  loss {loss_relative:.1e}  "
             f"min cosine {cosines[worst]:.6f} ({worst})",
             flush=True,
@@ -309,12 +323,12 @@ def check(
 
 def _compare_step(
     agent: torch.nn.Module,
-    learner: MLXLearner,
-    batch: Any,
+    port: Backend,
+    learner: BackendLearner,
+    batch: Prepared,
     targets: Targets,
     settings: Settings,
     zero: set[str],
-    hidden: int,
     report: Report,
 ) -> None:
     """One clipped Adam step in both frameworks from the same weights.
@@ -328,13 +342,13 @@ def _compare_step(
     )
     torch.nn.utils.clip_grad_norm_(list(agent.parameters()), settings.max_grad_norm)
     optimizer.step()
-    initial = {k: np.array(v) for k, v in tree_flatten(learner.policy.parameters())}
+    initial = learner.parameters()
     learner.step(batch, targets, settings)
-    after = {k: np.array(v) for k, v in tree_flatten(learner.policy.parameters())}
+    after = learner.parameters()
     now = {k: v.detach().numpy() for k, v in agent.named_parameters()}
-    expected_after = mlx_parameters(now, hidden)
-    expected_delta = mlx_parameters(
-        {k: v - before[k].numpy() for k, v in now.items()}, hidden
+    expected_after = port.parameter_layout(canonical_parameters(now))
+    expected_delta = port.parameter_layout(
+        canonical_parameters({k: v - before[k].numpy() for k, v in now.items()})
     )
     worst = 1.0
     largest = 0.0
@@ -351,7 +365,7 @@ def _compare_step(
 
 def _collection(
     agent: torch.nn.Module,
-    policy: Any,
+    policy: BackendPolicy,
     capture: Path,
     count: int,
     report: Report,
@@ -370,25 +384,25 @@ def _collection(
                     agent, {k: torch.from_numpy(v) for k, v in obs.items()}
                 )
             )
-        mlx_logits, mlx_values = policy(policy.prepare(obs, inference=True))
-        mx.eval(mlx_logits, mlx_values)
+        port_logits, port_values = policy.evaluate(policy.prepare(obs, inference=True))
         absolute, _ = _legal_difference(
-            np.array(mlx_logits), logits.numpy(), obs["actions_valid"] > 0
+            port_logits, logits.numpy(), obs["actions_valid"] > 0
         )
         report.collection_logits = max(report.collection_logits, absolute)
         report.collection_values = max(
             report.collection_values,
-            float(np.abs(np.array(mlx_values)[:, 0] - values.numpy()).max()),
+            float(np.abs(port_values - values.numpy()).max()),
         )
     policy.clear_cache()
 
 
-def _print(report: Report) -> None:
-    for name, measured, passed in report.checks():
-        print(f"{name:<40} {measured}  {'ok' if passed else 'FAIL'}")
+def _print(name: str, report: Report) -> None:
+    for component, measured, passed in report.checks():
+        print(f"{name:<6} {component:<40} {measured}  {'ok' if passed else 'FAIL'}")
     print(
-        f"{'one step':<40} params max |Δ| {report.step_parameter_max_abs:.1e}, "
-        f"update min cosine {report.step_update_min_cosine:.6f} (informative)"
+        f"{name:<6} {'one step':<40} params max |Δ| "
+        f"{report.step_parameter_max_abs:.1e}, update min cosine "
+        f"{report.step_update_min_cosine:.6f} (informative)"
     )
 
 
@@ -402,20 +416,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--collection", type=int, default=8)
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
+    names = installed_backends()
+    if not names:
+        parser.error("no framework backend is installed (" + ", ".join(BACKENDS) + ")")
+    reports: dict[str, Report] = {}
     try:
-        report = check(args.checkpoint, args.capture, args.minibatches, args.collection)
-    except (FileNotFoundError, UnsupportedForMLX) as error:
+        for name in names:
+            reports[name] = check(
+                args.checkpoint,
+                args.capture,
+                args.minibatches,
+                args.collection,
+                backend_name=name,
+            )
+    except (FileNotFoundError, UnsupportedPolicy) as error:
         parser.error(str(error))  # exits 2; 1 means the models disagree
-    _print(report)
-    failures = report.failures()
+    failures = {name: report.failures() for name, report in reports.items()}
+    for name, report in reports.items():
+        _print(name, report)
     if args.json is not None:
         args.json.write_text(
-            json.dumps(asdict(report) | {"failures": failures}, indent=2)
+            json.dumps(
+                {
+                    name: asdict(report) | {"failures": failures[name]}
+                    for name, report in reports.items()
+                },
+                indent=2,
+            )
         )
-    if failures:
-        print("parity: FAIL (" + ", ".join(failures) + ")")
+    failing = [f"{name}: " + ", ".join(f) for name, f in failures.items() if f]
+    if failing:
+        print("parity: FAIL (" + "; ".join(failing) + ")")
         return 1
-    print("parity: pass")
+    print("parity: pass (" + ", ".join(names) + ")")
     return 0
 
 

@@ -1,11 +1,11 @@
 """`ActorCritic` in MLX: the same encoder, attention stack, action heads and critic.
 
 `MLXActorCritic` mirrors `manabot.model.actor_critic.ActorCritic` module for
-module, for the configurations `supported` admits (the w160l8 regime's: a
+module, for the configurations `require_supported` admits (the w160l8 regime's: a
 catalog world with catalog record ids, table attention, masked-mean scalar
 critic, policy input v9). Its float arithmetic follows the PyTorch forward line
 by line; the integer bookkeeping comes precomputed in a `Prepared` batch
-(`manabot.model.mlx.prepare`).
+(`manabot.policy.prepare`).
 
 Two departures, both exact up to float rounding:
 
@@ -18,7 +18,7 @@ Two departures, both exact up to float rounding:
 Parameter paths equal the PyTorch state-dict names except where MLX containers
 differ: `nn.Sequential` children live under `layers`, attention in-projections
 are `query_proj`/`key_proj`/`value_proj`, and GRUs hold `Wx`, `Wh`, `b`, `bhn`
-(`manabot.model.mlx.checkpoint` maps them).
+(`manabot.backends.mlx.checkpoint` maps them from the canonical names).
 """
 
 from collections.abc import Mapping, Sequence
@@ -28,35 +28,15 @@ import mlx.core as mx
 import mlx.nn as nn
 import numpy as np
 
-from manabot.model.mlx.prepare import (
+from manabot.backends.mlx.arrays import to_numpy
+from manabot.policy.checkpoint import Dimensions
+from manabot.policy.prepare import (
     Packed,
     Prepared,
     Tables,
     catalog_schedule,
     prepare,
 )
-
-
-@dataclass(frozen=True)
-class Dimensions:
-    """Input widths and architecture of one checkpoint."""
-
-    hidden: int
-    heads: int
-    layers: int
-    feedforward: int
-    player: int
-    card: int
-    permanent: int
-    action: int
-    focus: int
-    relation: int
-    fact_kinds: int
-    token_rows: int
-    name_rows: int
-    links: int
-    value: int = 1
-
 
 # -- building blocks -----------------------------------------------------------------
 
@@ -328,6 +308,12 @@ class MLXActorCritic(nn.Module):
 
     def clear_cache(self) -> None:
         self._static.cache.clear()
+
+    def evaluate(self, batch: Prepared) -> tuple[np.ndarray, np.ndarray]:
+        """Evaluated logits [B,A] and values [B] as NumPy (`BackendPolicy.evaluate`)."""
+        logits, values = self(batch)
+        mx.eval(logits, values)
+        return to_numpy(logits), to_numpy(values)[:, 0]
 
     def _public(self, programs: mx.array) -> mx.array:
         """`NameCandidateEncoder.public_definitions`: add names to their programs."""

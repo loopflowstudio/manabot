@@ -13,7 +13,7 @@ one further day (about USD 21) if the soak needs it.
 real checkpoint and captured w160l8 inputs: logits and values within 1e-4
 absolute, PPO loss within 0.1% relative, every parameter's gradient cosine
 at least 0.999. Checked with
-[`manabot.model.mlx.parity`](../manabot/model/mlx.md#parity-check).
+[`manabot.backends.parity`](../manabot/backends/mlx.md#parity-check).
 
 ## Answer
 
@@ -213,7 +213,7 @@ minibatches) and read clocks; they changed nothing the run computed. The update
 took 826 s; collection 193.8 s, of which 166.5 s were policy calls, leaving at
 most 27.3 s for the engine.
 
-**Parity** (`manabot.model.mlx.parity`) ran first, on 8 learner minibatches and
+**Parity** (`manabot.backends.parity`) ran first, on 8 learner minibatches and
 16 collection calls, against PyTorch float32 on CPU with the training code's
 own loss. One clarification was fixed before any timing: the policy-score bias
 and every attention key bias have analytically zero gradients, so a tensor
@@ -225,8 +225,8 @@ passing parity record in the same ledger.
 **Arms.** CPU8 is the production PyTorch path on 8 threads: one
 `PolicyInference` scope per collection for inference; for learning the damped
 loss, `OptimizerHealth` backward, clipping and Adam. MPS is that learner on
-torch's MPS device, same venv. MLX is `manabot.model.mlx`: host-side index
-preparation in numpy, then the MLX graph, timed to evaluated outputs (logits
+torch's MPS device, same venv. MLX is `manabot.backends.mlx`: host-side index
+preparation in numpy (`manabot.policy.prepare`), then the MLX graph, timed to evaluated outputs (logits
 copied back to numpy for collection). Each bench phase is its own process: MLX
 and MPS share unified memory, and an early run that held both in one process
 ran MPS out of memory.
@@ -269,7 +269,7 @@ by section: attention 0.74 s, catalog 0.03 s, facts 0.02 s, permanent links
 `bench-v1.jsonl`, `profile.jsonl`, `summary.json`, the four charts, the
 capture's `capture.json`, `calls.json`, `minibatches.json` and `regime.json`,
 and a parity subset (`capture/initial.pt`, the first eight minibatches, the
-sixteen collection calls) so `manabot.model.mlx.parity` can be re-run. The
+sixteen collection calls) so `manabot.backends.parity` can be re-run. The
 full 12 GB capture is not retained. `experiments/mlx_pilot.py report`
 regenerates `summary.json` and the charts from the ledgers.
 
