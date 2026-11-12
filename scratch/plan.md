@@ -25,16 +25,19 @@ Changed docs: `docs/training.md` § Reduced precision (ladder, threshold, measur
 1. w256l8 step run with `experiments/cuda_precision.py` (bucketed on/off), ~USD 0.20.
    If BF16 learner and large collection calls are both >= 1.1x float32 at w256, set
    `BF16_MIN_HIDDEN_DIM = 256` and edit the threshold paragraph + regime comment.
-2. Learning A/B `experiments/precision_ladder.py` / `.md` at w384l8 bucketed, frontier
-   regime (`sampled_self_play`), float32 vs bf16 written explicitly, >= 2 seeds each, a few
-   hundred updates, strength vs frozen anchor at matched updates + loss/clip/KL
-   trajectories. Pre-register in the report before any scored run. USD 8 budget, cap 10.
-   Not written yet.
+2. Learning A/B: written, not launched. `experiments/precision_ladder.py` (arms
+   float32/bf16 explicit, w384l8 bucketed, `sampled_self_play` Elemental, seeds 32401/32402,
+   64 updates, horizon 64, eval vs heuristic at 16/32/48/64 + bf16-vs-float32 head-to-heads)
+   and `experiments/precision_ladder.md` (pre-registered paragraph, USD 10 cap). Launch:
+   `etude launch experiments/precision_ladder.py --rent l4 --parallel 4 --max-usd 10
+   --revision COMMIT`, then `etude eval ... --rent cpu32`. Check: `read_experiment` loads it,
+   `runs('HEAD')` gives 4 runs at 3.0 h / USD 1.95, `evaluation_matchups` on a fake state
+   gives the expected heuristic and head-to-head matchups; ruff clean.
 3. If BF16 is rejected: `ladder_precision` returns float32 everywhere and the docs
    paragraph says what separated. The docs' learning-comparison sentence currently states
    the accepted outcome and is unverified until (2) runs.
 
-Both runs wait for the L4: the Task says not to start until MTG-318 and MTG-319 have had
+Both runs (step run and A/B) are deferred: they wait for the L4: the Task says not to start until MTG-318 and MTG-319 have had
 their L4 time. Rechecked 2026-11-12 (realign): both still active/moving. PR #489 has landed
 and the branch contains current main, so no upstream change affects the plan.
 
