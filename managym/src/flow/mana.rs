@@ -1278,11 +1278,7 @@ impl Game {
     /// abilities. The planner offers only sources whose bonuses need no
     /// choice (`fixed_source_mana`), so this never suspends.
     fn tap_fixed_mana_source(&mut self, player: PlayerId, permanent: PermanentId) {
-        let view = self.characteristics(permanent);
-        let mut produced = Mana::default();
-        for ability in &view.mana_abilities {
-            produced.add(&ability.mana);
-        }
+        let produced = fixed_output(&self.characteristics(permanent));
         let bonuses = self.tap_bonuses(&self.mana_triggers(), player, permanent);
         self.tap_permanent(permanent, true);
         self.state.mana_pool_mut(player).add(&produced);
@@ -1304,12 +1300,8 @@ impl Game {
         view: &Characteristics,
         triggers: &[ManaTrigger],
     ) -> Option<Mana> {
-        let mut output = Mana::default();
-        for ability in &view.mana_abilities {
-            output.add(&ability.mana);
-        }
         let bonuses = self.tap_bonuses(triggers, player, permanent);
-        match production_alternatives(&[output], &bonuses).as_slice() {
+        match production_alternatives(&[fixed_output(view)], &bonuses).as_slice() {
             [only] => Some(only.clone()),
             _ => None,
         }
@@ -1355,8 +1347,8 @@ impl Game {
     /// Resolve `bonuses` after a production of `produced` into `player`'s
     /// pool (CR 605.4a): a fixed or single-type bonus adds at once; a choice
     /// among several produced types suspends as a `ManaChoice` holding the
-    /// rest. A production of no mana triggers nothing (CR 106.12a). Returns
-    /// the caller's `resume` when every bonus resolved, or the choice.
+    /// rest. Returns the caller's `resume` when every bonus resolved, or the
+    /// choice.
     pub(crate) fn resolve_mana_bonuses(
         &mut self,
         player: PlayerId,
@@ -1364,9 +1356,6 @@ impl Game {
         bonuses: Vec<TriggeredManaOutput>,
         resume: Option<Box<Decision>>,
     ) -> Result<Option<Box<Decision>>, Box<Decision>> {
-        if produced.total() == 0 {
-            return Ok(resume);
-        }
         let mut pending = bonuses.into_iter();
         while let Some(bonus) = pending.next() {
             let mut choices = bonus.alternatives(produced);
@@ -1576,12 +1565,8 @@ pub(crate) struct ManaTrigger {
 
 /// Each distinct total the triggered mana abilities `bonuses` can add after a
 /// production of `produced`: one per combination of their alternatives.
-/// Nothing when the production added no mana (CR 106.12a).
 fn bonus_alternatives(produced: &Mana, bonuses: &[TriggeredManaOutput]) -> Vec<Mana> {
     let mut totals = vec![Mana::default()];
-    if produced.total() == 0 {
-        return totals;
-    }
     for bonus in bonuses {
         let alternatives = bonus.alternatives(produced);
         if alternatives.is_empty() {
@@ -1600,6 +1585,15 @@ fn bonus_alternatives(produced: &Mana, bonuses: &[TriggeredManaOutput]) -> Vec<M
         totals = next;
     }
     totals
+}
+
+/// The mana a fixed source adds when tapped: every fixed production at once.
+fn fixed_output(view: &Characteristics) -> Mana {
+    let mut output = Mana::default();
+    for ability in &view.mana_abilities {
+        output.add(&ability.mana);
+    }
+    output
 }
 
 /// Each distinct pool addition of a mana ability with `outputs` followed by

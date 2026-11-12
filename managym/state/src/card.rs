@@ -151,9 +151,12 @@ pub enum TriggeredManaOutput {
 }
 
 impl TriggeredManaOutput {
-    /// Each mana this output can add after `produced`; empty when it adds
-    /// nothing (a type-copying output after no mana).
+    /// Each mana this output can add after `produced`; empty after a
+    /// production of no mana, which triggers nothing (CR 106.12a).
     pub fn alternatives(&self, produced: &Mana) -> Vec<Mana> {
+        if produced.total() == 0 {
+            return Vec::new();
+        }
         match self {
             Self::Fixed(mana) => vec![mana.clone()],
             Self::OneProducedType => {
