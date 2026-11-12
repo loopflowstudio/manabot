@@ -170,13 +170,23 @@ def test_pool_exclusions_preserve_source_split_without_backfilling(
         PoolCorpus.model_validate(damaged)
 
 
-def test_pool_derivation_does_not_exclude_malformed_lists(tmp_path: Path) -> None:
+def test_pool_derivation_does_not_exclude_malformed_lists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     payload = _pool_source().model_dump(mode="json")
     payload["trophies"][0]["decklist"] = managym.Decklist("Main\n0 Forest\n").to_dict()
     path = tmp_path / "source.json"
     path.write_text(json.dumps(payload))
-    with pytest.raises(managym.DeckImportError):
+    with pytest.raises(managym.DeckImportError) as rejected:
         derive_pools(path, held_out=1)
+    output = tmp_path / "pools.json"
+    monkeypatch.setattr(
+        sys, "argv", ["tla_pools", str(path), str(output), "--held-out", "1"]
+    )
+    with pytest.raises(SystemExit) as cli:
+        pools_main()
+    assert str(cli.value) == f"No corpus written: {rejected.value}"
+    assert not output.exists()
 
 
 def _tiny_regime() -> TrainingRegime:

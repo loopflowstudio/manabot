@@ -5,14 +5,13 @@ retain event identity even for identical decks. Journals are durable while a
 stage runs; sealing publishes immutable digest-named rows beside its artifacts.
 """
 
-from hashlib import sha256
 import os
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 
-from manabot.infra.identity import StrictModel
+from manabot.infra.identity import StrictModel, file_sha256
 
 
 class GameSeat(StrictModel):
@@ -44,9 +43,10 @@ class GameResultWriter:
             os.fsync(stream.fileno())
 
     def seal(self) -> Path:
-        body = self.path.read_bytes()
-        target = self.path.parent / f"{sha256(body).hexdigest()}.jsonl"
-        if target.exists() and target.read_bytes() != body:
+        # A journal can span an entire stage; hash it without retaining its rows.
+        digest = file_sha256(self.path)
+        target = self.path.parent / f"{digest}.jsonl"
+        if target.exists() and file_sha256(target) != digest:
             raise ValueError("game result artifact digest mismatch")
         self.path.replace(target)
         return target

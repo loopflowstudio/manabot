@@ -106,18 +106,8 @@ def main() -> None:
     try:
         corpus = derive_pools(args.source, args.held_out)
     except managym.DeckImportError as error:
-        names = sorted(
-            {
-                issue.card_name
-                for decklist in error.decklists.values()
-                for issue in decklist.issues
-                if issue.card_name is not None
-            }
-        )
-        raise SystemExit(
-            f"{len(error.decklists)} selected events fail current-world admission; "
-            f"no corpus written. Cards: {', '.join(names)}"
-        ) from None
+        # Native diagnostics retain the event, source line and rejection reason.
+        raise SystemExit(f"No corpus written: {error}") from None
     args.out.parent.mkdir(parents=True, exist_ok=True)
     atomic_json(args.out, corpus.model_dump(mode="json"))
     print(
