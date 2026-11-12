@@ -1,6 +1,7 @@
 """Recipe identity, horizon schedules and CLI routing without training."""
 
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from typing import Literal
 
@@ -288,4 +289,6 @@ def test_cli_padded_shapes_requires_a_recipe(tmp_path: Path) -> None:
         ],
     )
     assert invoked.exit_code != 0
-    assert "--padded-shapes" in invoked.output
+    # Typer forces rich colour under GitHub Actions, which splits option names
+    # with escape codes.
+    assert "--padded-shapes" in re.sub(r"\x1b\[[0-9;]*m", "", invoked.output)
