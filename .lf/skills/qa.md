@@ -96,8 +96,12 @@ publish, land or choose the next Graph step from here.
   A comparison runs six ladders (~7 h estimated at that rate; default 36,000 s).
   `--seconds` overrides either default without changing the workload. For a
   real comparison, `git worktree add --detach /tmp/<dir> <baseline commit>`;
-  the reference worker's own `uv run --locked` creates its venv and builds its
-  extension (byte-identical via uv cache when native source matches). Bound a
+  prepare its own venv with the candidate's exact Python patch version and
+  matching release extension before starting. Check Python and Torch versions
+  in both checkouts using the command in `docs/development.md`. The worker's
+  `uv run --locked` can create a venv, but does not guarantee the same Python
+  patch: the retained 600 s proof used 3.13.15 versus 3.13.7 and its completed
+  pairs fail host compatibility. Bound a
   smoke comparison with `--seconds 600` to exercise interleaving and the
   timeout path; remove the worktree afterwards. Rejection paths (dirty
   `--record-reference`, `--compare` without `--reference-root`, `--device mps`

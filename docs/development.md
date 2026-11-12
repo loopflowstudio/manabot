@@ -367,7 +367,17 @@ or device that recorded it. Only ratios from freshly measured reference and
 candidate runs in the same job can support a performance comparison.
 
 Both source checkouts must be clean, with their own locked environments and
-matching release native extensions. The reference checkout must match the
+matching release native extensions. Match the full Python version, including
+the patch release, and the Torch version. A fresh `uv` environment can choose
+a newer Python patch than an existing checkout; `--locked` alone does not
+make the interpreters identical. Before starting, run this in each checkout:
+
+```sh
+uv run --locked --extra evaluation python -c 'import platform, torch; print(platform.python_version(), torch.__version__)'
+```
+
+Prepare the reference environment with the candidate's exact Python version
+before measurement. The reference checkout must match the
 baseline commit and declare the matching `SUITE_INTERFACE` in
 `scripts/bench_pipeline.py`. The command creates no
 worktrees. Recording and comparison cover all four sizes and every workload

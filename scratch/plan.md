@@ -126,6 +126,11 @@ from concept review; this does not complete measurement or delivery.
    options. Establish repeatable behavior admission and retain incomparable
    results/failures. The full CPU/CUDA comparison has 48 worker attempts sharing
    one deadline; controlled fixtures do not prove its runtime or repeatability.
+   Publication audit of `.runs/qa-cmp-1/report.json`: the 598.32 s run retained
+   five attempts, four completed. Both w64 pairs fail `_compatible` with
+   `host mismatch`: reference Python 3.13.15, candidate 3.13.7. Their workload
+   and behavior digests match. Prepare matching Python patch and Torch versions
+   before retrying; automatic reference venv creation is insufficient.
 3. Gate checks merged metric-reader integration and the configured evaluation CI
    collection. CUDA remains a named same-pod check on an already provisioned
    host. CUDA/MPS have not been exercised here and do not block this repair.
@@ -138,3 +143,18 @@ passed. This supersedes QA's earlier 46-test count; merged integration checks
 remain with gate. Realignment re-read the two receipts and the deadline code and
 tests without repeating workloads. No product decision remains; CUDA/MPS and
 provider selection retain the limits above.
+
+## Publication audit — 2026-11-11
+
+`lf sync` merged main `4842222e3` in `84c85a023`, keeping benchmark notes after
+main deleted its unrelated scratch file. Focused pipeline, time-profile and
+outcome-table tests: 77 passed in 4.88 s. The exact evaluation CI invocation
+collected 617 tests; focused Ruff lint/format, workflow validation and diff
+whitespace checks passed. No complete real comparison or PR was produced.
+Publication remains blocked on acceptance item 2; the bounded comparison is
+neither complete nor host-compatible. Documentation now explicitly checks full
+Python and Torch versions before measurement.
+
+Proposed Infrastructure memory correction (read-only Wave context): the statement
+that no baseline exists predates QA. The clean eight-row ladder and committed
+reference are complete; real-source comparison acceptance remains open as above.

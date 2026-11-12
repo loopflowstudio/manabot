@@ -70,6 +70,10 @@ incomplete; elapsed 598.32s; RuntimeError: TimeoutError: attempt wall deadline e
 <code>.venv</code> and built the extension, byte-identical to the candidate's (uv cache; native source
 matches). The first reference row absorbed that setup (294 s wall vs 214 s).</li>
 <li class="ok">Behavior counters are identical across sides (513 calls, 104.8 rows, 0.591 idle).</li>
+<li class="bad">Publication audit: the reference used Python 3.13.15 and the candidate 3.13.7.
+Both completed w64 pairs fail <code>_compatible</code> with <code>host mismatch</code>.
+Workload and behavior digests match, but source admission alone did not establish
+comparison admission. Prepare matching full interpreter versions before retrying.</li>
 <li>Identical code read 703 vs 775 decisions/s (≈10%) on this loaded laptop: one pair is noise,
 which is why the comparison takes minima over three repetitions. No comparison was emitted.</li>
 <li class="ok">Timeout path: report retained with five attempts, cleanup 0.16–0.26 s each, comparison withheld,
@@ -100,8 +104,9 @@ reference environment itself, and fails cleanly at its deadline.</p>
 
 <h2>Not reached, and still wrong — worst first</h2>
 <ol>
-<li class="bad">No complete comparison has run (≈7 h estimated, 36,000 s default). Interleaving, admission and
-the timeout path are proven; minimum selection and comparable/incomparable verdicts on real samples are not.</li>
+<li class="bad">No complete comparison has run (≈7 h estimated, 36,000 s default). Interleaving, source admission and
+the timeout path are proven; completed pairs fail host compatibility because their Python patch versions differ.
+Minimum selection and a complete comparable/incomparable verdict remain unproved on real samples.</li>
 <li>The baseline names branch commit <code>c991025b8</code>. After a squash merge it remains fetchable only through
 the PR's head ref; a reference checkout must <code>git fetch origin pull/&lt;N&gt;/head</code>. Re-recording on a
 main commit after landing would be simpler for later users; that's gate's call.</li>
