@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import JsonValue
 
 from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.identity import file_sha256
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
@@ -33,6 +34,8 @@ OPPONENT_NAMES: dict[AnchorKind, str] = {
 class CheckpointAdmission:
     registration: PlayerRegistration
     identities: dict[str, JsonValue]
+    # The checkpoint's own space, which both registered ABI hashes describe.
+    space: ObservationSpace
 
 
 def register_checkpoint(
@@ -42,13 +45,19 @@ def register_checkpoint(
     content_suite: str,
     player_id: str,
     display_name: str,
+    role: Literal["anchor", "incumbent", "challenger"] = "challenger",
     training_seed: int | None = None,
-    artifact_id: str | None = None,
+    artifact_prefix: str = "checkpoint",
     expected_sha256: str | None = None,
     expected_bytes: int | None = None,
     allow_deck_repetition: bool = False,
 ) -> CheckpointAdmission:
-    """Admit local bytes; a missing producer seed remains unknown, never invented."""
+    """Admit local bytes; a missing producer seed remains unknown, never invented.
+
+    The world and both ABI hashes come from the checkpoint's own
+    `ObservationSpace`, never the matchup's fresh defaults: serving compares
+    them with the loaded space and refuses a registration that disagrees.
+    """
     digest, size = file_sha256(path), path.stat().st_size
     if (expected_sha256 is not None and digest != expected_sha256) or (
         expected_bytes is not None and size != expected_bytes
@@ -73,7 +82,7 @@ def register_checkpoint(
         player_seed_derivation_id="arena-pair-deal-player-v1",
         player_id=player_id,
         display_name=display_name,
-        role="challenger",
+        role=role,
         runner_kind="checkpoint",
         player_spec={
             "kind": "checkpoint",
@@ -87,9 +96,9 @@ def register_checkpoint(
         checkpoint_bytes=size,
         parameter_count=sum(parameter.numel() for parameter in agent.parameters()),
         training_seed=training_seed,
-        artifact_id=artifact_id or f"checkpoint/{digest}",
+        artifact_id=f"{artifact_prefix}/{digest}",
     )
-    return CheckpointAdmission(registration, runtime)
+    return CheckpointAdmission(registration, runtime, space)
 
 
 def register_anchor(
