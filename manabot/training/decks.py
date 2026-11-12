@@ -105,17 +105,18 @@ class UniformDecks(StrictModel):
             return [(None, None)] * len(self.decks)
         return list(zip(self.pools, self.builds, strict=True))
 
-    def players(self) -> list[managym.PlayerConfig]:
-        """Native setups; their names are what game results join back on."""
-        players = [deck.player() for deck in self.decks]
+    def _player_names(self) -> list[str | None]:
+        """Native player names, which game results join back on; None keeps the deck's."""
         if self.entry_ids is not None:
-            names: list[str | None] = list(self.entry_ids)
-        else:
-            names = [
-                None if pool is None else pool if build is None else f"{pool}/{build}"
-                for pool, build in self.seats()
-            ]
-        for player, name in zip(players, names, strict=True):
+            return list(self.entry_ids)
+        return [
+            None if pool is None else pool if build is None else f"{pool}/{build}"
+            for pool, build in self.seats()
+        ]
+
+    def players(self) -> list[managym.PlayerConfig]:
+        players = [deck.player() for deck in self.decks]
+        for player, name in zip(players, self._player_names(), strict=True):
             if name is not None:
                 player.name = name
         return players
@@ -123,9 +124,11 @@ class UniformDecks(StrictModel):
     def seats_by_player(self) -> dict[str, tuple[str, str | None]]:
         """Pooled decks' (pool, build) by native player name."""
         return {
-            player.name: (pool, build)
-            for player, (pool, build) in zip(self.players(), self.seats(), strict=True)
-            if pool is not None
+            name: (pool, build)
+            for name, (pool, build) in zip(
+                self._player_names(), self.seats(), strict=True
+            )
+            if pool is not None and name is not None
         }
 
     def match_config(self) -> MatchConfig:

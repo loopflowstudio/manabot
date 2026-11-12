@@ -35,14 +35,8 @@ def derive_pools(source_path: Path, held_out: int = 100) -> PoolCorpus:
         raise ValueError(
             "retained source does not contain its entire selected population"
         )
-    ids = [t.event_id for t in source.trophies]
-    if len(set(ids)) != len(ids):
-        raise ValueError("source draft ids must be unique")
-    if not 0 < held_out < len(ids):
-        raise ValueError(
-            "held-out count must leave nonempty training and evaluation splits"
-        )
-    evaluation = held_out_ids(ids, held_out)
+    # `PoolCorpus` rejects duplicate ids and a held-out count without training pools.
+    evaluation = held_out_ids((t.event_id for t in source.trophies), held_out)
     basics = managym.format.Limited.basic_cards()
     pools: list[Pool] = []
     for trophy in source.trophies:

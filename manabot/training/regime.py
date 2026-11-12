@@ -818,11 +818,13 @@ class TrainingRegime(Strict):
             )
         if self.deck_source is not None and any(
             not isinstance(stage, (TrainSelfPlay, ModuleStage))
-            or isinstance(stage, TrainSelfPlay)
-            and (
-                stage.behavior != "current-self"
-                or stage.root is not None
-                or stage.matchup_curriculum != "fixed"
+            or (
+                isinstance(stage, TrainSelfPlay)
+                and (
+                    stage.behavior != "current-self"
+                    or stage.root is not None
+                    or stage.matchup_curriculum != "fixed"
+                )
             )
             for stage in self.stages
         ):
@@ -896,8 +898,7 @@ class TrainingRegime(Strict):
                 raise ValueError(f"{accelerator} process recovery is unsupported")
             if any(model.belief_count_buckets for model in model_configs) or any(
                 not isinstance(stage, (TrainSelfPlay, ModuleStage))
-                or isinstance(stage, TrainSelfPlay)
-                and stage.opponent is not None
+                or (isinstance(stage, TrainSelfPlay) and stage.opponent is not None)
                 for stage in self.stages
             ):
                 raise ValueError(
@@ -1005,8 +1006,5 @@ class TrainingRegime(Strict):
         return tuple(self.models.values()) if self.models is not None else (self.agent,)
 
     def model_for(self, stage: TrainSelfPlay) -> ModelConfig:
-        if self.models is not None:
-            if len(stage.trains) != 1:
-                raise ValueError("named self-play trains exactly one model")
-            return self.models[stage.trains[0]]
-        return self.agent
+        # Admission guarantees that named self-play trains exactly one model.
+        return self.agent if self.models is None else self.models[stage.trains[0]]
