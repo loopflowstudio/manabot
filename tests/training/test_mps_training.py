@@ -135,8 +135,11 @@ def test_mps_torch_minimum_gates_selection(
     if admitted:
         assert baseline().regime.stages[0].execution.device == "mps"
     else:
-        with pytest.raises(ValueError, match=f"installed Torch {version} is below that minimum"):
-            baseline()
+        for device in (None, "mps"):
+            with pytest.raises(
+                ValueError, match=f"installed Torch {version} is below that minimum"
+            ):
+                baseline(device=device)
 
 
 def test_old_torch_mps_stage_fails_before_training(

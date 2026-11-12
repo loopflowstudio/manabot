@@ -119,9 +119,13 @@ def baseline(
 ) -> TrainingRecipe:
     """Resolve accelerated self-play; CPU smoke runs use the local recipe."""
     selected = accelerator() if device is None else device
-    # Automatic selection skips MPS only when this Torch is not admitted; say why.
-    if selected is None and torch.backends.mps.is_available():
-        raise ValueError(mps_torch_error())
+    # Reject unadmitted MPS here: the experiment runner would only report it from
+    # the training child's log. Automatic selection skips such MPS silently.
+    wants_mps = selected == "mps" or (
+        selected is None and torch.backends.mps.is_available()
+    )
+    if wants_mps and (error := mps_torch_error()) is not None:
+        raise ValueError(error)
     if selected is None or selected == "cpu":
         raise ValueError(
             "baseline requires CUDA or Apple MPS; use --recipe local for CPU"
