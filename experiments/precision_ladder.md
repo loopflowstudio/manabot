@@ -84,6 +84,11 @@ per run and USD 31.40 for four. The horizon stays 300 updates; at 150 s per
 update the window covers about 250, so *M* is likely below 300. The question is
 unchanged.
 
+Dated line, 2026-11-12: the queued cohort `mtg324-precision-ab-300c` started
+three runs; BF16 seed 32402 was lost when RunPod refused capacity. It was
+re-queued alone (`--arms bf16 --seeds 32402`) from a later commit that adds
+only that filter to `runs()`; its regime and job config are identical.
+
 ## Answer
 
 Pending.

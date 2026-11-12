@@ -131,20 +131,31 @@ def runs(
     hours: float = HOURS,
     usd_per_run: float = USD_PER_RUN,
     seeds: str = ",".join(str(seed) for seed in SEEDS),
+    arms: str = ",".join(ARMS),
 ) -> list[Run]:
     """Both arms under the same seeds.
 
     The run seed fixes initialization and every native game seed, so the two
     arms of one seed start from the same weights and meet the same deck
-    pairings and deals until their policies diverge.
+    pairings and deals until their policies diverge. `arms` and one seed
+    re-queue a single lost run with the same regime.
     """
     chosen = tuple(int(seed) for seed in seeds.split(","))
-    if len(chosen) < 2 or len(set(chosen)) != len(chosen):
+    if len(set(chosen)) != len(chosen):
+        raise ValueError("seeds repeat")
+    wanted = set(arms.split(","))
+    if not wanted <= set(ARMS):
+        raise ValueError(f"unknown arms {sorted(wanted - set(ARMS))}")
+    if wanted == set(ARMS) and len(chosen) < 2:
         raise ValueError("the comparison needs at least two distinct shared seeds")
     reference, candidate = (arm(precision) for precision in ARMS)
     require_single_axis(reference, candidate)
     return training_runs(
-        (reference, candidate),
+        tuple(
+            regime
+            for precision, regime in zip(ARMS, (reference, candidate), strict=True)
+            if precision in wanted
+        ),
         updates=UPDATES,
         revision=revision,
         experiment=EXPERIMENT,
