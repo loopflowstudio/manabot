@@ -132,12 +132,13 @@ bindings that can change future behavior.
 Each buffer arrives padded to its declared capacity, but a real batch uses
 little of it. Across 300 captured collection batches the median batch needed 59
 of 512 fact rows, 51 of 2,048 effect members and 12 of 64 actions. On the
-padded path the network still processes every slot, and skips lookups for an axis that is
-empty in the batch, so tensor shapes change from batch to batch.
+padded path the network still processes every slot, and skips lookups for an
+axis that is empty in the batch, so tensor shapes change from batch to batch.
 
 Bucketed padding, the default on CUDA, avoids most of that. After an
-observation is admitted, the network trims each variable axis (facts, effect headers, details and members, relations, actions, events, cards,
-permanents, known hands and decklists) to a bucket: the next power of two at or
+observation is admitted, the network trims each variable axis (facts, effect
+headers, details and members, relations, actions, events, cards, permanents,
+known hands and decklists) to a bucket: the next power of two at or
 above what the batch uses, at least 8 and at most the declared capacity. What a
 batch uses includes every row a reference can name, so trimming removes only
 empty rows nothing refers to. Trimming cards and permanents renumbers object
@@ -177,9 +178,11 @@ The resolved value is what the regime keeps: a stage that resolves on records
 `"bucketed_shapes": true, "live_tokens": true` in `run.json`, and one that
 resolves off omits both fields, so CPU and MPS regimes keep their hashes. A
 saved regime or `run.json` that omits them reads as off, the layout it trained
-in; only a regime built fresh in code meets `auto`. Builders that rebuild a
-regime (`with_capacity`, `with_agent`) resolve `auto` again; a value written
-explicitly is kept as written. To compare the paths on CUDA, write
+in. Fresh stages default to `auto`; JSON may also request it explicitly.
+Builders that rebuild a regime (`with_capacity`, `with_agent`) resolve `auto`
+again; a value written
+explicitly, including an edit after resolution, is kept as written.
+To compare the paths on CUDA, write
 `Execution(device="cuda", bucketed_shapes=False, live_tokens=False)`, or pass
 `--padded-shapes` to the CLI recipes ([run training](training.md#run-training)).
 Bucketed shapes may still be written explicitly on CPU or MPS; there they are
@@ -187,8 +190,8 @@ slower to learn, as described above.
 
 The stage's collection and learner policies, including a frozen opponent,
 use the resolved layout. Code that builds a policy outside a regime chooses it
-itself: `ActorCritic(..., bucketed_shapes=True)` and
-`load_checkpoint(..., bucketed_shapes=True)` default to off.
+itself: `ActorCritic(...)` and `load_checkpoint(...)` default both switches to
+off; pass `bucketed_shapes=True` or `live_tokens=True` to enable them.
 [Evaluation and search](evaluation.md#shared-inference) choose it from their
 own device in the same way.
 
@@ -216,12 +219,6 @@ observation to 16 permanent slots, including those with two. Live-token
 attention, on by default on CUDA, computes object attention and the per-object
 layers only for valid objects, so cost follows what the board holds
 rather than what the bucket allows.
-
-```python
-from manabot.training.regime import Execution
-
-execution = Execution(device="cuda")  # bucketed shapes and live tokens: auto, on
-```
 
 The forward packs the valid objects of every observation in the batch into one
 sequence and records where each observation's objects begin. Attention is
@@ -254,11 +251,10 @@ The setting resolves, serializes and reaches policies exactly as
 [bucketed shapes](#bucketed-padding) do, and the two are independent: either
 may be on without the other. Code that builds a policy directly passes
 `ActorCritic(..., live_tokens=True)` and `load_checkpoint(..., live_tokens=True)`,
-which construct it on any device so CPU tests can compare the layouts. The
-setting changes how a forward is computed, not the model: no `ModelConfig`
-field, checkpoint, world binding or policy input changes, and a checkpoint
-trained with it loads and runs without it. Action probabilities, values,
-losses and gradients agree with the padded path to within 1e-5 on CPU; on CUDA
+which allow it on any device so CPU tests can compare the layouts. Like
+bucketed shapes, it changes no model, checkpoint or input contract. Action
+probabilities, values, losses and gradients agree with the padded path to
+within 1e-5 on CPU; on CUDA
 they differ only by accumulation order, as bucketed shapes do. On an L4,
 live tokens over buckets make a learner step 1.45× faster than bucketed shapes
 alone at w160l8 and 1.91× at w384l8, where it falls from 386 ms to 202 ms

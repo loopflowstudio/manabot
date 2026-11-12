@@ -7,7 +7,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    PrivateAttr,
     SerializerFunctionWrapHandler,
     model_serializer,
     model_validator,
@@ -244,26 +243,14 @@ class Execution(Strict):
     # and likewise never model state.
     live_tokens: Layout = Field(default="auto", exclude_if=lambda value: value is False)
 
-    # Layout fields the regime resolved from `auto` rather than read as written.
-    # Not serialized: a saved regime keeps the layout it names. Builders that
-    # rebuild a regime re-resolve them (`TrainingRegime.authored_dump`).
-    _from_auto: frozenset[str] = PrivateAttr(default=frozenset())
-
     @model_validator(mode="after")
-    def reduced_precision_on_cuda(self) -> "Execution":
+    def cuda_settings(self) -> "Execution":
         if self.precision != "float32" and self.device != "cuda":
             raise ValueError(f"precision {self.precision} requires CUDA")
         # Off CUDA, jagged attention falls back to one call per observation.
         if self.live_tokens is True and self.device != "cuda":
             raise ValueError("live tokens require CUDA")
         return self
-
-    def __eq__(self, other: object) -> bool:
-        # Equal settings are equal executions, however the layout was chosen:
-        # a regime equals its own saved form.
-        if not isinstance(other, Execution):
-            return NotImplemented
-        return type(self) is type(other) and self.__dict__ == other.__dict__
 
     @property
     def resolved_bucketed_shapes(self) -> bool:
@@ -687,29 +674,21 @@ class RecoveryPolicy(Strict):
     checkpoint_updates: int = Field(default=128, ge=1)
 
 
-def _read_saved_self_play(
-    stage: dict[str, object], one_seat: bool
-) -> dict[str, object]:
-    seats = "one" if one_seat else _default_seats(stage.get("behavior"))
-    resolved = {"learning_seats": seats, **stage}
-    return {"batch_closure": _implied_closure(resolved), **resolved}
-
-
-def _read_saved_layout(stage: dict[str, object]) -> dict[str, object]:
-    # A saved execution omits an off layout, and every regime saved before the
-    # `auto` default omitted both: what it omits it trained without.
-    execution = stage.get("execution")
-    if not isinstance(execution, dict):
-        return stage
-    return {**stage, "execution": {**dict.fromkeys(LAYOUT_FIELDS, False), **execution}}
-
-
 def _read_saved_stage(stage: object, one_seat: bool) -> object:
     if not isinstance(stage, dict):
         return stage
-    stage = _read_saved_layout(stage)
+    # A saved execution omits an off layout, and every regime saved before the
+    # `auto` default omitted both: what it omits it trained without.
+    execution = stage.get("execution")
+    if isinstance(execution, dict):
+        stage = {
+            **stage,
+            "execution": {**dict.fromkeys(LAYOUT_FIELDS, False), **execution},
+        }
     if stage.get("operation") == "train_self_play":
-        return _read_saved_self_play(stage, one_seat)
+        seats = "one" if one_seat else _default_seats(stage.get("behavior"))
+        stage = {"learning_seats": seats, **stage}
+        stage = {"batch_closure": _implied_closure(stage), **stage}
     return stage
 
 
@@ -772,7 +751,7 @@ class TrainingRegime(Strict):
         """The regime as authored: layouts resolved from `auto` say `auto` again.
 
         Builders that rebuild a regime through its dump use this, so a changed
-        device, operation or token stream resolves the layout again while
+        device or operation resolves the layout again while
         explicit values stay as written. It is not a record: `model_dump` is
         what saves and hashes a regime.
         """
@@ -782,7 +761,9 @@ class TrainingRegime(Strict):
         for stage, dumped in zip(self.stages, stages, strict=True):
             execution = dumped["execution"]
             assert isinstance(execution, dict)
-            execution.update(dict.fromkeys(stage.execution._from_auto, "auto"))
+            for name in LAYOUT_FIELDS:
+                if name not in stage.execution.model_fields_set:
+                    execution[name] = "auto"
         return values
 
     @model_serializer(mode="wrap")
@@ -837,7 +818,9 @@ class TrainingRegime(Strict):
             if auto:
                 on = isinstance(stage, TrainSelfPlay) and execution.device == "cuda"
                 execution = execution.model_copy(update=dict.fromkeys(auto, on))
-                execution._from_auto = auto
+                # Resolved defaults remain unset. Pydantic tracks later explicit
+                # assignments/copies, so authored_dump preserves those overrides.
+                execution.model_fields_set.difference_update(auto)
                 stage = stage.model_copy(update={"execution": execution})
             stages.append(stage)
         self.stages = stages

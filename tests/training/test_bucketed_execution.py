@@ -13,7 +13,7 @@ from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.recipes.baseline import baseline_test
+from manabot.recipes.baseline import baseline, baseline_test
 from manabot.recipes.builders import with_agent
 from manabot.training import execution
 from manabot.training.regime import (
@@ -46,23 +46,7 @@ def _layout(regime: TrainingRegime, stage: int = 0) -> tuple[Layout, Layout]:
 
 def _fresh(device: Literal["cpu", "cuda"]) -> TrainingRegime:
     """A regime authored in code, as recipes build them, so `auto` applies."""
-    regime = baseline_test(2).regime
-    stage = regime.stages[0]
-    return TrainingRegime(
-        **{
-            **regime.model_dump(exclude={"stages", "agent"}),
-            "agent": regime.agent,
-            "stages": [
-                stage.model_copy(
-                    update={
-                        "execution": Execution(
-                            device=device, wall_seconds=stage.execution.wall_seconds
-                        )
-                    }
-                )
-            ],
-        }
-    )
+    return (baseline_test(2) if device == "cpu" else baseline(2, device=device)).regime
 
 
 def test_auto_resolves_on_for_cuda_self_play_and_records_it() -> None:
@@ -83,7 +67,7 @@ def test_auto_resolves_off_on_cpu_and_keeps_regime_bytes() -> None:
     assert canonical_sha256(dumped) == canonical_sha256(written.model_dump(mode="json"))
 
 
-def test_auto_resolves_off_for_other_operations() -> None:
+def test_unresolved_stage_cannot_supply_runtime_layout() -> None:
     stage = Stage(id="plain")
     assert stage.execution.bucketed_shapes == "auto"
     for name in LAYOUT:
@@ -112,6 +96,25 @@ def test_builders_resolve_auto_again_and_keep_written_values() -> None:
     data["stages"][0]["execution"].update(dict.fromkeys(LAYOUT, False))
     padded = TrainingRegime.model_validate(data)
     assert _layout(with_agent(padded, id="copy", agent=padded.agent)) == (False, False)
+
+
+@pytest.mark.parametrize("copy", [False, True])
+@pytest.mark.parametrize("field", LAYOUT)
+def test_builder_keeps_explicit_edits_after_auto_resolution(
+    field: str, copy: bool
+) -> None:
+    regime = _fresh("cuda")
+    stage = regime.stages[0]
+    if copy:
+        stage.execution = stage.execution.model_copy(update={field: False})
+    else:
+        setattr(stage.execution, field, False)
+    rebuilt = with_agent(regime, id="padded", agent=regime.agent)
+    assert getattr(rebuilt.stages[0].execution, field) is False
+    other = next(name for name in LAYOUT if name != field)
+    stages = rebuilt.authored_dump()["stages"]
+    assert isinstance(stages, list)
+    assert stages[0]["execution"][other] == "auto"
 
 
 def test_live_tokens_require_cuda() -> None:
