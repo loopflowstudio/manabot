@@ -361,6 +361,12 @@ def main() -> None:
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if args.out.exists():
+        parser.error(f"output already exists: {args.out}")
+    names = [f"{arm}{suffix}.json" for arm in SOURCES for suffix in ("", "-training")]
+    missing = [name for name in names if not (args.data / name).is_file()]
+    if missing:
+        parser.error(f"{args.data} lacks {', '.join(missing)}")
     compare(args.prepared, args.data, args.out)
 
 

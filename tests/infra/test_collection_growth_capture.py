@@ -9,6 +9,7 @@ from etude.train.block import Builder, encode
 import pytest
 
 from scripts.measure_collection_growth import main, read_block
+from scripts.report_collection_growth import main as report_main
 
 
 def test_collection_projection_preserves_sparse_values(tmp_path: Path) -> None:
@@ -93,3 +94,19 @@ def test_capture_refuses_existing_snapshot_before_reading_source(
         main()
     assert error.value.code == 2
     assert snapshot.read_text() == "retained evidence\n"
+
+
+def test_report_with_missing_inputs_leaves_output_free_for_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    out = tmp_path / "report"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["report_collection_growth.py", "--data", str(tmp_path), "--out", str(out)],
+    )
+    with pytest.raises(SystemExit) as error:
+        report_main()
+    assert error.value.code == 2
+    assert "lacks w64.json, w160.json" in capsys.readouterr().err
+    assert not out.exists()

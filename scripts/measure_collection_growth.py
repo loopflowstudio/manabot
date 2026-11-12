@@ -272,7 +272,11 @@ def main() -> None:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("x") as output:
         output.write(result.model_dump_json(indent=2) + "\n")
-    print(f"Captured {len(result.updates)} updates to {args.out}")
+    measured = [row.update for row in result.updates if row.metrics]
+    span = (
+        f"updates {measured[0]}–{measured[-1]}" if measured else "no measured updates"
+    )
+    print(f"Captured {span} ({len(measured)} with metrics) to {args.out}")
 
 
 if __name__ == "__main__":

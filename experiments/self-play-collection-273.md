@@ -297,8 +297,14 @@ retains that 23:15 read failure and zero new rental spending. A further CLI read
 at 23:36:06 UTC, recorded in `scratch/collection-growth.md`, exited 1 with
 `etude: GET catalog/gpus: no reply`; it requested no rental and left the published
 preflight unchanged. These failures establish neither unavailable capacity nor
-an unaffordable quote. The paid comparison remains blocked on a successful
-provider read and fresh quotes, and there is **no verdict of flat, partly flat or not flat**
+an unaffordable quote. They were local: the macOS python.org CPython 3.13 in
+the development environment could not verify RunPod's TLS certificate
+(`CERTIFICATE_VERIFY_FAILED`), and Etude reports any such `OSError` as
+"no reply". The same request answered HTTP 200 through `curl`. With
+`SSL_CERT_FILE` set to certifi's bundle, the read at 2026-11-12 00:19:23 UTC
+returned the `mtg281-l4` L4 (6 vCPUs, 48 GB) available at $0.59/hour, under the
+$0.60 ceiling. That quote reserves no capacity. No run or rental has been
+requested, and there is **no verdict of flat, partly flat or not flat**
 after the repair. A remaining-cause follow-up depends on that comparison; this
 historical evidence cannot rank `_slice_obs_tensors`, allocator/native memory
 and `game_errors` as residual causes after an unexecuted fix.

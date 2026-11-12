@@ -87,3 +87,12 @@ publish, land or choose the next Graph step from here.
   install the wheel with `--torch-backend cpu` at the minimum pins and run a
   copy of `scripts/release/smoke.py`; also `uv init` a project and `uv add
   "manabot[<extras>] @ file://<wheel>"` to see the latest resolution.
+- Rental availability and quotes (free reads, no rental):
+  `SSL_CERT_FILE=$(.venv/bin/python -I -c "import certifi;print(certifi.where())") doppler run --project manabot --config prd -- doppler run --project etude --config prd -- uv run --no-sync etude availability <supply> --timeout 30`.
+  Without `SSL_CERT_FILE`, the macOS python.org interpreter fails TLS
+  verification and Etude reports it as `GET catalog/gpus: no reply`; that is
+  local, not a provider outage. Confirm with `curl` before recording one.
+- Experiment report CLIs (`scripts/report_collection_*.py`): run the guide's
+  commands in a `git ls-files -co --exclude-standard` copy under `/tmp`,
+  fetch with Doppler `manabot/prd` and an empty `MANABOT_DATA_CACHE`, and
+  `cmp` regenerated outputs with the published bytes.

@@ -179,13 +179,17 @@ def fold_alignment(run: Reading, end: int) -> dict[str, FoldStatistics]:
     }
 
 
+RUNS = ("w64", "w160")
+
+
 def report(data: Path, out: Path) -> None:
-    # A fresh output directory keeps reproduction separate from frozen evidence.
-    out.mkdir(parents=True)
     runs = [
         reading(name, Capture.model_validate_json((data / f"{name}.json").read_bytes()))
-        for name in ("w64", "w160")
+        for name in RUNS
     ]
+    # A fresh output directory keeps reproduction separate from frozen evidence;
+    # creating it only after the inputs parse lets a corrected command reuse it.
+    out.mkdir(parents=True)
     common = int(min(r.update[-1] for r in runs))
     summary = {}
     for run in runs:
@@ -303,6 +307,13 @@ def main() -> None:
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    if args.out.exists():
+        parser.error(f"output already exists: {args.out}")
+    missing = [
+        f"{name}.json" for name in RUNS if not (args.data / f"{name}.json").is_file()
+    ]
+    if missing:
+        parser.error(f"{args.data} lacks {', '.join(missing)}")
     report(args.data, args.out)
 
 

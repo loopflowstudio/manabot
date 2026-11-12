@@ -38,7 +38,7 @@ criteria recorded in `scratch/questions.md`. All three baseline primaries must
 grow; incomplete or materially mismatched evidence withholds the verdict. The
 500-update horizon cannot certify the later 850–1700-update regime.
 
-The latest 2026-11-11 reconciliation read
+The latest 2026-11-12 UTC reconciliation read
 (`git ls-remote origin refs/heads/main`) returned
 `0b296e617a87017c4cca71227749eddac0a0481b`, already integrated through
 `37ffe26657f394b10f69256555ff45b3c58e82e4`. Its hand snapshots, game-generation
@@ -55,6 +55,23 @@ allocations remain descriptive: matching `HostFacts` cannot establish identical
 physical hosts or isolate contention. Material host differences withhold the verdict.
 
 ## Execution blocker and remaining work
+
+**Resolved at 2026-11-12 00:19 UTC (QA): the blocker was local TLS, not the
+provider.** At 00:18:56 UTC the plain command above still failed in about 1 s.
+`curl` of the exact URL (`https://api.runpod.io/v2/catalog/gpus?...`, same
+headers) returned HTTP 200 with prices. The venv's python.org CPython 3.13
+raised `SSLCertVerificationError ... unable to get local issuer certificate`.
+Etude 0.2.15's `providers/runpod/http.py` maps any `OSError` to "no reply".
+With `SSL_CERT_FILE=$(.venv/bin/python -I -c "import certifi;print(certifi.where())")`
+prefixed to the same command, the read returned: `mtg281-l4  NVIDIA L4 with at
+least 6 vCPUs, 48 GB at $0.59/hour (ceiling $0.60)  available  0 of 1 in use
+rentable now  asked 2026-11-12 00:19:23 UTC`. No rental was requested. Launches
+from this machine need the same `SSL_CERT_FILE` prefix. Etude's error wording
+hides a local certificate failure; that is a possible Etude follow-up.
+Proposed Wave memory correction (read-only here): the four "no reply" reads were
+local certificate-verification failures, not provider outages.
+
+The earlier record follows unchanged.
 
 Provider reads at 2026-11-11 22:42:24 and 23:15:36 UTC failed with
 `ProviderUnavailable: GET catalog/gpus: no reply`. Published
@@ -83,8 +100,11 @@ uses pinned source hashes and offline regime validation; real job bundles,
 archives, observation shapes and output hashes remain checked. No games or
 training use the fixture. Production source/world guards and published inputs
 remain unchanged. The matching native extension was rebuilt and installed
-atomically; this fixes collection without making current sources compatible
-with the frozen pair. Gate still owns broader validation.
+atomically; this fixes test collection without making current sources compatible
+with the frozen pair. The subsequent combined check passed 22 tests, including
+the extracted rental-wrapper checks. The earlier feedback's fixture-repair and
+extension-rebuild work is complete; gate still owns broader validation. No code
+repair is currently needed before obtaining provider visibility and quotes.
 
 1. Obtain fresh capacity and individual whole-rental quotes for both arms.
    Reserve at most $7.20 each plus $0.60 ancillary, cumulatively $15 including
@@ -129,8 +149,8 @@ with the frozen pair. Gate still owns broader validation.
   `PYTHONPATH=. uv run --no-sync pytest tests/training/test_collection_comparison_preparation.py -q`
   stopped during collection: `AttributeError: module 'manabot.managym' has no
   attribute 'HandSnapshot'`. It executed no test, game or rental. The local
-  extension predates the merged Python API; this supersedes the earlier local
-  collection success as evidence about the current checkout.
+  extension predated the merged Python API. The fixture-repair and combined
+  checks above supersede this collection failure.
 - Shipping docs: `experiments/self-play-collection-273.md` now leads with
   retained-plot reproduction; `experiments/README.md` links directly to the
   distinct paired inputs. Existing commands, criteria and evidence are preserved.
@@ -155,26 +175,66 @@ with the frozen pair. Gate still owns broader validation.
   collected 172 tests in 1.56s. This closes collection only; gate/CI still owns
   broader suite execution. No games, training or rentals ran in those checks.
 
-The fixture-repair check above closes the post-sync preparation test gap; earlier
-checks remain historical evidence. No paired execution occurred.
+The fixture-repair and combined checks above close the post-sync preparation test
+gap; earlier checks remain historical evidence. Reconciliation inspected the
+fixture, unpatched rejection and production admission guards without repeating
+tests. Upstream main remains the already-integrated `0b296e617`; no new runtime
+change requires another extension rebuild. No paired execution occurred.
 `git diff --check` passed; `lf context` kept scratch and Wave memory within both
 limits. The complete Wave memory was read; it has no immediate child directories.
 Earlier preparation and compression detail remains at
 `c995c00e719398a0f328ee4f9b3cf1050acb6625:scratch/collection-growth.md`.
 
-## Delete — do not maintain
+## Maintained boundaries
 
-No production path is replaced by these measurement tools. The redundant
-capture subcommand was removed; do not restore a parallel CLI. Keep published
-snapshots, frozen analysis, source archives and historical metric compatibility.
+No production path is replaced by these measurement tools. Capture has one CLI
+operation. Published snapshots, frozen analysis, source archives and historical
+metric compatibility remain intact.
 The declaration test's assumption that the live checkout equals the frozen
-runtime is removed. Preserve its recipe, archive and budget assertions on the
-explicit fixture, plus real-runtime rejection coverage. No further deletion is
-needed for the remaining execution work.
+runtime is removed. Recipe, archive and budget assertions use the explicit
+fixture, with separate real-runtime rejection coverage.
 
 The rental shell wrapper now belongs to
 `scripts/prepare_collection_comparison.py::_bound_rental`; its controlled-clock
 test runs independently of source archives and native admission. This removes
-the repeated shell checks nested inside each arm's archive test. Keep preparation
-focused on recipe/source admission and serialization; deadline arithmetic and
+the repeated shell checks nested inside each arm's archive test. Preparation
+checks recipe/source admission and serialization; deadline arithmetic and
 generated job bytes are unchanged. No further code deletion targets remain.
+
+## Concept review (2026-11-11 America/Los_Angeles)
+
+Outcome for loop-or-next: **nothing to change and no open product choice**.
+Advance this review; scientific execution remains incomplete. No next implement
+direction is needed. The retained provider failures require visibility and fresh
+quotes, not another preparation cycle or a different experiment.
+
+Keep the experience as “inspect retained growth, execute the frozen pair within
+the allowance, then read a qualified comparison.” Preparation is an immutable
+input record, not a live execution status. Rental state belongs to Etude;
+scientific completion belongs to each delivered TrainingRun; the verdict derives
+from bound captures and receipts. These distinctions preserve recovery and
+accounting, so merging them into one success flag would remove useful meaning.
+The existing usage guide and performance-review skill already express the
+necessary boundaries; no replacement instructions are proposed.
+
+The normal path consumes the published preparation, executes separately quoted
+arms, captures each receipt's metrics_run and produces a new comparison report.
+Failure walkthroughs retain the same contract: failed availability reads do not
+invalidate preparation; uncertain acquisition requires reconciliation before
+another acquisition; changed local native sources reject preparation replay;
+partial delivery permits a new capture of the same run, never invented rows or
+a replacement scientific attempt. Original identities, attempts, costs and
+deadlines survive throughout.
+
+Counterexamples checked against the implementation: a launcher can finish while
+training pauses at 480 updates; a receipt can point at another metric run; the
+baseline can remain flat; two rentals can share HostFacts without sharing a
+physical host. The first three withhold or reject the conclusion. The last
+limits even a complete comparison to the declared descriptive early-growth
+scope, not same-machine software speed evidence. Keep that qualification next
+to the result; neither a larger horizon nor a shared rental is selected here.
+
+The review page is `scratch/concept-review.html`. What to show next is the actual
+paired report with its limitations, delivered inventories and rental accounting
+once execution is possible. This review ran no tests, provider reads or rentals
+and changed no implementation or frozen evidence.
