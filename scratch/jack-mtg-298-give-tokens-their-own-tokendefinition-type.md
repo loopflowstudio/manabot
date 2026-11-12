@@ -48,10 +48,10 @@ place still merges the two namespaces.
   Compressed in ff1f16a66 to one match over eligible rows (with none, all rows
   are Unsupported, so only the shared reason is compared). Debug
   `cargo test --lib -- cards::decklist cards::deck_admission`: 12 passed.
-- CI run 43300525427 on 686a4724f: Rust Tests and Engine Budget passed; two
-  Integration jobs (core, evaluation) still pending when read. PR body Checks
-  refreshed. CI on e22a18a29: Rust Tests and Engine Budget passed; Integration
-  core pending when read. ff1f16a66 not yet pushed.
+- All pushed; HEAD 24a69d953 (main merge, no `managym/` file). CI runs on
+  686a4724f and e22a18a29 were cancelled by later pushes (Rust Tests had passed
+  on 686a4724f). CI run 43305686368 on 24a69d953 in progress when read; PR
+  body Checks names it. Remaining: that run green.
 - Out of scope (own follow-up Task): renaming runtime `state::card::Card` and
   `CardDefId`;
   keying Academy curated token art by `token.*`.
