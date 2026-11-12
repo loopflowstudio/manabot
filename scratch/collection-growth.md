@@ -23,27 +23,9 @@ Done 2026-11-12: report states the closed-inconclusive outcome (summary and end
 of the execution section); follow-up filed as MTG-305 in the experiments Wave.
 Remaining: delivery (gate/publish), no code change.
 
-## Former open decision: remaining budget cannot buy the frozen pair
-
-The iteration direction asks to "execute the pinned arms serially within the
-cumulative $15 cap". About $3.78 is spent (whole-lifetime estimate), which
-leaves about $11.22. The frozen envelope reserves $7.20 per arm plus $0.60
-ancillary ($15.00 for two arms). Expected compute does not fit either: the
-historical 500 updates took 10.05 h ($5.93 per arm, $11.86 per pair), and the
-baseline's own pace (251 updates in 4.53 h) projects about $5.3 per arm before
-growth. Only one frozen-envelope arm ($7.80) fits. The baseline also stalled
-for an unknown reason, so a retry may stall again. Any of these choices needs
-a person:
-
-- (a) Run only the after arm (≤$7.80, total ≤$11.58). Under the frozen reader
-  the verdict stays inconclusive, because the baseline has no 451–500
-  endpoint. Comparing updates 51–251 would be a new, post-hoc endpoint.
-- (b) Raise the cap to about $23 so the baseline can be retried and the after
-  arm run, both under the frozen envelope.
-- (c) Stop here and close the Task as inconclusive, with the published evidence.
-
-Under the cumulative cap no paid launch is authorized until one is chosen.
-Shrinking the per-arm reservation to fit would change the frozen preparation.
+Budget arithmetic behind the choice (about $11.22 left; one frozen-envelope
+arm costs $7.80, a pair $15.60) lives in the report's closing paragraph and
+`e58ddc886^:scratch/collection-growth.md`.
 
 ## Evidence and approach
 
@@ -133,7 +115,9 @@ with limitations, inventories and rental accounting once execution is possible).
 - Compress 2026-11-12: `report_collection_growth.py` shares one phase/RSS series
   helper; regenerated `summary.json`, `phases.png`, `growth.png` byte-identical.
   Frozen comparison reader (`e9adf766…`, bound by `reader-erratum.json`) untouched.
-  Compress passes two–four found no code change since `db3298be8`; nothing to reduce.
+  Compress passes two–five found no code change since `db3298be8`; the comparison
+  scripts stay as MTG-305's prepared inputs. Pass five folded the resolved budget
+  options into the report reference.
 
 ## Docs
 
