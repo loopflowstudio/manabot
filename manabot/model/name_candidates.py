@@ -48,6 +48,8 @@ class NameCandidateEncoder(nn.Module):
             ),
         )
         self.embedding = nn.Embedding(len(candidates) + 1, hidden_dim, padding_idx=0)
+        # Bucketed shapes join names without a data-dependent selection.
+        self.bucketed = False
         # Optional definition joins are already bound by checkpoint admission.
         # Several validated names may refer to one definition; retain all edges.
         self.register_buffer(
@@ -94,6 +96,15 @@ class NameCandidateEncoder(nn.Module):
         """
         assert self.program_rows is not None
         named = self.definitions != 0
+        if self.bucketed:
+            # Definition-free names add zero to padding row 0.
+            return programs.index_add(
+                0,
+                torch.where(named, self.program_rows, 0),
+                torch.where(named[:, None], self.embedding.weight, 0).to(
+                    programs.dtype
+                ),
+            )
         return programs.index_add(
             0, self.program_rows[named], self.embedding.weight[named].to(programs.dtype)
         )

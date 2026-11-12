@@ -101,6 +101,9 @@ class FactEncoder(nn.Module):
         self.output = nn.Linear(width, width)
         nn.init.zeros_(self.output.weight)
         nn.init.zeros_(self.output.bias)
+        # Bucketed shapes look ids up at the fact axis's shape instead of
+        # selecting live rows, and keep every slot on CPU inference.
+        self.bucketed = False
 
     def _programs(
         self, hidden: torch.Tensor, facts: torch.Tensor, kinds: torch.Tensor
@@ -180,6 +183,13 @@ class FactEncoder(nn.Module):
         detail_space = torch.where(
             restriction, RecordNamespace.RESTRICTION, RecordNamespace.TOKEN
         )
+        if self.bucketed:
+            return (
+                catalog.masked_names(id_space, ident, named)
+                + catalog.masked_names(detail_space, detail, named_detail)
+                + catalog.masked_tokens(facts[..., FACT_VALUE_INDEX], detail, program)
+                + catalog.sources(facts[..., FACT_SOURCE_INDEX])
+            )
         zeros = catalog.cards.token_embedding.weight.new_zeros(
             (*kinds.shape, self.kind.embedding_dim)
         )
@@ -207,18 +217,26 @@ class FactEncoder(nn.Module):
         facts: torch.Tensor,
         objects: torch.Tensor,
         catalog: RecordEmbeddings | None = None,
+        *,
+        count: int | None = None,
     ) -> torch.Tensor:
         """Add each valid fact's embedding to its object; `objects` is [B,N,D].
 
-        Catalog ids need `catalog`; hashed ids ignore it.
+        Catalog ids need `catalog`; hashed ids ignore it. `count` is the
+        admitted row count when the caller trimmed facts to a bucket.
         """
-        if facts.shape[1:] != (self.max_facts, FACT_DIM):
+        rows = self.max_facts if count is None else count
+        if facts.shape[1:] != (rows, FACT_DIM):
             raise ValueError(f"expected [batch, {self.max_facts}, {FACT_DIM}] facts")
         valid = facts[..., FACT_VALID_INDEX]
         if not ((valid == 0) | (valid == 1)).all():
             raise ValueError("fact validity must be binary")
         valid = valid.bool()
-        if facts.device.type == "cpu" and not torch.is_grad_enabled():
+        if (
+            facts.device.type == "cpu"
+            and not torch.is_grad_enabled()
+            and not self.bucketed
+        ):
             # Padding contributes no object delta. Select the ordered union of
             # live columns for this forward only, including the empty union;
             # ordinals, batch ownership and duplicate program occurrences stay
