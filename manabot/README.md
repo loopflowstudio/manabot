@@ -29,7 +29,8 @@ explicit. This is a software smoke, not playing-strength evidence.
 
 The local recipe selects CUDA, then Apple MPS, when available and CPU otherwise.
 `--recipe baseline` requires CUDA or Apple MPS. `--device cpu|mps|cuda` overrides
-the local device; baseline rejects CPU. MPS self-play uses float32; evaluation
+the local device; baseline rejects CPU. MPS self-play uses float32 and requires
+Torch 2.15 or newer; evaluation
 and search run on CPU. MPS process recovery, belief inputs and frozen opponents
 are unsupported. This makes no speed or strength claim.
 
