@@ -29,9 +29,11 @@ Parity script (outside the repo, `/tmp/mtg304parity/parity.py`): on one collecte
 
 ## Compress (2026-11-12)
 
-`loops/ppo.py` computes the value residual once and starts all three exposure counters in the diagnostics literal. Considered and kept: building PPO's mask with `selection_mask` would derive `selected` in sorted order, which changes the top-count minibatch order and breaks parity; Parity JSON byte-identical; focused suites 74 passed.
+`updates/ppo.py` computes the value residual once and starts all three exposure counters in the diagnostics literal. Considered and kept: building PPO's mask with `selection_mask` would derive `selected` in sorted order, which changes the top-count minibatch order and breaks parity; Parity JSON byte-identical; focused suites 74 passed.
 
 Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` recorder when none is passed, removing its `None` branches. Parity JSON byte-identical to `main_e5897.json`; pieces/minimal/health/boundaries 68 passed.
+
+Third compress (after the naming pass): `updates.health.clip_fraction` replaces the clip-fraction expression both rules repeated; the damped rule starts its exposure counters in the diagnostics literal and reads `batch.values` once. Parity (`/tmp/mtg304parity/parity_new.py`, new import paths, `-W error::DeprecationWarning`) byte-identical to `main_e5897.json`; pieces/minimal/health/objectives/admission/boundaries 97 passed.
 
 ## Remaining
 
@@ -46,14 +48,14 @@ Second compress (rebuilt branch): `gradient_step` takes a no-op `_Unrecorded` re
 
 - `manabot.rl` is top-level, not under `manabot/training/`, because `manabot/training/__init__.py` imports `records` and `regime`.
 - `legal_mask`/`policy_logs`/`check_*` stay in `manabot.model.policy_distribution` as the player's legality, per the steer, though they are pure tensor code.
-- `damped_policy_loss` lives with its rule in `loops/damped_policy.py`: it reads `check_logs`/`check_probabilities`/`policy_logs`.
+- `damped_policy_loss` lives with its rule in `updates/damped_policy.py`: it reads `check_logs`/`check_probabilities`/`policy_logs`.
 - `OptimizerHealth.check` before `gradient_step`'s own check is a timing boundary; both call `check_objective`.
 - `failure_tensors`/`minibatch_tensors` are shared plumbing, undocumented in the guide.
 - Example loop takes `model: ModelConfig | None` so the test can use a tiny model.
 
 ## Concept review, second pass (2026-11-12)
 
-Nothing to change. Checked against the old tree (on the rebuilt branch the choice is in `execution.py`): `stages.py:564` chose `update_damped_iteration` for `DampedPolicyLearning`, else `loops.ppo.update_iteration` (typed `Learning` only); the deprecated dispatcher in `learning/objectives.py` warns and keeps the 0.2 behaviour. Considered and kept: renaming `loops.ppo.update_iteration` so it matches `update_damped_iteration`. The module path already names the rule, and the guide and tests use that name.
+Nothing to change. Checked against the old tree (on the rebuilt branch the choice is in `execution.py`): `stages.py:564` chose `update_damped_iteration` for `DampedPolicyLearning`, else `updates.ppo.update_iteration` (typed `Learning` only); the deprecated dispatcher in `learning/objectives.py` warns and keeps the 0.2 behaviour. Considered and kept: renaming `updates.ppo.update_iteration` so it matches `update_damped_iteration`. The module path already names the rule, and the guide and tests use that name.
 
 Third pass (rebuilt branch, after the no-op recorder): nothing to change. `minimal.py` still composes only `rl` pieces, the player's legality and `AdmittedRollout`, `SeatRoutedCollector`; the rule choice stays one branch in `execution.py`; no open product choice.
 
@@ -62,8 +64,8 @@ Third pass (rebuilt branch, after the no-op recorder): nothing to change. `minim
 Steer (Jack Heart, via comment 69b01701): "ok, lets do that. let me review a clean 304". This Task lands first; MTG-303 stacks on top. Outcome 4 (shrinking the executor) moves to MTG-303.
 
 - Built from `main` e5897c7ab: this Task's own files applied from the old tip (old branch kept locally as `mtg304-pre-rebuild`, 364470932). Nothing from MTG-303: no `run.py`, `stages.py`, `two_models.py`; `records.py`, `regime.py`, `state/recovery.py` as on main.
-- `execution.py` = main plus imports from the new paths and the rule choice at the `stage.trainable` branch (`update_damped_iteration` for `DampedPolicyLearning`, else `loops.ppo.update_iteration`). Tests that patched `execution.update_iteration` for damped regimes now patch `execution.update_damped_iteration`.
-- Ported main's `AdmittedRollout` (#480) into `loops/ppo.py`, `loops/damped_policy.py` (`_targets` takes the admitted rollout) and `loops/minimal.py`. `tests/model/test_admission.py` (new on main) calls the rule its learning record selects.
+- `execution.py` = main plus imports from the new paths and the rule choice at the `stage.trainable` branch (`update_damped_iteration` for `DampedPolicyLearning`, else `updates.ppo.update_iteration`). Tests that patched `execution.update_iteration` for damped regimes now patch `execution.update_damped_iteration`.
+- Ported main's `AdmittedRollout` (#480) into `updates/ppo.py`, `updates/damped_policy.py` (`_targets` takes the admitted rollout) and `loops/minimal.py`. `tests/model/test_admission.py` (new on main) calls the rule its learning record selects.
 - `experiments/l4_step_profile.py` keeps its old import paths (an experiment at its commit); the aliases resolve them.
 - Parity: `/tmp/mtg304parity/parity.py` on main e5897c7ab vs this branch (with `-W error::DeprecationWarning`): JSON byte-identical (PPO, damped scalar, damped categorical; diagnostics and per-parameter sums).
 

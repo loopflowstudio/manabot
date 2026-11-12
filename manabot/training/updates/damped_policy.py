@@ -36,6 +36,7 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
+    clip_fraction,
     failure_tensors,
     minibatch_tensors,
 )
@@ -199,6 +200,8 @@ def update_damped_iteration(
         "rows": actions.numel(),
         "retained": int(targets.selected.sum()),
         "optimizer_exposures": 0,
+        "actor_exposures": 0,
+        "critic_exposures": 0,
         "iteration": iteration,
         "learning_rate": rate,
         "tau": tau,
@@ -223,18 +226,15 @@ def update_damped_iteration(
             if learner.agent.config.value_kind == "categorical_wdl"
             else targets.values
         )
+        predictions = torch.as_tensor(batch.values, device=device)
         if batch.assignments is not None:
             batch.target_residuals = (
-                (expected_targets - torch.as_tensor(batch.values, device=device))
-                .detach()
-                .cpu()
-                .numpy()
+                (expected_targets - predictions).detach().cpu().numpy()
             )
         chosen_types = torch.as_tensor(
             batch.action_data.selected_types(batch.actions, ACTION_TYPE_DIM),
             device=device,
         )
-        predictions = torch.as_tensor(batch.values, device=device)
         diagnostics["selection_groups"] = selection_diagnostics(
             targets.advantages,
             expected_targets - predictions,
@@ -250,8 +250,6 @@ def update_damped_iteration(
             quantile=learning.advantage_quantile,
             minimum=learning.min_advantage,
         )
-    diagnostics["actor_exposures"] = 0
-    diagnostics["critic_exposures"] = 0
     for group in learner.optimizer.param_groups:
         group["lr"] = rate
     # Compute credit on the original seat trajectories before regrouping rows.
@@ -368,14 +366,7 @@ def update_damped_iteration(
                         .gather(-1, actions[indexes, None])
                         .squeeze(-1)
                     )
-                    health["clip_fraction"] = float(
-                        (
-                            (float64_operand(ratio_logs).double().exp() - 1).abs()
-                            > learning.clip
-                        )
-                        .float()
-                        .mean()
-                    )
+                    health["clip_fraction"] = clip_fraction(ratio_logs, learning.clip)
                 diagnostics.update(
                     loss=float(loss.detach()),
                     value_loss=float(value_loss.detach()),

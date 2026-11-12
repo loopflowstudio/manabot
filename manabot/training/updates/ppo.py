@@ -28,6 +28,7 @@ from manabot.training.rollout.collection import RolloutBatch
 from manabot.training.updates.health import (
     OptimizerHealth,
     batch_health,
+    clip_fraction,
     failure_tensors,
     minibatch_tensors,
 )
@@ -225,16 +226,7 @@ def update_iteration(
                         recorder=observer,
                     )
                 with track("Minibatch diagnostics"):
-                    health["clip_fraction"] = float(
-                        (
-                            (
-                                float64_operand(log_ratio.detach()).double().exp() - 1
-                            ).abs()
-                            > learning.clip
-                        )
-                        .float()
-                        .mean()
-                    )
+                    health["clip_fraction"] = clip_fraction(log_ratio, learning.clip)
                     diagnostics["optimizer_exposures"] += len(indices)
                     diagnostics["actor_exposures"] += int(actor_mask.sum())
                     diagnostics["critic_exposures"] += len(indices)

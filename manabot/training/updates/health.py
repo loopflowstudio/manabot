@@ -101,6 +101,17 @@ def batch_health(
     )
 
 
+@torch.no_grad()
+def clip_fraction(log_ratio: Tensor, clip: float) -> float:
+    """Fraction of rows whose likelihood ratio lies outside `1 ± clip`.
+
+    The ratio is exponentiated in float64 so large log ratios do not overflow.
+    """
+    return float(
+        ((float64_operand(log_ratio).double().exp() - 1).abs() > clip).float().mean()
+    )
+
+
 class OptimizerHealth:
     """Record what `gradient_step` does to one iteration's `NumericalHealth`.
 
