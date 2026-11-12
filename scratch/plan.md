@@ -32,7 +32,9 @@
   `attempt` (lease + resume admission shared by both recipe kinds);
   `execute(regime, out=, seed=, resume_from=, recovery=, ...)`,
   `smoke(regime, out=)`, `regime_record`, `load_regime`, `RunResult`.
-  A regime is any module-level function or `functools.partial` of one.
+  A regime is any module-level function or `functools.partial` of one;
+  `execute` calls it with the annotation-validated arguments it records.
+  Saved and function stages shrink through one `stages.smoke_stage`.
 - `manabot/training/stages.py`: stage bodies extracted from the old
   `_execute_regime`; `run_saved_regime`, `smoke_form`; public `self_play`,
   `import_policy`, `collect_belief`, `train_belief`. Function stages build a

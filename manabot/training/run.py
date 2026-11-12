@@ -10,9 +10,10 @@ whichever recipe called it.
 
 Two kinds of recipe run through it:
 
-- a regime function, named by a `RegimeCall`: Python that receives the `Run`,
-  creates `Model`s and calls stage functions. `execute` runs one under a
-  writer lease; `rehearse` runs it once, tiny, in a discarded store.
+- a regime function: any module-level function taking the `Run` (or a
+  `functools.partial` binding its keyword arguments) that creates `Model`s
+  and calls stage functions. `execute` runs one under a writer lease;
+  `smoke` runs it once in its tiny form.
 - a saved `TrainingRegime`, run by `execute_regime`
   (`manabot.training.execution`) through `stages.run_saved_regime`.
 
@@ -313,7 +314,7 @@ class Run:
         self.experiment = experiment
         self.training_exposure = training_exposure
         self.game_ledger = game_ledger
-        # Set when rehearsing: the execution every stage runs under.
+        # Set by `smoke`: the execution every stage runs under.
         self.smoke_execution = smoke_execution
         self.resources = ExitStack()
         self.resources.callback(apply_matmul_precision, "float32")
@@ -344,10 +345,6 @@ class Run:
     @property
     def world(self) -> str:
         return managym.WORLD_VERSION
-
-    @property
-    def stages(self) -> list[StageRecord]:
-        return self.record.stages
 
     def stage_name(self, base: str) -> str:
         """`base` numbered by call order: `self-play`, `self-play-2`, ..."""
@@ -1211,8 +1208,8 @@ def _signature(regime: Regime) -> tuple[Callable[..., None], dict[str, object]]:
             raise TypeError(f"regime argument {parameter.name!r} is not bound")
         if parameter.name not in hints:
             raise TypeError(f"annotate regime argument {parameter.name!r}")
-        # Validation returns typed instances unchanged; it rejects a wrong
-        # type here, before a run opens.
+        # Validation returns typed instances unchanged and types JSON values;
+        # it rejects a wrong type here, before a run opens.
         arguments[parameter.name] = TypeAdapter(hints[parameter.name]).validate_python(
             value
         )
@@ -1247,7 +1244,7 @@ def regime_record(
 def load_regime(path: str, arguments: Mapping[str, object]) -> Regime:
     """The function at `module:qualname` bound to JSON `arguments`.
 
-    Each argument is validated against the function's annotation, so a
+    `execute` validates each argument against the function's annotation, so a
     recorded or remote regime rebinds to the same typed values.
     """
     module, _, name = path.partition(":")
@@ -1256,21 +1253,7 @@ def load_regime(path: str, arguments: Mapping[str, object]) -> Regime:
     target: Any = importlib.import_module(module)
     for part in name.split("."):
         target = getattr(target, part)
-    if not inspect.isfunction(target):
-        raise TypeError(f"{path} is not a function")
-    hints = get_type_hints(target)
-    unknown = set(arguments) - set(inspect.signature(target).parameters)
-    if unknown:
-        raise TypeError(f"unknown regime arguments: {', '.join(sorted(unknown))}")
-    return functools.partial(
-        target,
-        **{
-            key: TypeAdapter(hints[key]).validate_python(value)
-            if key in hints
-            else value
-            for key, value in arguments.items()
-        },
-    )
+    return functools.partial(target, **arguments)
 
 
 def source_revision() -> SourceRevision:
@@ -1353,6 +1336,7 @@ def execute(
     """
     if pause_path is not None and recovery is None:
         raise ValueError("safe pause requires complete-state recovery")
+    function, arguments = _signature(regime)
     record = regime_record(regime, wall_seconds=wall_seconds, recovery=recovery)
     digest = canonical_sha256(record.model_dump(mode="json"))
     with ExitStack() as stack:
@@ -1391,7 +1375,8 @@ def execute(
                 smoke_execution=smoke_execution,
             )
             result = run.execute(
-                lambda: _function_identities(seed), lambda: regime(run)
+                lambda: _function_identities(seed),
+                lambda: function(run, **arguments),
             )
             return RunResult(
                 result,

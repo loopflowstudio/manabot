@@ -8,19 +8,15 @@ manifests are exports.
 
 from collections.abc import Mapping
 import math
-import os
 from pathlib import Path
-import platform
 from typing import TYPE_CHECKING
 
-import psutil
 import torch
 
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
-from manabot.infra.source import source_commit
+from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.architecture import architecture_identity
 from manabot.training.mps import mps_torch_error
 from manabot.training.records import TrainingRun
@@ -30,7 +26,7 @@ from manabot.training.regime import (
     TrainSelfPlay,
 )
 from manabot.training.rollout.matchups import elemental_roster
-from manabot.training.run import attempt, open_run
+from manabot.training.run import attempt, host_identities, open_run
 from manabot.training.stages import run_saved_regime
 import managym
 
@@ -103,19 +99,7 @@ def _runtime_identities(
         del identities["matchup"], identities["matchup_sha256"]
         identities.update(deck_source_sha256=regime.deck_source.digest)
     identities.update(
-        architecture=architecture_identity(regime.agent, space),
-        hardware={
-            "platform": platform.platform(),
-            "processor": platform.processor(),
-            "cpu_count": os.cpu_count(),
-            "memory_bytes": psutil.virtual_memory().total,
-        },
-        training_source_sha256=source_bundle_sha256(
-            sorted(Path(__file__).resolve().parents[1].rglob("*.py"))
-        ),
-        torch=torch.__version__,
-        policy_numerics="masked-log-softmax-v1",
-        source_commit=source_commit(),
+        architecture=architecture_identity(regime.agent, space), **host_identities()
     )
     if any(stage.execution.device == "cuda" for stage in regime.stages):
         if not torch.cuda.is_available():

@@ -68,6 +68,7 @@ from manabot.training.regime import (
     FrozenOpponent,
     ImportPolicy,
     Learning,
+    Stage,
     TrainBelief,
     TrainingRegime,
     TrainSelfPlay,
@@ -993,29 +994,32 @@ def run_saved_regime(run: Run, regime: TrainingRegime) -> None:
             )
 
 
-def smoke_form(regime: TrainingRegime, execution: Execution) -> TrainingRegime:
-    """The saved regime run tiny: one update of one transition per stream.
+def smoke_stage[S: Stage](stage: S, execution: Execution) -> S:
+    """A stage run tiny under `execution`: one update of one transition per stream.
 
     Belief collection plays its minimum three games and belief training takes
-    one step; every stage runs under `execution`. Stream counts that a
-    curriculum stratifies are kept.
+    one step. Stream counts that a curriculum stratifies are kept. Saved and
+    function regimes shrink their stages here, so a smoke run means one thing.
     """
-    stages = []
-    for stage in regime.stages:
-        update: dict[str, object] = {"execution": execution}
-        if isinstance(stage, TrainSelfPlay):
-            update |= {
-                "updates": 1,
-                "transitions": 1,
-                "active_seconds": None,
-                "games_per_stream": None,
-                "streams": 2 if stage.matchup_curriculum == "fixed" else stage.streams,
-            }
-        elif isinstance(stage, CollectBelief):
-            update["games"] = 3
-        elif isinstance(stage, TrainBelief):
-            update["steps"] = 1
-        stages.append(stage.model_copy(update=update))
+    update: dict[str, object] = {"execution": execution}
+    if isinstance(stage, TrainSelfPlay):
+        update |= {
+            "updates": 1,
+            "transitions": 1,
+            "active_seconds": None,
+            "games_per_stream": None,
+            "streams": 2 if stage.matchup_curriculum == "fixed" else stage.streams,
+        }
+    elif isinstance(stage, CollectBelief):
+        update["games"] = 3
+    elif isinstance(stage, TrainBelief):
+        update["steps"] = 1
+    return stage.model_copy(update=update)
+
+
+def smoke_form(regime: TrainingRegime, execution: Execution) -> TrainingRegime:
+    """The saved regime with every stage in its `smoke_stage` form."""
+    stages = [smoke_stage(stage, execution) for stage in regime.stages]
     return TrainingRegime.model_validate(
         regime.model_copy(update={"stages": stages}).model_dump()
     )
@@ -1076,11 +1080,6 @@ def _stage_regime(
     return validate_regime(regime)
 
 
-def _smoked(run: Run, execution: Execution) -> Execution:
-    """A smoke run's stages all run under its one small execution."""
-    return execution if run.smoke_execution is None else run.smoke_execution
-
-
 def self_play(
     run: Run,
     model: Model,
@@ -1120,11 +1119,6 @@ def self_play(
     if opponent is not None:
         reference = run.export(opponent, decks=decks)
         frozen = FrozenOpponent(path=reference["path"], sha256=reference["sha256"])
-    if run.smoke_execution is not None:
-        # One update of one transition per stream: every path runs, cheaply.
-        updates, transitions = 1, 1
-        streams = 2 if matchup_curriculum == "fixed" else streams
-        games_per_stream = None
     # Omitted seats and closure take TrainSelfPlay's defaults for the behavior.
     implied = {
         key: value
@@ -1148,8 +1142,10 @@ def self_play(
         matchup_curriculum=matchup_curriculum,
         adaptive=adaptive,
         trainable=trainable,
-        execution=_smoked(run, execution),
+        execution=execution,
     )
+    if run.smoke_execution is not None:
+        declaration = smoke_stage(declaration, run.smoke_execution)
     regime = _stage_regime(
         run, name, decks, model.agent, model.observation, declaration
     )
@@ -1283,8 +1279,6 @@ def collect_belief(
     recorded = run.completed(name)
     if recorded is not None:
         return read_dataset(Path(recorded.artifacts["dataset"]["path"]))
-    if run.smoke_execution is not None:
-        games = 3
     declaration = CollectBelief(
         id=name,
         operation="collect_belief",
@@ -1293,6 +1287,8 @@ def collect_belief(
         games=games,
         max_steps=max_steps,
     )
+    if run.smoke_execution is not None:
+        declaration = smoke_stage(declaration, run.smoke_execution)
     policy = run.export(model, weights, decks=decks)
     scope = run.begin_stage(
         name,
@@ -1323,8 +1319,6 @@ def train_belief(
     recorded = run.completed(name)
     if recorded is not None:
         return recorded.artifacts["sampler"]  # type: ignore[return-value]
-    if run.smoke_execution is not None:
-        steps = 1
     declaration = TrainBelief(
         id=name,
         operation="train_belief",
@@ -1336,6 +1330,8 @@ def train_belief(
         history_dropout=history_dropout,
         evaluation_samples=evaluation_samples,
     )
+    if run.smoke_execution is not None:
+        declaration = smoke_stage(declaration, run.smoke_execution)
     scope = run.begin_stage(
         name,
         declaration.execution,
