@@ -1214,6 +1214,9 @@ pub struct PyPlayer {
     /// What this player has done this turn.
     #[pyo3(get, set)]
     pub turn_history: PyPlayerTurnHistory,
+    /// Spells this player cast this turn.
+    #[pyo3(get, set)]
+    pub spells_cast: u32,
     #[pyo3(get, set)]
     pub extra_turns: u32,
     #[pyo3(get, set)]
@@ -1481,6 +1484,7 @@ impl From<PlayerData> for PyPlayer {
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
+            spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,
@@ -1517,6 +1521,7 @@ impl From<PyPlayer> for PlayerData {
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
             turn_history: value.turn_history.into(),
+            spells_cast: value.spells_cast,
             extra_turns: value.extra_turns,
             additional_combats: value.additional_combats,
             no_maximum_hand_size: value.no_maximum_hand_size,

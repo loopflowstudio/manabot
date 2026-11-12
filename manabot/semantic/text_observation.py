@@ -258,8 +258,9 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
-def _turn_history(history: managym.PlayerTurnHistory) -> str:
+def _turn_history(player: managym.Player) -> str:
     """What a player has done this turn, or empty when nothing yet."""
+    history = player.turn_history
     parts = []
     if history.attacked:
         parts.append("attacked")
@@ -277,6 +278,8 @@ def _turn_history(history: managym.PlayerTurnHistory) -> str:
         parts.append(f"bent {bent}")
     if amount := history.life_lost:
         parts.append(f"lost {amount} life")
+    if count := player.spells_cast:
+        parts.append(f"cast {count} spell{'' if count == 1 else 's'}")
     return "; ".join(parts)
 
 
@@ -732,7 +735,7 @@ class _Renderer:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
-            if history := _turn_history(player.turn_history):
+            if history := _turn_history(player):
                 lines.append(f"This turn: {history}.")
             if player.extra_turns:
                 lines.append(

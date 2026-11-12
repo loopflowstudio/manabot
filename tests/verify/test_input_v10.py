@@ -15,6 +15,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import (
     TURN_STATE_DIM,
     TURN_STATE_LIFE_LOST_INDEX,
+    TURN_STATE_SPELLS_CAST_INDEX,
     ObservationEncoder,
     ObservationSpace,
 )
@@ -72,6 +73,9 @@ def test_native_and_python_v10_encoders_agree() -> None:
     cards = obs.agent_cards
     cards[0].from_battlefield_this_turn = True
     obs.agent_cards = cards
+    agent = obs.agent
+    agent.spells_cast = 2
+    obs.agent = agent
     python = ObservationEncoder(V10).encode(obs)
     native = _native(env, obs, V10)
     assert set(python) == set(native)
@@ -80,6 +84,9 @@ def test_native_and_python_v10_encoders_agree() -> None:
     assert python["player_turn_state"].shape == (2, TURN_STATE_DIM)
     assert python["player_turn_state"][1, TURN_STATE_LIFE_LOST_INDEX] == pytest.approx(
         3 / 20
+    )
+    assert python["player_turn_state"][0, TURN_STATE_SPELLS_CAST_INDEX] == (
+        pytest.approx(2 / 10)
     )
     assert python["card_turn_state"][0, 0] == 1.0
     assert python["card_turn_state"].sum() == 1.0

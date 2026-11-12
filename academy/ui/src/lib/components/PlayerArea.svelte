@@ -8,6 +8,7 @@
     CastPermission,
     PermanentState,
     PlayerState,
+    PlayerTurnHistory,
     RestrictedMana
   } from '$lib/types';
   import Card from './Card.svelte';
@@ -163,8 +164,8 @@
       {label} has no maximum hand size.
     </p>
   {/if}
-  {#if player.turn_history}
-    {@const history = player.turn_history}
+  {#if player.turn_history || player.spells_cast}
+    {@const history: PlayerTurnHistory = player.turn_history ?? {}}
     <p class="type-caption py-1" data-testid="turn-history">
       {label} this turn: {[
         history.attacked && 'attacked',
@@ -173,6 +174,7 @@
         history.cards_drawn && `drew ${history.cards_drawn} card${history.cards_drawn === 1 ? '' : 's'}`,
         history.bent && `bent ${['water', 'earth', 'fire', 'air'].filter((_, index) => (history.bent ?? 0) & (1 << index)).join(', ')}`,
         history.life_lost && `lost ${history.life_lost} life`,
+        player.spells_cast && `cast ${player.spells_cast} spell${player.spells_cast === 1 ? '' : 's'}`,
       ].filter(Boolean).join(' · ')}.
     </p>
   {/if}

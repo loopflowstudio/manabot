@@ -1643,6 +1643,12 @@
             "minimum": 0
           }
         },
+        "spells_cast": {
+          "description": "Spells this player cast this turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "stack": {
           "type": "array",
           "items": {

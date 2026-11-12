@@ -92,6 +92,9 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Spells this player cast this turn (`TurnState::spells_cast`).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub spells_cast: u32,
     /// Extra turns this player will take after this one (CR 500.7).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub extra_turns: u32,
@@ -1177,6 +1180,7 @@ impl Observation {
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            spells_cast: game.state.turn.spells_cast[player.0].len() as u32,
             extra_turns: game
                 .state
                 .turn

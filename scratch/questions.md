@@ -370,3 +370,17 @@ boundaries, TLE allocation, agent and the new `tests/verify/test_input_v10.py`
 passed. Not run (gate): world-change suites, Academy vitest and browser
 checks (no `node_modules`), Academy reconnect/fork for unearth and Bloodchief's
 optional payments, corpus admission, semantic-kernel evidence, clippy.
+
+## Concept review after the thirteenth pass, 2026-11-12 UTC
+
+Found: `spells_cast` is "seen" in `observability.rs` only through the
+optional `recent_events` rows (off by default, 32 rows, documented as not
+needed for the rules state), so neither v9 nor v10 carries the count that
+Volcanic Torrent's damage and `YouCastNthSpellThisTurn` read. Direction (plan):
+a v10 `player_turn_state` column.
+
+Assumption taken (reversible): v9 adds no refusal for spells cast. A refusal
+would match the thirteenth-pass rule (a visible card reads state v9 lacks) but
+would stop v9 runs over main's TLA cards that already played on v9. The
+alternative, refusing v9 whenever such a card is visible, is one predicate in
+`input_v10_state`.

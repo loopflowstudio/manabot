@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MTG-286 concept review: the last 8 bonus-sheet cards</title>
+<title>MTG-286 concept review: spells cast this turn in v10</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655b; --rule:#d9d3c7; --new:#2f6b3a; --newbg:#e8f2e6; --old:#8a3b2a; --code:#efeadf; }
   @media (prefers-color-scheme: dark) { :root { --fg:#ece7dd; --bg:#1b1a17; --muted:#a59d8f; --rule:#3a362f; --new:#8fd19a; --newbg:#20301f; --old:#e09a85; --code:#2a2722; } }
@@ -23,61 +23,34 @@
 </head>
 <body><main>
 <header>
-  <h1>The last 8 bonus-sheet cards: two can be built now</h1>
-  <p>Task MTG-286 · step concept-review · 2026-11-12</p>
-  <p>Built from <code>scratch/mtg-286-define-every-tle-card-so-tla-limited-pools.md</code>, <code>scratch/questions.md</code>, <code>scratch/tle-production-design.md</code>, <code>managym/state/src/card.rs</code>, <code>managym/src/flow/mana.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/model/facts.py</code></p>
+  <h1>V10 carries turn history, but not spells cast this turn</h1>
+  <p>Task MTG-286 · step concept-review (after the thirteenth pass) · 2026-11-12</p>
+  <p>Built from <code>scratch/mtg-286-define-every-tle-card-so-tla-limited-pools.md</code>, <code>scratch/questions.md</code>, <code>docs/observation-and-model.md</code>, <code>managym/src/flow/turn.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>managym/cards/tests/cards/observability.rs</code>, <code>managym/cards/src/cmr.rs</code></p>
 </header>
 
-<p><strong>Decision needed:</strong> none for the next pass. The Great Henge and Tarnished Citadel move out of the blocked production family and are the next implementation. Six cards are still blocked on three choices only a person can make (questions at the end).</p>
+<p><strong>Decision needed:</strong> none for the next pass. One v10 column is missing, and the design already says where it goes. One reversible assumption is listed at the end.</p>
 
-<h2>What a player does</h2>
-<p>Tap Tarnished Citadel while paying for a spell, pick a color, take 3 damage. Tap The Great Henge, get {G}{G} and gain 2 life. Neither uses the stack, and nobody gets priority in between (CR 605.3b).</p>
+<h2>What a player sees</h2>
+<p>Casting Volcanic Torrent deals X damage, where X is the number of spells its caster has cast this turn. A TLA card with "whenever you cast your second spell each turn" waits on the same count. A person watching can count the spells. The policy can't.</p>
 
 <div class="existing">
-<p><code>ActivatedAbilityDefinition::mana_choices</code> only counts an ability as a mana ability when its effects are exactly one <code>AddMana</code>, or a <code>Modal</code> whose modes are each one <code>AddMana</code>. So <code>[AddMana, GainLife]</code> would go on the stack as an ordinary activated ability. That is wrong.</p>
+<p><code>TurnState.spells_cast</code> holds the count. The observability guard says it is seen through <em>"spell-cast events in the history rows"</em>. Those rows are the <code>recent_events</code> suffix. It is off by default, holds at most 32 rows, and the observation guide says it must not be needed to know the rules state. No player column holds the count, in v9 or in v10.</p>
 </div>
 
 <div class="proposed">
-<p>A mana ability is an untargeted activated ability that starts with a mana output and is followed by a <em>suffix</em> containing no <code>AddMana</code> (CR 605.1a). The suffix runs as the child <code>EffectFrame</code> that a sacrifice cost already uses before <code>Decision::ManaChoice</code>. It carries the activation's <code>source_ref</code>, so Citadel's damage comes from the land and can be prevented. It runs once. Resuming the color choice never runs it again.</p>
-<pre>// Tarnished Citadel, second ability (sketch)
-effects: [
-  Effect::Modal { modes: [[AddMana W], [AddMana U], …] },
-  Effect::deal_damage(3, ObjectSelector::You),  // by: This
-]</pre>
-<p>Payment search counts the mana output as it does now. A suffix-bearing ability is always an explicit <code>PaymentStep::Activate</code> and never part of the automatic prefix. The only way it gets taken without a choice is trivial-decision skipping, when it is the single legal action.</p>
+<p>The v10 <code>player_turn_state</code> row grows from 2 × 7 to 2 × 8:</p>
+<pre>[ life lost / 20, spells cast / 10, nonartifact-locked mana W U B R G C / 10 ]</pre>
+<p>This goes through the native scalar and vector encoders, the Python encoder, the LLM text and the guard row. V10 has no checkpoints, so changing its layout breaks nothing.</p>
 </div>
 
-<h2>Concepts and APIs, before and after</h2>
-<table>
-<tr><th></th><th>Before</th><th>After</th></tr>
-<tr><td>Henge, Citadel</td><td>Blocked behind the production transaction and v10</td><td>Mana ability plus suffix. No new observation state, because the suffix is ordinary ability effects already in the tokens and text</td></tr>
-<tr><td>Heartbeat of Spring</td><td>Blocked (production review)</td><td>Still blocked. It needs real production occurrences and either player's bonus sources</td></tr>
-<tr><td>Production design</td><td>Owns suffix execution</td><td>Takes over the pre-<code>ManaChoice</code> suffix step later, so there is only ever one suffix path</td></tr>
-</table>
+<h2>Why v10 and not a v9 fix</h2>
+<p>V9 is frozen, and w17 checkpoints are bound to its layout. V10 already exists as the turn-history input, and the rule is that new observation state reaches the policy input in the same change. A count read by a card defined on this branch counts as that state.</p>
 
-<h2>Counterexamples checked</h2>
-<ul>
-<li><strong>Citadel's colored mode suspends on a color choice.</strong> The child frame runs before the suspended <code>ManaChoice</code>, the same way a sacrifice cost does, and committed effects never replay.</li>
-<li><strong>Citadel damage would kill you mid-payment.</strong> State-based actions wait for the usual check, the same as any damage during a mana ability.</li>
-<li><strong>The automatic payment would choose the damaging land for you.</strong> It can't: suffix abilities are never in the automatic prefix.</li>
-</ul>
-
-<h2>A finding that changes an open question</h2>
-<p><code>turn.spells_cast</code> already affects rules with no observation behind it. On main it feeds <code>YouCastNthSpellThisTurn</code> and the first-spell cost reduction. This branch adds <code>SpellsCastThisTurn</code> (Volcanic Torrent). Nothing under <code>managym/src/agent/</code>, <code>manabot/env/observation.py</code> or the text observation encodes it, so the policy input already lags on this count. Adding a new fact kind also changes a shape: <code>nn.Embedding(FACT_KINDS + 1)</code> in <code>manabot/model/facts.py</code>, so existing w17 checkpoints would refuse to load. The open turn-history question therefore covers three counts: spells cast, life lost, and cards that left the battlefield.</p>
-
-<h2>Questions (each blocks only the named cards)</h2>
+<h2>Questions</h2>
 <ol>
-<li>Turn history (Bloodchief Ascension, Brought Back, and the unobserved spells-cast count):
-  <br>a. Add one turn-history fact kind on the open w17, accepting that current w17 checkpoints refuse to load.
-  <br>b. Wait for the next world freeze, and record spells cast as a known gap until then.</li>
-<li>Token identity (Release to Memory; Lita, Mechanical Engineer):
-  <br>a. Tokens resolve by definition key, and only deck-enterable cards need unique names. This moves the learning tokens of every <code>CreateToken</code>.
-  <br>b. Keep the name-keyed pack and leave both cards for later.
-  <br>Separately, Zeppelin has no Scryfall printing (re-checked 2026-11-12), so it also needs an answer for which <code>scryfall_id</code> it carries.</li>
-<li>Powerstone restriction (Cityscape Leveler): a new <code>ManaUse</code> shape, "artifact spells and any ability", plus its observation bit.
-  <br>a. Now, on v9.
-  <br>b. At the freeze.</li>
-<li>Heartbeat of Spring: the authored review of event timing and the v10 table in <code>tle-production-design.md</code>.</li>
+  <li>Should v9 refuse positions where a visible card reads spells cast this turn?
+    <br>a. No (assumption taken): main's TLA cards already played on v9 with this gap, and a refusal would stop that collection.
+    <br>b. Yes: the same rule as life lost. It is one predicate in <code>input_v10_state</code>.</li>
 </ol>
 </main></body>
 </html>

@@ -191,12 +191,14 @@ pub const DECKLIST_DIM: usize = 5;
 
 // Input v10 adds turn state v9 has no place for, in two buffers whose
 // presence selects it. `player_turn_state` has one row per seat (agent
-// first): life lost this turn / 20, then mana that can't be spent to cast
-// nonartifact spells by W/U/B/R/G/C / 10. `card_turn_state` aligns with the
+// first): life lost this turn / 20, spells cast this turn / 10, then mana
+// that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10.
+// `card_turn_state` aligns with the
 // seats' card rows like `semantic_cards`: 1 for a graveyard card put there
 // from the battlefield this turn.
 pub const TURN_STATE_LIFE_LOST_INDEX: usize = 0;
-pub const TURN_STATE_NONARTIFACT_MANA_INDEX: usize = 1;
+pub const TURN_STATE_SPELLS_CAST_INDEX: usize = 1;
+pub const TURN_STATE_NONARTIFACT_MANA_INDEX: usize = 2;
 pub const TURN_STATE_DIM: usize = TURN_STATE_NONARTIFACT_MANA_INDEX + 6;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -916,6 +918,7 @@ fn encode_turn_state(
     {
         let row = &mut players[seat * TURN_STATE_DIM..(seat + 1) * TURN_STATE_DIM];
         row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost as f32 / 20.0;
+        row[TURN_STATE_SPELLS_CAST_INDEX] = player.spells_cast as f32 / 10.0;
         for class in player
             .restricted_mana
             .iter()
@@ -1860,6 +1863,7 @@ mod tests {
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
                 turn_history: Default::default(),
+                spells_cast: 0,
                 extra_turns: 0,
                 additional_combats: 0,
                 combat_mana: 0,
@@ -1892,6 +1896,7 @@ mod tests {
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
                 turn_history: Default::default(),
+                spells_cast: 0,
                 extra_turns: 0,
                 additional_combats: 0,
                 combat_mana: 0,

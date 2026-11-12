@@ -139,12 +139,14 @@ PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 # remaining-sideboard counts. A closed opponent's rows are all zero.
 DECKLIST_DIM = 5
 # Input v10 turn state (observation_encoder.rs). `player_turn_state` has one
-# row per seat, agent first: life lost this turn / 20, then mana that can't be
-# spent to cast nonartifact spells by W/U/B/R/G/C / 10. `card_turn_state`
+# row per seat, agent first: life lost this turn / 20, spells cast this turn
+# / 10, then mana that can't be spent to cast nonartifact spells by
+# W/U/B/R/G/C / 10. `card_turn_state`
 # aligns with the seats' card rows: 1 for a graveyard card put there from the
 # battlefield this turn.
 TURN_STATE_LIFE_LOST_INDEX = 0
-TURN_STATE_NONARTIFACT_MANA_INDEX = 1
+TURN_STATE_SPELLS_CAST_INDEX = 1
+TURN_STATE_NONARTIFACT_MANA_INDEX = 2
 TURN_STATE_DIM = TURN_STATE_NONARTIFACT_MANA_INDEX + 6
 _DECKLIST_COUNTS = (
     "main_counts",
@@ -417,6 +419,7 @@ class ObservationEncoder:
             ):
                 row = out["player_turn_state"][seat]
                 row[TURN_STATE_LIFE_LOST_INDEX] = player.turn_history.life_lost / 20.0
+                row[TURN_STATE_SPELLS_CAST_INDEX] = player.spells_cast / 10.0
                 for restricted in player.restricted_mana:
                     if restricted.except_nonartifact_spells:
                         row[TURN_STATE_NONARTIFACT_MANA_INDEX:] += (

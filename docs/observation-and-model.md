@@ -169,7 +169,7 @@ the native encoders:
 
 | Key | Shape | Holds |
 | --- | --- | --- |
-| `player_turn_state` | 2 × 7 | Per seat, agent first: life lost this turn / 20, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
+| `player_turn_state` | 2 × 8 | Per seat, agent first: life lost this turn / 20, spells cast this turn / 10, then mana that can't be spent to cast nonartifact spells by W/U/B/R/G/C / 10 |
 | `card_turn_state` | 2 × 60 | Per seat card row (aligned with `semantic_cards`): 1 for a graveyard card put there from the battlefield this turn |
 
 The model appends each seat's row to its player row and each card value to its

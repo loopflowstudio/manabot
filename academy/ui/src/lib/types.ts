@@ -185,6 +185,8 @@ export interface PlayerState {
   keeps_red_mana?: boolean;
   /** What this player has done this turn. */
   turn_history?: PlayerTurnHistory;
+  /** Spells this player cast this turn. */
+  spells_cast?: number;
   /** Extra turns this player will take after this one. */
   extra_turns?: number;
   /** Additional combat phases still to come this turn. */

@@ -592,6 +592,8 @@ class Player:
     no_maximum_hand_size: bool
     # What this player has done this turn.
     turn_history: PlayerTurnHistory
+    # Spells this player cast this turn.
+    spells_cast: int
     # Extra turns this player will take after this one (CR 500.7).
     extra_turns: int
     # Additional combat phases still to come this turn (active player only).

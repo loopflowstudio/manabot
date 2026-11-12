@@ -46,7 +46,7 @@ use managym::{
             PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
             PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TURN_STATE_DIM, TURN_STATE_LIFE_LOST_INDEX,
-            TURN_STATE_NONARTIFACT_MANA_INDEX,
+            TURN_STATE_NONARTIFACT_MANA_INDEX, TURN_STATE_SPELLS_CAST_INDEX,
         },
         shared_effects::{EffectMembership, EffectObject, SharedEffectData},
     },
@@ -581,7 +581,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 24] {
         ),
         (
             "spells_cast",
-            Seen::Via("spell-cast events in the history rows"),
+            Seen::Via("input v10 player_turn_state column 1 (PlayerData.spells_cast)"),
         ),
         (
             "history",
@@ -2746,6 +2746,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
         effects => [Rows("shared-effect rows, ContinuousEffectData below")],
         turn_history => [Rows("turn history below")],
+        spells_cast => [column(PlayerTurnState, TURN_STATE_SPELLS_CAST_INDEX)],
         extra_turns => [column(Player, PLAYER_EXTRA_TURNS_INDEX)],
         additional_combats => [column(Player, PLAYER_ADDITIONAL_COMBATS_INDEX)],
     }));
@@ -4620,6 +4621,9 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     let row = encoded(&s).player_turn_state;
     assert_eq!(row[TURN_STATE_LIFE_LOST_INDEX], 0.0);
     assert_eq!(row[TURN_STATE_DIM + TURN_STATE_LIFE_LOST_INDEX], 3.0 / 20.0);
+    // Spells cast this turn, per seat; v9 does not refuse it.
+    assert_eq!(row[TURN_STATE_SPELLS_CAST_INDEX], 0.1);
+    assert_eq!(row[TURN_STATE_DIM + TURN_STATE_SPELLS_CAST_INDEX], 0.0);
 
     // A graveyard card put there from the battlefield, read by Brought Back
     // in the viewer's hand.
