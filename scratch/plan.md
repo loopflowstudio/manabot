@@ -37,9 +37,8 @@ Third compress (after the naming pass): `updates.health.clip_fraction` replaces 
 
 ## Remaining
 
-- Naming pass (2026-11-12): learning/ -> updates/, PPO and damped out of loops/, guide opening rewritten. Pieces/minimal/boundaries/objectives/credit 79 passed; admission/learner/health/mps/precision/ci-selection 124 passed; test_regimes 18 passed; test_game_errors 3 failed (the `binding_mismatch` failures already on main); all 19 touched test files collect. PR #474 needs republishing with this diff.
-
-- Done: PR #474 targets `main` at 9ae190e51 (main 13e5642ad merged), titled and described for this Task alone. CI was pending at the last check.
+- PR #474 targets `main` at 4729e8d37 (naming pass, third compress and main 88b71387e merged); its description matches the `updates/` / `loops/` layout. CI was in progress at the realign check.
+- Naming-pass checks: pieces/minimal/boundaries/objectives/credit 79 passed; admission/learner/health/mps/precision/ci-selection 124 passed; test_regimes 18 passed; test_game_errors 3 failed (`binding_mismatch`, already on main).
 - Collection is the existing `SeatRoutedCollector` → `RolloutBatch`, documented as a piece in `docs/training-loop.md`; no new collection API.
 - Outcome 4 (smaller executor) belongs to MTG-303: `execution.py` is 1,794 lines here against 1,784 on main (new import paths plus the rule choice).
 - Open outside this Task: the `binding_mismatch` and packed-seed digest failures already on main (see the per-file check pass) need their own bug Tasks or fixes on main.
