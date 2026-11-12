@@ -19,7 +19,7 @@ Every backend is one package, `manabot/backends/<name>/`, with the same files:
 | File | Holds |
 | --- | --- |
 | `__init__.py` | the import guard naming the optional extra; nothing else |
-| `arrays.py` | conversion to and from NumPy, the float dtype, the device |
+| `arrays.py` | conversion to and from NumPy and the float dtype |
 | `policy.py` | the forward over a `Prepared` batch: logits and values |
 | `rl.py` | the loss terms of `manabot.training.learning` over the framework's arrays |
 | `learner.py` | the optimizer, gradient step and precision |

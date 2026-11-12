@@ -67,3 +67,7 @@ Names aligned with MTG-325's draft (steer 310e6b5f) except metadata keys: kept `
 M2: 19 passed (test_mlx_backend, test_policy_container, test_package_boundaries); parity on the full capture
 reproduced the ledger's parity record exactly except step_update_min_cosine (informative) at 1e-10.
 Local: boundary + container tests 14 passed; ruff clean.
+
+Compress after backend layout (2026-11-12): removed unused `arrays.device` and `Dimensions.value` (value head is
+`Linear(hidden, 1)`), folded module-level `dimensions()` into `PolicyCheckpoint.dimensions`, `_METADATA_KEYS`
+private again. Local boundary + container tests: 14 passed; ruff clean. MLX tests not rerun (M2-only, no behavior change).

@@ -1,4 +1,4 @@
-"""NumPy at the MLX backend's boundary: conversion, dtype and device.
+"""NumPy at the MLX backend's boundary: conversion and dtype.
 
 Every array crossing into the backend is float32 or an integer index; MLX's
 GPU has no float64. Arrays live in unified memory, so conversion copies but
@@ -25,8 +25,3 @@ def to_numpy(array: mx.array) -> np.ndarray:
 def flat_numpy(tree: Mapping[str, object] | list[object]) -> dict[str, np.ndarray]:
     """A parameter or gradient tree as NumPy arrays under dotted names."""
     return {name: np.array(value) for name, value in tree_flatten(tree)}
-
-
-def device() -> mx.Device:
-    """Where the backend computes: the GPU unless MLX was told otherwise."""
-    return mx.default_device()

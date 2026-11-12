@@ -252,7 +252,7 @@ class MLXActorCritic(nn.Module):
             nn.Identity(),  # MeanPoolingLayer's slot; pooling is masked below
             nn.Linear(hidden, hidden),
             nn.ReLU(),
-            nn.Linear(hidden, dims.value),
+            nn.Linear(hidden, 1),
         )
         self.extra_attention = [
             ObjectAttention(hidden, dims.heads, dims.feedforward, ownership=False)
