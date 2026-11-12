@@ -310,8 +310,8 @@ class ActorCritic(nn.Module):
             else None,
         )
 
-        # Runtime profiling choice, never model state: no parameter, buffer or
-        # configuration field records it.
+        # An execution choice of the training stage, never model state: no
+        # parameter, buffer or configuration field records it.
         self.bucketed_shapes = bucketed_shapes
         self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
