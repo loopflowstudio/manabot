@@ -32,3 +32,8 @@ Earlier assumptions (2026-11-04) are at
   No retained corpus or digest reads priced purposes; definitions keep
   `Resolving` and serialize unchanged apart from restricted-mana outputs, whose
   learning tokens now name typed predicates and subtypes instead of bit masks.
+- The fix brief asked for pools A and B to both be refused, but B
+  (Lesson-or-Shrine + Ally) is two classes on the closed list and is exactly
+  White Lotus Hideout plus Jasmine Dragon Tea Shop. Refusing A alone removes
+  the collision, so B encodes; refusing B would take current cards out of
+  policy play.

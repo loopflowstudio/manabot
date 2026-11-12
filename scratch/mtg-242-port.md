@@ -74,9 +74,12 @@ life and sacrifice reservations, class-aware pool remainders
 taps, and shared completion: `advance_mana_upfront` commits taps/life/mana,
 then runs sacrifice and `mana_suffix` as a child frame through
 `run_before_decision` before resuming `ManaChoice` with the original parent.
-Dynamic outputs are fixed when offered (`current_mana_output`); no current
-card's output depends on its own costs, so post-cost variable output stays a
-documented limit, not ported.
+Nested Prism/Treasure completion and fork isolation are witnessed in
+`cards/tests/cards/roe.rs` (`prism_*`, `audit_prism_treasure_*`). Variable
+outputs exist as `Effect::AddOneColorManaValue` (White Lotus Tile, Avatar
+Kyoshi; tests in `tla.rs`) and `AddMana.amount`, read when offered
+(`current_mana_output`). No current card's output depends on its own costs, so
+post-cost variable output stays a documented limit, not ported.
 
 Missing on main (port): `ManaUse` is still a 3-subtype bit mask
 (`SPEND_SUBTYPES`), so a restriction naming any other subtype becomes an empty
@@ -126,7 +129,62 @@ time is not evidence). Digests of every steps/search workload match main.
   62.81/62.78/62.83 G (main) vs 62.72/62.81/62.81 G; Search-64 1340.6 G vs
   1326.8 G (−1.0%). No speedup over main is claimed.
 
+Sync — 2026-11-12: `599823943` merges main `88b71387e`. Main's changes since
+`34980fdaa` touch only `vector_env_bindings.rs` and `__init__.pyi`, nothing in
+payment. Pre-sync checkpoint `987915ddb` narrowed `SpendingObject` to subtypes
+(types dropped, matching questions.md item 3) after the checks above; the
+measurement predates it.
+
+Check (post-sync, debug): `cargo test --workspace` filtered on
+mana/restrict/prism/scarecrow/supportive/powerstone/lotus — all pass, 0 failed.
+
 Remaining: CI Engine Budget on the PR (same-runner wall time). Not ported:
 policy-input rows for other restrictions, general exclusions and post-cost
 variable output (questions.md). Delete list: `ManaUse`, `SPEND_SUBTYPES`,
 `Mana` mask helpers — removed; no exclusive fixtures remained.
+
+## Concept review — 2026-11-12 (headless, against `599823943`)
+
+Accepted model, as implemented: mana carries a `ManaRestriction` (`Only` a set
+of `SpendPredicate`s over any subtype, or Powerstone's `ExceptNonartifactSpells`);
+every cost carries the `SpendingContext` it is paid in (`Cast` announced spell,
+`Activate { zone, source }`, `Resolving`). One authority (`allows`) serves
+offers, witnesses and execution; observation data names each class whole.
+No change to that model.
+
+Mismatch found — the policy refusal is per class, but ambiguity is per pool.
+`unrepresentable_state` accepts any class whose subtypes are a subset of
+{Lesson, Shrine, Ally spells+sources}. The columns are total restricted mana
+(`lesson_mana`) plus one overlapping sum per subtype, so four numbers per color
+against up to seven admitted classes. Constructed counterexample (no current
+card makes it): pool A = {Lesson only: 1, Shrine-or-Ally(+sources): 1}, pool
+B = {Lesson-or-Shrine: 1, Ally(+sources): 1}. Both encode total 2, Lesson 1,
+Shrine 1, Ally 1. A can cast a Lesson and a Shrine; B cannot. The guard calls
+both exact, so the promise "refused, never dropped" fails for them.
+
+Fixed after the review: `REPRESENTABLE_CLASSES` in
+`observation_encoder.rs` is that closed list (Lesson; Lesson-or-Shrine;
+Ally spells+sources; Powerstone via v10), shared by both encoders through
+`unrepresentable_state`. Pool A is refused (its Shrine-or-Ally class is not
+listed); pool B is two listed classes and still encodes, now uniquely: with
+the list closed, Shrine column = Lesson-or-Shrine amount, Lesson column minus
+that = Lesson-only amount. Native `restrictions_on_any_subtype_pay_exactly_their_purposes`
+and `tests/semantic/test_restricted_mana_input.py` cover A, B and
+Lesson-or-Ally. No layout or digest change.
+Check: debug `rules_tests mana|restrict`, lib `observation_encoder`, cards
+`mana` pass; extension rebuilt; restricted-mana, text-observation and Temur
+Python tests pass (2026-11-12).
+
+Considered and kept: `SpellSnapshot` compares by definition pointer while
+`SpendingObject` compares by content. It is a second identity rule for one
+concept, but it was chosen for pricing cost, digests match main, and fork
+clones share the Arc; a lost transposition merge across determinized worlds
+is the worst consequence. Unify only if a profile shows content equality free.
+
+Unresolved for review (unchanged; the brief routes it there): whether to add
+`FactKind::RestrictedMana` rows so arbitrary restrictions reach the policy
+(questions.md item 1). CLAUDE.md's open-vocabulary rule points to rows, but
+no current card needs them and the kind's shape consequence for w17
+checkpoints is a model decision. A general `Except` predicate set stays
+unbuilt (questions.md item 2): it would change `RestrictedManaData`'s
+published schema for no card.

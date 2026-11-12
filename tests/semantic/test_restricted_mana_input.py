@@ -37,13 +37,26 @@ def _env() -> managym.Env:
         ({"spells": ["Ally"]}, "Ally spells"),
         ({"abilities": ["Lesson"]}, "abilities of Lesson sources"),
         ({"spells": ["Lesson", "Ogre"]}, "Lesson or Ogre spells"),
+        # Classes within the column subtypes can still share one encoding:
+        # Lesson beside Shrine-or-Ally sums like Lesson-or-Shrine beside Ally.
+        (
+            {"spells": ["Ally", "Shrine"], "abilities": ["Ally"]},
+            "Ally or Shrine spells or abilities of Ally sources",
+        ),
+        ({"spells": ["Ally", "Lesson"]}, "Ally or Lesson spells"),
     ],
 )
 def test_both_encoders_refuse_restrictions_the_columns_cannot_state(
     restricted: dict[str, object], described: str
 ) -> None:
     env = _env()
-    obs = _observation_with(env, [restricted | {"mana": [0, 0, 0, 1, 0, 0]}])
+    obs = _observation_with(
+        env,
+        [
+            {"spells": ["Lesson"], "mana": [0, 0, 0, 1, 0, 0]},
+            restricted | {"mana": [0, 0, 0, 1, 0, 0]},
+        ],
+    )
     message = f"cannot represent mana restricted to {described}"
     assert managym.unrepresentable_state(obs) == f"mana restricted to {described}"
     for encode in (

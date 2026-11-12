@@ -154,7 +154,7 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
     use managym::{
         agent::{
             action::Action,
-            observation::Observation,
+            observation::{Observation, RestrictedManaData},
             observation_encoder::{encode, ObservationEncodeError, ObservationEncoderConfig},
         },
         state::{
@@ -183,6 +183,45 @@ fn restrictions_on_any_subtype_pay_exactly_their_purposes() {
         encode(&observation, &ObservationEncoderConfig::default()),
         Err(ObservationEncodeError::Unrepresentable(state)) if state == "mana restricted to Ogre spells"
     ));
+    // The columns sum Lesson, Shrine and Ally purposes, so only the classes
+    // they solve for encode: these two pools would share one encoding.
+    let class = |spells: &[&str], abilities: &[&str]| RestrictedManaData {
+        spells: spells.iter().map(|name| name.to_string()).collect(),
+        abilities: abilities.iter().map(|name| name.to_string()).collect(),
+        except_nonartifact_spells: false,
+        mana: [0, 0, 0, 1, 0, 0],
+    };
+    for (pool, refused) in [
+        (
+            [
+                class(&["Lesson"], &[]),
+                class(&["Shrine", "Ally"], &["Ally"]),
+            ],
+            "mana restricted to Ally or Shrine spells or abilities of Ally sources",
+        ),
+        (
+            [
+                class(&["Lesson", "Shrine"], &[]),
+                class(&["Ally"], &["Ally"]),
+            ],
+            "",
+        ),
+        (
+            [
+                class(&["Lesson", "Shrine"], &[]),
+                class(&["Ally", "Lesson"], &["Ally"]),
+            ],
+            "mana restricted to Ally or Lesson spells or abilities of Ally sources",
+        ),
+    ] {
+        let mut observation = observation.clone();
+        observation.agent.restricted_mana = pool.to_vec();
+        match encode(&observation, &ObservationEncoderConfig::default()) {
+            Err(ObservationEncodeError::Unrepresentable(state)) => assert_eq!(state, refused),
+            Ok(_) => assert!(refused.is_empty()),
+            Err(error) => panic!("{error}"),
+        }
+    }
     command(
         &mut s,
         |a| matches!(a, Action::CastSpell { card, .. } if *card == ogre),

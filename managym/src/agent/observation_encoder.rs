@@ -939,39 +939,44 @@ fn turn_state_reads(registry_key: i32) -> TurnStateReads {
         .unwrap_or_default()
 }
 
-/// The subtypes with restricted-mana columns, in column order, and whether a
-/// column's mana also pays for abilities of that subtype's sources. Each
-/// column has exactly this meaning; mana restricted any other way has none.
-const RESTRICTED_SUBTYPE_COLUMNS: [(&str, bool); 3] =
-    [("Lesson", false), ("Shrine", false), ("Ally", true)];
+/// The subtypes with restricted-mana columns, in column order. A class
+/// admitting several subtypes counts under each column.
+const RESTRICTED_SUBTYPE_COLUMNS: [&str; 3] = ["Lesson", "Shrine", "Ally"];
+
+/// The `Only` classes, as (spell subtypes, source subtypes), that the
+/// columns state exactly. With the total, the overlapping Lesson and Shrine
+/// columns solve uniquely for these classes and no others: a Lesson-or-Ally
+/// class beside a Shrine class sums like a Lesson class beside a
+/// Shrine-or-Ally one. Powerstone mana has its own v10 columns.
+const REPRESENTABLE_CLASSES: [(&[&str], &[&str]); 3] = [
+    (&["Lesson"], &[]),
+    (&["Lesson", "Shrine"], &[]),
+    (&["Ally"], &["Ally"]),
+];
+
+fn same_subtypes(names: &[String], expected: &[&str]) -> bool {
+    let mut names: Vec<&str> = names.iter().map(String::as_str).collect();
+    names.sort_unstable();
+    names.dedup();
+    names == expected
+}
 
 /// Restricted mana in `obs` that the player columns cannot state exactly, if
 /// any. Encoders refuse it before writing a buffer; its subtypes stay
 /// complete in `RestrictedManaData` and the text observation.
 pub fn unrepresentable_state(obs: &Observation) -> Option<String> {
-    for class in obs
-        .agent
+    obs.agent
         .restricted_mana
         .iter()
         .chain(&obs.opponent.restricted_mana)
-    {
-        if class.except_nonartifact_spells {
-            continue;
-        }
-        let exact = class.spells.iter().chain(&class.abilities).all(|name| {
-            RESTRICTED_SUBTYPE_COLUMNS
-                .iter()
-                .find(|(subtype, _)| subtype == name)
-                .is_some_and(|(subtype, abilities)| {
-                    class.spells.iter().any(|s| s == subtype)
-                        && class.abilities.iter().any(|s| s == subtype) == *abilities
+        .find(|class| {
+            !class.except_nonartifact_spells
+                && !REPRESENTABLE_CLASSES.iter().any(|(spells, abilities)| {
+                    same_subtypes(&class.spells, spells)
+                        && same_subtypes(&class.abilities, abilities)
                 })
-        });
-        if !exact {
-            return Some(format!("mana restricted to {}", class.describe()));
-        }
-    }
-    None
+        })
+        .map(|class| format!("mana restricted to {}", class.describe()))
 }
 
 /// The v10-only state this observation needs, if any: a definition visible
@@ -1094,7 +1099,7 @@ fn encode_player_features(
     // Restricted mana each column's subtype may use, by color. A class
     // admitting several subtypes counts under each, so these columns
     // overlap and need not sum to the total above.
-    for (index, (subtype, _)) in RESTRICTED_SUBTYPE_COLUMNS.iter().enumerate() {
+    for (index, subtype) in RESTRICTED_SUBTYPE_COLUMNS.iter().enumerate() {
         for class in player
             .restricted_mana
             .iter()
