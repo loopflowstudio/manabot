@@ -192,18 +192,21 @@ or a [saved regime](#saved-regimes) produced them.
 | Function | Does | Returns |
 | --- | --- | --- |
 | `self_play(run, model, *, decks, updates, learning, opponent=None, ...)` | Self-play training of `model`, or training against `opponent` held frozen. | `SelfPlayResult`: the stage's raw/EMA checkpoints and counters. |
-| `import_policy(run, name, *, source_run, source_stage, checkpoint, decks, weights)` | Admit a published policy (as the saved `import_policy` stage does) as a new model. | The `Model`. |
-| `collect_belief(run, model, *, decks, games, weights)` | Collect hidden-hand labels with `model` frozen. | The `SamplerDataset`. |
-| `train_belief(run, corpus, ...)` | Fit a belief sampler to a corpus. | The sampler's `ArtifactReference`. |
+| `import_policy(run, name, *, source_run, source_stage, checkpoint, decks, weights)` | Admit a published policy as a new model. | The `Model`. |
+| `collect_selection(run, policy, *, agent, observation, decks, population, ...)` | Play a frozen selection population with the self-play stage `policy`'s weights. | The selection dataset's `ArtifactReference`. |
+| `collect_belief(run, model, *, decks, games, weights)` | Collect hidden-hand labels with `model` frozen. | A `BeliefCorpus`: the stage and its published dataset. |
+| `train_belief(run, corpus, ...)` | Fit a belief sampler to a corpus, read back from its published dataset. | The sampler's `ArtifactReference`. |
 
 `self_play` takes the settings a saved `TrainSelfPlay` stage declares, as
-keyword arguments with the same names and meanings: `streams`, `transitions`,
-`games_per_stream`, `learning_seats`, `batch_closure`, `behavior`,
-`matchup_curriculum`, `adaptive`, `trainable`, `execution` and `learning`.
-`decks` is a `MatchConfig` or a `UniformDecks` source. Its schedules run on the
-`iteration_fraction` clock. Training the same model in the next self-play
-stage continues its live learner, Adam state, EMA and collector, as `initial`
-does in a saved regime, and must keep the settings that continuation fixes. A
+keyword arguments with the same names and meanings (`streams`, `transitions`,
+`learning`, `execution`, `pretrained`, `learning_state`, ...); `opponent` is
+another model of the run or a published `FrozenOpponent`. `decks` is a
+`MatchConfig` or a `UniformDecks` source. Schedules run on the
+`iteration_fraction` clock unless `schedule_clock=` says otherwise. Each stage
+function admits its own decks, world and curriculum, and checks the digest of
+every input it reads. Training the same model in the next self-play stage
+continues its live learner, Adam state, EMA and collector, as `initial` does
+in a saved regime, and must keep the settings that continuation fixes. A
 stage's name defaults to the function's, numbered in call order (`self-play`,
 `self-play-2`); `stage=` chooses one. Regime functions do not yet tolerate
 game failures, and a regime function's run cannot yet be the producer of an
@@ -253,13 +256,16 @@ through `run` and stage functions.
 
 ### Saved regimes
 
-`run_saved_regime(run, regime)` (`manabot.training.stages`) runs a saved
-`TrainingRegime` through the same stage bodies in its stage order;
-`execute_regime` and `--regime` call it. A saved regime keeps its serialized
+`run_saved_regime(run, regime)` (`manabot.training.stages`) is the regime
+function of a saved `TrainingRegime`: one stage-function call per saved stage,
+under the stage's own ID, with its declared settings and the regime's schedule
+clock. A fresh self-play stage trains a new model; a stage whose `initial`
+names the latest self-play stage trains that model again.
+`execute_regime` and `--regime` run it. A saved regime keeps its serialized
 identity: its run record embeds the same regime bytes, and receipts that hash
-those bytes still match. `partial(run_saved_regime, regime=regime)` is a
-regime like any other, which is how `--smoke` and `TrainingJob.smoke(out)` run
-a saved regime's tiny form.
+those bytes still match. `execute_regime(..., smoke_execution=Execution())`,
+`--smoke` and `TrainingJob.smoke(out)` run a saved regime's tiny form under
+the same record.
 
 ## Regimes and stages
 

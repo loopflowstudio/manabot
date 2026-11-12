@@ -18,3 +18,14 @@
 - Fixed a latent bug while moving code: a second fresh self-play stage passed
   the previous stage's RunContext as its Etude experiment name.
 - Kept the `#regimes-and-stages` heading so existing links stay valid.
+- Self-play always keeps a restored completed snapshot live
+  (`keep_restored=True`), so a saved regime whose next stage is fresh now
+  rebuilds that stage's collector on recovery before discarding it (extra
+  `recovery_seconds`, no change to trained results). A function cannot look
+  ahead; one rule for both kinds was the simpler choice.
+- Function self-play's Etude resolved config now records the run's
+  `regime_function` plus the stage settings (`stage`), and its regime tag is
+  the function's qualname; a saved run's carry the saved regime (unsmoked).
+- `TrainingRegime` per-stage rules moved into `check_self_play`; a regime
+  violating several rules may now report a different one first, and the
+  accelerator message names the stage's own device.

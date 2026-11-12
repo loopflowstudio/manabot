@@ -36,15 +36,15 @@
   `execute` calls it with the annotation-validated arguments it records.
   Saved and function stages shrink through one `stages.smoke_stage`.
 - `manabot/training/stages.py`: stage bodies extracted from the old
-  `_execute_regime`; `run_saved_regime`, `smoke_form`; public `self_play`,
-  `import_policy`, `collect_belief`, `train_belief`. Function stages build a
-  one-stage `TrainingRegime` context validated by `validate_regime`.
+  `_execute_regime`; public `self_play`, `import_policy`,
+  `collect_selection`, `collect_belief`, `train_belief`; `run_saved_regime`
+  calls them (see the concept-review follow-up below).
 - `execution.py`: `validate_regime`, `_runtime_identities`, `execute_regime`.
 - Records: `RunRecord.regime` optional + `regime_function`
   (`RegimeFunctionRecord`: function, arguments, sha, `SourceRevision`,
   wall_seconds, recovery); `StageRecord.operation` and `.arguments`.
-- CLI `--function/--arguments/--smoke` (smoke also for saved regimes);
-  `TrainingJob.smoke(out)`; `experiments/two_models.py`.
+- CLI `--function/--arguments/--smoke` (saved smoke via
+  `execute_regime(smoke_execution=)`); `TrainingJob.smoke(out)`; `experiments/two_models.py`.
 - `tests/training/test_regime_functions.py`: saved≡function bit-exact
   (initial_raw/raw/ema), two models end to end, argument checks, smoke,
   resume at an update boundary bit-exact, saved-regime smoke.
@@ -81,54 +81,45 @@
   exists to route through `Run`. Per-update outcome rows go through Etude
   `log_table`; docs do not promise per-game rows.
 
-## Concept review (2026-11-12, headless, against `6700caf3a`)
+## Concept review (2026-11-12, against `6700caf3a`) and its follow-up
 
-The interaction holds: a regime is `fn(run, **kwargs)` or a partial; `execute`
-/ `smoke` take it; models are `run.model(...)`; stage functions return typed
-results and replay their records on resume. The biggest mismatch is inside:
+The review found two callers per stage body: `run_saved_regime` dispatched
+to the private bodies while public functions built a one-stage
+`TrainingRegime` (`_stage_regime`). Done in the next implement pass:
 
-**Saved regimes do not call the stage functions.** `run_saved_regime`
-dispatches on stage kind straight to the private bodies (`_train_self_play`,
-`_import_policy`, ...), and public `self_play` / `import_policy` go the other
-way: they build a `TrainSelfPlay` and a one-stage `TrainingRegime`
-(`_stage_regime`) so the same bodies can read schema. So there are two
-callers of each body and the configuration is still the stage interface.
-Outcome 4 asks for the opposite direction ("calls the same stage functions";
-"the old one calls the new one").
+1. `run_saved_regime` is an ordinary regime function: one public call per
+   saved stage (`stage=<id>`, its settings, the regime's `schedule_clock`).
+   Fresh self-play stages get `run.model(<id>, ..., seed=seeds["initialization"])`;
+   `initial` reuses that stage's `Model` (validation admits only the latest
+   self-play stage, so this always continues live, also across intervening
+   belief stages). A belief collection naming a self-play stage whose model a
+   later stage continued reads that stage's own export (`_published_model`).
+   Public `collect_selection` added. `RunRecord.regime` and digest unchanged.
+2. Bodies take decks, model config, observation, settings and schedule clock;
+   `_stage_regime` and `smoke_form` are gone. `admit_self_play` (stages.py,
+   rosters/adaptive/deck source) and `check_self_play` (regime.py, the
+   per-stage rules `TrainingRegime` used to inline) are called by both
+   `validate_regime` and `self_play`. `admit_policy` / `admit_learning_state`
+   take `decks, agent, observation[, schedule_clock]`. `Run` carries
+   `recovery_max_microsteps` / `recovery_every_updates`.
+3. Input digest checks live in the stage functions (`_record_inputs` over
+   `Model.source`, the stage that published the model's weights, or the
+   `BeliefCorpus` stage). `collect_belief` returns `BeliefCorpus`;
+   `train_belief` reads the verified dataset back from disk.
+4. `execute_regime(..., smoke_execution=)`; `--smoke` on a saved regime and
+   `TrainingJob.smoke` (now returns `TrainingRun`) record the saved regime.
+5. `Model.session: SelfPlaySession | None`.
 
-### Next implement direction (implied by the design, no product choice)
-
-1. `run_saved_regime(run, regime)` becomes an ordinary regime function: one
-   `run.model("agent", ...)` (or `import_policy` for an `initial` import),
-   then one public stage-function call per saved stage, passing the saved
-   stage's `id` as `stage=`, `seed=run.seeds["initialization"]`, its
-   execution and settings. A saved stage whose `initial` names the previous
-   self-play stage is the same model trained again (live continuation). Add
-   a public `collect_selection` so every saved kind has a function.
-   Records stay as they are: `RunRecord.regime` and its digest still name
-   the saved regime, so receipts and evidence are unchanged.
-2. Stage bodies take what they read (decks, agent, observation, the stage
-   settings record, schedule clock) instead of a `TrainingRegime`; delete
-   `_stage_regime`. Keep `validate_regime` for saved files, and run the
-   per-stage deck/world/curriculum admission it does from the stage
-   function itself. The schedule clock is a stage argument (saved:
-   `run_elapsed_budget` default; function: `iteration_fraction`).
-3. Input-artifact digest checks (`initial`, `policy`, `dataset`) move into
-   the stage functions that read those inputs, so function regimes get them
-   too.
-4. `TrainingJob.smoke` goes through `execute_regime`'s smoke path, so a smoke
-   of a saved job records the saved regime's identity rather than a function
-   record whose argument is the whole regime JSON.
-5. Small: `Model.session: SelfPlaySession | None` (TYPE_CHECKING import)
-   instead of `Any`.
-
-Proof stays the existing bit-exact saved≡function test plus the saved-regime
-recovery and smoke suites; every saved fixture must keep its record digest.
-
-Counterexample to check while doing 1: a saved regime whose second self-play
-stage has `initial` naming an *earlier, non-adjacent* stage (fresh learner
-from those weights, not a continuation). It maps to a new model adopted from
-that stage's export, not to training the same `Model` again.
+Checks: test_regime_functions, test_regimes, test_belief_stages (+ a
+continued-policy test), test_policy_import, test_learning_state,
+test_bucketed_execution, test_frozen_opponent, test_training_decks,
+test_recovery, test_active_recovery, test_active_training, test_etude_job,
+test_game_error_recovery, test_mps_training, test_baseline_recipe,
+test_phase_timing, test_step_cadence, test_numerical_health,
+test_ataraxos_regime, test_automatic_game_capture, test_action_cutoff,
+test_process_tree_rss, test_time_cohort, test_monitoring,
+test_package_boundaries, test_experiment_files: all pass except the known
+test_game_errors `binding_mismatch` (3).
 
 ### Open product choice (does not block 1-5)
 
