@@ -67,7 +67,8 @@ now asserts all six `controlled_by` × `another` subjects tokenize distinctly.
 ## Remaining
 
 - Gate: full debug nextest and semantic pytest at the current head (the last
-  full runs predate compress e511f5adc and merge 55bc4a2b8), clippy, Python
+  full runs predate compress e511f5adc, merge 55bc4a2b8 and the subject fold
+  3a96a0d1e–395e108df), clippy, Python
   suites, engine budget digest (definitions changed).
 - Conformance evidence re-record belongs to whichever change moved it first
   (the stack parent); re-record after rebase if still stale.
