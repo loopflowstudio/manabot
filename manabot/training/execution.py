@@ -45,6 +45,7 @@ from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
 from manabot.training.learning.learner import Learner
 from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.training.mps import mps_torch_error
 from manabot.training.outcome_tables import OUTCOME_TABLE_METRIC, write_outcomes
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
@@ -268,6 +269,8 @@ def _runtime_identities(
     if any(stage.execution.device == "mps" for stage in regime.stages):
         if not torch.backends.mps.is_available():
             raise ValueError("MPS requested but unavailable; CPU fallback is forbidden")
+        if (error := mps_torch_error()) is not None:
+            raise ValueError(error)
     return identities
 
 
