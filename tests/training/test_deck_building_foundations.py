@@ -18,6 +18,7 @@ from manabot import managym
 from manabot.game_results import read_game_results
 from manabot.infra.config import ModelConfig
 from manabot.infra.identity import StrictModel, file_sha256
+from manabot.managym.format import LimitedBuild
 from manabot.model.checkpoint import load_checkpoint
 from manabot.pools import PoolCorpus
 from manabot.training.decks import UniformDecks
@@ -26,6 +27,7 @@ from manabot.training.regime import ModuleStage, TrainingRegime, TrainSelfPlay
 from manabot.training.stages.contract import StageContext, StageDefinition
 from manabot.training.stages.model_inventory import ModelInventory
 from manabot.verify.store import VerifyStore
+from managym.format import Limited
 
 
 def test_limited_builds_select_from_a_pool_and_reject_bad_input() -> None:
@@ -93,6 +95,12 @@ def _pool_source(event_ids: tuple[str, ...] = ("a", "b", "c")) -> Corpus:
             for name in event_ids
         ),
     )
+
+
+def test_format_imports_as_a_module() -> None:
+    assert Limited is managym.format.Limited
+    assert LimitedBuild is managym.format.LimitedBuild
+    assert Limited.__module__ == "managym.format"
 
 
 def test_pool_derivation_keeps_drafts_human_builds_and_frozen_split(

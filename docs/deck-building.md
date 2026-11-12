@@ -156,6 +156,13 @@ population = UniformDecks(
 `pools` and `builds` align with `decks`; each (pool, build) pair is unique.
 `UniformDecks.entry_ids` keeps its existing meaning in saved regimes.
 
+TLA Limited games outgrow the default observation capacities; a run on
+these decks stops with a typed capacity error within its first few dozen
+games. Copy the `observation` block and the `game_errors` policy (with
+`recover_capacity: true`) of
+`experiments/regimes/tla-frontier-c5fba4-w64.json`. Recovered games are
+`resource_limit` attempts in the private ledger and produce no result row.
+
 ### Deriving and publishing
 
 To derive from retained source text instead of restoring the artifact:

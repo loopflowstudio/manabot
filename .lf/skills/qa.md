@@ -102,6 +102,11 @@ publish, land or choose the next Graph step from here.
   64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
   `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
   an empty directory to act like a new machine.
+- TLA Limited decks (the MTG-282 pool corpus) overflow default observation
+  capacities within a few dozen games; copy the `observation` block and the
+  `game_errors` policy (`recover_capacity: true`) of
+  `experiments/regimes/tla-frontier-c5fba4-w64.json`. The default 300 s
+  `wall_seconds` ends a 40-update run on a laptop as `interrupted`.
 - Ctrl-C a run: start it with `subprocess.Popen(..., start_new_session=True,
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell

@@ -22,7 +22,7 @@ pub const DEFAULT_BUILD_CAP: usize = 60;
 
 /// Cards available to a build: supported names with positive counts.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "python", pyo3::pyclass(frozen, module = "manabot.managym"))]
+#[cfg_attr(feature = "python", pyo3::pyclass(frozen, module = "managym"))]
 pub struct CardPool {
     cards: BTreeMap<String, usize>,
 }
@@ -31,7 +31,7 @@ pub struct CardPool {
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(
     feature = "python",
-    pyo3::pyclass(frozen, module = "manabot.managym.format")
+    pyo3::pyclass(frozen, module = "managym.format")
 )]
 pub struct Limited;
 
@@ -45,7 +45,7 @@ pub struct Selection {
 
 /// One deck being built from one pool; selections commit.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "python", pyo3::pyclass(module = "manabot.managym.format"))]
+#[cfg_attr(feature = "python", pyo3::pyclass(module = "managym.format"))]
 pub struct LimitedBuild {
     pool: CardPool,
     max_cards: usize,
