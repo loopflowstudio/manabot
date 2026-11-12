@@ -72,6 +72,8 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   update_ema, collection). Belief inputs not covered (need belief rows).
   HEAD vs HEAD rerun also 0 differ. Losses distinct per config; 1,152/1,439
   gradients non-zero, none non-finite.
+- Second compress (protocol, container, boundary tests: 17 passed): `TorchLearner` value term uses `rl.squared_value_loss`
+  (same ops); `gradient_layout = parameter_layout`.
 - New: `test_torch_container_load.py` (2), `test_torch_backend_protocol.py`
   (1); with boundaries, policy container, capacity, minimal loop: 37 passed.
 - `pytest --collect-only` over every changed test file: 1,116 collected; only
@@ -90,13 +92,10 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
    MTG-321's file; do it after #495 lands, then move each component's inline
    lookups (semantic_cards, facts, shared_effects, name_candidates,
    continuation, recent_events, token_stream, belief) onto prepared indices.
-2. `save_checkpoint` writing the container (`load_checkpoint` reads it now):
-   needs the container to carry every config and the `.pt` extras (belief
-   binding, `bc`), which `require_supported`/`_METADATA_KEYS` do not yet;
-   `read_container` now raises `NotAContainer` for `.pt`, so `load_checkpoint`
-   must dispatch on format rather than try the container first.
-   Docs (training-loop.md checkpoint example, manabot/README.md) already
-   describe this and are ahead of the code.
+2. `save_checkpoint` writing the container (`load_checkpoint` reads both,
+   by zip magic): needs the container to carry every config and the `.pt`
+   extras (belief binding, `bc`), which `require_supported`/`_METADATA_KEYS`
+   do not yet.
 3. Register `"torch": "torch"` in `backends/parity.py` once #495 is on this
    branch (via #474/main), and run parity on a w160l8 capture.
 4. CUDA L4 check (under USD 3) with `bucketed_shapes` and `precision="tf32"`,

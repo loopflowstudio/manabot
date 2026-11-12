@@ -7,13 +7,8 @@ the file's bytes, verifies bindings before loading weights and returns an
 eval-mode model. Optimizer/collector recovery belongs to training. Historical
 serialized keys remain unchanged; these are not training snapshots.
 
-`BACKEND` is the torch `manabot.policy.protocol.Backend`: NumPy in and out,
-beside the native torch API that training and evaluation use. Its parameters
-and gradients keep canonical names (torch's tensors have the canonical
-shapes). Until `ActorCritic` reads `Prepared` indices itself, its `prepare`
-builds the shared `Prepared` and retains the admitted torch observation on it
-(`Retained`), which `evaluate` and the learner run; parity against the
-retained-reference torch path then exercises the harness with torch alone.
+`BACKEND` is the torch `manabot.policy.protocol.Backend`, NumPy in and out
+beside the native torch API (see the protocol section below).
 """
 
 from collections.abc import Mapping
@@ -33,7 +28,7 @@ import torch
 
 from manabot.backends.torch.learner import gradient_step
 from manabot.backends.torch.policy import ActorCritic
-from manabot.backends.torch.rl import selected_mean
+from manabot.backends.torch.rl import selected_mean, squared_value_loss
 from manabot.belief.encoding import (
     BeliefCheckpointBinding,
     BeliefEncodingSchema,
@@ -304,6 +299,10 @@ def save_checkpoint(
 
 
 # -- the NumPy backend protocol ------------------------------------------------------
+# Until `ActorCritic` reads `Prepared` indices itself, `prepare` builds the shared
+# `Prepared` and retains the admitted torch observation on it (`Retained`), which
+# `evaluate` and the learner run; parity against the retained-reference torch
+# path then exercises the harness with torch alone.
 
 
 @dataclass(frozen=True)
@@ -376,12 +375,10 @@ class TorchLearner:
             collection_kl=settings.collection_kl,
             tau=settings.tau,
         )
-        value = (
-            (values.squeeze(-1) - torch.from_numpy(targets.value_targets))
-            .square()
-            .mean()
+        value = squared_value_loss(values, torch.from_numpy(targets.value_targets))
+        return (
+            selected_mean(policy, torch.from_numpy(targets.actor_mask)) + value.mean()
         )
-        return selected_mean(policy, torch.from_numpy(targets.actor_mask)) + value
 
     def gradients(
         self, batch: Prepared, targets: Targets, settings: Settings
@@ -436,12 +433,10 @@ class _Torch:
     def parameter_layout(
         self, canonical: Mapping[str, np.ndarray]
     ) -> dict[str, np.ndarray]:
+        """Torch tensors have the canonical names and shapes."""
         return {name: np.asarray(value) for name, value in canonical.items()}
 
-    def gradient_layout(
-        self, canonical: Mapping[str, np.ndarray]
-    ) -> dict[str, np.ndarray]:
-        return {name: np.asarray(value) for name, value in canonical.items()}
+    gradient_layout = parameter_layout
 
 
 BACKEND = _Torch()
