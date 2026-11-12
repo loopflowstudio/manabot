@@ -127,8 +127,8 @@ def _artifacts(directory: Path) -> None:
         else:
             metadata += (
                 "Requires-Dist: managym==0.2.0\n"
-                "Requires-Dist: torch>=2.10.0 ; sys_platform == 'linux'\n"
-                "Requires-Dist: torch>=2.10.0 ; sys_platform != 'linux'\n"
+                "Requires-Dist: torch>=2.15.0 ; sys_platform == 'linux'\n"
+                "Requires-Dist: torch>=2.15.0 ; sys_platform != 'linux'\n"
                 "Requires-Dist: etude-sdk>=0.2.15\n"
             )
             tags = ["py3-none-any"]
