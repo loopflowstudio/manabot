@@ -227,7 +227,7 @@ jobs:
       - name: Require the complete engine inventory before training upload
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG" --require-engine
+        run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG" --require-engine --wait 300
       - name: Publish manabot with PyPI attestations
         if: steps.publication.outputs.manabot == 'true'
         uses: pypa/gh-action-pypi-publish@release/v1
@@ -254,4 +254,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG" --github
+        run: uv run --no-project python scripts/release/complete.py dist --tag "$RELEASE_TAG" --github --wait 300
