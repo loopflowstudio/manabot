@@ -10,8 +10,29 @@ Current outcome (2026-11-12 UTC): **inconclusive**. The baseline stopped at
 251/500 and its provider deletion is confirmed. Both fresh after-arm quote
 attempts refused L4 capacity before submission. No active Task rental remains.
 The execution evidence and qualified report are published; the paired scientific
-acceptance is unmet. No baseline retry, shorter endpoint or changed preparation
-is authorized.
+acceptance is unmet.
+
+## Open decision: remaining budget cannot buy the frozen pair
+
+The iteration direction asks to "execute the pinned arms serially within the
+cumulative $15 cap". About $3.78 is spent (whole-lifetime estimate), which
+leaves about $11.22. The frozen envelope reserves $7.20 per arm plus $0.60
+ancillary ($15.00 for two arms). Expected compute does not fit either: the
+historical 500 updates took 10.05 h ($5.93 per arm, $11.86 per pair), and the
+baseline's own pace (251 updates in 4.53 h) projects about $5.3 per arm before
+growth. Only one frozen-envelope arm ($7.80) fits. The baseline also stalled
+for an unknown reason, so a retry may stall again. Any of these choices needs
+a person:
+
+- (a) Run only the after arm (≤$7.80, total ≤$11.58). Under the frozen reader
+  the verdict stays inconclusive, because the baseline has no 451–500
+  endpoint. Comparing updates 51–251 would be a new, post-hoc endpoint.
+- (b) Raise the cap to about $23 so the baseline can be retried and the after
+  arm run, both under the frozen envelope.
+- (c) Stop here and close the Task as inconclusive, with the published evidence.
+
+Under the cumulative cap no paid launch is authorized until one is chosen.
+Shrinking the per-arm reservation to fit would change the frozen preparation.
 
 ## Evidence and approach
 
@@ -47,7 +68,7 @@ Provider reads from this machine need
 the python.org CPython 3.13 venv fails RunPod TLS verification, and Etude
 0.2.15's `providers/runpod/http.py` reports any `OSError` as "no reply". The
 four pre-execution "no reply" reads (2026-11-11 22:42–23:48 UTC) were local
-certificate failures, not provider outages. Proposed Wave memory correction;
+certificate failures, not provider outages (now in Wave memory);
 possible Etude follow-up for the error wording.
 
 Both fresh individual quotes were $7.0308333333 at $0.59/hour for 42,900 seconds.
@@ -67,7 +88,7 @@ says running at 251 beside the terminal launcher status.
 
 After source `62f650e82e93` was published; its quote (~06:58 UTC) and a recheck
 after evidence publication both refused L4 capacity. No after Run or rental
-exists. Do not change hardware, source, seed, target or thresholds.
+exists. Hardware, source, seed, target and thresholds stay frozen.
 
 Real receipts exposed a reader bug: `metrics_run` is a worker-local path and
 `actual_device` is `cuda:0`. `scripts/report_collection_comparison.py::_validate_arm`
