@@ -63,3 +63,23 @@ the repository, so cite the current CR in code comments and tests:
 
 Where the design and the CR disagree, the CR wins; record the difference in
 the PR description.
+
+## Coordination with MTG-242 (2026-11-12)
+
+The user's request: "you may also want to coordinate with mtg-242 which is also touching mana payment".
+MTG-242 (`jack/mtg-242-generalize-mana-spending-restrictions-and-payment-resources`,
+worktree `../manabot.mtg-242-generalize-mana-spending`, no PR yet) reworks
+`state/mana.rs` restricted-pool classes into typed `ManaRestriction` /
+`SpendingContext`, and makes the encoders refuse restricted mana outside the
+representable list (its `scratch/questions.md` proposes a
+`FactKind::RestrictedMana` row).
+
+- Production first: the trigger, `ManaChoice` producer, the Henge/Citadel suffix,
+  Badgermole and Heartbeat touch `flow/zones.rs`, `flow/mana.rs` resolution and
+  `state/card.rs`, not the pool's storage.
+- Spending (pool classes, receipts, Animal Attendant, Toph, Uncle's Musings)
+  builds on MTG-242's types: extend its `ManaRestriction` / `SpendingContext`
+  and restricted-mana fact row instead of a parallel canonical-class
+  representation. Do not rewrite `state/mana.rs` pool storage before MTG-242
+  lands on main; read its branch, then rebase onto main once it merges.
+- If spending can't wait, stop after the production half and say so.
