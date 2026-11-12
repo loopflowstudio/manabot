@@ -322,7 +322,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         ),
         Modification::NextCreatureCastFlash => (
             "Modification::NextCreatureCastFlash",
-            Seen::Fact(FactKind::Effect),
+            Seen::Via("its shared-effect row"),
         ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
