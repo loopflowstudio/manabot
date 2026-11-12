@@ -10,6 +10,8 @@ baseline names the minimum when MPS is present but not admitted, and
 stage loop, so the loop does not repeat the check). Docs updated earlier
 (docs/training.md, docs/development.md, README.md, manabot/README.md).
 
+Delete — do not maintain: nothing; this replaces pins and adds an admission check, no parallel path.
+
 Not changed: frozen fixtures, experiment reports, benchmarks HTML and
 configs/llm vLLM lock that record Torch 2.10 as evidence.
 
@@ -36,3 +38,7 @@ minibatches. An M4 Max does not reproduce it. 2.14 would suffice; 2.15 stays
 the pin. Recorded in the `manabot/training/mps.py` docstring; the error now
 says "Torch 2.10–2.13 compute incorrect MPS linear-layer weight gradients on
 Apple M2". test_mps_training + test_baseline_recipe: 58 passed.
+
+## Remaining work
+
+None in implementation. QA (scratch/qa.html) found and fixed explicit `baseline --device mps` on old Torch (6fab820bf). Left for gate/CI: full suites, CUDA cu132 on Linux.
