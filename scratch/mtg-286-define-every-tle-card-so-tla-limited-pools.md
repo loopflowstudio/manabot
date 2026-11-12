@@ -105,6 +105,12 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 Eight are blocked. Teferi's Protection is unblocked: implement the contract
 below.
 
+Known deviation in a defined card (tenth pass): activated abilities never offer
+their own source as a target, so neither player can choose Diaochan herself,
+although the card allows it (the opponent's clause makes this strategic). It
+predates this branch; per the playable-not-bug-free rule it does not block the
+card. It needs a fix here or a bug Task before gate.
+
 ## Teferi's Protection contract (proposed, tenth pass)
 
 Every new state is an `Effect::ApplyContinuous` record, per the duration rule,
