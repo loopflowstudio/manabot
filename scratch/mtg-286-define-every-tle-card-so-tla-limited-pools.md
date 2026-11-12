@@ -154,13 +154,15 @@ waits for a world freeze (the production review's v10 question).
 - Regenerate `conformance/semantic-kernel-w17-v2` evidence: the pack
   `content_digest` moves with every added definition, so
   `checked_semantic_conformance_evidence_reproduces` fails until it is
-  regenerated (eighth-pass compress run: 1131 passed, this one failed). The
+  regenerated (eleventh pass: 1148 passed, 2 skipped, this one failed). The
   Academy precision demos in `tests/academy/test_decision_surface.py` pin a
   content/setup identity that moves the same way (three fail, ninth pass).
 - World-change Python suites from `CLAUDE.md` and
   `docs/development.md#validation-by-change-area`; Academy pending choices,
   stale Commands, reconnect and replay/fork for each new decision. Browser
   checks headless after frontend build, isolated ports.
+  Includes Academy vitest (`permanent-notes.test.ts` gained phased-out and
+  life-lock cases, not yet run) and reconnect/fork with phased-out rows.
 - Fetch the pinned corpus via `manabot.data` with R2 credentials from Doppler;
   admit all `Corpus.trophies[*].decklist` of the first 1,000 events through
   `managym.admit_decklists` (not `Corpus.eligible` or saved `Trophy.deck`).
