@@ -475,6 +475,11 @@ impl Game {
             PlayerSelector::You => vec![frame.controller],
             PlayerSelector::EachOpponent => vec![PlayerId(1 - frame.controller.0)],
             PlayerSelector::TriggeringPlayer => frame.triggering_player.into_iter().collect(),
+            PlayerSelector::TriggeringPlayersOpponents => frame
+                .triggering_player
+                .map(|player| PlayerId(1 - player.0))
+                .into_iter()
+                .collect(),
             PlayerSelector::Target(_) => match self.present_primary_target(frame) {
                 Some(Target::Player(player)) => vec![player],
                 _ => Vec::new(),

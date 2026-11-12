@@ -5329,5 +5329,29 @@
     "colors": [
       "R"
     ]
+  },
+  "Visions of Beyond": {
+    "name": "Visions of Beyond",
+    "mana_cost": "{U}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Draw a card. If a graveyard has twenty or more cards in it, draw three cards instead.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Standstill": {
+    "name": "Standstill",
+    "mana_cost": "{1}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When a player casts a spell, sacrifice this enchantment. If you do, each of that player's opponents draws three cards.",
+    "colors": [
+      "U"
+    ]
   }
 }

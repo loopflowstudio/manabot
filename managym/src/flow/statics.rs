@@ -635,6 +635,9 @@ impl Game {
             Condition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
+            Condition::AnyGraveyardAtLeast { count } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .any(|player| self.state.zones.size(ZoneType::Graveyard, player) >= *count),
             Condition::ControlsAtLeast { count, predicate } => {
                 let source = source.and_then(|source| self.lookup_current_permanent(source).ok());
                 self.iter_battlefield_permanents(controller)

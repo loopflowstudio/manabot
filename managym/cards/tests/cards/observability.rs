@@ -475,17 +475,19 @@ fn player_selector_token(player: &PlayerSelector) -> &'static str {
         PlayerSelector::You => "PlayerSelector::You",
         PlayerSelector::EachOpponent => "PlayerSelector::EachOpponent",
         PlayerSelector::TriggeringPlayer => "PlayerSelector::TriggeringPlayer",
+        PlayerSelector::TriggeringPlayersOpponents => "PlayerSelector::TriggeringPlayersOpponents",
         PlayerSelector::Target(_) => "PlayerSelector::Target",
         PlayerSelector::TargetController => "PlayerSelector::TargetController",
         PlayerSelector::Owner => "PlayerSelector::Owner",
     }
 }
 
-fn player_selector_witnesses() -> [PlayerSelector; 6] {
+fn player_selector_witnesses() -> [PlayerSelector; 7] {
     [
         PlayerSelector::You,
         PlayerSelector::EachOpponent,
         PlayerSelector::TriggeringPlayer,
+        PlayerSelector::TriggeringPlayersOpponents,
         PlayerSelector::Target(Box::new(TargetSpec::Player)),
         PlayerSelector::TargetController,
         PlayerSelector::Owner,
@@ -1102,6 +1104,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::Always => "Condition::Always",
         Condition::CardsDrawnAtLeast { .. } => "Condition::CardsDrawnAtLeast",
         Condition::GraveyardAtLeast { .. } => "Condition::GraveyardAtLeast",
+        Condition::AnyGraveyardAtLeast { .. } => "Condition::AnyGraveyardAtLeast",
         Condition::ControlsAtLeast { .. } => "Condition::ControlsAtLeast",
         Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
         Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
@@ -1134,6 +1137,7 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 1,
             predicate: CardPredicate::creature(),
         },
+        Condition::AnyGraveyardAtLeast { count: 20 },
         Condition::ControlsAtLeast {
             count: 1,
             predicate: CardPredicate::creature(),

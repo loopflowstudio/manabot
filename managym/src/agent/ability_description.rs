@@ -211,6 +211,9 @@ fn condition_text(condition: &Condition) -> String {
         Condition::CardsDrawnAtLeast { count } => {
             format!("you have drawn at least {count} cards this turn")
         }
+        Condition::AnyGraveyardAtLeast { count } => {
+            format!("a graveyard has {count} or more cards in it")
+        }
         Condition::GraveyardAtLeast { count, predicate } => format!(
             "your graveyard has at least {count} {} cards",
             predicate_description(predicate, "matching")
@@ -459,6 +462,7 @@ fn player_description(player: &PlayerSelector) -> String {
         PlayerSelector::You => "you".into(),
         PlayerSelector::EachOpponent => "each opponent".into(),
         PlayerSelector::TriggeringPlayer => "that player".into(),
+        PlayerSelector::TriggeringPlayersOpponents => "each of that player's opponents".into(),
         PlayerSelector::TargetController => "its controller".into(),
         PlayerSelector::Target(target) => target_description(target),
         PlayerSelector::Owner => "its owner".into(),

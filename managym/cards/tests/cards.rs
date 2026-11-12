@@ -42,6 +42,8 @@ mod kld;
 mod ktk;
 #[path = "cards/lea.rs"]
 mod lea;
+#[path = "cards/m12.rs"]
+mod m12;
 #[path = "cards/m15.rs"]
 mod m15;
 #[path = "cards/m20.rs"]

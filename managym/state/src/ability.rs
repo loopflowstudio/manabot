@@ -219,6 +219,11 @@ pub enum Condition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if a graveyard has `count` or more cards in it": any player's
+    /// graveyard (Visions of Beyond).
+    AnyGraveyardAtLeast {
+        count: usize,
+    },
     /// "if you control `count` or more [predicate] permanents" (`count` 1:
     /// "if you control a [predicate]").
     ControlsAtLeast {
@@ -335,6 +340,7 @@ impl Condition {
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
             | Condition::GraveyardAtLeast { .. }
+            | Condition::AnyGraveyardAtLeast { .. }
             | Condition::ControlsAtLeast { .. }
             | Condition::UnspentManaAtLeast { .. }
             | Condition::AttackedThisTurn
@@ -369,6 +375,9 @@ pub enum PlayerSelector {
     EachOpponent,
     /// The trigger's player ("they": the caster of the triggering spell).
     TriggeringPlayer,
+    /// "each of that player's opponents" (Standstill): the opponents of the
+    /// trigger's player, whoever controls the effect.
+    TriggeringPlayersOpponents,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
     /// The controller of the frame's primary target permanent, as it is or
@@ -386,6 +395,7 @@ impl PlayerSelector {
             Self::You
             | Self::EachOpponent
             | Self::TriggeringPlayer
+            | Self::TriggeringPlayersOpponents
             | Self::TargetController
             | Self::Owner => None,
         }

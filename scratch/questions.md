@@ -236,4 +236,22 @@ guard now admits a source question in a P/T buff's own condition (layers ask it 
 the source, `layers.rs` node conditions), with `CantBeBlockedIf` as the retained
 negative. Cruel Tutor's caster knows the top card; no observation tracks library
 order knowledge (existing gap, not new information revealed).
-`check_tle_coverage.py --bonus-sheet` — 19 of 61 defined, 42 missing.
+Then Visions of Beyond (new `Condition::AnyGraveyardAtLeast`) and Standstill
+(new `PlayerSelector::TriggeringPlayersOpponents`), each with guard tokens,
+witnesses, descriptions and directed tests. Debug: full cards target 632 passed;
+`rules_tests` 169 passed (2 ignored); lib `tokens vocabulary description` 8 passed;
+rebuilt extension; text-observation + allocation pytest 67 passed.
+`check_tle_coverage.py --bonus-sheet` — 21 of 61 defined, 40 missing, no other issues.
+
+Remaining bonus names need these rule families (allocation ledger has detail):
+production/spending review (Heartbeat, Great Henge, Tarnished Citadel); copy entry
+and token copies (Clone, Clone Legion, Sakashima, Rhys); cascade (Volcanic
+Torrent); end-turn (Sundial); phasing + life lock (Teferi's Protection); combat
+skip/requirements (Empty City Ruse, Taunting Challenge); counter/zone-history
+triggers (Bloodchief, Dark Depths, Brought Back); cast-time costs (Force of
+Negation, Shattering Spree replicate, Cityscape Leveler unearth, Mystic Remora
+cumulative upkeep); scoped counts/costs (Blasphemous Act, Dockside, Return of the
+Wildspeaker, Training Grounds, Agent of Treachery); new tokens (Join the Dance
+Human, Release to Memory Spirit, Lita's Zeppelin, Koma's Coil, Rhys's Elf Warrior,
+Marit Lage); damage source/LKI (Warstorm Surge, Noxious Gearhulk, Searing Blood);
+uncounterable + color predicates (Rending Volley, Koma); others per allocation.
