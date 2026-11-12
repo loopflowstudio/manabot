@@ -114,6 +114,12 @@ on local branch `mtg-286-nonbonus-batch3-parked` for the later Task.
 | Observed turn history (blocked, layout) | Bloodchief Ascension (life lost this turn), Brought Back (left the battlefield this turn) |
 | Restricted mana shape (blocked, layout) | Cityscape Leveler (Powerstone; its cast/attack trigger and unearth are otherwise ready) |
 
+None of the six can be implemented on this branch until one of these is
+settled: the token-identity choices (a)/(b) below; whether turn history and the
+Powerstone restriction get new v9 fact kinds (which make w17 checkpoints
+refuse, `manabot/model/facts.py` `FACT_KINDS`) or wait for a world freeze; and
+the production review. Until then the remaining work is the gate checks below.
+
 Known deviation in a defined card: activated abilities never offer their own
 source as a target, so neither player can choose Diaochan herself. Filed as
 bug Task MTG-296: the fix (exclude only `TargetRequirement.another`) moves
