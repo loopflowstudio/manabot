@@ -81,6 +81,16 @@ publish, land or choose the next Graph step from here.
   there; it builds cold, runs the browser proof and writes
   `.cache/clean-machine/proof.json` (`launch.elapsed_to_playable_ms`). Shared
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
+- Model or training-path changes: `uv run manabot train --recipe local --device
+  cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
+  seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
+  checkpoints with `uv run manabot sim --hero-deck-file <f> --villain-deck-file
+  <f> --set sim.hero=<ckpt.pt> --set sim.villain=<ckpt.pt> --set
+  sim.num_games=10 --set sim.num_threads=1`. The deck files must equal the
+  checkpoint's `world_binding["setups"]`, written as `N Name` lines with a
+  `Sideboard` section, because the default sim match is refused. Fixed seeds
+  make equal win, timeout and mean-step counts a check that every sampled
+  action matched. Ten games took about two minutes on a loaded laptop.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
