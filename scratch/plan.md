@@ -13,3 +13,13 @@ Check: focused pytest (batched_eval -k non_default, learning_signal, experiment_
 layer_input, local_evaluation) passed.
 
 Compress: `artifact_id` → `artifact_prefix` (all callers used `<prefix>/<digest>`).
+
+Other registration sites (checked at realign): `manabot/experiment/study.py`
+and `attack_execution.py` take ABI hashes from the training run's
+`identities`, which describe the space the checkpoint was trained with;
+`experiments/mtg186_eval.py` and `elemental_grid.py` already pass the loaded
+space; `card_evaluation.py` registers code players only. None needed a change.
+`elemental_long_eval.py` stays frozen (see questions.md).
+
+Remains: CI (rerun of the timed-out self-play test noted in questions.md),
+then a GPU evaluation pass that admits a frontier checkpoint, run by MTG-267.
