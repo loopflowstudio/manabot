@@ -111,6 +111,16 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+- MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
+  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
+  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
+  `local` recipe checkpoints use FiLM and are refused), load it with
+  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  admitting each batch with `admit_observation` and comparing against torch
+  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
+  `policy.evaluate`; untrained-policy argmax
+  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir>` on the published subset takes about 50 s on an M2.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -142,7 +152,14 @@ publish, land or choose the next Graph step from here.
   (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
   64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
   `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine.
+  an empty directory to act like a new machine. To A/B an `Execution` switch
+  the CLI lacks (such as `live_tokens`), start from
+  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
+  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
+  the same `--seed`. Equal layouts then give `run.json` files that differ only in
+  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
+  `bucketed_shapes` makes learning about 7× slower than padded, so time
+  bucketed arms against a bucketed control.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -163,3 +180,15 @@ publish, land or choose the next Graph step from here.
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
   ignores SIGINT, so `pkill -INT` appears to hang.
+- Experiment reports and figures: arrive as a new reader with
+  `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
+  manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
+  <paths>`. In zsh, pass a path list as an array (`"${P[@]}"`), since zsh does
+  not word-split `$P`. Fetch only the files the figure code reads; whole
+  evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
+  figure that changes bytes on every redraw also changes its manifest entry.
+  Render SVGs with `rsvg-convert -z 2 -b white` and look at them. The L4 profile
+  (`experiments/l4_step_profile.py`) has a CPU smoke job,
+  `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
+  experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
+  minutes and 2.2 GB and runs every stage as a real child process.

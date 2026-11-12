@@ -12,6 +12,9 @@ objects, continuation relations and legal actions (`manabot.model.token_stream`)
 Both share every embedding and join before attention and the critic after it.
 With `bucketed_shapes=True` (`manabot.model.buckets`), each forward trims its
 variable axes to power-of-two buckets and returns logits at full capacity.
+With `live_tokens=True` (`manabot.model.live_tokens`), table attention runs
+over the batch's valid objects packed into one sequence; either setting
+composes with the other and neither changes the model.
 """
 
 from dataclasses import dataclass
@@ -42,6 +45,7 @@ from manabot.model.buckets import (
 from manabot.model.continuation import ContinuationEncoder
 from manabot.model.facts import FactEncoder, RecordVocabulary
 from manabot.model.inference import PreparedObservation, trim_admitted, trim_prepared
+from manabot.model.live_tokens import LiveTokens
 from manabot.model.name_candidates import NameCandidateEncoder
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import (
@@ -61,6 +65,16 @@ from manabot.model.token_stream import (
     unpack,
 )
 import managym
+
+# Validity of the visible object table, in its concatenation order.
+OBJECT_VALIDITY_KEYS = (
+    "agent_player_valid",
+    "opponent_player_valid",
+    "agent_cards_valid",
+    "opponent_cards_valid",
+    "agent_permanents_valid",
+    "opponent_permanents_valid",
+)
 
 
 @dataclass
@@ -96,6 +110,7 @@ class ActorCritic(nn.Module):
         config: ModelConfig,
         *,
         bucketed_shapes: bool = False,
+        live_tokens: bool = False,
     ) -> None:
         super().__init__()
         self.observation_space = observation_space
@@ -320,6 +335,7 @@ class ActorCritic(nn.Module):
         # An execution choice of the training stage, never model state: no
         # parameter, buffer or configuration field records it.
         self.bucketed_shapes = bucketed_shapes
+        self.live_tokens = live_tokens
         self.facts.bucketed = self.bucketed_shapes
         self.name_candidates.bucketed = self.bucketed_shapes
 
@@ -340,6 +356,11 @@ class ActorCritic(nn.Module):
                 raise ValueError(
                     "token_stream='pooled' sizes its token types at full capacity "
                     "and does not support bucketed shapes"
+                )
+            if self.live_tokens:
+                raise ValueError(
+                    "token_stream='pooled' packs its own sequence and does not "
+                    "support live tokens"
                 )
             self.token_types = nn.Embedding(TOKEN_TYPES, embed_dim)
             nn.init.normal_(self.token_types.weight, std=embed_dim**-0.5)
@@ -387,6 +408,8 @@ class ActorCritic(nn.Module):
         A distributional head alone does not select a categorical loss.
         """
         capacity = obs["actions_valid"].shape
+        # Trimming keeps every valid object, so the count holds for buckets too.
+        live = obs.live_token_count if isinstance(obs, PreparedObservation) else None
         buckets = None
         if self.bucketed_shapes:
             obs, buckets = self._bucketed(obs)
@@ -395,7 +418,7 @@ class ActorCritic(nn.Module):
 
         if self.token_types is None:
             encoded = self._attend_objects(
-                state.objects, state.is_agent, state.validity
+                state.objects, state.is_agent, state.validity, live
             )
             # The optional trailing token is a critic input, never an action focus.
             post_attention_objects = encoded[:, : state.validity.shape[1]]
@@ -422,6 +445,23 @@ class ActorCritic(nn.Module):
         if self.debug:
             self.last_raw_logits = logits.detach().cpu()
         return logits, self._value_from_objects(encoded, state.validity)
+
+    def live_token_count(self, obs: Dict[str, torch.Tensor]) -> int | None:
+        """Host count of the tokens live-token attention packs for CPU `obs`.
+
+        Valid table objects, belief rows and their global row, and one value
+        token per observation; None unless this policy packs live tokens.
+        """
+        if not self.live_tokens or not self.config.attention_on:
+            return None
+        batch = obs["actions_valid"].shape[0]
+        count = sum(int(obs[key].count_nonzero()) for key in OBJECT_VALIDITY_KEYS)
+        if self.belief_count_buckets > 0:
+            # Belief rows plus one global belief row per observation.
+            count += int(obs["belief_validity"].count_nonzero()) + batch
+        if self.value_token is not None:
+            count += batch
+        return count
 
     def object_trimming(self) -> bool:
         """Whether buckets may trim object axes: padding objects must be inert."""
@@ -464,8 +504,14 @@ class ActorCritic(nn.Module):
         objects: torch.Tensor,
         is_agent: torch.Tensor,
         validity: torch.Tensor,
+        live: int | None = None,
     ) -> torch.Tensor:
-        """Encode real objects and, when configured, a trailing neutral value token."""
+        """Encode real objects and, when configured, a trailing neutral value token.
+
+        `live` is the host-measured token count for live-token attention.
+        """
+        if self.live_tokens and self.config.attention_on:
+            return self._attend_live(objects, is_agent, validity, live)
         original_slots = objects.shape[1]
         columns = None
         if (
@@ -509,6 +555,38 @@ class ActorCritic(nn.Module):
                 (objects.shape[0], original_slots, objects.shape[2])
             ).index_copy(1, columns, objects)
         return objects
+
+    def _attend_live(
+        self,
+        objects: torch.Tensor,
+        is_agent: torch.Tensor,
+        validity: torch.Tensor,
+        live: int | None,
+    ) -> torch.Tensor:
+        """`_attend_objects` over valid objects only, returned at [B,N(+1),D].
+
+        The value token is one more live token per observation, ownerless as
+        on the padded path. Padding slots come back zero, as every padded
+        layer leaves them, so focus joins and every value aggregation read the
+        same values.
+        """
+        batch = objects.shape[0]
+        owner = torch.where(is_agent, 1.0, -1.0).to(objects.dtype)
+        present = validity != 0
+        if self.value_token is not None:
+            objects = torch.cat(
+                (objects, self.value_token.expand(batch, -1, -1).to(objects.dtype)),
+                dim=1,
+            )
+            owner = torch.cat((owner, owner.new_zeros((batch, 1))), dim=1)
+            present = torch.cat((present, present.new_ones((batch, 1))), dim=1)
+        tokens = LiveTokens.pack(present, live)
+        packed = tokens.gather(objects)
+        owners = tokens.gather(owner)
+        packed = self.attention.forward_live(packed, owners, tokens)
+        for layer in self.extra_attention:
+            packed = layer.forward_live(packed, owners, tokens)
+        return tokens.scatter(packed)
 
     def _value_from_objects(
         self, objects: torch.Tensor, validity: torch.Tensor
@@ -720,14 +798,7 @@ class ActorCritic(nn.Module):
             enc_agent_perms,
             enc_opp_perms,
         ]
-        validity_parts = [
-            obs["agent_player_valid"],
-            obs["opponent_player_valid"],
-            obs["agent_cards_valid"],
-            obs["opponent_cards_valid"],
-            obs["agent_permanents_valid"],
-            obs["opponent_permanents_valid"],
-        ]
+        validity_parts = [obs[key] for key in OBJECT_VALIDITY_KEYS]
 
         belief_is_agent = None
         if self.belief_count_buckets > 0:
@@ -1061,6 +1132,16 @@ class GameObjectAttention(nn.Module):
 
         mask = (~key_padding_mask).unsqueeze(-1).float()
         return post_norm * mask
+
+    def forward_live(
+        self, packed: torch.Tensor, owners: torch.Tensor, tokens: LiveTokens
+    ) -> torch.Tensor:
+        """`forward` over packed live tokens [L,D]; `owners` [L] is +1 for the
+        acting viewer's objects, -1 for the opponent's and 0 for a value token."""
+        if self.perspective is not None:
+            packed = packed + owners.unsqueeze(-1) * self.perspective
+        x = self.norm1(packed + tokens.self_attention(self.mha, packed))
+        return self.norm2(x + self.mlp(x))
 
 
 def layer_init(

@@ -120,6 +120,13 @@ at the source each run pinned; ac601834d is the last revision carrying them.
 
 ## Index
 
+[Live-token attention, MTG-319](live_token_attention.md): **completed
+2026-11-12**, exploratory pilot on one L4 (USD 0.24). Attending over valid objects
+only, on top of bucketed shapes, takes the w384l8 learner step from 386 ms to
+202 ms (1.91×, bar 1.5×). Outputs match the padded path as closely as bucketed
+shapes do. Build-out recommended. Evidence is under
+`experiments/data/live_token_attention/`.
+
 [Mirror search on MTG-183](search-mirror.md): **completed 2026-11-12**,
 exploratory — 3,000 games (six settings × 500 deals) plus an 8,000-game earlier
 sweep on the frozen w13 policy. With playable uniform hand sampling, mirror
