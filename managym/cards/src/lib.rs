@@ -17,6 +17,7 @@ mod bng;
 mod bro;
 mod c17;
 mod c19;
+mod chk;
 mod cmr;
 mod csp;
 mod dft;
@@ -89,13 +90,14 @@ pub fn catalog() -> &'static [CardDefinition] {
     })
 }
 
-const SETS: [fn() -> Vec<CardDefinition>; 61] = [
+const SETS: [fn() -> Vec<CardDefinition>; 62] = [
     aer::cards,
     afr::cards,
     blb::cards,
     bng::cards,
     bro::cards,
     c17::cards,
+    chk::cards,
     c19::cards,
     cmr::cards,
     csp::cards,

@@ -1850,6 +1850,8 @@ fn cost_effect_completion_retains_output_and_parent_payment_across_choices() {
         decision: Decision::ManaChoice {
             player,
             choices: vec![Mana::parse("U"), Mana::parse("B")],
+            produced: None,
+            bonuses: Vec::new(),
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 player,
                 PaymentCost::Mana(ManaCost::parse("{1}")),

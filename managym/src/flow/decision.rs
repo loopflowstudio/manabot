@@ -444,9 +444,18 @@ pub enum Decision {
         tap_remaining: usize,
         resume: Option<Box<Decision>>,
     },
+    /// A mana production's output choice. With `produced` absent, the
+    /// choices are the mana ability's outputs; present, they are one
+    /// triggered mana ability's type choice after that production. `bonuses`
+    /// are the triggered mana abilities still to resolve after this choice
+    /// (CR 605.4a), captured when the source was tapped for mana.
     ManaChoice {
         player: PlayerId,
         choices: Vec<crate::state::mana::Mana>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        produced: Option<crate::state::mana::Mana>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        bonuses: Vec<crate::state::card::TriggeredManaOutput>,
         resume: Option<Box<Decision>>,
     },
     /// `player` chooses a permanent they control matching `predicate` for
@@ -1978,20 +1987,37 @@ impl Game {
                 Decision::ManaChoice {
                     player,
                     choices,
+                    produced,
+                    bonuses,
                     resume,
                 },
                 Action::ChooseMode { mode, .. },
             ) => {
-                let mana = &choices[*mode];
-                self.state.mana_pool_mut(*player).add(mana);
-                if let Some(resume) = resume.take() {
+                let mana = choices[*mode].clone();
+                self.state.mana_pool_mut(*player).add(&mana);
+                let player = *player;
+                let produced = produced.take().unwrap_or(mana);
+                let resume = match self.resolve_mana_bonuses(
+                    player,
+                    &produced,
+                    std::mem::take(bonuses),
+                    resume.take(),
+                ) {
+                    Ok(resume) => resume,
+                    Err(choice) => {
+                        suspended.decision = *choice;
+                        *self.state.suspended_decision_mut() = Some(suspended);
+                        return Ok(());
+                    }
+                };
+                if let Some(resume) = resume {
                     suspended.decision = *resume;
                     *self.state.suspended_decision_mut() = Some(suspended);
                     self.advance_mana_upfront()?;
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
-                    self.state.priority_mut().on_non_pass_action(*player);
+                    self.state.priority_mut().on_non_pass_action(player);
                 }
                 Ok(())
             }

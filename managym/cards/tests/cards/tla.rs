@@ -9795,7 +9795,11 @@ fn optional_decline_retains_mana_activation_costs_and_chosen_output() {
 
 #[test]
 fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
-    use managym::state::{card::TriggeredManaAbility, predicate::CardPredicate};
+    use managym::state::{
+        ability::Actor,
+        card::{TriggeredManaAbility, TriggeredManaOutput},
+        predicate::CardPredicate,
+    };
 
     for with_artifact in [false, true] {
         let names = if with_artifact {
@@ -9817,8 +9821,9 @@ fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
         s.game_mut().state.cards[source_card]
             .triggered_mana_abilities
             .push(TriggeredManaAbility {
+                who: Actor::You,
                 predicate: CardPredicate::creature(),
-                mana: Mana::parse("G"),
+                output: TriggeredManaOutput::Fixed(Mana::parse("G")),
             });
         cast(&mut s, "Waterbending Lesson");
         if s.action_space().kind == ActionSpaceKind::PayOrNot {
@@ -9853,9 +9858,9 @@ fn waterbend_and_mana_taps_have_distinct_bonus_accounting() {
         } else {
             activate_named(&mut s, "Hermitic Herbalist", 0);
             assert_eq!(
-                s.game().state.players[0].mana_pool,
-                Mana::parse("G"),
-                "exactly one immediate tap bonus"
+                s.game().state.players[0].mana_pool.total(),
+                0,
+                "the bonus waits for the ability to produce mana (CR 106.12a)"
             );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("GU"));

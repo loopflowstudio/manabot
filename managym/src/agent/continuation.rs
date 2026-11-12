@@ -1227,6 +1227,8 @@ mod tests {
         game.suspend_rule_decision(Decision::ManaChoice {
             player: actor,
             choices: vec![Mana::parse("U")],
+            produced: None,
+            bonuses: Vec::new(),
             resume: Some(Box::new(Decision::Payment(PaymentProgress::new(
                 actor,
                 PaymentCost::Waterbend { generic: 2 },
@@ -1288,6 +1290,8 @@ mod tests {
             Decision::ManaChoice {
                 player,
                 choices: vec![],
+                produced: None,
+                bonuses: Vec::new(),
                 resume: None,
             },
             Decision::ChooseObject {

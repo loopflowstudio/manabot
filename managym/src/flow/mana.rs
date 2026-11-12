@@ -4,8 +4,6 @@
 // Game owns their events and explicit Decision continuations. Pool arithmetic
 // and spend-purpose restrictions belong to state/mana.rs.
 
-use std::sync::Arc;
-
 use crate::{
     agent::action::{Action, AgentError},
     flow::{
@@ -15,7 +13,10 @@ use crate::{
     },
     state::{
         ability::Effect,
-        card::{ActivatedAbilityDefinition, ReplacementEffect},
+        card::{
+            ActivatedAbilityDefinition, ReplacementEffect, TriggeredManaAbility,
+            TriggeredManaOutput,
+        },
         game_object::{CardId, PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaUse},
     },
@@ -678,7 +679,7 @@ impl Game {
         if let Some(suspended) = &self.state.suspended_decision {
             reserve(&suspended.decision, self, &mut reserved);
         }
-        let bonus_sources = self.tap_bonus_sources(player);
+        let triggers = self.mana_triggers();
         let sources = self
             .characteristics_many(self.iter_battlefield_permanents(player))
             .map(|(permanent, characteristics)| {
@@ -687,7 +688,8 @@ impl Game {
                 let can_tap = self.permanent_can_tap(permanent);
                 let prohibited = self.activations_prohibited(permanent);
                 let fixed = (can_tap && !prohibited && !characteristics.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(permanent, &characteristics, &bonus_sources));
+                    .then(|| self.fixed_source_mana(player, permanent, &characteristics, &triggers))
+                    .flatten();
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
@@ -701,10 +703,8 @@ impl Game {
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
                         if ability.tap_source {
-                            let bonus = self.tap_mana_bonus_from(&bonus_sources, permanent);
-                            for output in &mut outputs {
-                                output.add(&bonus);
-                            }
+                            let bonuses = self.tap_bonuses(&triggers, player, permanent);
+                            outputs = production_alternatives(&outputs, &bonuses);
                         }
                         Some(ManaActivation {
                             tap_source: ability.tap_source,
@@ -787,10 +787,9 @@ impl Game {
                         .clone();
                     let mut outputs = ability.mana_choices().unwrap();
                     if ability.tap_source {
-                        let player = decision.player();
-                        for output in &mut outputs {
-                            output.add(&game.tap_mana_bonus(*permanent, player));
-                        }
+                        let bonuses =
+                            game.tap_bonuses(&game.mana_triggers(), decision.player(), *permanent);
+                        outputs = production_alternatives(&outputs, &bonuses);
                     }
                     if *tap_remaining > 0 {
                         result.push(Obligation::Tap {
@@ -1076,11 +1075,34 @@ impl Game {
         possible
     }
 
+    /// Whether choosing `mana` at the pending `ManaChoice` leaves a complete
+    /// witness, counting the triggered mana abilities that still resolve
+    /// after it from the same production.
     pub(crate) fn mana_choice_completes_payment(&self, player: PlayerId, mana: &Mana) -> bool {
         let mut pool = self.pooled_mana(player);
         pool.add(mana);
+        let mut obligations = self.payment_obligations(player);
+        if let Some(SuspendedResolution {
+            decision: Decision::ManaChoice {
+                produced, bonuses, ..
+            },
+            ..
+        }) = &self.state.suspended_decision
+        {
+            let produced = produced.as_ref().unwrap_or(mana);
+            let after = bonus_alternatives(produced, bonuses);
+            if after != [Mana::default()] {
+                obligations.insert(
+                    0,
+                    Obligation::Output {
+                        choices: after,
+                        life_cost: 0,
+                    },
+                );
+            }
+        }
         self.payment_model(player, None)
-            .plan(pool, self.payment_obligations(player), SourcePolicy::All)
+            .plan(pool, obligations, SourcePolicy::All)
             .is_some()
     }
 
@@ -1206,7 +1228,12 @@ impl Game {
             }
         }
         let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
+        // Tapping the source for mana (CR 106.12) selects its triggered mana
+        // abilities from this board, before a sacrifice cost or suffix can
+        // change it; they resolve once the output is produced (CR 106.12a).
+        let mut bonuses = Vec::new();
         if ability.tap_source {
+            bonuses = self.tap_bonuses(&self.mana_triggers(), player, permanent);
             self.tap_permanent(permanent, true);
         }
         if ability.life_cost > 0 {
@@ -1222,6 +1249,8 @@ impl Game {
         caller.decision = Decision::ManaChoice {
             player,
             choices: ability.mana_choices().unwrap(),
+            produced: None,
+            bonuses,
             resume,
         };
         // The sacrifice cost, then the ability's non-mana instructions, run
@@ -1245,35 +1274,116 @@ impl Game {
         Ok(())
     }
 
+    /// Tap a source of fixed mana for mana and resolve its triggered mana
+    /// abilities. The planner offers only sources whose bonuses need no
+    /// choice (`fixed_source_mana`), so this never suspends.
     fn tap_fixed_mana_source(&mut self, player: PlayerId, permanent: PermanentId) {
-        let produced = self
-            .characteristics(permanent)
-            .mana_abilities
-            .iter()
-            .map(|ability| ability.mana.clone())
-            .collect::<Vec<_>>();
-        self.tap_permanent(permanent, true);
-        for mana in produced {
-            self.state.mana_pool_mut(player).add(&mana);
+        let view = self.characteristics(permanent);
+        let mut produced = Mana::default();
+        for ability in &view.mana_abilities {
+            produced.add(&ability.mana);
         }
+        let bonuses = self.tap_bonuses(&self.mana_triggers(), player, permanent);
+        self.tap_permanent(permanent, true);
+        self.state.mana_pool_mut(player).add(&produced);
+        let resolved = self.resolve_mana_bonuses(player, &produced, bonuses, None);
+        assert!(
+            matches!(resolved, Ok(None)),
+            "a fixed source's bonuses need no choice"
+        );
     }
 
-    /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
-    /// in the payment search until the player selects a color. Callers check
-    /// that the source has mana abilities, can tap and has not lost its
-    /// abilities, reading its characteristics once.
+    /// Fixed tap output plus its triggered mana abilities' mana, or `None`
+    /// when a bonus would need a choice among several produced types (no
+    /// current fixed source produces more than one type). Callers check that
+    /// the source has mana abilities, can tap and has not lost its abilities.
     fn fixed_source_mana(
         &self,
+        player: PlayerId,
         permanent: PermanentId,
         view: &Characteristics,
-        bonus_sources: &[Arc<Characteristics>],
-    ) -> Mana {
+        triggers: &[ManaTrigger],
+    ) -> Option<Mana> {
         let mut output = Mana::default();
         for ability in &view.mana_abilities {
             output.add(&ability.mana);
         }
-        output.add(&self.tap_mana_bonus_from(bonus_sources, permanent));
-        output
+        let bonuses = self.tap_bonuses(triggers, player, permanent);
+        match production_alternatives(&[output], &bonuses).as_slice() {
+            [only] => Some(only.clone()),
+            _ => None,
+        }
+    }
+
+    /// Every triggered mana ability on the battlefield, with its controller,
+    /// read from one board.
+    pub(crate) fn mana_triggers(&self) -> Vec<ManaTrigger> {
+        let mut triggers = Vec::new();
+        for controller in [PlayerId(0), PlayerId(1)] {
+            for (_, view) in self.layer_views(self.iter_battlefield_permanents(controller)) {
+                for ability in &view.triggered_mana_abilities {
+                    triggers.push(ManaTrigger {
+                        controller,
+                        ability: ability.clone(),
+                    });
+                }
+            }
+        }
+        triggers
+    }
+
+    /// The outputs of the triggered mana abilities that `producer` tapping
+    /// `tapped` for mana triggers, in board order. Read before the tap
+    /// commits, so a source sacrificed for its own ability keeps its
+    /// characteristics.
+    pub(crate) fn tap_bonuses(
+        &self,
+        triggers: &[ManaTrigger],
+        producer: PlayerId,
+        tapped: PermanentId,
+    ) -> Vec<TriggeredManaOutput> {
+        triggers
+            .iter()
+            .filter(|trigger| {
+                trigger.ability.who.includes(trigger.controller, producer)
+                    && self.permanent_matches_predicate(tapped, &trigger.ability.predicate)
+            })
+            .map(|trigger| trigger.ability.output.clone())
+            .collect()
+    }
+
+    /// Resolve `bonuses` after a production of `produced` into `player`'s
+    /// pool (CR 605.4a): a fixed or single-type bonus adds at once; a choice
+    /// among several produced types suspends as a `ManaChoice` holding the
+    /// rest. A production of no mana triggers nothing (CR 106.12a). Returns
+    /// the caller's `resume` when every bonus resolved, or the choice.
+    pub(crate) fn resolve_mana_bonuses(
+        &mut self,
+        player: PlayerId,
+        produced: &Mana,
+        bonuses: Vec<TriggeredManaOutput>,
+        resume: Option<Box<Decision>>,
+    ) -> Result<Option<Box<Decision>>, Box<Decision>> {
+        if produced.total() == 0 {
+            return Ok(resume);
+        }
+        let mut pending = bonuses.into_iter();
+        while let Some(bonus) = pending.next() {
+            let mut choices = bonus.alternatives(produced);
+            if choices.len() > 1 {
+                return Err(Box::new(Decision::ManaChoice {
+                    player,
+                    choices,
+                    produced: Some(produced.clone()),
+                    bonuses: pending.collect(),
+                    resume,
+                }));
+            }
+            if let Some(mana) = choices.pop() {
+                self.state.mana_pool_mut(player).add(&mana);
+            }
+        }
+        Ok(resume)
     }
 
     pub fn cached_producible_mana(&mut self, player: PlayerId) -> Mana {
@@ -1390,7 +1500,7 @@ impl Game {
 
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
-        let bonus_sources = self.tap_bonus_sources(player);
+        let triggers = self.mana_triggers();
         for (permanent_id, view) in self.layer_views(self.iter_battlefield_permanents(player)) {
             if view.mana_abilities.is_empty()
                 || !self.permanent_can_tap(permanent_id)
@@ -1398,7 +1508,9 @@ impl Game {
             {
                 continue;
             }
-            total.add(&self.fixed_source_mana(permanent_id, &view, &bonus_sources));
+            if let Some(mana) = self.fixed_source_mana(player, permanent_id, &view, &triggers) {
+                total.add(&mana);
+            }
         }
         total
     }
@@ -1453,6 +1565,58 @@ impl Game {
             }) && !self.characteristics(id).abilities_lost
         })
     }
+}
+
+/// A triggered mana ability on the battlefield and its controller, the
+/// "you" its `who` is relative to.
+pub(crate) struct ManaTrigger {
+    controller: PlayerId,
+    ability: TriggeredManaAbility,
+}
+
+/// Each distinct total the triggered mana abilities `bonuses` can add after a
+/// production of `produced`: one per combination of their alternatives.
+/// Nothing when the production added no mana (CR 106.12a).
+fn bonus_alternatives(produced: &Mana, bonuses: &[TriggeredManaOutput]) -> Vec<Mana> {
+    let mut totals = vec![Mana::default()];
+    if produced.total() == 0 {
+        return totals;
+    }
+    for bonus in bonuses {
+        let alternatives = bonus.alternatives(produced);
+        if alternatives.is_empty() {
+            continue;
+        }
+        let mut next = Vec::new();
+        for total in &totals {
+            for alternative in &alternatives {
+                let mut sum = total.clone();
+                sum.add(alternative);
+                if !next.contains(&sum) {
+                    next.push(sum);
+                }
+            }
+        }
+        totals = next;
+    }
+    totals
+}
+
+/// Each distinct pool addition of a mana ability with `outputs` followed by
+/// the triggered mana abilities it triggers. The planner reads these as one
+/// output choice; play resolves the bonuses' own choices afterward.
+fn production_alternatives(outputs: &[Mana], bonuses: &[TriggeredManaOutput]) -> Vec<Mana> {
+    let mut totals = Vec::new();
+    for output in outputs {
+        for bonus in bonus_alternatives(output, bonuses) {
+            let mut sum = output.clone();
+            sum.add(&bonus);
+            if !totals.contains(&sum) {
+                totals.push(sum);
+            }
+        }
+    }
+    totals
 }
 
 /// `cost` as obligations: `waterbend` of its generic that taps may also
