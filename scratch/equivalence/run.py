@@ -26,7 +26,10 @@ from manabot.env.observation import ObservationSpace  # noqa: E402
 from manabot.infra.config import ModelConfig, ObservationConfig  # noqa: E402
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.model.admission import admit_observation  # noqa: E402
-from manabot.backends.torch.rl import legal_mask, policy_logs  # noqa: E402
+try:  # noqa: E402
+    from manabot.backends.torch.rl import legal_mask, policy_logs
+except ImportError:  # before the updates take the backend (PR A)
+    from manabot.model.policy_distribution import legal_mask, policy_logs
 from manabot.model.inference import PolicyInference  # noqa: E402
 from manabot.training.loops.minimal import train  # noqa: E402
 import managym  # noqa: E402
