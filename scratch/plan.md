@@ -60,8 +60,8 @@ Checks: `pytest tests/model/test_bucketed_shapes.py` 10 passed;
 
 Remaining: gate; MTG-301 L4 A/B (docs give the Etude `Job.environment` recipe; `Variable` is Pydantic, keyword arguments only).
 
-Upstream (2026-11-12): origin/main is still the checkout base `b2ff1aaed`;
-MTG-299, MTG-300 and MTG-301 are started and unmerged, so the expected
+Upstream (2026-11-12): the branch contains origin/main `01d5abd2c` (merged at
+`ac7bda09e`). MTG-299, MTG-300 and MTG-301 are not on main, so the expected
 conflicts (catalog selection in `actor_critic.py`, encoder count checks) are
 resolved by whichever lands second.
 
@@ -78,17 +78,10 @@ state. Object trimming silently off under `historical_mean`/belief rows is a
 correctness guard, not a user choice. Remaining packed paths (300/300 full
 signatures) are the stated follow-up for the L4 profile, not a design gap.
 
-Concept review after merging main (2026-11-12, at `ac7bda09e`): main now ships
-`managym.observation_layout()`, the native column table with each column's name,
-kind and encoding. It already names every object reference `buckets.py`
-remaps: encoding "Padded object table index + 1" on facts.object,
-effects.controller/source, effect_members.object, relations.source/reference,
-agent/opponent_permanents.attached_to/blocking; zero-based object-table index
-on action_focus and policy-history events.source_context/target_context. The
-engine guide says to look columns up by name. `_ONE_BASED_REFERENCES` and
-`_EVENT_FOCUS_COLUMNS` still hard-code 10, 12, 0, 6, 24, 5, 10, so a reference
-column added later would be trimmed away and not renumbered: wrong objects, no
-error.
+Concept review after merging main (2026-11-12, at `ac7bda09e`): main ships
+`managym.observation_layout()`, naming each column with its encoding; hard-coded
+reference columns would let a later-added reference be trimmed without being
+renumbered (wrong objects, no error). Fixed below.
 
 Layout lookups (done): `buckets.py` names every remapped reference and row join
 (effect detail/member spans, relation frame, action continuation) through
