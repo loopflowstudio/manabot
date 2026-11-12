@@ -9,7 +9,7 @@ use managym::{
     agent::action::Action,
     state::{
         game_object::{ObjectId, PlayerId},
-        mana::{Mana, ManaUse},
+        mana::{Mana, ManaRestriction},
         zone::ZoneType,
     },
 };
@@ -463,7 +463,7 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         let mut s = five_color_setup(&["Prophetic Prism"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
-        let lesson = ManaUse::spell(["Lesson"]);
+        let lesson = ManaRestriction::spell(["Lesson"]);
         let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
         s.game_mut().state.players[0].mana_pool.add(&restricted);
         s.game_mut().scenario_refresh_priority().unwrap();

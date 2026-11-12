@@ -57,12 +57,12 @@ def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
         "elemental_closure",
         "elemental_lambda",
         "lambda_sweep",
+        "mlx_pilot",
         "mtg183-elemental-eval",
         "seat_comparison",
         "tla_frontier",
         "tla_frontier_calibration",
         "tla_frontier_vocabulary",
-        "token_stream",
         "two_seat",
         "value_readout_252",
     }

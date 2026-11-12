@@ -28,6 +28,9 @@ pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackDefinitionManifest {
     pub card_def_id: CardDefId,
+    /// The card's or token's key; `None` for a back face or rules fixture.
+    /// With the name it identifies the row: two tokens may share a name.
+    pub key: Option<String>,
     pub registry_name: String,
 }
 
@@ -95,8 +98,9 @@ impl ContentPack {
 
     /// Read-only descriptor for binding derived consumers to the catalog.
     ///
-    /// Registry names are used only at the adapter boundary. Runtime match
-    /// facts and learning projections continue to carry typed definition IDs.
+    /// Keys and registry names are used only at the adapter boundary. Runtime
+    /// match facts and learning projections continue to carry typed
+    /// definition IDs.
     pub fn manifest(&self) -> ContentPackManifest {
         ContentPackManifest {
             world_version: crate::WORLD_VERSION.into(),
@@ -106,6 +110,7 @@ impl ContentPack {
                 .definition_entries()
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
                     card_def_id,
+                    key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
                     registry_name: definition.name.clone(),
                 })
                 .collect(),

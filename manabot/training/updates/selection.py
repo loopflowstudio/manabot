@@ -1,20 +1,23 @@
-"""Advantage selection and censored rollout diagnostics shared by both learners.
+"""Censored rollout diagnostics of the player's advantage selection.
+
+The selection itself is generic (`manabot.rl.selection`); these group it by the
+player's action types and terminal distances.
 
 Distances count same-viewer transitions to a terminal observed in this batch.
 Unfinished tails are unknown, never labeled distant or terminal. Residuals are
 lambda-target minus collection prediction, not independent ground-truth error.
 """
 
-import math
 from typing import Literal, TypedDict
 
 import torch
 from torch import Tensor
 
-from manabot.model.numerics import float64_operand
-from manabot.training.learning.health import NumericalHealth
-from manabot.training.learning.returns import terminal_distances
+from manabot.rl.numerics import float64_operand
+from manabot.rl.returns import terminal_distances
+from manabot.rl.selection import magnitude_quantile
 from manabot.training.rollout.adaptive import AdaptiveDiagnostics
+from manabot.training.updates.health import NumericalHealth
 
 
 class SelectionGroup(TypedDict):
@@ -26,54 +29,6 @@ class SelectionGroup(TypedDict):
     retained_advantage_quantiles: list[float]
     residual_abs_mean: float
     retained_residual_abs_mean: float | None
-
-
-def selected_rows(
-    advantages: Tensor,
-    fraction: float,
-    minimum: float,
-    *,
-    kind: Literal["top_count", "quantile"] = "top_count",
-) -> Tensor:
-    """Select [B] indexes, preserving each learner's pre-shuffle order.
-
-    Top-count sorts by magnitude with stable ties; quantiles retain row order.
-    """
-    if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum).nonzero().flatten()
-    magnitude = advantages.abs()
-    count = max(1, math.ceil(len(magnitude) * fraction))
-    indices = torch.argsort(magnitude, descending=True, stable=True)[:count]
-    return indices[magnitude[indices] >= minimum]
-
-
-def _magnitude_quantile(advantages: Tensor, quantile: float) -> float:
-    return float(torch.quantile(advantages.detach().abs(), quantile))
-
-
-def selected_moves(advantages: Tensor, quantile: float, minimum: float) -> Tensor:
-    """Inclusive magnitude quantile over all [T,E] rows; retain every tie."""
-    threshold = max(_magnitude_quantile(advantages, quantile), minimum)
-    return advantages.detach().abs() >= threshold
-
-
-def selection_mask(
-    advantages: Tensor,
-    kind: Literal["top_count", "quantile"],
-    fraction: float,
-    minimum: float,
-) -> Tensor:
-    if kind == "quantile":
-        return selected_moves(advantages, 1 - fraction, minimum)
-    mask = torch.zeros_like(advantages, dtype=torch.bool).flatten()
-    mask[selected_rows(advantages.flatten(), fraction, minimum)] = True
-    return mask.reshape_as(advantages)
-
-
-def selected_mean(values: Tensor, selected: Tensor) -> Tensor:
-    """Selected mean, on the host for MPS; empty support has zero gradient."""
-    values, selected = float64_operand(values), float64_operand(selected)
-    return values[selected].sum() / selected.sum().clamp_min(1)
 
 
 @torch.no_grad()
@@ -169,7 +124,7 @@ def value_scale(
     threshold: float | None = None
     floor_binds: bool | None = None
     if kind == "quantile":
-        empirical = _magnitude_quantile(advantages, quantile)
+        empirical = magnitude_quantile(advantages, quantile)
         threshold = max(empirical, minimum)
         floor_binds = minimum > empirical
     return ValueScale(

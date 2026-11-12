@@ -12,7 +12,7 @@ use crate::{
         },
         effect::Modification,
         game_object::{Object, ObjectKind, PermanentId, PlayerId, PublicId},
-        mana::Mana,
+        mana::{Mana, SpendingContext, SpendingObject},
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         subtype::is_creature_type,
@@ -553,6 +553,31 @@ impl<'a> Context<'a> {
         };
         view.creature_types.sort();
         view.creature_types.dedup();
+        // Activations are paid as abilities of this source (CR 106.6), read
+        // from its final subtypes; an unchanged source keeps sharing its
+        // earlier snapshot.
+        if !view.activated_abilities.is_empty() {
+            let shared = view
+                .activated_abilities
+                .iter()
+                .map(|ability| &ability.mana_cost.purpose)
+                .find(|purpose| {
+                    matches!(purpose, SpendingContext::Activate {
+                        zone: ZoneType::Battlefield,
+                        source,
+                    } if source.describes(&view.subtypes))
+                })
+                .cloned();
+            let purpose = shared.unwrap_or_else(|| SpendingContext::Activate {
+                zone: ZoneType::Battlefield,
+                source: SpendingObject::new(view.subtypes.iter().map(String::as_str)),
+            });
+            for ability in &mut view.activated_abilities {
+                if ability.mana_cost.purpose != purpose {
+                    ability.mana_cost.purpose = purpose.clone();
+                }
+            }
+        }
         view.static_abilities = object
             .statics
             .iter()

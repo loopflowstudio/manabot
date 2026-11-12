@@ -7,6 +7,10 @@ mean, and how interrupted or failed work is recovered. Comparisons are declared
 in [experiments.md](experiments.md); metric definitions live in
 [experiment-metrics.md](experiment-metrics.md); evaluation protocols live in
 [evaluation.md](evaluation.md).
+An update learns from one collected batch, a loop keeps playing and updating
+until it is done, and a recipe is our loops with our settings;
+[training loops](training-loop.md) lists the updates, their pieces and a loop
+to copy.
 
 - [Run training](#run-training)
 - [Regimes and stages](#regimes-and-stages)
@@ -60,7 +64,9 @@ device fails explicitly. Float64 loss and diagnostic arithmetic runs on the
 host with gradients preserved; no automatic operator fallback is enabled.
 Reduced precision remains CUDA-only. MPS process recovery, belief
 inputs and frozen opponents are unsupported. Evaluation and search stay on CPU
-for this workflow. The baseline coordinator reserves a CPU evaluator thread
+for this workflow. A separate [MLX backend](../manabot/backends/mlx.md) of the policy
+and learner step reads the same checkpoints, converted to the shared container,
+for measurement on Apple Silicon; it does not train. The baseline coordinator reserves a CPU evaluator thread
 alongside accelerator training. Monitoring exports do not require process
 recovery; accelerator runs cannot resume a stopped learner. This support makes
 no speed or strength claim.
@@ -129,6 +135,9 @@ Direct `SeatRoutedCollector` users must call `close()`.
 `execution.bucketed_shapes` (default `False`, serialized only when `True`)
 selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
 for the stage's collection and learner policies.
+`execution.live_tokens` (default `False`, serialized only when `True`) selects
+[live-token attention](observation-and-model.md#live-token-attention-profiling)
+for the same policies.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as

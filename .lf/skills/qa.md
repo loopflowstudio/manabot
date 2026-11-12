@@ -89,13 +89,18 @@ publish, land or choose the next Graph step from here.
   uv/Cargo/npm download caches stay warm locally, unlike the CI reference.
 - Local-update search changes: `uv run --extra dev python
   scripts/bench_local_update.py --reference main --worlds 4 16` checks in
-  seconds that default receipts still equal main's, field for field; the
-  `--rollout-evidence`/`--native-encoder` arms check opt-in parity. To play
+  seconds that receipts still equal main's, field for field; the
+  `--rollout-evidence`/`--native-encoder` arms check that full evidence and
+  the Python encoder still match the compact, native defaults. To play
   games, build two players per arm with `make_player` and drive `act`,
   `prepare_step`, `env.step_semantic` and `observe_step` as
   `manabot/sim/native_game.py` does; the default `decision_seconds=1` times
   out full evidence at 16 worlds × depth 20 (about 0.9 s on the
-  initialized fixture), so set the budget explicitly.
+  initialized fixture), so set the budget explicitly for full-evidence arms.
+  `_bench_match` and `_initialized_checkpoint` from the bench script give the
+  match and checkpoint; with equal player and reset seeds, every evidence and
+  encoder arm must pick identical Commands for a whole game (two 93-decision
+  games per arm at 4 worlds × depth 20 took about 90 s).
 - Model or training-path changes: `uv run manabot train --recipe local --device
   cpu --out .runs/<name>` takes seconds and writes `run.json` with per-phase
   seconds (`learning_seconds`, collection and forward splits) for an A/B. Play
@@ -106,6 +111,16 @@ publish, land or choose the next Graph step from here.
   `Sideboard` section, because the default sim match is refused. Fixed seeds
   make equal win, timeout and mean-step counts a check that every sampled
   action matched. Ten games took about two minutes on a loaded laptop.
+- MLX backend (`manabot.backends.mlx`, Apple Silicon with the `mlx` extra only):
+  run it on the Mac that owns the measurement, not on a shared laptop. Convert a w160l8
+  checkpoint (the published `experiments/data/mlx_pilot/capture/initial.pt`;
+  `local` recipe checkpoints use FiLM and are refused), load it with
+  `load_mlx_policy` and step a `VectorEnv` with `MatchConfig(world=WORLD_SETUP)`,
+  admitting each batch with `admit_observation` and comparing against torch
+  `PolicyInference` (torch values are `[B]`, MLX `[B,1]` from `policy(...)` and `[B]` from
+  `policy.evaluate`; untrained-policy argmax
+  differences are exact ties). `python -m manabot.backends.parity <initial.pt>
+  --capture <capture dir>` on the published subset takes about 50 s on an M2.
 - Library consumers: follow `docs/development.md#build-and-verify` into an
   ignored `.runs/` output (the engine staging is `<staging>/managym`), then
   `uv build --wheel --python 3.12 <managym sdist>` for the other interpreter
@@ -128,6 +143,17 @@ publish, land or choose the next Graph step from here.
   (`zone`, `is_token`) at every decision. A token in the graveyard during a
   mana ability's color choice is correct: SBAs wait for priority. Academy's
   game end is a "Game Over" dialog with "Play Again".
+- Python-only library changes (no engine change): `uv build --wheel --package
+  manabot -o .runs/<dir>` builds in seconds; install it into a fresh `/tmp`
+  venv with `uv pip install <wheel> --index-url https://pypi.org/simple
+  --extra-index-url https://download.pytorch.org/whl/cpu --index-strategy
+  unsafe-best-match` (the matching `managym` comes from PyPI), then run user
+  scripts from `/tmp` with `<venv>/bin/python -I`. Outside a checkout,
+  `save_checkpoint` prints a harmless `fatal: not a git repository`.
+- Training guide (`docs/training-loop.md`): run its example command verbatim
+  (about 20 s on CPU), save and reload the policy as it says, call both
+  maintained rules directly on a collected batch, and compare the tables'
+  signatures with `inspect.signature`.
 - Training recipes: write a regime JSON from Python
   (`TrainingRegime(...).model_dump_json()`) and run
   `uv run manabot train --regime <file> --seed N --out /tmp/<dir>/<run>` with a
@@ -135,7 +161,14 @@ publish, land or choose the next Graph step from here.
   (`status`, `stages[].artifacts`, `selected_artifact`). Keep it small (4 streams,
   64 transitions, 2 updates; a few seconds on CPU). Artifact fetches need
   `doppler run --project manabot --config prd --`; set `MANABOT_DATA_CACHE` to
-  an empty directory to act like a new machine.
+  an empty directory to act like a new machine. To A/B an `Execution` switch
+  the CLI lacks (such as `live_tokens`), start from
+  `manabot.recipes.local.local_smoke(steps=3, device="cpu")`, set
+  `stages[0].execution.<field>`, re-validate, and dump one regime per arm with
+  the same `--seed`. Equal layouts then give `run.json` files that differ only in
+  `regime_digest`, and `model_state_dict` within about 1e-6. On CPU,
+  `bucketed_shapes` makes learning about 7× slower than padded, so time
+  bucketed arms against a bucketed control.
 - TLA Limited decks (the MTG-282 pool corpus) overflow default observation
   capacities within a few dozen games; copy the `observation` block and the
   `game_errors` policy (`recover_capacity: true`) of
@@ -156,3 +189,15 @@ publish, land or choose the next Graph step from here.
   preexec_fn=lambda: signal.signal(signal.SIGINT, signal.SIG_DFL))` and
   `os.killpg(pid, SIGINT)`. A job started with `&` from a non-interactive shell
   ignores SIGINT, so `pkill -INT` appears to hang.
+- Experiment reports and figures: arrive as a new reader with
+  `MANABOT_DATA_CACHE` set to an empty directory, then `doppler run --project
+  manabot --config prd -- uv run --extra artifacts python -m manabot.data fetch
+  <paths>`. In zsh, pass a path list as an array (`"${P[@]}"`), since zsh does
+  not word-split `$P`. Fetch only the files the figure code reads; whole
+  evidence folders can exceed 1 GB. Redraw twice and compare digests, because a
+  figure that changes bytes on every redraw also changes its manifest entry.
+  Render SVGs with `rsvg-convert -z 2 -b white` and look at them. The L4 profile
+  (`experiments/l4_step_profile.py`) has a CPU smoke job,
+  `ETUDE_OUTPUT_DIR=<dir> MTG301_WORK=<dir> MTG301_CANDIDATE=<c> uv run python
+  experiments/l4_step_profile.py job --smoke`. For `live` it took about 6
+  minutes and 2.2 GB and runs every stage as a real child process.

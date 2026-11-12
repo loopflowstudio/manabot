@@ -62,8 +62,18 @@ and one program span per ability or spell; a created token is a reference to its
 definition row. `key`, `scryfall_id`, `name` and `text_box` are never tokens.
 
 `BoundSemanticPack` binds that catalog to a live manifest: the digests must match
-and manifest IDs join rows by registry name, so rows never depend on `CardDefId`
-allocation. The `semantic_only` mode masks opaque `CardDefId` inputs;
+and each manifest ID joins the catalog row of the same definition key, so rows
+never depend on `CardDefId` allocation. A back face or rules fixture has no key
+and joins by its printed name. Names alone do not identify a definition: two
+tokens may print one name, and a token may print a card's.
+
+```python
+raw = managym.catalog_tokens()
+raw["keys"][row]            # "token.spirit", "tla.aang_s_iceberg", or None
+raw["registry_names"][row]  # "Spirit": the printed name, possibly shared
+```
+
+The `semantic_only` mode masks opaque `CardDefId` inputs;
 `identity` exposes them for controlled ablations. The projection reads only
 viewer-safe `managym.Observation`; mutable counters, damage, control and other
 match facts remain in observation tensors.

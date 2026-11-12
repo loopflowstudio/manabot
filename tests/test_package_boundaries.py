@@ -40,6 +40,71 @@ def test_manabot_never_imports_academy() -> None:
     assert violations == []
 
 
+_FRAMEWORKS = ("torch", "mlx", "jax", "jaxlib", "flax")
+_BACKENDS = REPO_ROOT / "manabot/backends"
+
+
+def _manabot_imports() -> list[tuple[Path, int, str]]:
+    return [
+        (path, line, module)
+        for path in sorted((REPO_ROOT / "manabot").rglob("*.py"))
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+    ]
+
+
+def test_policy_contract_imports_no_array_framework() -> None:
+    policy = REPO_ROOT / "manabot/policy"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if policy in path.parents
+        and (
+            module.split(".")[0] in _FRAMEWORKS
+            or module == "manabot.backends"
+            or module.startswith("manabot.backends.")
+        )
+    ]
+    assert violations == []
+    # Transitively too: the shared preparation and container load no framework.
+    probe = textwrap.dedent(
+        f"""
+        import sys
+        import manabot.policy.checkpoint, manabot.policy.prepare, manabot.policy.protocol
+        loaded = sorted(m for m in sys.modules if m.split(".")[0] in {_FRAMEWORKS!r})
+        assert not loaded, loaded
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], check=True, cwd=REPO_ROOT)
+
+
+def test_only_the_mlx_backend_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module import neither it nor any backend, eagerly or lazily.
+    mlx = _BACKENDS / "mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
+        or (
+            (module == "manabot.backends" or module.startswith("manabot.backends."))
+            and _BACKENDS not in path.parents
+        )
+    ]
+    assert violations == []
+
+
+def test_backends_never_import_each_other() -> None:
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if _BACKENDS in path.parents
+        and path.parent != _BACKENDS
+        and module.startswith("manabot.backends.")
+        and module.split(".")[2] != path.relative_to(_BACKENDS).parts[0]
+    ]
+    assert violations == []
+
+
 class _RefuseAcademy(importlib.abc.MetaPathFinder):
     """Fail any attempt to import academy, as if it were not installed."""
 
@@ -273,6 +338,53 @@ def test_engine_imports_without_training_or_academy() -> None:
         for module in pkgutil.iter_modules(managym.__path__, 'managym.'):
             importlib.import_module(module.name)
         assert 'manabot' not in sys.modules
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+# Model-agnostic learning pieces: a deck builder or any other role reuses them
+# unchanged, so they never reach the game, its observations, the player model,
+# collection or the engine.
+def test_generic_learning_pieces_import_only_themselves() -> None:
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path in sorted((REPO_ROOT / "manabot/rl").rglob("*.py"))
+        for line, module in _imported_modules(ast.parse(path.read_text(), str(path)))
+        if module.split(".")[0] in {"managym", "academy", "etude"}
+        or (module.startswith("manabot") and not module.startswith("manabot.rl"))
+    ]
+    assert violations == []
+
+
+class _RefuseRoles(importlib.abc.MetaPathFinder):
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        root = fullname.split(".")[0]
+        if root in {"managym", "academy", "etude"} or (
+            root == "manabot"
+            and fullname != "manabot"
+            and not fullname.startswith("manabot.rl")
+        ):
+            raise ImportError(f"generic learning pieces must not import {fullname}")
+        return None
+
+
+def test_generic_learning_pieces_import_without_the_player() -> None:
+    probe = textwrap.dedent(
+        """
+        import importlib
+        import pkgutil
+        import sys
+        from tests.test_package_boundaries import _RefuseRoles
+        sys.meta_path.insert(0, _RefuseRoles())
+        import manabot.rl
+        for module in pkgutil.walk_packages(manabot.rl.__path__, 'manabot.rl.'):
+            importlib.import_module(module.name)
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

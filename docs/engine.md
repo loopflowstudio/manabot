@@ -485,9 +485,12 @@ stable only within one installed build. Do not key a saved embedding table or
 dataset by raw IDs. Join each ID to a stable identity for the installed build:
 `managym.content_pool("world")["definitions"]` maps every `card_def_id` to its
 `registry_name`, definition `key` and `scryfall_id` (back faces have a name but
-no key). For card features rather than identities, `managym.catalog_tokens()`
-gives each definition's tokenized rules text, rows by `CardDefId`, so the
-tokens describe cards a model has not seen.
+no key). Join on `key`: a printed name does not identify a definition, since
+two tokens may share one and a token may share a card's. For card features
+rather than identities, `managym.catalog_tokens()` gives each definition's
+tokenized rules text, rows by `CardDefId`, with the same `keys` and
+`registry_names` beside them, so the tokens describe cards a model has not
+seen.
 
 ### Deprecated names
 

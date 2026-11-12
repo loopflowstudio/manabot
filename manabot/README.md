@@ -5,7 +5,9 @@ training, and verification. You train *a* manabot; this package is how.
 
 The central loop is self-play: play a batch, turn game results into per-decision
 credit, filter, update, repeat. [How a manabot learns](../docs/learning.md)
-explains it, and [training.md](../docs/training.md) covers running it.
+explains it, [training.md](../docs/training.md) covers running it, and
+[training loops](../docs/training-loop.md) lists the updates we maintain,
+their pieces and a loop to copy.
 
 ## Quickstart
 
@@ -192,10 +194,11 @@ remain independent, but a probability at a sampling threshold can turn that
 rounding into a different trajectory; replay uses the retained allocation and
 implementation identity.
 
-### Compact rollout evidence
+### Rollout evidence
 
-Full evidence is the default. To keep the same search but retain less per
-rollout, select compact evidence in the search config:
+Search retains compact evidence by default. An audit run selects full evidence
+in the search config to keep a per-Command witness and viewer hash for every
+rollout step:
 
 ```python
 player, observation_space = make_player(
@@ -207,55 +210,64 @@ player, observation_space = make_player(
             "worlds": 16,
             "depth": 20,
             "decision_seconds": 30,
-            "rollout_evidence": "compact",
+            "rollout_evidence": "full",
         },
     },
     seed=42,
 )
 ```
 
-`player.last_receipt.schema` is then `regularized-local-update/v4`. Every
-rollout keeps its seed, signed value, terminal flag and Command count. Its
+Omit `"rollout_evidence"` (or set it to `"compact"`) and
+`player.last_receipt.schema` is `regularized-local-update/v4`. Every rollout
+keeps its seed, signed value, terminal flag and Command count. Its
 `actor_observation_hashes` list is empty, and its branch audit records
 `audit: false` with empty tapes. During rollouts, search records no native
 witness for each Command and computes no viewer hash for each actor. Each
 Command it applies still increments a count, and the receipt checks that count
 against the native session's counters. Search still checks the root viewer,
 validates every sampled world, checks Command preconditions and keeps the same
-policy inputs and rollout budgets. For the same checkpoint, root, history and
-seed, compact and full evidence choose the same Commands and produce the same
-tensors and values. Compact receipts cannot show that each rollout step matches
-the witness that full evidence would have recorded. `verify_replay` checks only
-the evidence a receipt retains.
+policy inputs and rollout budgets. Compact receipts cannot show that each
+rollout step matches the witness that full evidence would have recorded.
+`verify_replay` checks only the evidence a receipt retains.
 
-`rollout_evidence="full"` is the default and still writes
-`regularized-local-update/v3` receipts with the same `config_json` bytes as
-before. Readers still accept historical v1–v3 receipts. The evidence mode is
-part of the implementation and receipt identity: a registered player selecting
-compact evidence must declare `search_semantics.branch_audit: false`, and
-switching modes never relabels an existing experiment's receipts.
+`rollout_evidence="full"` writes `regularized-local-update/v3` receipts, with
+the same `config_json` bytes that receipts had before the field existed. For
+the same checkpoint, root, history and seed, compact and full evidence choose
+the same Commands and produce the same tensors and values; they differ only in
+what the receipt retains.
+
+The evidence mode is part of the implementation and receipt identity. Readers
+accept historical v1–v4 receipts, and a v1–v3 receipt is always read as full
+evidence. A registration whose config omits `rollout_evidence` predates the
+field and also means full evidence, so frozen registrations keep their
+meaning; a new registration states the mode, and one selecting compact evidence
+declares `search_semantics.branch_audit: false`. Changing the default never
+relabels an existing experiment's receipts or registrations.
 
 ### Native frontier encoding
 
-By default, each frontier forward allocates a fresh batch and fills its rows one
-branch at a time. `LocalUpdateTeacher(..., native_encoder=True)` instead keeps
-frontier buffers from `ObservationEncoder.allocate(capacity)` for the life of the
-teacher. Native code writes every live branch's acting-player observation into
-these buffers with one call, `managym.encode_observations_into(envs, buffers,
-capacity)`, which returns each row's legal-action count. The buffers grow only
-when a frontier exceeds their capacity, and rows past the live frontier are left
-untouched. The tensor layout is the checkpoint's own, and every legal action is
-still required. The option leaves inference threads, rollout depth, legal
-support and the search config unchanged, and is not recorded in the receipt.
-Python callers of `make_player` enable it with a top-level
-`"native_encoder": true` beside `"config"`. Registered evaluation players keep
-the default.
+Each teacher keeps frontier buffers from
+`ObservationEncoder.allocate(capacity)` for its whole life. Native code writes
+every live branch's acting-player observation into these buffers with one call,
+`managym.encode_observations_into(envs, buffers, capacity)`, which returns each
+row's legal-action count. The buffers grow only when a frontier exceeds their
+capacity, and rows past the live frontier are left untouched. The tensor layout
+is the checkpoint's own, and every legal action is still required. The encoder
+leaves inference threads, rollout depth, legal support and the search config
+unchanged, and is not recorded in the receipt, so registered evaluation players
+use it without changing their identity.
 
-A teacher with native encoding reuses its buffers between calls, so only one
-search may use it at a time; give each concurrent search its own teacher. An
-extension without the batch writer, or a buffer whose shape, dtype or
-writability does not match the selected observation space, raises before any
-inference.
+`LocalUpdateTeacher(..., native_encoder=False)`, or a top-level
+`"native_encoder": false` beside `"config"` in a `make_player` spec, instead
+allocates a fresh batch for each frontier forward and fills its rows one branch
+at a time in Python. Use it to compare encoders; both write identical tensors.
+
+A teacher reuses its buffers between calls, so only one search may use it at a
+time; give each concurrent search its own teacher. An extension without the
+batch writer, or a buffer whose shape, dtype or writability does not match the
+selected observation space, raises before any inference. Search never falls
+back to the Python encoder: rebuild the extension, or select
+`native_encoder=False` explicitly.
 
 ### Inference threads
 
@@ -632,8 +644,14 @@ with those packages blocked.
   `execution.py` sequences stages and owns the run lifecycle.
 - `training/rollout/`: on-policy collection, stream producers, matchups and
   complete-game accounting.
-- `training/learning/`: Learner, optimization rules, per-seat returns, sample
-  selection and numerical health.
+- `training/updates/`: an update learns from one collected batch. The damped
+  policy update (`damped_policy.py`, the default), the PPO control (`ppo.py`)
+  and their pieces: Learner, rollout admission, the reference magnet,
+  numerical health and selection diagnostics.
+- `training/loops/`: a loop keeps playing and updating until it is done; a
+  one-page example (`minimal.py`).
+- `rl/`: model-agnostic pieces (returns, losses, selection, the gradient step
+  and EMA); they import nothing else from manabot.
 - `training/state/`: policy admission, exact learning snapshots, recovery and
   retained game-failure state.
 - `belief/`: viewer histories, world distributions and belief models;

@@ -354,7 +354,11 @@ an optional `scryfall_id` and `printed`) in `managym/cards/src/tokens.rs`,
 listed in its `tokens()` and reached through `managym_cards::token_catalog()`,
 keyed `token.<name>`. Effects create tokens by key (`Effect::create_tokens("token.spirit", 1)`),
 never by printed name, so two tokens may share a name (a plain 1/1 Spirit
-beside TLA's `token.spirit`); give each its own descriptive key. A token's
+beside TLA's `token.spirit`); give each its own descriptive key. A definition's
+identity is its key, never its printed name: a deck entry names the one
+eligible card of that name whatever tokens share it, and the learning catalog
+binds manifest rows by key (`catalog_tokens()["keys"]`), by name only for the
+keyless back faces and fixtures. A token's
 `scryfall_id` is the id of its first token printing, or `None` only for a token
 with no printing (Lita's Zeppelin). Deck admission, the world pool and card
 support never accept a token. The engine registers every card face and token

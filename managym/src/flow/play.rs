@@ -23,7 +23,7 @@ use crate::{
         ability::{EffectValue, TargetRequirement},
         card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{ObjectId, PermanentId, PlayerId, Target},
-        mana::{ManaCost, ManaUse},
+        mana::{ManaCost, SpellSnapshot, SpendingContext, SpendingObject},
         stack_object::ActivatedAbilityOnStack,
         zone::ZoneType,
     },
@@ -207,10 +207,7 @@ impl Game {
     ) -> Option<ManaCost> {
         let card_ref = &self.state.objects[object];
         let mut cost = self.casting_mana_cost(player, object, cast)?.with_x(cast.x);
-        cost.purpose = ManaUse::cast(
-            card_ref.subtypes.iter().map(String::as_str),
-            card_ref.types.is_artifact(),
-        );
+        cost.purpose = SpendingContext::Cast(SpellSnapshot(card_ref.copiable_definition()));
         if let Some(additional) = card_ref.required_waterbend() {
             cost = cost.plus(&additional.with_x(cast.x));
         }
@@ -1291,8 +1288,11 @@ impl Game {
             return None;
         }
         let mut ability = ability.clone();
-        let purpose = ManaUse::ability(card_ref.subtypes.iter().map(String::as_str));
-        self.price_activation(player, purpose, &mut ability);
+        ability.mana_cost.purpose = SpendingContext::Activate {
+            zone: ability.zone.zone(),
+            source: SpendingObject::new(card_ref.subtypes.iter().map(String::as_str)),
+        };
+        self.price_activation(player, &mut ability);
         Some(ability)
     }
 

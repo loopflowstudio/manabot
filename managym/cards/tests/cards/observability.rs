@@ -4751,7 +4751,7 @@ fn input_v10_carries_turn_state_that_v9_refuses() {
     let mut s = five_color_setup(&["Gray Ogre"]);
     assert_eq!(refusal(&s), None);
     s.game_mut().state.players[0].mana_pool = managym::state::mana::Mana::restricted_to(
-        managym::state::mana::ManaUse::except_nonartifact_spells(),
+        managym::state::mana::ManaRestriction::ExceptNonartifactSpells,
         [0, 0, 0, 0, 0, 1],
     );
     assert_eq!(

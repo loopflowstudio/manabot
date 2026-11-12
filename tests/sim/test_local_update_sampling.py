@@ -441,22 +441,25 @@ def test_batched_search_checks_deadline_after_forward(
         teacher.search(env._engine, history, seed=17)
 
 
+@pytest.mark.parametrize("native_encoder", [True, False])
 def test_batch_rejects_incomplete_and_nonfinite_rows(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, native_encoder: bool
 ) -> None:
-    teacher, env = make_teacher(tmp_path)
+    teacher, env = make_teacher(tmp_path, native_encoder=native_encoder)
+    # A fresh teacher, so native frontier buffers are first sized for this space.
+    narrow, _ = make_teacher(tmp_path, native_encoder=native_encoder)
     with monkeypatch.context() as patch:
         patch.setattr(
-            teacher,
+            narrow,
             "space",
             ObservationSpace(
-                teacher.space.encoder.config.model_copy(
+                narrow.space.encoder.config.model_copy(
                     update={"max_actions": 1, "action_overflow": "first-legal"}
                 )
             ),
         )
-        with pytest.raises(ValueError, match="complete legal offers"):
-            teacher.predict_batch([env._engine, env._engine])
+        with pytest.raises(ValueError, match="complete legal offers|capacity exceeded"):
+            narrow.predict_batch([env._engine, env._engine])
     forward = teacher.agent.forward
 
     def nonfinite(

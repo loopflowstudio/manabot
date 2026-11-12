@@ -64,9 +64,11 @@ RELATION_ELIGIBILITY_INDEX = 32
 RELATION_X_INDEX = 33
 RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
 RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
-SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
+# Restricted-mana column subtypes, in column order (the native
+# `RESTRICTED_SUBTYPE_COLUMNS`); other restrictions are refused, never dropped.
+RESTRICTED_SUBTYPE_COLUMNS = ("Lesson", "Shrine", "Ally")
 PLAYER_RESTRICTED_INDEX = 40
-PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(SPEND_SUBTYPES) * 6
+PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(RESTRICTED_SUBTYPE_COLUMNS) * 6
 PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
 PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
 PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
@@ -349,6 +351,8 @@ class ObservationEncoder:
                 raise ValueError("invalid action continuation reference")
         if not self.turn_state and (state := managym.input_v10_state(obs)):
             raise UnsupportedPolicyInput(10, state)
+        if state := managym.unrepresentable_state(obs):
+            raise ValueError(f"the policy input cannot represent {state}")
         out = {
             "semantic_cards": np.zeros((2, self.cards_per_player), dtype=np.float32),
             "known_hand": np.zeros((2, self.cards_per_player, 2), dtype=np.float32),
@@ -797,7 +801,7 @@ class ObservationEncoder:
         arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
         arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
         # A class admitting several subtypes counts under each.
-        for index, subtype in enumerate(SPEND_SUBTYPES):
+        for index, subtype in enumerate(RESTRICTED_SUBTYPE_COLUMNS):
             start = PLAYER_RESTRICTED_INDEX + 6 * index
             for restricted in player.restricted_mana:
                 if subtype in (*restricted.spells, *restricted.abilities):

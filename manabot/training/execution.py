@@ -39,11 +39,10 @@ from manabot.infra.source import source_commit
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.model.policy_distribution import NumericalError
 from manabot.model.world import validate_agent_setup
 from manabot.reports.selection import analyze_selection, write_selection_report
-from manabot.training.learning.learner import Learner
-from manabot.training.learning.objectives import update_ema, update_iteration
+from manabot.rl.numerics import NumericalError
+from manabot.rl.step import update_ema
 from manabot.training.mps import mps_torch_error
 from manabot.training.precision import apply_matmul_precision
 from manabot.training.records import (
@@ -58,6 +57,7 @@ from manabot.training.regime import (
     CheckpointCadence,
     CollectBelief,
     CollectSelection,
+    DampedPolicyLearning,
     ImportPolicy,
     TrainBelief,
     TrainingRegime,
@@ -95,6 +95,9 @@ from manabot.training.update_metrics import (
     phase_seconds,
     time_since,
 )
+from manabot.training.updates.damped_policy import update_damped_iteration
+from manabot.training.updates.learner import Learner
+from manabot.training.updates.ppo import update_iteration
 import managym
 
 from .clock import boot_identity, watchdog_seconds
@@ -1121,6 +1124,7 @@ def _execute_regime(
                         opponent_agent, opponent_space = load_checkpoint(
                             str(opponent_path),
                             bucketed_shapes=stage.execution.bucketed_shapes,
+                            live_tokens=stage.execution.live_tokens,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
@@ -1141,6 +1145,7 @@ def _execute_regime(
                         space,
                         regime.agent,
                         bucketed_shapes=stage.execution.bucketed_shapes,
+                        live_tokens=stage.execution.live_tokens,
                     ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
@@ -1455,8 +1460,23 @@ def _execute_regime(
                         # queued work (EMA, last step) counts toward learning.
                         with learner.profiler.track("Learning"):
                             try:
-                                diagnostic = (
-                                    update_iteration(
+                                if stage.trainable != "policy_value":
+                                    diagnostic = {
+                                        "rows": batch.actions.size,
+                                        "optimizer_exposures": 0,
+                                        "retained": 0,
+                                        "numerical": {"optimizer_steps": 0},
+                                    }
+                                elif isinstance(stage.learning, DampedPolicyLearning):
+                                    diagnostic = update_damped_iteration(
+                                        learner,
+                                        batch,
+                                        stage.learning,
+                                        iteration + 1,
+                                        bootstrap_agent=behavior_agent,
+                                    )
+                                else:
+                                    diagnostic = update_iteration(
                                         learner,
                                         batch,
                                         stage.learning,
@@ -1472,14 +1492,6 @@ def _execute_regime(
                                         iteration=iteration + 1,
                                         bootstrap_agent=behavior_agent,
                                     )
-                                    if stage.trainable == "policy_value"
-                                    else {
-                                        "rows": batch.actions.size,
-                                        "optimizer_exposures": 0,
-                                        "retained": 0,
-                                        "numerical": {"optimizer_steps": 0},
-                                    }
-                                )
                                 adaptive_diagnostics = collector.commit_adaptive(batch)
                                 if adaptive_diagnostics is not None:
                                     diagnostic["adaptive"] = adaptive_diagnostics
