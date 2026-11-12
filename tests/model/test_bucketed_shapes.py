@@ -9,23 +9,21 @@ from manabot.env.observation import FACT_OBJECT_INDEX
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.admission import admit_observation
 from manabot.model.buckets import (
-    BUCKETED_SHAPES_ENV,
     ONE_BASED_REFERENCES,
     ZERO_BASED_REFERENCES,
     bucket,
     bucket_sizes,
-    bucketed_shapes_enabled,
 )
 from manabot.model.inference import PolicyInference
 import managym
 from tests.model.test_inference import PolicyFixture, _policy
 
 
-def _bucketed(case: PolicyFixture, monkeypatch: pytest.MonkeyPatch) -> ActorCritic:
+def _bucketed(case: PolicyFixture) -> ActorCritic:
     """A bucketed copy of the fixture's policy with identical weights."""
-    monkeypatch.setenv(BUCKETED_SHAPES_ENV, "1")
-    agent = ActorCritic(case.agent.observation_space, case.agent.config).eval()
-    monkeypatch.delenv(BUCKETED_SHAPES_ENV)
+    agent = ActorCritic(
+        case.agent.observation_space, case.agent.config, bucketed_shapes=True
+    ).eval()
     agent.load_state_dict(case.agent.state_dict())
     # Fresh fact and link outputs are zero; give those joins real signal.
     with torch.no_grad():
@@ -81,26 +79,14 @@ def test_remapped_references_are_every_object_table_column() -> None:
     assert zero_based == set(ZERO_BASED_REFERENCES)
 
 
-def test_switch_reads_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(BUCKETED_SHAPES_ENV, raising=False)
-    assert not bucketed_shapes_enabled()
-    monkeypatch.setenv(BUCKETED_SHAPES_ENV, "0")
-    assert not bucketed_shapes_enabled()
-    monkeypatch.setenv(BUCKETED_SHAPES_ENV, "1")
-    assert bucketed_shapes_enabled()
-    monkeypatch.setenv(BUCKETED_SHAPES_ENV, "yes")
-    with pytest.raises(ValueError, match="must be 0 or 1"):
-        bucketed_shapes_enabled()
-
-
 @pytest.mark.parametrize("history", [False, True])
 def test_outputs_and_gradients_match_default(
-    history: bool, monkeypatch: pytest.MonkeyPatch
+    history: bool,
 ) -> None:
     torch.manual_seed(302)
     case = _policy(history=history)
     obs = _later_decisions(case)
-    agent = _bucketed(case, monkeypatch)
+    agent = _bucketed(case)
     buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)
     assert buckets is not None and buckets.trims_objects
     outputs = []
@@ -164,11 +150,10 @@ def _shrink_facts(obs: dict[str, torch.Tensor]) -> None:
 def test_rejections_match_default(
     plant: Callable[[dict[str, torch.Tensor]], None],
     message: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     case = _policy()
     obs = _later_decisions(case)
-    agent = _bucketed(case, monkeypatch)
+    agent = _bucketed(case)
     plant(obs)
     errors = []
     for model in (case.agent, agent):
@@ -178,13 +163,11 @@ def test_rejections_match_default(
     assert errors[0] == errors[1]
 
 
-def test_reference_to_padding_object_is_kept(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_reference_to_padding_object_is_kept() -> None:
     """A focus on the last permanent slot keeps that slot, as the default reads it."""
     case = _policy()
     obs = _later_decisions(case)
-    agent = _bucketed(case, monkeypatch)
+    agent = _bucketed(case)
     objects = case.agent._is_agent_template.shape[1]
     _set_focus(objects - 1)(obs)
     buckets = bucket_sizes(obs, agent.observation_space.encoder, objects=True)

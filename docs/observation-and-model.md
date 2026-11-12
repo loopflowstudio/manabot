@@ -163,23 +163,29 @@ tokens. On CPU, where the recurrent catalog encoder dominates learning, a
 learner forward and backward is therefore slower than on the default path,
 most of all for small decks.
 
-Turn it on for a process with an environment variable, which takes effect when
-an `ActorCritic` is constructed:
+A training stage turns it on in its execution settings, next to the device:
 
-```bash
-MANABOT_BUCKETED_SHAPES=1 uv run python experiments/<name>.py
+```python
+from manabot.training.regime import Execution
+
+execution = Execution(device="cuda", bucketed_shapes=True)
 ```
 
-An Etude job enables it the same way, through the job's `environment`:
-`environment=(Variable(name="MANABOT_BUCKETED_SHAPES", value="1"),)` on
-`etude.launch.records.Job`, with `Variable` from the same module. The job's
-environment is part of its identity, so running the same job once with each
-setting gives two distinct jobs to compare. Leave it unset, or set it to `0`,
-for the default path.
+The stage's collection and learner policies, including a frozen opponent
+(`load_checkpoint(..., bucketed_shapes=True)`), then use bucketed shapes; its
+evaluation and search do not. `uv run manabot train --recipe baseline
+--bucketed-shapes` sets it on the CLI recipes ([run training](training.md#run-training)),
+and code that builds a policy directly passes
+`ActorCritic(..., bucketed_shapes=True)`. An unset field is omitted from the
+serialized regime, so existing regime hashes are unchanged; a stage that sets
+it records `"bucketed_shapes": true` in the regime in `run.json`. To compare
+the two paths, run the same regime once with each setting.
+`token_stream="pooled"` does not support bucketed shapes, and a regime
+combining them fails validation.
 
-The setting is a runtime choice, not part of the model. It changes no
-`ModelConfig` field, regime hash, checkpoint, world binding or policy input, so
-a checkpoint trained with either setting loads and runs with the other. On CPU,
+The setting changes how a forward is computed, not the model. It changes no
+`ModelConfig` field, checkpoint, world binding or policy input, so a checkpoint
+trained with either setting loads and runs with the other. On CPU,
 action probabilities, values, losses and gradients agree with the default path
 up to the order of floating-point sums. A batch that references no card
 definition is the one difference in gradient support: the catalog encoder then

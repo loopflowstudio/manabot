@@ -1115,7 +1115,8 @@ def _execute_regime(
                     record.inputs["frozen_opponent"] = artifact(opponent_path)
                     if not stage.initial or snapshot is not None:
                         opponent_agent, opponent_space = load_checkpoint(
-                            str(opponent_path)
+                            str(opponent_path),
+                            bucketed_shapes=stage.execution.bucketed_shapes,
                         )
                         validate_agent_setup(
                             opponent_agent, Match(regime.root_match).to_rust()
@@ -1132,7 +1133,11 @@ def _execute_regime(
                     learner, ema, iteration = self_play_session
                 else:
                     torch.manual_seed(seeds["initialization"])
-                    agent = ActorCritic(space, regime.agent).to(stage.execution.device)
+                    agent = ActorCritic(
+                        space,
+                        regime.agent,
+                        bucketed_shapes=stage.execution.bucketed_shapes,
+                    ).to(stage.execution.device)
                     if stage.initial_weights is not None:
                         reference = stage.initial_weights
                         copied = out / f"{stage.id}-initialization-source.pt"

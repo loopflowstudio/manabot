@@ -34,13 +34,16 @@ uv run manabot train --regime regime.json --seed 197 --out .runs/example
 smoke with no evaluation. `--recipe baseline` (`manabot.recipes.baseline`,
 version `baseline-v3`) runs the ordinary baseline through the experiment runner
 with initial and endpoint evaluation. `--steps`, `--seconds` and
-`--learning-seats` and `--device cpu|mps|cuda` apply only to these recipes.
+`--learning-seats`, `--device cpu|mps|cuda` and `--bucketed-shapes` apply only
+to these recipes; a regime sets the same choices in its stages' `Execution`.
 Without `--device`, both select CUDA when available; Apple MPS is used only
 when requested with `--device mps`. Baseline requires an accelerator and
 rejects CPU; use `--recipe local` on machines without CUDA. Local defaults to
 CPU otherwise, including on Apple Silicon, and accepts an explicit override.
 `--preset` and `--set` are
-retired and fail.
+retired and fail. `--bucketed-shapes` trains with
+[bucketed padding](observation-and-model.md#bucketed-padding-profiling), an
+opt-in way to compare accelerator cost; it is off by default.
 
 CPU is the default and recommended device on Apple Silicon. On a quiet Apple
 M2, MPS was slower than CPU for collection at every measured batch size, only
@@ -123,6 +126,9 @@ damping horizon fitted to the run's expected updates and `recover_capacity`.
 The matched GPU comparison for a fixed matchup is in
 [worker-scaling run019](../experiments/worker-scaling.md#persistent-production-producers-run019).
 Direct `SeatRoutedCollector` users must call `close()`.
+`execution.bucketed_shapes` (default `False`, serialized only when `True`)
+selects [bucketed padding](observation-and-model.md#bucketed-padding-profiling)
+for the stage's collection and learner policies.
 
 Self-play `initial` continues the live collector, learner and optimizer of an
 earlier stage in the same execution. External checkpoints never act as
