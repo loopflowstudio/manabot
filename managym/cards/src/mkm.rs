@@ -1,8 +1,8 @@
 //! Murders at Karlov Manor.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
@@ -35,7 +35,10 @@ fn proft_s_eidetic_memory() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::BeginningOfYourCombat,
+                condition: TriggerCondition::BeginningOf {
+                    step: TurnStep::Combat,
+                    whose: Actor::You,
+                },
                 intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
                 effects: vec![Effect::put_counters(
                     ObjectSelector::Target(TargetSpec::CreatureYouControl),

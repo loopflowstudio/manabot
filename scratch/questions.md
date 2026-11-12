@@ -372,3 +372,20 @@ Main added named layout columns (`agent/observation_layout.rs`,
 `managym.observation_layout()`); the merge moved the branch's guards and
 shared-effect writes to those names and described duration code 4. Remaining
 work is in the plan.
+
+## MTG-307 (2026-11-12)
+
+- Assumption (reversible): the trigger player actor is a small `Actor` enum
+  (`You`, `Opponent`, `AnyPlayer`), not `PlayerSelector`, which resolves at
+  resolution and carries `TriggeringPlayer`, `Target` and `Owner`.
+- Assumption (reversible): search, scry, surveil and the bends share one
+  `Performs { who, any_of }` event.
+- Decision (implement, reversible): learning tokens and definition digests
+  move. Tokens are serde-derived names, so stability would need a custom
+  serializer (a compatibility shim); input shapes are unchanged, w17 is the
+  open world and the content digest already moves with every card. Frozen
+  checkpoints and evidence keep their revisions.
+- Out of scope, possible follow-up: `DelayedEvent` (`YouCastSpell`,
+  `EndStep { your_turn }`, `Upkeep`), `Sacrificed { controller_only }`,
+  `YouPutCountersOnCreature` and `YourAttackingCreatureTriggers` still bake
+  the actor into names.

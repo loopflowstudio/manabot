@@ -1,8 +1,8 @@
 //! Avatar: The Last Airbender Eternal.
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, ObjectSelector, Scope, TargetRequirement, TargetSpec,
-        TriggerCondition, TriggerSubject,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, Per, Scope, TargetRequirement,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keyword, Keywords,
@@ -67,17 +67,23 @@ fn the_cabbage_merchant() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::OpponentCastsSpell {
+                condition: TriggerCondition::Casts {
+                    who: Actor::Opponent,
                     predicate: CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
+                    nth: None,
                 },
                 effects: vec![Effect::create_tokens("Food", 1)],
             },
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::CreatureDealsCombatDamageToYou,
+                condition: TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::Any(CardPredicate::creature()),
+                    to: Actor::You,
+                    per: Per::Object,
+                },
                 effects: vec![Effect::Sacrifice {
                     optional: false,
                     what: ObjectSelector::chosen(CardPredicate {

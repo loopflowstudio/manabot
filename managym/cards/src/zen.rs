@@ -1,8 +1,8 @@
 //! Zendikar.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PaymentCost, PlayerSelector,
-        TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PaymentCost,
+        PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{
         CardDefinition, CardType, CardTypes, ManaAbility, ReplacementEffect, StaticAbility,
@@ -108,7 +108,10 @@ fn bloodchief_ascension() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: Some(Condition::OpponentLostLifeThisTurnAtLeast { amount: 2 }),
-                condition: TriggerCondition::BeginningOfEachEndStep,
+                condition: TriggerCondition::BeginningOf {
+                    step: TurnStep::End,
+                    whose: Actor::AnyPlayer,
+                },
                 effects: vec![may(vec![Effect::put_counters(
                     ObjectSelector::This,
                     CounterKind::Quest,
@@ -120,7 +123,10 @@ fn bloodchief_ascension() -> CardDefinition {
                     kind: CounterKind::Quest,
                     count: 3,
                 }),
-                condition: TriggerCondition::CardPutIntoOpponentsGraveyard,
+                condition: TriggerCondition::PutIntoGraveyard {
+                    whose: Actor::Opponent,
+                    predicate: CardPredicate::default(),
+                },
                 effects: vec![may(vec![
                     Effect::LoseLife {
                         player: PlayerSelector::TriggeringPlayer,

@@ -1,7 +1,10 @@
 //! Future Sight.
 use managym_state::effect::Modification;
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
+        TurnStep,
+    },
     card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
 };
@@ -40,7 +43,10 @@ fn rites_of_flourishing() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOfEachDrawStep,
+            condition: TriggerCondition::BeginningOf {
+                step: TurnStep::Draw,
+                whose: Actor::AnyPlayer,
+            },
             effects: vec![Effect::ForPlayer {
                 player: PlayerSelector::TriggeringPlayer,
                 effects: vec![Effect::DrawCards {

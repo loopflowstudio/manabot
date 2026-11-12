@@ -2288,7 +2288,7 @@ fn selected_cards_bind_exact_objects_and_keep_the_callers_mill_result() {
 
 #[test]
 fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_sources() {
-    use crate::state::ability::{Ability, TriggerCondition};
+    use crate::state::ability::{Ability, Actor, KeywordAction, TriggerCondition};
 
     let player = PlayerId(0);
     let (mut game, _, _) = fixture(player);
@@ -2305,7 +2305,10 @@ fn keyword_completion_captures_triggers_before_the_callers_suffix_removes_source
         _ => unreachable!(),
     };
     game.state.cards[source].abilities = vec![Ability::Triggered {
-        condition: TriggerCondition::YouScryOrSurveil,
+        condition: TriggerCondition::Performs {
+            who: Actor::You,
+            any_of: vec![KeywordAction::Scry, KeywordAction::Surveil],
+        },
         intervening_if: None,
         effects: vec![Effect::gain_life(1)],
     }];

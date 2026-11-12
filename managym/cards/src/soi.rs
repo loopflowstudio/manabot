@@ -1,8 +1,8 @@
 //! Shadows over Innistrad.
 use managym_state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
-        TriggerSubject,
+        Ability, Actor, Condition, Effect, EffectValue, ObjectSelector, PlayerSelector,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
@@ -73,7 +73,10 @@ fn fevered_visions() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::BeginningOfEachEndStep,
+            condition: TriggerCondition::BeginningOf {
+                step: TurnStep::End,
+                whose: Actor::AnyPlayer,
+            },
             effects: vec![
                 that_player(vec![Effect::DrawCards {
                     count: EffectValue::Fixed(1),

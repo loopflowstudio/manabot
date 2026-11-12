@@ -4,9 +4,10 @@
 
 use crate::state::{
     ability::{
-        Ability, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency, DistinctSearchEnd,
-        Effect, EffectValue, LinkedChooser, LinkedExile, LinkedGrant, ObjectSelector, PaymentCost,
-        PlayerSelector, Scope, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Actor, Condition, DelayedEvent, DelayedExpiry, DelayedFrequency,
+        DistinctSearchEnd, Effect, EffectValue, KeywordAction, LinkedChooser, LinkedExile,
+        LinkedGrant, ObjectSelector, PaymentCost, Per, PlayerSelector, Scope, TargetSpec,
+        TriggerCondition, TriggerSubject, TurnStep,
     },
     card::{Card, CardType, Keyword, Keywords},
     effect::{EffectDuration, Modification},
@@ -76,23 +77,8 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::NoCounters { kind } => {
             format!("When this has no {} counters on it", counter_description(*kind))
         }
-        TriggerCondition::YouCastSpell { predicate } => format!(
-            "When you cast a {}",
-            predicate_description(predicate, "spell")
-        ),
-        TriggerCondition::CreatureDealsCombatDamageToYou => {
-            "Whenever a creature deals combat damage to you".into()
-        }
-        TriggerCondition::OpponentCastsSpell { predicate } => format!(
-            "Whenever an opponent casts a {}",
-            predicate_description(predicate, "spell")
-        ),
         TriggerCondition::SpellTargetsOnlyThis { predicate } => format!(
             "Whenever a player casts a {} that targets only this",
-            predicate_description(predicate, "spell")
-        ),
-        TriggerCondition::PlayerCastsSpell { predicate } => format!(
-            "When a player casts a {}",
             predicate_description(predicate, "spell")
         ),
         TriggerCondition::AttacksWithAnother => {
@@ -109,45 +95,16 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Attacks {
             subject: TriggerSubject::EnchantedCreature,
         } => "When enchanted creature attacks".into(),
-        TriggerCondition::Attacks {
-            subject: TriggerSubject::AnotherYouControl(predicate),
-        } => format!(
-            "When one or more other {} you control attack",
-            predicate_description(predicate, "permanents")
-        ),
-        TriggerCondition::Attacks {
-            subject: TriggerSubject::AnyYouControl(predicate),
-        } => format!(
-            "When one or more {} you control attack",
-            predicate_description(predicate, "permanents")
-        ),
-        TriggerCondition::Attacks {
-            subject: TriggerSubject::Another(predicate),
-        } => format!(
-            "When one or more other {} attack",
-            predicate_description(predicate, "permanents")
-        ),
+        TriggerCondition::Attacks { subject } => {
+            format!("When {} attack", one_or_more(subject, "permanents"))
+        }
         TriggerCondition::AttacksAlone { subject } => {
             format!("When {} attacks alone", subject_description(subject))
-        }
-        TriggerCondition::OpponentSearchesLibrary => {
-            "When an opponent searches their library".into()
-        }
-        TriggerCondition::CardPutIntoOpponentsGraveyard => {
-            "When a card is put into an opponent's graveyard from anywhere".into()
         }
         TriggerCondition::FromZone { zone, condition } => format!(
             "{} (from {})",
             condition_description(condition),
             format!("{zone:?}").to_lowercase()
-        ),
-        TriggerCondition::CreatureDealsCombatDamageToPlayer { subject } => format!(
-            "When {} deals combat damage to a player",
-            subject_description(subject)
-        ),
-        TriggerCondition::OneOrMoreDealCombatDamageToPlayer { predicate } => format!(
-            "When one or more {} you control deal combat damage to a player",
-            predicate_description(predicate, "creatures")
         ),
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
@@ -159,36 +116,12 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When {} becomes the target of an opponent's spell or ability",
             subject_description(subject)
         ),
-        TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
-        TriggerCondition::BeginningOfEachUpkeep => "At the beginning of each upkeep".into(),
-        TriggerCondition::BeginningOfEachDrawStep => {
-            "At the beginning of each player's draw step".into()
-        }
-        TriggerCondition::BeginningOfEachEndStep => {
-            "At the beginning of each player's end step".into()
-        }
-        TriggerCondition::YouBend => {
-            "Whenever you waterbend, earthbend, firebend, or airbend".into()
-        }
-        TriggerCondition::BeginningOfYourCombat => "At the beginning of your combat".into(),
-        TriggerCondition::BeginningOfYourEndStep => "At the beginning of your end step".into(),
         TriggerCondition::YourAttackingCreatureTriggers => "Whenever a creature you control attacking causes a triggered ability of that creature to trigger".into(),
-        TriggerCondition::BeginningOfYourFirstMainPhase => {
-            "At the beginning of your first main phase".into()
-        }
         TriggerCondition::WhileSourceAttacking { condition } => format!(
             "{} while this is attacking",
             condition_description(condition)
         ),
-        TriggerCondition::YouCastNthSpellThisTurn { n } => {
-            format!("Whenever you cast your spell number {n} each turn")
-        }
         TriggerCondition::Chapter { chapter } => format!("Chapter {}", roman(*chapter)),
-        TriggerCondition::YouDrawNthCardThisTurn { n } => {
-            format!("When you draw card {n} this turn")
-        }
-        TriggerCondition::YouScry => "When you scry".into(),
-        TriggerCondition::YouScryOrSurveil => "When you scry or surveil".into(),
         TriggerCondition::LeavesTheBattlefield { subject } => {
             format!(
                 "When {} leaves the battlefield",
@@ -199,8 +132,86 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When you put one or more {} counters on a creature",
             counter_description(*kind)
         ),
-        TriggerCondition::OpponentDrawsNthCardThisTurn { n } => {
-            format!("When an opponent draws card {n} this turn")
+        TriggerCondition::Casts {
+            who,
+            predicate,
+            nth: None,
+        } => format!(
+            "Whenever {} a {}",
+            actor_does(*who, "cast", "casts"),
+            predicate_description(predicate, "spell")
+        ),
+        TriggerCondition::Casts {
+            who,
+            predicate,
+            nth: Some(n),
+        } => format!(
+            "Whenever {} {} {} {} each turn",
+            actor_does(*who, "cast", "casts"),
+            actor_possessive(*who),
+            ordinal(*n),
+            predicate_description(predicate, "spell")
+        ),
+        TriggerCondition::Draws { who, nth: None } => {
+            format!("Whenever {} a card", actor_does(*who, "draw", "draws"))
+        }
+        TriggerCondition::Draws { who, nth: Some(n) } => format!(
+            "Whenever {} {} {} card each turn",
+            actor_does(*who, "draw", "draws"),
+            actor_possessive(*who),
+            ordinal(*n)
+        ),
+        TriggerCondition::BeginningOf { step, whose } => {
+            let whose = match whose {
+                Actor::You => "your",
+                Actor::Opponent => "each opponent's",
+                Actor::AnyPlayer => "each player's",
+            };
+            let step = match step {
+                TurnStep::Upkeep => "upkeep",
+                TurnStep::Draw => "draw step",
+                TurnStep::FirstMain => "first main phase",
+                TurnStep::Combat => "combat",
+                TurnStep::End => "end step",
+            };
+            format!("At the beginning of {whose} {step}")
+        }
+        TriggerCondition::Performs { who, any_of } => {
+            let actions: Vec<String> = any_of
+                .iter()
+                .map(|action| keyword_action_text(*who, *action))
+                .collect();
+            format!(
+                "Whenever {} {}",
+                actor_noun(*who),
+                alternatives(&actions)
+            )
+        }
+        TriggerCondition::PutIntoGraveyard { whose, predicate } => format!(
+            "Whenever a {} is put into {} from anywhere",
+            predicate_description(predicate, "card"),
+            match whose {
+                Actor::You => "your graveyard",
+                Actor::Opponent => "an opponent's graveyard",
+                Actor::AnyPlayer => "a graveyard",
+            }
+        ),
+        TriggerCondition::DealsCombatDamage { subject, to, per } => {
+            let to = match to {
+                Actor::You => "you",
+                Actor::Opponent => "an opponent",
+                Actor::AnyPlayer => "a player",
+            };
+            match per {
+                Per::Object => format!(
+                    "Whenever {} deals combat damage to {to}",
+                    subject_description(subject)
+                ),
+                Per::Batch => format!(
+                    "Whenever {} deal combat damage to {to}",
+                    one_or_more(subject, "creatures")
+                ),
+            }
         }
         TriggerCondition::InGraveyard { condition } => {
             format!(
@@ -223,6 +234,106 @@ fn subject_description(subject: &TriggerSubject) -> String {
         TriggerSubject::AnyYouControl(p) => {
             format!("a {} you control", predicate_description(p, "permanent"))
         }
+        TriggerSubject::Any(p) => format!("a {}", predicate_description(p, "permanent")),
+    }
+}
+
+/// A subject read as a batch ("one or more other Allies you control"); a
+/// single object reads as itself.
+fn one_or_more(subject: &TriggerSubject, plural: &str) -> String {
+    match subject {
+        TriggerSubject::This | TriggerSubject::EnchantedCreature => subject_description(subject),
+        TriggerSubject::AnotherYouControl(p) => format!(
+            "one or more other {} you control",
+            predicate_description(p, plural)
+        ),
+        TriggerSubject::AnyYouControl(p) => {
+            format!(
+                "one or more {} you control",
+                predicate_description(p, plural)
+            )
+        }
+        TriggerSubject::Another(p) => {
+            format!("one or more other {}", predicate_description(p, plural))
+        }
+        TriggerSubject::Any(p) => format!("one or more {}", predicate_description(p, plural)),
+    }
+}
+
+/// A trigger actor as the subject of a sentence.
+fn actor_noun(who: Actor) -> &'static str {
+    match who {
+        Actor::You => "you",
+        Actor::Opponent => "an opponent",
+        Actor::AnyPlayer => "a player",
+    }
+}
+
+fn actor_possessive(who: Actor) -> &'static str {
+    match who {
+        Actor::You => "your",
+        Actor::Opponent | Actor::AnyPlayer => "their",
+    }
+}
+
+/// "you cast", "an opponent casts".
+fn actor_does(who: Actor, plain: &str, third_person: &str) -> String {
+    let verb = if who == Actor::You {
+        plain
+    } else {
+        third_person
+    };
+    format!("{} {verb}", actor_noun(who))
+}
+
+/// A keyword action's verb phrase agreeing with its actor.
+fn keyword_action_text(who: Actor, action: KeywordAction) -> String {
+    let (plain, third_person) = match action {
+        KeywordAction::Search => {
+            return format!(
+                "{} {} library",
+                if who == Actor::You {
+                    "search"
+                } else {
+                    "searches"
+                },
+                actor_possessive(who)
+            );
+        }
+        KeywordAction::Scry => ("scry", "scries"),
+        KeywordAction::Surveil => ("surveil", "surveils"),
+        KeywordAction::Waterbend => ("waterbend", "waterbends"),
+        KeywordAction::Earthbend => ("earthbend", "earthbends"),
+        KeywordAction::Firebend => ("firebend", "firebends"),
+        KeywordAction::Airbend => ("airbend", "airbends"),
+    };
+    if who == Actor::You {
+        plain
+    } else {
+        third_person
+    }
+    .into()
+}
+
+/// "a or b"; "a, b, or c".
+fn alternatives(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [first, second] => format!("{first} or {second}"),
+        [rest @ .., last] => format!("{}, or {last}", rest.join(", ")),
+    }
+}
+
+/// "second", as printed in "your second spell each turn".
+fn ordinal(n: u32) -> String {
+    match n {
+        1 => "first".into(),
+        2 => "second".into(),
+        3 => "third".into(),
+        4 => "fourth".into(),
+        5 => "fifth".into(),
+        n => format!("{n}th"),
     }
 }
 
@@ -1134,6 +1245,82 @@ fn roman(chapter: u8) -> &'static str {
 mod tests {
     use super::*;
     use crate::state::ability::TargetRequirement;
+
+    #[test]
+    fn trigger_descriptions_fill_one_template_per_event() {
+        let cases = [
+            (
+                TriggerCondition::Casts {
+                    who: Actor::Opponent,
+                    predicate: CardPredicate::creature(),
+                    nth: Some(2),
+                },
+                "Whenever an opponent casts their second creature spell each turn",
+            ),
+            (
+                TriggerCondition::Casts {
+                    who: Actor::You,
+                    predicate: CardPredicate::default(),
+                    nth: None,
+                },
+                "Whenever you cast a spell",
+            ),
+            (
+                TriggerCondition::Draws {
+                    who: Actor::You,
+                    nth: Some(2),
+                },
+                "Whenever you draw your second card each turn",
+            ),
+            (
+                TriggerCondition::BeginningOf {
+                    step: TurnStep::Draw,
+                    whose: Actor::AnyPlayer,
+                },
+                "At the beginning of each player's draw step",
+            ),
+            (
+                TriggerCondition::Performs {
+                    who: Actor::Opponent,
+                    any_of: vec![KeywordAction::Search],
+                },
+                "Whenever an opponent searches their library",
+            ),
+            (
+                TriggerCondition::Performs {
+                    who: Actor::You,
+                    any_of: KeywordAction::BENDING.to_vec(),
+                },
+                "Whenever you waterbend, earthbend, firebend, or airbend",
+            ),
+            (
+                TriggerCondition::PutIntoGraveyard {
+                    whose: Actor::Opponent,
+                    predicate: CardPredicate::default(),
+                },
+                "Whenever a card is put into an opponent's graveyard from anywhere",
+            ),
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate::subtype("Ally")),
+                    to: Actor::AnyPlayer,
+                    per: Per::Batch,
+                },
+                "Whenever one or more Ally creatures you control deal combat damage to a player",
+            ),
+            (
+                TriggerCondition::DealsCombatDamage {
+                    subject: TriggerSubject::Any(CardPredicate::creature()),
+                    to: Actor::You,
+                    per: Per::Object,
+                },
+                "Whenever a creature deals combat damage to you",
+            ),
+        ];
+        for (condition, expected) in cases {
+            assert_eq!(condition_description(&condition), expected);
+        }
+    }
 
     #[test]
     fn descriptions_keep_target_clauses_and_conditional_branches() {

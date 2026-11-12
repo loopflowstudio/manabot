@@ -1,6 +1,8 @@
 //! Odyssey.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PlayerSelector, TriggerCondition,
+    },
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, ManaAbility},
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
@@ -43,8 +45,10 @@ fn standstill() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::PlayerCastsSpell {
+            condition: TriggerCondition::Casts {
+                who: Actor::AnyPlayer,
                 predicate: CardPredicate::default(),
+                nth: None,
             },
             effects: vec![
                 Effect::sacrifice_this(),

@@ -2,7 +2,9 @@
 //! with `is_token: true`, so copy effects treat tokens and cards alike. Each is
 //! keyed by name and carries the Scryfall id of its first token printing.
 use managym_state::{
-    ability::{Ability, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Actor, Effect, EffectValue, ObjectSelector, TriggerCondition, TriggerSubject,
+    },
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes, Keyword,
         Keywords, StaticAbility,
@@ -253,11 +255,13 @@ fn monk() -> CardDefinition {
     CardDefinition {
         abilities: vec![Ability::Triggered {
             intervening_if: None,
-            condition: TriggerCondition::YouCastSpell {
+            condition: TriggerCondition::Casts {
+                who: Actor::You,
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
                     ..Default::default()
                 },
+                nth: None,
             },
             effects: vec![Effect::until_end_of_turn(
                 ObjectSelector::This,

@@ -532,6 +532,34 @@ fn lightning_bolt() -> CardDefinition {
 - An `Effect` is a verb over an `ObjectSelector`: deal damage to a target, tap
   each creature you control, sacrifice this. New behavior is a new rules
   variant with a directed test, never a special case for one card.
+- A trigger is "whenever X does Y": an event over its actor, with the event's
+  own parameters as fields. Monastery Swiftspear's prowess
+  ([`managym/cards/src/ktk.rs`](../managym/cards/src/ktk.rs)) is the cast event
+  with you as the actor:
+
+  ```rust
+  condition: TriggerCondition::Casts {
+      who: Actor::You,
+      predicate: CardPredicate {
+          not_card_types: vec![CardType::Creature],
+          ..Default::default()
+      },
+      nth: None,
+  },
+  ```
+
+  Changing `who` to `Actor::Opponent` or `Actor::AnyPlayer` gives "whenever an
+  opponent casts" or "whenever a player casts"; `nth: Some(2)` gives "your
+  second spell each turn". The same applies to draws (`Draws { who, nth }`),
+  steps (`BeginningOf { step, whose }`), keyword actions such as searching,
+  scrying or bending (`Performs { who, any_of }`) and cards reaching a
+  graveyard (`PutIntoGraveyard { whose, predicate }`). Object events name a
+  `TriggerSubject` instead: `Dies`, `Attacks`, `DealsCombatDamage { subject,
+  to, per }`, where `per` says whether "one or more" creatures trigger once per
+  batch or once each. The ability description ("Whenever an opponent draws
+  their second card each turn, ...") and the learning tokens come from one
+  template per event, so a card that needs a new actor or count needs no new
+  variant.
 - Learning tokens derive from the same definition
   ([`managym/src/cards/tokens.rs`](../managym/src/cards/tokens.rs)), so the
   policy can read what a card does and a new variant reaches the model without

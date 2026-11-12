@@ -1,8 +1,8 @@
 //! Ice Age.
 use managym_state::{
     ability::{
-        Ability, Effect, EffectValue, ObjectSelector, PaymentCost, PlayerSelector, Scope,
-        TriggerCondition,
+        Ability, Actor, Effect, EffectValue, ObjectSelector, PaymentCost, PlayerSelector, Scope,
+        TriggerCondition, TurnStep,
     },
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
@@ -51,7 +51,10 @@ fn mystic_remora() -> CardDefinition {
         abilities: vec![
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::BeginningOfYourUpkeep,
+                condition: TriggerCondition::BeginningOf {
+                    step: TurnStep::Upkeep,
+                    whose: Actor::You,
+                },
                 effects: vec![
                     Effect::put_counters(ObjectSelector::This, CounterKind::Age, 1),
                     Effect::CumulativeUpkeep {
@@ -63,11 +66,13 @@ fn mystic_remora() -> CardDefinition {
             // opponent (this ability's controller, 1v1) may draw.
             Ability::Triggered {
                 intervening_if: None,
-                condition: TriggerCondition::OpponentCastsSpell {
+                condition: TriggerCondition::Casts {
+                    who: Actor::Opponent,
                     predicate: CardPredicate {
                         not_card_types: vec![CardType::Creature],
                         ..Default::default()
                     },
+                    nth: None,
                 },
                 effects: vec![Effect::ForPlayer {
                     player: PlayerSelector::TriggeringPlayer,
