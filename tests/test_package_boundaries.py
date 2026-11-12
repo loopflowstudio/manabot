@@ -327,12 +327,33 @@ def test_backends_never_import_each_other() -> None:
     assert violations == []
 
 
+def test_only_the_mlx_backend_imports_mlx() -> None:
+    # MLX is an optional Apple Silicon extra: the PyTorch path, training and
+    # every other module import neither it nor its backend, eagerly or lazily.
+    # Outside `manabot/backends/`, only the torch backend is imported.
+    mlx = _BACKENDS / "mlx"
+    violations = [
+        f"{path.relative_to(REPO_ROOT)}:{line}: {module}"
+        for path, line, module in _manabot_imports()
+        if (module.split(".")[0] == "mlx" and mlx not in path.parents)
+        or (
+            module.startswith("manabot.backends.")
+            and module.split(".")[2] != "torch"
+            and _BACKENDS not in path.parents
+        )
+    ]
+    assert violations == []
+
+
 # Modules outside the torch backend that still import torch. Training,
 # evaluation, search and the model's components move behind a backend in later
 # changes; the list only shrinks, and a module that stops importing torch
 # leaves it.
 _TORCH_NOT_YET_MOVED = frozenset(
     (
+        # The converter and parity check read the PyTorch reference.
+        "manabot/backends/convert.py",
+        "manabot/backends/parity.py",
         "manabot/belief/agent.py",
         "manabot/belief/checkpoint.py",
         "manabot/belief/demo.py",
