@@ -190,3 +190,17 @@ no current card needs them and the kind's shape consequence for w17
 checkpoints is a model decision. A general `Except` predicate set stays
 unbuilt (questions.md item 2): it would change `RestrictedManaData`'s
 published schema for no card.
+
+## Concept review — 2026-11-12 (headless, against `a72fcffa1`)
+
+The earlier review's proposal is implemented as specified. The closed list in
+`observation_encoder.rs::representable` holds exactly the restrictions current
+card definitions produce (tla Lesson; tla Lesson-or-Shrine; tla
+Ally spells+sources; `token.powerstone`), so no defined card is refused and
+every non-listed class (constructed only, e.g. the Ogre and pool-A witnesses)
+is a typed refusal. Model, names and authority (`ManaRestriction::allows`,
+`SpendingContext` on every cost) unchanged; no further design change.
+Open for the interactive review only, not blocking a reviewable PR:
+questions.md items 1 (fact rows for arbitrary restrictions) and 2 (general
+`Except`). Adding a card with a new restriction class must extend the closed
+list or take item 1's rows; the refusal makes that visible at encode time.

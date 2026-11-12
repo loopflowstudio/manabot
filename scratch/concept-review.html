@@ -22,12 +22,12 @@ table { border-collapse:collapse; width:100%; font-size:.95rem; } td, th { borde
 </head>
 <body><main>
 <header>
-<h1>Mana restrictions: one refusal rule is per class, the ambiguity is per pool</h1>
+<h1>Mana restrictions: the closed list holds; nothing left to change before review</h1>
 <p>Task MTG-242 · concept-review step (headless) · 2026-11-12</p>
-<p>Built from <code>managym/state/src/mana.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/env/observation.py</code>, <code>scratch/mtg-242-port.md</code>, <code>scratch/questions.md</code> at <code>599823943</code></p>
+<p>Built from <code>managym/state/src/mana.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/env/observation.py</code>, <code>scratch/mtg-242-port.md</code>, <code>scratch/questions.md</code>, <code>managym/cards/src/{tla,tokens}.rs</code> at <code>a72fcffa1</code> (earlier pass at <code>599823943</code>)</p>
 </header>
 
-<p><strong>Decision needed:</strong> none from a person this step. The design changed in one place (below) and goes back to implement. One model choice stays open for the interactive review.</p>
+<p><strong>Decision needed:</strong> none from a person this step. The closed-list refusal that the earlier pass proposed is now implemented (<code>d0f92723a</code>), and it matches every restriction current cards produce. The design does not change. Two model choices stay open for the interactive review, and neither one blocks the PR.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <div class="exist"><p class="tag">Existing on this branch, kept</p>
@@ -48,13 +48,13 @@ columns, both: total 2 · Lesson 1 · Shrine 1 · Ally 1
 A can cast a Lesson and a Shrine this turn; B cannot.</pre>
 <p>No current card makes A, so nothing plays wrong today. The new typed restrictions make A one constructor call away.</p>
 
-<div class="prop"><p class="tag">Proposed (next implement)</p>
+<div class="exist"><p class="tag">Implemented at d0f92723a (proposed by the earlier pass)</p>
 <p>Representable means one of a closed list of exact classes, the ones current cards make, which the columns jointly determine:</p>
 <pre>Only{Cast(Lesson)}                     Hermitic Herbalist
 Only{Cast(Lesson), Cast(Shrine)}       White Lotus Hideout
 Only{Cast(Ally), Activate(Ally)}       Jasmine Dragon Tea Shop
 ExceptNonartifactSpells   (v10 only)   Powerstone</pre>
-<p>Both encoders refuse every other class. Pool A/B goes into the native and Python refusal tests. Layout, checkpoints, digests and current-card play all stay the same.</p></div>
+<p>Both encoders refuse every other class through <code>unrepresentable_state</code>. The native and Python tests cover pool A (refused) and pool B (encoded uniquely). Layout, checkpoints and digests are unchanged. The list matches every <code>ManaRestriction</code> in <code>managym/cards/src</code>, so no defined card is refused.</p></div>
 
 <h2>Kept as is</h2>
 <p><code>SpellSnapshot</code> compares by pointer while <code>SpendingObject</code> compares by content. That is two identity rules for one concept, but the pointer rule was chosen to keep pricing cheap, and digests match main. Unify them only if a profile shows content equality costs nothing.</p>
