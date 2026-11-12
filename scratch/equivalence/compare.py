@@ -12,7 +12,7 @@ kinds: Counter[str] = Counter()
 differ = []
 for key in base:
     a, b = base[key], head[key]
-    kind = "train" if key.startswith("train/") else key.split("/")[2]
+    kind = "train" if key.startswith("train/") else key.split("/")[-2 if "infer" in key else 2]
     kinds[kind] += 1
     if a.shape != b.shape or a.dtype != b.dtype:
         differ.append((key, "shape/dtype"))
@@ -25,7 +25,7 @@ for key in base:
 worst: dict[str, float] = {}
 for key, delta in differ:
     if isinstance(delta, float):
-        kind = "train" if key.startswith("train/") else key.split("/")[2]
+        kind = "train" if key.startswith("train/") else key.split("/")[-2 if "infer" in key else 2]
         worst[kind] = max(worst.get(kind, 0.0), delta)
 print("tensors", len(base), dict(kinds))
 print("max abs diff by kind", worst)

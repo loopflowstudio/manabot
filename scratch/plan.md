@@ -116,18 +116,10 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
 
 ## Remaining
 
-1. ActorCritic over `manabot.policy.prepare.Prepared`. Unblocked (#495
-   is here); this Task extends MTG-321's files in place. `require_supported`
-   refuses FiLM, belief, history beyond w160l8, pooled token stream, v10,
-   categorical value, historical_mean and attention off; torch must keep
-   running all of them bitwise. Extend `prepare.py`, then move each
-   component's inline lookups (semantic_cards, facts, shared_effects,
-   name_candidates, continuation, recent_events, token_stream, belief) onto
-   prepared indices. Substantial; candidate for the second stacked PR.
-2. `save_checkpoint` writing the container (`load_checkpoint` reads both,
-   by zip magic): needs the container to carry every config and the `.pt`
-   extras (belief binding, `bc`), which `require_supported`/`_METADATA_KEYS`
-   do not yet. Follows item 1.
+1. ActorCritic over `manabot.policy.prepare.Prepared`: not built; sized in
+   "Pass of 21:45Z" below. Recommended as its own stacked Task.
+2. `save_checkpoint` writing the container: follows item 1 (the container
+   must first carry every configuration and the `.pt` extras).
 3. Done (f61ed7dcc): `BACKENDS = {"torch", "mlx"}`; torch passes its own
    parity on the w160l8 capture (see "Pass of 21:00Z").
 4. Done (Etude 15d399dab9ae, see Checks). Re-run CPU and the L4 launch
@@ -308,9 +300,59 @@ Checks:
   files: 4 passed.
 - The M2 is no longer needed by this Task after this pass.
 
-Remaining after this pass: items 1, 2 and the item 4 rerun (ActorCritic over
-`Prepared`, container save, forward equivalence), then delete `scratch/`
-before landing.
+## Pass of 21:45Z 2026-11-12: main merge, item 1 sized
+
+- Merged main (71ab00215): #499 removed the pooled token stream. Kept this
+  branch's `backends/torch/policy.py` homes; `policy/checkpoint.py`
+  `require_supported` no longer reads `token_stream` (steer 793944f0);
+  `backends/README.md` and the boundary list drop the stream. Checks:
+  boundaries, value aggregation, live tokens, bucketed execution, policy
+  container, torch container/protocol, update backends: 83 passed; agent,
+  bucketed shapes, inference, learning pieces, minimal loop, experiment
+  files, regimes: 72 passed.
+- `scratch/equivalence/run.py` now runs at HEAD (10 configs; the pooled one
+  is gone) and also captures the serving path (`PolicyInference`, no grad,
+  B=24 and B=1) and `live_tokens=True` for every attention config: 3,248
+  tensors, 13 s, HEAD vs HEAD 0 differ. This is the oracle for item 1.
+- Item 1 was not started. What the reading showed:
+  - Size. Seven torch components do their lookups inline (`policy.py`
+    actions/links/belief, `model/{semantic_cards,facts,shared_effects,
+    continuation,name_candidates,recent_events}.py`), each with branches on
+    device, autograd, `bucketed` and vocabulary. About 20 test, script and
+    experiment files call those encoders or `_gather_*`/`_attend_objects`
+    with raw tensors (`test_agent`, `test_value_aggregation`,
+    `test_record_vocabulary`, `test_shared_effects`, `naming_reference`,
+    `bench_local_update`, `l4_step_profile`, ...). Comparable to everything
+    this PR already holds.
+  - `prepare` lacks, for torch's configurations: hashed record ids (word
+    arrays, no `searchsorted`), no-world definition ids, v10 turn-state
+    columns, belief rows (object count N + rows + 1 in every flat index),
+    recent events, and the referenced-definition subset learning encodes
+    without buckets. `Tables` assumes a catalog world.
+  - Flat indices depend on the object count, so bucket trimming has to run
+    on the host before `prepare` (today `trim_admitted` trims device
+    tensors in the forward).
+  - Bitwise hazards: `program_number` (`np.log1p` against `torch.log1p`),
+    `/60` and `/FACT_TIMESTAMP_SCALE` in NumPy, `index_put` scatter against
+    masked lookups in embedding gradients.
+  - The carrier exists already: `AdmittedObservation.references`
+    (`CardReferences`) is host-admitted rows travelling with the tensors.
+    A slice order that keeps each commit coherent: replace `references`
+    with `Prepared` rows; legal-action coordinates and focus; permanent
+    links; relations; facts; shared effects; then drop the tensor
+    dictionary from the forward. Host cost recorded by MTG-321: 6 ms at
+    B=256.
+  - Expected CUDA effect: the forward loses its device reads (`nonzero`
+    for legal rows and programs, `unique` for referenced definitions) and
+    gains one host preparation and transfer per minibatch; rerun item 4.
+- Why it is not in this PR: a partly converted forward would ship a second
+  input representation beside the dictionary, and would void the L4 and M2
+  results recorded above. The PR as it stands is complete for the matched
+  torch backend and the updates written once, and its docs state the
+  interim (`.pt` save, torch does its own lookups).
+
+Remaining for this PR: gate; delete `scratch/` before landing. Items 1 and
+2 and the item 4 rerun belong to the stacked follow-up.
 
 ## Docs (write-docs pass, 2026-11-12)
 

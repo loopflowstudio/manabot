@@ -60,10 +60,11 @@
   `rl.py` because that file imports nothing from manabot; `policy/returns.py`
   is the NumPy twin, bit-identical. Folding torch's onto the NumPy ones is a
   possible follow-up.
-- Steer 793944f0: main's `require_supported` reads `ModelConfig.token_stream`
-  after #498 removed it; #499 fixes it. This branch has neither yet; take
-  #499's two-line removal at the next main merge.
-- Do Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint`
-  writing the container) ship in this PR or a second stacked one? The docs
-  state the interim (`.pt` save, torch does its own lookups); assumed a
-  second PR, so they stay true for the first.
+- Steer 793944f0 is satisfied: main's #499 is merged (71ab00215) and
+  `require_supported` no longer reads `token_stream`.
+- Remaining 1 and 2 (`ActorCritic` over `Prepared`, `save_checkpoint` writing
+  the container) are assumed to be a stacked follow-up Task, not this PR
+  (sized in plan.md "Pass of 21:45Z"). The Task outcome names them, so this
+  needs a person's yes; no Task was created from here. The docs state the
+  interim (`.pt` save, torch does its own lookups), so they are true for
+  this PR.

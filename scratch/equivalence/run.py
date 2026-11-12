@@ -26,7 +26,8 @@ from manabot.env.observation import ObservationSpace  # noqa: E402
 from manabot.infra.config import ModelConfig, ObservationConfig  # noqa: E402
 from manabot.backends.torch.policy import ActorCritic  # noqa: E402
 from manabot.model.admission import admit_observation  # noqa: E402
-from manabot.model.policy_distribution import legal_mask, policy_logs  # noqa: E402
+from manabot.backends.torch.rl import legal_mask, policy_logs  # noqa: E402
+from manabot.model.inference import PolicyInference  # noqa: E402
 from manabot.training.loops.minimal import train  # noqa: E402
 import managym  # noqa: E402
 
@@ -38,7 +39,6 @@ CONFIGS = {
     "history": (ModelConfig(hidden_dim=16, world=W, recent_events=True), "history"),
     "wdl": (ModelConfig(hidden_dim=16, world=W, value_kind="categorical_wdl"), 9),
     "film": (ModelConfig(hidden_dim=16, world=W, policy_film=True), 9),
-    "pooled": (ModelConfig(hidden_dim=16, world=W, token_stream="pooled"), 9),
     "no_attention": (ModelConfig(hidden_dim=16, world=W, attention_on=False), 9),
     "two_layers": (ModelConfig(hidden_dim=16, world=W, attention_layers=2), 9),
     "hashed": (ModelConfig(hidden_dim=16, world=W, record_vocabulary="hashed"), 9),
@@ -126,6 +126,18 @@ def forward_backward(out, key, model, batch) -> None:
             out[f"{key}/grad/{pname}"] = p.grad.detach().cpu().clone()
 
 
+def inference(out, key, model, batch) -> None:
+    """The serving path: a PolicyInference scope, no autograd, eval mode."""
+    model.eval()
+    for rows in (24, 1):
+        with torch.no_grad(), PolicyInference(model) as scope:
+            obs = scope.prepare({k: v[:rows].clone() for k, v in batch.items()})
+            logits, values = model(obs)
+        out[f"{key}/infer{rows}/logits"] = logits.cpu()
+        out[f"{key}/infer{rows}/values"] = values.cpu()
+    model.train()
+
+
 def capture() -> dict[str, torch.Tensor]:
     out: dict[str, torch.Tensor] = {}
     space, config, batch = belief_batch(24)
@@ -134,6 +146,7 @@ def capture() -> dict[str, torch.Tensor]:
         model = ActorCritic(space, config, bucketed_shapes=bucketed)
         model.train()
         forward_backward(out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch)
+        inference(out, f"belief/{'bucketed' if bucketed else 'padded'}", model, batch)
     spaces = {
         9: ObservationConfig(),
         10: ObservationConfig(policy_input_version=10),
@@ -145,12 +158,16 @@ def capture() -> dict[str, torch.Tensor]:
         for name, (config, cfg_version) in CONFIGS.items():
             if cfg_version != version:
                 continue
-            for bucketed in (False, True) if config.token_stream == "tables" else (False,):
-                key = f"{name}/{'bucketed' if bucketed else 'padded'}"
-                torch.manual_seed(0)
-                model = ActorCritic(space, config, bucketed_shapes=bucketed)
-                model.train()
-                forward_backward(out, key, model, batch)
+            for bucketed in (False, True):
+                for live in (False, True) if config.attention_on else (False,):
+                    key = f"{name}/{'bucketed' if bucketed else 'padded'}{'-live' if live else ''}"
+                    torch.manual_seed(0)
+                    model = ActorCritic(
+                        space, config, bucketed_shapes=bucketed, live_tokens=live
+                    )
+                    model.train()
+                    forward_backward(out, key, model, batch)
+                    inference(out, key, model, batch)
     for name, config in {
         "masked_mean": ModelConfig(hidden_dim=16, value_aggregation="masked_mean"),
         "default": ModelConfig(hidden_dim=16),
