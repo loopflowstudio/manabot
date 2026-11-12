@@ -182,8 +182,8 @@ backend first, client second). Next passes:
    damped_policy_loss, clip_fraction; new there: action_logs, reference_logs,
    require_finite. `backends/torch/learner.py`: `no_grad()`,
    `Learner.set_learning_rate`. Deleted `training/updates/references.py` and
-   its `training/learning/references.py` alias; `model/policy_distribution.py`
-   is now alias-only (#474's released names). `reference_distribution` is
+   its `training/learning/references.py` alias (#474 later deleted
+   `model/policy_distribution.py` too). `reference_distribution` is
    `manabot.policy.prepare`'s NumPy function (added the empty-row refusal,
    vectorized counts with one `bincount`: 0.6 ms action-type / 0.05 ms uniform
    per [256,128] minibatch). Host bookkeeping in NumPy: trained rows,
