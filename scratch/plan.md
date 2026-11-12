@@ -32,13 +32,21 @@ The MTG-304 plan this branch inherited is in git (`05c1203e9:scratch/plan.md`).
   Behaviour change on CUDA learning: buckets are measured on the host at
   admission instead of by one device read per forward (sizes identical).
 
+- compress pass: `backends/torch/learner.py` drops section comments that
+  repeated its docstring and `__init__` comments (`Learner` gains a docstring);
+  `model/admission.measure_buckets` and `model/inference` use
+  `arrays.to_numpy`/`device_of`; the generic-pieces boundary test compares
+  module names without line numbers. `arrays.from_numpy`/`flat_numpy` stay
+  unused until the torch parity `BACKEND` (Remaining 3), matching MLX's file.
+
 ## Checks
 
 - Boundaries, learning pieces (incl. new alias rows), minimal loop, learner,
   precision, numerical health, returns, objectives, policy container, agent,
   admission, credit assignment, puct/local-update digests, artifact storage,
   experiments, two-seat, bucketed shapes/execution, inference, mps, collection:
-  all passed (several runs; last 78 passed in 20 s).
+  all passed (several runs). After compress: boundaries, learner, bucketed
+  shapes, inference, admission, learning pieces: 78 passed in 39 s.
 - `pytest --collect-only` over every changed test file: 1,116 collected; only
   errors are duckdb-dependent files (extra not installed).
 - Bucket parity: `/tmp/mtg325buckets/compare.py` runs the old torch

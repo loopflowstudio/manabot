@@ -1,8 +1,9 @@
 """NumPy at the torch backend's boundary: conversion, dtype and device.
 
 `from_numpy` shares memory with its input on CPU and copies to another
-device; `to_numpy` detaches and copies to the host. Neither changes a dtype,
-so a float64 operand stays float64 and an integer index keeps its width.
+device; `to_numpy` detaches and copies to the host (a CPU tensor is viewed).
+Neither changes a dtype, so a float64 operand stays float64 and an integer
+index keeps its width.
 """
 
 from collections.abc import Iterable

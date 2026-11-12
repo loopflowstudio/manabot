@@ -5,8 +5,9 @@ forward precision and a profiler; the updates in `manabot.training.updates`
 step it. `gradient_step` runs backward, global-norm clipping and the
 optimizer for any `nn.Module`, refusing to step on a loss or gradients it
 cannot trust (`NumericalError`, `manabot.backends.torch.rl`); an optional
-`StepRecorder` observes what it did. `update_ema` keeps the averaged model
-that evaluation and exports read. `forward_precision` and
+`StepRecorder` (the player's `OptimizerHealth` in
+`manabot.training.updates.health` is one) observes what it did. `update_ema`
+keeps the averaged model that evaluation and exports read. `forward_precision` and
 `apply_matmul_precision` apply a stage's declared numeric precision.
 """
 
@@ -26,15 +27,6 @@ if TYPE_CHECKING:
     from manabot.training.regime import Precision
 
 # -- Update step ---------------------------------------------------------------
-# The update step: one guarded gradient step, and the parameter average.
-#
-# `gradient_step` runs backward, global-norm clipping and the optimizer for any
-# `nn.Module`. It refuses to step on a loss or gradients it cannot trust and
-# raises `NumericalError` (`manabot.backends.torch.rl`) instead. An optional
-# `StepRecorder` observes what it did: timing, rejections and sampled gradient
-# detail; the player's `OptimizerHealth`
-# (`manabot.training.updates.health`) is one. `update_ema` keeps the averaged
-# model that evaluation and exports read.
 
 
 class StepRecorder(Protocol):
@@ -207,15 +199,15 @@ def forward_precision(
 
 
 # -- Learner -------------------------------------------------------------------
-# Trainable policy and Adam state shared by every update.
-#
-# The learning rule sets the rate before stepping. Recurrent CUDA kernels need
-# a training-mode forward before backward, so construction enables train mode.
-# The profiler times learning phases between existing device waits; it adds no
-# synchronization and draws no training randomness.
 
 
 class Learner:
+    """Trainable policy and Adam state shared by every update.
+
+    The profiler times learning phases between existing device waits; it adds
+    no synchronization and draws no training randomness.
+    """
+
     def __init__(
         self,
         agent: "ActorCritic",

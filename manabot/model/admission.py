@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from manabot.backends.torch.arrays import to_numpy
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
     PERMANENT_LINK_INDEXES,
@@ -192,7 +193,7 @@ def measure_buckets(
     if not agent.bucketed_shapes:
         return None
     return bucket_sizes(
-        {key: value.detach().cpu().numpy() for key, value in obs.items()},
+        {key: to_numpy(value) for key, value in obs.items()},
         agent.observation_space.encoder,
         objects=agent.object_trimming(),
     )

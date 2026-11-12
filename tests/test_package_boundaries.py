@@ -434,9 +434,9 @@ _GENERIC_ALLOWED = ("manabot.backends.torch.rl", "manabot.infra.profiler")
 
 def test_generic_learning_pieces_import_only_themselves() -> None:
     violations = [
-        f"{relative}:{line}: {module}"
+        f"{relative}: {module}"
         for relative in _GENERIC
-        for line, module in _imported_modules(
+        for _, module in _imported_modules(
             ast.parse((REPO_ROOT / relative).read_text(), relative)
         )
         if module.split(".")[0] in {"managym", "academy", "etude"}
@@ -445,8 +445,8 @@ def test_generic_learning_pieces_import_only_themselves() -> None:
     # The learner names the player's network and its precision in annotations
     # only (under TYPE_CHECKING); the runtime probe below holds it to that.
     assert violations == [
-        "manabot/backends/torch/learner.py:25: manabot.backends.torch.policy",
-        "manabot/backends/torch/learner.py:26: manabot.training.regime",
+        "manabot/backends/torch/learner.py: manabot.backends.torch.policy",
+        "manabot/backends/torch/learner.py: manabot.training.regime",
     ]
 
 

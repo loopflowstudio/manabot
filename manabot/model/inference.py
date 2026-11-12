@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
+from manabot.backends.torch.arrays import device_of
 from manabot.model.admission import AdmittedObservation, admit_observation
 from manabot.model.semantic_cards import CardReferences
 from manabot.policy.buckets import (
@@ -107,7 +108,7 @@ def admit_on_device(
 
     For one-off forwards outside a PolicyInference scope.
     """
-    device = next(agent.parameters()).device
+    device = device_of(agent)
     return transfer_admitted(admit_observation(agent, obs), device)[0]
 
 
@@ -214,7 +215,7 @@ class PolicyInference:
 
     def __init__(self, agent: "ActorCritic") -> None:
         self.agent = agent
-        self.device = next(agent.parameters()).device
+        self.device = device_of(agent)
         self._closed = False
         self._versions = self._state()
         self._modes = tuple(module.training for module in agent.modules())
