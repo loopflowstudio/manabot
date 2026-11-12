@@ -1,1 +1,0 @@
-License Manabot’s original source and release packages under MIT
